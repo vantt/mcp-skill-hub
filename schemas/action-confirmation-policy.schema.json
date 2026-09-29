@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillhub.local/schemas/action-confirmation-policy.schema.json",
+  "title": "Skill Hub action confirmation policy",
+  "description": "Public policy contract for confirmation requirements. Enforcement and authorization rationale are internal implementation concerns.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["policy_revision", "action_class", "confirmation"],
+  "properties": {
+    "policy_revision": {"type": "string", "description": "public: Opaque policy revision."},
+    "action_class": {"type": "string", "enum": ["read-only", "mechanical", "network", "semantic", "destructive", "git-commit", "git-push"], "description": "public: Action risk class. Git push is never automatic in V1."},
+    "confirmation": {"type": "object", "additionalProperties": false, "required": ["required", "mode"], "description": "public: Required confirmation behavior.", "properties": {"required": {"type": "boolean", "description": "public: Whether explicit confirmation is needed."}, "mode": {"type": "string", "enum": ["none", "explicit-request", "preview-and-approval", "never-automatic"], "description": "public: Confirmation interaction mode."}, "pins": {"type": "object", "additionalProperties": false, "required": ["proposal_id", "proposal_digest", "base_version"], "description": "public: Semantic confirmation must pin the opaque preview identity, digest, and base version.", "properties": {"proposal_id": {"type": "string", "minLength": 1, "description": "public: Opaque proposal identity."}, "proposal_digest": {"type": "string", "minLength": 1, "description": "public: Opaque immutable preview digest."}, "base_version": {"type": "string", "minLength": 1, "description": "public: Opaque target base version."}}}}},
+    "application_command": {"type": "string", "description": "public: Application command governed by this policy."},
+    "rationale": {"type": "string", "description": "experimental: Human-readable policy explanation."},
+    "authorization_context": {"type": "object", "description": "internal: Evaluated authorization facts; never expose secrets.", "additionalProperties": false}
+  },
+  "allOf": [
+    {"if": {"properties": {"action_class": {"const": "read-only"}}}, "then": {"properties": {"confirmation": {"properties": {"required": {"const": false}, "mode": {"const": "none"}}}}}},
+    {"if": {"properties": {"action_class": {"const": "semantic"}}}, "then": {"properties": {"confirmation": {"required": ["pins"], "properties": {"required": {"const": true}, "mode": {"const": "preview-and-approval"}, "pins": {"required": ["proposal_id", "proposal_digest", "base_version"]}}}}}},
+    {"if": {"properties": {"action_class": {"const": "git-push"}}}, "then": {"properties": {"confirmation": {"properties": {"required": {"const": true}, "mode": {"const": "never-automatic"}}}}}}
+  ]
+}

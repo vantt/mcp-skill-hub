@@ -1,0 +1,54 @@
+scenario: recovery-partial-distill-failure
+given:
+  run_ids:
+  - run_a1f6
+  - run_g8t2
+  - run_w5m3
+  successful_run_ids:
+  - run_a1f6
+  - run_g8t2
+  failed_run_id: run_w5m3
+when:
+  intent: Submit batch analysis
+  application_command: SubmitDistillRun
+expect:
+  status: partial_failure
+  summary: Two analyses were saved; one needs recovery; active skills are unchanged.
+  suggested_actions:
+  - Retry the failed analysis
+  confirmation:
+    policy_revision: policy_v1
+    action_class: mechanical
+    application_command: SubmitDistillRun
+    confirmation:
+      required: false
+      mode: explicit-request
+  progressive_disclosure:
+    L0:
+      counts:
+        runs_saved: 2
+        failed_runs: 1
+      recommended_action: Retry the failed analysis
+    L1:
+      items:
+      - id: run_w5m3
+        summary: One source analysis failed
+        impact: Successful analyses remain available for review.
+    L2:
+      evidence:
+      - run_id: run_w5m3
+        failure_kind: resource_read_failed
+      comparison:
+        successful_runs: 2
+        failed_runs: 1
+    L3:
+      canonical_artifacts:
+      - run_a1f6
+      - run_g8t2
+      - run_w5m3
+      diagnostics:
+      - resource_read_failed
+  error:
+    ERROR: One source analysis failed.
+    WHY: A required source resource could not be read.
+    FIX: Retry the failed analysis; completed analyses do not need to be repeated.

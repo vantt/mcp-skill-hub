@@ -1,0 +1,48 @@
+scenario: insight-apply-git-dirty-after-apply
+given:
+  insight_id: ins_c9q5
+  proposal_id: prop_k3s7
+  proposal_digest: sha256:opaque-proposal
+  base_version: sha256:opaque-base
+when:
+  intent: Approve the reviewed insight
+  application_command: ConfirmInsightApplication
+expect:
+  status: applied
+  summary: Insight was applied locally; canonical changes are not committed.
+  suggested_actions:
+  - Review the curation diff
+  confirmation:
+    policy_revision: policy_v1
+    action_class: semantic
+    application_command: ConfirmInsightApplication
+    confirmation:
+      required: true
+      mode: preview-and-approval
+      pins:
+        proposal_id: prop_k3s7
+        proposal_digest: sha256:opaque-proposal
+        base_version: sha256:opaque-base
+  progressive_disclosure:
+    L0:
+      counts:
+        changed_files: 3
+        uncommitted_changes: 3
+      recommended_action: Review the curation diff
+    L1:
+      items:
+      - id: ins_c9q5
+        summary: Insight is active locally
+        impact: Three canonical files changed.
+    L2:
+      evidence:
+      - proposal_id: prop_k3s7
+        operation_id: op_z1h4
+      comparison:
+        diff_available: true
+    L3:
+      canonical_artifacts:
+      - ins_c9q5
+      - prop_k3s7
+      - op_z1h4
+      diagnostics: []

@@ -1,0 +1,40 @@
+scenario: curation-home-healthy
+given:
+  workspace:
+    health: valid
+    index: current
+    git_dirty: false
+  counts:
+    active_skills: 42
+    watching_sources: 12
+    failed_runs: 0
+    pending_high_value_insights: 0
+when:
+  intent: Check my Skill Hub
+  application_command: GetCurationHome
+expect:
+  status: ok
+  summary: Skill Hub is up to date.
+  suggested_actions:
+  - Continue normal work
+  confirmation:
+    policy_revision: policy_v1
+    action_class: read-only
+    application_command: GetCurationHome
+    confirmation:
+      required: false
+      mode: none
+  progressive_disclosure:
+    L0:
+      counts:
+        attention_items: 0
+      recommended_action: Continue normal work
+    L1:
+      items: []
+      impact: No curation work is pending.
+    L2:
+      evidence: []
+      comparison: null
+    L3:
+      canonical_artifacts: []
+      diagnostics: []

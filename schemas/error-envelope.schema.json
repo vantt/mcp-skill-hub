@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillhub.local/schemas/error-envelope.schema.json",
+  "title": "Skill Hub error envelope",
+  "description": "Public fields provide stable, actionable errors. Correlation and diagnostic fields are internal or experimental and must not leak secrets or absolute paths.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["code", "render"],
+  "properties": {
+    "code": {"type": "string", "enum": ["invalid_request", "unsupported_schema", "stale_context", "unknown_resolution", "clarification_budget_exhausted", "resolution_retry_exhausted", "index_stale", "snapshot_expired", "resource_digest_mismatch", "permission_denied", "internal_error", "workspace_invalid", "recovery_required", "run_interrupted", "partial_distill_failure", "source_unavailable", "stale_proposal", "resource_read_failed", "operation_cancelled"], "description": "public: Stable machine-readable error code."},
+    "retryable": {"type": "boolean", "description": "public: Whether retry can succeed without changing the request."},
+    "render": {"type": "object", "additionalProperties": false, "required": ["ERROR", "WHY", "FIX"], "description": "public: Required user-facing actionable error rendering.", "properties": {"ERROR": {"type": "string", "minLength": 1, "description": "public: What failed."}, "WHY": {"type": "string", "minLength": 1, "description": "public: Known cause or evidence."}, "FIX": {"type": "string", "minLength": 1, "description": "public: Concrete safe next step."}}},
+    "correlation_id": {"type": "string", "description": "experimental: Opaque support correlation identifier."},
+    "diagnostics": {"type": "array", "description": "internal: Technical detail disclosed only on explicit request.", "items": {"type": "object"}}
+  }
+}

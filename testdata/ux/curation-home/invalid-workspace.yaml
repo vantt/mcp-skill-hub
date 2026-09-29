@@ -1,0 +1,45 @@
+scenario: curation-home-invalid-workspace
+given:
+  workspace:
+    health: invalid
+    index: stale
+    git_dirty: false
+  diagnostic_id: diag_q9v4
+when:
+  intent: Check my Skill Hub
+  application_command: GetCurationHome
+expect:
+  status: recovery_required
+  summary: Workspace needs repair before other curation work.
+  suggested_actions:
+  - Run skillhub doctor --fix
+  confirmation:
+    policy_revision: policy_v1
+    action_class: read-only
+    application_command: GetCurationHome
+    confirmation:
+      required: false
+      mode: none
+  progressive_disclosure:
+    L0:
+      counts:
+        invalid_workspaces: 1
+      recommended_action: Run skillhub doctor --fix
+    L1:
+      items:
+      - id: diag_q9v4
+        summary: Search data does not match canonical files
+        impact: Search results may be incomplete.
+    L2:
+      evidence:
+      - diagnostic_id: diag_q9v4
+        finding: derived_index_mismatch
+      comparison: null
+    L3:
+      canonical_artifacts: []
+      diagnostics:
+      - diag_q9v4
+  error:
+    ERROR: Workspace checks found state that needs repair.
+    WHY: Canonical data is intact but derived search data is stale.
+    FIX: Run skillhub doctor --fix and review its repair plan before confirming changes.

@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillhub.local/schemas/source-record.schema.json",
+  "title": "Skill Hub source record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "id", "adapter", "locator", "status", "identity", "trust", "monitoring", "limits"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,127}$"},
+    "adapter": {"enum": ["git", "filesystem", "immutable-http", "living-http"]},
+    "locator": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "url": {"type": "string", "format": "uri", "pattern": "^https://"},
+        "repository": {"type": "string", "format": "uri", "pattern": "^https://"},
+        "path": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+        "ref": {"type": "string"},
+        "mode": {"enum": ["immutable", "living"]}
+      }
+    },
+    "status": {"enum": ["watching", "changed", "distill_pending", "retired"]},
+    "identity": {"type": "object"},
+    "license": {"type": "string"},
+    "trust": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source", "reviewed"],
+      "properties": {"source": {"type": "string"}, "reviewed": {"type": "boolean"}}
+    },
+    "monitoring": {
+      "type": "object", "additionalProperties": false,
+      "required": ["enabled", "cadence"],
+      "properties": {"enabled": {"type": "boolean"}, "cadence": {"enum": ["daily", "weekly", "manual"]}}
+    },
+    "limits": {
+      "type": "object", "additionalProperties": false,
+      "required": ["timeout_seconds", "max_bytes", "max_files", "max_file_bytes"],
+      "properties": {
+        "timeout_seconds": {"type": "integer", "minimum": 1},
+        "max_bytes": {"type": "integer", "minimum": 1},
+        "max_files": {"type": "integer", "minimum": 1},
+        "max_file_bytes": {"type": "integer", "minimum": 1}
+      }
+    },
+    "current_revision": {"$ref": "#/$defs/revision"},
+    "distilled_revision": {"$ref": "#/$defs/revision"}
+  },
+  "$defs": {
+    "revision": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "value", "content_digest", "observed_at"],
+      "properties": {
+        "kind": {"type": "string"}, "value": {"type": "string"},
+        "content_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "observed_at": {"type": "string", "format": "date-time"}
+      }
+    }
+  }
+}

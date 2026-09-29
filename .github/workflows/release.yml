@@ -1,0 +1,81 @@
+name: Release skeleton
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to embed in the archive metadata
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Package release artifacts
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - { goos: linux, goarch: amd64, archive: tar.gz }
+          - { goos: darwin, goarch: arm64, archive: tar.gz }
+          - { goos: windows, goarch: amd64, archive: zip }
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.26.x"
+          check-latest: true
+      - name: Validate version input
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [[ ! "$VERSION" =~ ^[0-9A-Za-z][0-9A-Za-z._+-]*$ ]]; then
+            echo "ERROR: Version must contain only letters, digits, dot, underscore, plus, or hyphen." >&2
+            exit 1
+          fi
+      - name: Prepare output directory
+        shell: bash
+        run: mkdir -p dist
+      - name: Build
+        env:
+          CGO_ENABLED: "0"
+          GOOS: ${{ matrix.target.goos }}
+          GOARCH: ${{ matrix.target.goarch }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          go build \
+            -ldflags "-X github.com/vantt/mcp-skill-hub/internal/version.Version=$VERSION" \
+            -o "dist/skillhub${{ matrix.target.goos == 'windows' && '.exe' || '' }}" \
+            ./cmd/skillhub
+      - name: Archive
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          mkdir -p artifacts
+          name="skillhub-${VERSION}-${{ matrix.target.goos }}-${{ matrix.target.goarch }}"
+          if [ "${{ matrix.target.archive }}" = "zip"; then
+            (cd dist && zip "../artifacts/${name}.zip" skillhub.exe)
+          else
+            tar -C dist -czf "artifacts/${name}.tar.gz" skillhub
+          fi
+      - name: Checksum
+        shell: bash
+        run: sha256sum artifacts/* > artifacts/checksums.txt
+      - name: Generate SBOM placeholder
+        shell: bash
+        run: printf '%s\n' 'SBOM generation will be configured before publishing releases.' > artifacts/SBOM-PLACEHOLDER.txt
+      - name: Signing placeholder
+        shell: bash
+        run: printf '%s\n' 'Artifact signing is intentionally not configured in this skeleton.' > artifacts/SIGNING-PLACEHOLDER.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: skillhub-${{ matrix.target.goos }}-${{ matrix.target.goarch }}
+          path: artifacts/
+
+# This workflow intentionally packages artifacts only. It does not create a
+# GitHub release, upload assets, sign artifacts, or publish to a package registry.

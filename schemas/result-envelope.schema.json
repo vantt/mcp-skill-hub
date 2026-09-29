@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillhub.local/schemas/result-envelope.schema.json",
+  "title": "Skill Hub result envelope",
+  "description": "Stable public result fields are marked public. Optional diagnostics and pagination extensions are experimental; implementation details remain internal.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "summary", "items", "suggested_actions", "warnings", "error"],
+  "properties": {
+    "schema_version": {"type": "string", "description": "public: Major result-envelope contract version."},
+    "status": {"type": "string", "enum": ["ok", "ready", "action_required", "applied", "recovery_required", "partial_failure", "error"], "description": "public: Stable outcome classification."},
+    "summary": {"type": "string", "minLength": 1, "description": "public: Concise user-facing outcome without internal cursor or snapshot terminology."},
+    "items": {"type": "array", "description": "public: Compact L1 item summaries.", "items": {"$ref": "#/$defs/item"}},
+    "suggested_actions": {"type": "array", "maxItems": 3, "description": "public: Ordered next actions; L0 responses contain exactly one.", "items": {"$ref": "#/$defs/action"}},
+    "warnings": {"type": "array", "description": "public: Non-fatal actionable warnings.", "items": {"$ref": "#/$defs/warning"}},
+    "error": {"description": "public: Present for error outcomes; null otherwise.", "oneOf": [{"type": "null"}, {"$ref": "error-envelope.schema.json"}]},
+    "operation_id": {"type": "string", "description": "public: Opaque operation receipt for a completed mutation."},
+    "proposal": {"$ref": "#/$defs/proposal", "description": "public: Pinned semantic-mutation preview; confirm with every opaque field."},
+    "next_page": {"type": "string", "description": "experimental: Opaque page continuation token; do not display to normal users."},
+    "diagnostics": {"type": "array", "description": "internal: Raw technical diagnostics, available only through explicit detail requests.", "items": {"type": "object"}}
+  },
+  "$defs": {
+    "item": {"type": "object", "additionalProperties": false, "required": ["id", "summary", "impact"], "properties": {"id": {"type": "string", "description": "public: Opaque item identifier."}, "summary": {"type": "string", "description": "public: Item summary."}, "impact": {"type": "string", "description": "public: User-relevant impact."}}},
+    "action": {"type": "object", "additionalProperties": false, "required": ["label", "command"], "properties": {"label": {"type": "string", "description": "public: Action label."}, "command": {"type": "string", "description": "public: Application command name."}, "requires_confirmation": {"type": "boolean", "description": "public: Whether confirmation is required."}}},
+    "warning": {"type": "object", "additionalProperties": false, "required": ["code", "summary"], "properties": {"code": {"type": "string", "description": "public: Stable warning code."}, "summary": {"type": "string", "description": "public: Actionable warning text."}}},
+    "proposal": {"type": "object", "additionalProperties": false, "required": ["id", "digest", "base_version"], "properties": {"id": {"type": "string", "description": "public: Opaque proposal identifier."}, "digest": {"type": "string", "description": "public: Opaque immutable proposal digest."}, "base_version": {"type": "string", "description": "public: Opaque target version pinned by confirmation."}}}
+  }
+}

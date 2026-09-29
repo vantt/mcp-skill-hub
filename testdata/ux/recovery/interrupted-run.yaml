@@ -1,0 +1,47 @@
+scenario: recovery-interrupted-run
+given:
+  run_id: run_l4x9
+  source_id: src_b7e1
+  last_completed_revision: rev_opaque_4
+  failed_resource_count: 2
+when:
+  intent: Resume pending work
+  application_command: RetryDistillRun
+expect:
+  status: recovery_required
+  summary: Analysis stopped before completion; source progress was not advanced.
+  suggested_actions:
+  - Retry failed resources
+  confirmation:
+    policy_revision: policy_v1
+    action_class: mechanical
+    application_command: RetryDistillRun
+    confirmation:
+      required: false
+      mode: explicit-request
+  progressive_disclosure:
+    L0:
+      counts:
+        interrupted_runs: 1
+        failed_resources: 2
+      recommended_action: Retry failed resources
+    L1:
+      items:
+      - id: run_l4x9
+        summary: Analysis stopped while reading resources
+        impact: No curated skill changed.
+    L2:
+      evidence:
+      - run_id: run_l4x9
+        source_id: src_b7e1
+        completed_through: rev_opaque_4
+      comparison: null
+    L3:
+      canonical_artifacts:
+      - run_l4x9
+      diagnostics:
+      - run_interrupted
+  error:
+    ERROR: Analysis did not complete.
+    WHY: Two resources were not processed before interruption.
+    FIX: Retry failed resources, save deferred coverage, or cancel the run.

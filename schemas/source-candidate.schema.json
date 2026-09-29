@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillhub.local/schemas/source-candidate.schema.json",
+  "title": "Skill Hub source candidate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "id", "locator", "captured_at", "reason", "status"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "id": {"type": "string", "pattern": "^SRCQ-[A-Z0-9_-]+$"},
+    "locator": {"type": "string", "minLength": 1, "maxLength": 4096},
+    "captured_at": {"type": "string", "format": "date-time"},
+    "reason": {"type": "string", "minLength": 1, "maxLength": 2000},
+    "status": {"enum": ["pending", "accepted", "rejected", "deferred"]},
+    "decision_reason": {"type": "string"}
+  },
+  "allOf": [
+    {"if": {"properties": {"status": {"const": "rejected"}}}, "then": {"required": ["decision_reason"]}}
+  ]
+}

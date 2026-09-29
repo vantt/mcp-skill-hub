@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillhub.local/schemas/skill-metadata.schema.json",
+  "title": "Curated skill metadata",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "id", "name", "status", "description", "routing"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"},
+    "name": {"type": "string", "minLength": 1},
+    "status": {"enum": ["draft", "active", "deprecated", "archived"]},
+    "description": {"type": "string", "minLength": 1},
+    "collection_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"},
+    "collection": {"type": ["string", "array"]},
+    "aliases": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "domain": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "topics": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "technologies": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "content": {"type": "object"},
+    "routing": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operations": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "triggers": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "not_for": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "min_scope": {"enum": ["", "single_step", "multi_step", "project"]},
+        "requirements": {"type": "object"},
+        "boosts": {"type": "object"},
+        "distinguish_from": {"type": "array"},
+        "supporting": {"type": "array"}
+      }
+    },
+    "quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "reviewed": {"type": "boolean"},
+        "curated": {"type": "boolean"},
+        "reviewed_at": {"type": "string", "format": "date-time"},
+        "routing_review_rationale": {"type": "string", "minLength": 1}
+      }
+    },
+    "provenance": {"type": "object"},
+    "history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["state", "occurred_at"],
+        "properties": {
+          "from": {"enum": ["draft", "active", "deprecated"]},
+          "state": {"enum": ["draft", "active", "deprecated", "archived"]},
+          "occurred_at": {"type": "string", "format": "date-time"}
+        }
+      }
+    },
+    "created_at": {"type": "string", "format": "date-time"},
+    "updated_at": {"type": "string", "format": "date-time"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "active"}}, "required": ["status"]},
+      "then": {
+        "properties": {
+          "routing": {
+            "required": ["triggers", "not_for", "min_scope"],
+            "properties": {
+              "triggers": {"minItems": 1},
+              "min_scope": {"enum": ["single_step", "multi_step", "project"]}
+            }
+          }
+        }
+      }
+    }
+  ]
+}

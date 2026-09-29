@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillhub.local/schemas/canonical-entity.schema.json",
+  "title": "Skill Hub canonical entity",
+  "description": "Shared identity contract for YAML canonical entities. Curated skill metadata uses the strict lifecycle schema; other entity-specific invariants are enforced by the canonical workspace validator.",
+  "$defs": {
+    "entity": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "schema_version": {"type": ["string", "integer"]}
+      }
+    },
+    "skill_metadata": {"$ref": "skill-metadata.schema.json"},
+    "source_candidate": {"allOf": [{"$ref": "#/$defs/entity"}]},
+    "source": {"allOf": [{"$ref": "#/$defs/entity"}]},
+    "skill_source_link": {"allOf": [{"$ref": "#/$defs/entity"}], "required": ["skill_id", "source_id"], "properties": {"skill_id": {"type": "string"}, "source_id": {"type": "string"}}},
+    "run": {"allOf": [{"$ref": "#/$defs/entity"}]},
+    "finding": {"allOf": [{"$ref": "#/$defs/entity"}]},
+    "comparison": {"allOf": [{"$ref": "#/$defs/entity"}]},
+    "insight": {"allOf": [{"$ref": "#/$defs/entity"}]},
+    "proposal": {"allOf": [{"$ref": "#/$defs/entity"}]},
+    "incorporation": {"allOf": [{"$ref": "#/$defs/entity"}]},
+    "outcome": {"allOf": [{"$ref": "#/$defs/entity"}]},
+    "operation_receipt": {"allOf": [{"$ref": "#/$defs/entity"}]},
+    "config": {"type": "object"},
+    "evaluation": {"allOf": [{"$ref": "#/$defs/entity"}]}
+  }
+}

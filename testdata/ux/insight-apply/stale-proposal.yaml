@@ -1,0 +1,53 @@
+scenario: insight-apply-stale-proposal
+given:
+  insight_id: ins_y8p3
+  proposal_id: prop_m6d2
+  proposal_digest: sha256:opaque-proposal
+  base_version: sha256:opaque-base
+  current_version: sha256:opaque-current
+when:
+  intent: Approve the reviewed insight
+  application_command: ConfirmInsightApplication
+expect:
+  status: error
+  summary: Proposal is stale; nothing was applied.
+  suggested_actions:
+  - Regenerate the proposal
+  confirmation:
+    policy_revision: policy_v1
+    action_class: semantic
+    application_command: ConfirmInsightApplication
+    confirmation:
+      required: true
+      mode: preview-and-approval
+      pins:
+        proposal_id: prop_m6d2
+        proposal_digest: sha256:opaque-proposal
+        base_version: sha256:opaque-base
+  progressive_disclosure:
+    L0:
+      counts:
+        stale_proposals: 1
+      recommended_action: Regenerate the proposal
+    L1:
+      items:
+      - id: prop_m6d2
+        summary: Reviewed proposal no longer matches the target
+        impact: Active content remains unchanged.
+    L2:
+      evidence:
+      - proposal_id: prop_m6d2
+        base_version: sha256:opaque-base
+        current_version: sha256:opaque-current
+      comparison:
+        changed: true
+    L3:
+      canonical_artifacts:
+      - ins_y8p3
+      - prop_m6d2
+      diagnostics:
+      - proposal_stale
+  error:
+    ERROR: The proposal can no longer be confirmed.
+    WHY: The target changed after the preview was created.
+    FIX: Regenerate the proposal and review the updated diff.

@@ -1,0 +1,46 @@
+scenario: source-maintenance-unavailable-source
+given:
+  workspace:
+    health: valid
+    index: current
+  source_id: src_u2c6
+  check_attempts: 3
+when:
+  intent: Check source availability
+  application_command: CheckSources
+expect:
+  status: error
+  summary: One source could not be reached; curated skills are unchanged.
+  suggested_actions:
+  - Retry the source check
+  confirmation:
+    policy_revision: policy_v1
+    action_class: network
+    application_command: CheckSources
+    confirmation:
+      required: true
+      mode: explicit-request
+  progressive_disclosure:
+    L0:
+      counts:
+        unavailable_sources: 1
+      recommended_action: Retry the source check
+    L1:
+      items:
+      - id: src_u2c6
+        summary: Source is temporarily unavailable
+        impact: Last known content remains valid.
+    L2:
+      evidence:
+      - source_id: src_u2c6
+        attempts: 3
+      comparison: null
+    L3:
+      canonical_artifacts:
+      - src_u2c6
+      diagnostics:
+      - source_unavailable
+  error:
+    ERROR: Source could not be reached.
+    WHY: Three checks did not obtain a current revision.
+    FIX: Retry the source check, pause monitoring, or inspect diagnostics.

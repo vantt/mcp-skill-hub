@@ -1,0 +1,47 @@
+scenario: insight-apply-high-value-insight-review
+given:
+  workspace:
+    health: valid
+    index: current
+    git_dirty: false
+  insight_id: ins_b4n1
+  evidence_ids:
+  - obs_f7k3
+  - cmp_r2v8
+when:
+  intent: Review important insights
+  application_command: GetInsightInbox
+expect:
+  status: ok
+  summary: One high-value insight is ready for review.
+  suggested_actions:
+  - Review the insight recommendation
+  confirmation:
+    policy_revision: policy_v1
+    action_class: read-only
+    application_command: GetInsightInbox
+    confirmation:
+      required: false
+      mode: none
+  progressive_disclosure:
+    L0:
+      counts:
+        high_value_insights: 1
+      recommended_action: Review the insight recommendation
+    L1:
+      items:
+      - id: ins_b4n1
+        summary: Add explicit failure-mode review
+        impact: Improves one local workflow section.
+    L2:
+      evidence:
+      - obs_f7k3
+      - cmp_r2v8
+      comparison:
+        verdict: convergent
+    L3:
+      canonical_artifacts:
+      - ins_b4n1
+      - obs_f7k3
+      - cmp_r2v8
+      diagnostics: []

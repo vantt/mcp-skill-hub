@@ -1,0 +1,46 @@
+scenario: source-maintenance-changed-sources
+given:
+  workspace:
+    health: valid
+    index: current
+  changed_source_ids:
+  - src_d8f2
+  - src_h5j7
+  revision_digests:
+  - sha256:opaque-a
+  - sha256:opaque-b
+when:
+  intent: Distill all changed sources
+  application_command: PrepareDistillRuns
+expect:
+  status: ready
+  summary: Two changed sources are ready for analysis; active skills will not change.
+  suggested_actions:
+  - Start analysis for changed sources
+  confirmation:
+    policy_revision: policy_v1
+    action_class: mechanical
+    application_command: PrepareDistillRuns
+    confirmation:
+      required: false
+      mode: explicit-request
+  progressive_disclosure:
+    L0:
+      counts:
+        changed_sources: 2
+      recommended_action: Start analysis for changed sources
+    L1:
+      items:
+      - id: src_d8f2
+        summary: New source content is available
+        impact: May produce review proposals.
+    L2:
+      evidence:
+      - source_id: src_d8f2
+        revision: rev_opaque_1
+      comparison:
+        changed_paths: 4
+    L3:
+      canonical_artifacts:
+      - src_d8f2
+      diagnostics: []

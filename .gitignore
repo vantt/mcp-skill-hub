@@ -1,0 +1,6 @@
+# SQLite files are disposable runtime projections and must never be committed.
+*.db
+*.db-shm
+*.db-wal
+/runtime/
+/.skillhub/transactions/

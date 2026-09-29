@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillhub.local/schemas/source-link.schema.json",
+  "title": "Skill Hub source-to-skill link",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "id", "skill_id", "source_id", "role"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "skill_id": {"type": "string", "minLength": 1},
+    "source_id": {"type": "string", "minLength": 1},
+    "role": {"enum": ["learning-source", "origin", "inspiration"]}
+  }
+}

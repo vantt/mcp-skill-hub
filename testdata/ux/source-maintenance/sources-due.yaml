@@ -1,0 +1,45 @@
+scenario: source-maintenance-sources-due
+given:
+  workspace:
+    health: valid
+    index: current
+  due_source_ids:
+  - src_n3k8
+  - src_p6r1
+  - src_t4w9
+when:
+  intent: Check sources due for updates
+  application_command: CheckSources
+expect:
+  status: action_required
+  summary: Three sources are due for an update check.
+  suggested_actions:
+  - Check all due sources
+  confirmation:
+    policy_revision: policy_v1
+    action_class: network
+    application_command: CheckSources
+    confirmation:
+      required: false
+      mode: explicit-request
+  progressive_disclosure:
+    L0:
+      counts:
+        sources_due: 3
+      recommended_action: Check all due sources
+    L1:
+      items:
+      - id: src_n3k8
+        summary: Source update check is due
+        impact: New learning may be waiting.
+    L2:
+      evidence:
+      - source_id: src_n3k8
+        monitoring: due
+      comparison: null
+    L3:
+      canonical_artifacts:
+      - src_n3k8
+      - src_p6r1
+      - src_t4w9
+      diagnostics: []

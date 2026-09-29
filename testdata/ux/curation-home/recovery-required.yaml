@@ -1,0 +1,47 @@
+scenario: curation-home-recovery-required
+given:
+  workspace:
+    health: valid
+    index: current
+    git_dirty: true
+  interrupted_run_id: run_x7m2
+  counts:
+    interrupted_runs: 1
+    changed_sources: 3
+    pending_insights: 5
+when:
+  intent: Curate my Skill Hub
+  application_command: GetCurationHome
+expect:
+  status: recovery_required
+  summary: One analysis run needs recovery before optional work.
+  suggested_actions:
+  - Resume the interrupted run
+  confirmation:
+    policy_revision: policy_v1
+    action_class: read-only
+    application_command: GetCurationHome
+    confirmation:
+      required: false
+      mode: none
+  progressive_disclosure:
+    L0:
+      counts:
+        recovery_items: 1
+        optional_items: 8
+      recommended_action: Resume the interrupted run
+    L1:
+      items:
+      - id: run_x7m2
+        summary: Analysis stopped before completion
+        impact: No source progress was saved.
+    L2:
+      evidence:
+      - run_id: run_x7m2
+        state: interrupted
+      comparison: null
+    L3:
+      canonical_artifacts:
+      - run_x7m2
+      diagnostics:
+      - recovery_journal_present
