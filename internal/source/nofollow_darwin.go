@@ -1,11 +1,13 @@
-//go:build !linux && !darwin
+//go:build darwin
 
 package source
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 func openNoFollow(rootPath, relative string) (*os.File, error) {
@@ -23,5 +25,21 @@ func openNoFollow(rootPath, relative string) (*os.File, error) {
 			return nil, ErrInvalidLocator
 		}
 	}
-	return os.Open(current)
+	file, err := os.OpenFile(current, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+	if err != nil {
+		if errors.Is(err, syscall.ELOOP) {
+			return nil, ErrInvalidLocator
+		}
+		return nil, err
+	}
+	fi, err := file.Stat()
+	if err != nil {
+		file.Close()
+		return nil, err
+	}
+	if !fi.Mode().IsRegular() {
+		file.Close()
+		return nil, ErrInvalidLocator
+	}
+	return file, nil
 }

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 )
@@ -251,13 +252,16 @@ func RemediationFiles(root string) ([]RemediationFile, error) {
 
 func safeTarget(root string) error {
 	for path := root; ; path = filepath.Dir(path) {
+		if parent := filepath.Dir(path); parent == path {
+			break
+		}
+		// On macOS, system directories like /var, /tmp, /etc are symlinks to /private/...
+		if runtime.GOOS == "darwin" && (path == "/var" || path == "/tmp" || path == "/etc") {
+			continue
+		}
 		info, err := os.Lstat(path)
 		if err == nil && info.Mode()&os.ModeSymlink != 0 {
 			return fmt.Errorf("workspace path must not contain a symlink: %s", path)
-		}
-		parent := filepath.Dir(path)
-		if parent == path {
-			break
 		}
 	}
 	// Check the closest existing ancestor before creating any path. This prevents init
@@ -273,13 +277,22 @@ func safeTarget(root string) error {
 		}
 		ancestor = parent
 	}
-	if gitRoot, err := gitRoot(ancestor); err == nil && filepath.Clean(gitRoot) != filepath.Clean(root) {
+	if gitRoot, err := gitRoot(ancestor); err == nil && !samePath(gitRoot, root) {
 		return fmt.Errorf("refusing nested workspace inside Git repository %s; choose a directory outside it", gitRoot)
 	}
 	if isGitRepository(root) && looksLikeSourceCheckout(root) {
 		return fmt.Errorf("refusing source checkout as workspace: %s", root)
 	}
 	return nil
+}
+
+func samePath(a, b string) bool {
+	ca := filepath.Clean(filepath.FromSlash(strings.TrimSpace(a)))
+	cb := filepath.Clean(filepath.FromSlash(strings.TrimSpace(b)))
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(ca, cb)
+	}
+	return ca == cb
 }
 
 func gitRoot(root string) (string, error) {

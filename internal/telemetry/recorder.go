@@ -277,6 +277,13 @@ func (r *Recorder) Close(ctx context.Context) error {
 queued:
 	select {
 	case result := <-item.response:
+		if result.err == nil {
+			select {
+			case <-r.done:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
 		return result.err
 	case <-ctx.Done():
 		return ctx.Err()

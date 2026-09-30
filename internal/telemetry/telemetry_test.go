@@ -370,7 +370,7 @@ func TestCloseCanRetryAfterCanceledFullQueue(t *testing.T) {
 	}
 	select {
 	case <-recorder.done:
-	default:
+	case <-time.After(time.Second):
 		t.Fatal("writer goroutine remained live after successful close")
 	}
 }

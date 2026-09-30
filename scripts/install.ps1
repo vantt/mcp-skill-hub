@@ -373,9 +373,9 @@ function Download-ReleaseFile {
         Die "Refusing non-HTTPS download: $url"
     }
 
-    $curlCmd = Get-Command 'curl.exe' -ErrorAction SilentlyContinue
+    $curlCmd = Get-Command 'curl' -ErrorAction SilentlyContinue
     if ($null -eq $curlCmd) {
-        $curlCmd = Get-Command 'curl' -ErrorAction SilentlyContinue
+        $curlCmd = Get-Command 'curl.exe' -ErrorAction SilentlyContinue
     }
 
     if ($null -ne $curlCmd) {
@@ -427,9 +427,9 @@ function Verify-ReleaseManifest {
         return
     }
 
-    $cosignCmd = Get-Command 'cosign.exe' -ErrorAction SilentlyContinue
+    $cosignCmd = Get-Command 'cosign' -ErrorAction SilentlyContinue
     if ($null -eq $cosignCmd) {
-        $cosignCmd = Get-Command 'cosign' -ErrorAction SilentlyContinue
+        $cosignCmd = Get-Command 'cosign.exe' -ErrorAction SilentlyContinue
     }
 
     if ($null -ne $cosignCmd) {
@@ -672,9 +672,9 @@ if ($isSameVersion) {
 }
 
 # Check signature requirement before network operations
-$cosignCmd = Get-Command 'cosign.exe' -ErrorAction SilentlyContinue
+$cosignCmd = Get-Command 'cosign' -ErrorAction SilentlyContinue
 if ($null -eq $cosignCmd) {
-    $cosignCmd = Get-Command 'cosign' -ErrorAction SilentlyContinue
+    $cosignCmd = Get-Command 'cosign.exe' -ErrorAction SilentlyContinue
 }
 if ($isRequireSignature -and [string]::IsNullOrWhiteSpace($env:SKILLHUB_LOCAL_FIXTURE) -and ($null -eq $cosignCmd)) {
     Die "Signature verification is required (SKILLHUB_REQUIRE_SIGNATURE=1) but cosign is not installed. Install cosign from https://github.com/sigstore/cosign to continue."

@@ -2,6 +2,9 @@
 # Hermetic lifecycle and release-security coverage.
 set -eu
 
+unset XDG_CONFIG_HOME || true
+XDG_CONFIG_HOME=""
+export XDG_CONFIG_HOME
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 TEST_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/skillhub lifecycle.XXXXXXXX")
 trap 'rm -rf "$TEST_ROOT"' EXIT HUP INT TERM
@@ -514,13 +517,13 @@ zsh_block_count=$(grep -c '^# >>> skillhub >>>$' "$FAKE_ZDOT/.zshrc")
 # 3. Fish: ~/.config/fish/conf.d/skillhub.fish
 FISH_HOME="$TEST_ROOT/fake-fish-home"
 mkdir -p "$FISH_HOME/.config/fish/conf.d"
-SHELL=/usr/bin/fish HOME=$FISH_HOME SKILLHUB_FIXTURE_VERIFIER=$FIXTURE_VERIFIER \
+XDG_CONFIG_HOME="" SHELL=/usr/bin/fish HOME=$FISH_HOME SKILLHUB_FIXTURE_VERIFIER=$FIXTURE_VERIFIER \
 	"$SCRIPT_DIR/install.sh" --version 1.0.0 --local-fixture "$fixture_v1" --prefix "$FISH_HOME/.local" --os linux --arch amd64 >/dev/null
 fish_cfg="$FISH_HOME/.config/fish/conf.d/skillhub.fish"
 assert_file "$fish_cfg"
 grep -q "fish_add_path \"$FISH_HOME/.local/bin\"" "$fish_cfg" || fail 'fish_add_path missing in skillhub.fish'
 # Idempotent:
-SHELL=/usr/bin/fish HOME=$FISH_HOME SKILLHUB_FIXTURE_VERIFIER=$FIXTURE_VERIFIER \
+XDG_CONFIG_HOME="" SHELL=/usr/bin/fish HOME=$FISH_HOME SKILLHUB_FIXTURE_VERIFIER=$FIXTURE_VERIFIER \
 	"$SCRIPT_DIR/install.sh" --version 1.0.0 --local-fixture "$fixture_v1" --prefix "$FISH_HOME/.local" --os linux --arch amd64 >/dev/null
 fish_block_count=$(grep -c '^# >>> skillhub >>>$' "$fish_cfg")
 [ "$fish_block_count" -eq 1 ] || fail "marked block not idempotent in fish config: count=$fish_block_count"
