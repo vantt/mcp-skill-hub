@@ -289,6 +289,12 @@ func safeTarget(root string) error {
 func samePath(a, b string) bool {
 	ca := filepath.Clean(filepath.FromSlash(strings.TrimSpace(a)))
 	cb := filepath.Clean(filepath.FromSlash(strings.TrimSpace(b)))
+	if realA, err := filepath.EvalSymlinks(ca); err == nil {
+		ca = filepath.Clean(realA)
+	}
+	if realB, err := filepath.EvalSymlinks(cb); err == nil {
+		cb = filepath.Clean(realB)
+	}
 	if runtime.GOOS == "windows" {
 		return strings.EqualFold(ca, cb)
 	}

@@ -432,7 +432,11 @@ func rejectSymlinkComponents(root *os.Root, relative string) error {
 }
 
 func sqliteURL(path string) string {
-	return (&url.URL{Scheme: "file", Path: filepath.ToSlash(path)}).String()
+	p := filepath.ToSlash(filepath.Clean(path))
+	if !strings.HasPrefix(p, "/") {
+		p = "/" + p
+	}
+	return (&url.URL{Scheme: "file", Path: p}).String()
 }
 
 func writeEvents(ctx context.Context, config Config, events []storedEnvelope) error {

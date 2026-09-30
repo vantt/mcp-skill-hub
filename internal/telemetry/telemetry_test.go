@@ -1048,7 +1048,7 @@ func TestPreviewAcceptsRowsWrittenWithVariablePrecisionTimestamps(t *testing.T) 
 	recorder.Record(event)
 	mustFlush(t, recorder)
 
-	database, err := sql.Open("sqlite", "file:"+recorder.config.Path)
+	database, err := sql.Open("sqlite", sqliteURL(recorder.config.Path))
 	if err != nil {
 		t.Fatal(err)
 	}
