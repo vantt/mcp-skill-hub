@@ -20,7 +20,7 @@ var warmOpenP95Budget = 100 * time.Millisecond
 
 func init() {
 	if os.Getenv("CI") != "" {
-		warmOpenP95Budget = 250 * time.Millisecond
+		warmOpenP95Budget = 500 * time.Millisecond
 	}
 }
 

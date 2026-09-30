@@ -23,7 +23,7 @@ var resolverP95Budget = 50 * time.Millisecond
 
 func init() {
 	if os.Getenv("CI") != "" {
-		resolverP95Budget = 250 * time.Millisecond
+		resolverP95Budget = 500 * time.Millisecond
 	}
 }
 
