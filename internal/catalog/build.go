@@ -8,17 +8,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/vantt/mcp-skill-hub/internal/canonical"
+	"github.com/vantt/mcp-skill-hub/internal/mutation"
+	"github.com/vantt/mcp-skill-hub/internal/version"
 	"io/fs"
+	_ "modernc.org/sqlite"
 	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"unicode"
-	"github.com/vantt/mcp-skill-hub/internal/canonical"
-	"github.com/vantt/mcp-skill-hub/internal/mutation"
-	"github.com/vantt/mcp-skill-hub/internal/version"
-	_ "modernc.org/sqlite"
 )
 
 // BuildCatalogGeneration creates, verifies, and atomically publishes one immutable catalog.

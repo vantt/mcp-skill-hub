@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/evaluation"
+	"github.com/vantt/mcp-skill-hub/internal/telemetry"
 	"io"
 	"io/fs"
 	"os"
@@ -12,9 +15,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"github.com/vantt/mcp-skill-hub/internal/app"
-	"github.com/vantt/mcp-skill-hub/internal/evaluation"
-	"github.com/vantt/mcp-skill-hub/internal/telemetry"
 )
 
 type evaluationFlags struct {
