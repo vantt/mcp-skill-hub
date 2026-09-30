@@ -404,7 +404,7 @@ func anchorSQLitePath(directory *os.File, directoryPath, databaseName string) (s
 			return filepath.Join(candidate, databaseName), nil
 		}
 	}
-	return "", errors.New("stable telemetry directory descriptor path is unavailable")
+	return filepath.Join(directoryPath, databaseName), nil
 }
 
 func rejectSymlinkComponents(root *os.Root, relative string) error {

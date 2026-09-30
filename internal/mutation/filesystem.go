@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -383,6 +384,9 @@ func ensureAbsoluteDirectory(path string, mode fs.FileMode) error {
 }
 
 func ensureDirectory(path string, mode fs.FileMode) error {
+	if runtime.GOOS == "darwin" && (path == "/var" || path == "/tmp" || path == "/etc") {
+		return nil
+	}
 	info, err := os.Lstat(path)
 	if errors.Is(err, os.ErrNotExist) {
 		if err := os.Mkdir(path, mode); err != nil && !errors.Is(err, fs.ErrExist) {
@@ -403,6 +407,9 @@ func ensureDirectory(path string, mode fs.FileMode) error {
 }
 
 func syncDir(path string) error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
 	directory, err := os.Open(path)
 	if err != nil {
 		return err

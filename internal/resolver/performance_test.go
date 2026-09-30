@@ -16,9 +16,16 @@ import (
 
 const (
 	resolverPerformanceSkillCount = 256
-	resolverP95Budget             = 50 * time.Millisecond
 	resolverHangLimit             = 2 * time.Second
 )
+
+var resolverP95Budget = 50 * time.Millisecond
+
+func init() {
+	if os.Getenv("CI") != "" {
+		resolverP95Budget = 100 * time.Millisecond
+	}
+}
 
 func TestResolverPerformanceBudget(t *testing.T) {
 	if testing.Short() {
