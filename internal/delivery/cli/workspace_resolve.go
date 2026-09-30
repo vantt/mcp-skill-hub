@@ -155,12 +155,13 @@ func isHomeDir(dir, homeDir string) bool {
 		return false
 	}
 	cleanDir := filepath.Clean(dir)
-	if cleanDir == homeDir {
+	cleanHome := filepath.Clean(homeDir)
+	if strings.EqualFold(cleanDir, cleanHome) {
 		return true
 	}
 	evalDir, errDir := filepath.EvalSymlinks(cleanDir)
-	evalHome, errHome := filepath.EvalSymlinks(homeDir)
-	if errDir == nil && errHome == nil && evalDir == evalHome {
+	evalHome, errHome := filepath.EvalSymlinks(cleanHome)
+	if errDir == nil && errHome == nil && strings.EqualFold(evalDir, evalHome) {
 		return true
 	}
 	return false

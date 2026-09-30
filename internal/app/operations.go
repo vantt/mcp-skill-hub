@@ -262,7 +262,16 @@ func parsePorcelain(output []byte) ([]DiffFile, error) {
 }
 
 func safeRelativePath(path string) bool {
-	return path != "" && path != "." && !filepath.IsAbs(filepath.FromSlash(path)) && path != ".." && !strings.HasPrefix(path, "../")
+	if path == "" || path == "." || path == ".." || strings.HasPrefix(path, "../") {
+		return false
+	}
+	if strings.HasPrefix(path, "/") || strings.HasPrefix(path, "\\") {
+		return false
+	}
+	if filepath.VolumeName(path) != "" || filepath.IsAbs(filepath.FromSlash(path)) {
+		return false
+	}
+	return true
 }
 
 func canonicalDiffPath(path string) bool {

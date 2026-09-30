@@ -86,7 +86,7 @@ func TestSkillCLIConfirmsStoredExactProposalAndRejectsInterveningEdit(t *testing
 	}
 	pins := preview.Confirmation.Confirmation.Pins
 	artifact := filepath.Join(root, "runtime", "proposals", pins.ProposalID+".json")
-	if info, err := os.Stat(artifact); err != nil || info.Mode().Perm()&0o077 != 0 {
+	if info, err := os.Stat(artifact); err != nil || (runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0) {
 		t.Fatalf("proposal artifact mode = %v, %v", info, err)
 	}
 	confirm := []string{"skill", "confirm", "--workspace", root, "--proposal", pins.ProposalID, "--proposal-digest", pins.ProposalDigest, "--base-version", pins.BaseVersion, "--json"}

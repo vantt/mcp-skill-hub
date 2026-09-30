@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -22,7 +23,7 @@ func TestRuntimeApplicationProposalIsPersistedRestrictivelyAndExactly(t *testing
 		t.Fatal("immutable proposal was overwritten")
 	}
 	path := filepath.Join(root, "runtime", "insight-proposals", "APP-fixture.json")
-	if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0o600 {
+	if info, err := os.Stat(path); err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0o600) {
 		t.Fatalf("mode = %v, %v", info, err)
 	}
 	loaded, err := LoadRuntimeProposal(root, proposal.ID, now.Add(time.Minute))

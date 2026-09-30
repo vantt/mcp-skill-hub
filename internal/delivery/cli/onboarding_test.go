@@ -145,10 +145,15 @@ func TestConnectPreviewThenApplyWritesProjectFilesOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{`"skillhub"`, workspace, `"mcp"`} {
+	workspaceJSON, _ := json.Marshal(workspace)
+	escapedWorkspace := string(workspaceJSON[1 : len(workspaceJSON)-1])
+	for _, want := range []string{`"skillhub"`, `"mcp"`} {
 		if !strings.Contains(string(registration), want) {
 			t.Fatalf(".mcp.json is missing %q:\n%s", want, registration)
 		}
+	}
+	if !strings.Contains(string(registration), workspace) && !strings.Contains(string(registration), escapedWorkspace) {
+		t.Fatalf(".mcp.json is missing workspace %q:\n%s", workspace, registration)
 	}
 	for _, path := range []string{"CLAUDE.md", "AGENTS.md", "GEMINI.md", ".claude/skills/system-curator/SKILL.md", ".agents/skills/system-curator/SKILL.md", ".gemini/skills/system-curator/SKILL.md", ".codex/config.toml", ".gemini/settings.json"} {
 		if _, err := os.Stat(filepath.Join(project, filepath.FromSlash(path))); err != nil {
@@ -229,6 +234,7 @@ func TestConnectGlobalWritesUserScopeAndPreservesClaudeConfig(t *testing.T) {
 	workspace := initTestWorkspace(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	existing := "{\n  \"numStartups\": 7,\n  \"projects\": {\"/p\": {\"allowedTools\": []}},\n  \"mcpServers\": {\"keep\": {\"command\": \"keep\"}}\n}\n"
 	if err := os.WriteFile(filepath.Join(home, ".claude.json"), []byte(existing), 0o600); err != nil {
 		t.Fatal(err)
@@ -247,10 +253,15 @@ func TestConnectGlobalWritesUserScopeAndPreservesClaudeConfig(t *testing.T) {
 		t.Fatalf("apply exit = %d: %s", code, stderr)
 	}
 	got, _ := os.ReadFile(filepath.Join(home, ".claude.json"))
-	for _, want := range []string{`"numStartups": 7`, `"allowedTools": []`, `"keep": {"command": "keep"}`, `"skillhub"`, workspace} {
+	workspaceJSON, _ := json.Marshal(workspace)
+	escapedWorkspace := string(workspaceJSON[1 : len(workspaceJSON)-1])
+	for _, want := range []string{`"numStartups": 7`, `"allowedTools": []`, `"keep": {"command": "keep"}`, `"skillhub"`} {
 		if !strings.Contains(string(got), want) {
 			t.Fatalf("~/.claude.json is missing %q:\n%s", want, got)
 		}
+	}
+	if !strings.Contains(string(got), workspace) && !strings.Contains(string(got), escapedWorkspace) {
+		t.Fatalf("~/.claude.json is missing workspace %q:\n%s", workspace, got)
 	}
 	for _, path := range []string{".claude/CLAUDE.md", ".claude/skills/system-curator/SKILL.md", ".codex/config.toml", ".codex/AGENTS.md", ".agents/skills/system-curator/SKILL.md", ".gemini/settings.json", ".gemini/GEMINI.md", ".gemini/skills/system-curator/SKILL.md"} {
 		if _, err := os.Stat(filepath.Join(home, filepath.FromSlash(path))); err != nil {

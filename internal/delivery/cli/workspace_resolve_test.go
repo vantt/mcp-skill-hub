@@ -237,6 +237,7 @@ func TestWorkspaceResolutionNeverScansHome(t *testing.T) {
 	t.Setenv(workspaceEnvVar, "")
 	fakeHome := t.TempDir()
 	t.Setenv("HOME", fakeHome)
+	t.Setenv("USERPROFILE", fakeHome)
 
 	// Put a valid workspace right inside fakeHome/.skillhub/schema-version
 	if err := os.MkdirAll(filepath.Join(fakeHome, ".skillhub"), 0o755); err != nil {

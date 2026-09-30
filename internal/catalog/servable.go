@@ -23,6 +23,7 @@ var ErrSkillNotServable = errors.New("skill cannot be served")
 // ParseSkillFrontmatter decodes SKILL.md frontmatter into the JSON data model
 // carried by skill distribution.
 func ParseSkillFrontmatter(contents []byte) (map[string]any, error) {
+	contents = bytes.ReplaceAll(contents, []byte("\r\n"), []byte("\n"))
 	if !bytes.HasPrefix(contents, []byte("---\n")) {
 		return nil, errors.New("SKILL.md must begin with YAML frontmatter")
 	}

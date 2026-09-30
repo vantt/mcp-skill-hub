@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -116,7 +117,7 @@ func LoadProposal(root, id string, now time.Time) (Proposal, error) {
 	if err != nil {
 		return Proposal{}, err
 	}
-	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 {
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() || (runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0) {
 		return Proposal{}, errors.New("proposal artifact is not a restrictive regular file")
 	}
 	data, err := rootHandle.ReadFile(path)

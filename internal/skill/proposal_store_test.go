@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -28,7 +29,7 @@ func TestProposalArtifactRoundTripIsRestrictiveAndExpires(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := filepath.Join(root, "runtime", "proposals", proposal.ID+".json")
-	if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0o600 {
+	if info, err := os.Stat(path); err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0o600) {
 		t.Fatalf("artifact mode = %v, %v", info, err)
 	}
 	loaded, err := LoadProposal(root, proposal.ID, now.Add(time.Hour))

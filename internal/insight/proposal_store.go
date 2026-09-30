@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -110,7 +111,7 @@ func LoadRuntimeProposal(root, id string, now time.Time) (RuntimeProposal, error
 	if err != nil {
 		return RuntimeProposal{}, err
 	}
-	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 || info.Size() > 64<<20 {
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() || (runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0) || info.Size() > 64<<20 {
 		return RuntimeProposal{}, errors.New("application proposal artifact is unsafe")
 	}
 	data, err := handle.ReadFile(path)

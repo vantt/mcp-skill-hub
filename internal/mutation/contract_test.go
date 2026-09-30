@@ -4,15 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/vantt/mcp-skill-hub/internal/canonical"
+	"github.com/vantt/mcp-skill-hub/internal/workspace"
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/vantt/mcp-skill-hub/internal/canonical"
-	"github.com/vantt/mcp-skill-hub/internal/workspace"
 )
 
 func TestPlanAndConfirmPinProposalAndCanonicalState(t *testing.T) {
@@ -375,6 +375,9 @@ func TestTransactionFilesRemainRestrictive(t *testing.T) {
 		if entry.IsDir() {
 			want = 0o700
 		}
+		if runtime.GOOS == "windows" {
+			return nil
+		}
 		if info.Mode().Perm()&^want != 0 {
 			return fmt.Errorf("transaction path %s mode %o is broader than %o", path, info.Mode().Perm(), want)
 		}
@@ -528,8 +531,10 @@ func TestRollbackAfterReceiptFaultRestoresReplaceDeleteAndCreate(t *testing.T) {
 			t.Fatalf("rollback %s = %q, %v", path, got, err)
 		}
 	}
-	if info, err := os.Stat(filepath.Join(root, filepath.FromSlash(replacePath))); err != nil || info.Mode().Perm() != 0o750 {
-		t.Fatalf("replacement mode after rollback = %v, %v", info, err)
+	if runtime.GOOS != "windows" {
+		if info, err := os.Stat(filepath.Join(root, filepath.FromSlash(replacePath))); err != nil || info.Mode().Perm() != 0o750 {
+			t.Fatalf("replacement mode after rollback = %v, %v", info, err)
+		}
 	}
 	if _, err := os.Stat(filepath.Join(root, "sources/catalog/SRC-C-CREATE.yaml")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("created path remains: %v", err)
@@ -577,10 +582,12 @@ func TestReplacementPreservesPermissionsAndNewFilesUseCanonicalDefault(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	for file, want := range map[string]os.FileMode{path: 0o750, "sources/catalog/SRC-NEW-MODE.yaml": 0o644} {
-		info, err := os.Stat(filepath.Join(root, filepath.FromSlash(file)))
-		if err != nil || info.Mode().Perm() != want {
-			t.Fatalf("mode %s = %v, %v; want %v", file, info, err, want)
+	if runtime.GOOS != "windows" {
+		for file, want := range map[string]os.FileMode{path: 0o750, "sources/catalog/SRC-NEW-MODE.yaml": 0o644} {
+			info, err := os.Stat(filepath.Join(root, filepath.FromSlash(file)))
+			if err != nil || info.Mode().Perm() != want {
+				t.Fatalf("mode %s = %v, %v; want %v", file, info, err, want)
+			}
 		}
 	}
 }
