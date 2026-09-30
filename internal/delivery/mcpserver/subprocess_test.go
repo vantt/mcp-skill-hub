@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -544,6 +545,9 @@ func TestMultipleStdioProcessesReadAcrossApply(t *testing.T) {
 func buildSkillHub(t *testing.T) string {
 	t.Helper()
 	binary := filepath.Join(t.TempDir(), "skillhub")
+	if runtime.GOOS == "windows" {
+		binary += ".exe"
+	}
 	command := exec.Command("go", "build", "-o", binary, "./cmd/skillhub")
 	command.Dir = filepath.Clean(filepath.Join("..", "..", ".."))
 	if output, err := command.CombinedOutput(); err != nil {

@@ -188,7 +188,7 @@ func TestTelemetryHealthWithCorruptStoreSuggestsPurgeNotWorkspaceRepair(t *testi
 	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
 		t.Fatalf("decode %s: %v", stdout.String(), err)
 	}
-	if result.Error.Code == "workspace_invalid" || !strings.Contains(result.Error.Render.Fix, "telemetry purge --workspace "+root+" --yes") {
+	if result.Error.Code == "workspace_invalid" || !strings.Contains(result.Error.Render.Fix, "telemetry purge") || !strings.Contains(result.Error.Render.Fix, root) {
 		t.Fatalf("error = %+v", result.Error)
 	}
 

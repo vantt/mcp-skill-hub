@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -96,14 +97,41 @@ func setupCLIFixtureServer(t *testing.T, targetVersion string, archiveBytes []by
 	}))
 }
 
+func getCompiledTestBinary(t *testing.T, versionOutput string) []byte {
+	t.Helper()
+	if runtime.GOOS != "windows" {
+		return []byte("#!/bin/sh\ncase \"$1\" in version) echo \"" + versionOutput + "\";; *) echo ok;; esac\n")
+	}
+	dir := t.TempDir()
+	src := filepath.Join(dir, "main.go")
+	code := fmt.Sprintf("package main\nimport (\n\t\"fmt\"\n\t\"os\"\n)\nfunc main() {\n\tif len(os.Args) > 1 && os.Args[1] == \"version\" {\n\t\tfmt.Println(%q)\n\t\tos.Exit(0)\n\t}\n\tos.Exit(0)\n}\n", versionOutput)
+	if err := os.WriteFile(src, []byte(code), 0644); err != nil {
+		t.Fatal(err)
+	}
+	exe := filepath.Join(dir, "mock.exe")
+	cmd := exec.Command("go", "build", "-o", exe, src)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("compile test binary: %v\n%s", err, out)
+	}
+	data, err := os.ReadFile(exe)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
+}
+
 func setupCLIManagedInstall(t *testing.T, initialVersion string) string {
 	t.Helper()
 	tempDir := t.TempDir()
-	exePath := filepath.Join(tempDir, "skillhub")
+	binName := "skillhub"
+	if runtime.GOOS == "windows" {
+		binName = "skillhub.exe"
+	}
+	exePath := filepath.Join(tempDir, binName)
 	markerPath := filepath.Join(tempDir, ".skillhub-managed")
 
-	script := "#!/bin/sh\ncase \"$1\" in version) echo \"" + initialVersion + "\";; *) echo ok;; esac\n"
-	if err := os.WriteFile(exePath, []byte(script), 0755); err != nil {
+	script := getCompiledTestBinary(t, initialVersion)
+	if err := os.WriteFile(exePath, script, 0755); err != nil {
 		t.Fatal(err)
 	}
 	markerContent := fmt.Sprintf("skillhub-managed-v1\nversion=%s\n", initialVersion)
@@ -180,8 +208,12 @@ func TestUpdateHelp(t *testing.T) {
 }
 
 func TestUpdateCheckAvailable(t *testing.T) {
-	newBinary := []byte("#!/bin/sh\ncase \"$1\" in version) echo \"0.2.0\";; esac\n")
-	archiveBytes := createCLITestTarGz(t, "skillhub", newBinary)
+	newBinary := getCompiledTestBinary(t, "0.2.0")
+	binName := "skillhub"
+	if runtime.GOOS == "windows" {
+		binName = "skillhub.exe"
+	}
+	archiveBytes := createCLITestArchive(t, binName, newBinary)
 	server := setupCLIFixtureServer(t, "0.2.0", archiveBytes)
 	defer server.Close()
 
@@ -209,8 +241,12 @@ func TestUpdateCheckAvailable(t *testing.T) {
 }
 
 func TestUpdateCheckAlreadyUpToDate(t *testing.T) {
-	newBinary := []byte("#!/bin/sh\ncase \"$1\" in version) echo \"0.1.0\";; esac\n")
-	archiveBytes := createCLITestTarGz(t, "skillhub", newBinary)
+	newBinary := getCompiledTestBinary(t, "0.1.0")
+	binName := "skillhub"
+	if runtime.GOOS == "windows" {
+		binName = "skillhub.exe"
+	}
+	archiveBytes := createCLITestArchive(t, binName, newBinary)
 	server := setupCLIFixtureServer(t, "0.1.0", archiveBytes)
 	defer server.Close()
 
@@ -232,8 +268,12 @@ func TestUpdateCheckAlreadyUpToDate(t *testing.T) {
 }
 
 func TestUpdateCheckJSON(t *testing.T) {
-	newBinary := []byte("#!/bin/sh\ncase \"$1\" in version) echo \"0.2.0\";; esac\n")
-	archiveBytes := createCLITestTarGz(t, "skillhub", newBinary)
+	newBinary := getCompiledTestBinary(t, "0.2.0")
+	binName := "skillhub"
+	if runtime.GOOS == "windows" {
+		binName = "skillhub.exe"
+	}
+	archiveBytes := createCLITestArchive(t, binName, newBinary)
 	server := setupCLIFixtureServer(t, "0.2.0", archiveBytes)
 	defer server.Close()
 
@@ -271,7 +311,7 @@ func TestUpdateCheckJSON(t *testing.T) {
 }
 
 func TestUpdateApplySuccess(t *testing.T) {
-	newBinary := []byte("#!/bin/sh\ncase \"$1\" in version) echo \"0.2.0\";; esac\n")
+	newBinary := getCompiledTestBinary(t, "0.2.0")
 	binName := "skillhub"
 	if runtime.GOOS == "windows" {
 		binName = "skillhub.exe"
@@ -311,7 +351,7 @@ func TestUpdateApplySuccess(t *testing.T) {
 }
 
 func TestUpdateApplyJSON(t *testing.T) {
-	newBinary := []byte("#!/bin/sh\ncase \"$1\" in version) echo \"0.2.0\";; esac\n")
+	newBinary := getCompiledTestBinary(t, "0.2.0")
 	binName := "skillhub"
 	if runtime.GOOS == "windows" {
 		binName = "skillhub.exe"

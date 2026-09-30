@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -985,6 +986,9 @@ func TestHealthReportsCumulativeCountersAcrossRecorders(t *testing.T) {
 }
 
 func TestRecorderRecoversAfterRuntimeDirectoryIsRecreated(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows file locks prevent deleting directory with open SQLite file handles")
+	}
 	workspace := t.TempDir()
 	runtimeDir := filepath.Join(workspace, "runtime")
 	recorder := newTestRecorder(t, Config{Path: filepath.Join(runtimeDir, "telemetry.db"), WorkspaceRoot: workspace})

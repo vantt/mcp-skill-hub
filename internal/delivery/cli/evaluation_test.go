@@ -117,6 +117,10 @@ func copyEvaluationFixtureTree(t *testing.T, source, destination string) {
 		if err != nil {
 			return err
 		}
+		ext := strings.ToLower(filepath.Ext(path))
+		if ext == ".md" || ext == ".yaml" || ext == ".yml" || ext == ".json" {
+			contents = bytes.ReplaceAll(contents, []byte("\r\n"), []byte("\n"))
+		}
 		info, err := entry.Info()
 		if err != nil {
 			return err
