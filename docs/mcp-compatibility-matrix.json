@@ -1,0 +1,91 @@
+{
+  "schema_version": "1",
+  "generated_at": "2026-09-29T21:15:00+07:00",
+  "server": {
+    "name": "skillhub",
+    "transport": "stdio",
+    "preferred_protocol_revision": "2026-07-28",
+    "legacy_protocol_revision_tested": "2025-11-25",
+    "sdk": "github.com/modelcontextprotocol/go-sdk@v1.8.0",
+    "maximum_frame_bytes": 4194304
+  },
+  "executed_checks": [
+    {
+      "client": "github.com/modelcontextprotocol/go-sdk",
+      "client_version": "v1.8.0",
+      "status": "verified",
+      "transport": "in-memory",
+      "protocol_revisions": ["2026-07-28", "2025-11-25"],
+      "negotiation_labels": {
+        "2026-07-28": "server/discover modern negotiation",
+        "2025-11-25": "initialize legacy negotiation"
+      },
+      "operations": ["tools/list", "tools/call", "skills/list", "skills/get", "resources/read"],
+      "evidence": "go test ./internal/delivery/mcpserver -count=1 -run TestModernAndLegacySDKContracts"
+    },
+    {
+      "client": "@modelcontextprotocol/inspector",
+      "client_version": "2.8.0",
+      "status": "verified",
+      "transport": "stdio",
+      "protocol_revisions": ["2026-07-28"],
+      "negotiation_label": "server/discover modern negotiation",
+      "operations": ["tools/list --strict", "skills/list --verify", "skills/get", "resources/read"],
+      "skill_verification": {
+        "skills_checked": 1,
+        "files_checked": 1,
+        "conformance_errors": 0,
+        "frontmatter_errors": 0,
+        "digest_errors": 0
+      },
+      "schema_findings": {"errors": 0, "warnings": 0, "tools_checked": 27},
+      "evidence": "With an isolated temporary workspace/catalog/client config and a no-argument wrapper for the built server: npx --no-install @modelcontextprotocol/inspector --cli <wrapper> --protocol-era modern --transport stdio --method tools/list --strict --format json; repeat with --method skills/list --verify. Both exited 0; verification reported 1 skill and 1 file with no conformance errors.",
+      "notes": "The wrapper only supplies `skillhub mcp serve --workspace <temporary-workspace>` so Inspector options cannot be consumed as server arguments. No persistent Inspector state is reused."
+    }
+  ],
+  "unverified_checks": [
+    {
+      "tool": "@modelcontextprotocol/conformance",
+      "version": "0.1.16",
+      "status": "blocked_unverified",
+      "reason": "The released runner requires an HTTP URL and its listed scenarios stop at MCP 2025-11-25, while this server exposes stdio and targets 2026-07-28. No transport adapter was added merely to manufacture a conformance result."
+    }
+  ],
+  "stock_clients": [
+    {"client": "Claude Desktop", "status": "unverified", "reason": "No safely invocable installed stock-client harness was available.", "assumptions": []},
+    {
+      "client": "Claude Code",
+      "client_version": "2.1.284",
+      "status": "verified",
+      "transport": "stdio",
+      "operations": ["MCP registration", "system-curator load", "read-only curation inspection"],
+      "evidence": "In an isolated initialized workspace, `claude -p --mcp-config .mcp.json --strict-mcp-config --permission-mode bypassPermissions` was asked `Curate my Skill Hub`, to load system-curator, inspect only, and make no mutations. It exited 0 after seven turns, reported workspace/catalog/recovery/source/insight state, and left the workspace unchanged.",
+      "assumptions": ["The host retains final tool approval and activation authority."]
+    },
+    {"client": "Cursor", "status": "unverified", "reason": "No safely invocable installed stock-client harness was available.", "assumptions": []},
+    {
+      "client": "Codex CLI",
+      "client_version": "0.158.0",
+      "status": "blocked_unverified",
+      "reason": "The generated .codex/config.toml was parsed and the server registration was recognized, but the end-to-end curation run stopped before model/tool execution because the locally installed client could not refresh its authentication token (HTTP 401).",
+      "assumptions": ["Project trust or an explicit trusted automation mode is required before Codex enables project MCP configuration."]
+    },
+    {
+      "client": "Gemini CLI",
+      "status": "blocked_unverified",
+      "reason": "The generated .gemini/settings.json registration was recognized, but the installed host disabled the project server while the isolated folder was untrusted; no end-to-end curation claim is made.",
+      "assumptions": ["The project folder must be trusted before Gemini enables its MCP registration."]
+    }
+  ],
+  "transport_evidence": {
+    "malformed_json": "Go SDK v1.8.0 closes stdio without a JSON-RPC response, exits non-zero, emits zero stdout bytes, and records the parse failure on stderr. TestStdioEOFMalformedAndFrameLimit asserts the exact close/EOF behavior because the SDK does not permit the application handler to return a parse-error frame.",
+    "oversized_frame": "A frame larger than 4194304 bytes closes the stdio session and exits non-zero without leaving a subprocess."
+  },
+  "scope_notes": [
+    "The skills extension advertises directoryRead=false.",
+    "Stock-client support for SEP-2640 skills/list and skills/get is not claimed unless listed under executed_checks.",
+    "Recommendation remains exposed through skill_resolve and is not inferred from distribution support.",
+    "External conformance and stock-client checks are unverified, not not_applicable.",
+    "Claude Code is the only V1 stock client with executed end-to-end curation evidence. Codex and Gemini configuration projections are best-effort previews, not claimed supported until their blocked end-to-end checks pass."
+  ]
+}

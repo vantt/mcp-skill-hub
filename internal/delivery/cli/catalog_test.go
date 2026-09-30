@@ -45,6 +45,18 @@ func TestRebuildHumanOutputIncludesProgress(t *testing.T) {
 	if code := Run([]string{"rebuild", "--workspace", root}, &stdout, &stderr); code != 0 {
 		t.Fatalf("rebuild exit = %d: %s", code, stderr.String())
 	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected no stderr progress by default, got: %q", stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "Search index rebuilt.") {
+		t.Fatalf("expected summary line in stdout, got: %q", stdout.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if code := Run([]string{"rebuild", "--workspace", root, "--verbose"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("rebuild --verbose exit = %d: %s", code, stderr.String())
+	}
 	if !strings.Contains(stderr.String(), "[0/5]") || !strings.Contains(stderr.String(), "[5/5]") {
 		t.Fatalf("rebuild progress = %q", stderr.String())
 	}

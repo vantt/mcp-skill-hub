@@ -23,21 +23,55 @@ func runDistill(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), "distill requires a subcommand", "Run `skillhub distill prepare|start|submit|get|retry|cancel|findings|comparisons|insights`.")
 	}
 	sub := args[0]
+	switch sub {
+	case "prepare", "start", "retry", "cancel", "get", "submit", "findings", "comparisons", "insights":
+	default:
+		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), fmt.Sprintf("unsupported distill subcommand %q", sub), "Use prepare, start, submit, get, retry, cancel, findings, comparisons, or insights.")
+	}
 	flags, positionals, err := parseDistillFlags(args[1:])
 	if err != nil {
 		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Review distill command arguments and retry.")
 	}
+	switch sub {
+	case "prepare":
+		if len(positionals) == 0 && !flags.allChanged {
+			return writeInvalidRequest(stdout, stderr, flags.jsonOutput, "prepare requires source IDs or --all-changed", "Select at least one source.")
+		}
+	case "start", "retry", "cancel", "get":
+		if len(positionals) != 1 {
+			return writeInvalidRequest(stdout, stderr, flags.jsonOutput, sub+" requires exactly one run ID", "Provide one run ID.")
+		}
+	case "submit":
+		if len(positionals) != 1 || flags.submission == "" {
+			return writeInvalidRequest(stdout, stderr, flags.jsonOutput, "submit requires one run ID and --submission <json-file>", "Pass a structured submission containing coverage, findings, comparisons, and insights.")
+		}
+	case "findings", "comparisons", "insights":
+		if len(positionals) != 0 {
+			return writeInvalidRequest(stdout, stderr, flags.jsonOutput, sub+" accepts no positional arguments", "Use --source-id or --skill-id to filter.")
+		}
+	}
+	resolved, resErr := resolveWorkspace(flags.workspace)
+	if resErr != nil {
+		return writeWorkspaceResolutionError(stdout, stderr, flags.jsonOutput, resErr)
+	}
+	flags.workspace = resolved
 	service := app.DistillService{}
 	switch sub {
 	case "prepare":
 		if len(positionals) == 0 && !flags.allChanged {
 			return writeInvalidRequest(stdout, stderr, flags.jsonOutput, "prepare requires source IDs or --all-changed", "Select at least one source.")
 		}
+		finishTelemetry := startCommandTelemetry(flags.workspace, func(sink app.TelemetrySink) { service.Telemetry = sink })
+		defer finishTelemetry()
 		result, callErr := service.PrepareDistillRuns(ctx, flags.workspace, app.DistillPrepareInput{SourceIDs: positionals, AllChanged: flags.allChanged, IdempotencyKey: flags.idempotencyKey})
 		return writeDistill(stdout, stderr, flags.jsonOutput, result, callErr)
 	case "start", "retry", "cancel", "get":
 		if len(positionals) != 1 {
 			return writeInvalidRequest(stdout, stderr, flags.jsonOutput, sub+" requires exactly one run ID", "Provide one run ID.")
+		}
+		if sub != "get" {
+			finishTelemetry := startCommandTelemetry(flags.workspace, func(sink app.TelemetrySink) { service.Telemetry = sink })
+			defer finishTelemetry()
 		}
 		var result app.DistillRunResult
 		var callErr error
@@ -60,6 +94,8 @@ func runDistill(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		if decodeErr != nil {
 			return writeInvalidRequest(stdout, stderr, flags.jsonOutput, decodeErr.Error(), "Correct the structured submission and retry the run.")
 		}
+		finishTelemetry := startCommandTelemetry(flags.workspace, func(sink app.TelemetrySink) { service.Telemetry = sink })
+		defer finishTelemetry()
 		input.IdempotencyKey = firstText(flags.idempotencyKey, input.IdempotencyKey)
 		result, callErr := service.SubmitDistillRun(ctx, flags.workspace, positionals[0], input)
 		return writeDistill(stdout, stderr, flags.jsonOutput, result, callErr)
@@ -115,9 +151,6 @@ func parseDistillFlags(args []string) (distillFlags, []string, error) {
 			positionals = append(positionals, value)
 		}
 	}
-	if flags.workspace == "" {
-		return flags, nil, errors.New("--workspace is required for non-interactive use")
-	}
 	return flags, positionals, nil
 }
 
@@ -155,6 +188,9 @@ func writeDistill(stdout, stderr io.Writer, jsonOutput bool, value any, err erro
 			fmt.Fprintln(stderr, err)
 			return 1
 		}
+		if batch, ok := value.(app.DistillBatchResult); ok && batch.Prepared == 0 && batch.Failed > 0 {
+			return 1
+		}
 		return 0
 	}
 	switch result := value.(type) {
@@ -167,6 +203,10 @@ func writeDistill(stdout, stderr io.Writer, jsonOutput bool, value any, err erro
 			}
 			fmt.Fprintf(stdout, "- %s: %s\n", item.SourceID, state)
 		}
+		if result.Prepared == 0 && result.Failed > 0 {
+			return 1
+		}
+		return 0
 	case app.DistillRunResult:
 		fmt.Fprintf(stdout, "%s\nRun: %s [%s]\n", result.Summary, result.Run.ID, result.Run.State)
 	case app.DistillQueryResult:

@@ -18,11 +18,23 @@ func Run(args []string, stdout, stderr io.Writer) int {
 // RunContext executes a command with cancellation propagated to application services.
 func RunContext(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		return writeInvalidRequest(stdout, stderr, false, "No command was provided.", "Run `skillhub version` to inspect this build.")
+		return writeGlobalHelp(stdout)
 	}
 
 	jsonOutput := hasJSONFlag(args)
+	if isHelpFlag(args[0]) {
+		return writeGlobalHelp(stdout)
+	}
+	if wantsHelp(args[1:]) {
+		if code, ok := writeCommandHelp(stdout, args[0]); ok {
+			return code
+		}
+	}
 	switch args[0] {
+	case "help":
+		return runHelp(args[1:], stdout, stderr)
+	case "connect":
+		return runConnect(ctx, args[1:], stdout, stderr)
 	case "version":
 		return runVersion(args[1:], stdout, stderr)
 	case "status":
@@ -37,6 +49,8 @@ func RunContext(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		return runDiff(ctx, args[1:], stdout, stderr)
 	case "doctor":
 		return runDoctor(args[1:], stdout, stderr)
+	case "migrate":
+		return runMigrate(ctx, args[1:], stdout, stderr)
 	case "skill":
 		return runSkill(ctx, args[1:], stdout, stderr)
 	case "source":
@@ -49,8 +63,20 @@ func RunContext(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		return runInsight(ctx, args[1:], stdout, stderr)
 	case "check":
 		return runCheck(ctx, args[1:], stdout, stderr)
+	case "resolve":
+		return runResolve(ctx, args[1:], stdout, stderr)
+	case "resolution":
+		return runResolution(ctx, args[1:], stdout, stderr)
+	case "eval":
+		return runEvaluation(ctx, args[1:], stdout, stderr)
+	case "telemetry":
+		return runTelemetry(ctx, args[1:], stdout, stderr)
+	case "mcp":
+		return runMCP(ctx, args[1:], stdout, stderr)
+	case "update":
+		return runUpdate(ctx, args[1:], stdout, stderr)
 	default:
-		return writeInvalidRequest(stdout, stderr, jsonOutput, fmt.Sprintf("The command %q is not supported.", args[0]), "Run `skillhub version` to inspect this build.")
+		return writeInvalidRequest(stdout, stderr, jsonOutput, fmt.Sprintf("The command %q is not supported.", args[0]), "Run `skillhub help` to list commands.")
 	}
 }
 

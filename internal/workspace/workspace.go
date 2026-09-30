@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -13,7 +14,15 @@ import (
 	"strings"
 )
 
-const SchemaVersion = "1"
+const (
+	SchemaVersion = "1"
+
+	// V1 canonical workspaces are deliberately bounded so inventory, validation,
+	// and catalog builds cannot consume unbounded memory from workspace content.
+	MaxCanonicalFilesV1     = 8192
+	MaxCanonicalFileBytesV1 = int64(4 << 20)
+	MaxCanonicalBytesV1     = int64(64 << 20)
+)
 
 var requiredDirectories = []string{
 	"skills", "sources/intake", "sources/catalog", "sources/skills",
@@ -91,17 +100,38 @@ func Inspect(root string) (Plan, error) {
 	if !isGitRepository(root) {
 		findings = append(findings, Finding{"git_repository_missing", ".git", "Workspace is not a Git repository.", true})
 	}
-	versionPath := filepath.Join(root, ".skillhub", "schema-version")
-	version, versionErr := os.ReadFile(versionPath)
+	skillhubPath := filepath.Join(root, ".skillhub")
+	if err := rejectSymlink(skillhubPath); err != nil {
+		return Plan{}, err
+	}
+	_, skillhubErr := os.Lstat(skillhubPath)
+	versionPath := filepath.Join(skillhubPath, "schema-version")
+	version, versionErr := readCanonicalFileBounded(versionPath, ".skillhub/schema-version")
 	if versionErr != nil || strings.TrimSpace(string(version)) != SchemaVersion {
-		findings = append(findings, Finding{"schema_version_missing", ".skillhub/schema-version", "Workspace schema version is missing or incompatible.", true})
+		// A missing marker only means "new workspace" when nothing canonical exists
+		// yet. Otherwise it is a legacy layout that must go through migration, so
+		// doctor never writes the marker over existing canonical content.
+		if errors.Is(versionErr, os.ErrNotExist) && errors.Is(skillhubErr, os.ErrNotExist) && !hasCanonicalContent(root) {
+			findings = append(findings, Finding{"schema_version_missing", ".skillhub/schema-version", "Workspace schema version is missing.", true})
+		} else {
+			summary := "Canonical schema version is incompatible with this binary."
+			if errors.Is(versionErr, os.ErrNotExist) {
+				summary = "Canonical schema marker is missing (legacy version 0)."
+			} else if versionErr != nil {
+				return Plan{}, fmt.Errorf("read canonical schema version: %w", versionErr)
+			}
+			findings = append(findings, Finding{"canonical_schema_incompatible", ".skillhub/schema-version", summary, false})
+		}
 	}
 	for _, dir := range requiredDirectories {
 		if info, err := os.Stat(filepath.Join(root, filepath.FromSlash(dir))); err != nil || !info.IsDir() {
 			findings = append(findings, Finding{"directory_missing", dir, "Required canonical directory is missing.", true})
 		}
 	}
-	ignore, err := os.ReadFile(filepath.Join(root, ".gitignore"))
+	ignore, err := readCanonicalFileBounded(filepath.Join(root, ".gitignore"), ".gitignore")
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return Plan{}, fmt.Errorf("read .gitignore: %w", err)
+	}
 	for _, entry := range requiredIgnoreEntries {
 		if err != nil || !hasLine(string(ignore), entry) {
 			findings = append(findings, Finding{"gitignore_entry_missing", ".gitignore", "Required Git ignore entry is missing: " + entry, true})
@@ -110,11 +140,50 @@ func Inspect(root string) (Plan, error) {
 	return Plan{Root: root, Findings: findings}, nil
 }
 
+// hasCanonicalContent reports whether any canonical entity or skill file exists.
+// Directories alone are structure, not content, and links count as content so a
+// hostile layout is never treated as a fresh workspace.
+func hasCanonicalContent(root string) bool {
+	for _, directory := range requiredDirectories {
+		found := errors.New("canonical content found")
+		err := filepath.WalkDir(filepath.Join(root, filepath.FromSlash(directory)), func(_ string, entry fs.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return nil
+			}
+			if !entry.IsDir() {
+				return found
+			}
+			return nil
+		})
+		if errors.Is(err, found) {
+			return true
+		}
+	}
+	return false
+}
+
 // Apply bootstraps a workspace directly. Existing-workspace application code
 // uses PrepareLayout plus RemediationFiles and commits those files through the
 // mutation WAL; this direct path is retained for first-time workspace creation.
 func Apply(root string) (Plan, error) {
-	plan, err := PrepareLayout(root)
+	absoluteRoot, err := filepath.Abs(root)
+	if err != nil {
+		return Plan{}, fmt.Errorf("make workspace path absolute: %w", err)
+	}
+	if _, statErr := os.Lstat(absoluteRoot); statErr == nil {
+		existing, inspectErr := Inspect(absoluteRoot)
+		if inspectErr != nil {
+			return Plan{}, inspectErr
+		}
+		for _, finding := range existing.Findings {
+			if !finding.Fixable {
+				return existing, fmt.Errorf("%s: explicit canonical migration is required", finding.Summary)
+			}
+		}
+	} else if !errors.Is(statErr, os.ErrNotExist) {
+		return Plan{}, statErr
+	}
+	plan, err := PrepareLayout(absoluteRoot)
 	if err != nil {
 		return Plan{}, err
 	}
@@ -279,7 +348,7 @@ func desiredGitignore(root string) ([]byte, error) {
 	if err := rejectSymlink(path); err != nil {
 		return nil, err
 	}
-	contents, err := os.ReadFile(path)
+	contents, err := readCanonicalFileBounded(path, relativePath)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("read .gitignore: %w", err)
 	}
@@ -375,6 +444,60 @@ func writeManagedFile(root, relative string, contents []byte, mode fs.FileMode) 
 	return nil
 }
 
+func readCanonicalFileBounded(path, relative string) ([]byte, error) {
+	directory, err := os.OpenRoot(filepath.Dir(path))
+	if err != nil {
+		return nil, err
+	}
+	defer directory.Close()
+	return readBoundedFromRoot(directory, filepath.Base(path), relative)
+}
+
+// ReadCanonicalFile reads one workspace-relative regular file through an os.Root
+// so links cannot escape the workspace. Symlinks, non-regular files, and files
+// above the V1 per-file limit are rejected before any content is read.
+func ReadCanonicalFile(root, relative string) ([]byte, error) {
+	handle, err := os.OpenRoot(root)
+	if err != nil {
+		return nil, err
+	}
+	defer handle.Close()
+	return readBoundedFromRoot(handle, filepath.FromSlash(relative), relative)
+}
+
+func readBoundedFromRoot(root *os.Root, name, relative string) ([]byte, error) {
+	info, err := root.Lstat(name)
+	if err != nil {
+		return nil, err
+	}
+	if info.Mode()&fs.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("canonical input %s is not a regular file", relative)
+	}
+	if info.Size() > MaxCanonicalFileBytesV1 {
+		return nil, fmt.Errorf("canonical file %s exceeds V1 per-file limit of %d bytes", relative, MaxCanonicalFileBytesV1)
+	}
+	file, err := root.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	opened, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !opened.Mode().IsRegular() || opened.Size() > MaxCanonicalFileBytesV1 {
+		return nil, fmt.Errorf("canonical file %s exceeds V1 per-file limit of %d bytes", relative, MaxCanonicalFileBytesV1)
+	}
+	contents, err := io.ReadAll(io.LimitReader(file, MaxCanonicalFileBytesV1+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(contents)) > MaxCanonicalFileBytesV1 {
+		return nil, fmt.Errorf("canonical file %s exceeds V1 per-file limit of %d bytes", relative, MaxCanonicalFileBytesV1)
+	}
+	return contents, nil
+}
+
 func rejectSymlink(path string) error {
 	info, err := os.Lstat(path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -393,41 +516,115 @@ func rejectSymlink(path string) error {
 func RequiredDirectories() []string { return append([]string(nil), requiredDirectories...) }
 
 // RelativeFiles returns sorted regular files and refuses symlinks so callers cannot escape the workspace.
+// It enumerates directories in small batches and enforces the V1 count and byte ceilings before callers
+// allocate file contents.
 func RelativeFiles(root string) ([]string, error) {
-	var paths []string
-	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		rel, err := filepath.Rel(root, path)
-		if err != nil {
-			return err
-		}
-		if rel == "." {
-			return nil
-		}
-		rel = filepath.ToSlash(rel)
-		if rel == ".git" || strings.HasPrefix(rel, ".git/") || rel == "runtime" || strings.HasPrefix(rel, "runtime/") || rel == ".skillhub/transactions" || strings.HasPrefix(rel, ".skillhub/transactions/") {
-			if entry.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if entry.Type()&fs.ModeSymlink != 0 {
-			return fmt.Errorf("unsafe symlink: %s", rel)
-		}
-		if entry.IsDir() {
-			return nil
-		}
-		if !entry.Type().IsRegular() {
-			return fmt.Errorf("unsupported non-regular canonical path: %s", rel)
-		}
-		paths = append(paths, rel)
-		return nil
-	})
+	rootInfo, err := os.Lstat(root)
 	if err != nil {
 		return nil, err
 	}
+	if rootInfo.Mode()&fs.ModeSymlink != 0 {
+		return nil, fmt.Errorf("unsafe workspace root symlink: %s", root)
+	}
+	if !rootInfo.IsDir() {
+		return nil, fmt.Errorf("workspace root is not a directory: %s", root)
+	}
+	rootHandle, err := os.OpenRoot(root)
+	if err != nil {
+		return nil, fmt.Errorf("open workspace root: %w", err)
+	}
+	defer rootHandle.Close()
+
+	paths := make([]string, 0)
+	if err := collectCanonicalFiles(rootHandle, ".", &paths); err != nil {
+		return nil, err
+	}
 	sort.Strings(paths)
+	var total int64
+	for _, relative := range paths {
+		info, err := rootHandle.Lstat(filepath.FromSlash(relative))
+		if err != nil {
+			return nil, fmt.Errorf("inspect canonical file %s: %w", relative, err)
+		}
+		if info.Mode()&fs.ModeSymlink != 0 {
+			return nil, fmt.Errorf("unsafe symlink: %s", relative)
+		}
+		if !info.Mode().IsRegular() {
+			return nil, fmt.Errorf("unsupported non-regular canonical path: %s", relative)
+		}
+		if info.Size() > MaxCanonicalFileBytesV1 {
+			return nil, fmt.Errorf("canonical file %s exceeds V1 per-file limit of %d bytes", relative, MaxCanonicalFileBytesV1)
+		}
+		if info.Size() > MaxCanonicalBytesV1-total {
+			return nil, fmt.Errorf("canonical files exceed V1 aggregate limit of %d bytes at %s", MaxCanonicalBytesV1, relative)
+		}
+		total += info.Size()
+	}
 	return paths, nil
+}
+
+func collectCanonicalFiles(root *os.Root, directory string, paths *[]string) error {
+	handle, err := root.Open(directory)
+	if err != nil {
+		return err
+	}
+	defer handle.Close()
+	for {
+		entries, readErr := handle.ReadDir(64)
+		for _, entry := range entries {
+			native := filepath.Join(directory, entry.Name())
+			relative := filepath.ToSlash(strings.TrimPrefix(native, "."+string(filepath.Separator)))
+			if isNonCanonicalPath(relative) {
+				continue
+			}
+			if entry.Type()&fs.ModeSymlink != 0 {
+				return fmt.Errorf("unsafe symlink: %s", relative)
+			}
+			if entry.IsDir() {
+				if err := collectCanonicalFiles(root, native, paths); err != nil {
+					return err
+				}
+				continue
+			}
+			if !entry.Type().IsRegular() {
+				return fmt.Errorf("unsupported non-regular canonical path: %s", relative)
+			}
+			if len(*paths) >= MaxCanonicalFilesV1 {
+				return fmt.Errorf("canonical file count exceeds V1 limit of %d files", MaxCanonicalFilesV1)
+			}
+			*paths = append(*paths, relative)
+		}
+		if errors.Is(readErr, io.EOF) {
+			return nil
+		}
+		if readErr != nil {
+			return fmt.Errorf("read canonical directory %s: %w", directory, readErr)
+		}
+	}
+}
+
+// isNonCanonicalPath excludes derived state, repository metadata, and host
+// integration surfaces. Host config, native-skill copies, and instruction
+// files are operational projections; they must never affect canonical
+// validation, catalog snapshots, or Git-backed mutation transactions.
+func isNonCanonicalPath(relative string) bool {
+	for _, directory := range []string{
+		".git",
+		"runtime",
+		".skillhub/transactions",
+		".agents",
+		".claude",
+		".codex",
+		".gemini",
+	} {
+		if relative == directory || strings.HasPrefix(relative, directory+"/") {
+			return true
+		}
+	}
+	switch relative {
+	case ".mcp.json", "AGENTS.md", "CLAUDE.md", "GEMINI.md":
+		return true
+	default:
+		return false
+	}
 }

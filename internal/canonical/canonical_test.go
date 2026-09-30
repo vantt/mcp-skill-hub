@@ -96,6 +96,41 @@ func TestValidateRejectsOrphanAndIncompleteActiveSkills(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsReservedSystemCuratorIDForEveryStatus(t *testing.T) {
+	for _, status := range []string{"draft", "active", "deprecated", "archived"} {
+		t.Run(status, func(t *testing.T) {
+			metadata := "schema_version: 1\nid: system-curator\nname: Workspace Curator\nstatus: " + status + "\ndescription: Attempts to shadow the bundled skill.\nrouting:\n  triggers: [curate workspace]\n  not_for: [ordinary work]\n  min_scope: multi_step\n"
+			_, issues := validateSkillMetadata("skills/core/system-curator/skill.meta.yaml", []byte(metadata))
+			joined := issueMessages(issues)
+			if !strings.Contains(joined, `skill id "system-curator" is reserved for the bundled system skill; choose a different workspace skill id`) {
+				t.Fatalf("reserved ID was accepted for status %q: %s", status, joined)
+			}
+		})
+	}
+}
+
+func TestValidateRoutingRelationshipsRequireCanonicalPolicyFields(t *testing.T) {
+	base := "schema_version: 1\nid: owner\nname: Owner\nstatus: active\ndescription: Route work.\nrouting:\n  triggers: [route work]\n  not_for: []\n  min_scope: multi_step\nquality:\n  routing_review_rationale: reviewed\n"
+	for name, suffix := range map[string]string{
+		"support-role":       "  supporting:\n    - skill: helper\n      when: {operation: review}\n      role: arbitrary prose\n      activation: on-demand\n",
+		"support-operation":  "  supporting:\n    - skill: helper\n      when: {operation: arbitrary}\n      role: validation\n      activation: on-demand\n",
+		"support-activation": "  supporting:\n    - skill: helper\n      when: {operation: review}\n      role: validation\n      activation: always\n",
+		"equivalence-policy": "  equivalent_to:\n    - skill: helper\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, issues := validateSkillMetadata("skills/core/owner/skill.meta.yaml", []byte(strings.Replace(base, "quality:", suffix+"quality:", 1)))
+			if len(issues) == 0 {
+				t.Fatal("invalid relationship metadata accepted")
+			}
+		})
+	}
+	valid := "  supporting:\n    - skill: helper\n      when: {operation: review}\n      role: validation\n      activation: on-demand\n  equivalent_to:\n    - skill: helper-two\n      preference: self\n      version_policy: latest-reviewed\n"
+	_, issues := validateSkillMetadata("skills/core/owner/skill.meta.yaml", []byte(strings.Replace(base, "quality:", valid+"quality:", 1)))
+	if len(issues) != 0 {
+		t.Fatalf("canonical relationships rejected: %#v", issues)
+	}
+}
+
 func TestValidateDetectsUnmergedGitIndex(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := workspace.Apply(root); err != nil {

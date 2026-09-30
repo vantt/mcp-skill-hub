@@ -89,9 +89,15 @@ func (adapter GitRepositoryAdapter) Identify(ctx context.Context, locator Locato
 	var skillPaths []string
 	count := 0
 	err = root.Files().ForEach(func(file *object.File) error {
+		if locator.Path != "" {
+			prefix := strings.TrimSuffix(locator.Path, "/") + "/"
+			if !strings.HasPrefix(file.Name, prefix) && file.Name != locator.Path {
+				return nil
+			}
+		}
 		count++
 		if count > adapter.MaxFiles {
-			return ErrLimitExceeded
+			return &LimitExceededError{Limit: "files", Actual: int64(count), Max: int64(adapter.MaxFiles)}
 		}
 		upper := strings.ToUpper(file.Name)
 		if license == "" && (upper == "LICENSE" || strings.HasPrefix(upper, "LICENSE.") || upper == "COPYING") {
@@ -226,7 +232,7 @@ func (adapter GitRepositoryAdapter) Read(ctx context.Context, source Source, rev
 		return nil, ErrInvalidLocator
 	}
 	if file.Size > adapter.MaxFileSize {
-		return nil, ErrLimitExceeded
+		return nil, &LimitExceededError{Limit: "file_size", Actual: file.Size, Max: adapter.MaxFileSize, Path: resourcePath}
 	}
 	reader, err := file.Reader()
 	if err != nil {
@@ -257,7 +263,7 @@ func (adapter GitRepositoryAdapter) List(ctx context.Context, source Source, rev
 		}
 		total += item.size
 		if total > adapter.MaxBytes {
-			return nil, ErrLimitExceeded
+			return nil, &LimitExceededError{Limit: "bytes", Actual: total, Max: adapter.MaxBytes}
 		}
 		resources = append(resources, Resource{Path: name, Size: item.size})
 	}
@@ -299,12 +305,15 @@ func (adapter GitRepositoryAdapter) revisionFiles(ctx context.Context, repositor
 		if file.Mode == filemode.Symlink || (file.Mode != filemode.Regular && file.Mode != filemode.Executable) {
 			return ErrInvalidLocator
 		}
-		if len(files) >= adapter.MaxFiles || file.Size > adapter.MaxFileSize {
-			return ErrLimitExceeded
+		if len(files) >= adapter.MaxFiles {
+			return &LimitExceededError{Limit: "files", Actual: int64(len(files) + 1), Max: int64(adapter.MaxFiles)}
+		}
+		if file.Size > adapter.MaxFileSize {
+			return &LimitExceededError{Limit: "file_size", Actual: file.Size, Max: adapter.MaxFileSize, Path: name}
 		}
 		total += file.Size
 		if total > adapter.MaxBytes {
-			return ErrLimitExceeded
+			return &LimitExceededError{Limit: "bytes", Actual: total, Max: adapter.MaxBytes}
 		}
 		files[name] = gitFile{hash: file.Hash, size: file.Size}
 		return nil

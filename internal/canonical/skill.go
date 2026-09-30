@@ -13,7 +13,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const maxSkillResourceBytes = 16 << 20
+const (
+	maxSkillResourceBytes = 16 << 20
+	reservedSystemSkillID = "system-curator"
+)
 
 var skillIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
@@ -55,7 +58,7 @@ func validateSkills(root string, files []string) []Issue {
 			metadata = append(metadata, item)
 			entrypoint := item.Directory + "/SKILL.md"
 			if _, ok := fileSet[entrypoint]; !ok {
-				issues = append(issues, Issue{Path: entrypoint, Message: "skill entrypoint is missing"})
+				issues = append(issues, Issue{Path: entrypoint, Line: 1, Message: "skill entrypoint is missing", Fix: "Create SKILL.md in the skill directory."})
 			}
 			continue
 		}
@@ -107,25 +110,35 @@ func validateSkillMetadata(path string, contents []byte) (skillMetadata, []Issue
 		return item, []Issue{{Path: path, Message: "invalid skill metadata: " + err.Error()}}
 	}
 	var issues []Issue
-	add := func(message string) { issues = append(issues, Issue{Path: path, Message: message}) }
+	add := func(message string, node ...*yaml.Node) {
+		line := 1
+		if len(node) > 0 && node[0] != nil && node[0].Line > 0 {
+			line = node[0].Line
+		}
+		fix := skillIssueFix(message, item.ID)
+		issues = append(issues, Issue{Path: path, Line: line, Message: message, Fix: fix})
+	}
 	if scalarValue(values["schema_version"]) != "1" {
-		add("skill schema_version must be 1")
+		add("skill schema_version must be 1", values["schema_version"])
 	}
 	item.ID = scalar(values["id"])
 	if !skillIDPattern.MatchString(item.ID) {
 		add("skill id must be a lowercase kebab-case identifier")
+	}
+	if item.ID == reservedSystemSkillID {
+		add(fmt.Sprintf("skill id %q is reserved for the bundled system skill; choose a different workspace skill id", reservedSystemSkillID))
 	}
 	if item.ID != filepath.Base(item.Directory) {
 		add(fmt.Sprintf("skill id %q does not match directory %q", item.ID, filepath.Base(item.Directory)))
 	}
 	for _, field := range []string{"name", "description"} {
 		if strings.TrimSpace(scalar(values[field])) == "" {
-			add(field + " must be a non-empty string")
+			add(field+" must be a non-empty string", values[field])
 		}
 	}
 	item.Status = scalar(values["status"])
 	if !oneOf(item.Status, "draft", "active", "deprecated", "archived") {
-		add("skill status must be draft, active, deprecated, or archived")
+		add("skill status must be draft, active, deprecated, or archived", values["status"])
 	}
 	for _, field := range []string{"created_at", "updated_at"} {
 		if value := scalar(values[field]); value != "" {
@@ -170,7 +183,7 @@ func validateSkillMetadata(path string, contents []byte) (skillMetadata, []Issue
 		add("routing must be a mapping")
 		return item, issues
 	}
-	routingValues, err := mappingValues(routing, stringSet("operations", "triggers", "not_for", "min_scope", "requirements", "boosts", "distinguish_from", "supporting"))
+	routingValues, err := mappingValues(routing, stringSet("operations", "triggers", "not_for", "min_scope", "requirements", "boosts", "distinguish_from", "supporting", "equivalent_to"))
 	if err != nil {
 		add("invalid routing metadata: " + err.Error())
 		return item, issues
@@ -187,32 +200,40 @@ func validateSkillMetadata(path string, contents []byte) (skillMetadata, []Issue
 		add("routing.operations " + err.Error())
 	}
 	if scope := scalar(routingValues["min_scope"]); scope != "" && !oneOf(scope, "single_step", "multi_step", "project") {
-		add("routing.min_scope must be single_step, multi_step, or project")
+		add("routing.min_scope must be single_step, multi_step, or project", routingValues["min_scope"])
 	}
 	if requirements := routingValues["requirements"]; requirements != nil {
 		if err := validateRequirements(requirements); err != nil {
 			add("routing.requirements " + err.Error())
 		}
 	}
-	for _, field := range []string{"distinguish_from", "supporting"} {
-		targets, err := relationshipTargets(routingValues[field], field == "distinguish_from")
+	for _, field := range []string{"distinguish_from", "supporting", "equivalent_to"} {
+		targets, err := relationshipTargets(routingValues[field], field)
 		if err != nil {
 			add("routing." + field + " " + err.Error())
 		} else {
+			seen := make(map[string]bool, len(targets))
+			for _, target := range targets {
+				if seen[target] {
+					add("routing." + field + " must not contain duplicate skill targets")
+					break
+				}
+				seen[target] = true
+			}
 			item.Relationships = append(item.Relationships, targets...)
 		}
 	}
 	if item.Status == "active" {
 		if len(triggers) == 0 {
-			add("active skill requires at least one routing trigger")
+			add("active skill requires at least one routing trigger", routing)
 		}
 		if routingValues["not_for"] == nil {
-			add("active skill requires routing.not_for (an explicit empty list requires quality.routing_review_rationale)")
+			add("active skill requires routing.not_for (an explicit empty list requires quality.routing_review_rationale)", routing)
 		} else if len(notFor) == 0 && qualityRationale(values["quality"]) == "" {
-			add("active skill with empty routing.not_for requires quality.routing_review_rationale")
+			add("active skill with empty routing.not_for requires quality.routing_review_rationale", routing)
 		}
 		if scalar(routingValues["min_scope"]) == "" {
-			add("active skill requires routing.min_scope")
+			add("active skill requires routing.min_scope", routing)
 		}
 	}
 	return item, issues
@@ -308,19 +329,28 @@ func stringSequence(node *yaml.Node) ([]string, error) {
 	return result, nil
 }
 
-func relationshipTargets(node *yaml.Node, requireDiscriminator bool) ([]string, error) {
+func relationshipTargets(node *yaml.Node, kind string) ([]string, error) {
 	if node == nil {
 		return nil, nil
 	}
 	if node.Kind != yaml.SequenceNode {
 		return nil, fmt.Errorf("must be a sequence")
 	}
+	allowed := stringSet("skill")
+	switch kind {
+	case "distinguish_from":
+		allowed = stringSet("skill", "discriminator")
+	case "supporting":
+		allowed = stringSet("skill", "when", "role", "activation")
+	case "equivalent_to":
+		allowed = stringSet("skill", "preference", "version_policy")
+	}
 	var result []string
 	for _, entry := range node.Content {
 		if entry.Kind != yaml.MappingNode {
 			return nil, fmt.Errorf("entries must be mappings")
 		}
-		values, err := mappingValues(entry, stringSet("skill", "discriminator", "when", "role", "activation"))
+		values, err := mappingValues(entry, allowed)
 		if err != nil {
 			return nil, err
 		}
@@ -328,7 +358,8 @@ func relationshipTargets(node *yaml.Node, requireDiscriminator bool) ([]string, 
 		if !skillIDPattern.MatchString(target) {
 			return nil, fmt.Errorf("entry skill must be a lowercase kebab-case identifier")
 		}
-		if requireDiscriminator {
+		switch kind {
+		case "distinguish_from":
 			discriminator := values["discriminator"]
 			if discriminator == nil || discriminator.Kind != yaml.MappingNode {
 				return nil, fmt.Errorf("distinguish_from entries require a discriminator mapping")
@@ -340,6 +371,29 @@ func relationshipTargets(node *yaml.Node, requireDiscriminator bool) ([]string, 
 			choices, err := stringSequence(fields["choices"])
 			if err != nil || len(choices) < 2 {
 				return nil, fmt.Errorf("discriminator choices must contain at least two strings")
+			}
+		case "supporting":
+			when := values["when"]
+			if when == nil || when.Kind != yaml.MappingNode {
+				return nil, fmt.Errorf("supporting entries require when.operation")
+			}
+			fields, err := mappingValues(when, stringSet("operation"))
+			operation := scalar(fields["operation"])
+			if err != nil || !oneOf(operation, "explore", "design", "implement", "review", "debug", "test", "refactor", "migrate", "document", "operate", "research", "other") {
+				return nil, fmt.Errorf("supporting when.operation is invalid")
+			}
+			if !oneOf(scalar(values["role"]), "validation", "research", "implementation", "review", "documentation", "operations") {
+				return nil, fmt.Errorf("supporting role is invalid")
+			}
+			if scalar(values["activation"]) != "on-demand" {
+				return nil, fmt.Errorf("supporting activation must be on-demand")
+			}
+		case "equivalent_to":
+			if !oneOf(scalar(values["preference"]), "self", "target") {
+				return nil, fmt.Errorf("equivalent_to preference is invalid")
+			}
+			if !oneOf(scalar(values["version_policy"]), "exact", "compatible", "latest-reviewed") {
+				return nil, fmt.Errorf("equivalent_to version_policy is invalid")
 			}
 		}
 		result = append(result, target)
@@ -465,4 +519,43 @@ func oneOf(value string, candidates ...string) bool {
 		}
 	}
 	return false
+}
+
+func parseFrontmatterName(content []byte) (string, int, bool) {
+	if !bytes.HasPrefix(content, []byte("---\n")) && !bytes.HasPrefix(content, []byte("---\r\n")) {
+		return "", 0, false
+	}
+	lines := strings.Split(string(content), "\n")
+	for i := 1; i < len(lines); i++ {
+		line := strings.TrimSpace(lines[i])
+		if line == "---" {
+			break
+		}
+		if strings.HasPrefix(line, "name:") {
+			val := strings.TrimSpace(strings.TrimPrefix(line, "name:"))
+			val = strings.Trim(val, `"'`)
+			return val, i + 1, true
+		}
+	}
+	return "", 0, false
+}
+
+func skillIssueFix(message, id string) string {
+	if id == "" {
+		id = "<id>"
+	}
+	switch {
+	case strings.Contains(message, "trigger"):
+		return fmt.Sprintf("Run `skillhub skill edit %s --trigger \"<when to use>\" --yes`", id)
+	case strings.Contains(message, "not_for"):
+		return fmt.Sprintf("Run `skillhub skill edit %s --not-for \"<when not to use>\" --yes`", id)
+	case strings.Contains(message, "min_scope"):
+		return fmt.Sprintf("Run `skillhub skill edit %s --min-scope <single_step|multi_step|project> --yes`", id)
+	case strings.Contains(message, "description"):
+		return fmt.Sprintf("Run `skillhub skill edit %s --description \"<description>\" --yes`", id)
+	case strings.Contains(message, "status"):
+		return "Set status to draft, active, deprecated, or archived"
+	default:
+		return "Correct the field in this file and run `skillhub validate`."
+	}
 }

@@ -1,0 +1,22 @@
+schema_version: 1
+id: deploy-service
+name: Deploy Service
+status: active
+description: Deploy applications and services to production.
+routing:
+  operations: [operate]
+  triggers: [deploy application service production]
+  not_for: [unrelated tasks]
+  min_scope: multi_step
+quality:
+  reviewed: true
+provenance:
+  created_by: skillhub
+history:
+  - state: draft
+    occurred_at: "2026-09-29T00:00:00Z"
+  - from: draft
+    state: active
+    occurred_at: "2026-09-29T00:00:01Z"
+created_at: "2026-09-29T00:00:00Z"
+updated_at: "2026-09-29T00:00:01Z"

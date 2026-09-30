@@ -34,9 +34,8 @@ type change struct {
 	Receipt      bool   `json:"receipt,omitempty"`
 }
 
-func commitPrepared(root string, set WriteSet, changes []Change, resultSnapshot string, options Options) (Receipt, error) {
+func commitPrepared(root string, set WriteSet, changes []Change, resultSnapshot string, occurredAt time.Time, options Options) (Receipt, error) {
 	transactionsRoot := filepath.Join(root, ".skillhub", "transactions")
-	occurredAt := operationTime()
 	receiptPath := operationPath(set.OperationID, occurredAt)
 	if actual, err := digestAt(root, receiptPath); err != nil {
 		return Receipt{}, err
@@ -203,7 +202,11 @@ func commitPrepared(root string, set WriteSet, changes []Change, resultSnapshot 
 	for _, item := range entries {
 		paths = append(paths, item.Path)
 	}
-	return Receipt{OperationID: set.OperationID, ChangedPaths: paths, CatalogSnapshot: resultSnapshot, Generation: m.PublishedGeneration, GitDirty: dirty}, nil
+	return Receipt{
+		OperationID: set.OperationID, ChangedPaths: paths, CatalogSnapshot: resultSnapshot,
+		Generation: m.PublishedGeneration, GitDirty: dirty,
+		SourceSchemaVersion: set.SourceSchemaVersion, TargetSchemaVersion: set.TargetSchemaVersion,
+	}, nil
 }
 
 func writeManifest(txn string, m manifest) error {

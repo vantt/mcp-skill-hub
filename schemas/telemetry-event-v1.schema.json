@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillhub.local/schemas/telemetry-event-v1.schema.json",
+  "title": "Stored telemetry event v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_version", "event_id", "event_type", "occurred_at", "catalog_snapshot", "policy_revision", "client", "privacy", "payload"],
+  "properties": {
+    "event_version": {"const": "1"},
+    "event_id": {"$ref": "#/$defs/token"},
+    "event_type": {"$ref": "#/$defs/eventType"},
+    "occurred_at": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?Z$"},
+    "session_id_hash": {"$ref": "#/$defs/token"},
+    "request_id": {"$ref": "#/$defs/token"},
+    "resolution_id": {"$ref": "#/$defs/token"},
+    "catalog_snapshot": {"$ref": "#/$defs/token"},
+    "policy_revision": {"$ref": "#/$defs/token"},
+    "client": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {"$ref": "#/$defs/token"},
+        "version": {"$ref": "#/$defs/token"}
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["content_mode", "redaction_version"],
+      "properties": {
+        "content_mode": {"const": "none"},
+        "redaction_version": {"const": "redact-v1"}
+      }
+    },
+    "payload": {"type": "object"}
+  },
+  "allOf": [
+    {"$ref": "#/$defs/routingEvent"},
+    {"$ref": "#/$defs/routingResultRecommendations"},
+    {"$ref": "#/$defs/feedbackEventReasons"},
+    {"$ref": "#/$defs/clarificationEvent"},
+    {"$ref": "#/$defs/skillEvent"},
+    {"$ref": "#/$defs/taskEvent"},
+    {"$ref": "#/$defs/curationEvent"},
+    {"$ref": "#/$defs/distillationEvent"},
+    {"$ref": "#/$defs/entityEvent"},
+    {"$ref": "#/$defs/systemEvent"}
+  ],
+  "$defs": {
+    "token": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@+\\-]{0,255}$"},
+    "tokens": {"type": "array", "maxItems": 64, "items": {"$ref": "#/$defs/token"}},
+    "feedbackReasonCode": {"enum": ["user_rejected", "scope_mismatch", "capability_unavailable", "constraint_conflict", "workflow_completed", "workflow_failed", "abandoned", "host_report"]},
+    "feedbackReasonCodes": {"type": "array", "maxItems": 64, "items": {"$ref": "#/$defs/feedbackReasonCode"}},
+    "count": {"type": "integer", "minimum": 0, "maximum": 1000000000000},
+    "curationCount": {"type": "integer", "minimum": 0, "maximum": 10000},
+    "curationDurationMillis": {"type": "integer", "minimum": 0, "maximum": 604800000},
+    "curationStatus": {"enum": ["completed", "partial", "failed", "abandoned"]},
+    "curationBasis": {"enum": ["host-reported", "controlled-benchmark"]},
+    "curationErrorCode": {"enum": ["capability_unavailable", "internal_error", "operation_cancelled", "partial_failure", "recovery_required", "source_unavailable", "validation_failed"]},
+    "stageMillis": {
+      "type": "object",
+      "maxProperties": 32,
+      "propertyNames": {"$ref": "#/$defs/token"},
+      "additionalProperties": {"$ref": "#/$defs/count"}
+    },
+    "eventType": {
+      "enum": [
+        "resolution.started", "resolution.recommended", "resolution.completed", "resolution.failed",
+        "clarification.requested", "clarification.answered",
+        "skill.activated", "activation.approved", "activation.rejected", "skill.loaded", "skill.used", "skill.completed", "skill.abandoned",
+        "task.completed", "task.outcome_reported", "skill.utility_reported",
+        "source_candidate.captured", "source_candidate.triaged", "source.checked", "curation.session_completed",
+        "distill_run.prepared", "distill_run.submitted", "distill_run.finalized", "distill_run.failed",
+        "observation.created", "observation.updated", "observation.tombstoned", "coverage_gap.recorded", "comparison.updated", "insight.proposed", "insight.reopened", "incorporation.outcome_recorded",
+        "index.rebuilt", "catalog.changed", "evaluation.run_completed"
+      ]
+    },
+    "routingPayload": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "status": {"$ref": "#/$defs/token"}, "operation": {"$ref": "#/$defs/token"}, "artifact_kind": {"$ref": "#/$defs/token"},
+        "constraint_count": {"$ref": "#/$defs/count"}, "fact_keys": {"$ref": "#/$defs/tokens"}, "candidate_count": {"$ref": "#/$defs/count"},
+        "top_skill_id": {"$ref": "#/$defs/token"}, "skill_id": {"$ref": "#/$defs/token"}, "confidence_band": {"$ref": "#/$defs/token"},
+        "reason_codes": {"$ref": "#/$defs/tokens"}, "recommended_skill_ids": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"$ref": "#/$defs/token"}}, "channels": {"$ref": "#/$defs/tokens"}, "stage_ms": {"$ref": "#/$defs/stageMillis"},
+        "duration_ms": {"$ref": "#/$defs/count"}, "error_code": {"$ref": "#/$defs/token"}, "basis": {"$ref": "#/$defs/token"}
+      }
+    },
+    "clarificationRequestedPayload": {"type": "object", "additionalProperties": false, "properties": {"field": {"$ref": "#/$defs/token"}, "reason_codes": {"$ref": "#/$defs/tokens"}, "duration_ms": {"$ref": "#/$defs/count"}}},
+    "clarificationAnsweredPayload": {"type": "object", "additionalProperties": false, "properties": {"field": {"$ref": "#/$defs/token"}, "answer_kind": {"$ref": "#/$defs/token"}, "duration_ms": {"$ref": "#/$defs/count"}}},
+    "skillPayload": {"type": "object", "additionalProperties": false, "properties": {"skill_id": {"$ref": "#/$defs/token"}, "status": {"$ref": "#/$defs/token"}, "reason_codes": {"$ref": "#/$defs/tokens"}, "basis": {"$ref": "#/$defs/token"}, "duration_ms": {"$ref": "#/$defs/count"}, "error_code": {"$ref": "#/$defs/token"}}},
+    "taskCompletedPayload": {"type": "object", "additionalProperties": false, "properties": {"status": {"$ref": "#/$defs/token"}, "duration_ms": {"$ref": "#/$defs/count"}, "skill_count": {"$ref": "#/$defs/count"}}},
+    "taskOutcomePayload": {"type": "object", "additionalProperties": false, "required": ["status"], "dependentRequired": {"utility": ["basis"], "basis": ["utility"]}, "properties": {"status": {"$ref": "#/$defs/token"}, "skill_id": {"$ref": "#/$defs/token"}, "utility": {"enum": ["helpful", "harmful", "neutral"]}, "basis": {"enum": ["user", "evaluator", "controlled-benchmark"]}, "reason_codes": {"$ref": "#/$defs/feedbackReasonCodes"}, "duration_ms": {"$ref": "#/$defs/count"}}},
+    "skillUtilityPayload": {"type": "object", "additionalProperties": false, "required": ["utility", "basis"], "properties": {"skill_id": {"$ref": "#/$defs/token"}, "utility": {"enum": ["helpful", "harmful", "neutral"]}, "basis": {"enum": ["user", "evaluator", "controlled-benchmark"]}, "reason_codes": {"$ref": "#/$defs/feedbackReasonCodes"}}},
+    "curationPayload": {"type": "object", "additionalProperties": false, "properties": {"candidate_id": {"$ref": "#/$defs/token"}, "source_id": {"$ref": "#/$defs/token"}, "status": {"$ref": "#/$defs/token"}, "triage": {"$ref": "#/$defs/token"}, "reason_codes": {"$ref": "#/$defs/tokens"}, "duration_ms": {"$ref": "#/$defs/count"}, "error_code": {"$ref": "#/$defs/token"}}},
+    "curationSessionPayload": {"type": "object", "additionalProperties": false, "required": ["status", "basis"], "properties": {"status": {"$ref": "#/$defs/curationStatus"}, "basis": {"$ref": "#/$defs/curationBasis"}, "turns_to_next_action": {"$ref": "#/$defs/curationCount"}, "unnecessary_confirmations": {"$ref": "#/$defs/curationCount"}, "prompts_per_batch": {"$ref": "#/$defs/curationCount"}, "batch_size": {"$ref": "#/$defs/curationCount"}, "auto_finalized": {"type": "boolean"}, "recovery_completed": {"type": "boolean"}, "routine_git_noise": {"$ref": "#/$defs/curationCount"}, "duration_ms": {"$ref": "#/$defs/curationDurationMillis"}, "error_code": {"$ref": "#/$defs/curationErrorCode"}}, "allOf": [{"if": {"properties": {"status": {"const": "completed"}}, "required": ["status"]}, "then": {"not": {"required": ["error_code"]}}}]}, 
+    "distillPayload": {"type": "object", "additionalProperties": false, "properties": {"run_id": {"$ref": "#/$defs/token"}, "status": {"$ref": "#/$defs/token"}, "observation_count": {"$ref": "#/$defs/count"}, "coverage_gap_count": {"$ref": "#/$defs/count"}, "resource_count": {"$ref": "#/$defs/count"}, "cursor_advanced": {"type": "boolean"}, "auto_finalized": {"type": "boolean"}, "retry_count": {"$ref": "#/$defs/count"}, "duration_ms": {"$ref": "#/$defs/count"}, "error_code": {"$ref": "#/$defs/token"}}},
+    "entityPayload": {"type": "object", "additionalProperties": false, "properties": {"entity_id": {"$ref": "#/$defs/token"}, "run_id": {"$ref": "#/$defs/token"}, "status": {"$ref": "#/$defs/token"}, "reason_codes": {"$ref": "#/$defs/tokens"}, "duration_ms": {"$ref": "#/$defs/count"}}},
+    "coverageGapPayload": {"type": "object", "additionalProperties": false, "properties": {"run_id": {"$ref": "#/$defs/token"}, "resource_id": {"$ref": "#/$defs/token"}, "classification": {"$ref": "#/$defs/token"}, "reason_code": {"$ref": "#/$defs/token"}, "duration_ms": {"$ref": "#/$defs/count"}}},
+    "incorporationPayload": {"type": "object", "additionalProperties": false, "properties": {"incorporation_id": {"$ref": "#/$defs/token"}, "insight_id": {"$ref": "#/$defs/token"}, "outcome": {"$ref": "#/$defs/token"}, "basis": {"$ref": "#/$defs/token"}, "duration_ms": {"$ref": "#/$defs/count"}}},
+    "indexPayload": {"type": "object", "additionalProperties": false, "properties": {"status": {"$ref": "#/$defs/token"}, "entity_count": {"$ref": "#/$defs/count"}, "duration_ms": {"$ref": "#/$defs/count"}, "error_code": {"$ref": "#/$defs/token"}}},
+    "catalogPayload": {"type": "object", "additionalProperties": false, "properties": {"change_kind": {"$ref": "#/$defs/token"}, "entity_count": {"$ref": "#/$defs/count"}, "duration_ms": {"$ref": "#/$defs/count"}}},
+    "evaluationPayload": {"type": "object", "additionalProperties": false, "properties": {"run_id": {"$ref": "#/$defs/token"}, "suite_id": {"$ref": "#/$defs/token"}, "variant": {"$ref": "#/$defs/token"}, "status": {"$ref": "#/$defs/token"}, "case_count": {"$ref": "#/$defs/count"}, "acceptable_count": {"$ref": "#/$defs/count"}, "no_skill_count": {"$ref": "#/$defs/count"}, "seed": {"$ref": "#/$defs/count"}, "model_id": {"$ref": "#/$defs/token"}, "duration_ms": {"$ref": "#/$defs/count"}, "error_code": {"$ref": "#/$defs/token"}}},
+    "routingEvent": {"if": {"properties": {"event_type": {"enum": ["resolution.started", "resolution.recommended", "resolution.completed", "resolution.failed"]}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/routingPayload"}}}},
+    "routingResultRecommendations": {"if": {"properties": {"event_type": {"enum": ["resolution.recommended", "resolution.completed", "resolution.failed"]}}}, "then": {"properties": {"payload": {"required": ["recommended_skill_ids"]}}}},
+    "feedbackEventReasons": {"if": {"properties": {"event_type": {"enum": ["skill.activated", "activation.rejected", "skill.loaded", "skill.used", "skill.abandoned"]}}}, "then": {"properties": {"payload": {"properties": {"reason_codes": {"$ref": "#/$defs/feedbackReasonCodes"}}}}}},
+    "clarificationEvent": {"if": {"properties": {"event_type": {"const": "clarification.requested"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/clarificationRequestedPayload"}}}, "else": {"if": {"properties": {"event_type": {"const": "clarification.answered"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/clarificationAnsweredPayload"}}}}},
+    "skillEvent": {"if": {"properties": {"event_type": {"enum": ["skill.activated", "activation.approved", "activation.rejected", "skill.loaded", "skill.used", "skill.completed", "skill.abandoned"]}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/skillPayload"}}}},
+    "taskEvent": {"if": {"properties": {"event_type": {"const": "task.completed"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/taskCompletedPayload"}}}, "else": {"if": {"properties": {"event_type": {"const": "task.outcome_reported"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/taskOutcomePayload"}}}, "else": {"if": {"properties": {"event_type": {"const": "skill.utility_reported"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/skillUtilityPayload"}}}}}},
+    "curationEvent": {"if": {"properties": {"event_type": {"enum": ["source_candidate.captured", "source_candidate.triaged", "source.checked"]}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/curationPayload"}}}, "else": {"if": {"properties": {"event_type": {"const": "curation.session_completed"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/curationSessionPayload"}}}}},
+    "distillationEvent": {"if": {"properties": {"event_type": {"enum": ["distill_run.prepared", "distill_run.submitted", "distill_run.finalized", "distill_run.failed"]}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/distillPayload"}}}},
+    "entityEvent": {"if": {"properties": {"event_type": {"enum": ["observation.created", "observation.updated", "observation.tombstoned", "comparison.updated", "insight.proposed", "insight.reopened"]}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/entityPayload"}}}, "else": {"if": {"properties": {"event_type": {"const": "coverage_gap.recorded"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/coverageGapPayload"}}}, "else": {"if": {"properties": {"event_type": {"const": "incorporation.outcome_recorded"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/incorporationPayload"}}}}}},
+    "systemEvent": {"if": {"properties": {"event_type": {"const": "index.rebuilt"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/indexPayload"}}}, "else": {"if": {"properties": {"event_type": {"const": "catalog.changed"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/catalogPayload"}}}, "else": {"if": {"properties": {"event_type": {"const": "evaluation.run_completed"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/evaluationPayload"}}}}}}
+  }
+}

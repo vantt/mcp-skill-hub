@@ -28,18 +28,54 @@ func (WorkspaceService) ValidateWorkspace(ctx context.Context, path string) (Res
 	if err != nil {
 		return Result{}, err
 	}
+	files, _ := workspace.RelativeFiles(root)
+	for _, rel := range files {
+		if strings.HasPrefix(rel, "skills/") && strings.HasSuffix(rel, "/SKILL.md") {
+			parts := strings.Split(rel, "/")
+			if len(parts) >= 3 {
+				skillID := parts[len(parts)-2]
+				if content, readErr := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel))); readErr == nil {
+					if fmName, line, ok := parseFrontmatterName(content); ok && fmName != "" && fmName != skillID {
+						issues = append(issues, canonical.Issue{
+							Path:    rel,
+							Line:    line,
+							Message: fmt.Sprintf("SKILL.md frontmatter name %q does not match skill ID %q", fmName, skillID),
+							Fix:     fmt.Sprintf("Update frontmatter name to %q, remove the name field, or use `skillhub skill edit %s`.", skillID, skillID),
+						})
+					}
+				}
+			}
+		}
+	}
 	result := NewResult(StatusOK, "Workspace validation passed.")
 	for index, issue := range issues {
+		summary := issue.Path
+		if issue.Line > 0 {
+			summary = fmt.Sprintf("%s:%d: %s", issue.Path, issue.Line, issue.Message)
+		} else {
+			summary = fmt.Sprintf("%s: %s", issue.Path, issue.Message)
+		}
+		fix := issue.Fix
+		if fix == "" {
+			fix = "Correct this file and run `skillhub validate`."
+		}
 		result.Items = append(result.Items, Item{
 			ID:      fmt.Sprintf("validation_issue_%d", index+1),
-			Summary: issue.Path + ": " + issue.Message,
-			Impact:  "Correct this canonical workspace issue.",
+			Summary: summary,
+			Impact:  fix,
 		})
 	}
 	if len(issues) > 0 {
 		result.Status = StatusError
 		result.Summary = "Workspace validation failed."
-		result.Error = NewWorkspaceInvalidError(fmt.Sprintf("Canonical validation found %d issue(s).", len(issues)))
+		result.Error = &Error{
+			Code: ErrorWorkspaceInvalid,
+			Render: ErrorRender{
+				Error: "The workspace has validation errors.",
+				Why:   fmt.Sprintf("Canonical validation found %d issue(s).", len(issues)),
+				Fix:   "Correct the findings listed above (or use `skillhub skill edit <id>`), then run `skillhub validate`.",
+			},
+		}
 	}
 	return result, nil
 }
@@ -76,10 +112,10 @@ func (WorkspaceService) GetCurationDiff(ctx context.Context, path string) (Curat
 		return CurationDiff{}, err
 	}
 	result := CurationDiff{
-		Result:        NewResult(StatusOK, "No uncommitted canonical changes."),
+		Result:        NewResult(StatusOK, "No uncommitted changes."),
 		GitConfigured: state.Configured,
 		Dirty:         len(state.Files) > 0,
-		Groups:        groupDiffFiles(state.Files),
+		Groups:        groupDiffFiles(state.Files, root),
 	}
 	if !state.Configured {
 		result.Status = StatusActionRequired
@@ -90,11 +126,11 @@ func (WorkspaceService) GetCurationDiff(ctx context.Context, path string) (Curat
 	}
 	if result.Dirty {
 		result.Status = StatusActionRequired
-		result.Summary = fmt.Sprintf("Git has %d uncommitted canonical file(s).", len(state.Files))
+		result.Summary = fmt.Sprintf("Git has %d uncommitted file(s).", len(state.Files))
 		result.SuggestedActions = []Action{{Label: "Review the grouped changes", Command: "GetCurationDiff"}}
 	}
 	for _, group := range result.Groups {
-		result.Items = append(result.Items, Item{ID: group.Kind, Summary: fmt.Sprintf("%s: %d file(s)", group.Kind, group.Count), Impact: "Review before committing or restoring these canonical changes."})
+		result.Items = append(result.Items, Item{ID: group.Kind, Summary: fmt.Sprintf("%s: %d file(s)", group.Kind, group.Count), Impact: "Review before committing or restoring these changes."})
 	}
 	return result, nil
 }
@@ -241,14 +277,27 @@ func canonicalDiffPath(path string) bool {
 	return false
 }
 
-func groupDiffFiles(files []DiffFile) []DiffGroup {
-	order := []string{"active_skills", "source_learning", "routing", "operation_history", "workspace_config"}
+func groupDiffFiles(files []DiffFile, roots ...string) []DiffGroup {
+	root := ""
+	if len(roots) > 0 {
+		root = roots[0]
+	}
+	order := []string{"active_skills", "draft_skills", "source_learning", "routing", "operation_history", "workspace_config"}
 	grouped := make(map[string][]DiffFile, len(order))
 	for _, file := range files {
 		kind := "workspace_config"
 		switch {
 		case strings.HasPrefix(file.Path, "skills/"):
 			kind = "active_skills"
+			parts := strings.Split(file.Path, "/")
+			if len(parts) >= 3 {
+				metaPath := filepath.Join(root, parts[0], parts[1], parts[2], "skill.meta.yaml")
+				if content, err := os.ReadFile(metaPath); err == nil {
+					if bytes.Contains(content, []byte("status: draft")) || bytes.Contains(content, []byte("status: \"draft\"")) {
+						kind = "draft_skills"
+					}
+				}
+			}
 		case strings.HasPrefix(file.Path, "sources/"), strings.HasPrefix(file.Path, "distill/"):
 			kind = "source_learning"
 		case strings.HasPrefix(file.Path, "registry/"), strings.HasPrefix(file.Path, "config/"), strings.HasPrefix(file.Path, "evals/"):
@@ -265,4 +314,23 @@ func groupDiffFiles(files []DiffFile) []DiffGroup {
 		}
 	}
 	return result
+}
+
+func parseFrontmatterName(content []byte) (string, int, bool) {
+	if !bytes.HasPrefix(content, []byte("---\n")) && !bytes.HasPrefix(content, []byte("---\r\n")) {
+		return "", 0, false
+	}
+	lines := strings.Split(string(content), "\n")
+	for i := 1; i < len(lines); i++ {
+		line := strings.TrimSpace(lines[i])
+		if line == "---" {
+			break
+		}
+		if strings.HasPrefix(line, "name:") {
+			val := strings.TrimSpace(strings.TrimPrefix(line, "name:"))
+			val = strings.Trim(val, `"'`)
+			return val, i + 1, true
+		}
+	}
+	return "", 0, false
 }

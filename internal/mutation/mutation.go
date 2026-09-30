@@ -46,6 +46,8 @@ type WriteSet struct {
 	ProposalID          string
 	ProposalDigest      string
 	BaseCatalogSnapshot string
+	SourceSchemaVersion *int
+	TargetSchemaVersion *int
 	Changes             []Change
 }
 
@@ -68,11 +70,13 @@ type Confirmation struct {
 // Receipt is returned after a successful durable mutation, including an
 // idempotent retry after the original response was lost.
 type Receipt struct {
-	OperationID     string
-	ChangedPaths    []string
-	CatalogSnapshot string
-	Generation      string
-	GitDirty        bool
+	OperationID         string
+	ChangedPaths        []string
+	CatalogSnapshot     string
+	Generation          string
+	GitDirty            bool
+	SourceSchemaVersion *int
+	TargetSchemaVersion *int
 }
 
 // Publication identifies the derived generation published for the exact
@@ -247,11 +251,21 @@ func commitWhileLocked(root string, set WriteSet, options Options) (Receipt, err
 			return Receipt{}, ErrConflict
 		}
 	}
-	resultSnapshot, err := validateVirtualSnapshot(root, changes)
+	// The operation receipt is part of the canonical tree once applied, so the
+	// pre-commit limit check must include it. Receipt history is not catalog
+	// affecting, and a same-length placeholder digest keeps its size identical
+	// to the final receipt written by commitPrepared.
+	occurredAt := operationTime()
+	placeholder, err := receiptYAML(root, set, changes, digest(nil), occurredAt)
 	if err != nil {
 		return Receipt{}, err
 	}
-	return commitPrepared(root, set, changes, resultSnapshot.CatalogSnapshot, options)
+	virtualChanges := append(append([]Change(nil), changes...), Change{Path: operationPath(set.OperationID, occurredAt), Contents: placeholder})
+	resultSnapshot, err := validateVirtualSnapshot(root, virtualChanges)
+	if err != nil {
+		return Receipt{}, err
+	}
+	return commitPrepared(root, set, changes, resultSnapshot.CatalogSnapshot, occurredAt, options)
 }
 
 // LookupOperation returns an already-applied result before callers inspect the
@@ -278,6 +292,12 @@ func validWriteSet(set WriteSet, requireOperation bool) error {
 	}
 	if set.ProposalID != "" && !validOpaqueID(set.ProposalID) {
 		return errors.New("proposal ID is invalid")
+	}
+	if (set.SourceSchemaVersion == nil) != (set.TargetSchemaVersion == nil) {
+		return errors.New("source and target schema versions must be provided together")
+	}
+	if set.SourceSchemaVersion != nil && (*set.SourceSchemaVersion < 0 || *set.TargetSchemaVersion <= *set.SourceSchemaVersion) {
+		return errors.New("schema migration versions are invalid")
 	}
 	if set.ProposalDigest != "" && !validOptionalDigest(set.ProposalDigest) {
 		return errors.New("proposal digest is invalid")
@@ -360,6 +380,9 @@ func proposalDigest(set WriteSet) string {
 	sortChanges(changes)
 	hash := sha256.New()
 	fmt.Fprintf(hash, "%s\x00%s\x00%s\x00%s\n", set.Command, set.IdempotencyKey, set.RequestDigest, set.BaseCatalogSnapshot)
+	if set.SourceSchemaVersion != nil {
+		fmt.Fprintf(hash, "schema\x00%d\x00%d\n", *set.SourceSchemaVersion, *set.TargetSchemaVersion)
+	}
 	for _, item := range changes {
 		fmt.Fprintf(hash, "%s\x00%s\x00%t\x00%s\n", item.Path, item.BeforeDigest, item.Delete, digest(item.Contents))
 	}
@@ -370,12 +393,26 @@ func proposalDigest(set WriteSet) string {
 // operation IDs, idempotency keys, snapshots, and optimistic before-digests are
 // deliberately excluded so a retry after a lost response may replan against the
 // resulting state and still recover the original receipt.
+// DigestRequest returns the normalized digest used to identify retries of a
+// deterministic write set. Callers that must recover an operation after its
+// successful state transition invalidated the original preconditions can use
+// this digest with LookupOperation.
+func DigestRequest(set WriteSet) (string, error) {
+	if err := validWriteSet(set, false); err != nil {
+		return "", err
+	}
+	return requestDigest(set), nil
+}
+
 func requestDigest(set WriteSet) string {
 	if set.RequestDigest != "" {
 		return set.RequestDigest
 	}
 	hash := sha256.New()
 	fmt.Fprintf(hash, "%s\n", set.Command)
+	if set.SourceSchemaVersion != nil {
+		fmt.Fprintf(hash, "schema\x00%d\x00%d\n", *set.SourceSchemaVersion, *set.TargetSchemaVersion)
+	}
 	changes := append([]Change(nil), set.Changes...)
 	sortChanges(changes)
 	for _, item := range changes {

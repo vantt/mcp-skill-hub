@@ -2,9 +2,9 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
-	"strconv"
 	"strings"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
@@ -13,6 +13,10 @@ import (
 func runStatus(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	path, jsonOutput, quiet, err := curationFlags(args)
 	if err != nil {
+		var resErr *WorkspaceResolutionError
+		if errors.As(err, &resErr) {
+			return writeWorkspaceResolutionError(stdout, stderr, hasJSONFlag(args), resErr)
+		}
 		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub status [--workspace <path>] [--json|--quiet]`.")
 	}
 	home, err := (app.CurationService{}).GetCurationHome(ctx, path)
@@ -30,13 +34,27 @@ func runStatus(ctx context.Context, args []string, stdout, stderr io.Writer) int
 		fmt.Fprintln(stdout, home.Status)
 		return 0
 	}
-	renderCurationHome(stdout, home)
+	renderCurationHome(stdout, home, path)
 	return 0
 }
 
-func renderCurationHome(writer io.Writer, home app.CurationHome) {
+func renderCurationHome(writer io.Writer, home app.CurationHome, workspacePath string) {
 	fmt.Fprintln(writer, home.Summary)
-	fmt.Fprintf(writer, "%d active skills; %d watched sources.\n", home.HomeSummary.ActiveSkills, home.HomeSummary.WatchingSources)
+	if home.Workspace.Health == "valid" && home.Workspace.Index != "current" {
+		fmt.Fprintln(writer, "Skill and source counts are unavailable until the search index is rebuilt.")
+	} else if home.HomeSummary.ActiveSkills == 0 && home.HomeSummary.WatchingSources == 0 {
+		fmt.Fprintln(writer, "No skills yet. Next: ask your agent 'create a skill for ...' or run `skillhub skill create ...`")
+	} else {
+		skillWord := "skills"
+		if home.HomeSummary.ActiveSkills == 1 {
+			skillWord = "skill"
+		}
+		sourceWord := "sources"
+		if home.HomeSummary.WatchingSources == 1 {
+			sourceWord = "source"
+		}
+		fmt.Fprintf(writer, "%d active %s; %d watched %s.\n", home.HomeSummary.ActiveSkills, skillWord, home.HomeSummary.WatchingSources, sourceWord)
+	}
 	gitState := "clean"
 	if !home.Workspace.GitConfigured {
 		gitState = "not configured"
@@ -44,24 +62,25 @@ func renderCurationHome(writer io.Writer, home app.CurationHome) {
 		gitState = "has uncommitted changes"
 	}
 	fmt.Fprintf(writer, "Workspace %s; search index %s; Git %s.\n", home.Workspace.Health, home.Workspace.Index, gitState)
-	var unsupported []string
-	for _, category := range home.Categories {
-		if category.Availability == app.AvailabilityNotConfigured {
-			unsupported = append(unsupported, strings.ReplaceAll(category.Kind, "_", " ")+": 0 (not configured)")
-		}
-	}
-	if len(unsupported) > 0 {
-		fmt.Fprintln(writer, strings.Join(unsupported, "; ")+".")
-	}
 	if home.Error != nil {
 		fmt.Fprintf(writer, "ERROR: %s\nWHY: %s\nFIX: %s\n", home.Error.Render.Error, home.Error.Render.Why, home.Error.Render.Fix)
 	}
-	fmt.Fprintf(writer, "Recommended next: %s.\n", home.SuggestedActions[0].Label)
+	if len(home.SuggestedActions) > 0 && home.SuggestedActions[0].Label != "" {
+		label := home.SuggestedActions[0].Label
+		if label == "Review uncommitted changes" {
+			label = fmt.Sprintf("Review uncommitted changes: git -C %s add -A && git -C %s commit -m \"Update skills\"", workspacePath, workspacePath)
+		}
+		fmt.Fprintf(writer, "Recommended next: %s.\n", label)
+	}
 }
 
 func runDiff(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	path, jsonOutput, err := workspaceFlag(args)
 	if err != nil {
+		var resErr *WorkspaceResolutionError
+		if errors.As(err, &resErr) {
+			return writeWorkspaceResolutionError(stdout, stderr, hasJSONFlag(args), resErr)
+		}
 		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub diff --workspace <path>`.")
 	}
 	result, err := (app.WorkspaceService{}).GetCurationDiff(ctx, path)
@@ -77,12 +96,34 @@ func runDiff(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	}
 	fmt.Fprintln(stdout, result.Summary)
 	for _, group := range result.Groups {
-		fmt.Fprintf(stdout, "%s (%d):\n", strings.ReplaceAll(group.Kind, "_", " "), group.Count)
+		label := strings.ReplaceAll(group.Kind, "_", " ")
+		fmt.Fprintf(stdout, "%s (%d):\n", label, group.Count)
 		for _, file := range group.Files {
-			fmt.Fprintf(stdout, "  %s %s\n", file.Status, strconv.Quote(file.Path))
+			statusWord := diffStatusWord(file.Status)
+			fmt.Fprintf(stdout, "  %s  %s\n", statusWord, file.Path)
 		}
 	}
+	fmt.Fprintf(stdout, "\nTo commit these changes, run:\n  git -C %s add -A && git -C %s commit -m \"...\"\n", path, path)
 	return 0
+}
+
+func diffStatusWord(status string) string {
+	switch status {
+	case "A":
+		return "added"
+	case "M":
+		return "modified"
+	case "D":
+		return "deleted"
+	case "??":
+		return "untracked"
+	case "R":
+		return "renamed"
+	case "U":
+		return "conflicted"
+	default:
+		return status
+	}
 }
 
 func curationFlags(args []string) (path string, jsonOutput, quiet bool, err error) {
@@ -105,5 +146,9 @@ func curationFlags(args []string) (path string, jsonOutput, quiet bool, err erro
 	if jsonOutput && quiet {
 		return "", jsonOutput, quiet, fmt.Errorf("--json and --quiet cannot be used together")
 	}
-	return path, jsonOutput, quiet, nil
+	resolved, resErr := resolveWorkspace(path)
+	if resErr != nil {
+		return "", jsonOutput, quiet, resErr
+	}
+	return resolved, jsonOutput, quiet, nil
 }

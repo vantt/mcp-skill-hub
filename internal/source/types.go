@@ -4,6 +4,7 @@ package source
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -21,6 +22,25 @@ var (
 	ErrRevisionMismatch   = errors.New("source revision is no longer current")
 	ErrHistoryUnavailable = errors.New("source revision history is unavailable")
 )
+
+// LimitExceededError provides specific information about which resource limit was breached.
+type LimitExceededError struct {
+	Limit  string // "files", "bytes", "file_size"
+	Actual int64
+	Max    int64
+	Path   string
+}
+
+func (e *LimitExceededError) Error() string {
+	if e.Path != "" {
+		return fmt.Sprintf("source exceeded %s limit on %s (%d > %d)", e.Limit, e.Path, e.Actual, e.Max)
+	}
+	return fmt.Sprintf("source exceeded %s limit (%d > %d)", e.Limit, e.Actual, e.Max)
+}
+
+func (e *LimitExceededError) Is(target error) bool {
+	return target == ErrLimitExceeded
+}
 
 // Locator is an adapter-neutral, credential-free source location.
 type Locator struct {

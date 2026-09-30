@@ -1,6 +1,6 @@
 ---
 title: "Phase 12 — MCP protocol and skill distribution"
-status: todo
+status: done
 ---
 
 # Phase 12 — MCP protocol and skill distribution

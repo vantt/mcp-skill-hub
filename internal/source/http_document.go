@@ -117,7 +117,7 @@ func (adapter HTTPDocumentAdapter) fetch(ctx context.Context, raw string) ([]byt
 		return nil, nil, fmt.Errorf("fetch source document: HTTP %d", response.StatusCode)
 	}
 	if response.ContentLength > adapter.MaxBytes {
-		return nil, nil, ErrLimitExceeded
+		return nil, nil, &LimitExceededError{Limit: "bytes", Actual: response.ContentLength, Max: adapter.MaxBytes}
 	}
 	contents, err := boundedRead(response.Body, adapter.MaxBytes)
 	if err != nil {

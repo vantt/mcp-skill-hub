@@ -36,6 +36,17 @@ type Manifest struct {
 // GetManifest returns only active skills by default because draft, deprecated,
 // and archived skills are curation state rather than distributable procedures.
 func GetManifest(ctx context.Context, root, id string) (Manifest, error) {
+	return getManifest(ctx, root, id, true)
+}
+
+// GetManifestAnyState is the curator read surface: it returns a skill in any
+// lifecycle state, with the state recorded in the manifest. Distribution paths
+// must keep using GetManifest.
+func GetManifestAnyState(ctx context.Context, root, id string) (Manifest, error) {
+	return getManifest(ctx, root, id, false)
+}
+
+func getManifest(ctx context.Context, root, id string, activeOnly bool) (Manifest, error) {
 	if !idPattern.MatchString(id) {
 		return Manifest{}, errors.New("skill id must be a lowercase kebab-case identifier")
 	}
@@ -51,7 +62,7 @@ func GetManifest(ctx context.Context, root, id string) (Manifest, error) {
 		}
 		return Manifest{}, err
 	}
-	if manifest.Status != "active" {
+	if activeOnly && manifest.Status != "active" {
 		return Manifest{}, ErrNotFound
 	}
 	rows, err := handle.DB.QueryContext(ctx, `SELECT path,kind,digest,size_bytes FROM resources WHERE skill_id=? ORDER BY path`, id)

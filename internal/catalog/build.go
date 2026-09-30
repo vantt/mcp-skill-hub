@@ -108,7 +108,7 @@ func buildCatalogGeneration(ctx context.Context, root string, options BuildOptio
 	if err := waitForContext(ctx); err != nil {
 		return BuildResult{}, err
 	}
-	warnings := ensureDisposableDatabases(ctx, root)
+	warnings := append(ensureDisposableDatabases(ctx, root), input.Warnings...)
 	if err := waitForContext(ctx); err != nil {
 		return BuildResult{}, err
 	}

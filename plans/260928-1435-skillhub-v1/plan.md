@@ -1,7 +1,7 @@
 ---
 title: "Skill Hub V1 Implementation"
 description: "Cook-ready phased plan for the local-first Git-backed Curated Skill Hub V1."
-status: in-progress
+status: completed
 priority: P1
 effort: "multi-week"
 issue: null
@@ -66,22 +66,22 @@ Do not start from CRUD tables. Each vertical slice must prove a user intent thro
 
 | Phase | Name | Status | Dependencies | Cook readiness |
 |---:|---|---|---|---|
-| 00 | [Freeze UX behavior before implementation](./phase-01-ux-contract-freeze.md) | Pending | None | Ready |
-| 01 | [Go foundation, CI and release skeleton](./phase-02-go-foundation.md) | Pending | Phase 01 | Ready |
-| 02 | [Workspace bootstrap and canonical read model](./phase-03-workspace-canonical-read-model.md) | Pending | Phase 02 | Structured outline |
-| 03 | [Canonical mutation transaction and recovery](./phase-04-canonical-mutation-recovery.md) | Pending | Phase 03 | Structured outline |
-| 04 | [Rebuildable immutable SQLite catalog generations](./phase-05-sqlite-catalog-generations.md) | Pending | Phase 04 | Structured outline |
-| 05 | [Curation Home, status and operational CLI](./phase-06-curation-home-operational-cli.md) | Pending | Phase 05 | Structured outline |
-| 06 | [Curated skill lifecycle](./phase-07-curated-skill-lifecycle.md) | Pending | Phase 06 | Structured outline |
-| 07 | [Source intake, adapters and monitoring](./phase-08-source-intake-adapters-monitoring.md) | Pending | Phase 07 | Structured outline |
-| 08 | [Distillation and learning pipeline](./phase-09-distillation-learning-pipeline.md) | Pending | Phase 08 | Structured outline |
-| 09 | [Insight inbox, apply and outcomes](./phase-10-insight-inbox-apply-outcomes.md) | Pending | Phase 09 | Structured outline |
-| 10 | [Evidence-first resolver](./phase-11-evidence-first-resolver.md) | Pending | Phase 10 | Structured outline |
-| 11 | [MCP protocol and skill distribution](./phase-12-mcp-protocol-skill-distribution.md) | Pending | Phase 11 | Structured outline |
-| 12 | [Bundled System Curator Skill and host bootstrap](./phase-13-system-curator-host-bootstrap.md) | Pending | Phase 12 | Structured outline |
-| 13 | [Telemetry, reproducibility and evaluation](./phase-14-telemetry-reproducibility-evaluation.md) | Pending | Phase 13 | Structured outline |
-| 14 | [Hardening, migrations and V1 release](./phase-15-hardening-v1-release.md) | Pending | Phase 14 | Structured outline |
-| 15 | [Post-core capabilities, evidence-gated](./phase-16-post-core-evidence-gated-capabilities.md) | Pending | Phase 15 | Structured outline |
+| 00 | [Freeze UX behavior before implementation](./phase-01-ux-contract-freeze.md) | Complete | None | Delivered |
+| 01 | [Go foundation, CI and release skeleton](./phase-02-go-foundation.md) | Complete | Phase 01 | Delivered |
+| 02 | [Workspace bootstrap and canonical read model](./phase-03-workspace-canonical-read-model.md) | Complete | Phase 02 | Delivered |
+| 03 | [Canonical mutation transaction and recovery](./phase-04-canonical-mutation-recovery.md) | Complete | Phase 03 | Delivered |
+| 04 | [Rebuildable immutable SQLite catalog generations](./phase-05-sqlite-catalog-generations.md) | Complete | Phase 04 | Delivered |
+| 05 | [Curation Home, status and operational CLI](./phase-06-curation-home-operational-cli.md) | Complete | Phase 05 | Delivered |
+| 06 | [Curated skill lifecycle](./phase-07-curated-skill-lifecycle.md) | Complete | Phase 06 | Delivered |
+| 07 | [Source intake, adapters and monitoring](./phase-08-source-intake-adapters-monitoring.md) | Complete | Phase 07 | Delivered |
+| 08 | [Distillation and learning pipeline](./phase-09-distillation-learning-pipeline.md) | Complete | Phase 08 | Delivered |
+| 09 | [Insight inbox, apply and outcomes](./phase-10-insight-inbox-apply-outcomes.md) | Complete | Phase 09 | Delivered |
+| 10 | [Evidence-first resolver](./phase-11-evidence-first-resolver.md) | Complete | Phase 10 | Delivered |
+| 11 | [MCP protocol and skill distribution](./phase-12-mcp-protocol-skill-distribution.md) | Complete | Phase 11 | Delivered |
+| 12 | [Bundled System Curator Skill and host bootstrap](./phase-13-system-curator-host-bootstrap.md) | Complete | Phase 12 | Delivered |
+| 13 | [Telemetry, reproducibility and evaluation](./phase-14-telemetry-reproducibility-evaluation.md) | Complete | Phase 13 | Delivered |
+| 14 | [Hardening, migrations and V1 release](./phase-15-hardening-v1-release.md) | Complete | Phase 14 | Delivered; hosted release evidence pending first tag |
+| 15 | [Post-core capabilities, evidence-gated](./phase-16-post-core-evidence-gated-capabilities.md) | Complete | Phase 15 | Gate held; no optional capability justified |
 
 ## Cross-phase quality gates
 

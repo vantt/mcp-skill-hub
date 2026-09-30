@@ -61,7 +61,14 @@ func TestSkillLifecycleCreateActivateReadDeprecateArchive(t *testing.T) {
 	if err != nil || createdResult.Status != StatusApplied || createdResult.OperationID == "" || createdResult.CatalogSnapshot == "" || createdResult.Generation == "" || !createdResult.GitDirty {
 		t.Fatalf("create result = %#v, %v", createdResult, err)
 	}
-	if _, err := service.ReadSkill(ctx, root, "consumer-review"); !errors.Is(err, skill.ErrNotFound) {
+	if createdResult.State != "draft" || createdResult.Summary != "Draft skill consumer-review saved." {
+		t.Fatalf("create result state/summary = %q / %q", createdResult.State, createdResult.Summary)
+	}
+	draft, err := service.ReadSkill(ctx, root, "consumer-review")
+	if err != nil || draft.Manifest.Status != "draft" || !strings.Contains(draft.Content, "Use evidence") {
+		t.Fatalf("draft read = %#v, %v", draft, err)
+	}
+	if _, err := skill.GetManifest(ctx, root, "consumer-review"); !errors.Is(err, skill.ErrNotFound) {
 		t.Fatalf("draft was distributable: %v", err)
 	}
 
@@ -70,7 +77,7 @@ func TestSkillLifecycleCreateActivateReadDeprecateArchive(t *testing.T) {
 		t.Fatal(err)
 	}
 	activatedResult, err := service.ConfirmSkillMutation(ctx, root, activated, activated.Confirmation.Confirmation.Pins)
-	if err != nil || activatedResult.Status != StatusApplied {
+	if err != nil || activatedResult.Status != StatusApplied || activatedResult.Summary != "Skill consumer-review is now active." || activatedResult.State != "active" {
 		t.Fatalf("activate result = %#v, %v", activatedResult, err)
 	}
 	read, err := service.ReadSkill(ctx, root, "consumer-review")

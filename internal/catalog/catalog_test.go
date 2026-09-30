@@ -18,7 +18,7 @@ import (
 
 func TestDeleteRuntimeRebuildsOfflineAndRecreatesDisposableDatabases(t *testing.T) {
 	root := newWorkspace(t)
-	writeCanonical(t, root, "skills/core/review/skill.meta.yaml", "schema_version: 1\nid: review\nname: Review\nstatus: active\ndescription: Review code.\nrouting:\n  triggers: [review code]\n  operations: [review]\n  not_for: [write prose]\n  min_scope: multi_step\n")
+	writeCanonical(t, root, "skills/core/review/skill.meta.yaml", "schema_version: 1\nid: review\nname: Review\nstatus: active\ndescription: Review code.\naliases: [patch-inspector]\nrouting:\n  triggers: [review code]\n  operations: [review]\n  not_for: [write prose]\n  min_scope: multi_step\n")
 	writeCanonical(t, root, "skills/core/review/SKILL.md", "# Review\nUse evidence.\n")
 	first := build(t, root, BuildOptions{})
 	if err := os.RemoveAll(filepath.Join(root, "runtime")); err != nil {
@@ -57,6 +57,9 @@ func TestDeleteRuntimeRebuildsOfflineAndRecreatesDisposableDatabases(t *testing.
 	var matches int
 	if err := handle.DB.QueryRow(`SELECT count(*) FROM skill_fts WHERE skill_fts MATCH 'review'`).Scan(&matches); err != nil || matches != 1 {
 		t.Fatalf("skill FTS matches = %d, %v", matches, err)
+	}
+	if err := handle.DB.QueryRow(`SELECT count(*) FROM skill_fts WHERE skill_fts MATCH '"patch-inspector"'`).Scan(&matches); err != nil || matches != 1 {
+		t.Fatalf("skill alias FTS matches = %d, %v", matches, err)
 	}
 }
 

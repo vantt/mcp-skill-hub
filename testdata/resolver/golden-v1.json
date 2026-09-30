@@ -1,0 +1,6604 @@
+{
+  "schema_version": 1,
+  "id": "resolver-golden-v1",
+  "sanitization": "synthetic tasks contain no user, project, path, or secret data",
+  "skills": [
+    {
+      "id": "code-review",
+      "collection_id": "golden",
+      "name": "Code Review",
+      "description": "review a code change for defects and maintainability",
+      "status": "active",
+      "digest": "sha256:717d32bb32dbbc160a16199742dea33a0f51d557381f7c5fefa452be9ebdf9ce",
+      "aliases": [],
+      "operations": [
+        "review"
+      ],
+      "triggers": [
+        "review code changes pull requests"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true,
+      "equivalent_to": [
+        "pull-request-review"
+      ],
+      "supporting": [
+        {
+          "skill_id": "unit-testing",
+          "operation": "review",
+          "role": "validation",
+          "activation": "on-demand"
+        }
+      ],
+      "equivalence": [
+        {
+          "skill_id": "pull-request-review",
+          "preference": "self",
+          "version_policy": "latest-reviewed"
+        }
+      ]
+    },
+    {
+      "id": "api-design",
+      "collection_id": "golden",
+      "name": "API Design",
+      "description": "design an API contract and service interface",
+      "status": "active",
+      "digest": "sha256:bb4bcefa0fb388da443ffcfaf7f6dc75b2f395eafda59a7a59d42ee4226044b6",
+      "aliases": [],
+      "operations": [
+        "design"
+      ],
+      "triggers": [
+        "design API contract schema"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true,
+      "distinguish_from": [
+        {
+          "skill_id": "graphql-api",
+          "field": "task.api_style",
+          "question": "Is the API general HTTP/REST or specifically GraphQL?",
+          "choices": [
+            "rest-or-http",
+            "graphql"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "database-migration",
+      "collection_id": "golden",
+      "name": "Database Migration",
+      "description": "plan safe database schema migrations and rollback",
+      "status": "active",
+      "digest": "sha256:db2d3bed8f6f1e9c4629b95f2bac185dc71cf9ca91aab93ab6505a0af649dd0c",
+      "aliases": [],
+      "operations": [
+        "migrate"
+      ],
+      "triggers": [
+        "plan database schema migration"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true
+    },
+    {
+      "id": "security-audit",
+      "collection_id": "golden",
+      "name": "Security Audit",
+      "description": "audit application security and vulnerability risks",
+      "status": "active",
+      "digest": "sha256:8f9b6a749f81877f8906984bb525ee4cb8f7148d6397f3376b9417a2c554c440",
+      "aliases": [],
+      "operations": [
+        "review"
+      ],
+      "triggers": [
+        "audit security vulnerabilities threats"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true
+    },
+    {
+      "id": "frontend-accessibility",
+      "collection_id": "golden",
+      "name": "Frontend Accessibility",
+      "description": "audit frontend accessibility and inclusive interaction",
+      "status": "active",
+      "digest": "sha256:f557e71a252ec93ec31dd35d394cf44ad187ac408bb52d40faad6ee12164c16b",
+      "aliases": [],
+      "operations": [
+        "review"
+      ],
+      "triggers": [
+        "audit web accessibility keyboard screenreader"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true
+    },
+    {
+      "id": "browser-testing",
+      "collection_id": "golden",
+      "name": "Browser Testing",
+      "description": "test browser user flows and rendering behavior",
+      "status": "active",
+      "digest": "sha256:b8b61365074a7b49a200099f342f024980f76962cec7b32351ba473c591ce273",
+      "aliases": [],
+      "operations": [
+        "test"
+      ],
+      "triggers": [
+        "test browser user flows playwright"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true
+    },
+    {
+      "id": "incident-debugging",
+      "collection_id": "golden",
+      "name": "Incident Debugging",
+      "description": "diagnose production incidents and failure causes",
+      "status": "active",
+      "digest": "sha256:dd6112e6a10d83428c90f11115365db3f6b86c39a885ba144c35c92e2b060bf9",
+      "aliases": [],
+      "operations": [
+        "debug"
+      ],
+      "triggers": [
+        "diagnose production incident outage"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true
+    },
+    {
+      "id": "performance-profiling",
+      "collection_id": "golden",
+      "name": "Performance Profiling",
+      "description": "profile runtime performance and bottlenecks",
+      "status": "active",
+      "digest": "sha256:cb3ee755df7802ac4401fdc7d12fbbd17a8943bb63d2b0b6709f9ebb3ea474b9",
+      "aliases": [],
+      "operations": [
+        "debug"
+      ],
+      "triggers": [
+        "profile latency cpu memory bottleneck"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true
+    },
+    {
+      "id": "documentation-writing",
+      "collection_id": "golden",
+      "name": "Documentation Writing",
+      "description": "write and maintain technical documentation",
+      "status": "active",
+      "digest": "sha256:d1e0779b555a54d7ba3f8201dd6cb5549cb6ec4f4423d1af8d27341987e22b0a",
+      "aliases": [],
+      "operations": [
+        "document"
+      ],
+      "triggers": [
+        "write technical documentation guide"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true
+    },
+    {
+      "id": "kubernetes-operations",
+      "collection_id": "golden",
+      "name": "Kubernetes Operations",
+      "description": "operate Kubernetes workloads and clusters",
+      "status": "active",
+      "digest": "sha256:9d00a4812384950bd01bdb30911d3b003a29a88a02559be01ec52c75bc2b3f9a",
+      "aliases": [],
+      "operations": [
+        "operate"
+      ],
+      "triggers": [
+        "operate kubernetes cluster workloads"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true,
+      "requirements": {
+        "capabilities_all": [
+          "cluster-access"
+        ]
+      }
+    },
+    {
+      "id": "terraform-infrastructure",
+      "collection_id": "golden",
+      "name": "Terraform Infrastructure",
+      "description": "design and change Terraform infrastructure",
+      "status": "active",
+      "digest": "sha256:5498724650bce68d62d487aee0781ca59cdd17351bedbcd15386a25adea12e94",
+      "aliases": [],
+      "operations": [
+        "implement"
+      ],
+      "triggers": [
+        "provision terraform cloud infrastructure"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true
+    },
+    {
+      "id": "payment-integration",
+      "collection_id": "golden",
+      "name": "Payment Integration",
+      "description": "integrate payment checkout and billing providers",
+      "status": "active",
+      "digest": "sha256:90a3e7f2576e3042372ff199b2ccd3dc9eac953107a256b6ed8ed4a9707bcdfc",
+      "aliases": [],
+      "operations": [
+        "implement"
+      ],
+      "triggers": [
+        "integrate payment checkout webhook"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true
+    },
+    {
+      "id": "authentication",
+      "collection_id": "golden",
+      "name": "Authentication",
+      "description": "implement authentication sessions and identity providers",
+      "status": "active",
+      "digest": "sha256:b9d90628453938c578c7f826de5e5bd2bcac29e10c5526888384ba74fcea563e",
+      "aliases": [],
+      "operations": [
+        "implement"
+      ],
+      "triggers": [
+        "implement login oauth session authentication"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true
+    },
+    {
+      "id": "react-performance",
+      "collection_id": "golden",
+      "name": "React Performance",
+      "description": "optimize React rendering and bundle performance",
+      "status": "active",
+      "digest": "sha256:7e314e2479f1af2d8aa7162117e330826219582d56d2066c73e78d3a32716554",
+      "aliases": [],
+      "operations": [
+        "refactor"
+      ],
+      "triggers": [
+        "optimize react rendering bundle performance"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true
+    },
+    {
+      "id": "mobile-development",
+      "collection_id": "golden",
+      "name": "Mobile Development",
+      "description": "build native and cross-platform mobile applications",
+      "status": "active",
+      "digest": "sha256:3ceb54ae3a01979fc12e6b6c4821c3f301445aeaf544da8f106a767c696b82af",
+      "aliases": [],
+      "operations": [
+        "implement"
+      ],
+      "triggers": [
+        "build ios android mobile application"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true
+    },
+    {
+      "id": "data-analysis",
+      "collection_id": "golden",
+      "name": "Data Analysis",
+      "description": "analyze structured datasets and statistical trends",
+      "status": "active",
+      "digest": "sha256:c938b7391e1aebdb6e66a7bec1164b3ca7857fb8b5964e32cb7fdb2256d9e42b",
+      "aliases": [],
+      "operations": [
+        "research"
+      ],
+      "triggers": [
+        "analyze dataset statistics trends"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true
+    },
+    {
+      "id": "machine-learning",
+      "collection_id": "golden",
+      "name": "Machine Learning",
+      "description": "develop and evaluate machine learning models",
+      "status": "active",
+      "digest": "sha256:405bad505fef01a06b69f684c32d7a6e3dec15380d46ffe6efe06a8209764a03",
+      "aliases": [],
+      "operations": [
+        "implement"
+      ],
+      "triggers": [
+        "train machine learning model classifier"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true
+    },
+    {
+      "id": "image-processing",
+      "collection_id": "golden",
+      "name": "Image Processing",
+      "description": "process and transform image assets",
+      "status": "active",
+      "digest": "sha256:1bb408c036f2cf68f6b895c1c89b967330a087a13b066574781fe7edf6484625",
+      "aliases": [],
+      "operations": [
+        "implement"
+      ],
+      "triggers": [
+        "convert resize crop image"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true
+    },
+    {
+      "id": "video-processing",
+      "collection_id": "golden",
+      "name": "Video Processing",
+      "description": "process and transcode video and audio media",
+      "status": "active",
+      "digest": "sha256:fc87c27aedfee9d72b435aaa1fd13a80fe9ea64f6ae12b73c8a468288e4dba67",
+      "aliases": [],
+      "operations": [
+        "implement"
+      ],
+      "triggers": [
+        "encode transcode edit video audio"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true
+    },
+    {
+      "id": "git-workflow",
+      "collection_id": "golden",
+      "name": "Git Workflow",
+      "description": "manage Git branches commits and rebases",
+      "status": "active",
+      "digest": "sha256:37a483ff7d848b16cfad13b6b11345ebc8a7a144ce4b54e2bc59f1e23454951f",
+      "aliases": [],
+      "operations": [
+        "operate"
+      ],
+      "triggers": [
+        "manage git branches rebase commits"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true
+    },
+    {
+      "id": "release-management",
+      "collection_id": "golden",
+      "name": "Release Management",
+      "description": "prepare and coordinate software releases",
+      "status": "active",
+      "digest": "sha256:dd126886497fade025fdf85a8b4c3fd451f7b9502a99b48131773d1903e0a0ed",
+      "aliases": [],
+      "operations": [
+        "operate"
+      ],
+      "triggers": [
+        "prepare release changelog version"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true
+    },
+    {
+      "id": "dependency-upgrade",
+      "collection_id": "golden",
+      "name": "Dependency Upgrade",
+      "description": "upgrade software dependencies safely",
+      "status": "active",
+      "digest": "sha256:5a417420139cb1695a76b3184fdfc5e34e4f475f4658b085e930d15218891ea0",
+      "aliases": [],
+      "operations": [
+        "migrate"
+      ],
+      "triggers": [
+        "upgrade package dependency version"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true
+    },
+    {
+      "id": "refactoring",
+      "collection_id": "golden",
+      "name": "Refactoring",
+      "description": "restructure code while preserving behavior",
+      "status": "active",
+      "digest": "sha256:aa3850283600eb7a43693196380aa7af6bc4b91a94cd65474be77b379677e467",
+      "aliases": [],
+      "operations": [
+        "refactor"
+      ],
+      "triggers": [
+        "refactor restructure extract rename code"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true
+    },
+    {
+      "id": "unit-testing",
+      "collection_id": "golden",
+      "name": "Unit Testing",
+      "description": "design and implement focused unit tests",
+      "status": "active",
+      "digest": "sha256:187695a95cc9286d4563ca4398a230623205bdddb36fb37086c90ae6f75ed7b1",
+      "aliases": [],
+      "operations": [
+        "test"
+      ],
+      "triggers": [
+        "write unit tests test cases coverage"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true,
+      "equivalent_to": [
+        "test-design"
+      ],
+      "equivalence": [
+        {
+          "skill_id": "test-design",
+          "preference": "self",
+          "version_policy": "latest-reviewed"
+        }
+      ]
+    },
+    {
+      "id": "load-testing",
+      "collection_id": "golden",
+      "name": "Load Testing",
+      "description": "measure service behavior under concurrent load",
+      "status": "active",
+      "digest": "sha256:3c152b2b332e3632469653bce745a644a03c4febd137fe70239a17247a38bcdc",
+      "aliases": [],
+      "operations": [
+        "test"
+      ],
+      "triggers": [
+        "load test throughput concurrency traffic"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true
+    },
+    {
+      "id": "observability",
+      "collection_id": "golden",
+      "name": "Observability",
+      "description": "add metrics traces and operational dashboards",
+      "status": "active",
+      "digest": "sha256:58ee00072efbff7143506d2837139233da731c2786b2a6808da3003daba7c42c",
+      "aliases": [],
+      "operations": [
+        "implement"
+      ],
+      "triggers": [
+        "instrument metrics traces dashboards"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true
+    },
+    {
+      "id": "logging",
+      "collection_id": "golden",
+      "name": "Logging",
+      "description": "design structured application logging",
+      "status": "active",
+      "digest": "sha256:0a149844a7c9f4cff948bf39833fcc5429ce2325e43d6b3873a22a76e956e470",
+      "aliases": [],
+      "operations": [
+        "implement"
+      ],
+      "triggers": [
+        "improve structured logs correlation"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true
+    },
+    {
+      "id": "caching",
+      "collection_id": "golden",
+      "name": "Caching",
+      "description": "design application caching and invalidation",
+      "status": "active",
+      "digest": "sha256:6fe78deb222783bc4f547007a32471da36efc0c41bbe4cb738dbe9e46cc7f8c4",
+      "aliases": [],
+      "operations": [
+        "design"
+      ],
+      "triggers": [
+        "design cache invalidation ttl"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true
+    },
+    {
+      "id": "message-consumer-review",
+      "collection_id": "golden",
+      "name": "Message Consumer Review",
+      "description": "review retries acknowledgements and duplicate message handling",
+      "status": "active",
+      "digest": "sha256:d47b3e2ea9850eba7355b843bba88ea9e8292ff75e60ac6aa27db89f54ac9ee8",
+      "aliases": [],
+      "operations": [
+        "review"
+      ],
+      "triggers": [
+        "review message consumer retry idempotency acknowledgement"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true,
+      "requirements": {
+        "facts_any": [
+          {
+            "key": "dependency",
+            "value": "kafka"
+          },
+          {
+            "key": "dependency",
+            "value": "rabbitmq"
+          }
+        ]
+      }
+    },
+    {
+      "id": "event-architecture-review",
+      "collection_id": "golden",
+      "name": "Event Architecture Review",
+      "description": "review event-driven service boundaries and topology",
+      "status": "active",
+      "digest": "sha256:4299bd7e475d74ad5e346050d84899561fe3bb9e270a5ac478075272b76a39fc",
+      "aliases": [],
+      "operations": [
+        "design"
+      ],
+      "triggers": [
+        "design event service boundaries topology"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true
+    },
+    {
+      "id": "sql-optimization",
+      "collection_id": "golden",
+      "name": "SQL Optimization",
+      "description": "optimize SQL queries indexes and execution plans",
+      "status": "active",
+      "digest": "sha256:2aca30f6a09e278266b2d8dd698f6bdebce9d386fda923f5cac908571ca5c7f3",
+      "aliases": [],
+      "operations": [
+        "refactor"
+      ],
+      "triggers": [
+        "optimize sql query index execution plan"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true
+    },
+    {
+      "id": "graphql-api",
+      "collection_id": "golden",
+      "name": "GraphQL API",
+      "description": "design a GraphQL API schema and resolver contract",
+      "status": "active",
+      "digest": "sha256:ce9b9aac9fa5a6a96065abb8fc7b006d652b9f955d7499d78e3c9ad6273a7e19",
+      "aliases": [],
+      "operations": [
+        "design"
+      ],
+      "triggers": [
+        "design API contract schema"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true,
+      "distinguish_from": [
+        {
+          "skill_id": "api-design",
+          "field": "task.api_style",
+          "question": "Is the API general HTTP/REST or specifically GraphQL?",
+          "choices": [
+            "rest-or-http",
+            "graphql"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cli-development",
+      "collection_id": "golden",
+      "name": "CLI Development",
+      "description": "build command-line interfaces and command contracts",
+      "status": "active",
+      "digest": "sha256:5b8aeb3903b488df6419081d1648a083f8c6d3d1765ee9955e54e26b0fb9b5e2",
+      "aliases": [],
+      "operations": [
+        "implement"
+      ],
+      "triggers": [
+        "build command line interface flags"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true
+    },
+    {
+      "id": "mcp-server",
+      "collection_id": "golden",
+      "name": "MCP Server",
+      "description": "build Model Context Protocol servers and tools",
+      "status": "active",
+      "digest": "sha256:6c7915018034fa58addb0413dc5e23a9e6647ca2572275c60add89c63593f122",
+      "aliases": [],
+      "operations": [
+        "implement"
+      ],
+      "triggers": [
+        "build mcp tools resources server"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true
+    },
+    {
+      "id": "webhooks",
+      "collection_id": "golden",
+      "name": "Webhooks",
+      "description": "implement secure webhook delivery and ingestion",
+      "status": "active",
+      "digest": "sha256:a58f0473fb4c182db5a53fe978863b6eaa6552b5c694769ae3965d25bb11be76",
+      "aliases": [],
+      "operations": [
+        "implement"
+      ],
+      "triggers": [
+        "implement webhook signature delivery retry"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true
+    },
+    {
+      "id": "search-relevance",
+      "collection_id": "golden",
+      "name": "Search Relevance",
+      "description": "evaluate and improve search retrieval relevance",
+      "status": "active",
+      "digest": "sha256:07d99468c01baa5bcc098248247c660b99252104fd0ee944f9b229b6bc11c27a",
+      "aliases": [],
+      "operations": [
+        "research"
+      ],
+      "triggers": [
+        "improve search ranking retrieval relevance"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true
+    },
+    {
+      "id": "privacy-review",
+      "collection_id": "golden",
+      "name": "Privacy Review",
+      "description": "review personal-data handling retention and redaction",
+      "status": "active",
+      "digest": "sha256:b65ce2ea386bdec1063799c9fd4c8e9cb8d3664abbb3d5b739ee3864c0fdcfe8",
+      "aliases": [],
+      "operations": [
+        "review"
+      ],
+      "triggers": [
+        "review privacy pii retention redaction"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true
+    },
+    {
+      "id": "backup-recovery",
+      "collection_id": "golden",
+      "name": "Backup Recovery",
+      "description": "design and verify backup and recovery procedures",
+      "status": "active",
+      "digest": "sha256:8fcc21f2f446531fe8b46e478b785be09dd99d68eb365046233038df7972f03c",
+      "aliases": [],
+      "operations": [
+        "operate"
+      ],
+      "triggers": [
+        "design backup restore disaster recovery"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true
+    },
+    {
+      "id": "localization",
+      "collection_id": "golden",
+      "name": "Localization",
+      "description": "implement product localization and internationalization",
+      "status": "active",
+      "digest": "sha256:a3cacb75505cc02b52b47594bcb668c54880b9e5bf62e9611fc6e3b681b6a007",
+      "aliases": [],
+      "operations": [
+        "implement"
+      ],
+      "triggers": [
+        "localize translate locale internationalization"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true
+    },
+    {
+      "id": "email-delivery",
+      "collection_id": "golden",
+      "name": "Email Delivery",
+      "description": "implement email delivery and deliverability controls",
+      "status": "active",
+      "digest": "sha256:ced2a1f5d362b9472eba5a0931771110bf64f27fabaf7557f745e1e819c9fc73",
+      "aliases": [],
+      "operations": [
+        "implement"
+      ],
+      "triggers": [
+        "send email deliverability bounce spam"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true
+    },
+    {
+      "id": "pull-request-review",
+      "collection_id": "golden",
+      "name": "Pull Request Review",
+      "description": "review a code change for defects and maintainability",
+      "status": "active",
+      "digest": "sha256:75c17f6c89793a99116e56c8422ec3656d8a58f181eeeff75a4b2ccf0605b203",
+      "aliases": [],
+      "operations": [
+        "review"
+      ],
+      "triggers": [
+        "review code changes pull requests"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true,
+      "equivalent_to": [
+        "code-review"
+      ],
+      "equivalence": [
+        {
+          "skill_id": "code-review",
+          "preference": "target",
+          "version_policy": "latest-reviewed"
+        }
+      ]
+    },
+    {
+      "id": "test-design",
+      "collection_id": "golden",
+      "name": "Test Design",
+      "description": "design and implement focused unit tests",
+      "status": "active",
+      "digest": "sha256:b7b86c2a8e110bfd83c22746f531401715e8ee2da072b83729579e635d3b66e3",
+      "aliases": [],
+      "operations": [
+        "test"
+      ],
+      "triggers": [
+        "write unit tests test cases coverage"
+      ],
+      "not_for": [
+        "unrelated trivial typo correction"
+      ],
+      "min_scope": "multi_step",
+      "reviewed": true,
+      "equivalent_to": [
+        "unit-testing"
+      ],
+      "equivalence": [
+        {
+          "skill_id": "unit-testing",
+          "preference": "target",
+          "version_policy": "latest-reviewed"
+        }
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "id": "direct-00-a",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-00-a",
+        "task": {
+          "description": "Please handle this situation: review code changes pull requests",
+          "scope": "multi_step"
+        },
+        "operation": "review",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "code-review"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-00"
+      }
+    },
+    {
+      "id": "direct-00-b",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-00-b",
+        "task": {
+          "description": "inspect a proposed patch for bugs and maintainability",
+          "scope": "multi_step"
+        },
+        "operation": "review",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "code-review"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-00"
+      }
+    },
+    {
+      "id": "direct-01-a",
+      "split": "calibration",
+      "tags": [
+        "ambiguity",
+        "clarification",
+        "direct",
+        "resolved"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-01-a",
+        "task": {
+          "description": "design API contract schema",
+          "scope": "multi_step"
+        },
+        "operation": "design",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "needs_context",
+        "question": {
+          "field": "task.api_style"
+        }
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-01"
+      }
+    },
+    {
+      "id": "direct-01-b",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-01-b",
+        "task": {
+          "description": "define HTTP endpoints and request response contracts",
+          "scope": "multi_step"
+        },
+        "operation": "design",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "api-design"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-01"
+      }
+    },
+    {
+      "id": "direct-02-a",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-02-a",
+        "task": {
+          "description": "Please handle this situation: plan database schema migration",
+          "scope": "multi_step"
+        },
+        "operation": "migrate",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "database-migration"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-02"
+      }
+    },
+    {
+      "id": "direct-02-b",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-02-b",
+        "task": {
+          "description": "prepare a rollback-safe change to production tables",
+          "scope": "multi_step"
+        },
+        "operation": "migrate",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "database-migration"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-02"
+      }
+    },
+    {
+      "id": "direct-03-a",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-03-a",
+        "task": {
+          "description": "audit security vulnerabilities threats",
+          "scope": "multi_step"
+        },
+        "operation": "review",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "security-audit"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-03"
+      }
+    },
+    {
+      "id": "direct-03-b",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-03-b",
+        "task": {
+          "description": "assess an application for exploitable weaknesses and threat exposure",
+          "scope": "multi_step"
+        },
+        "operation": "review",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "security-audit"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-03"
+      }
+    },
+    {
+      "id": "direct-04-a",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-04-a",
+        "task": {
+          "description": "Please handle this situation: audit web accessibility keyboard screenreader",
+          "scope": "multi_step"
+        },
+        "operation": "review",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "frontend-accessibility"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-04"
+      }
+    },
+    {
+      "id": "direct-04-b",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-04-b",
+        "task": {
+          "description": "check keyboard navigation focus order and screen reader labels",
+          "scope": "multi_step"
+        },
+        "operation": "review",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "frontend-accessibility"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-04"
+      }
+    },
+    {
+      "id": "direct-05-a",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-05-a",
+        "task": {
+          "description": "test browser user flows playwright",
+          "scope": "multi_step"
+        },
+        "operation": "test",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "browser-testing"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-05"
+      }
+    },
+    {
+      "id": "direct-05-b",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-05-b",
+        "task": {
+          "description": "automate checkout interactions across browsers with Playwright",
+          "scope": "multi_step"
+        },
+        "operation": "test",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "browser-testing"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-05"
+      }
+    },
+    {
+      "id": "direct-06-a",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-06-a",
+        "task": {
+          "description": "Please handle this situation: diagnose production incident outage",
+          "scope": "multi_step"
+        },
+        "operation": "debug",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "incident-debugging"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-06"
+      }
+    },
+    {
+      "id": "direct-06-b",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-06-b",
+        "task": {
+          "description": "trace the root cause of a live service outage",
+          "scope": "multi_step"
+        },
+        "operation": "debug",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "incident-debugging"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-06"
+      }
+    },
+    {
+      "id": "direct-07-a",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-07-a",
+        "task": {
+          "description": "profile latency cpu memory bottleneck",
+          "scope": "multi_step"
+        },
+        "operation": "debug",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "performance-profiling"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-07"
+      }
+    },
+    {
+      "id": "direct-07-b",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-07-b",
+        "task": {
+          "description": "find CPU and memory hotspots causing slow requests",
+          "scope": "multi_step"
+        },
+        "operation": "debug",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "performance-profiling"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-07"
+      }
+    },
+    {
+      "id": "direct-08-a",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-08-a",
+        "task": {
+          "description": "Please handle this situation: write technical documentation guide",
+          "scope": "multi_step"
+        },
+        "operation": "document",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "documentation-writing"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-08"
+      }
+    },
+    {
+      "id": "direct-08-b",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-08-b",
+        "task": {
+          "description": "Create a technical documentation maintainer guide for a public interface",
+          "scope": "multi_step"
+        },
+        "operation": "document",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "documentation-writing"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-08"
+      }
+    },
+    {
+      "id": "direct-09-a",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-09-a",
+        "task": {
+          "description": "operate kubernetes cluster workloads",
+          "scope": "multi_step"
+        },
+        "operation": "operate",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [
+              "cluster-access"
+            ],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "kubernetes-operations"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-09"
+      }
+    },
+    {
+      "id": "direct-09-b",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-09-b",
+        "task": {
+          "description": "roll out and troubleshoot workloads on a Kubernetes cluster",
+          "scope": "multi_step"
+        },
+        "operation": "operate",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [
+              "cluster-access"
+            ],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "kubernetes-operations"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-09"
+      }
+    },
+    {
+      "id": "direct-10-a",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-10-a",
+        "task": {
+          "description": "Please handle this situation: provision terraform cloud infrastructure",
+          "scope": "multi_step"
+        },
+        "operation": "implement",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "terraform-infrastructure"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-10"
+      }
+    },
+    {
+      "id": "direct-10-b",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-10-b",
+        "task": {
+          "description": "change cloud resources managed through Terraform modules",
+          "scope": "multi_step"
+        },
+        "operation": "implement",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "terraform-infrastructure"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-10"
+      }
+    },
+    {
+      "id": "direct-11-a",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-11-a",
+        "task": {
+          "description": "integrate payment checkout webhook",
+          "scope": "multi_step"
+        },
+        "operation": "implement",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "payment-integration"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-11"
+      }
+    },
+    {
+      "id": "direct-11-b",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-11-b",
+        "task": {
+          "description": "connect checkout billing and payment provider callbacks",
+          "scope": "multi_step"
+        },
+        "operation": "implement",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "payment-integration"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-11"
+      }
+    },
+    {
+      "id": "direct-12-a",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-12-a",
+        "task": {
+          "description": "Please handle this situation: implement login oauth session authentication",
+          "scope": "multi_step"
+        },
+        "operation": "implement",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "authentication"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-12"
+      }
+    },
+    {
+      "id": "direct-12-b",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-12-b",
+        "task": {
+          "description": "add OAuth login sessions and identity verification",
+          "scope": "multi_step"
+        },
+        "operation": "implement",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "authentication"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-12"
+      }
+    },
+    {
+      "id": "direct-13-a",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-13-a",
+        "task": {
+          "description": "optimize react rendering bundle performance",
+          "scope": "multi_step"
+        },
+        "operation": "refactor",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "react-performance"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-13"
+      }
+    },
+    {
+      "id": "direct-13-b",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-13-b",
+        "task": {
+          "description": "reduce unnecessary React renders and JavaScript bundle cost",
+          "scope": "multi_step"
+        },
+        "operation": "refactor",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "react-performance"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-13"
+      }
+    },
+    {
+      "id": "direct-14-a",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-14-a",
+        "task": {
+          "description": "Please handle this situation: build ios android mobile application",
+          "scope": "multi_step"
+        },
+        "operation": "implement",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "mobile-development"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-14"
+      }
+    },
+    {
+      "id": "direct-14-b",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-14-b",
+        "task": {
+          "description": "Build a cross-platform mobile application for phones and tablets",
+          "scope": "multi_step"
+        },
+        "operation": "implement",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "mobile-development"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-14"
+      }
+    },
+    {
+      "id": "direct-15-a",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-15-a",
+        "task": {
+          "description": "analyze dataset statistics trends",
+          "scope": "multi_step"
+        },
+        "operation": "research",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "data-analysis"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-15"
+      }
+    },
+    {
+      "id": "direct-15-b",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-15-b",
+        "task": {
+          "description": "identify statistical patterns and trends in tabular records",
+          "scope": "multi_step"
+        },
+        "operation": "research",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "data-analysis"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-15"
+      }
+    },
+    {
+      "id": "direct-16-a",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-16-a",
+        "task": {
+          "description": "Please handle this situation: train machine learning model classifier",
+          "scope": "multi_step"
+        },
+        "operation": "implement",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "machine-learning"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-16"
+      }
+    },
+    {
+      "id": "direct-16-b",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-16-b",
+        "task": {
+          "description": "Train and evaluate a machine learning prediction model",
+          "scope": "multi_step"
+        },
+        "operation": "implement",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "machine-learning"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-16"
+      }
+    },
+    {
+      "id": "direct-17-a",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-17-a",
+        "task": {
+          "description": "convert resize crop image",
+          "scope": "multi_step"
+        },
+        "operation": "implement",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "image-processing"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-17"
+      }
+    },
+    {
+      "id": "direct-17-b",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-17-b",
+        "task": {
+          "description": "batch resize crop and convert product pictures",
+          "scope": "multi_step"
+        },
+        "operation": "implement",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "image-processing"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-17"
+      }
+    },
+    {
+      "id": "direct-18-a",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-18-a",
+        "task": {
+          "description": "Please handle this situation: encode transcode edit video audio",
+          "scope": "multi_step"
+        },
+        "operation": "implement",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "video-processing"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-18"
+      }
+    },
+    {
+      "id": "direct-18-b",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-18-b",
+        "task": {
+          "description": "transcode recorded media and normalize its audio track",
+          "scope": "multi_step"
+        },
+        "operation": "implement",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "video-processing"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-18"
+      }
+    },
+    {
+      "id": "direct-19-a",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-19-a",
+        "task": {
+          "description": "manage git branches rebase commits",
+          "scope": "multi_step"
+        },
+        "operation": "operate",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "git-workflow"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-19"
+      }
+    },
+    {
+      "id": "direct-19-b",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-19-b",
+        "task": {
+          "description": "rebase a feature branch and organize its commits",
+          "scope": "multi_step"
+        },
+        "operation": "operate",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "git-workflow"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-19"
+      }
+    },
+    {
+      "id": "direct-20-a",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-20-a",
+        "task": {
+          "description": "Please handle this situation: prepare release changelog version",
+          "scope": "multi_step"
+        },
+        "operation": "operate",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "release-management"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-20"
+      }
+    },
+    {
+      "id": "direct-20-b",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-20-b",
+        "task": {
+          "description": "coordinate a versioned release and produce its changelog",
+          "scope": "multi_step"
+        },
+        "operation": "operate",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "release-management"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-20"
+      }
+    },
+    {
+      "id": "direct-21-a",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-21-a",
+        "task": {
+          "description": "upgrade package dependency version",
+          "scope": "multi_step"
+        },
+        "operation": "migrate",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "dependency-upgrade"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-21"
+      }
+    },
+    {
+      "id": "direct-21-b",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-21-b",
+        "task": {
+          "description": "update a library version while checking compatibility regressions",
+          "scope": "multi_step"
+        },
+        "operation": "migrate",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "dependency-upgrade"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-21"
+      }
+    },
+    {
+      "id": "direct-22-a",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-22-a",
+        "task": {
+          "description": "Please handle this situation: refactor restructure extract rename code",
+          "scope": "multi_step"
+        },
+        "operation": "refactor",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "refactoring"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-22"
+      }
+    },
+    {
+      "id": "direct-22-b",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-22-b",
+        "task": {
+          "description": "extract and rename modules without changing observable behavior",
+          "scope": "multi_step"
+        },
+        "operation": "refactor",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "refactoring"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-22"
+      }
+    },
+    {
+      "id": "direct-23-a",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-23-a",
+        "task": {
+          "description": "write unit tests test cases coverage",
+          "scope": "multi_step"
+        },
+        "operation": "test",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "unit-testing"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-23"
+      }
+    },
+    {
+      "id": "direct-23-b",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-23-b",
+        "task": {
+          "description": "add focused isolated tests for edge cases and coverage gaps",
+          "scope": "multi_step"
+        },
+        "operation": "test",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "unit-testing"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-23"
+      }
+    },
+    {
+      "id": "direct-24-a",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-24-a",
+        "task": {
+          "description": "Please handle this situation: load test throughput concurrency traffic",
+          "scope": "multi_step"
+        },
+        "operation": "test",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "load-testing"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-24"
+      }
+    },
+    {
+      "id": "direct-24-b",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-24-b",
+        "task": {
+          "description": "measure throughput and latency under concurrent traffic",
+          "scope": "multi_step"
+        },
+        "operation": "test",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "load-testing"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-24"
+      }
+    },
+    {
+      "id": "direct-25-a",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-25-a",
+        "task": {
+          "description": "instrument metrics traces dashboards",
+          "scope": "multi_step"
+        },
+        "operation": "implement",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "observability"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-25"
+      }
+    },
+    {
+      "id": "direct-25-b",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-25-b",
+        "task": {
+          "description": "instrument traces metrics and an operations dashboard",
+          "scope": "multi_step"
+        },
+        "operation": "implement",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "observability"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-25"
+      }
+    },
+    {
+      "id": "direct-26-a",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-26-a",
+        "task": {
+          "description": "Please handle this situation: improve structured logs correlation",
+          "scope": "multi_step"
+        },
+        "operation": "implement",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "logging"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-26"
+      }
+    },
+    {
+      "id": "direct-26-b",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-26-b",
+        "task": {
+          "description": "Add structured application logging with useful event context",
+          "scope": "multi_step"
+        },
+        "operation": "implement",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "logging"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-26"
+      }
+    },
+    {
+      "id": "direct-27-a",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-27-a",
+        "task": {
+          "description": "design cache invalidation ttl",
+          "scope": "multi_step"
+        },
+        "operation": "design",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "caching"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-27"
+      }
+    },
+    {
+      "id": "direct-27-b",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-27-b",
+        "task": {
+          "description": "choose TTL and invalidation behavior for cached responses",
+          "scope": "multi_step"
+        },
+        "operation": "design",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "caching"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-27"
+      }
+    },
+    {
+      "id": "direct-28-a",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-28-a",
+        "task": {
+          "description": "Please handle this situation: review message consumer retry idempotency acknowledgement",
+          "scope": "multi_step"
+        },
+        "operation": "review",
+        "context": {
+          "facts": [
+            {
+              "key": "dependency",
+              "value": "kafka",
+              "basis": "tool",
+              "scope": "active-component"
+            }
+          ],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "message-consumer-review"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-28"
+      }
+    },
+    {
+      "id": "direct-28-b",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-28-b",
+        "task": {
+          "description": "inspect duplicate delivery retry and acknowledgement ordering in a Kafka worker",
+          "scope": "multi_step"
+        },
+        "operation": "review",
+        "context": {
+          "facts": [
+            {
+              "key": "dependency",
+              "value": "kafka",
+              "basis": "tool",
+              "scope": "active-component"
+            }
+          ],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "message-consumer-review"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-28"
+      }
+    },
+    {
+      "id": "direct-29-a",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-29-a",
+        "task": {
+          "description": "design event service boundaries topology",
+          "scope": "multi_step"
+        },
+        "operation": "design",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "event-architecture-review"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-29"
+      }
+    },
+    {
+      "id": "direct-29-b",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-29-b",
+        "task": {
+          "description": "evaluate event-driven service boundaries and messaging topology",
+          "scope": "multi_step"
+        },
+        "operation": "design",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "event-architecture-review"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-29"
+      }
+    },
+    {
+      "id": "direct-30-a",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-30-a",
+        "task": {
+          "description": "Please handle this situation: optimize sql query index execution plan",
+          "scope": "multi_step"
+        },
+        "operation": "refactor",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "sql-optimization"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-30"
+      }
+    },
+    {
+      "id": "direct-30-b",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-30-b",
+        "task": {
+          "description": "use an execution plan to improve a slow SQL statement and index",
+          "scope": "multi_step"
+        },
+        "operation": "refactor",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "sql-optimization"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-30"
+      }
+    },
+    {
+      "id": "direct-31-a",
+      "split": "calibration",
+      "tags": [
+        "ambiguity",
+        "clarification",
+        "direct",
+        "resolved"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-31-a",
+        "task": {
+          "description": "design API contract schema for scenario 63",
+          "scope": "multi_step"
+        },
+        "operation": "design",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "needs_context",
+        "question": {
+          "field": "task.api_style"
+        }
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-31"
+      }
+    },
+    {
+      "id": "direct-31-b",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-31-b",
+        "task": {
+          "description": "define GraphQL types queries mutations and resolver boundaries",
+          "scope": "multi_step"
+        },
+        "operation": "design",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "graphql-api"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-31"
+      }
+    },
+    {
+      "id": "direct-32-a",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-32-a",
+        "task": {
+          "description": "Please handle this situation: build command line interface flags",
+          "scope": "multi_step"
+        },
+        "operation": "implement",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "cli-development"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-32"
+      }
+    },
+    {
+      "id": "direct-32-b",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-32-b",
+        "task": {
+          "description": "Build a command-line interface with flags, arguments, and reliable exit codes",
+          "scope": "multi_step"
+        },
+        "operation": "implement",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "cli-development"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-32"
+      }
+    },
+    {
+      "id": "direct-33-a",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-33-a",
+        "task": {
+          "description": "build mcp tools resources server",
+          "scope": "multi_step"
+        },
+        "operation": "implement",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "mcp-server"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-33"
+      }
+    },
+    {
+      "id": "direct-33-b",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-33-b",
+        "task": {
+          "description": "expose service actions as Model Context Protocol tools and resources",
+          "scope": "multi_step"
+        },
+        "operation": "implement",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "mcp-server"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-33"
+      }
+    },
+    {
+      "id": "direct-34-a",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-34-a",
+        "task": {
+          "description": "Please handle this situation: implement webhook signature delivery retry",
+          "scope": "multi_step"
+        },
+        "operation": "implement",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "webhooks"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-34"
+      }
+    },
+    {
+      "id": "direct-34-b",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-34-b",
+        "task": {
+          "description": "verify signatures and safely retry incoming callback delivery",
+          "scope": "multi_step"
+        },
+        "operation": "implement",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "webhooks"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-34"
+      }
+    },
+    {
+      "id": "direct-35-a",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-35-a",
+        "task": {
+          "description": "improve search ranking retrieval relevance",
+          "scope": "multi_step"
+        },
+        "operation": "research",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "search-relevance"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-35"
+      }
+    },
+    {
+      "id": "direct-35-b",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-35-b",
+        "task": {
+          "description": "evaluate whether retrieval ranking returns useful results",
+          "scope": "multi_step"
+        },
+        "operation": "research",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "search-relevance"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-35"
+      }
+    },
+    {
+      "id": "direct-36-a",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-36-a",
+        "task": {
+          "description": "Please handle this situation: review privacy pii retention redaction",
+          "scope": "multi_step"
+        },
+        "operation": "review",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "privacy-review"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-36"
+      }
+    },
+    {
+      "id": "direct-36-b",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-36-b",
+        "task": {
+          "description": "assess PII collection retention and redaction controls",
+          "scope": "multi_step"
+        },
+        "operation": "review",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "privacy-review"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-36"
+      }
+    },
+    {
+      "id": "direct-37-a",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-37-a",
+        "task": {
+          "description": "design backup restore disaster recovery",
+          "scope": "multi_step"
+        },
+        "operation": "operate",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "backup-recovery"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-37"
+      }
+    },
+    {
+      "id": "direct-37-b",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-37-b",
+        "task": {
+          "description": "prove backups can restore service after a disaster",
+          "scope": "multi_step"
+        },
+        "operation": "operate",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "backup-recovery"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-37"
+      }
+    },
+    {
+      "id": "direct-38-a",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-38-a",
+        "task": {
+          "description": "Please handle this situation: localize translate locale internationalization",
+          "scope": "multi_step"
+        },
+        "operation": "implement",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "localization"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-38"
+      }
+    },
+    {
+      "id": "direct-38-b",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-38-b",
+        "task": {
+          "description": "Implement product localization for multiple languages and regional formats",
+          "scope": "multi_step"
+        },
+        "operation": "implement",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "localization"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-38"
+      }
+    },
+    {
+      "id": "direct-39-a",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-39-a",
+        "task": {
+          "description": "send email deliverability bounce spam",
+          "scope": "multi_step"
+        },
+        "operation": "implement",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "email-delivery"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-39"
+      }
+    },
+    {
+      "id": "direct-39-b",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-39-b",
+        "task": {
+          "description": "handle bounces spam reputation and reliable mail sending",
+          "scope": "multi_step"
+        },
+        "operation": "implement",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "email-delivery"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-39"
+      }
+    },
+    {
+      "id": "direct-40-a",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-40-a",
+        "task": {
+          "description": "Please handle this situation: review code changes pull requests for scenario 81",
+          "scope": "multi_step"
+        },
+        "operation": "review",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "code-review"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-40"
+      }
+    },
+    {
+      "id": "direct-40-b",
+      "split": "held_out",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-40-b",
+        "task": {
+          "description": "Inspect a code change and report defects before merge",
+          "scope": "multi_step"
+        },
+        "operation": "review",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "code-review"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-40"
+      }
+    },
+    {
+      "id": "direct-41-a",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "direct"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-41-a",
+        "task": {
+          "description": "write unit tests test cases coverage for scenario 83",
+          "scope": "multi_step"
+        },
+        "operation": "test",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "unit-testing"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-41"
+      }
+    },
+    {
+      "id": "direct-41-b",
+      "split": "calibration",
+      "tags": [
+        "resolved",
+        "paraphrase"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-direct-41-b",
+        "task": {
+          "description": "add focused isolated tests for edge cases and coverage gaps for scenario 84",
+          "scope": "multi_step"
+        },
+        "operation": "test",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "unit-testing"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "direct-intent-41"
+      }
+    },
+    {
+      "id": "no-skill-00",
+      "split": "calibration",
+      "tags": [
+        "no_skill",
+        "trivial"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-no-skill-00",
+        "task": {
+          "description": "rename one typo in a greeting",
+          "scope": "single_step"
+        },
+        "operation": "other",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "no_skill"
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-no-skill-00"
+      }
+    },
+    {
+      "id": "no-skill-01",
+      "split": "held_out",
+      "tags": [
+        "no_skill",
+        "out_of_catalog"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-no-skill-01",
+        "task": {
+          "description": "tell me a short joke",
+          "scope": "single_step"
+        },
+        "operation": "other",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "no_skill"
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-no-skill-01"
+      }
+    },
+    {
+      "id": "no-skill-02",
+      "split": "calibration",
+      "tags": [
+        "no_skill",
+        "out_of_catalog"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-no-skill-02",
+        "task": {
+          "description": "calculate seventeen plus twenty",
+          "scope": "single_step"
+        },
+        "operation": "other",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "no_skill"
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-no-skill-02"
+      }
+    },
+    {
+      "id": "no-skill-03",
+      "split": "held_out",
+      "tags": [
+        "no_skill",
+        "trivial"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-no-skill-03",
+        "task": {
+          "description": "schedule a dentist appointment",
+          "scope": "single_step"
+        },
+        "operation": "other",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "no_skill"
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-no-skill-03"
+      }
+    },
+    {
+      "id": "no-skill-04",
+      "split": "calibration",
+      "tags": [
+        "no_skill",
+        "out_of_catalog"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-no-skill-04",
+        "task": {
+          "description": "summarize a cooking recipe",
+          "scope": "single_step"
+        },
+        "operation": "other",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "no_skill"
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-no-skill-04"
+      }
+    },
+    {
+      "id": "no-skill-05",
+      "split": "held_out",
+      "tags": [
+        "no_skill",
+        "out_of_catalog"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-no-skill-05",
+        "task": {
+          "description": "choose a birthday present",
+          "scope": "single_step"
+        },
+        "operation": "other",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "no_skill"
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-no-skill-05"
+      }
+    },
+    {
+      "id": "no-skill-06",
+      "split": "calibration",
+      "tags": [
+        "no_skill",
+        "trivial"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-no-skill-06",
+        "task": {
+          "description": "forecast tomorrow weather",
+          "scope": "single_step"
+        },
+        "operation": "other",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "no_skill"
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-no-skill-06"
+      }
+    },
+    {
+      "id": "no-skill-07",
+      "split": "held_out",
+      "tags": [
+        "no_skill",
+        "out_of_catalog"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-no-skill-07",
+        "task": {
+          "description": "sort these music titles",
+          "scope": "single_step"
+        },
+        "operation": "other",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "no_skill"
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-no-skill-07"
+      }
+    },
+    {
+      "id": "no-skill-08",
+      "split": "calibration",
+      "tags": [
+        "no_skill",
+        "out_of_catalog"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-no-skill-08",
+        "task": {
+          "description": "explain a chess opening",
+          "scope": "single_step"
+        },
+        "operation": "other",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "no_skill"
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-no-skill-08"
+      }
+    },
+    {
+      "id": "no-skill-09",
+      "split": "held_out",
+      "tags": [
+        "no_skill",
+        "trivial"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-no-skill-09",
+        "task": {
+          "description": "draft a vacation itinerary",
+          "scope": "single_step"
+        },
+        "operation": "other",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "no_skill"
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-no-skill-09"
+      }
+    },
+    {
+      "id": "no-skill-10",
+      "split": "calibration",
+      "tags": [
+        "no_skill",
+        "out_of_catalog"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-no-skill-10",
+        "task": {
+          "description": "convert miles to kilometers",
+          "scope": "single_step"
+        },
+        "operation": "other",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "no_skill"
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-no-skill-10"
+      }
+    },
+    {
+      "id": "no-skill-11",
+      "split": "held_out",
+      "tags": [
+        "no_skill",
+        "out_of_catalog"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-no-skill-11",
+        "task": {
+          "description": "find a rhyming word",
+          "scope": "single_step"
+        },
+        "operation": "other",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "no_skill"
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-no-skill-11"
+      }
+    },
+    {
+      "id": "no-skill-12",
+      "split": "calibration",
+      "tags": [
+        "no_skill",
+        "trivial"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-no-skill-12",
+        "task": {
+          "description": "rename one typo in a greeting quickly",
+          "scope": "single_step"
+        },
+        "operation": "other",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "no_skill"
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-no-skill-12"
+      }
+    },
+    {
+      "id": "no-skill-13",
+      "split": "held_out",
+      "tags": [
+        "no_skill",
+        "out_of_catalog"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-no-skill-13",
+        "task": {
+          "description": "tell me a short joke quickly",
+          "scope": "single_step"
+        },
+        "operation": "other",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "no_skill"
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-no-skill-13"
+      }
+    },
+    {
+      "id": "no-skill-14",
+      "split": "calibration",
+      "tags": [
+        "no_skill",
+        "out_of_catalog"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-no-skill-14",
+        "task": {
+          "description": "calculate seventeen plus twenty quickly",
+          "scope": "single_step"
+        },
+        "operation": "other",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "no_skill"
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-no-skill-14"
+      }
+    },
+    {
+      "id": "no-skill-15",
+      "split": "held_out",
+      "tags": [
+        "no_skill",
+        "trivial"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-no-skill-15",
+        "task": {
+          "description": "schedule a dentist appointment quickly",
+          "scope": "single_step"
+        },
+        "operation": "other",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "no_skill"
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-no-skill-15"
+      }
+    },
+    {
+      "id": "no-skill-16",
+      "split": "calibration",
+      "tags": [
+        "no_skill",
+        "out_of_catalog"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-no-skill-16",
+        "task": {
+          "description": "summarize a cooking recipe quickly",
+          "scope": "single_step"
+        },
+        "operation": "other",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "no_skill"
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-no-skill-16"
+      }
+    },
+    {
+      "id": "no-skill-17",
+      "split": "held_out",
+      "tags": [
+        "no_skill",
+        "out_of_catalog"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-no-skill-17",
+        "task": {
+          "description": "choose a birthday present quickly",
+          "scope": "single_step"
+        },
+        "operation": "other",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "no_skill"
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-no-skill-17"
+      }
+    },
+    {
+      "id": "no-skill-18",
+      "split": "calibration",
+      "tags": [
+        "no_skill",
+        "trivial"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-no-skill-18",
+        "task": {
+          "description": "forecast tomorrow weather quickly",
+          "scope": "single_step"
+        },
+        "operation": "other",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "no_skill"
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-no-skill-18"
+      }
+    },
+    {
+      "id": "no-skill-19",
+      "split": "held_out",
+      "tags": [
+        "no_skill",
+        "out_of_catalog"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-no-skill-19",
+        "task": {
+          "description": "sort these music titles quickly",
+          "scope": "single_step"
+        },
+        "operation": "other",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "no_skill"
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-no-skill-19"
+      }
+    },
+    {
+      "id": "no-skill-20",
+      "split": "calibration",
+      "tags": [
+        "no_skill",
+        "out_of_catalog"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-no-skill-20",
+        "task": {
+          "description": "explain a chess opening quickly",
+          "scope": "single_step"
+        },
+        "operation": "other",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "no_skill"
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-no-skill-20"
+      }
+    },
+    {
+      "id": "no-skill-21",
+      "split": "held_out",
+      "tags": [
+        "no_skill",
+        "trivial"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-no-skill-21",
+        "task": {
+          "description": "draft a vacation itinerary quickly",
+          "scope": "single_step"
+        },
+        "operation": "other",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "no_skill"
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-no-skill-21"
+      }
+    },
+    {
+      "id": "no-skill-22",
+      "split": "calibration",
+      "tags": [
+        "no_skill",
+        "out_of_catalog"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-no-skill-22",
+        "task": {
+          "description": "convert miles to kilometers quickly",
+          "scope": "single_step"
+        },
+        "operation": "other",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "no_skill"
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-no-skill-22"
+      }
+    },
+    {
+      "id": "no-skill-23",
+      "split": "held_out",
+      "tags": [
+        "no_skill",
+        "out_of_catalog"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-no-skill-23",
+        "task": {
+          "description": "find a rhyming word quickly",
+          "scope": "single_step"
+        },
+        "operation": "other",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "no_skill"
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-no-skill-23"
+      }
+    },
+    {
+      "id": "negation-00",
+      "split": "calibration",
+      "tags": [
+        "negation",
+        "no_skill"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-negation-00",
+        "task": {
+          "description": "review code changes pull requests",
+          "scope": "multi_step",
+          "constraints": [
+            "Do not review code changes pull requests"
+          ]
+        },
+        "operation": "review",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "no_skill"
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-negation-00"
+      }
+    },
+    {
+      "id": "negation-01",
+      "split": "calibration",
+      "tags": [
+        "negation",
+        "no_skill"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-negation-01",
+        "task": {
+          "description": "design API contract schema",
+          "scope": "multi_step",
+          "constraints": [
+            "Do not design API contract schema"
+          ]
+        },
+        "operation": "design",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "no_skill"
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-negation-01"
+      }
+    },
+    {
+      "id": "negation-02",
+      "split": "calibration",
+      "tags": [
+        "negation",
+        "no_skill"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-negation-02",
+        "task": {
+          "description": "plan database schema migration",
+          "scope": "multi_step",
+          "constraints": [
+            "Do not plan database schema migration"
+          ]
+        },
+        "operation": "migrate",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "no_skill"
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-negation-02"
+      }
+    },
+    {
+      "id": "negation-03",
+      "split": "calibration",
+      "tags": [
+        "negation",
+        "no_skill"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-negation-03",
+        "task": {
+          "description": "audit security vulnerabilities threats",
+          "scope": "multi_step",
+          "constraints": [
+            "Do not audit security vulnerabilities threats"
+          ]
+        },
+        "operation": "review",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "no_skill"
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-negation-03"
+      }
+    },
+    {
+      "id": "negation-04",
+      "split": "calibration",
+      "tags": [
+        "negation",
+        "no_skill"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-negation-04",
+        "task": {
+          "description": "audit web accessibility keyboard screenreader",
+          "scope": "multi_step",
+          "constraints": [
+            "Do not audit web accessibility keyboard screenreader"
+          ]
+        },
+        "operation": "review",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "no_skill"
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-negation-04"
+      }
+    },
+    {
+      "id": "negation-05",
+      "split": "calibration",
+      "tags": [
+        "negation",
+        "no_skill"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-negation-05",
+        "task": {
+          "description": "test browser user flows playwright",
+          "scope": "multi_step",
+          "constraints": [
+            "Do not test browser user flows playwright"
+          ]
+        },
+        "operation": "test",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "no_skill"
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-negation-05"
+      }
+    },
+    {
+      "id": "negation-06",
+      "split": "calibration",
+      "tags": [
+        "negation",
+        "no_skill"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-negation-06",
+        "task": {
+          "description": "diagnose production incident outage",
+          "scope": "multi_step",
+          "constraints": [
+            "Do not diagnose production incident outage"
+          ]
+        },
+        "operation": "debug",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "no_skill"
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-negation-06"
+      }
+    },
+    {
+      "id": "negation-07",
+      "split": "calibration",
+      "tags": [
+        "negation",
+        "no_skill"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-negation-07",
+        "task": {
+          "description": "profile latency cpu memory bottleneck",
+          "scope": "multi_step",
+          "constraints": [
+            "Do not profile latency cpu memory bottleneck"
+          ]
+        },
+        "operation": "debug",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "no_skill"
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-negation-07"
+      }
+    },
+    {
+      "id": "negation-08",
+      "split": "held_out",
+      "tags": [
+        "negation",
+        "no_skill"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-negation-08",
+        "task": {
+          "description": "Please handle this situation: write technical documentation guide",
+          "scope": "multi_step",
+          "constraints": [
+            "Do not write technical documentation guide"
+          ]
+        },
+        "operation": "document",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "no_skill"
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-negation-08"
+      }
+    },
+    {
+      "id": "negation-09",
+      "split": "held_out",
+      "tags": [
+        "negation",
+        "no_skill"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-negation-09",
+        "task": {
+          "description": "Please handle this situation: operate kubernetes cluster workloads",
+          "scope": "multi_step",
+          "constraints": [
+            "Do not operate kubernetes cluster workloads"
+          ]
+        },
+        "operation": "operate",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "no_skill"
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-negation-09"
+      }
+    },
+    {
+      "id": "negation-10",
+      "split": "held_out",
+      "tags": [
+        "negation",
+        "no_skill"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-negation-10",
+        "task": {
+          "description": "Please handle this situation: provision terraform cloud infrastructure",
+          "scope": "multi_step",
+          "constraints": [
+            "Do not provision terraform cloud infrastructure"
+          ]
+        },
+        "operation": "implement",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "no_skill"
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-negation-10"
+      }
+    },
+    {
+      "id": "negation-11",
+      "split": "held_out",
+      "tags": [
+        "negation",
+        "no_skill"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-negation-11",
+        "task": {
+          "description": "Please handle this situation: integrate payment checkout webhook",
+          "scope": "multi_step",
+          "constraints": [
+            "Do not integrate payment checkout webhook"
+          ]
+        },
+        "operation": "implement",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "no_skill"
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-negation-11"
+      }
+    },
+    {
+      "id": "missing-fact-00",
+      "split": "calibration",
+      "tags": [
+        "missing_fact",
+        "clarification"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-missing-fact-00",
+        "task": {
+          "description": "review message consumer retry idempotency acknowledgement",
+          "scope": "multi_step"
+        },
+        "operation": "review",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "needs_context",
+        "question": {
+          "field": "context.facts.dependency=kafka"
+        }
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-missing-fact-00"
+      }
+    },
+    {
+      "id": "missing-fact-01",
+      "split": "calibration",
+      "tags": [
+        "missing_fact",
+        "clarification"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-missing-fact-01",
+        "task": {
+          "description": "review message consumer retry idempotency acknowledgement for scenario 122",
+          "scope": "multi_step"
+        },
+        "operation": "review",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "needs_context",
+        "question": {
+          "field": "context.facts.dependency=kafka"
+        }
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-missing-fact-01"
+      }
+    },
+    {
+      "id": "missing-fact-02",
+      "split": "calibration",
+      "tags": [
+        "missing_fact",
+        "clarification"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-missing-fact-02",
+        "task": {
+          "description": "review message consumer retry idempotency acknowledgement for scenario 123",
+          "scope": "multi_step"
+        },
+        "operation": "review",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "needs_context",
+        "question": {
+          "field": "context.facts.dependency=kafka"
+        }
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-missing-fact-02"
+      }
+    },
+    {
+      "id": "missing-fact-03",
+      "split": "held_out",
+      "tags": [
+        "missing_fact",
+        "clarification"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-missing-fact-03",
+        "task": {
+          "description": "Please handle this situation: review message consumer retry idempotency acknowledgement",
+          "scope": "multi_step"
+        },
+        "operation": "review",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "needs_context",
+        "question": {
+          "field": "context.facts.dependency=kafka"
+        }
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-missing-fact-03"
+      }
+    },
+    {
+      "id": "missing-fact-04",
+      "split": "held_out",
+      "tags": [
+        "missing_fact",
+        "clarification"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-missing-fact-04",
+        "task": {
+          "description": "Please handle this situation: review message consumer retry idempotency acknowledgement for scenario 125",
+          "scope": "multi_step"
+        },
+        "operation": "review",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "needs_context",
+        "question": {
+          "field": "context.facts.dependency=kafka"
+        }
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-missing-fact-04"
+      }
+    },
+    {
+      "id": "missing-capability-00",
+      "split": "calibration",
+      "tags": [
+        "missing_capability",
+        "clarification"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-missing-capability-00",
+        "task": {
+          "description": "operate kubernetes cluster workloads",
+          "scope": "multi_step"
+        },
+        "operation": "operate",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "needs_context",
+        "question": {
+          "field": "context.execution.capabilities"
+        }
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-missing-capability-00"
+      }
+    },
+    {
+      "id": "missing-capability-01",
+      "split": "calibration",
+      "tags": [
+        "missing_capability",
+        "clarification"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-missing-capability-01",
+        "task": {
+          "description": "operate kubernetes cluster workloads for scenario 127",
+          "scope": "multi_step"
+        },
+        "operation": "operate",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "needs_context",
+        "question": {
+          "field": "context.execution.capabilities"
+        }
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-missing-capability-01"
+      }
+    },
+    {
+      "id": "missing-capability-02",
+      "split": "calibration",
+      "tags": [
+        "missing_capability",
+        "clarification"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-missing-capability-02",
+        "task": {
+          "description": "operate kubernetes cluster workloads for scenario 128",
+          "scope": "multi_step"
+        },
+        "operation": "operate",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "needs_context",
+        "question": {
+          "field": "context.execution.capabilities"
+        }
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-missing-capability-02"
+      }
+    },
+    {
+      "id": "missing-capability-03",
+      "split": "held_out",
+      "tags": [
+        "missing_capability",
+        "clarification"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-missing-capability-03",
+        "task": {
+          "description": "Please handle this situation: operate kubernetes cluster workloads",
+          "scope": "multi_step"
+        },
+        "operation": "operate",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "needs_context",
+        "question": {
+          "field": "context.execution.capabilities"
+        }
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-missing-capability-03"
+      }
+    },
+    {
+      "id": "missing-capability-04",
+      "split": "held_out",
+      "tags": [
+        "missing_capability",
+        "clarification"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-missing-capability-04",
+        "task": {
+          "description": "Please handle this situation: operate kubernetes cluster workloads for scenario 130",
+          "scope": "multi_step"
+        },
+        "operation": "operate",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "needs_context",
+        "question": {
+          "field": "context.execution.capabilities"
+        }
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-missing-capability-04"
+      }
+    },
+    {
+      "id": "ambiguity-00",
+      "split": "calibration",
+      "tags": [
+        "ambiguity",
+        "clarification"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-ambiguity-00",
+        "task": {
+          "description": "design API contract schema for scenario 131",
+          "scope": "multi_step"
+        },
+        "operation": "design",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "needs_context",
+        "question": {
+          "field": "task.api_style"
+        }
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-ambiguity-00"
+      }
+    },
+    {
+      "id": "ambiguity-01",
+      "split": "calibration",
+      "tags": [
+        "ambiguity",
+        "clarification"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-ambiguity-01",
+        "task": {
+          "description": "design API contract schema for scenario 132",
+          "scope": "multi_step"
+        },
+        "operation": "design",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "needs_context",
+        "question": {
+          "field": "task.api_style"
+        }
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-ambiguity-01"
+      }
+    },
+    {
+      "id": "ambiguity-02",
+      "split": "calibration",
+      "tags": [
+        "ambiguity",
+        "clarification"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-ambiguity-02",
+        "task": {
+          "description": "design API contract schema for scenario 133",
+          "scope": "multi_step"
+        },
+        "operation": "design",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "needs_context",
+        "question": {
+          "field": "task.api_style"
+        }
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-ambiguity-02"
+      }
+    },
+    {
+      "id": "ambiguity-03",
+      "split": "calibration",
+      "tags": [
+        "ambiguity",
+        "clarification"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-ambiguity-03",
+        "task": {
+          "description": "design API contract schema for scenario 134",
+          "scope": "multi_step"
+        },
+        "operation": "design",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "needs_context",
+        "question": {
+          "field": "task.api_style"
+        }
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-ambiguity-03"
+      }
+    },
+    {
+      "id": "ambiguity-04",
+      "split": "calibration",
+      "tags": [
+        "ambiguity",
+        "clarification"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-ambiguity-04",
+        "task": {
+          "description": "design API contract schema for scenario 135",
+          "scope": "multi_step"
+        },
+        "operation": "design",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "needs_context",
+        "question": {
+          "field": "task.api_style"
+        }
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-ambiguity-04"
+      }
+    },
+    {
+      "id": "ambiguity-05",
+      "split": "held_out",
+      "tags": [
+        "ambiguity",
+        "clarification"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-ambiguity-05",
+        "task": {
+          "description": "Should a client API use GraphQL queries or conventional REST resources?",
+          "scope": "multi_step"
+        },
+        "operation": "design",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "needs_context",
+        "question": {
+          "field": "task.api_style"
+        }
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-ambiguity-05"
+      }
+    },
+    {
+      "id": "ambiguity-06",
+      "split": "held_out",
+      "tags": [
+        "ambiguity",
+        "clarification"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-ambiguity-06",
+        "task": {
+          "description": "Compare a GraphQL schema endpoint with a general HTTP API contract.",
+          "scope": "multi_step"
+        },
+        "operation": "design",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "needs_context",
+        "question": {
+          "field": "task.api_style"
+        }
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-ambiguity-06"
+      }
+    },
+    {
+      "id": "ambiguity-07",
+      "split": "held_out",
+      "tags": [
+        "ambiguity",
+        "clarification"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-ambiguity-07",
+        "task": {
+          "description": "Select GraphQL versus REST for the service interface.",
+          "scope": "multi_step"
+        },
+        "operation": "design",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "needs_context",
+        "question": {
+          "field": "task.api_style"
+        }
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-ambiguity-07"
+      }
+    },
+    {
+      "id": "equivalent-review-0",
+      "split": "calibration",
+      "tags": [
+        "duplicate",
+        "equivalent"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-equivalent-review-0",
+        "task": {
+          "description": "review code changes pull requests",
+          "scope": "multi_step"
+        },
+        "operation": "review",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "code-review"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-equivalent-review-0"
+      }
+    },
+    {
+      "id": "equivalent-review-1",
+      "split": "calibration",
+      "tags": [
+        "duplicate",
+        "equivalent"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-equivalent-review-1",
+        "task": {
+          "description": "review code changes pull requests for scenario 140",
+          "scope": "multi_step"
+        },
+        "operation": "review",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "code-review"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-equivalent-review-1"
+      }
+    },
+    {
+      "id": "equivalent-review-2",
+      "split": "held_out",
+      "tags": [
+        "duplicate",
+        "equivalent"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-equivalent-review-2",
+        "task": {
+          "description": "Perform a pull request code review for defects and maintainability",
+          "scope": "multi_step"
+        },
+        "operation": "review",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "code-review"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-equivalent-review-2"
+      }
+    },
+    {
+      "id": "equivalent-test-0",
+      "split": "calibration",
+      "tags": [
+        "duplicate",
+        "equivalent"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-equivalent-test-0",
+        "task": {
+          "description": "write unit tests test cases coverage for scenario 142",
+          "scope": "multi_step"
+        },
+        "operation": "test",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "unit-testing"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-equivalent-test-0"
+      }
+    },
+    {
+      "id": "equivalent-test-1",
+      "split": "calibration",
+      "tags": [
+        "duplicate",
+        "equivalent"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-equivalent-test-1",
+        "task": {
+          "description": "write unit tests test cases coverage for scenario 143",
+          "scope": "multi_step"
+        },
+        "operation": "test",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "unit-testing"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-equivalent-test-1"
+      }
+    },
+    {
+      "id": "equivalent-test-2",
+      "split": "held_out",
+      "tags": [
+        "duplicate",
+        "equivalent"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-equivalent-test-2",
+        "task": {
+          "description": "add focused isolated tests for edge cases and coverage gaps for scenario 144",
+          "scope": "multi_step"
+        },
+        "operation": "test",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "unit-testing"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-equivalent-test-2"
+      }
+    },
+    {
+      "id": "support-0",
+      "split": "calibration",
+      "tags": [
+        "supporting",
+        "resolved"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-support-0",
+        "task": {
+          "description": "review code changes pull requests and write unit tests coverage",
+          "scope": "multi_step"
+        },
+        "operation": "review",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "code-review"
+        ],
+        "supporting": [
+          "unit-testing"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-support-0"
+      }
+    },
+    {
+      "id": "support-1",
+      "split": "calibration",
+      "tags": [
+        "supporting",
+        "resolved"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-support-1",
+        "task": {
+          "description": "review code changes pull requests and write unit tests coverage for scenario 146",
+          "scope": "multi_step"
+        },
+        "operation": "review",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "code-review"
+        ],
+        "supporting": [
+          "unit-testing"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-support-1"
+      }
+    },
+    {
+      "id": "support-2",
+      "split": "calibration",
+      "tags": [
+        "supporting",
+        "resolved"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-support-2",
+        "task": {
+          "description": "review code changes pull requests and write unit tests coverage for scenario 147",
+          "scope": "multi_step"
+        },
+        "operation": "review",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "code-review"
+        ],
+        "supporting": [
+          "unit-testing"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-support-2"
+      }
+    },
+    {
+      "id": "support-3",
+      "split": "calibration",
+      "tags": [
+        "supporting",
+        "resolved"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-support-3",
+        "task": {
+          "description": "review code changes pull requests and write unit tests coverage for scenario 148",
+          "scope": "multi_step"
+        },
+        "operation": "review",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "code-review"
+        ],
+        "supporting": [
+          "unit-testing"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-support-3"
+      }
+    },
+    {
+      "id": "support-4",
+      "split": "held_out",
+      "tags": [
+        "supporting",
+        "resolved"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-support-4",
+        "task": {
+          "description": "Review a code change and identify missing focused regression coverage",
+          "scope": "multi_step"
+        },
+        "operation": "review",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "code-review"
+        ],
+        "supporting": [
+          "unit-testing"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-support-4"
+      }
+    },
+    {
+      "id": "support-5",
+      "split": "held_out",
+      "tags": [
+        "supporting",
+        "resolved"
+      ],
+      "request": {
+        "schema_version": "1",
+        "request_id": "req-support-5",
+        "task": {
+          "description": "Inspect a pull request for defects, then add focused tests when coverage is absent",
+          "scope": "multi_step"
+        },
+        "operation": "review",
+        "context": {
+          "facts": [],
+          "execution": {
+            "capabilities": [],
+            "unavailable_capabilities": []
+          }
+        }
+      },
+      "expected": {
+        "status": "resolved",
+        "acceptable_primary": [
+          "code-review"
+        ],
+        "supporting": [
+          "unit-testing"
+        ]
+      },
+      "provenance": {
+        "source": "synthetic-sanitized",
+        "reviewed_by": [
+          "resolver-fixture-maintainer"
+        ],
+        "reviewed_at": "2026-09-29",
+        "intent_template_group": "scenario-support-5"
+      }
+    }
+  ]
+}

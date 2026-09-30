@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vantt/mcp-skill-hub/internal/catalog"
 	"github.com/vantt/mcp-skill-hub/internal/mutation"
 	"github.com/vantt/mcp-skill-hub/internal/skill"
 )
@@ -50,10 +51,22 @@ type SkillProposal struct {
 	proposal      skill.Proposal
 }
 
+// MissingActivationRequirementsError indicates a skill cannot transition to active
+// because one or more required routing fields are missing.
+type MissingActivationRequirementsError struct {
+	SkillID string   `json:"skill_id"`
+	Missing []string `json:"missing"`
+}
+
+func (e *MissingActivationRequirementsError) Error() string {
+	return fmt.Sprintf("skill %s cannot be activated: missing required fields: %s", e.SkillID, strings.Join(e.Missing, ", "))
+}
+
 // SkillMutationResult reports active local state and the Git boundary.
 type SkillMutationResult struct {
 	Result
 	SkillID         string              `json:"skill_id"`
+	State           string              `json:"state,omitempty"`
 	OperationID     string              `json:"operation_id"`
 	ChangedPaths    []string            `json:"changed_paths"`
 	CatalogSnapshot string              `json:"catalog_snapshot"`
@@ -94,6 +107,9 @@ func (service SkillService) PreviewSkillUpdate(ctx context.Context, path, id str
 	}
 	proposal, err := service.Manager.PreviewUpdate(ctx, root, id, input, fullDiff)
 	if err != nil {
+		if errors.Is(err, skill.ErrNotFound) {
+			return SkillProposal{}, fmt.Errorf("%w: Skill %s does not exist; use skill_create_preview", skill.ErrNotFound, id)
+		}
 		return SkillProposal{}, err
 	}
 	if err := skill.StoreProposal(root, proposal, time.Now()); err != nil {
@@ -125,6 +141,18 @@ func (service SkillService) previewTransition(ctx context.Context, path, id, tar
 	if err != nil {
 		return SkillProposal{}, err
 	}
+	if target == "active" {
+		missing, err := service.CheckActivationRequirements(ctx, path, id)
+		if err != nil {
+			return SkillProposal{}, err
+		}
+		if len(missing) > 0 {
+			return SkillProposal{}, &MissingActivationRequirementsError{
+				SkillID: id,
+				Missing: missing,
+			}
+		}
+	}
 	proposal, err := service.Manager.PreviewTransition(ctx, root, id, target, fullDiff, idempotencyKey)
 	if err != nil {
 		return SkillProposal{}, err
@@ -155,6 +183,9 @@ func (service SkillService) LoadSkillProposal(ctx context.Context, path, proposa
 // ConfirmSkillMutation applies exactly the preview and pins supplied by the caller.
 func (service SkillService) ConfirmSkillMutation(ctx context.Context, path string, preview SkillProposal, pins ConfirmationPins) (SkillMutationResult, error) {
 	if pins != preview.Confirmation.Confirmation.Pins {
+		if pins.ProposalDigest != preview.Confirmation.Confirmation.Pins.ProposalDigest {
+			return digestMismatchSkillProposal(preview), nil
+		}
 		return staleSkillProposal(preview), nil
 	}
 	root, err := skill.ResolveWorkspace(path)
@@ -168,9 +199,10 @@ func (service SkillService) ConfirmSkillMutation(ctx context.Context, path strin
 	if err != nil {
 		return SkillMutationResult{}, err
 	}
+	state := skillStateAfter(ctx, root, preview)
 	response := SkillMutationResult{
-		Result:  NewResult(StatusApplied, "Skill mutation was published and is active locally."),
-		SkillID: preview.SkillID, OperationID: result.OperationID, ChangedPaths: result.ChangedPaths,
+		Result:  NewResult(StatusApplied, appliedSkillSummary(preview.SkillID, preview.Command, state)),
+		SkillID: preview.SkillID, State: state, OperationID: result.OperationID, ChangedPaths: result.ChangedPaths,
 		CatalogSnapshot: result.CatalogSnapshot, Generation: result.Generation,
 		ActiveLocally: true, GitDirty: result.GitDirty,
 	}
@@ -196,12 +228,70 @@ func (SkillService) ReadSkillContentForEdit(ctx context.Context, path, id string
 	return skill.ReadEditableContent(root, id)
 }
 
+// ReadSkillRouting returns a skill's stored routing fields in any state.
+func (SkillService) ReadSkillRouting(ctx context.Context, path, id string) (skill.RoutingInput, error) {
+	if err := ctx.Err(); err != nil {
+		return skill.RoutingInput{}, err
+	}
+	root, err := skill.ResolveWorkspace(path)
+	if err != nil {
+		return skill.RoutingInput{}, err
+	}
+	return skill.ReadRouting(root, id)
+}
+
+// ReadSkillRationale returns a skill's stored routing review rationale in any state.
+func (SkillService) ReadSkillRationale(ctx context.Context, path, id string) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	root, err := skill.ResolveWorkspace(path)
+	if err != nil {
+		return "", err
+	}
+	return skill.ReadRationale(root, id)
+}
+
+// CheckActivationRequirements returns all missing requirements for activating a skill.
+// Active skills require at least one trigger, not_for or rationale, and min_scope.
+func (SkillService) CheckActivationRequirements(ctx context.Context, path, id string) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	root, err := skill.ResolveWorkspace(path)
+	if err != nil {
+		return nil, err
+	}
+	routing, err := skill.ReadRouting(root, id)
+	if err != nil {
+		return nil, err
+	}
+	rationale, err := skill.ReadRationale(root, id)
+	if err != nil {
+		return nil, err
+	}
+	var missing []string
+	if len(routing.Triggers) == 0 {
+		missing = append(missing, "trigger")
+	}
+	if len(routing.NotFor) == 0 && strings.TrimSpace(rationale) == "" {
+		missing = append(missing, "not_for or rationale (quality.routing_review_rationale)")
+	}
+	if strings.TrimSpace(routing.MinScope) == "" {
+		missing = append(missing, "min_scope")
+	}
+	return missing, nil
+}
+
 func (SkillService) ReadSkill(ctx context.Context, path, id string) (SkillReadResult, error) {
 	root, err := skill.ResolveWorkspace(path)
 	if err != nil {
 		return SkillReadResult{}, err
 	}
-	manifest, err := skill.GetManifest(ctx, root, id)
+	if err := catalog.EnsureFreshOrRebuild(ctx, root); err != nil {
+		return SkillReadResult{}, err
+	}
+	manifest, err := skill.GetManifestAnyState(ctx, root, id)
 	if err != nil {
 		return SkillReadResult{}, err
 	}
@@ -213,15 +303,48 @@ func (SkillService) ReadSkill(ctx context.Context, path, id string) (SkillReadRe
 		}
 	}
 	if entry == nil {
-		return SkillReadResult{}, fmt.Errorf("%w: active skill has no SKILL.md manifest entry", skill.ErrSnapshotExpired)
+		return SkillReadResult{}, fmt.Errorf("%w: skill has no SKILL.md manifest entry", skill.ErrSnapshotExpired)
 	}
 	contents, err := skill.ReadResource(ctx, root, manifest.CatalogSnapshot, entry.Path, entry.Digest)
 	if err != nil {
 		return SkillReadResult{}, err
 	}
-	response := SkillReadResult{Result: NewResult(StatusOK, "Active skill loaded from a digest-pinned catalog snapshot."), Manifest: manifest, Content: string(contents)}
-	response.Items = append(response.Items, Item{ID: id, Summary: manifest.Name, Impact: fmt.Sprintf("%d digest-pinned resource(s).", len(manifest.Resources))})
+	response := SkillReadResult{Result: NewResult(StatusOK, fmt.Sprintf("Skill %s (%s) loaded.", id, manifest.Status)), Manifest: manifest, Content: string(contents)}
+	response.Items = append(response.Items, Item{ID: id, Summary: manifest.Name, Impact: fmt.Sprintf("%d resource(s).", len(manifest.Resources))})
 	return response, nil
+}
+
+// skillStateAfter reports the lifecycle state a confirmed mutation left the
+// skill in. Transitions name their target; create always yields a draft; other
+// commands read the freshly published catalog. Empty means unknown.
+func skillStateAfter(ctx context.Context, root string, preview SkillProposal) string {
+	switch {
+	case preview.Command == "skill_create":
+		return "draft"
+	case strings.HasPrefix(preview.Command, "skill_") && preview.Command != "skill_edit":
+		return strings.TrimPrefix(preview.Command, "skill_")
+	}
+	manifest, err := skill.GetManifestAnyState(ctx, root, preview.SkillID)
+	if err != nil {
+		return ""
+	}
+	return manifest.Status
+}
+
+func appliedSkillSummary(id, command, state string) string {
+	switch {
+	case command == "skill_create":
+		return fmt.Sprintf("Draft skill %s saved.", id)
+	case command == "skill_edit" && state == "draft":
+		return fmt.Sprintf("Draft skill %s saved.", id)
+	case command == "skill_edit" && state != "":
+		return fmt.Sprintf("Skill %s updated; it is %s.", id, state)
+	case command == "skill_edit":
+		return fmt.Sprintf("Skill %s updated.", id)
+	case state != "":
+		return fmt.Sprintf("Skill %s is now %s.", id, state)
+	}
+	return fmt.Sprintf("Skill %s changed.", id)
 }
 
 func makeSkillProposal(proposal skill.Proposal, summary string) SkillProposal {
@@ -247,6 +370,18 @@ func staleSkillProposal(preview SkillProposal) SkillMutationResult {
 		Error: "The proposal can no longer be confirmed.",
 		Why:   "The target or confirmation pins changed after the preview was created.",
 		Fix:   "Regenerate the proposal and review the updated diff.",
+	}}
+	result.SuggestedActions = append(result.SuggestedActions, Action{Label: "Regenerate the proposal", Command: "PreviewSkillUpdate"})
+	return result
+}
+
+func digestMismatchSkillProposal(preview SkillProposal) SkillMutationResult {
+	confirmation := preview.Confirmation
+	result := SkillMutationResult{Result: NewResult(StatusError, "Proposal digest does not match the preview; nothing was applied."), SkillID: preview.SkillID, Confirmation: &confirmation}
+	result.Error = &Error{Code: ErrorStaleProposal, Render: ErrorRender{
+		Error: "The proposal cannot be confirmed.",
+		Why:   "Proposal digest does not match the preview.",
+		Fix:   "Pass the exact proposal digest printed by the preview command, or re-run with --yes.",
 	}}
 	result.SuggestedActions = append(result.SuggestedActions, Action{Label: "Regenerate the proposal", Command: "PreviewSkillUpdate"})
 	return result

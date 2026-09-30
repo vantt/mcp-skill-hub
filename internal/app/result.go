@@ -18,13 +18,14 @@ const (
 
 // Result is the public response contract returned by all delivery adapters.
 type Result struct {
-	SchemaVersion    string    `json:"schema_version"`
-	Status           Status    `json:"status"`
-	Summary          string    `json:"summary"`
-	Items            []Item    `json:"items"`
-	SuggestedActions []Action  `json:"suggested_actions"`
-	Warnings         []Warning `json:"warnings"`
-	Error            *Error    `json:"error"`
+	SchemaVersion    string         `json:"schema_version"`
+	Status           Status         `json:"status"`
+	Summary          string         `json:"summary"`
+	Items            []Item         `json:"items"`
+	SuggestedActions []Action       `json:"suggested_actions"`
+	Warnings         []Warning      `json:"warnings"`
+	Error            *Error         `json:"error"`
+	Details          map[string]any `json:"details,omitempty"`
 }
 
 // NewResult creates a result with the fields that must always be present.

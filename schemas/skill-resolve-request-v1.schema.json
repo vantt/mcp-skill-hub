@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillhub.local/schemas/skill-resolve-request-v1.schema.json",
+  "title": "Skill resolution request v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "request_id", "task"],
+  "properties": {
+    "schema_version": {"const": "1"},
+    "request_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "task": {
+      "type": "object", "additionalProperties": false, "required": ["description"],
+      "properties": {
+        "description": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "constraints": {"type": "array", "maxItems": 16, "items": {"type": "string", "minLength": 1, "maxLength": 512}, "uniqueItems": true},
+        "exclusions": {"type": "object", "additionalProperties": false, "properties": {"skill_ids": {"type": "array", "maxItems": 16, "items": {"type": "string", "minLength": 1, "maxLength": 128}, "uniqueItems": true}, "terms": {"type": "array", "maxItems": 16, "items": {"type": "string", "minLength": 1, "maxLength": 512}, "uniqueItems": true}}},
+        "scope": {"enum": ["single_step", "multi_step", "project"]}
+      }
+    },
+    "operation": {"enum": ["explore", "design", "implement", "review", "debug", "test", "refactor", "migrate", "document", "operate", "research", "other"]},
+    "context": {"$ref": "#/$defs/context"},
+    "activation_context": {"$ref": "#/$defs/activationContext"},
+    "prior": {"$ref": "#/$defs/prior"}
+  },
+  "$defs": {
+    "context": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "active_artifact": {
+          "type": "object", "additionalProperties": false,
+          "properties": {"kind": {"type": "string", "maxLength": 128}, "path_hint": {"type": "string", "maxLength": 512}, "language": {"type": "string", "maxLength": 128}}
+        },
+        "facts": {"type": "array", "maxItems": 32, "items": {"$ref": "#/$defs/fact"}},
+        "execution": {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "signal": {"type": "object", "additionalProperties": false, "required": ["kind", "summary"], "properties": {"kind": {"type": "string", "minLength": 1}, "summary": {"type": "string", "minLength": 1, "maxLength": 512}}},
+            "capabilities": {"type": "array", "maxItems": 32, "items": {"type": "string", "minLength": 1, "maxLength": 128}, "uniqueItems": true},
+            "unavailable_capabilities": {"type": "array", "maxItems": 32, "items": {"type": "string", "minLength": 1, "maxLength": 128}, "uniqueItems": true}
+          }
+        }
+      }
+    },
+    "fact": {
+      "type": "object", "additionalProperties": false, "required": ["key", "value", "basis"],
+      "properties": {"key": {"type": "string", "minLength": 1, "maxLength": 256}, "value": {"type": "string", "minLength": 1, "maxLength": 256}, "basis": {"enum": ["user", "tool", "agent-host", "agent-inference"]}, "scope": {"type": "string", "maxLength": 128}, "observed_at": {"type": "string", "format": "date-time"}}
+    },
+    "activationContext": {
+      "type": "object", "additionalProperties": false, "required": ["mode"],
+      "properties": {
+        "mode": {"enum": ["allow-primary", "supplement-only", "coverage-check"]},
+        "active_procedures": {"type": "array", "maxItems": 8, "items": {"type": "object", "additionalProperties": false, "required": ["id", "role", "scope", "state_basis", "replaceable"], "properties": {"id": {"type": "string", "minLength": 1, "maxLength": 256}, "role": {"enum": ["primary", "supporting"]}, "scope": {"type": "string", "minLength": 1}, "summary": {"type": "string", "maxLength": 512}, "state_basis": {"enum": ["host-native", "adapter-tracked", "user-selected", "agent-reported"]}, "replaceable": {"type": "boolean"}, "locked_by": {"type": "string"}, "identity": {"type": "object", "additionalProperties": false, "properties": {"digest": {"type": "string"}, "origin": {"type": "string"}}}}}
+      }
+    }
+    },
+    "prior": {
+      "type": "object", "additionalProperties": false, "required": ["resolution_id", "context_revision", "kind"],
+      "properties": {"resolution_id": {"type": "string", "minLength": 1}, "context_revision": {"type": "integer", "minimum": 1}, "kind": {"enum": ["clarification", "rejected"]}, "question_id": {"type": "string"}, "answer": {"type": "string"}, "basis": {"type": "string"}, "reason_code": {"type": "string"}}
+    }
+  }
+}

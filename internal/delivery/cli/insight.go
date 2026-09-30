@@ -28,7 +28,11 @@ func runInbox(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 		}
 		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Pass only --workspace and optional --json.")
 	}
-	result, callErr := (app.InsightService{}).GetInsightInbox(ctx, flags.workspace)
+	resolved, resErr := resolveWorkspace(flags.workspace)
+	if resErr != nil {
+		return writeWorkspaceResolutionError(stdout, stderr, flags.jsonOutput, resErr)
+	}
+	result, callErr := (app.InsightService{}).GetInsightInbox(ctx, resolved)
 	return writeInsightResult(stdout, stderr, flags.jsonOutput, result, callErr)
 }
 
@@ -37,10 +41,61 @@ func runInsight(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), "insight requires a subcommand", "Use decide, apply, confirm, outcome, provenance, impact, or operation-diff.")
 	}
 	sub := args[0]
+	switch sub {
+	case "show", "decide", "plan", "reject", "obsolete", "reopen", "apply", "confirm", "outcome", "provenance", "impact", "operation-diff":
+	default:
+		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), fmt.Sprintf("unsupported insight subcommand %q", sub), "Use decide, apply, confirm, outcome, provenance, impact, or operation-diff.")
+	}
 	flags, positionals, err := parseInsightFlags(args[1:])
 	if err != nil {
 		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Review insight command arguments and retry.")
 	}
+	switch sub {
+	case "show":
+		if len(positionals) != 1 {
+			return writeInvalidRequest(stdout, stderr, flags.jsonOutput, "show requires one insight ID", "Provide one insight ID.")
+		}
+	case "decide", "plan", "reject", "obsolete", "reopen":
+		decision := flags.decision
+		if sub != "decide" {
+			decision = sub
+		}
+		if len(positionals) != 1 || decision == "" || flags.reason == "" {
+			return writeInvalidRequest(stdout, stderr, flags.jsonOutput, sub+" requires one insight ID and --reason", "Choose plan, reject, obsolete, or reopen with an explicit rationale.")
+		}
+	case "apply":
+		if flags.yes {
+			return writeInvalidRequest(stdout, stderr, flags.jsonOutput, "apply is preview-only and does not accept --yes", "Run apply without --yes, then use a separate insight confirm invocation with the exact persisted proposal pins.")
+		}
+		if len(positionals) != 1 || flags.proposalFile == "" {
+			return writeInvalidRequest(stdout, stderr, flags.jsonOutput, "apply requires one insight ID and --proposal-file", "Provide a JSON application proposal with exact changes and mappings.")
+		}
+	case "confirm":
+		if len(positionals) != 0 || flags.proposalID == "" || flags.proposalDigest == "" || flags.baseVersion == "" {
+			return writeInvalidRequest(stdout, stderr, flags.jsonOutput, "confirm requires --proposal, --proposal-digest, and --base-version", "Confirm the exact pins returned by apply preview.")
+		}
+	case "outcome":
+		if len(positionals) != 1 || flags.state == "" || flags.note == "" || len(flags.evidence) == 0 {
+			return writeInvalidRequest(stdout, stderr, flags.jsonOutput, "outcome requires one incorporation ID, --state, --note, and at least one --evidence", "Record confirmed, adjusted, or ineffective only from explicit evidence.")
+		}
+	case "provenance":
+		if len(positionals) != 0 || flags.artifact == "" {
+			return writeInvalidRequest(stdout, stderr, flags.jsonOutput, "provenance requires --artifact <workspace-relative-path>", "Provide one local artifact path.")
+		}
+	case "impact":
+		if len(positionals) != 0 || flags.finding == "" {
+			return writeInvalidRequest(stdout, stderr, flags.jsonOutput, "impact requires --finding <observation-id>", "Provide one changed finding ID.")
+		}
+	case "operation-diff":
+		if len(positionals) != 1 {
+			return writeInvalidRequest(stdout, stderr, flags.jsonOutput, "operation-diff requires one operation ID", "Provide the managed operation ID.")
+		}
+	}
+	resolved, resErr := resolveWorkspace(flags.workspace)
+	if resErr != nil {
+		return writeWorkspaceResolutionError(stdout, stderr, flags.jsonOutput, resErr)
+	}
+	flags.workspace = resolved
 	service := app.InsightService{}
 	switch sub {
 	case "show":
@@ -172,9 +227,6 @@ func parseInsightFlags(args []string) (insightFlags, []string, error) {
 			positionals = append(positionals, value)
 		}
 	}
-	if flags.workspace == "" {
-		return flags, nil, errors.New("--workspace is required for non-interactive use")
-	}
 	return flags, positionals, nil
 }
 
@@ -234,7 +286,7 @@ func writeInsightResult(stdout, stderr io.Writer, jsonOutput bool, value any, er
 	case app.InsightDecisionResult:
 		fmt.Fprintf(stdout, "%s\n%s [%s]\nOperation: %s\n", result.Summary, result.Insight.ID, result.Insight.Status, result.OperationID)
 	case app.InsightApplicationPreview:
-		fmt.Fprintf(stdout, "%s\nProposal: %s\nDigest: %s\nBase catalog: %s\n%s", result.Summary, result.ProposalID, result.ProposalDigest, result.BaseCatalogVersion, result.Diff)
+		fmt.Fprintf(stdout, "%s\nProposal: %s\nDigest: %s\nBase version: %s\n%sConfirm with:\n  skillhub insight confirm --proposal %s --proposal-digest %s --base-version %s\n", result.Summary, result.ProposalID, result.ProposalDigest, result.BaseCatalogVersion, result.Diff, result.ProposalID, result.ProposalDigest, result.BaseCatalogVersion)
 	case app.InsightApplicationResult:
 		if result.Error != nil {
 			fmt.Fprintf(stderr, "ERROR: %s\nWHY: %s\nFIX: %s\n", result.Error.Render.Error, result.Error.Render.Why, result.Error.Render.Fix)

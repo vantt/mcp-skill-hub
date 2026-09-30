@@ -4,9 +4,11 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/vantt/mcp-skill-hub/internal/mutation"
+	workspacepkg "github.com/vantt/mcp-skill-hub/internal/workspace"
 )
 
 func TestInitRequiresConfirmationBeforeMutation(t *testing.T) {
@@ -30,6 +32,73 @@ func TestInitRequiresConfirmationBeforeMutation(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, "runtime", "catalog", "current.json")); err != nil {
 		t.Fatalf("confirmed init did not publish a catalog generation: %v", err)
+	}
+}
+
+func TestDoctorHostIntegrationPreviewIsReadOnlyAndDependencyOrdered(t *testing.T) {
+	root := healthyWorkspaceWithoutHosts(t)
+	result, err := (WorkspaceService{}).Doctor(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != StatusActionRequired || len(result.Items) != 9 {
+		t.Fatalf("host integration preview = %#v", result)
+	}
+	for index, item := range result.Items {
+		wantKind := []string{"mcp-registration", "native-skill", "bootstrap-instructions"}[index/3]
+		if !strings.Contains(item.ID, wantKind) || !strings.Contains(item.Summary, root) || !strings.Contains(item.Summary, "native-skill-instruction-coordination") || !strings.Contains(item.Summary, "Managed diff preview:") {
+			t.Fatalf("preview item %d = %#v, want kind %s with path, level, and managed diff", index, item, wantKind)
+		}
+	}
+	if len(result.Warnings) != 0 {
+		t.Fatalf("preview warnings = %#v, want 0", result.Warnings)
+	}
+	for _, relative := range hostArtifactPaths() {
+		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(relative))); !os.IsNotExist(err) {
+			t.Fatalf("read-only doctor wrote %s: %v", relative, err)
+		}
+	}
+}
+
+func TestDoctorFixAppliesAllHostArtifactsAndIsIdempotent(t *testing.T) {
+	root := healthyWorkspaceWithoutHosts(t)
+	service := WorkspaceService{}
+	applied, err := service.DoctorFix(root, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if applied.Status != StatusApplied {
+		t.Fatalf("host apply status = %s", applied.Status)
+	}
+	before := make(map[string][]byte)
+	for _, relative := range hostArtifactPaths() {
+		path := filepath.Join(root, filepath.FromSlash(relative))
+		content, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("host artifact %s: %v", relative, err)
+		}
+		before[relative] = content
+	}
+	for _, relative := range []string{"CLAUDE.md", "AGENTS.md", "GEMINI.md"} {
+		if count := strings.Count(string(before[relative]), "<!-- skillhub:bootstrap:v1:start -->"); count != 1 {
+			t.Fatalf("%s bootstrap block count = %d", relative, count)
+		}
+	}
+	if entries, err := os.ReadDir(filepath.Join(root, "history", "operations")); err != nil || len(entries) != 0 {
+		t.Fatalf("host-only integration created canonical receipts: %#v, %v", entries, err)
+	}
+
+	if _, err := service.DoctorFix(root, true); err != nil {
+		t.Fatal(err)
+	}
+	for relative, want := range before {
+		got, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(relative)))
+		if err != nil || string(got) != string(want) {
+			t.Fatalf("second fix changed %s: %v", relative, err)
+		}
+	}
+	if entries, err := os.ReadDir(filepath.Join(root, "history", "operations")); err != nil || len(entries) != 0 {
+		t.Fatalf("idempotent host fix created canonical receipts: %#v, %v", entries, err)
 	}
 }
 
@@ -98,30 +167,20 @@ func TestDoctorHealthyWorkspaceCreatesOnlyAdvisoryLockState(t *testing.T) {
 	}
 }
 
-func TestDoctorIsReadOnlyAndFixRequiresConfirmation(t *testing.T) {
+func TestInitIsReadOnlyAndConfirmationInitializes(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "workspace")
 	service := WorkspaceService{}
-	preview, err := service.Doctor(root)
+	preview, err := service.Init(root, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if preview.Status != StatusActionRequired {
-		t.Fatalf("unexpected doctor status: %s", preview.Status)
+		t.Fatalf("unexpected init preview status: %s", preview.Status)
 	}
 	if _, err := os.Stat(root); !os.IsNotExist(err) {
-		t.Fatalf("doctor wrote workspace: %v", err)
+		t.Fatalf("init preview wrote workspace: %v", err)
 	}
-	refusal, err := service.DoctorFix(root, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if refusal.Status != StatusActionRequired {
-		t.Fatalf("unexpected refusal status: %s", refusal.Status)
-	}
-	if _, err := os.Stat(root); !os.IsNotExist(err) {
-		t.Fatalf("doctor --fix without --yes wrote workspace: %v", err)
-	}
-	applied, err := service.DoctorFix(root, true)
+	applied, err := service.Init(root, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,11 +188,25 @@ func TestDoctorIsReadOnlyAndFixRequiresConfirmation(t *testing.T) {
 		t.Fatalf("unexpected applied status: %s", applied.Status)
 	}
 	if _, err := os.Stat(filepath.Join(root, ".skillhub", "schema-version")); err != nil {
-		t.Fatalf("fix did not initialize workspace: %v", err)
+		t.Fatalf("init did not initialize workspace: %v", err)
 	}
 }
 
-func TestExistingWorkspaceDoctorFixUsesMutationReceipt(t *testing.T) {
+func TestDoctorFixRejectsMissingWorkspace(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "workspace")
+	service := WorkspaceService{}
+	if _, err := service.Doctor(root); err == nil {
+		t.Fatal("Doctor on missing path should fail")
+	}
+	if _, err := service.DoctorFix(root, true); err == nil {
+		t.Fatal("DoctorFix on missing path should fail")
+	}
+	if _, err := os.Stat(root); !os.IsNotExist(err) {
+		t.Fatalf("DoctorFix created missing workspace: %v", err)
+	}
+}
+
+func TestExistingWorkspaceDoctorFixNeverSilentlyChangesCanonicalVersion(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "workspace")
 	service := WorkspaceService{}
 	if _, err := service.Init(root, true); err != nil {
@@ -142,14 +215,18 @@ func TestExistingWorkspaceDoctorFixUsesMutationReceipt(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, ".skillhub", "schema-version"), []byte("outdated\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.DoctorFix(root, true); err != nil {
+	result, err := service.DoctorFix(root, true)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if contents, err := os.ReadFile(filepath.Join(root, ".skillhub", "schema-version")); err != nil || string(contents) != "1\n" {
-		t.Fatalf("schema remediation = %q, %v", contents, err)
+	if result.Status != StatusActionRequired || len(result.SuggestedActions) != 1 || !strings.Contains(result.SuggestedActions[0].Command, "skillhub migrate") {
+		t.Fatalf("doctor result = %#v", result)
+	}
+	if contents, err := os.ReadFile(filepath.Join(root, ".skillhub", "schema-version")); err != nil || string(contents) != "outdated\n" {
+		t.Fatalf("doctor changed schema marker = %q, %v", contents, err)
 	}
 	var receipts int
-	err := filepath.WalkDir(filepath.Join(root, "history", "operations"), func(_ string, entry os.DirEntry, walkErr error) error {
+	err = filepath.WalkDir(filepath.Join(root, "history", "operations"), func(_ string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
@@ -158,8 +235,8 @@ func TestExistingWorkspaceDoctorFixUsesMutationReceipt(t *testing.T) {
 		}
 		return nil
 	})
-	if err != nil || receipts != 1 {
-		t.Fatalf("doctor remediation receipts = %d, %v", receipts, err)
+	if err != nil || receipts != 0 {
+		t.Fatalf("doctor created canonical receipts = %d, %v", receipts, err)
 	}
 }
 
@@ -222,5 +299,31 @@ func TestDoctorReportsAndFixesPendingRecovery(t *testing.T) {
 	}
 	if pending, err := mutation.Pending(root); err != nil || len(pending) != 0 {
 		t.Fatalf("pending after fix = %#v, %v", pending, err)
+	}
+}
+
+func healthyWorkspaceWithoutHosts(t *testing.T) string {
+	t.Helper()
+	root := filepath.Join(t.TempDir(), "workspace")
+	if _, err := workspacepkg.Apply(root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (CatalogService{}).EnsureCatalog(t.Context(), root); err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
+func hostArtifactPaths() []string {
+	return []string{
+		".mcp.json",
+		".codex/config.toml",
+		".gemini/settings.json",
+		".claude/skills/system-curator/SKILL.md",
+		".agents/skills/system-curator/SKILL.md",
+		".gemini/skills/system-curator/SKILL.md",
+		"CLAUDE.md",
+		"AGENTS.md",
+		"GEMINI.md",
 	}
 }

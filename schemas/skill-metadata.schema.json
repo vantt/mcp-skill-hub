@@ -26,10 +26,18 @@
         "triggers": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
         "not_for": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
         "min_scope": {"enum": ["", "single_step", "multi_step", "project"]},
-        "requirements": {"type": "object"},
+        "requirements": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "facts": {"$ref": "#/$defs/factRequirements"},
+            "capabilities": {"$ref": "#/$defs/capabilityRequirements"}
+          }
+        },
         "boosts": {"type": "object"},
-        "distinguish_from": {"type": "array"},
-        "supporting": {"type": "array"}
+        "distinguish_from": {"type": "array", "items": {"$ref": "#/$defs/distinguishRelationship"}},
+        "supporting": {"type": "array", "items": {"$ref": "#/$defs/supportRelationship"}},
+        "equivalent_to": {"type": "array", "items": {"$ref": "#/$defs/equivalentRelationship"}, "uniqueItems": true}
       }
     },
     "quality": {
@@ -58,6 +66,14 @@
     },
     "created_at": {"type": "string", "format": "date-time"},
     "updated_at": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {
+    "factRequirement": {"type": "object", "additionalProperties": false, "required": ["key", "value"], "properties": {"key": {"type": "string", "minLength": 1}, "value": {"type": "string", "minLength": 1}}},
+    "factRequirements": {"type": "object", "additionalProperties": false, "properties": {"all": {"type": "array", "items": {"$ref": "#/$defs/factRequirement"}}, "any": {"type": "array", "items": {"$ref": "#/$defs/factRequirement"}}}},
+    "capabilityRequirements": {"type": "object", "additionalProperties": false, "properties": {"all": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}, "any": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}}},
+    "distinguishRelationship": {"type": "object", "additionalProperties": false, "required": ["skill", "discriminator"], "properties": {"skill": {"type": "string"}, "discriminator": {"type": "object", "additionalProperties": false, "required": ["field", "question", "choices"], "properties": {"field": {"type": "string", "minLength": 1}, "question": {"type": "string", "minLength": 1}, "choices": {"type": "array", "minItems": 2, "items": {"type": "string", "minLength": 1}, "uniqueItems": true}}}}},
+    "supportRelationship": {"type": "object", "additionalProperties": false, "required": ["skill", "when", "role", "activation"], "properties": {"skill": {"type": "string", "minLength": 1}, "when": {"type": "object", "additionalProperties": false, "required": ["operation"], "properties": {"operation": {"enum": ["explore", "design", "implement", "review", "debug", "test", "refactor", "migrate", "document", "operate", "research", "other"]}}}, "role": {"enum": ["validation", "research", "implementation", "review", "documentation", "operations"]}, "activation": {"enum": ["on-demand"]}}},
+    "equivalentRelationship": {"type": "object", "additionalProperties": false, "required": ["skill", "preference", "version_policy"], "properties": {"skill": {"type": "string", "minLength": 1}, "preference": {"enum": ["self", "target"]}, "version_policy": {"enum": ["exact", "compatible", "latest-reviewed"]}}}
   },
   "allOf": [
     {

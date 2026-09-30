@@ -1,6 +1,6 @@
 ---
 title: "Phase 14 — Telemetry, reproducibility and evaluation"
-status: todo
+status: done
 ---
 
 # Phase 14 — Telemetry, reproducibility and evaluation
@@ -77,6 +77,16 @@ Add phase-specific commands from the roadmap section above when implementation r
 - Implementing this phase before its prerequisites can weaken Git-first and derived-state invariants.
 - Adding shortcuts to satisfy a command surface can create a second source of truth outside canonical files.
 - User-facing behavior can drift from Phase 01 UX fixtures if adapters format results independently.
+
+## Execution evidence
+
+- Telemetry uses a versioned allowlist, content-free default envelope, bounded asynchronous recording, WAL storage, retention, purge, export, drop counters, and path-anchored SQLite access. Recorder failures are isolated from domain results.
+- Feedback distinguishes recommended, activated, loaded, used, abandoned, rejected, completed, failed, utility, and finite reason/basis enums. Selected skills must come from retained ordered recommendations; MCP discovery publishes the same enums.
+- `curation_session_record` records explicit host/evaluator measurements idempotently without inventing measurements in the curator. Source, distill, resolver, MCP, and feedback paths are instrumented.
+- Exact replay fails closed on unavailable retained generations. Reports include undefined metrics, deterministic confidence intervals, partitions, exclusions, multiple acceptable outcomes, and paired policy comparisons.
+- The committed strict golden corpus and committed CLI suite/manifest/workspace overlay run through CI. Promotion creates an incomplete sanitized draft for human review and never mutates production policy.
+- Purge/delete tests force a full catalog rebuild and prove validation, snapshot identity, and resolver output are unchanged.
+- Independent review found no remaining behavioral blocker; the implementation is present in the working tree and will become repository-tracked when the authorized ship/commit step runs.
 
 ## Rollback
 

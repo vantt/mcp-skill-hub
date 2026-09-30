@@ -35,7 +35,9 @@ type Snapshot struct {
 // Issue is a precise canonical validation failure.
 type Issue struct {
 	Path    string
+	Line    int
 	Message string
+	Fix     string
 }
 
 // Validate checks workspace structure, canonical files, identity, references, and conflict markers.
@@ -62,17 +64,27 @@ func Validate(root string) ([]Issue, error) {
 	for _, path := range conflicts {
 		issues = append(issues, Issue{Path: path, Message: "unresolved Git index conflict"})
 	}
+	rootHandle, err := os.OpenRoot(root)
+	if err != nil {
+		return nil, fmt.Errorf("open canonical workspace: %w", err)
+	}
+	defer rootHandle.Close()
 	ids := make(map[string]string)
 	refs := make([]reference, 0)
+	var totalBytes int64
 	for _, rel := range files {
 		if !validCanonicalPath(rel) {
 			issues = append(issues, Issue{Path: rel, Message: "path is outside the canonical workspace layout"})
 			continue
 		}
-		contents, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+		contents, err := readCanonicalFile(rootHandle, rel)
 		if err != nil {
-			return nil, fmt.Errorf("read %s: %w", rel, err)
+			return nil, err
 		}
+		if int64(len(contents)) > workspace.MaxCanonicalBytesV1-totalBytes {
+			return nil, fmt.Errorf("canonical files exceed V1 aggregate limit of %d bytes at %s", workspace.MaxCanonicalBytesV1, rel)
+		}
+		totalBytes += int64(len(contents))
 		if hasConflictMarker(string(contents)) {
 			issues = append(issues, Issue{Path: rel, Message: "unresolved Git conflict marker"})
 		}
@@ -335,16 +347,59 @@ func inventory(root string) ([]FileDigest, error) {
 	if err != nil {
 		return nil, err
 	}
+	rootHandle, err := os.OpenRoot(root)
+	if err != nil {
+		return nil, fmt.Errorf("open canonical workspace: %w", err)
+	}
+	defer rootHandle.Close()
 	items := make([]FileDigest, 0, len(files))
+	var totalBytes int64
 	for _, rel := range files {
-		contents, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+		contents, err := readCanonicalFile(rootHandle, rel)
 		if err != nil {
-			return nil, fmt.Errorf("read %s: %w", rel, err)
+			return nil, err
 		}
+		if int64(len(contents)) > workspace.MaxCanonicalBytesV1-totalBytes {
+			return nil, fmt.Errorf("canonical files exceed V1 aggregate limit of %d bytes at %s", workspace.MaxCanonicalBytesV1, rel)
+		}
+		totalBytes += int64(len(contents))
 		digest := sha256.Sum256(contents)
 		items = append(items, FileDigest{Path: rel, Digest: "sha256:" + hex.EncodeToString(digest[:])})
 	}
 	return items, nil
+}
+
+func readCanonicalFile(root *os.Root, relative string) ([]byte, error) {
+	info, err := root.Lstat(relative)
+	if err != nil {
+		return nil, fmt.Errorf("inspect canonical input %s: %w", relative, err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("canonical input %s is not a regular file", relative)
+	}
+	if info.Size() > workspace.MaxCanonicalFileBytesV1 {
+		return nil, fmt.Errorf("canonical file %s exceeds V1 per-file limit of %d bytes", relative, workspace.MaxCanonicalFileBytesV1)
+	}
+	file, err := root.Open(relative)
+	if err != nil {
+		return nil, fmt.Errorf("open canonical input %s: %w", relative, err)
+	}
+	defer file.Close()
+	opened, err := file.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("inspect opened canonical input %s: %w", relative, err)
+	}
+	if !opened.Mode().IsRegular() || opened.Size() > workspace.MaxCanonicalFileBytesV1 {
+		return nil, fmt.Errorf("canonical file %s exceeds V1 per-file limit of %d bytes", relative, workspace.MaxCanonicalFileBytesV1)
+	}
+	contents, err := io.ReadAll(io.LimitReader(file, workspace.MaxCanonicalFileBytesV1+1))
+	if err != nil {
+		return nil, fmt.Errorf("read canonical input %s: %w", relative, err)
+	}
+	if int64(len(contents)) > workspace.MaxCanonicalFileBytesV1 {
+		return nil, fmt.Errorf("canonical file %s exceeds V1 per-file limit of %d bytes", relative, workspace.MaxCanonicalFileBytesV1)
+	}
+	return contents, nil
 }
 
 func sameInventory(first, second []FileDigest) bool {

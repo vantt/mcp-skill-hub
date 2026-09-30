@@ -1,7 +1,9 @@
 package app
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -15,6 +17,7 @@ import (
 	distillpkg "github.com/vantt/mcp-skill-hub/internal/distill"
 	"github.com/vantt/mcp-skill-hub/internal/mutation"
 	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
+	"github.com/vantt/mcp-skill-hub/internal/telemetry"
 )
 
 type distillClock struct{ value time.Time }
@@ -97,6 +100,59 @@ func (a revisionAdapter) List(_ context.Context, src sourcepkg.Source, rev sourc
 	return result, nil
 }
 
+func TestDistillOperationsEmitSanitizedOrderedTelemetry(t *testing.T) {
+	root, service, adapter := newDistillWorkspace(t, "source-a", false)
+	sink := &captureTelemetrySink{}
+	service.Telemetry = sink
+	run := prepareAndStart(t, root, service, "source-a")
+	target := adapter.files["r2"]["SKILL.md"]
+	const rawRecommendation = "Private recommendation text must not be recorded."
+	result, err := service.SubmitDistillRun(t.Context(), root, run.ID, DistillSubmission{
+		Coverage: completeCoverage(),
+		Findings: []FindingSubmission{{StableKey: "retry-review", Status: "active", What: "Private observation text.", Vocabulary: []string{"private vocabulary"}, Evidence: []distillpkg.Evidence{evidenceFor(run, "SKILL.md", "SKILL.md#new", target)}}},
+		Insights: []InsightSubmission{{StableKey: "retry-review", SkillID: "consumer-review", Recommendation: rawRecommendation, ObservationIDs: []string{"OBS-source-a--retry-review"}, Category: "reliability", Priority: "high", Rationale: "Private rationale."}},
+	})
+	if err != nil || result.Run.State != "finalized" {
+		t.Fatalf("submit = %#v, %v", result, err)
+	}
+	wantTypes := []string{
+		telemetry.EventDistillRunPrepared, telemetry.EventDistillRunSubmitted, telemetry.EventObservationCreated,
+		telemetry.EventInsightProposed, telemetry.EventDistillRunFinalized,
+	}
+	if len(sink.events) != len(wantTypes) {
+		t.Fatalf("telemetry events = %#v", sink.events)
+	}
+	current, err := catalog.OpenCurrent(t.Context(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer current.Close()
+	for index, event := range sink.events {
+		if event.Version != telemetry.EventVersion || event.Type != wantTypes[index] || event.CatalogSnapshot != current.Pointer.CatalogSnapshot || event.PolicyRevision == "" {
+			t.Fatalf("event %d = %#v", index, event)
+		}
+	}
+	encoded, err := json.Marshal(sink.events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, raw := range []string{"SKILL.md", "Private observation text.", "private vocabulary", rawRecommendation, "Private rationale."} {
+		if bytes.Contains(encoded, []byte(raw)) {
+			t.Fatalf("telemetry leaked raw evidence %q: %s", raw, encoded)
+		}
+	}
+}
+
+func TestDistillTelemetryPanicDoesNotChangeFinalization(t *testing.T) {
+	root, service, adapter := newDistillWorkspace(t, "source-a", false)
+	service.Telemetry = panickingTelemetrySink{}
+	run := prepareAndStart(t, root, service, "source-a")
+	result, err := service.SubmitDistillRun(t.Context(), root, run.ID, validSubmission(run, adapter))
+	if err != nil || result.Run.State != "finalized" || result.CatalogSnapshot == "" {
+		t.Fatalf("finalize with panicking telemetry = %#v, %v", result, err)
+	}
+}
+
 func TestDistillFinalizesArtifactsAndCursorAtomicallyWithoutEditingSkill(t *testing.T) {
 	root, service, adapter := newDistillWorkspace(t, "source-a", false)
 	beforeSkill, err := os.ReadFile(filepath.Join(root, "skills/software/consumer-review/SKILL.md"))
@@ -139,6 +195,8 @@ func TestDistillFinalizesArtifactsAndCursorAtomicallyWithoutEditingSkill(t *test
 
 func TestDistillRejectsEvidenceNotPinnedToTargetAndDoesNotAdvanceCursor(t *testing.T) {
 	root, service, adapter := newDistillWorkspace(t, "source-a", false)
+	sink := &captureTelemetrySink{}
+	service.Telemetry = sink
 	run := prepareAndStart(t, root, service, "source-a")
 	_, err := service.SubmitDistillRun(context.Background(), root, run.ID, DistillSubmission{Coverage: completeCoverage(), Findings: []FindingSubmission{{StableKey: "wrong-pin", Status: "active", What: "Claim.", Vocabulary: []string{"claim"}, Evidence: []distillpkg.Evidence{{Revision: distillpkg.IdentityOf(*run.FromRevision), RunID: run.ID, PackageDigest: run.PackageDigest, Path: "SKILL.md", Locator: "SKILL.md", Digest: sourcepkg.Digest(adapter.files["r1"]["SKILL.md"])}}}}})
 	if err == nil {
@@ -152,10 +210,24 @@ func TestDistillRejectsEvidenceNotPinnedToTargetAndDoesNotAdvanceCursor(t *testi
 	if records[0].DistilledRevision == nil || records[0].DistilledRevision.Value != "r1" {
 		t.Fatal("failed run advanced cursor")
 	}
+	wantTypes := []string{telemetry.EventDistillRunPrepared, telemetry.EventDistillRunSubmitted, telemetry.EventDistillRunFailed}
+	if len(sink.events) != len(wantTypes) {
+		t.Fatalf("failed telemetry events = %#v", sink.events)
+	}
+	for index, event := range sink.events {
+		if event.Type != wantTypes[index] {
+			t.Fatalf("failed telemetry event %d = %#v", index, event)
+		}
+	}
+	if advanced, _ := sink.events[len(sink.events)-1].Payload["cursor_advanced"].(bool); advanced {
+		t.Fatal("failed telemetry claimed cursor advancement")
+	}
 }
 
 func TestDistillAwaitingDecisionOnlyForBlockingCoverageAndRetryCancel(t *testing.T) {
 	root, service, adapter := newDistillWorkspace(t, "source-a", false)
+	sink := &captureTelemetrySink{}
+	service.Telemetry = sink
 	run := prepareAndStart(t, root, service, "source-a")
 	proposal := validSubmission(run, adapter)
 	proposal.Coverage = []distillpkg.CoverageEntry{{Resource: "SKILL.md", Status: "deferred", Reason: "Needs policy decision.", Blocking: true}, {Resource: "removed.md", Status: "analyzed", Reason: "Removal checked."}}
@@ -165,6 +237,18 @@ func TestDistillAwaitingDecisionOnlyForBlockingCoverageAndRetryCancel(t *testing
 	}
 	if result.Run.State != "awaiting_decision" || result.Run.ProposedArtifacts == nil || len(result.Run.OutstandingDecisions) == 0 {
 		t.Fatalf("awaiting proposal was not durably preserved: %#v", result.Run)
+	}
+	wantTelemetry := []string{telemetry.EventDistillRunPrepared, telemetry.EventDistillRunSubmitted, telemetry.EventCoverageGapRecorded}
+	if len(sink.events) != len(wantTelemetry) {
+		t.Fatalf("awaiting telemetry = %#v", sink.events)
+	}
+	for index, event := range sink.events {
+		if event.Type != wantTelemetry[index] {
+			t.Fatalf("awaiting telemetry event %d = %#v", index, event)
+		}
+	}
+	if _, leakedPath := sink.events[2].Payload["resource"]; leakedPath {
+		t.Fatalf("coverage telemetry persisted a resource path: %#v", sink.events[2])
 	}
 	if _, err := service.RetryDistillRun(context.Background(), root, run.ID); err == nil {
 		t.Fatal("awaiting-decision retry without an explicit decision was accepted")
@@ -185,6 +269,8 @@ func TestDistillAwaitingDecisionOnlyForBlockingCoverageAndRetryCancel(t *testing
 
 func TestDistillGeneratesRemovalTombstoneAndMarksComparisonStale(t *testing.T) {
 	root, service, adapter := newDistillWorkspace(t, "source-a", false)
+	sink := &captureTelemetrySink{}
+	service.Telemetry = sink
 	run := prepareAndStart(t, root, service, "source-a")
 	fromIdentity := distillpkg.IdentityOf(*run.FromRevision)
 	observation := distillpkg.Observation{SchemaVersion: 1, ID: "OBS-source-a--removed-knowledge", SourceID: "source-a", RunID: run.ID, StableKey: "removed-knowledge", Status: "active", FirstSeen: fromIdentity, LastSeen: fromIdentity, What: "The source contained old knowledge.", Vocabulary: []string{"old knowledge"}, Evidence: []distillpkg.Evidence{{Revision: fromIdentity, RunID: run.ID, PackageDigest: run.PackageDigest, Path: "removed.md", Locator: "removed.md", Digest: sourcepkg.Digest(adapter.files["r1"]["removed.md"])}}}
@@ -222,6 +308,18 @@ func TestDistillGeneratesRemovalTombstoneAndMarksComparisonStale(t *testing.T) {
 	insights, err := service.QueryDistill(context.Background(), root, "insights", "", "consumer-review")
 	if err != nil || len(insights.Insights) != 1 || insights.Insights[0].Status != "withdrawn" {
 		t.Fatalf("unsupported insight was not withdrawn = %#v, %v", insights, err)
+	}
+	wantTelemetry := []string{
+		telemetry.EventDistillRunPrepared, telemetry.EventDistillRunSubmitted, telemetry.EventObservationTombstoned,
+		telemetry.EventComparisonUpdated, telemetry.EventDistillRunFinalized,
+	}
+	if len(sink.events) != len(wantTelemetry) {
+		t.Fatalf("tombstone telemetry = %#v", sink.events)
+	}
+	for index, event := range sink.events {
+		if event.Type != wantTelemetry[index] {
+			t.Fatalf("tombstone telemetry event %d = %#v", index, event)
+		}
 	}
 }
 

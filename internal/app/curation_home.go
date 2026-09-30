@@ -144,17 +144,22 @@ func (CurationService) GetCurationHome(ctx context.Context, path string) (Curati
 }
 
 type homeState struct {
-	Health             string
-	Index              string
-	GitDirty           bool
-	GitConfigured      bool
-	RecoveryPending    bool
-	RecoveryID         string
-	DiagnosticID       string
-	DiagnosticSummary  string
-	DiagnosticImpact   string
-	InvalidReason      string
-	Summary            CurationSummary
+	Health            string
+	Index             string
+	GitDirty          bool
+	GitConfigured     bool
+	RecoveryPending   bool
+	RecoveryID        string
+	DiagnosticID      string
+	DiagnosticSummary string
+	DiagnosticImpact  string
+	InvalidReason     string
+	Summary           CurationSummary
+	// TotalSkills and TotalSources count every state; CountsKnown is false when
+	// the catalog could not be read, so a missing count is never taken for zero.
+	TotalSkills        int
+	TotalSources       int
+	CountsKnown        bool
 	InterruptedID      string
 	ChangedSources     int
 	DueSources         int
@@ -197,11 +202,13 @@ func readHomeCounts(ctx context.Context, root string, state *homeState) (resultE
 		target *int
 	}{
 		{`SELECT count(*) FROM skills WHERE status='active'`, &state.Summary.ActiveSkills},
+		{`SELECT count(*) FROM skills`, &state.TotalSkills},
+		{`SELECT count(*) FROM canonical_entities WHERE kind='source'`, &state.TotalSources},
 		{`SELECT count(*) FROM canonical_entities WHERE kind='source' AND COALESCE(json_extract(content_json,'$.status'),'watching') IN ('watching','changed','distill_pending')`, &state.Summary.WatchingSources},
 		{`SELECT count(*) FROM provenance WHERE kind='run' AND state IN ('failed','interrupted')`, &state.Summary.FailedOrInterruptedRuns},
 		{`SELECT count(*) FROM insights WHERE status='pending'`, &state.Summary.PendingInsights},
 		{`SELECT count(*) FROM insights WHERE status='pending' AND (json_extract(content_json,'$.high_value')=1 OR json_extract(content_json,'$.priority') IN ('high','critical'))`, &state.Summary.PendingHighValueInsights},
-		{`SELECT count(*) FROM canonical_entities WHERE kind='source' AND json_extract(content_json,'$.status')='changed'`, &state.ChangedSources},
+		{`SELECT count(*) FROM canonical_entities WHERE kind='source' AND (json_extract(content_json,'$.status') IN ('changed', 'distill_pending') OR json_extract(content_json,'$.distilled_revision') IS NULL)`, &state.ChangedSources},
 	}
 	for _, item := range queries {
 		if err := handle.DB.QueryRowContext(ctx, item.query).Scan(item.target); err != nil {
@@ -213,6 +220,12 @@ func readHomeCounts(ctx context.Context, root string, state *homeState) (resultE
 			return fmt.Errorf("read interrupted run: %w", err)
 		}
 	}
+	candidates, _, err := readSourceRecords(root)
+	if err != nil {
+		return fmt.Errorf("read source candidates: %w", err)
+	}
+	state.TotalSources += len(candidates)
+	state.CountsKnown = true
 	operational, err := (sourcepkg.OperationalStore{Root: root}).List(ctx)
 	if err != nil {
 		return fmt.Errorf("read source operational state: %w", err)
@@ -311,7 +324,7 @@ func deriveCurationHome(state homeState) CurationHome {
 		if diagnosticImpact == "" {
 			diagnosticImpact = "Search results may be incomplete."
 		}
-		home.Actions = append(home.Actions, ActionItem{Kind: "repair_workspace", ID: state.DiagnosticID, Count: 1, Priority: 110, Summary: diagnosticSummary, Command: "DoctorFix"})
+		home.Actions = append(home.Actions, ActionItem{Kind: "repair_workspace", ID: state.DiagnosticID, Count: 1, Priority: 110, Summary: diagnosticSummary, Command: "workspace_validate"})
 		home.Items = append(home.Items, Item{ID: firstNonEmpty(state.DiagnosticID, "workspace_validation"), Summary: diagnosticSummary, Impact: diagnosticImpact})
 	}
 	if state.RecoveryPending {
@@ -320,12 +333,12 @@ func deriveCurationHome(state homeState) CurationHome {
 		home.Status = StatusRecoveryRequired
 		if state.Health == "valid" {
 			home.Summary = "One workspace operation needs recovery before optional work."
-			home.Actions = append(home.Actions, ActionItem{Kind: "recover_workspace", ID: state.RecoveryID, Count: 1, Priority: 105, Summary: "An interrupted canonical operation needs recovery", Command: "DoctorFix"})
+			home.Actions = append(home.Actions, ActionItem{Kind: "recover_workspace", ID: state.RecoveryID, Count: 1, Priority: 105, Summary: "An interrupted canonical operation needs recovery", Command: "workspace_validate"})
 		} else {
 			// Validation repair and journal recovery share one mechanical DoctorFix
 			// action, but each condition remains visible as a separate diagnostic.
 			for index := range home.Actions {
-				if home.Actions[index].Command == "DoctorFix" {
+				if home.Actions[index].Command == "workspace_validate" {
 					home.Actions[index].Count++
 					break
 				}
@@ -340,21 +353,21 @@ func deriveCurationHome(state homeState) CurationHome {
 		if state.Health == "valid" && !state.RecoveryPending {
 			home.Summary = "One analysis run needs recovery before optional work."
 		}
-		home.Actions = append(home.Actions, ActionItem{Kind: "resume_run", ID: state.InterruptedID, Count: state.Summary.FailedOrInterruptedRuns, Priority: 100, Summary: "Analysis stopped before completion", Command: "RetryDistillRun"})
+		home.Actions = append(home.Actions, ActionItem{Kind: "resume_run", ID: state.InterruptedID, Count: state.Summary.FailedOrInterruptedRuns, Priority: 100, Summary: "Analysis stopped before completion", Command: "curation_run_retry"})
 	}
 	if state.Health == "valid" && state.Index != "current" && state.Index != string(catalog.StateHealthy) {
 		home.HomeSummary.AttentionItems++
 		if home.Status == StatusOK {
 			home.Status = StatusActionRequired
 		}
-		home.Actions = append(home.Actions, ActionItem{Kind: "rebuild_index", Count: 1, Priority: 90, Summary: "Search index needs repair", Command: "BuildCatalogGeneration"})
+		home.Actions = append(home.Actions, ActionItem{Kind: "rebuild_index", Count: 1, Priority: 90, Summary: "Search index needs repair", Command: "workspace_rebuild"})
 	}
 	if state.UnavailableSources > 0 {
 		home.HomeSummary.AttentionItems += state.UnavailableSources
 		if home.Status == StatusOK {
 			home.Status = StatusActionRequired
 		}
-		home.Actions = append(home.Actions, ActionItem{Kind: "retry_unavailable_sources", Count: state.UnavailableSources, Priority: 80, Summary: fmt.Sprintf("%d source(s) are temporarily unavailable", state.UnavailableSources), Command: "CheckSources"})
+		home.Actions = append(home.Actions, ActionItem{Kind: "retry_unavailable_sources", Count: state.UnavailableSources, Priority: 80, Summary: fmt.Sprintf("%d source(s) are temporarily unavailable", state.UnavailableSources), Command: "source_check"})
 	}
 	if state.ChangedSources > 0 {
 		home.HomeSummary.OptionalItems += state.ChangedSources
@@ -362,7 +375,7 @@ func deriveCurationHome(state homeState) CurationHome {
 		if home.Status == StatusOK {
 			home.Status = StatusActionRequired
 		}
-		home.Actions = append(home.Actions, ActionItem{Kind: "distill_changed_sources", Count: state.ChangedSources, Priority: 70, Summary: fmt.Sprintf("%d source(s) are ready to distill", state.ChangedSources), Command: "PrepareDistillRuns"})
+		home.Actions = append(home.Actions, ActionItem{Kind: "distill_changed_sources", Count: state.ChangedSources, Priority: 70, Summary: fmt.Sprintf("%d source(s) are ready to distill", state.ChangedSources), Command: "curation_run_start"})
 	}
 	if state.DueSources > 0 {
 		home.HomeSummary.OptionalItems += state.DueSources
@@ -370,7 +383,7 @@ func deriveCurationHome(state homeState) CurationHome {
 		if home.Status == StatusOK {
 			home.Status = StatusActionRequired
 		}
-		home.Actions = append(home.Actions, ActionItem{Kind: "check_due_sources", Count: state.DueSources, Priority: 60, Summary: fmt.Sprintf("%d source(s) are due for an update check", state.DueSources), Command: "CheckSources"})
+		home.Actions = append(home.Actions, ActionItem{Kind: "check_due_sources", Count: state.DueSources, Priority: 60, Summary: fmt.Sprintf("%d source(s) are due for an update check", state.DueSources), Command: "source_check"})
 	}
 	if state.Summary.PendingInsights > 0 {
 		home.HomeSummary.OptionalItems += state.Summary.PendingInsights
@@ -382,14 +395,22 @@ func deriveCurationHome(state homeState) CurationHome {
 		if state.Summary.PendingHighValueInsights > 0 {
 			summary = fmt.Sprintf("%d insight(s) need review; %d are high-value", state.Summary.PendingInsights, state.Summary.PendingHighValueInsights)
 		}
-		home.Actions = append(home.Actions, ActionItem{Kind: "review_insights", Count: state.Summary.PendingInsights, Priority: 40, Summary: summary, Command: "GetInsightInbox"})
+		home.Actions = append(home.Actions, ActionItem{Kind: "review_insights", Count: state.Summary.PendingInsights, Priority: 40, Summary: summary, Command: "inbox_list"})
 	}
 	if state.GitDirty {
 		home.HomeSummary.AttentionItems++
 		if home.Status == StatusOK {
 			home.Status = StatusActionRequired
 		}
-		home.Actions = append(home.Actions, ActionItem{Kind: "review_git_changes", Count: 1, Priority: 10, Summary: "Git has uncommitted canonical changes", Command: "GetCurationDiff"})
+		home.Actions = append(home.Actions, ActionItem{Kind: "review_git_changes", Count: 1, Priority: 10, Summary: "Git has uncommitted canonical changes", Command: "workspace_diff"})
+	}
+	if state.Health == "valid" && state.CountsKnown && state.TotalSkills == 0 && state.TotalSources == 0 && state.GitDirty {
+		// A fresh workspace has no skills in any state and no sources. Replace
+		// the bare "review uncommitted changes" suggestion with the onboarding
+		// sequence. Once the files are committed, or anything has been added,
+		// the workspace is ordinary again, because host connections cannot be
+		// observed from the workspace itself.
+		home.Actions = append(home.Actions, ActionItem{Kind: "first_run_commit", Count: 1, Priority: 20, Summary: "The new workspace has no skills and is not committed yet", Command: "workspace_diff"})
 	}
 	sort.SliceStable(home.Actions, func(i, j int) bool {
 		if home.Actions[i].Priority == home.Actions[j].Priority {
@@ -399,20 +420,22 @@ func deriveCurationHome(state homeState) CurationHome {
 	})
 
 	if len(home.Actions) == 0 {
-		home.SuggestedActions = []Action{{Label: "Continue normal work", Command: "ContinueNormalWork"}}
+		home.SuggestedActions = []Action{{Label: "Continue normal work", Command: ""}}
 		return home
 	}
 	recommended := home.Actions[0]
 	if home.Summary == "Skill Hub is up to date." {
 		switch recommended.Kind {
 		case "rebuild_index":
-			home.Summary = "Search index needs repair before catalog-backed work."
+			home.Summary = "Search index is stale; skill and source counts are unavailable until it is rebuilt."
 		case "distill_changed_sources":
 			home.Summary = fmt.Sprintf("%d source(s) are ready to distill.", recommended.Count)
 		case "review_insights":
 			home.Summary = fmt.Sprintf("%d insight(s) are waiting for review.", recommended.Count)
 		case "review_git_changes":
 			home.Summary = "Git has uncommitted canonical changes."
+		case "first_run_commit":
+			home.Summary = "Workspace is new; commit it, then connect an agent."
 		default:
 			home.Summary = "Skill Hub needs attention."
 		}
@@ -430,12 +453,13 @@ func recommendationLabel(kind string) string {
 		"repair_workspace":          "Run skillhub doctor --fix",
 		"recover_workspace":         "Run skillhub doctor --fix",
 		"resume_run":                "Resume the interrupted run",
-		"rebuild_index":             "Rebuild the search index",
+		"rebuild_index":             "Run `skillhub rebuild` to refresh the search index",
 		"retry_unavailable_sources": "Retry unavailable source checks",
 		"distill_changed_sources":   "Distill changed sources",
 		"check_due_sources":         "Check all due sources",
 		"review_insights":           "Review pending insights",
 		"review_git_changes":        "Review uncommitted changes",
+		"first_run_commit":          "Commit the new workspace, then run `skillhub connect` in your project",
 	}[kind]
 }
 

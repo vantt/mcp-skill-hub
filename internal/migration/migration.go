@@ -1,0 +1,166 @@
+// Package migration plans explicit, ordered canonical schema migrations.
+package migration
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
+
+	"github.com/vantt/mcp-skill-hub/internal/canonical"
+	"github.com/vantt/mcp-skill-hub/internal/mutation"
+	"github.com/vantt/mcp-skill-hub/internal/workspace"
+)
+
+const CurrentVersion = 1
+
+var (
+	ErrNoMigrationPath = errors.New("no canonical migration path is registered")
+	ErrAlreadyCurrent  = errors.New("canonical schema is already at the requested version")
+)
+
+// FileDiff is a deterministic, content-safe preview of one canonical change.
+type FileDiff struct {
+	Path   string `json:"path"`
+	Before string `json:"before"`
+	After  string `json:"after"`
+	Diff   string `json:"diff"`
+}
+
+// Proposal pins the exact mutation preview that may subsequently be confirmed.
+type Proposal struct {
+	SourceVersion int               `json:"source_schema_version"`
+	TargetVersion int               `json:"target_schema_version"`
+	Changes       []FileDiff        `json:"changes"`
+	Mutation      mutation.Proposal `json:"-"`
+	ID            string            `json:"proposal_id"`
+	Digest        string            `json:"proposal_digest"`
+	BaseSnapshot  string            `json:"base_catalog_snapshot"`
+}
+
+type step struct {
+	from int
+	to   int
+	plan func(string) ([]mutation.Change, []FileDiff, error)
+}
+
+// Registry contains the only supported ordered canonical migrations.
+type Registry struct{ steps map[int]step }
+
+// Empty reports whether the registry has no migration steps.
+func (registry Registry) Empty() bool { return len(registry.steps) == 0 }
+
+// DefaultRegistry includes every migration understood by this binary.
+func DefaultRegistry() Registry {
+	return Registry{steps: map[int]step{0: {from: 0, to: 1, plan: planLegacyV0ToV1}}}
+}
+
+// DetectVersion reads the canonical marker. A missing marker is the legacy v0
+// representation; malformed markers are never guessed or rewritten.
+func DetectVersion(root string) (int, error) {
+	contents, err := workspace.ReadCanonicalFile(root, ".skillhub/schema-version")
+	if errors.Is(err, os.ErrNotExist) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("read canonical schema marker: %w", err)
+	}
+	value := strings.TrimSpace(string(contents))
+	version, err := strconv.Atoi(value)
+	if err != nil || version < 0 || value != strconv.Itoa(version) {
+		return 0, errors.New("canonical schema marker is not a canonical non-negative integer")
+	}
+	return version, nil
+}
+
+// Preview validates the source layout and creates a read-only, pinned proposal.
+func (registry Registry) Preview(root string, target int) (Proposal, error) {
+	source, err := DetectVersion(root)
+	if err != nil {
+		return Proposal{}, err
+	}
+	if target == source {
+		return Proposal{}, ErrAlreadyCurrent
+	}
+	if target <= source || target > CurrentVersion {
+		return Proposal{}, fmt.Errorf("%w: %d to %d", ErrNoMigrationPath, source, target)
+	}
+
+	var changes []mutation.Change
+	var diffs []FileDiff
+	version := source
+	for version < target {
+		next, ok := registry.steps[version]
+		if !ok || next.from != version || next.to <= version || next.to > target {
+			return Proposal{}, fmt.Errorf("%w: %d to %d", ErrNoMigrationPath, source, target)
+		}
+		stepChanges, stepDiffs, err := next.plan(root)
+		if err != nil {
+			return Proposal{}, err
+		}
+		changes = append(changes, stepChanges...)
+		diffs = append(diffs, stepDiffs...)
+		version = next.to
+	}
+	sort.Slice(diffs, func(i, j int) bool { return diffs[i].Path < diffs[j].Path })
+	sourceVersion, targetVersion := source, target
+	planned, err := mutation.PlanMutation(root, mutation.WriteSet{
+		Command: "canonical_migration", IdempotencyKey: fmt.Sprintf("canonical-migration:%d:%d", source, target),
+		SourceSchemaVersion: &sourceVersion, TargetSchemaVersion: &targetVersion, Changes: changes,
+	})
+	if err != nil {
+		return Proposal{}, err
+	}
+	return Proposal{
+		SourceVersion: source, TargetVersion: target, Changes: diffs, Mutation: planned,
+		ID: planned.ID, Digest: planned.Digest, BaseSnapshot: planned.BaseCatalogSnapshot,
+	}, nil
+}
+
+func planLegacyV0ToV1(root string) ([]mutation.Change, []FileDiff, error) {
+	plan, err := workspace.Inspect(root)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, finding := range plan.Findings {
+		if finding.ID != "canonical_schema_incompatible" {
+			return nil, nil, fmt.Errorf("legacy v0 layout is not otherwise v1-compatible: %s: %s", finding.Path, finding.Summary)
+		}
+	}
+	if len(plan.Findings) != 1 {
+		return nil, nil, errors.New("legacy v0 migration requires exactly one missing schema marker finding")
+	}
+	issues, err := canonical.Validate(root)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, issue := range issues {
+		if issue.Path != ".skillhub/schema-version" {
+			return nil, nil, fmt.Errorf("legacy v0 layout is not otherwise v1-compatible: %s: %s", issue.Path, issue.Message)
+		}
+	}
+	if len(issues) != 1 {
+		return nil, nil, errors.New("legacy v0 migration requires an otherwise valid v1 canonical layout")
+	}
+	markerPath := filepath.Join(root, ".skillhub", "schema-version")
+	beforeBytes, err := os.ReadFile(markerPath)
+	if errors.Is(err, os.ErrNotExist) {
+		beforeBytes = nil
+	} else if err != nil {
+		return nil, nil, fmt.Errorf("read legacy schema marker: %w", err)
+	}
+	before := string(beforeBytes)
+	after := workspace.SchemaVersion + "\n"
+	diff := "--- a/.skillhub/schema-version\n+++ b/.skillhub/schema-version\n"
+	if before == "" {
+		diff += "@@ -0,0 +1 @@\n+" + workspace.SchemaVersion + "\n"
+	} else {
+		diff += "@@ -1 +1 @@\n-" + strings.TrimSuffix(before, "\n") + "\n+" + workspace.SchemaVersion + "\n"
+	}
+	return []mutation.Change{{Path: ".skillhub/schema-version", Contents: []byte(after)}}, []FileDiff{{
+		Path: ".skillhub/schema-version", Before: before, After: after, Diff: diff,
+	}}, nil
+}

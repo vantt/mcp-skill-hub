@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -32,6 +33,7 @@ type buildInput struct {
 	ProjectionInputDigest  string
 	CanonicalSchemaVersion int
 	Entities               []entity
+	Warnings               []string
 }
 
 // entity retains the schema-specific YAML object only inside the build boundary;
@@ -104,20 +106,18 @@ func readInput(root string) (buildInput, error) {
 	}
 	defer rootHandle.Close()
 	input := buildInput{Files: make([]inputFile, 0, len(paths))}
+	var totalBytes int64
 	for _, path := range paths {
-		info, err := rootHandle.Lstat(path)
-		if err != nil || info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-			if err == nil {
-				err = fmt.Errorf("canonical input is not a regular file")
-			}
-			return buildInput{}, fmt.Errorf("read canonical input %s: %w", path, err)
-		}
-		contents, err := rootHandle.ReadFile(path)
+		contents, err := readCanonicalInput(rootHandle, path)
 		if err != nil {
-			return buildInput{}, fmt.Errorf("read canonical input %s: %w", path, err)
+			return buildInput{}, err
 		}
+		if int64(len(contents)) > workspace.MaxCanonicalBytesV1-totalBytes {
+			return buildInput{}, fmt.Errorf("canonical files exceed V1 aggregate limit of %d bytes at %s", workspace.MaxCanonicalBytesV1, path)
+		}
+		totalBytes += int64(len(contents))
 		sum := sha256.Sum256(contents)
-		input.Files = append(input.Files, inputFile{Path: path, Digest: "sha256:" + hex.EncodeToString(sum[:]), Bytes: append([]byte(nil), contents...)})
+		input.Files = append(input.Files, inputFile{Path: path, Digest: "sha256:" + hex.EncodeToString(sum[:]), Bytes: contents})
 	}
 	input.ProjectionInputDigest = aggregate(input.Files, func(inputFile) bool { return true })
 	input.CatalogSnapshot = aggregate(input.Files, func(file inputFile) bool { return catalogAffecting(file.Path) })
@@ -149,7 +149,41 @@ func readInput(root string) (buildInput, error) {
 	if err := validateEntities(input.Entities); err != nil {
 		return buildInput{}, err
 	}
+	input.Warnings = servableSkillWarnings(input)
 	return input, nil
+}
+
+func readCanonicalInput(root *os.Root, path string) ([]byte, error) {
+	info, err := root.Lstat(path)
+	if err != nil {
+		return nil, fmt.Errorf("inspect canonical input %s: %w", path, err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("canonical input %s is not a regular file", path)
+	}
+	if info.Size() > workspace.MaxCanonicalFileBytesV1 {
+		return nil, fmt.Errorf("canonical file %s exceeds V1 per-file limit of %d bytes", path, workspace.MaxCanonicalFileBytesV1)
+	}
+	file, err := root.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("open canonical input %s: %w", path, err)
+	}
+	defer file.Close()
+	opened, err := file.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("inspect opened canonical input %s: %w", path, err)
+	}
+	if !opened.Mode().IsRegular() || opened.Size() > workspace.MaxCanonicalFileBytesV1 {
+		return nil, fmt.Errorf("canonical file %s exceeds V1 per-file limit of %d bytes", path, workspace.MaxCanonicalFileBytesV1)
+	}
+	contents, err := io.ReadAll(io.LimitReader(file, workspace.MaxCanonicalFileBytesV1+1))
+	if err != nil {
+		return nil, fmt.Errorf("read canonical input %s: %w", path, err)
+	}
+	if int64(len(contents)) > workspace.MaxCanonicalFileBytesV1 {
+		return nil, fmt.Errorf("canonical file %s exceeds V1 per-file limit of %d bytes", path, workspace.MaxCanonicalFileBytesV1)
+	}
+	return contents, nil
 }
 
 func parseEntity(file inputFile) (entity, bool, error) {

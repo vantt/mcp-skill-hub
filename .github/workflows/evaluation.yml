@@ -1,0 +1,272 @@
+name: Evaluation
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    # 02:00 Asia/Saigon (UTC+7).
+    - cron: "0 19 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evaluation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.26.x"
+
+jobs:
+  evaluation:
+    name: Evaluation quality and reproducibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: true
+
+      - name: Run committed CLI evaluation artifacts end to end
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p bin reports
+          go build -o bin/skillhub ./cmd/skillhub
+
+          workspace=$(mktemp -d)
+          trap 'rm -rf "$workspace"' EXIT
+          bin/skillhub init "$workspace" --yes
+          cp -R testdata/evaluation/workspace-overlay/. "$workspace"/
+          rm -rf "$workspace/runtime/catalog"
+          bin/skillhub rebuild --workspace "$workspace" --json >/dev/null
+
+          report=reports/committed-cli-evaluation.json
+          bin/skillhub eval run \
+            --workspace "$workspace" \
+            --suite testdata/evaluation/cli-suite-v1.json \
+            --manifest testdata/evaluation/cli-manifest-v1.json \
+            --output "$report" \
+            --json >/dev/null
+
+          jq -e --slurpfile manifest testdata/evaluation/cli-manifest-v1.json '
+            .schema_version == 1 and
+            .samples == 4 and
+            (.exclusions | length) == 0 and
+            (.outcomes | length) == 4 and
+            all(.outcomes[]; .correct == true) and
+            .manifest == $manifest[0]
+          ' "$report" >/dev/null
+
+          regenerated="$workspace/cli-manifest-v1.json"
+          bin/skillhub eval manifest \
+            --workspace "$workspace" \
+            --suite testdata/evaluation/cli-suite-v1.json \
+            --experiment-id cli-replay-v1 \
+            --variant sqlite-fts-rules \
+            --seed 260929 \
+            --output "$regenerated" \
+            --json >/dev/null
+          cmp testdata/evaluation/cli-manifest-v1.json "$regenerated"
+
+      - name: Run schema and evaluation quality tests
+        shell: bash
+        run: |
+          mkdir -p reports
+          : > reports/package-tests.jsonl
+          status=0
+          run_tests() {
+            set +e
+            go test -json "$@" | tee -a reports/package-tests.jsonl
+            result=${PIPESTATUS[0]}
+            set -e
+            if (( result != 0 )); then status=$result; fi
+          }
+          run_tests ./schemas
+          run_tests ./internal/evaluation
+          run_tests ./internal/resolver -run '^TestGoldenCorpusCalibratesOnlyOnTrainingAndMeetsHeldOutGates$'
+          exit "$status"
+
+      - name: Generate committed 150-case evaluation reports
+        if: always()
+        shell: bash
+        env:
+          # This opt-in keeps ordinary local tests hermetic.
+          SKILLHUB_EVALUATION_REPORT_DIR: ${{ github.workspace }}/reports/evaluation
+        run: |
+          mkdir -p reports/evaluation
+          set +e
+          go test -json -count=1 ./internal/evaluation \
+            -run '^TestCommittedGoldenCorpusEvaluationRegression$' \
+            | tee reports/committed-corpus.jsonl
+          status=${PIPESTATUS[0]}
+          set -e
+          exit "$status"
+
+      - name: Validate report pins, populations, metrics, and held-out policy
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          calibration=reports/evaluation/calibration-report.json
+          held_out=reports/evaluation/held-out-report.json
+          policy=testdata/resolver/evaluation-policy-v1.json
+
+          for report in "$calibration" "$held_out"; do
+            test -s "$report"
+            jq -e '
+              .schema_version == 1 and
+              (.manifest.schema_version == 1) and
+              (.manifest.experiment_id | type == "string" and length > 0) and
+              (.manifest.suite_digest | test("^sha256:[0-9a-f]{64}$")) and
+              (.manifest.catalog_snapshot | test("^sha256:[0-9a-f]{64}$")) and
+              (.manifest.policy_revision | test("^sha256:[0-9a-f]{64}$")) and
+              (.manifest.protocol_schema | type == "string" and length > 0) and
+              (.manifest.normalization_version | type == "string" and length > 0) and
+              (.manifest.index_version | type == "string" and length > 0) and
+              (.manifest.fact_provider_fixture | type == "string" and length > 0) and
+              (.manifest.fact_provider_version | test("^sha256:[0-9a-f]{64}$")) and
+              (.manifest.seed | type == "number") and
+              (.manifest.binary.version | type == "string" and length > 0) and
+              (.manifest.binary.commit | type == "string" and length > 0) and
+              (.manifest.variant | type == "string" and length > 0) and
+              (.metrics.acceptable_top1.value | type == "number") and
+              (.metrics.no_skill_precision.value | type == "number") and
+              (.metrics.no_skill_recall.value | type == "number") and
+              (.metrics.no_skill_false_positive.value | type == "number") and
+              (.metrics.clarification_validity.value | type == "number") and
+              ([.metrics.acceptable_top1, .metrics.no_skill_precision,
+                .metrics.no_skill_recall, .metrics.no_skill_false_positive,
+                .metrics.clarification_validity]
+                | all(.denominator > 0 and .ci95 != null and .ci95.samples > 0))
+            ' "$report" >/dev/null
+          done
+
+          jq -e -s '
+            .[0].manifest == .[1].manifest and
+            .[0].samples == 81 and .[1].samples == 69 and
+            (.[0].exclusions | length) == 0 and
+            (.[1].exclusions | length) == 0 and
+            all(.[0].outcomes[]; .partition == "calibration") and
+            all(.[1].outcomes[]; .partition == "held_out")
+          ' "$calibration" "$held_out" >/dev/null
+
+          jq -e --slurpfile policy "$policy" '
+            ($policy[0].held_out_gates) as $gates |
+            ([.outcomes[] | select(.status == "resolved")]) as $resolved |
+            ([.outcomes[] | select(.status == "resolved" and .correct)]) as $correct_resolved |
+            ([.outcomes[] | select(.correct)]) as $correct |
+            ($resolved | length) > 0 and
+            (($correct_resolved | length) / ($resolved | length) >= $gates.resolved_precision_min) and
+            (.metrics.no_skill_recall.value >= $gates.no_skill_abstention_recall_min) and
+            (.metrics.clarification_validity.value >= $gates.ambiguity_recall_min) and
+            (($correct | length) / .samples >= $gates.overall_accuracy_min)
+          ' "$held_out" >/dev/null
+
+          {
+            echo '## Committed corpus evaluation'
+            for entry in "Calibration:$calibration" "Held out:$held_out"; do
+              label=${entry%%:*}
+              report=${entry#*:}
+              echo "### $label"
+              jq -r '
+                def metric($name; $metric):
+                  "| \($name) | \($metric.value) | \($metric.ci95.low)–\($metric.ci95.high) | \($metric.ci95.samples) |";
+                "- Samples: \(.samples)\n" +
+                "- Exclusions (\(.exclusions | length)): " +
+                  (if (.exclusions | length) == 0 then "none" else ([.exclusions[] | "\(.case_id): \(.reason)"] | join("; ")) end) + "\n\n" +
+                "| Metric | Value | 95% CI | Bootstrap samples |\n|---|---:|---:|---:|\n" +
+                metric("Acceptable top-1"; .metrics.acceptable_top1) + "\n" +
+                metric("No-skill precision"; .metrics.no_skill_precision) + "\n" +
+                metric("No-skill recall"; .metrics.no_skill_recall) + "\n" +
+                metric("No-skill false-positive"; .metrics.no_skill_false_positive) + "\n" +
+                metric("Clarification validity"; .metrics.clarification_validity) + "\n\n" +
+                "#### Slices\n\n| Slice | Samples | Acceptable top-1 | No-skill recall | Clarification validity |\n|---|---:|---:|---:|---:|\n" +
+                (if (.slices | length) == 0 then
+                  "| None | 0 | — | — | — |"
+                else
+                  ([.slices[] | "| \(.name) | \(.samples) | \(.metrics.acceptable_top1.value // "undefined") | \(.metrics.no_skill_recall.value // "undefined") | \(.metrics.clarification_validity.value // "undefined") |"] | join("\n"))
+                end)
+              ' "$report"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Repeat deterministic evaluation and resolver checks
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          go test -json -count=10 ./internal/evaluation ./internal/resolver \
+            -run '^Test(RunnerBranchesMetricsPartitionsAndDeterministicReport|PairedVariantComparisonIsDeterministicAndReportsVariance|DeterministicConcurrentResolutionAndCandidateOrder)$' \
+            | tee reports/determinism.jsonl
+          status=${PIPESTATUS[0]}
+          set -e
+          exit "$status"
+
+      - name: Race-check deterministic resolver behavior
+        if: ${{ always() && (github.event_name == 'pull_request' || github.event_name == 'push') }}
+        shell: bash
+        run: |
+          set +e
+          go test -json -race ./internal/resolver \
+            -run '^TestDeterministicConcurrentResolutionAndCandidateOrder$' \
+            | tee reports/race.jsonl
+          status=${PIPESTATUS[0]}
+          set -e
+          exit "$status"
+
+      - name: Run nightly package quality tests
+        if: ${{ always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
+        shell: bash
+        run: |
+          set +e
+          go test -json ./internal/app ./internal/delivery/cli \
+            | tee reports/nightly-package-tests.jsonl
+          status=${PIPESTATUS[0]}
+          set -e
+          exit "$status"
+
+      - name: Capture nightly catalog-growth and distractor evidence
+        if: ${{ always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
+        shell: bash
+        run: |
+          set +e
+          go test -json -count=1 ./internal/resolver \
+            -run '^TestGoldenDistractorGrowthPreservesDominanceAndMetrics$' \
+            | tee reports/catalog-growth-distractor.jsonl
+          status=${PIPESTATUS[0]}
+          set -e
+          jq -s '
+            {
+              schema_version: 1,
+              test: "TestGoldenDistractorGrowthPreservesDominanceAndMetrics",
+              passed: any(.[]; .Test == "TestGoldenDistractorGrowthPreservesDominanceAndMetrics" and .Action == "pass"),
+              failed: any(.[]; .Action == "fail"),
+              comparisons: [.[] | select((.Output? // "") | contains("distractor x")) | .Output | rtrimstr("\n")]
+            }
+          ' reports/catalog-growth-distractor.jsonl > reports/catalog-growth-distractor-evidence.json
+          exit "$status"
+
+      - name: Race-check evaluation and resolver packages nightly
+        if: ${{ always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
+        shell: bash
+        run: |
+          set +e
+          go test -json -race ./internal/evaluation ./internal/resolver \
+            | tee reports/nightly-race.jsonl
+          status=${PIPESTATUS[0]}
+          set -e
+          exit "$status"
+
+      - name: Upload evaluation reports and test evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: evaluation-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: reports/**
+          if-no-files-found: error
+          retention-days: 30

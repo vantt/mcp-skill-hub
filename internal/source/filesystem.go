@@ -12,11 +12,16 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 )
 
-var filesystemCacheMu sync.Mutex
+const filesystemMaxTimeout = DefaultTimeout
+
+var filesystemCacheGate = func() chan struct{} {
+	gate := make(chan struct{}, 1)
+	gate <- struct{}{}
+	return gate
+}()
 
 // FilesystemAdapter captures bounded immutable snapshots of a subtree beneath
 // an explicitly configured root. Revisions refer to cached bytes rather than a
@@ -27,6 +32,7 @@ type FilesystemAdapter struct {
 	MaxFiles    int
 	MaxBytes    int64
 	MaxFileSize int64
+	Timeout     time.Duration
 	Now         func() time.Time
 }
 
@@ -47,6 +53,9 @@ func (adapter FilesystemAdapter) defaults() FilesystemAdapter {
 	if adapter.MaxFileSize <= 0 {
 		adapter.MaxFileSize = DefaultMaxFileSize
 	}
+	if adapter.Timeout <= 0 || adapter.Timeout > filesystemMaxTimeout {
+		adapter.Timeout = filesystemMaxTimeout
+	}
 	if adapter.Now == nil {
 		adapter.Now = time.Now
 	}
@@ -58,6 +67,8 @@ func (adapter FilesystemAdapter) defaults() FilesystemAdapter {
 
 func (adapter FilesystemAdapter) Identify(ctx context.Context, locator Locator) (Identity, error) {
 	adapter = adapter.defaults()
+	ctx, cancel := context.WithTimeout(ctx, adapter.Timeout)
+	defer cancel()
 	root, err := adapter.resolve(locator.Path)
 	if err != nil {
 		return Identity{}, err
@@ -72,13 +83,21 @@ func (adapter FilesystemAdapter) Identify(ctx context.Context, locator Locator) 
 	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
 		return Identity{}, fmt.Errorf("%w: filesystem source must be a directory", ErrInvalidLocator)
 	}
+	if err := ctx.Err(); err != nil {
+		return Identity{}, err
+	}
 	return Identity{Name: filepath.Base(root), Canonical: filepath.ToSlash(locator.Path), Path: "."}, nil
 }
 
 func (adapter FilesystemAdapter) CurrentRevision(ctx context.Context, source Source) (Revision, error) {
 	adapter = adapter.withLimits(source.Limits)
+	ctx, cancel := context.WithTimeout(ctx, adapter.Timeout)
+	defer cancel()
 	manifest, err := adapter.capture(ctx, source.Locator.Path)
 	if err != nil {
+		return Revision{}, err
+	}
+	if err := ctx.Err(); err != nil {
 		return Revision{}, err
 	}
 	return Revision{Kind: "filesystem-snapshot", Value: manifest.Digest, ContentDigest: manifest.Digest, ObservedAt: adapter.Now().UTC()}, nil
@@ -86,6 +105,11 @@ func (adapter FilesystemAdapter) CurrentRevision(ctx context.Context, source Sou
 
 func (adapter FilesystemAdapter) Diff(ctx context.Context, source Source, from, to Revision) (ChangeSet, error) {
 	adapter = adapter.withLimits(source.Limits)
+	ctx, cancel := context.WithTimeout(ctx, adapter.Timeout)
+	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return ChangeSet{}, err
+	}
 	if from.ContentDigest == to.ContentDigest {
 		return ChangeSet{From: from, To: to, Changes: []Change{}}, nil
 	}
@@ -119,6 +143,9 @@ func (adapter FilesystemAdapter) Diff(ctx context.Context, source Source, from, 
 	sort.Strings(names)
 	changes := make([]Change, 0)
 	for _, name := range names {
+		if err := ctx.Err(); err != nil {
+			return ChangeSet{}, err
+		}
 		_, oldOK := beforeMap[name]
 		_, newOK := afterMap[name]
 		status := ""
@@ -144,11 +171,16 @@ func (adapter FilesystemAdapter) Diff(ctx context.Context, source Source, from, 
 			changes = append(changes, Change{Path: name, Status: status})
 		}
 	}
+	if err := ctx.Err(); err != nil {
+		return ChangeSet{}, err
+	}
 	return ChangeSet{From: from, To: to, Changes: changes}, nil
 }
 
 func (adapter FilesystemAdapter) Read(ctx context.Context, source Source, revision Revision, resourcePath string) ([]byte, error) {
 	adapter = adapter.withLimits(source.Limits)
+	ctx, cancel := context.WithTimeout(ctx, adapter.Timeout)
+	defer cancel()
 	if !safeResourcePath(resourcePath) {
 		return nil, ErrInvalidLocator
 	}
@@ -160,7 +192,7 @@ func (adapter FilesystemAdapter) Read(ctx context.Context, source Source, revisi
 	for _, item := range manifest.Resources {
 		if item.Path == resourcePath {
 			if item.Size > adapter.MaxFileSize {
-				return nil, ErrLimitExceeded
+				return nil, &LimitExceededError{Limit: "file_size", Actual: item.Size, Max: adapter.MaxFileSize, Path: item.Path}
 			}
 			found = true
 			break
@@ -169,11 +201,20 @@ func (adapter FilesystemAdapter) Read(ctx context.Context, source Source, revisi
 	if !found {
 		return nil, os.ErrNotExist
 	}
-	return adapter.readSnapshotFile(revision.ContentDigest, resourcePath)
+	contents, err := adapter.readSnapshotFile(revision.ContentDigest, resourcePath)
+	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return contents, nil
 }
 
 func (adapter FilesystemAdapter) List(ctx context.Context, source Source, revision Revision, scope Scope) ([]Resource, error) {
 	adapter = adapter.withLimits(source.Limits)
+	ctx, cancel := context.WithTimeout(ctx, adapter.Timeout)
+	defer cancel()
 	if scope.Prefix != "" && !safeResourcePath(scope.Prefix) {
 		return nil, ErrInvalidLocator
 	}
@@ -184,14 +225,26 @@ func (adapter FilesystemAdapter) List(ctx context.Context, source Source, revisi
 	resources := make([]Resource, 0, len(manifest.Resources))
 	var total int64
 	for _, item := range manifest.Resources {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if scope.Prefix != "" && item.Path != scope.Prefix && !strings.HasPrefix(item.Path, strings.TrimSuffix(scope.Prefix, "/")+"/") {
 			continue
 		}
 		total += item.Size
-		if len(resources) >= adapter.MaxFiles || item.Size > adapter.MaxFileSize || total > adapter.MaxBytes {
-			return nil, ErrLimitExceeded
+		if len(resources) >= adapter.MaxFiles {
+			return nil, &LimitExceededError{Limit: "files", Actual: int64(len(resources) + 1), Max: int64(adapter.MaxFiles)}
+		}
+		if item.Size > adapter.MaxFileSize {
+			return nil, &LimitExceededError{Limit: "file_size", Actual: item.Size, Max: adapter.MaxFileSize, Path: item.Path}
+		}
+		if total > adapter.MaxBytes {
+			return nil, &LimitExceededError{Limit: "bytes", Actual: total, Max: adapter.MaxBytes}
 		}
 		resources = append(resources, item)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	return resources, nil
 }
@@ -206,6 +259,13 @@ func (adapter FilesystemAdapter) withLimits(limits Limits) FilesystemAdapter {
 	}
 	if limits.MaxFileBytes > 0 && limits.MaxFileBytes < adapter.MaxFileSize {
 		adapter.MaxFileSize = limits.MaxFileBytes
+	}
+	const maxDurationSeconds = int64((time.Duration(1<<63 - 1)) / time.Second)
+	if seconds := int64(limits.TimeoutSeconds); seconds > 0 && seconds <= maxDurationSeconds {
+		configured := time.Duration(seconds) * time.Second
+		if configured < adapter.Timeout {
+			adapter.Timeout = configured
+		}
 	}
 	return adapter
 }
@@ -259,8 +319,12 @@ func (adapter FilesystemAdapter) capture(ctx context.Context, relative string) (
 	if rel, relErr := filepath.Rel(sourceRoot, cacheRoot); relErr == nil && (rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))) {
 		return filesystemManifest{}, fmt.Errorf("%w: filesystem cache must be outside the source subtree", ErrInvalidLocator)
 	}
-	filesystemCacheMu.Lock()
-	defer filesystemCacheMu.Unlock()
+	select {
+	case <-ctx.Done():
+		return filesystemManifest{}, ctx.Err()
+	case <-filesystemCacheGate:
+	}
+	defer func() { filesystemCacheGate <- struct{}{} }()
 	if err := ensureCacheDirectory(cacheRoot); err != nil {
 		return filesystemManifest{}, err
 	}
@@ -308,8 +372,11 @@ func (adapter FilesystemAdapter) capture(ctx context.Context, relative string) (
 		if !info.Mode().IsRegular() {
 			return fmt.Errorf("unsupported source object: %s", rel)
 		}
-		if len(resources) >= adapter.MaxFiles || info.Size() > adapter.MaxFileSize {
-			return ErrLimitExceeded
+		if len(resources) >= adapter.MaxFiles {
+			return &LimitExceededError{Limit: "files", Actual: int64(len(resources) + 1), Max: int64(adapter.MaxFiles)}
+		}
+		if info.Size() > adapter.MaxFileSize {
+			return &LimitExceededError{Limit: "file_size", Actual: info.Size(), Max: adapter.MaxFileSize, Path: rel}
 		}
 		contents, err := readRootRegularFile(root, rel, adapter.MaxFileSize)
 		if err != nil {
@@ -317,7 +384,7 @@ func (adapter FilesystemAdapter) capture(ctx context.Context, relative string) (
 		}
 		total += int64(len(contents))
 		if total > adapter.MaxBytes {
-			return ErrLimitExceeded
+			return &LimitExceededError{Limit: "bytes", Actual: total, Max: adapter.MaxBytes}
 		}
 		if err := writeSnapshotFile(staging, rel, contents); err != nil {
 			return err
@@ -335,6 +402,9 @@ func (adapter FilesystemAdapter) capture(ctx context.Context, relative string) (
 	// Walk order is platform-defined; recompute the identity in sorted order.
 	hash.Reset()
 	for _, item := range resources {
+		if err := ctx.Err(); err != nil {
+			return filesystemManifest{}, err
+		}
 		contents, readErr := os.ReadFile(filepath.Join(staging, "files", filepath.FromSlash(item.Path)))
 		if readErr != nil {
 			return filesystemManifest{}, readErr
@@ -360,7 +430,7 @@ func (adapter FilesystemAdapter) capture(ctx context.Context, relative string) (
 	} else if err != nil {
 		return filesystemManifest{}, err
 	}
-	if err := adapter.pruneCache(final); err != nil {
+	if err := adapter.pruneCache(ctx, final); err != nil {
 		return filesystemManifest{}, err
 	}
 	return manifest, nil
@@ -402,7 +472,7 @@ func readRootRegularFile(rootPath, relative string, maximum int64) ([]byte, erro
 		return nil, err
 	}
 	if !opened.Mode().IsRegular() || opened.Size() > maximum {
-		return nil, ErrLimitExceeded
+		return nil, &LimitExceededError{Limit: "file_size", Actual: opened.Size(), Max: maximum, Path: relative}
 	}
 	contents, err := boundedRead(file, maximum)
 	if err != nil {
@@ -451,17 +521,23 @@ func (adapter FilesystemAdapter) loadManifest(ctx context.Context, revision Revi
 	if err := decoder.Decode(&manifest); err != nil || manifest.Version != 1 || manifest.Digest != revision.ContentDigest {
 		return filesystemManifest{}, ErrHistoryUnavailable
 	}
+	if err := ctx.Err(); err != nil {
+		return filesystemManifest{}, err
+	}
 	if len(manifest.Resources) > adapter.MaxFiles {
-		return filesystemManifest{}, ErrLimitExceeded
+		return filesystemManifest{}, &LimitExceededError{Limit: "files", Actual: int64(len(manifest.Resources)), Max: int64(adapter.MaxFiles)}
 	}
 	var total int64
 	for _, item := range manifest.Resources {
+		if err := ctx.Err(); err != nil {
+			return filesystemManifest{}, err
+		}
 		if !safeResourcePath(item.Path) || item.Size < 0 || item.Size > adapter.MaxFileSize {
 			return filesystemManifest{}, ErrHistoryUnavailable
 		}
 		total += item.Size
 		if total > adapter.MaxBytes {
-			return filesystemManifest{}, ErrLimitExceeded
+			return filesystemManifest{}, &LimitExceededError{Limit: "bytes", Actual: total, Max: adapter.MaxBytes}
 		}
 	}
 	return manifest, nil
@@ -484,7 +560,10 @@ func (adapter FilesystemAdapter) readSnapshotFile(digest, relative string) ([]by
 	return contents, nil
 }
 
-func (adapter FilesystemAdapter) pruneCache(keep string) error {
+func (adapter FilesystemAdapter) pruneCache(ctx context.Context, keep string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	entries, err := os.ReadDir(adapter.CacheRoot)
 	if err != nil {
 		return err
@@ -497,6 +576,9 @@ func (adapter FilesystemAdapter) pruneCache(keep string) error {
 	items := make([]cached, 0)
 	var total int64
 	for _, entry := range entries {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".capture-") {
 			continue
 		}
@@ -505,6 +587,9 @@ func (adapter FilesystemAdapter) pruneCache(keep string) error {
 		if err := filepath.WalkDir(path, func(_ string, child fs.DirEntry, walkErr error) error {
 			if walkErr != nil {
 				return walkErr
+			}
+			if err := ctx.Err(); err != nil {
+				return err
 			}
 			if child.Type()&os.ModeSymlink != 0 {
 				return errors.New("unsafe filesystem snapshot cache entry")
@@ -534,6 +619,9 @@ func (adapter FilesystemAdapter) pruneCache(keep string) error {
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].modified.Before(items[j].modified) })
 	for _, item := range items {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if total <= limit {
 			break
 		}

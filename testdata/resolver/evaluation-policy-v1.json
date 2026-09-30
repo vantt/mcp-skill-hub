@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "corpus": "golden-v1.json",
+  "calibration_split": "calibration",
+  "held_out_split": "held_out",
+  "calibration_grid": {
+    "applicability_floor": [0.16, 0.20, 0.24, 0.28, 0.32, 0.36, 0.40, 0.44],
+    "minimum_margin": [0.04, 0.06, 0.08, 0.10, 0.12]
+  },
+  "selected": {
+    "applicability_floor": 0.16,
+    "minimum_margin": 0.04
+  },
+  "held_out_gates": {
+    "resolved_precision_min": 0.85,
+    "no_skill_abstention_recall_min": 0.85,
+    "ambiguity_recall_min": 0.85,
+    "overall_accuracy_min": 0.82
+  }
+}

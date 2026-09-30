@@ -17,15 +17,19 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
-          go-version: "1.26.x"
-          check-latest: true
+          go-version: "1.26.0"
       - name: Test
         run: go test ./...
       - name: Race test
         run: go test -race ./...
+      - name: Performance budgets
+        shell: bash
+        env:
+          SKILLHUB_PERF: "1"
+        run: go test -p 1 -count=1 -run 'Performance' ./...
       - name: Vet
         run: go vet ./...
 
@@ -33,14 +37,63 @@ jobs:
     name: Format
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
-          go-version: "1.26.x"
-          check-latest: true
+          go-version: "1.26.0"
       - name: Check formatting
         shell: bash
-        run: test -z "$(gofmt -l cmd internal)"
+        run: test -z "$(gofmt -l cmd internal schemas)"
+
+  installer-lifecycle:
+    name: Installer lifecycle
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - name: Check shell syntax
+        shell: bash
+        run: bash -n scripts/install.sh
+      - name: Test install, upgrade, rollback, and uninstall
+        shell: bash
+        run: scripts/test-installer-lifecycle.sh
+
+  installer-windows:
+    name: Windows installer lifecycle
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - name: Test Windows installer
+        shell: pwsh
+        run: scripts/test-installer-windows.ps1
+
+  fuzz:
+    name: Bounded fuzz (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: canonical
+            package: ./internal/canonical
+            target: FuzzCanonicalParsersAndPaths
+          - name: mutation
+            package: ./internal/mutation
+            target: FuzzMutationPathConfinement
+          - name: mcpserver
+            package: ./internal/delivery/mcpserver
+            target: FuzzMCPFrameAndInputHelpers
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: "1.26.0"
+      - name: Fuzz ${{ matrix.name }}
+        run: go test ${{ matrix.package }} -run '^$' -fuzz '^${{ matrix.target }}$' -fuzztime=15s -timeout=3m
 
   cross-compile:
     name: Cross-compile smoke check
@@ -50,14 +103,16 @@ jobs:
       matrix:
         target:
           - { goos: linux, goarch: amd64 }
+          - { goos: linux, goarch: arm64 }
+          - { goos: darwin, goarch: amd64 }
           - { goos: darwin, goarch: arm64 }
           - { goos: windows, goarch: amd64 }
+          - { goos: windows, goarch: arm64 }
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
-          go-version: "1.26.x"
-          check-latest: true
+          go-version: "1.26.0"
       - name: Build ${{ matrix.target.goos }}/${{ matrix.target.goarch }}
         env:
           CGO_ENABLED: "0"

@@ -128,7 +128,7 @@ CREATE TABLE operations (
   status TEXT NOT NULL,
   changes_json TEXT NOT NULL
 ) STRICT;
-CREATE VIRTUAL TABLE skill_fts USING fts5(skill_id UNINDEXED, name, description, triggers);
+CREATE VIRTUAL TABLE skill_fts USING fts5(skill_id UNINDEXED, name, aliases, description, triggers);
 CREATE VIRTUAL TABLE resource_fts USING fts5(path UNINDEXED, skill_id UNINDEXED, content);
 CREATE VIRTUAL TABLE curation_fts USING fts5(entity_id UNINDEXED, kind UNINDEXED, content);
 `

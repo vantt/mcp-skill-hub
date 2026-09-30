@@ -1,6 +1,6 @@
 ---
 title: "Phase 13 — Bundled System Curator Skill and host bootstrap"
-status: todo
+status: done
 ---
 
 # Phase 13 — Bundled System Curator Skill and host bootstrap
@@ -71,6 +71,14 @@ Add phase-specific commands from the roadmap section above when implementation r
 - Implementing this phase before its prerequisites can weaken Git-first and derived-state invariants.
 - Adding shortcuts to satisfy a command surface can create a second source of truth outside canonical files.
 - User-facing behavior can drift from Phase 01 UX fixtures if adapters format results independently.
+
+## Execution evidence
+
+- Bundled `system-curator` is embedded, versioned, reserved from mutable workspace shadowing, and distributed through the same pinned skill/resource contracts as ordinary skills.
+- Claude Code 2.1.284 completed an isolated end-to-end `Curate my Skill Hub` read-only inspection over generated stdio registration. The host loaded curator guidance, inspected workspace/catalog/recovery/source/insight state, and made no mutation.
+- Repeated doctor/fix and host-adapter tests prove idempotent managed blocks and registrations for Claude Code, Codex CLI, and Gemini CLI. Codex and Gemini projections remain best-effort because local authentication/trust blocked their end-to-end runs; they are not claimed as supported V1 stock clients.
+- CLI remains an independent recovery route, and all mutations still pass through application validation and canonical mutation services.
+- Compatibility evidence and caveats are recorded in `docs/mcp-compatibility-matrix.json`.
 
 ## Rollback
 

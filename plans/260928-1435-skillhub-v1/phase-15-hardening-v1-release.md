@@ -1,6 +1,6 @@
 ---
 title: "Phase 15 — Hardening, migrations and V1 release"
-status: todo
+status: done
 ---
 
 # Phase 15 — Hardening, migrations and V1 release
@@ -76,6 +76,17 @@ Add phase-specific commands from the roadmap section above when implementation r
 - Implementing this phase before its prerequisites can weaken Git-first and derived-state invariants.
 - Adding shortcuts to satisfy a command surface can create a second source of truth outside canonical files.
 - User-facing behavior can drift from Phase 01 UX fixtures if adapters format results independently.
+
+## Execution evidence
+
+- Canonical migration is explicit, registry-driven, previewed, pinned, WAL-protected, recoverable, idempotent, and receipted with source/target versions. Doctor and rebuild never silently upgrade canonical files; derived schema incompatibility rebuilds only after canonical/recovery checks pass.
+- Canonical ingestion is bounded to 8,192 files, 4 MiB per file, and 64 MiB aggregate. Host files, source walks, network operations, MCP frames, telemetry, evaluation inputs, and subprocess operations have explicit bounds.
+- Native fuzz targets, every mutation/catalog fault hook, disk-full/read-only/permission/clock-skew tests, and deterministic multi-process stdio race tests pass. Release verification runs unit/race/vet/fuzz/fault gates on Linux, macOS, and Windows.
+- Deterministic performance tests enforce 256-skill warm-open p95 below 100 ms and uncached resolver p95 below 50 ms while reporting p50/p95/p99 rebuild evidence.
+- The standalone streamed installer authenticates the signed checksum manifest before archive verification, supports stable/prerelease SemVer, installs atomically, and has hermetic install/upgrade/rollback/uninstall coverage. It requires `cosign` and supports the published Linux/amd64 and Darwin/arm64 shell targets.
+- The tag-only publication path builds CGO-free archives, generates SPDX SBOMs and deterministic checksums, keylessly signs all assets, attests SBOM/provenance, verifies evidence, and uses SHA-pinned actions with least privileges. Manual dispatch produces non-installable draft artifacts only.
+- `docs/release-runbook.md` covers verification, migration, backup, clone/rebuild/serve disaster recovery, rollback, support, and performance budgets. `docs/mcp-compatibility-matrix.json` records executed and blocked client evidence.
+- Final independent security/release review reported GO with no critical/high static blockers. Hosted OIDC/signing/publication remains evidence to collect on the first real tag, not a static implementation blocker.
 
 ## Rollback
 

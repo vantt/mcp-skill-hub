@@ -22,6 +22,8 @@ type receiptDocument struct {
 	RequestDigest         string           `yaml:"request_digest"`
 	Proposal              *receiptProposal `yaml:"proposal,omitempty"`
 	BaseCatalogSnapshot   string           `yaml:"base_catalog_snapshot,omitempty"`
+	SourceSchemaVersion   *int             `yaml:"source_schema_version,omitempty"`
+	TargetSchemaVersion   *int             `yaml:"target_schema_version,omitempty"`
 	ResultCatalogSnapshot string           `yaml:"result_catalog_snapshot"`
 	Changes               []receiptChange  `yaml:"changes"`
 	Status                string           `yaml:"status"`
@@ -54,6 +56,8 @@ func receiptYAML(root string, set WriteSet, changes []Change, resultSnapshot str
 		IdempotencyKey:        effectiveIdempotencyKey(set),
 		RequestDigest:         requestDigest(set),
 		BaseCatalogSnapshot:   set.BaseCatalogSnapshot,
+		SourceSchemaVersion:   set.SourceSchemaVersion,
+		TargetSchemaVersion:   set.TargetSchemaVersion,
 		ResultCatalogSnapshot: resultSnapshot,
 		Changes:               make([]receiptChange, 0, len(changes)),
 		Status:                "applied",
@@ -132,6 +136,10 @@ func existingOperation(root string, set WriteSet) (Receipt, bool, error) {
 		if document.SchemaVersion != 1 || document.Status != "applied" || document.ID == "" || document.RequestDigest == "" || document.ResultCatalogSnapshot == "" {
 			return fmt.Errorf("invalid operation receipt for idempotency key %q", key)
 		}
+		if (document.SourceSchemaVersion == nil) != (document.TargetSchemaVersion == nil) ||
+			(document.SourceSchemaVersion != nil && (*document.SourceSchemaVersion < 0 || *document.TargetSchemaVersion <= *document.SourceSchemaVersion)) {
+			return fmt.Errorf("invalid schema migration versions in operation receipt for idempotency key %q", key)
+		}
 		if document.RequestDigest != wantedDigest {
 			return ErrIdempotencyConflict
 		}
@@ -163,5 +171,8 @@ func existingOperation(root string, set WriteSet) (Receipt, bool, error) {
 		return Receipt{}, false, err
 	}
 	paths = append(paths, filepath.ToSlash(relativeReceipt))
-	return Receipt{OperationID: matched.ID, ChangedPaths: paths, CatalogSnapshot: matched.ResultCatalogSnapshot, GitDirty: dirty}, true, nil
+	return Receipt{
+		OperationID: matched.ID, ChangedPaths: paths, CatalogSnapshot: matched.ResultCatalogSnapshot, GitDirty: dirty,
+		SourceSchemaVersion: matched.SourceSchemaVersion, TargetSchemaVersion: matched.TargetSchemaVersion,
+	}, true, nil
 }

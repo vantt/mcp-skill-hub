@@ -19,6 +19,7 @@ import (
 	insightpkg "github.com/vantt/mcp-skill-hub/internal/insight"
 	"github.com/vantt/mcp-skill-hub/internal/mutation"
 	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
+	"github.com/vantt/mcp-skill-hub/internal/telemetry"
 	"github.com/vantt/mcp-skill-hub/internal/workspace"
 )
 
@@ -28,6 +29,7 @@ type DistillService struct {
 	IDs             IDGenerator
 	Adapters        map[string]sourcepkg.Adapter
 	MutationOptions mutation.Options
+	Telemetry       TelemetrySink
 }
 
 type DistillPrepareInput struct {
@@ -151,14 +153,14 @@ func (service DistillService) PrepareDistillRuns(ctx context.Context, path strin
 		if len(requested) > 0 && !requested[record.ID] {
 			continue
 		}
-		if len(requested) == 0 && input.AllChanged && record.Status != "changed" && record.Status != "distill_pending" {
+		if len(requested) == 0 && input.AllChanged && record.Status != "changed" && record.Status != "distill_pending" && record.DistilledRevision != nil {
 			continue
 		}
 		seen[record.ID] = true
 		run, pkg, prepareErr := service.prepareOne(ctx, root, record, input.IdempotencyKey)
 		item := DistillPrepareItem{SourceID: record.ID}
 		if prepareErr != nil {
-			item.Error = sanitizeDistillError(prepareErr)
+			item.Error = sanitizeDistillErrorForSource(prepareErr, record.ID)
 			result.Failed++
 		} else {
 			item.Run, item.Package = &run, &pkg
@@ -177,13 +179,20 @@ func (service DistillService) PrepareDistillRuns(ctx context.Context, path strin
 		result.Status = StatusPartialFailure
 	}
 	result.Summary = fmt.Sprintf("Prepared %d source run(s); %d source(s) failed independently. Curated skills are unchanged.", result.Prepared, result.Failed)
+	events := make([]telemetry.Event, 0, result.Prepared)
 	for _, item := range result.Results {
 		summary := "prepared"
 		if item.Error != "" {
 			summary = item.Error
 		}
 		result.Items = append(result.Items, Item{ID: item.SourceID, Summary: summary, Impact: "Active skill content was not modified."})
+		if item.Run != nil {
+			events = append(events, curationTelemetryEvent(telemetry.EventDistillRunPrepared, map[string]any{
+				"run_id": item.Run.ID, "status": item.Run.State, "resource_count": len(item.Run.ChangedResources), "retry_count": item.Run.Attempt,
+			}))
+		}
 	}
+	recordCurationTelemetry(ctx, service.Telemetry, root, events...)
 	return result, nil
 }
 
@@ -362,7 +371,10 @@ func (service DistillService) writeRunWithIntent(ctx context.Context, root strin
 }
 
 // SubmitDistillRun validates real packaged bytes and auto-finalizes one canonical WriteSet when unblocked.
-func (service DistillService) SubmitDistillRun(ctx context.Context, path, runID string, input DistillSubmission) (DistillRunResult, error) {
+func (service DistillService) SubmitDistillRun(ctx context.Context, path, runID string, input DistillSubmission) (result DistillRunResult, resultErr error) {
+	startedAt := time.Now()
+	telemetryEligible := false
+	artifactEvents := []telemetry.Event{}
 	root, err := workspace.Discover(path)
 	if err != nil {
 		return DistillRunResult{}, err
@@ -401,6 +413,41 @@ func (service DistillService) SubmitDistillRun(ctx context.Context, path, runID 
 	if run.State == "awaiting_decision" && strings.TrimSpace(input.Resolution) == "" {
 		return DistillRunResult{}, errors.New("correcting an awaiting-decision run requires an explicit resolution")
 	}
+	telemetryEligible = true
+	defer func() {
+		if !telemetryEligible {
+			return
+		}
+		persisted := result.Run
+		if resultErr != nil {
+			if loaded, _, loadErr := readRun(root, runID); loadErr == nil {
+				persisted = loaded
+			}
+		}
+		events := []telemetry.Event{curationTelemetryEvent(telemetry.EventDistillRunSubmitted, map[string]any{
+			"run_id": runID, "status": "submitted", "observation_count": len(input.Findings),
+			"coverage_gap_count": countCoverageGaps(input.Coverage), "resource_count": len(input.Coverage),
+			"retry_count": run.Attempt, "duration_ms": time.Since(startedAt).Milliseconds(),
+		})}
+		events = append(events, coverageGapTelemetry(input.Coverage, runID)...)
+		if resultErr != nil {
+			if persisted.State == "failed" {
+				events = append(events, curationTelemetryEvent(telemetry.EventDistillRunFailed, map[string]any{
+					"run_id": runID, "status": "failed", "cursor_advanced": false, "retry_count": persisted.Attempt,
+					"duration_ms": time.Since(startedAt).Milliseconds(), "error_code": "submission_failed",
+				}))
+			}
+		} else if result.Run.State == "finalized" {
+			events = append(events, artifactEvents...)
+			events = append(events, curationTelemetryEvent(telemetry.EventDistillRunFinalized, map[string]any{
+				"run_id": runID, "status": "finalized", "observation_count": len(result.Run.FindingIDs),
+				"coverage_gap_count": countCoverageGaps(input.Coverage), "resource_count": len(result.Run.ChangedResources),
+				"cursor_advanced": true, "auto_finalized": true, "retry_count": result.Run.Attempt,
+				"duration_ms": time.Since(startedAt).Milliseconds(),
+			}))
+		}
+		recordCurationTelemetry(ctx, service.Telemetry, root, events...)
+	}()
 	pkg, err := distillpkg.LoadRevisionPackage(root, run.ID)
 	if err != nil || pkg.Digest != run.PackageDigest || !distillpkg.SameRevision(pkg.ToRevision, run.ToRevision) {
 		return service.failSubmission(ctx, root, run, runBytes, errors.New("immutable target revision package is unavailable or invalid"))
@@ -708,6 +755,7 @@ func (service DistillService) SubmitDistillRun(ctx context.Context, path, runID 
 		changes = append(changes, change)
 		run.InsightIDs = append(run.InsightIDs, id)
 	}
+	artifactEvents = distillArtifactTelemetry(run.ID, input, observationByID, newObservations, newComparisons, newInsights)
 	distillpkg.SortRunCollections(&run)
 	runAfter, _ := distillpkg.Marshal(run)
 	changes[0].Contents = runAfter
@@ -1098,14 +1146,121 @@ func boundedDistillMessage(value string, maximum int) string {
 	return string(characters)
 }
 
+func countCoverageGaps(coverage []distillpkg.CoverageEntry) int {
+	count := 0
+	for _, item := range coverage {
+		if coverageGapClassification(item.Status) != "" {
+			count++
+		}
+	}
+	return count
+}
+
+func coverageGapTelemetry(coverage []distillpkg.CoverageEntry, runID string) []telemetry.Event {
+	events := []telemetry.Event{}
+	for _, item := range coverage {
+		classification := coverageGapClassification(item.Status)
+		if classification == "" {
+			continue
+		}
+		events = append(events, curationTelemetryEvent(telemetry.EventCoverageGapRecorded, map[string]any{
+			"run_id": runID, "resource_id": telemetryResourceID(item.Resource), "classification": classification,
+			"reason_code": classification,
+		}))
+	}
+	sort.Slice(events, func(i, j int) bool {
+		return events[i].Payload["resource_id"].(string) < events[j].Payload["resource_id"].(string)
+	})
+	return events
+}
+
+func coverageGapClassification(status string) string {
+	switch status {
+	case "deferred", "unreadable", "out_of_scope":
+		return status
+	case "ruled_out_with_reason":
+		return "ruled_out"
+	default:
+		return ""
+	}
+}
+
+func telemetryResourceID(resource string) string {
+	digest := sha256.Sum256([]byte(resource))
+	return "sha256:" + hex.EncodeToString(digest[:])
+}
+
+func distillArtifactTelemetry(runID string, input DistillSubmission, existing map[string]distillpkg.Observation, observations map[string]distillpkg.Observation, comparisons map[string]distillpkg.Comparison, insights map[string]distillpkg.Insight) []telemetry.Event {
+	events := []telemetry.Event{}
+	observationIDs := make([]string, 0, len(observations))
+	for id := range observations {
+		observationIDs = append(observationIDs, id)
+	}
+	sort.Strings(observationIDs)
+	for _, id := range observationIDs {
+		item := observations[id]
+		eventType := telemetry.EventObservationCreated
+		if item.Status == "removed" || item.Status == "superseded" {
+			eventType = telemetry.EventObservationTombstoned
+		} else if _, found := existing[id]; found {
+			eventType = telemetry.EventObservationUpdated
+		}
+		events = append(events, curationTelemetryEvent(eventType, map[string]any{
+			"entity_id": id, "run_id": runID, "status": item.Status,
+		}))
+	}
+	comparisonIDs := make([]string, 0, len(comparisons))
+	for id := range comparisons {
+		comparisonIDs = append(comparisonIDs, id)
+	}
+	sort.Strings(comparisonIDs)
+	for _, id := range comparisonIDs {
+		status := "current"
+		if comparisons[id].Stale {
+			status = "stale"
+		}
+		events = append(events, curationTelemetryEvent(telemetry.EventComparisonUpdated, map[string]any{
+			"entity_id": id, "run_id": runID, "status": status,
+		}))
+	}
+	insightIDs := make([]string, 0, len(input.Insights))
+	for _, submitted := range input.Insights {
+		id := distillpkg.InsightID(submitted.SkillID, submitted.StableKey)
+		if _, found := insights[id]; found {
+			insightIDs = append(insightIDs, id)
+		}
+	}
+	sort.Strings(insightIDs)
+	for _, id := range insightIDs {
+		events = append(events, curationTelemetryEvent(telemetry.EventInsightProposed, map[string]any{
+			"entity_id": id, "run_id": runID, "status": insights[id].Status,
+		}))
+	}
+	return events
+}
+
 func sanitizeDistillError(err error) string {
+	return sanitizeDistillErrorForSource(err, "")
+}
+
+func sanitizeDistillErrorForSource(err error, sourceID string) string {
+	var limitErr *sourcepkg.LimitExceededError
+	if errors.As(err, &limitErr) {
+		if sourceID != "" {
+			return fmt.Sprintf("source exceeded %s limit (%d > %d); narrow scope with `skillhub source triage %s --path <subdir>`", limitErr.Limit, limitErr.Actual, limitErr.Max, sourceID)
+		}
+		return fmt.Sprintf("source exceeded %s limit (%d > %d); narrow scope with `skillhub source triage <source-id> --path <subdir>`", limitErr.Limit, limitErr.Actual, limitErr.Max)
+	}
 	switch {
 	case errors.Is(err, context.DeadlineExceeded):
 		return "source preparation timed out"
 	case errors.Is(err, sourcepkg.ErrHistoryUnavailable):
 		return "pinned source history is unavailable"
 	case errors.Is(err, sourcepkg.ErrLimitExceeded):
-		return "source exceeded configured limits"
+		if sourceID != "" {
+			return fmt.Sprintf("source exceeded configured limits; narrow scope with `skillhub source triage %s --path <subdir>`", sourceID)
+		}
+		return "source exceeded configured limits; narrow scope with `skillhub source triage <source-id> --path <subdir>`"
 	default:
 		return err.Error()
 	}

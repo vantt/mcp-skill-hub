@@ -1,7 +1,9 @@
 package app
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
@@ -13,6 +15,7 @@ import (
 	"github.com/vantt/mcp-skill-hub/internal/catalog"
 	"github.com/vantt/mcp-skill-hub/internal/skill"
 	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
+	"github.com/vantt/mcp-skill-hub/internal/telemetry"
 	"github.com/vantt/mcp-skill-hub/internal/workspace"
 )
 
@@ -56,6 +59,67 @@ func (*fakeSourceAdapter) List(context.Context, sourcepkg.Source, sourcepkg.Revi
 	return []sourcepkg.Resource{}, nil
 }
 
+func TestSourceOperationsEmitSanitizedPostOperationTelemetry(t *testing.T) {
+	root := newSourceWorkspace(t)
+	sink := &captureTelemetrySink{}
+	adapter := &fakeSourceAdapter{revisions: map[string]sourcepkg.Revision{"source-a": revision("one")}, errors: map[string]error{}}
+	service := SourceService{
+		Clock: sourceClock{now: time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC)}, IDs: fixedSourceID("0011223344556677"),
+		Adapters: map[string]sourcepkg.Adapter{"git": adapter}, Telemetry: sink,
+	}
+	const locator = "https://github.com/private/example.git"
+	const reason = "private evidence reason that must not be recorded"
+	captured, err := service.CaptureSourceCandidate(t.Context(), root, SourceCandidateInput{Locator: locator, Reason: reason})
+	if err != nil {
+		t.Fatal(err)
+	}
+	preview, _, err := service.TriageSourceCandidate(t.Context(), root, SourceTriageInput{CandidateID: captured.Candidate.ID, Decision: "accept", SourceID: "source-a", Adapter: "git", MonitoringEnabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.ConfirmSourceProposal(t.Context(), root, preview, preview.Confirmation.Confirmation.Pins); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.CheckSources(t.Context(), root, []string{"source-a"}, false); err != nil {
+		t.Fatal(err)
+	}
+	wantTypes := []string{telemetry.EventSourceCandidateCaptured, telemetry.EventSourceCandidateTriaged, telemetry.EventSourceChecked}
+	if len(sink.events) != len(wantTypes) {
+		t.Fatalf("telemetry events = %#v", sink.events)
+	}
+	current, err := catalog.OpenCurrent(t.Context(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer current.Close()
+	for index, event := range sink.events {
+		if event.Version != telemetry.EventVersion || event.Type != wantTypes[index] || event.CatalogSnapshot != current.Pointer.CatalogSnapshot || event.PolicyRevision == "" {
+			t.Fatalf("event %d = %#v", index, event)
+		}
+	}
+	encoded, err := json.Marshal(sink.events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, raw := range []string{locator, reason} {
+		if bytes.Contains(encoded, []byte(raw)) {
+			t.Fatalf("telemetry leaked raw source data %q: %s", raw, encoded)
+		}
+	}
+}
+
+func TestSourceTelemetryPanicDoesNotChangeCaptureResult(t *testing.T) {
+	root := newSourceWorkspace(t)
+	service := SourceService{Clock: sourceClock{now: time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC)}, IDs: fixedSourceID("0011223344556677"), Telemetry: panickingTelemetrySink{}}
+	result, err := service.CaptureSourceCandidate(t.Context(), root, SourceCandidateInput{Locator: "sources/private", Reason: "private reason"})
+	if err != nil || result.Status != StatusApplied || result.Candidate.Status != "pending" {
+		t.Fatalf("capture with panicking telemetry = %#v, %v", result, err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "sources", "intake", result.Candidate.ID+".yaml")); err != nil {
+		t.Fatalf("canonical result was not published: %v", err)
+	}
+}
+
 func TestSourceChecksPreserveUnchangedCanonicalStatePersistChangesAndIsolateFailures(t *testing.T) {
 	root := newSourceWorkspace(t)
 	adapter := &fakeSourceAdapter{revisions: map[string]sourcepkg.Revision{}, errors: map[string]error{}}
@@ -86,12 +150,23 @@ func TestSourceChecksPreserveUnchangedCanonicalStatePersistChangesAndIsolateFail
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Unchanged != 1 || result.Changed != 0 {
-		t.Fatalf("unchanged result = %#v", result)
+	if result.Changed != 1 || len(result.Results) != 1 || result.Results[0].Status != "needs_analysis" {
+		t.Fatalf("freshly onboarded source did not report needs_analysis: %#v", result)
 	}
 	if after := gitStatus(t, root); after != before {
-		t.Fatalf("unchanged check dirtied Git: before %q after %q", before, after)
+		t.Fatalf("needs_analysis check dirtied Git: before %q after %q", before, after)
 	}
+	_, freshRecords, _ := readSourceRecords(root)
+	for _, rec := range freshRecords {
+		if rec.ID == "source-a" {
+			rec.DistilledRevision = rec.CurrentRevision
+			rec.Status = "watching"
+			data, _ := sourcepkg.MarshalCanonical(rec)
+			_ = os.WriteFile(filepath.Join(root, "sources/catalog/source-a.yaml"), data, 0o644)
+		}
+	}
+	commitWorkspace(t, root)
+	before = gitStatus(t, root)
 	outsideOnly := adapter.revisions["source-a"]
 	outsideOnly.Value = revision("different-commit-same-scoped-tree").Value
 	adapter.revisions["source-a"] = outsideOnly

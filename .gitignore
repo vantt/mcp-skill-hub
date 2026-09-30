@@ -4,3 +4,11 @@
 *.db-wal
 /runtime/
 /.skillhub/transactions/
+
+# Local agent and editor directories
+.agentkit/
+.agents/
+.claude/
+.omp/
+.pi/
+engineer/

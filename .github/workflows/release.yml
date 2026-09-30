@@ -1,81 +1,710 @@
-name: Release skeleton
+name: Release
 
 on:
+  push:
+    tags:
+      - "v*.*.*"
   workflow_dispatch:
     inputs:
       version:
-        description: Version to embed in the archive metadata
+        description: SemVer label for a private draft artifact (no tag or GitHub release is created)
         required: true
         type: string
 
-permissions:
-  contents: read
+concurrency:
+  group: release-${{ github.event_name == 'push' && github.ref_name || format('draft-{0}-{1}', inputs.version, github.sha) }}
+  cancel-in-progress: false
+
+permissions: {}
 
 jobs:
-  package:
-    name: Package release artifacts
+  prepare:
+    name: Validate release metadata
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      tag: ${{ steps.release.outputs.tag }}
+      prerelease: ${{ steps.release.outputs.prerelease }}
+    steps:
+      - name: Validate and derive version
+        id: release
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          REF: ${{ github.ref }}
+          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+        run: |
+          set -euo pipefail
+
+          validate_and_classify() {
+            local version="$1"
+            local version_without_build prerelease_identifiers identifier
+            local semver='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
+            [[ "$version" =~ $semver ]] || return 1
+
+            version_without_build="${version%%+*}"
+            if [[ "$version_without_build" == *-* ]]; then
+              prerelease_identifiers="${version_without_build#*-}"
+              IFS=. read -r -a identifiers <<< "$prerelease_identifiers"
+              for identifier in "${identifiers[@]}"; do
+                [[ ! "$identifier" =~ ^0[0-9]+$ ]] || return 1
+              done
+              printf 'prerelease\n'
+            else
+              printf 'stable\n'
+            fi
+          }
+
+          # Shared SemVer validation self-test
+          [[ "$(validate_and_classify '1.2.3+build-5')" == "stable" ]] || { echo "ERROR: Build metadata containing a hyphen must remain stable." >&2; exit 1; }
+          [[ "$(validate_and_classify '1.2.3-rc.1')" == "prerelease" ]] || { echo "ERROR: Prerelease version was not classified as prerelease." >&2; exit 1; }
+          if validate_and_classify '1.2.3-01' >/dev/null; then
+            echo "ERROR: Numeric prerelease identifier with a leading zero was accepted." >&2
+            exit 1
+          fi
+
+          if [[ "$EVENT_NAME" == "push" ]]; then
+            [[ "$REF_TYPE" == "tag" ]] || { echo "ERROR: Release pushes must be tag events." >&2; exit 1; }
+            raw_version="$REF_NAME"
+          else
+            [[ "$EVENT_NAME" == "workflow_dispatch" ]] || { echo "ERROR: Unsupported release event: $EVENT_NAME" >&2; exit 1; }
+            [[ "$REF" == "refs/heads/main" ]] || { echo "ERROR: Manual draft generation is restricted to the main branch." >&2; exit 1; }
+            raw_version="$INPUT_VERSION"
+          fi
+
+          version="${raw_version#v}"
+          [[ "$raw_version" == "$version" || "$raw_version" == "v$version" ]] || { echo "ERROR: Invalid version prefix." >&2; exit 1; }
+          (( ${#version} <= 128 )) || { echo "ERROR: Version exceeds the 128-character release asset limit." >&2; exit 1; }
+
+          classification="$(validate_and_classify "$version")" || {
+            echo "ERROR: Version $version is not valid SemVer." >&2
+            exit 1
+          }
+
+          prerelease=false
+          if [[ "$EVENT_NAME" == "push" && "$classification" == "prerelease" ]]; then
+            prerelease=true
+          fi
+          {
+            echo "version=$version"
+            if [[ "$EVENT_NAME" == "push" ]]; then
+              echo "tag=$REF_NAME"
+            else
+              echo "tag="
+            fi
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
+  verify:
+    name: Verify release candidate (${{ matrix.os }})
+    needs: prepare
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
-        target:
-          - { goos: linux, goarch: amd64, archive: tar.gz }
-          - { goos: darwin, goarch: arm64, archive: tar.gz }
-          - { goos: windows, goarch: amd64, archive: zip }
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-go@v6
+      - name: Check out exact source revision
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
-          go-version: "1.26.x"
-          check-latest: true
-      - name: Validate version input
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Confirm exact source commit
         shell: bash
         env:
-          VERSION: ${{ inputs.version }}
+          EXPECTED_SHA: ${{ github.sha }}
         run: |
-          if [[ ! "$VERSION" =~ ^[0-9A-Za-z][0-9A-Za-z._+-]*$ ]]; then
-            echo "ERROR: Version must contain only letters, digits, dot, underscore, plus, or hyphen." >&2
-            exit 1
-          fi
-      - name: Prepare output directory
+          set -euo pipefail
+          expected_commit="$(git rev-parse "${EXPECTED_SHA}^{commit}")"
+          actual_commit="$(git rev-parse HEAD)"
+          [[ "$actual_commit" == "$expected_commit" ]] || { echo "ERROR: Checked out $actual_commit instead of $expected_commit." >&2; exit 1; }
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: "1.26.0"
+          cache: true
+
+      - name: Run unit and integration tests
         shell: bash
-        run: mkdir -p dist
-      - name: Build
+        run: go test ./...
+
+      - name: Run race detector
+        shell: bash
+        run: go test -race ./...
+
+      - name: Run performance budgets serially
+        shell: bash
+        env:
+          SKILLHUB_PERF: "1"
+        run: go test -p 1 -count=1 -run 'Performance' ./...
+
+      - name: Run static analysis
+        shell: bash
+        run: go vet ./...
+
+      - name: Run fault-injection and hardening tests
+        shell: bash
+        run: go test ./internal/... -run 'Fault|Hardening|DiskFull|ReadOnly|ConcurrentFrames' -count=1
+
+      - name: Check formatting
+        shell: bash
+        run: test -z "$(gofmt -l cmd internal schemas)"
+
+      - name: Test installer lifecycle
+        if: matrix.os != 'windows-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/install.sh
+          scripts/test-installer-lifecycle.sh
+
+
+      - name: Test Windows installer lifecycle
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: scripts/test-installer-windows.ps1
+      - name: Run bounded canonical fuzzing
+        shell: bash
+        run: go test ./internal/canonical -run '^$' -fuzz '^FuzzCanonicalParsersAndPaths$' -fuzztime=15s -timeout=3m
+
+      - name: Run bounded mutation fuzzing
+        shell: bash
+        run: go test ./internal/mutation -run '^$' -fuzz '^FuzzMutationPathConfinement$' -fuzztime=15s -timeout=3m
+
+      - name: Run bounded MCP server fuzzing
+        shell: bash
+        run: go test ./internal/delivery/mcpserver -run '^$' -fuzz '^FuzzMCPFrameAndInputHelpers$' -fuzztime=15s -timeout=3m
+
+  build:
+    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+    needs:
+      - prepare
+      - verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            extension: ""
+            archive: tar.gz
+          - goos: linux
+            goarch: arm64
+            extension: ""
+            archive: tar.gz
+          - goos: darwin
+            goarch: amd64
+            extension: ""
+            archive: tar.gz
+          - goos: darwin
+            goarch: arm64
+            extension: ""
+            archive: tar.gz
+          - goos: windows
+            goarch: amd64
+            extension: .exe
+            archive: zip
+          - goos: windows
+            goarch: arm64
+            extension: .exe
+            archive: zip
+    steps:
+      - name: Check out exact source revision
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: "1.26.0"
+          cache: true
+
+      - name: Install Syft
+        uses: anchore/sbom-action/download-syft@43a17d6e7add2b5535efe4dcae9952337c479a93 # v0.20.11
+
+      - name: Derive reproducible build metadata
+        id: metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "date=$(git show -s --format=%cI HEAD)" >> "$GITHUB_OUTPUT"
+          echo "source_date_epoch=$(git show -s --format=%ct HEAD)" >> "$GITHUB_OUTPUT"
+          if [[ -n "$(git status --porcelain --untracked-files=normal)" ]]; then
+            echo "dirty=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "dirty=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build CGO-free binary
+        shell: bash
         env:
           CGO_ENABLED: "0"
-          GOOS: ${{ matrix.target.goos }}
-          GOARCH: ${{ matrix.target.goarch }}
-          VERSION: ${{ inputs.version }}
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          COMMIT: ${{ steps.metadata.outputs.commit }}
+          BUILD_DATE: ${{ steps.metadata.outputs.date }}
+          DIRTY: ${{ steps.metadata.outputs.dirty }}
+          BINARY: skillhub${{ matrix.extension }}
         run: |
-          go build \
-            -ldflags "-X github.com/vantt/mcp-skill-hub/internal/version.Version=$VERSION" \
-            -o "dist/skillhub${{ matrix.target.goos == 'windows' && '.exe' || '' }}" \
+          set -euo pipefail
+          mkdir -p dist artifacts
+          go build -trimpath -buildvcs=false \
+            -ldflags "-s -w -X github.com/vantt/mcp-skill-hub/internal/version.Version=$VERSION -X github.com/vantt/mcp-skill-hub/internal/version.Commit=$COMMIT -X github.com/vantt/mcp-skill-hub/internal/version.Date=$BUILD_DATE -X github.com/vantt/mcp-skill-hub/internal/version.Dirty=$DIRTY" \
+            -o "dist/$BINARY" \
             ./cmd/skillhub
-      - name: Archive
+
+      - name: Create deterministic archive
         shell: bash
         env:
-          VERSION: ${{ inputs.version }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          SOURCE_DATE_EPOCH: ${{ steps.metadata.outputs.source_date_epoch }}
+          BINARY: skillhub${{ matrix.extension }}
+          ARCHIVE_FORMAT: ${{ matrix.archive }}
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
         run: |
-          mkdir -p artifacts
-          name="skillhub-${VERSION}-${{ matrix.target.goos }}-${{ matrix.target.goarch }}"
-          if [ "${{ matrix.target.archive }}" = "zip"; then
-            (cd dist && zip "../artifacts/${name}.zip" skillhub.exe)
-          else
-            tar -C dist -czf "artifacts/${name}.tar.gz" skillhub
-          fi
-      - name: Checksum
-        shell: bash
-        run: sha256sum artifacts/* > artifacts/checksums.txt
-      - name: Generate SBOM placeholder
-        shell: bash
-        run: printf '%s\n' 'SBOM generation will be configured before publishing releases.' > artifacts/SBOM-PLACEHOLDER.txt
-      - name: Signing placeholder
-        shell: bash
-        run: printf '%s\n' 'Artifact signing is intentionally not configured in this skeleton.' > artifacts/SIGNING-PLACEHOLDER.txt
-      - uses: actions/upload-artifact@v4
-        with:
-          name: skillhub-${{ matrix.target.goos }}-${{ matrix.target.goarch }}
-          path: artifacts/
+          set -euo pipefail
+          archive_base="skillhub-${VERSION}-${GOOS}-${GOARCH}"
+          if [[ "$ARCHIVE_FORMAT" == "zip" ]]; then
+            python3 - <<'PY'
+          import datetime
+          import os
+          import zipfile
 
-# This workflow intentionally packages artifacts only. It does not create a
-# GitHub release, upload assets, sign artifacts, or publish to a package registry.
+          binary = os.environ["BINARY"]
+          epoch = int(os.environ["SOURCE_DATE_EPOCH"])
+          archive = f'artifacts/skillhub-{os.environ["VERSION"]}-{os.environ["GOOS"]}-{os.environ["GOARCH"]}.zip'
+          timestamp = datetime.datetime.fromtimestamp(epoch, datetime.timezone.utc).timetuple()[:6]
+          info = zipfile.ZipInfo(binary, timestamp)
+          info.compress_type = zipfile.ZIP_DEFLATED
+          info.create_system = 3
+          info.external_attr = 0o100755 << 16
+          with zipfile.ZipFile(archive, "w", strict_timestamps=True) as output:
+              output.writestr(info, open(f"dist/{binary}", "rb").read(), compresslevel=9)
+          PY
+          else
+            tar --sort=name --format=posix --mtime="@${SOURCE_DATE_EPOCH}" \
+              --owner=0 --group=0 --numeric-owner \
+              --pax-option=delete=atime,delete=ctime \
+              -C dist -cf - "$BINARY" | gzip -n -9 > "artifacts/${archive_base}.tar.gz"
+          fi
+
+      - name: Generate SPDX SBOM
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          BINARY: skillhub${{ matrix.extension }}
+        run: |
+          set -euo pipefail
+          syft scan "file:dist/$BINARY" \
+            --output "spdx-json=artifacts/skillhub-${VERSION}-${GOOS}-${GOARCH}.spdx.json"
+
+      - name: Upload platform artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: skillhub-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 7
+
+  draft:
+    name: Package private draft assets
+    if: github.event_name == 'workflow_dispatch'
+    needs:
+      - prepare
+      - verify
+      - build
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Download platform artifacts
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          pattern: skillhub-*
+          path: draft
+          merge-multiple: true
+
+      - name: Mark and checksum draft package
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' \
+            'DRAFT ONLY - NOT A RELEASE OR INSTALLER DISTRIBUTION' \
+            "Version label: $VERSION" \
+            "Source commit: $SOURCE_SHA" \
+            'This unsigned private workflow artifact does not claim a Git tag or release identity.' \
+            > draft/DRAFT-ONLY-NOT-FOR-INSTALLATION.txt
+          (
+            cd draft
+            find . -maxdepth 1 -type f ! -name draft-checksums.txt -printf '%f\0' \
+              | LC_ALL=C sort -z \
+              | xargs -0 sha256sum > draft-checksums.txt
+            sha256sum --check --strict draft-checksums.txt
+          )
+
+      - name: Upload private draft package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: draft-only-skillhub-${{ needs.prepare.outputs.version }}-${{ github.sha }}
+          path: draft/
+          if-no-files-found: error
+          retention-days: 7
+
+  sign:
+    name: Sign and attest tag release assets
+    if: github.event_name == 'push'
+    needs:
+      - prepare
+      - verify
+      - build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Check out exact tagged source revision
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Download platform artifacts
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          pattern: skillhub-*
+          path: release
+          merge-multiple: true
+
+      - name: Add standalone verified installers
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          sed -e "s/^DEFAULT_VERSION='@SKILLHUB_VERSION@'/DEFAULT_VERSION='${VERSION}'/" scripts/install.sh > release/install.sh
+          chmod 0755 release/install.sh
+          sed -e "s/^\$DEFAULT_VERSION = '@SKILLHUB_VERSION@'/\$DEFAULT_VERSION = '${VERSION}'/" scripts/install.ps1 > release/install.ps1
+          chmod 0644 release/install.ps1
+          grep -Eq "^DEFAULT_VERSION='${VERSION}'\$" release/install.sh || { echo "ERROR: DEFAULT_VERSION not stamped in install.sh" >&2; exit 1; }
+          grep -Eq "^\$DEFAULT_VERSION = '${VERSION}'\$" release/install.ps1 || { echo "ERROR: DEFAULT_VERSION not stamped in install.ps1" >&2; exit 1; }
+
+      - name: Generate deterministic checksums
+        shell: bash
+        working-directory: release
+        run: |
+          set -euo pipefail
+          find . -maxdepth 1 -type f ! -name checksums.txt -printf '%f\0' \
+            | LC_ALL=C sort -z \
+            | xargs -0 sha256sum > checksums.txt
+          grep -Eq '^[0-9a-f]{64}  install\.sh$' checksums.txt || { echo "ERROR: Installer is missing from checksums.txt." >&2; exit 1; }
+          grep -Eq '^[0-9a-f]{64}  install\.ps1$' checksums.txt || { echo "ERROR: PowerShell installer is missing from checksums.txt." >&2; exit 1; }
+          sha256sum --check --strict checksums.txt
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
+
+      - name: Keylessly sign and attest artifacts
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          archives=(
+            "release/skillhub-${VERSION}-linux-amd64.tar.gz"
+            "release/skillhub-${VERSION}-linux-arm64.tar.gz"
+            "release/skillhub-${VERSION}-darwin-amd64.tar.gz"
+            "release/skillhub-${VERSION}-darwin-arm64.tar.gz"
+            "release/skillhub-${VERSION}-windows-amd64.zip"
+            "release/skillhub-${VERSION}-windows-arm64.zip"
+          )
+          sboms=(
+            "release/skillhub-${VERSION}-linux-amd64.spdx.json"
+            "release/skillhub-${VERSION}-linux-arm64.spdx.json"
+            "release/skillhub-${VERSION}-darwin-amd64.spdx.json"
+            "release/skillhub-${VERSION}-darwin-arm64.spdx.json"
+            "release/skillhub-${VERSION}-windows-amd64.spdx.json"
+            "release/skillhub-${VERSION}-windows-arm64.spdx.json"
+          )
+          platform_assets=(release/skillhub-*)
+          (( ${#platform_assets[@]} == 12 )) || { echo "ERROR: Expected exactly six archives and six SBOMs." >&2; exit 1; }
+          assets=("${archives[@]}" "${sboms[@]}" release/install.sh release/install.ps1 release/checksums.txt)
+          for asset in "${assets[@]}"; do
+            [[ -f "$asset" ]] || { echo "ERROR: Missing release asset $asset" >&2; exit 1; }
+            cosign sign-blob --yes --bundle "${asset}.sigstore.json" "$asset"
+          done
+          [[ -f release/install.sh.sigstore.json ]] || { echo "ERROR: Missing installer signature bundle." >&2; exit 1; }
+          [[ -f release/install.ps1.sigstore.json ]] || { echo "ERROR: Missing install.ps1 signature bundle." >&2; exit 1; }
+          [[ -f release/checksums.txt.sigstore.json ]] || { echo "ERROR: Missing checksum signature bundle." >&2; exit 1; }
+
+          for index in "${!archives[@]}"; do
+            cosign attest-blob --yes --type spdxjson --predicate "${sboms[$index]}" \
+              --bundle "${archives[$index]}.attestation.json" "${archives[$index]}"
+            [[ -f "${archives[$index]}.attestation.json" ]] || { echo "ERROR: Missing SBOM attestation for ${archives[$index]}" >&2; exit 1; }
+          done
+
+      - name: Verify checksums, signatures, and SBOM attestations
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          CERTIFICATE_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/release.yml@${{ github.ref }}
+          CERTIFICATE_ISSUER: https://token.actions.githubusercontent.com
+        run: |
+          set -euo pipefail
+          (cd release && sha256sum --check --strict checksums.txt)
+
+          archives=(
+            "release/skillhub-${VERSION}-linux-amd64.tar.gz"
+            "release/skillhub-${VERSION}-linux-arm64.tar.gz"
+            "release/skillhub-${VERSION}-darwin-amd64.tar.gz"
+            "release/skillhub-${VERSION}-darwin-arm64.tar.gz"
+            "release/skillhub-${VERSION}-windows-amd64.zip"
+            "release/skillhub-${VERSION}-windows-arm64.zip"
+          )
+          sboms=(
+            "release/skillhub-${VERSION}-linux-amd64.spdx.json"
+            "release/skillhub-${VERSION}-linux-arm64.spdx.json"
+            "release/skillhub-${VERSION}-darwin-amd64.spdx.json"
+            "release/skillhub-${VERSION}-darwin-arm64.spdx.json"
+            "release/skillhub-${VERSION}-windows-amd64.spdx.json"
+            "release/skillhub-${VERSION}-windows-arm64.spdx.json"
+          )
+          assets=("${archives[@]}" "${sboms[@]}" release/install.sh release/install.ps1 release/checksums.txt)
+          for asset in "${assets[@]}"; do
+            bundle="${asset}.sigstore.json"
+            [[ -f "$bundle" ]] || { echo "ERROR: Missing signature bundle for $asset" >&2; exit 1; }
+            cosign verify-blob \
+              --bundle "$bundle" \
+              --certificate-identity "$CERTIFICATE_IDENTITY" \
+              --certificate-oidc-issuer "$CERTIFICATE_ISSUER" \
+              "$asset"
+          done
+          [[ -f release/install.sh.sigstore.json ]] || { echo "ERROR: Missing installer signature bundle." >&2; exit 1; }
+          [[ -f release/install.ps1.sigstore.json ]] || { echo "ERROR: Missing install.ps1 signature bundle." >&2; exit 1; }
+          [[ -f release/checksums.txt.sigstore.json ]] || { echo "ERROR: Missing checksum signature bundle." >&2; exit 1; }
+
+          for archive in "${archives[@]}"; do
+            bundle="${archive}.attestation.json"
+            [[ -f "$bundle" ]] || { echo "ERROR: Missing SBOM attestation for $archive" >&2; exit 1; }
+            cosign verify-blob-attestation \
+              --bundle "$bundle" \
+              --type spdxjson \
+              --certificate-identity "$CERTIFICATE_IDENTITY" \
+              --certificate-oidc-issuer "$CERTIFICATE_ISSUER" \
+              "$archive"
+          done
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        with:
+          subject-path: |
+            release/*.tar.gz
+            release/*.zip
+            release/install.sh
+            release/install.ps1
+
+      - name: Verify GitHub provenance
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          archives=(
+            "release/skillhub-${VERSION}-linux-amd64.tar.gz"
+            "release/skillhub-${VERSION}-linux-arm64.tar.gz"
+            "release/skillhub-${VERSION}-darwin-amd64.tar.gz"
+            "release/skillhub-${VERSION}-darwin-arm64.tar.gz"
+            "release/skillhub-${VERSION}-windows-amd64.zip"
+            "release/skillhub-${VERSION}-windows-arm64.zip"
+          )
+          for item in "${archives[@]}" release/install.sh release/install.ps1; do
+            gh attestation verify "$item" --repo "$GH_REPO"
+          done
+
+      - name: Upload verified release assets
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-assets
+          path: release/
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish tag release
+    if: github.event_name == 'push'
+    needs:
+      - prepare
+      - verify
+      - sign
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      attestations: read
+    steps:
+      - name: Download verified release assets
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          name: release-assets
+          path: release
+
+      - name: Verify release assets before publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd release && sha256sum --check --strict checksums.txt)
+          grep -Eq '^[0-9a-f]{64}  install\.sh$' release/checksums.txt || { echo "ERROR: Installer is missing from checksums.txt." >&2; exit 1; }
+          grep -Eq '^[0-9a-f]{64}  install\.ps1$' release/checksums.txt || { echo "ERROR: PowerShell installer is missing from checksums.txt." >&2; exit 1; }
+
+      - name: Create release and upload assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          [[ -n "$TAG" ]] || { echo "ERROR: Tag publication requires a tag-push identity." >&2; exit 1; }
+          args=("$TAG" --repo "$GH_REPO" --generate-notes --title "$TAG" --verify-tag)
+          if [[ "$PRERELEASE" == "true" ]]; then
+            args+=(--prerelease)
+          fi
+          gh release create "${args[@]}" release/*
+
+  smoke:
+    name: Smoke test release installation (${{ matrix.os }})
+    needs:
+      - prepare
+      - publish
+    if: github.event_name == 'push'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Test literal one-liner install, PATH, upgrade, and uninstall (Linux & macOS)
+        if: matrix.os != 'windows-latest'
+        shell: bash
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          export GH_REPO
+
+          # 1. Upgrade smoke: if a previous stable release exists, test upgrading from it
+          prev_tag="$(gh release list --repo "$GH_REPO" --exclude-drafts --exclude-pre-releases --limit 10 --json tagName -q '.[].tagName' | grep -v "^${TAG}$" | head -n 1 || true)"
+          if [[ -n "$prev_tag" ]]; then
+            echo "Found previous release $prev_tag; verifying upgrade flow..."
+            curl -fsSL "https://github.com/${GH_REPO}/releases/download/${prev_tag}/install.sh" | bash
+            installed_prev="$(bash -l -c 'skillhub version' 2>/dev/null || true)"
+            echo "Installed previous version: $installed_prev"
+          else
+            echo "No previous stable release found; skipping pre-upgrade step."
+          fi
+
+          # 2. Run literal one-liner against the new release
+          echo "Installing skillhub $TAG via literal one-liner..."
+          curl -fsSL "https://github.com/${GH_REPO}/releases/download/${TAG}/install.sh" | bash
+
+          # 3. Verify skillhub version in a new shell/subshell (PATH verification)
+          echo "Verifying skillhub version in a new login shell..."
+          installed_version="$(bash -l -c 'skillhub version')"
+          echo "Installed version: $installed_version"
+          [[ "$installed_version" =~ $VERSION ]] || {
+            echo "ERROR: Expected version $VERSION in output: $installed_version" >&2
+            exit 1
+          }
+
+          # 4. Run uninstall via SKILLHUB_UNINSTALL=1
+          echo "Running uninstall..."
+          curl -fsSL "https://github.com/${GH_REPO}/releases/download/${TAG}/install.sh" | SKILLHUB_UNINSTALL=1 bash
+
+          # Verify binary removed
+          if bash -l -c 'command -v skillhub' 2>/dev/null; then
+            echo "ERROR: skillhub binary is still present after uninstall" >&2
+            exit 1
+          fi
+          echo "Smoke test passed on ${{ matrix.os }}!"
+
+      - name: Test literal one-liner install, PATH, upgrade, and uninstall (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = $env:TAG
+          $version = $env:VERSION
+          $repo = $env:GH_REPO
+
+          # 1. Upgrade smoke: if a previous stable release exists, test upgrading from it
+          $prevTag = (gh release list --repo $repo --exclude-drafts --exclude-pre-releases --limit 10 --json tagName -q '.[].tagName' | Where-Object { $_ -ne $tag } | Select-Object -First 1)
+          if ($prevTag) {
+              Write-Host "Found previous release $prevTag; verifying upgrade flow..."
+              irm "https://github.com/$repo/releases/download/$prevTag/install.ps1" | iex
+              $prevOut = powershell -ExecutionPolicy Bypass -Command "skillhub version"
+              Write-Host "Installed previous version: $prevOut"
+          } else {
+              Write-Host "No previous stable release found; skipping pre-upgrade step."
+          }
+
+          # 2. Run literal one-liner against the new release
+          Write-Host "Installing skillhub $tag via literal one-liner..."
+          irm "https://github.com/$repo/releases/download/$tag/install.ps1" | iex
+
+          # 3. Verify skillhub version in a fresh shell (PATH verification)
+          Write-Host "Verifying skillhub version in fresh shell..."
+          $out = powershell -ExecutionPolicy Bypass -Command "skillhub version"
+          Write-Host "Installed version: $out"
+          if ($out -notmatch [regex]::Escape($version)) {
+              throw "ERROR: Expected version $version in output: $out"
+          }
+
+          # 4. Run uninstall via SKILLHUB_UNINSTALL=1
+          Write-Host "Running uninstall..."
+          $env:SKILLHUB_UNINSTALL = '1'
+          irm "https://github.com/$repo/releases/download/$tag/install.ps1" | iex
+
+          # Verify binary removed
+          $cmd = powershell -ExecutionPolicy Bypass -Command "Get-Command skillhub -ErrorAction SilentlyContinue"
+          if ($cmd) {
+              throw "ERROR: skillhub binary is still present after uninstall"
+          }
+          Write-Host "Windows smoke test passed!"

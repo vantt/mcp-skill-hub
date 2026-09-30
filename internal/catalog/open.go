@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/vantt/mcp-skill-hub/internal/canonical"
@@ -24,6 +26,32 @@ func Inspect(ctx context.Context, root string) (Status, error) {
 	}
 	defer lock.Unlock()
 	return InspectWhileLocked(ctx, root)
+}
+
+// EnsureFreshOrRebuild inspects catalog freshness. If the catalog is stale
+// and canonical files pass validation, it automatically rebuilds the generation.
+// If canonical validation fails, it returns a clear error describing the issue.
+func EnsureFreshOrRebuild(ctx context.Context, root string) error {
+	status, err := Inspect(ctx, root)
+	if err != nil {
+		return err
+	}
+	if status.State == StateHealthy {
+		return nil
+	}
+	if status.State != StateStale {
+		return catalogUnavailableError{state: status.State, detail: status.Detail}
+	}
+	// Check canonical validation before rebuilding
+	issues, err := canonical.Validate(root)
+	if err != nil {
+		return err
+	}
+	if len(issues) > 0 {
+		return fmt.Errorf("search index is stale: canonical validation failed: %s: %s (run `skillhub validate` to inspect)", issues[0].Path, issues[0].Message)
+	}
+	_, err = BuildCatalogGeneration(ctx, root, BuildOptions{})
+	return err
 }
 
 // InspectPublished reports pointer and generation health without reading canonical
@@ -74,6 +102,54 @@ func InspectWhileLocked(ctx context.Context, root string) (Status, error) {
 	return Status{State: StateHealthy, Pointer: &pointer}, nil
 }
 
+// ErrSnapshotUnavailable reports that no retained, valid immutable generation
+// exactly matches the requested catalog snapshot.
+var ErrSnapshotUnavailable = errors.New("catalog_snapshot_unavailable")
+
+// OpenSnapshot opens an exact retained catalog snapshot. Candidates are ordered
+// by generation ID so equivalent generations are selected deterministically.
+// It never substitutes the current or newest generation for the requested one.
+func OpenSnapshot(ctx context.Context, root, catalogSnapshot string) (*Handle, error) {
+	if catalogSnapshot == "" {
+		return nil, fmt.Errorf("%w: catalog snapshot is required", ErrSnapshotUnavailable)
+	}
+	lock, err := mutation.AcquireSharedLock(ctx, root, mutation.DefaultLockTimeout)
+	if err != nil {
+		return nil, err
+	}
+	defer lock.Unlock()
+	pointer, err := findSnapshotGeneration(ctx, root, catalogSnapshot)
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, ctxErr
+		}
+		return nil, fmt.Errorf("%w: %v", ErrSnapshotUnavailable, err)
+	}
+	handle, err := openPinnedGeneration(ctx, root, pointer)
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, ctxErr
+		}
+		return nil, fmt.Errorf("%w: could not pin and open exact generation: %v", ErrSnapshotUnavailable, err)
+	}
+	return handle, nil
+}
+
+// ErrCatalogUnavailable reports that the current catalog is missing, stale,
+// corrupt, or incompatible and must be rebuilt before it can be served.
+var ErrCatalogUnavailable = errors.New("catalog_unavailable")
+
+type catalogUnavailableError struct {
+	state  State
+	detail string
+}
+
+func (err catalogUnavailableError) Error() string {
+	return fmt.Sprintf("catalog is %s: %s", err.state, err.detail)
+}
+
+func (err catalogUnavailableError) Is(target error) bool { return target == ErrCatalogUnavailable }
+
 // OpenCurrent pins and opens the current immutable generation read-only.
 func OpenCurrent(ctx context.Context, root string) (*Handle, error) {
 	lock, err := mutation.AcquireSharedLock(ctx, root, mutation.DefaultLockTimeout)
@@ -81,14 +157,38 @@ func OpenCurrent(ctx context.Context, root string) (*Handle, error) {
 		return nil, err
 	}
 	defer lock.Unlock()
+	return openCurrentWhileLocked(ctx, root)
+}
+
+// OpenCurrentLocked pins the current generation like OpenCurrent but keeps the
+// shared workspace lock until Close. Callers that read canonical files described
+// by the generation use it so no mutation can commit between the open and the read.
+func OpenCurrentLocked(ctx context.Context, root string) (*Handle, error) {
+	lock, err := mutation.AcquireSharedLock(ctx, root, mutation.DefaultLockTimeout)
+	if err != nil {
+		return nil, err
+	}
+	handle, err := openCurrentWhileLocked(ctx, root)
+	if err != nil {
+		_ = lock.Unlock()
+		return nil, err
+	}
+	handle.release = lock.Unlock
+	return handle, nil
+}
+
+func openCurrentWhileLocked(ctx context.Context, root string) (*Handle, error) {
 	status, err := InspectWhileLocked(ctx, root)
 	if err != nil {
 		return nil, err
 	}
 	if status.State != StateHealthy || status.Pointer == nil {
-		return nil, fmt.Errorf("catalog is %s: %s", status.State, status.Detail)
+		return nil, catalogUnavailableError{state: status.State, detail: status.Detail}
 	}
-	pointer := *status.Pointer
+	return openPinnedGeneration(ctx, root, *status.Pointer)
+}
+
+func openPinnedGeneration(ctx context.Context, root string, pointer Pointer) (*Handle, error) {
 	pinDirectory := filepath.Join(root, "runtime", "catalog", "pins", pointer.Generation)
 	if err := ensureRuntimeDirectory(root, filepath.ToSlash(filepath.Join("runtime", "catalog", "pins", pointer.Generation))); err != nil {
 		return nil, err
@@ -111,25 +211,123 @@ func OpenCurrent(ctx context.Context, root string) (*Handle, error) {
 	}
 	if marshalErr != nil {
 		_ = pin.Close()
-		_ = os.Remove(pinPath)
+		removePin(pinPath)
 		return nil, marshalErr
 	}
 	if err := pin.Close(); err != nil {
-		_ = os.Remove(pinPath)
+		removePin(pinPath)
 		return nil, err
 	}
 	database, err := sql.Open("sqlite", sqliteDSN(generationPath(root, pointer), true))
 	if err != nil {
-		_ = os.Remove(pinPath)
+		removePin(pinPath)
 		return nil, err
 	}
 	database.SetMaxOpenConns(1)
 	if err := database.PingContext(ctx); err != nil {
-		database.Close()
-		_ = os.Remove(pinPath)
+		_ = database.Close()
+		removePin(pinPath)
 		return nil, err
 	}
 	return &Handle{DB: database, Pointer: pointer, pinPath: pinPath}, nil
+}
+
+func removePin(path string) {
+	_ = os.Remove(path)
+}
+
+func findSnapshotGeneration(ctx context.Context, root, catalogSnapshot string) (Pointer, error) {
+	rootHandle, err := os.OpenRoot(root)
+	if err != nil {
+		return Pointer{}, err
+	}
+	defer rootHandle.Close()
+	for _, relative := range []string{"runtime", "runtime/catalog", "runtime/catalog/generations"} {
+		info, err := rootHandle.Lstat(relative)
+		if err != nil {
+			return Pointer{}, err
+		}
+		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+			return Pointer{}, fmt.Errorf("unsafe catalog runtime directory: %s", relative)
+		}
+	}
+	directory, err := rootHandle.Open("runtime/catalog/generations")
+	if err != nil {
+		return Pointer{}, err
+	}
+	entries, readErr := directory.Readdir(-1)
+	closeErr := directory.Close()
+	if readErr != nil {
+		return Pointer{}, readErr
+	}
+	if closeErr != nil {
+		return Pointer{}, closeErr
+	}
+	names := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if strings.HasSuffix(entry.Name(), ".db") {
+			names = append(names, entry.Name())
+		}
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if err := waitForContext(ctx); err != nil {
+			return Pointer{}, err
+		}
+		generation := strings.TrimSuffix(name, ".db")
+		if !validGenerationID(generation) {
+			continue
+		}
+		relative := "runtime/catalog/generations/" + name
+		info, err := rootHandle.Lstat(relative)
+		if err != nil {
+			return Pointer{}, err
+		}
+		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+			return Pointer{}, fmt.Errorf("unsafe catalog generation: %s", name)
+		}
+		pointer, err := readGenerationMetadata(ctx, root, generation)
+		if err != nil {
+			continue
+		}
+		if pointer.CatalogSnapshot == catalogSnapshot {
+			return pointer, nil
+		}
+	}
+	return Pointer{}, errors.New("exact catalog snapshot is not retained or valid")
+}
+
+func readGenerationMetadata(ctx context.Context, root, generation string) (Pointer, error) {
+	pointer := Pointer{Generation: generation, Database: "generations/" + generation + ".db"}
+	database, err := sql.Open("sqlite", sqliteDSN(generationPath(root, pointer), true))
+	if err != nil {
+		return Pointer{}, err
+	}
+	database.SetMaxOpenConns(1)
+	var integrity string
+	err = database.QueryRowContext(ctx, `PRAGMA quick_check`).Scan(&integrity)
+	if err == nil && integrity != "ok" {
+		err = fmt.Errorf("generation quick check returned %q", integrity)
+	}
+	if err == nil {
+		err = database.QueryRowContext(ctx, `SELECT canonical_schema_version,derived_schema_version,builder_version,catalog_snapshot,projection_input_digest FROM generation_metadata WHERE singleton=1`).Scan(
+			&pointer.CanonicalSchemaVersion,
+			&pointer.DerivedSchemaVersion,
+			&pointer.BuilderVersion,
+			&pointer.CatalogSnapshot,
+			&pointer.ProjectionInputDigest,
+		)
+	}
+	if closeErr := database.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		return Pointer{}, err
+	}
+	if pointer.CanonicalSchemaVersion <= 0 || pointer.DerivedSchemaVersion != DerivedSchemaVersion || pointer.BuilderVersion == "" || pointer.CatalogSnapshot == "" || pointer.ProjectionInputDigest == "" {
+		return Pointer{}, errors.New("generation metadata is invalid or incompatible")
+	}
+	return pointer, nil
 }
 
 func verifyPointerDatabase(ctx context.Context, root string, pointer Pointer) error {

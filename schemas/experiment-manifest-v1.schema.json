@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillhub.local/schemas/experiment-manifest-v1.schema.json",
+  "title": "Experiment manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "experiment_id", "catalog_snapshot", "policy_revision",
+    "protocol_schema", "normalization_version", "index_version",
+    "fact_provider_fixture", "fact_provider_version", "seed", "binary", "variant"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "experiment_id": {"$ref": "#/$defs/nonEmptyString"},
+    "case_digest": {"$ref": "#/$defs/digest"},
+    "suite_digest": {"$ref": "#/$defs/digest"},
+    "catalog_snapshot": {"$ref": "#/$defs/digest"},
+    "policy_revision": {"$ref": "#/$defs/digest"},
+    "protocol_schema": {"$ref": "#/$defs/nonEmptyString"},
+    "normalization_version": {"$ref": "#/$defs/nonEmptyString"},
+    "index_version": {"$ref": "#/$defs/nonEmptyString"},
+    "fact_provider_fixture": {"$ref": "#/$defs/nonEmptyString"},
+    "fact_provider_version": {"$ref": "#/$defs/nonEmptyString"},
+    "seed": {"type": "integer", "minimum": -9223372036854775808, "maximum": 9223372036854775807},
+    "binary": {"$ref": "#/$defs/binary"},
+    "model": {"$ref": "#/$defs/model"},
+    "variant": {"$ref": "#/$defs/nonEmptyString"}
+  },
+  "anyOf": [{"required": ["case_digest"]}, {"required": ["suite_digest"]}],
+  "$defs": {
+    "nonEmptyString": {"type": "string", "minLength": 1},
+    "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "binary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "commit"],
+      "properties": {
+        "version": {"$ref": "#/$defs/nonEmptyString"},
+        "commit": {"$ref": "#/$defs/nonEmptyString"},
+        "digest": {"type": "string"}
+      }
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "model", "configuration"],
+      "properties": {
+        "provider": {"$ref": "#/$defs/nonEmptyString"},
+        "model": {"$ref": "#/$defs/nonEmptyString"},
+        "configuration": {"$ref": "#/$defs/nonEmptyString"}
+      }
+    }
+  }
+}

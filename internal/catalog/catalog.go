@@ -35,7 +35,7 @@ const (
 
 const (
 	// DerivedSchemaVersion changes whenever the disposable SQLite schema changes.
-	DerivedSchemaVersion  = 1
+	DerivedSchemaVersion  = 2
 	defaultBuilderVersion = "dev"
 )
 
@@ -128,6 +128,7 @@ type Handle struct {
 	DB      *sql.DB
 	Pointer Pointer
 	pinPath string
+	release func() error
 }
 
 // Close releases the database and then its GC pin.
@@ -143,7 +144,12 @@ func (handle *Handle) Close() error {
 		if err := os.Remove(handle.pinPath); err != nil && !os.IsNotExist(err) && closeErr == nil {
 			closeErr = err
 		}
-		_ = os.Remove(filepath.Dir(handle.pinPath))
+	}
+	if handle.release != nil {
+		if err := handle.release(); err != nil && closeErr == nil {
+			closeErr = err
+		}
+		handle.release = nil
 	}
 	return closeErr
 }
@@ -273,5 +279,22 @@ func CollectGarbage(root string, minimumAge time.Duration) (resultErr error) {
 			return err
 		}
 	}
+	pruneEmptyPinDirectories(filepath.Join(root, "runtime", "catalog", "pins"))
 	return nil
+}
+
+// pruneEmptyPinDirectories removes pin directories that hold no pins. Readers
+// never remove them because opens only hold a shared lock; the caller must hold
+// the exclusive lock so no reader is between creating the directory and its pin.
+func pruneEmptyPinDirectories(pinsDir string) {
+	entries, err := os.ReadDir(pinsDir)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			// os.Remove fails on non-empty directories, which is the intent.
+			_ = os.Remove(filepath.Join(pinsDir, entry.Name()))
+		}
+	}
 }

@@ -639,12 +639,17 @@ Distillation semantic work is primarily Agent-executed. CLI `run` commands inspe
 | Start distillation | `curation_run_start` | `PrepareDistillRuns` |
 | Submit findings | `curation_run_submit` | `SubmitDistillRun` |
 | Retry/cancel run | `curation_run_retry/cancel` | `RetryDistillRun` / `CancelDistillRun` |
+| Import skills from source | `source_import_preview/confirm` | `PreviewSourceImport` / `ConfirmSkillMutation` |
 | List review work | `inbox_list` | `GetInsightInbox` |
 | Inspect insight/evidence | `insight_get` | `GetInsightDetail` |
 | Decide insight | `insight_decide` | `DecideInsight` |
 | Preview apply | `insight_apply_preview` | `PreviewInsightApplication` |
 | Confirm apply | `insight_apply_confirm` | `ConfirmInsightApplication` |
-| Edit skill | `skill_update_preview/confirm` | `PreviewSkillUpdate` / `ConfirmSkillUpdate` |
+| Create draft skill | `skill_create_preview/confirm` | `PreviewCreate` / `ConfirmSkillMutation` |
+| Edit skill | `skill_update_preview/confirm` | `PreviewSkillUpdate` / `ConfirmSkillMutation` |
+| Transition skill state | `skill_transition_preview/confirm` | `PreviewTransition` / `ConfirmSkillMutation` |
+| List skills | `skill_list` | `ListSkills` |
+| Get skill | `skill_get` | `ReadSkill` |
 | Routing impact | `routing_evaluate` | `EvaluateRoutingChange` |
 | Validate | `workspace_validate` | `ValidateWorkspace` |
 | Rebuild derived DB | `workspace_rebuild` | `BuildCatalogGeneration` |

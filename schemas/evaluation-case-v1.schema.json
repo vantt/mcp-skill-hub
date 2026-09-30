@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillhub.local/schemas/evaluation-case-v1.schema.json",
+  "title": "Evaluation case v1",
+  "$ref": "#/$defs/case",
+  "$defs": {
+    "status": {"enum": ["resolved", "no_skill", "needs_context", "already_covered"]},
+    "partition": {"enum": ["development", "calibration", "held_out"]},
+    "nonEmptyString": {"type": "string", "minLength": 1, "maxLength": 4096},
+    "boundedString": {"type": "string", "maxLength": 4096},
+    "stringArray": {"type": "array", "maxItems": 256, "uniqueItems": true, "items": {"$ref": "#/$defs/boundedString"}},
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "id", "request", "expected"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "id": {"$ref": "#/$defs/nonEmptyString"},
+        "partition": {"$ref": "#/$defs/partition"},
+        "split": {"$ref": "#/$defs/partition"},
+        "tags": {"type": "array", "maxItems": 32, "uniqueItems": true, "items": {"$ref": "#/$defs/boundedString"}},
+        "request": {"$ref": "#/$defs/request"},
+        "expected": {"$ref": "#/$defs/expected"},
+        "counters": {"$ref": "#/$defs/counters"},
+        "exclude": {"$ref": "#/$defs/boundedString"},
+        "provenance": {"$ref": "#/$defs/provenance"}
+      },
+      "anyOf": [{"required": ["partition"]}, {"required": ["split"]}]
+    },
+    "expected": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "status": {"$ref": "#/$defs/status"},
+        "acceptable_statuses": {"type": "array", "minItems": 1, "maxItems": 256, "uniqueItems": true, "items": {"$ref": "#/$defs/status"}},
+        "acceptable_primary": {"type": "array", "maxItems": 256, "uniqueItems": true, "items": {"$ref": "#/$defs/nonEmptyString"}},
+        "unacceptable_primary": {"type": "array", "maxItems": 256, "uniqueItems": true, "items": {"$ref": "#/$defs/nonEmptyString"}},
+        "no_skill": {"type": "boolean"},
+        "question": {"$ref": "#/$defs/question"},
+        "branches": {"type": "object", "maxProperties": 128, "propertyNames": {"minLength": 1, "maxLength": 4096}, "additionalProperties": {"$ref": "#/$defs/branch"}},
+        "supporting": {"type": "array", "maxItems": 256, "uniqueItems": true, "items": {"$ref": "#/$defs/nonEmptyString"}},
+        "rationale": {"$ref": "#/$defs/boundedString"}
+      },
+      "oneOf": [{"required": ["acceptable_statuses"]}, {"required": ["status"]}],
+      "allOf": [
+        {"if": {"anyOf": [{"properties": {"status": {"const": "resolved"}}, "required": ["status"]}, {"properties": {"acceptable_statuses": {"contains": {"const": "resolved"}}}, "required": ["acceptable_statuses"]}]}, "then": {"required": ["acceptable_primary"], "properties": {"acceptable_primary": {"minItems": 1}}}},
+        {"if": {"anyOf": [{"properties": {"status": {"const": "needs_context"}}, "required": ["status"]}, {"properties": {"acceptable_statuses": {"contains": {"const": "needs_context"}}}, "required": ["acceptable_statuses"]}]}, "then": {"required": ["question"]}},
+        {"if": {"properties": {"no_skill": {"const": true}}, "required": ["no_skill"]}, "then": {"anyOf": [{"properties": {"status": {"const": "no_skill"}}, "required": ["status"]}, {"properties": {"acceptable_statuses": {"contains": {"const": "no_skill"}}}, "required": ["acceptable_statuses"]}]}}
+      ]
+    },
+    "question": {"type": "object", "additionalProperties": false, "required": ["field"], "properties": {"id": {"$ref": "#/$defs/boundedString"}, "field": {"$ref": "#/$defs/nonEmptyString"}}},
+    "branch": {
+      "type": "object", "additionalProperties": false, "required": ["acceptable_statuses"],
+      "properties": {
+        "acceptable_statuses": {"type": "array", "minItems": 1, "maxItems": 256, "uniqueItems": true, "items": {"$ref": "#/$defs/status"}},
+        "acceptable_primary": {"type": "array", "maxItems": 256, "uniqueItems": true, "items": {"$ref": "#/$defs/nonEmptyString"}},
+        "no_skill": {"type": "boolean"}
+      },
+      "allOf": [
+        {"if": {"properties": {"acceptable_statuses": {"contains": {"const": "resolved"}}}}, "then": {"required": ["acceptable_primary"], "properties": {"acceptable_primary": {"minItems": 1}}}},
+        {"if": {"properties": {"no_skill": {"const": true}}, "required": ["no_skill"]}, "then": {"properties": {"acceptable_statuses": {"contains": {"const": "no_skill"}}}}}
+      ]
+    },
+    "counters": {
+      "type": "object",
+      "maxProperties": 128,
+      "propertyNames": {"enum": [
+        "curation.turns_to_next_action", "curation.unnecessary_confirmations", "curation.prompts_per_batch", "curation.partial_failure_completions", "curation.auto_finalized", "curation.blocking_decision", "curation.default_status_no_network", "curation.default_response_bytes", "curation.raw_evidence_disclosures", "curation.insight_review_turns", "curation.stale_proposal_rejections", "curation.recovery_completed", "curation.recovery_abandoned", "curation.routine_git_noise", "curation.mutations_reporting_state", "curation.abandoned",
+        "distillation.completed", "distillation.failed", "distillation.retried", "distillation.changed_resources_analyzed", "distillation.changed_resources_deferred", "distillation.changed_resources_unreadable", "distillation.coverage_gaps", "distillation.silent_omissions", "distillation.observations_created", "distillation.observations_updated", "distillation.observations_tombstoned", "distillation.evidence_locator_failures", "distillation.stale_syntheses", "distillation.cursor_atomicity_violations",
+        "invocation.substantive_resolver_called", "invocation.trivial_resolver_called", "invocation.correct_reuse", "invocation.operation_change_reconsulted", "invocation.duplicate_activations", "invocation.missed_useful_skill"
+      ]},
+      "additionalProperties": {"type": "number", "minimum": 0}
+    },
+    "provenance": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "source": {"$ref": "#/$defs/boundedString"}, "reviewed_by": {"$ref": "#/$defs/stringArray"},
+        "reviewed_at": {"$ref": "#/$defs/boundedString"}, "intent_template_group": {"$ref": "#/$defs/boundedString"}
+      }
+    },
+    "request": {
+      "type": "object", "additionalProperties": false, "required": ["schema_version", "request_id", "task"],
+      "properties": {
+        "schema_version": {"const": "1"}, "request_id": {"$ref": "#/$defs/nonEmptyString"},
+        "task": {"$ref": "#/$defs/task"}, "operation": {"$ref": "#/$defs/boundedString"}, "context": {"$ref": "#/$defs/context"},
+        "activation_context": {"$ref": "#/$defs/activationContext"}, "prior": {"$ref": "#/$defs/prior"}
+      }
+    },
+    "task": {
+      "type": "object", "additionalProperties": false, "required": ["description"],
+      "properties": {
+        "description": {"$ref": "#/$defs/nonEmptyString"},
+        "constraints": {"$ref": "#/$defs/stringArray"},
+        "exclusions": {"type": "object", "additionalProperties": false, "properties": {"skill_ids": {"$ref": "#/$defs/stringArray"}, "terms": {"$ref": "#/$defs/stringArray"}}},
+        "scope": {"$ref": "#/$defs/boundedString"}
+      }
+    },
+    "context": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "active_artifact": {"type": "object", "additionalProperties": false, "properties": {"kind": {"$ref": "#/$defs/boundedString"}, "path_hint": {"$ref": "#/$defs/boundedString"}, "language": {"$ref": "#/$defs/boundedString"}}},
+        "facts": {"type": "array", "maxItems": 256, "items": {"$ref": "#/$defs/fact"}},
+        "execution": {"$ref": "#/$defs/execution"}
+      }
+    },
+    "fact": {"type": "object", "additionalProperties": false, "required": ["key", "value", "basis"], "properties": {"key": {"$ref": "#/$defs/boundedString"}, "value": {"$ref": "#/$defs/boundedString"}, "basis": {"$ref": "#/$defs/boundedString"}, "scope": {"$ref": "#/$defs/boundedString"}, "observed_at": {"$ref": "#/$defs/boundedString"}}},
+    "execution": {"type": "object", "additionalProperties": false, "properties": {"signal": {"type": "object", "additionalProperties": false, "required": ["kind", "summary"], "properties": {"kind": {"$ref": "#/$defs/boundedString"}, "summary": {"$ref": "#/$defs/boundedString"}}}, "capabilities": {"$ref": "#/$defs/stringArray"}, "unavailable_capabilities": {"$ref": "#/$defs/stringArray"}}},
+    "activationContext": {"type": "object", "additionalProperties": false, "required": ["mode"], "properties": {"mode": {"$ref": "#/$defs/boundedString"}, "active_procedures": {"type": "array", "maxItems": 256, "items": {"$ref": "#/$defs/activeProcedure"}}}},
+    "activeProcedure": {"type": "object", "additionalProperties": false, "required": ["id", "role", "scope", "state_basis", "replaceable"], "properties": {"id": {"$ref": "#/$defs/boundedString"}, "role": {"$ref": "#/$defs/boundedString"}, "scope": {"$ref": "#/$defs/boundedString"}, "summary": {"$ref": "#/$defs/boundedString"}, "state_basis": {"$ref": "#/$defs/boundedString"}, "replaceable": {"type": "boolean"}, "locked_by": {"$ref": "#/$defs/boundedString"}, "identity": {"type": "object", "additionalProperties": false, "properties": {"digest": {"$ref": "#/$defs/boundedString"}, "origin": {"$ref": "#/$defs/boundedString"}}}}},
+    "prior": {"type": "object", "additionalProperties": false, "required": ["resolution_id", "context_revision", "kind"], "properties": {"resolution_id": {"$ref": "#/$defs/boundedString"}, "context_revision": {"type": "integer"}, "kind": {"$ref": "#/$defs/boundedString"}, "question_id": {"$ref": "#/$defs/boundedString"}, "answer": {"$ref": "#/$defs/boundedString"}, "basis": {"$ref": "#/$defs/boundedString"}, "reason_code": {"$ref": "#/$defs/boundedString"}}}
+  }
+}

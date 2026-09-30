@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -31,14 +32,48 @@ func TestProposalArtifactRoundTripIsRestrictiveAndExpires(t *testing.T) {
 		t.Fatalf("artifact mode = %v, %v", info, err)
 	}
 	loaded, err := LoadProposal(root, proposal.ID, now.Add(time.Hour))
-	if err != nil || string(loaded.planned.WriteSet.Changes[0].Contents) != "# exact contents\n" {
-		t.Fatalf("loaded = %#v, %v", loaded, err)
+	wantContent := "---\nname: roundtrip\ndescription: Roundtrip proposal.\n---\n\n# exact contents\n"
+	if err != nil || string(loaded.planned.WriteSet.Changes[0].Contents) != wantContent {
+		t.Fatalf("loaded content = %q, want %q; err=%v", loaded.planned.WriteSet.Changes[0].Contents, wantContent, err)
 	}
 	if _, err := LoadProposal(root, proposal.ID, now.Add(proposalLifetime)); err == nil {
 		t.Fatal("expired proposal was accepted")
 	}
 	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("expired artifact was not cleaned up: %v", err)
+	}
+}
+
+func TestCreateGeneratesAndEditPreservesSkillFrontmatter(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "workspace")
+	if _, err := workspace.Apply(root); err != nil {
+		t.Fatal(err)
+	}
+	manager := Manager{}
+	created, err := manager.PreviewCreate(t.Context(), root, CreateInput{
+		ID: "frontmatter", Collection: "software", Name: "Frontmatter", Description: "Valid distributed instructions.",
+		Content: []byte("# Instructions\n\nOriginal body.\n"),
+		Routing: RoutingInput{Triggers: []string{"use frontmatter"}, NotFor: []string{"other"}, MinScope: "single_step"},
+	}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.Confirm(t.Context(), root, created); err != nil {
+		t.Fatal(err)
+	}
+	updated, err := manager.PreviewUpdate(t.Context(), root, "frontmatter", UpdateInput{SetContent: true, Content: []byte("# Instructions\n\nUpdated body.\n")}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var entrypoint []byte
+	for _, change := range updated.planned.WriteSet.Changes {
+		if filepath.Base(change.Path) == "SKILL.md" {
+			entrypoint = change.Contents
+		}
+	}
+	wantPrefix := "---\nname: frontmatter\ndescription: Valid distributed instructions.\n---\n\n"
+	if !strings.HasPrefix(string(entrypoint), wantPrefix) || !strings.Contains(string(entrypoint), "Updated body.") {
+		t.Fatalf("edited content did not preserve frontmatter: %q", entrypoint)
 	}
 }
 
@@ -84,5 +119,58 @@ func TestEditableContentRejectsSymlink(t *testing.T) {
 	}
 	if _, err := ReadEditableContent(root, "unsafe-read"); err == nil {
 		t.Fatal("editable read followed a symlink")
+	}
+}
+
+func TestEditKeepsSkillFrontmatterDescriptionInSyncWithMetadata(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "workspace")
+	if _, err := workspace.Apply(root); err != nil {
+		t.Fatal(err)
+	}
+	manager := Manager{}
+	created, err := manager.PreviewCreate(t.Context(), root, CreateInput{
+		ID: "in-sync", Collection: "software", Name: "In Sync", Description: "Original description.",
+		Content: []byte("# Instructions\n\nBody.\n"),
+		Routing: RoutingInput{Triggers: []string{"use in sync"}, NotFor: []string{"other"}, MinScope: "single_step"},
+	}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.Confirm(t.Context(), root, created); err != nil {
+		t.Fatal(err)
+	}
+	entrypoint := func(proposal Proposal) string {
+		for _, change := range proposal.planned.WriteSet.Changes {
+			if filepath.Base(change.Path) == "SKILL.md" {
+				return string(change.Contents)
+			}
+		}
+		return ""
+	}
+
+	description := "Updated description."
+	body, err := manager.PreviewUpdate(t.Context(), root, "in-sync", UpdateInput{Description: &description, SetContent: true, Content: []byte("# Instructions\n\nNew body.\n")}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := entrypoint(body); !strings.Contains(got, "description: Updated description.") || !strings.Contains(got, "name: in-sync") || !strings.Contains(got, "New body.") {
+		t.Fatalf("reused header kept a stale description: %q", got)
+	}
+
+	only, err := manager.PreviewUpdate(t.Context(), root, "in-sync", UpdateInput{Description: &description}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := entrypoint(only); !strings.Contains(got, "description: Updated description.") || !strings.Contains(got, "Body.") {
+		t.Fatalf("description-only edit did not update SKILL.md: %q", got)
+	}
+
+	name := "Renamed"
+	nameOnly, err := manager.PreviewUpdate(t.Context(), root, "in-sync", UpdateInput{Name: &name}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := entrypoint(nameOnly); got != "" {
+		t.Fatalf("name-only edit rewrote SKILL.md: %q", got)
 	}
 }

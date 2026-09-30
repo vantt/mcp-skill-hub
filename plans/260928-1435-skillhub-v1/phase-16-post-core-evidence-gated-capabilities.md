@@ -1,6 +1,6 @@
 ---
 title: "Phase 16 — Post-core capabilities, evidence-gated"
-status: todo
+status: done
 ---
 
 # Phase 16 — Post-core capabilities, evidence-gated
@@ -77,6 +77,17 @@ Add phase-specific commands from the roadmap section above when implementation r
 - Implementing this phase before its prerequisites can weaken Git-first and derived-state invariants.
 - Adding shortcuts to satisfy a command surface can create a second source of truth outside canonical files.
 - User-facing behavior can drift from Phase 01 UX fixtures if adapters format results independently.
+
+## Gate decision
+
+The phase was evaluated and deliberately closed without adding optional capability code. Current committed evidence does not demonstrate a V1 need for deep-dive mode, consult mode, additional adapters, vector retrieval, LLM fallback, or remote/multi-tenant operation:
+
+- the 150-case calibration/held-out corpus passes its accepted resolver gates with deterministic FTS/rule retrieval;
+- the committed real-CLI suite resolves all four expected outcomes;
+- no error analysis or ablation demonstrates a vector/LLM quality gain worth additional authority, privacy, cost, or reproducibility complexity;
+- no V1 usage evidence requires remote tenancy or another source adapter.
+
+These capabilities remain out of the V1 product boundary. Reopening one requires a concrete measured failure population, an accepted scope, and its capability-specific privacy/cost/replay gate; it must not be inferred from this phase's completed status.
 
 ## Rollback
 

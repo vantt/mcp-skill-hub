@@ -1,64 +1,85 @@
 # Skill Hub
 
-Skill Hub is a planned local-first, Git-backed hub for curated agent skills. The V1 target is a single Go binary with CLI and MCP adapters over shared application services; Git owns durable workspace state and derived local state remains rebuildable.
+Skill Hub keeps one curated, Git-backed collection of agent skills and shares it with Claude Code, Codex, and Gemini CLI across all your projects. Your agent asks the hub which skill fits the task at hand; the hub answers with a recommendation, and you stay in control of what changes. It ships as a single Go binary. Your skills are plain files in a Git repository that you own.
 
-## Current foundation status
+## Quickstart
 
-The current foundation provides workspace initialization, validation, doctor remediation, offline rebuild of immutable SQLite catalog generations, the curated skill lifecycle (`draft → active → deprecated → archived`), and source intake/monitoring. Managed semantic changes are previewed, explicitly confirmed, receipted, and published through a new catalog generation. A Go toolchain is the only development prerequisite; the binary requires neither Node nor Python at runtime. SQLite is embedded through the maintained pure-Go `modernc.org/sqlite` driver, so builds require neither CGo nor a system SQLite library.
+**1. Install Skill Hub.** Run the one-liner for your platform:
 
-Use these commands from the repository root:
-
+Linux / macOS:
 ```bash
-# Print version and build metadata
-go run ./cmd/skillhub version
-
-# Print the same result as JSON
-go run ./cmd/skillhub version --json
-
-# Rebuild all derived catalog state from canonical files, without network access
-go run ./cmd/skillhub rebuild --workspace /path/to/workspace
-
-# Preview a draft; add --yes only after reviewing the proposal
-go run ./cmd/skillhub skill create --workspace /path/to/workspace \
-  --id reliability-review --collection software --name "Reliability Review" \
-  --description "Review reliability risks." --trigger "review reliability" \
-  --not-for "design a new service" --min-scope multi_step --full-diff
-go run ./cmd/skillhub skill create --workspace /path/to/workspace \
-  --id reliability-review --collection software --name "Reliability Review" \
-  --description "Review reliability risks." --trigger "review reliability" \
-  --not-for "design a new service" --min-scope multi_step --yes
-
-# Preview/confirm lifecycle transitions and read an active skill
-go run ./cmd/skillhub skill activate reliability-review --workspace /path/to/workspace
-go run ./cmd/skillhub skill activate reliability-review --workspace /path/to/workspace --yes
-go run ./cmd/skillhub skill show reliability-review --workspace /path/to/workspace
-
-# Edit through a temporary $VISUAL/$EDITOR file, then validate and publish via the same mutation service
-go run ./cmd/skillhub skill edit reliability-review --workspace /path/to/workspace --editor --yes
-
-# Capture without network access, then inspect intake
-go run ./cmd/skillhub source capture https://github.com/example/repo.git \
-  --reason "Potential reliability source" --workspace /path/to/workspace
-go run ./cmd/skillhub source list --workspace /path/to/workspace
-
-# Onboarding performs explicit source inspection and returns exact confirmation pins
-go run ./cmd/skillhub source triage SRCQ-ID --decision accept --source-id example-repo \
-  --adapter git --workspace /path/to/workspace
-go run ./cmd/skillhub source confirm --workspace /path/to/workspace \
-  --proposal PROP-ID --proposal-digest sha256:DIGEST --base-version sha256:BASE
-
-# Source checks are the explicit network boundary; status never fetches
-go run ./cmd/skillhub check --all-due --workspace /path/to/workspace
-go run ./cmd/skillhub check --all --workspace /path/to/workspace
-
-# After an unmanaged canonical-file edit, validate first; rebuild publishes only valid bytes
-go run ./cmd/skillhub validate --workspace /path/to/workspace
-go run ./cmd/skillhub rebuild --workspace /path/to/workspace
-
-# Validate the Go foundation
-go test ./...
-go test -race ./...
-go vet ./...
+curl -fsSL https://github.com/vantt/mcp-skill-hub/releases/latest/download/install.sh | sh
 ```
 
-MCP transport, distillation, semantic skill resolution, and production installation or publishing are not implemented yet.
+Windows (PowerShell):
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://github.com/vantt/mcp-skill-hub/releases/latest/download/install.ps1 | iex"
+```
+
+The installer places `skillhub` in `~/.local/bin` (or `%LOCALAPPDATA%\skillhub\bin` on Windows), verifies SHA-256 checksums, and configures your `PATH`. Open a new terminal and run `skillhub version` to confirm.
+
+**2. Create your workspace.** This is the Git repository that holds your skills:
+
+```bash
+skillhub init ~/skillhub --yes
+git -C ~/skillhub add -A
+git -C ~/skillhub commit -m "Initialize Skill Hub workspace"
+```
+
+**3. Connect a project.** Connected projects auto-resolve the workspace:
+
+```bash
+cd your-project
+skillhub connect --workspace ~/skillhub --yes
+```
+
+Tip: Connected projects find the workspace automatically from their local config. For standalone CLI use outside connected projects, run `export SKILLHUB_WORKSPACE=~/skillhub` or pass `--workspace ~/skillhub`. Add `-g` to connect every project at once: `skillhub connect -g --workspace ~/skillhub --yes`.
+
+**4. Restart your agent** in that project and ask it:
+
+> curate my Skill Hub
+
+The agent shows the state of your hub and suggests one next step.
+
+## Installation details and options
+
+- **Install directory:** `$HOME/.local/bin` on Unix, `%LOCALAPPDATA%\skillhub\bin` on Windows.
+- **PATH modification:** Enabled by default (updates shell profiles on Unix, User PATH on Windows). Opt out with `SKILLHUB_NO_MODIFY_PATH=1`.
+- **Integrity and signatures:** Always verifies SHA-256 checksums. Verifies Cosign signatures when `cosign` is installed; enforce strict signature checking with `SKILLHUB_REQUIRE_SIGNATURE=1`.
+- **Pin a version:** Set `SKILLHUB_VERSION=v0.1.0` before running the installer script.
+- **Upgrade:** Run `skillhub update`, or re-run the installer one-liner.
+- **Uninstall:**
+  - Unix: `curl -fsSL https://github.com/vantt/mcp-skill-hub/releases/latest/download/install.sh | sh -s -- --uninstall` (or set `SKILLHUB_UNINSTALL=1`).
+  - Windows: `powershell -ExecutionPolicy ByPass -c "$env:SKILLHUB_UNINSTALL='1'; irm https://github.com/vantt/mcp-skill-hub/releases/latest/download/install.ps1 | iex"`.
+
+## Other install options
+
+**Build from source:** (requires Git and Go 1.26+)
+
+```bash
+git clone https://github.com/vantt/mcp-skill-hub.git
+cd mcp-skill-hub
+go build -o ~/.local/bin/skillhub ./cmd/skillhub
+```
+
+## What next
+
+- **Add your first skill.** Ask your agent: "Create a skill for reviewing reliability risks." Or use the CLI: see [Create a skill](docs/user-guide.md#create-a-skill).
+- **Bring in skills from a GitHub repo.** Ask your agent: "Import skills from https://github.com/owner/repo." Or CLI: `skillhub source import <source-id>`. See [Source onboarding and import](docs/user-guide.md#source-onboarding-and-skill-import).
+- **Check health.** `skillhub status` shows what needs attention. `skillhub doctor` checks workspace and agent connections.
+- **See every command.** `skillhub help`, or `skillhub help <command>`.
+
+## Documentation
+
+- [User guide](docs/user-guide.md): concepts, daily tasks, moving machines, troubleshooting, command cheat sheet.
+- [Release runbook](docs/release-runbook.md): how releases are built, signed, and verified.
+- [Design documents](docs/design/): architecture and decisions (written in Vietnamese).
+- [MCP compatibility matrix](docs/mcp-compatibility-matrix.json): tested agent clients.
+
+## Development
+
+```bash
+go test ./...
+go vet ./...
+go run ./cmd/skillhub help
+```

@@ -436,6 +436,20 @@ The journal protects against process/OS crash during a managed mutation. It cann
 
 `doctor --fix` previews recovery action. Normal commands return `recovery_required` until resolved.
 
+### 12.3 Canonical schema migration
+
+Canonical schema migration is explicit and registry-driven. Startup, status, doctor, validation, and rebuild may report an incompatible canonical version but must not rewrite it. Doctor marks that finding non-mechanically-fixable and directs the operator to `skillhub migrate`.
+
+Migration follows the same prepare/confirm contract as any semantic mutation:
+
+1. `skillhub migrate --workspace <root>` resolves an ordered supported path and returns a read-only diff with source version, target version, proposal digest, base catalog snapshot, and per-path before digests.
+2. The operator backs up or commits the workspace and confirms with `--to <version> --yes`.
+3. Confirmation reloads and pins the source tree, then applies every migration step through the canonical WAL and exclusive workspace lock.
+4. The immutable operation receipt records `source_schema_version` and `target_schema_version` in addition to normal proposal and snapshot evidence.
+5. A crash uses ordinary deterministic recovery. A retry with the same normalized request is idempotent; a stale preview or changed source fails closed.
+
+The V1 registry contains the narrow legacy `0 → 1` transition. It updates only `.skillhub/schema-version` and accepts the transition only when the remaining canonical tree is already compatible with V1. Future transitions must be ordered, deterministic, separately tested, and must never derive canonical truth from SQLite. Catalog format incompatibility remains derived maintenance: after canonical validation and recovery checks pass, it may rebuild automatically without a canonical migration.
+
 ## 13. Catalog snapshot
 
 `catalog_snapshot` identifies behavior served to resolver/distribution. It hashes only catalog-affecting canonical inputs, for example:

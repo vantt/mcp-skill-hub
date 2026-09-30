@@ -15,14 +15,16 @@ import (
 	"github.com/vantt/mcp-skill-hub/internal/catalog"
 	"github.com/vantt/mcp-skill-hub/internal/mutation"
 	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
+	"github.com/vantt/mcp-skill-hub/internal/telemetry"
 	"github.com/vantt/mcp-skill-hub/internal/workspace"
 )
 
 // SourceService is the shared boundary for source intake, onboarding, and explicit checks.
 type SourceService struct {
-	Clock    Clock
-	IDs      IDGenerator
-	Adapters map[string]sourcepkg.Adapter
+	Clock     Clock
+	IDs       IDGenerator
+	Adapters  map[string]sourcepkg.Adapter
+	Telemetry TelemetrySink
 }
 
 type SourceCandidateInput struct{ Locator, Reason, IdempotencyKey string }
@@ -105,6 +107,7 @@ func (service SourceService) defaults(root string) SourceService {
 }
 
 func (service SourceService) CaptureSourceCandidate(ctx context.Context, path string, input SourceCandidateInput) (SourceCandidateResult, error) {
+	startedAt := time.Now()
 	root, err := workspace.Discover(path)
 	if err != nil {
 		return SourceCandidateResult{}, err
@@ -122,10 +125,11 @@ func (service SourceService) CaptureSourceCandidate(ctx context.Context, path st
 	if err != nil {
 		return SourceCandidateResult{}, err
 	}
-	warning := false
 	for _, candidate := range candidates {
 		if candidate.Locator == locator && candidate.Status != "rejected" {
-			warning = true
+			result := SourceCandidateResult{Result: NewResult(StatusOK, "Source candidate already exists; returning existing candidate."), Candidate: candidate}
+			result.Items = append(result.Items, Item{ID: candidate.ID, Summary: candidate.Locator, Impact: "Intake status: " + candidate.Status})
+			return result, nil
 		}
 	}
 	random, err := service.IDs.New()
@@ -157,9 +161,9 @@ func (service SourceService) CaptureSourceCandidate(ctx context.Context, path st
 	}
 	result := SourceCandidateResult{Result: NewResult(StatusApplied, "Source candidate captured; no network fetch or skill changes were made."), Candidate: candidate, OperationID: receipt.OperationID}
 	result.Items = append(result.Items, Item{ID: id, Summary: locator, Impact: "Pending source triage."})
-	if warning {
-		result.Warnings = append(result.Warnings, Warning{Code: "duplicate_locator", Summary: "Another non-rejected candidate uses the same locator; it was not merged."})
-	}
+	recordCurationTelemetry(ctx, service.Telemetry, root, curationTelemetryEvent(telemetry.EventSourceCandidateCaptured, map[string]any{
+		"candidate_id": candidate.ID, "status": candidate.Status, "duration_ms": time.Since(startedAt).Milliseconds(),
+	}))
 	return result, nil
 }
 
@@ -231,6 +235,9 @@ func (service SourceService) TriageSourceCandidate(ctx context.Context, path str
 			return SourceProposal{}, SourceMutationResult{}, confirmErr
 		}
 		result := sourceMutationResult("Source candidate decision recorded.", "", receipt)
+		recordCurationTelemetry(ctx, service.Telemetry, root, curationTelemetryEvent(telemetry.EventSourceCandidateTriaged, map[string]any{
+			"candidate_id": candidate.ID, "status": candidate.Status, "triage": input.Decision,
+		}))
 		return SourceProposal{}, result, nil
 	case "accept":
 		proposal, previewErr := service.previewOnboarding(ctx, root, candidate, candidateBytes, input)
@@ -317,6 +324,30 @@ func (service SourceService) previewOnboarding(ctx context.Context, root string,
 	pins := ConfirmationPins{ProposalID: planned.ID, ProposalDigest: planned.Digest, BaseVersion: planned.BaseCatalogSnapshot}
 	expiresAt := service.Clock.Now().UTC().Add(24 * time.Hour)
 	proposal := SourceProposal{Result: NewResult(StatusActionRequired, "Source onboarding is ready for review."), CandidateID: candidate.ID, Source: record, Link: link, Diff: diff, Confirmation: ConfirmationPolicy{PolicyRevision: "policy_v1", ActionClass: "semantic", ApplicationCommand: "TriageSourceCandidate", Confirmation: ConfirmationRequirement{Required: true, Mode: "preview-and-approval", Pins: pins}}, planned: planned, expiresAt: expiresAt}
+	resources, listErr := adapter.List(inspectionContext, sourcepkg.Source{ID: input.SourceID, Locator: locator, Limits: record.Limits}, revision, sourcepkg.Scope{})
+	var limitErr *sourcepkg.LimitExceededError
+	if errors.As(listErr, &limitErr) {
+		proposal.Warnings = append(proposal.Warnings, Warning{
+			Code:    "source_size_warning",
+			Summary: fmt.Sprintf("Source size exceeds %s limit (%d > %d); distillation may fail. Consider scoping with `skillhub source triage %s --decision accept --path <subdir>`.", limitErr.Limit, limitErr.Actual, limitErr.Max, candidate.ID),
+		})
+	} else if listErr == nil {
+		var totalBytes int64
+		for _, r := range resources {
+			totalBytes += r.Size
+		}
+		if len(resources) > record.Limits.MaxFiles {
+			proposal.Warnings = append(proposal.Warnings, Warning{
+				Code:    "source_size_warning",
+				Summary: fmt.Sprintf("Source size exceeds files limit (%d > %d); distillation may fail. Consider scoping with `skillhub source triage %s --decision accept --path <subdir>`.", len(resources), record.Limits.MaxFiles, candidate.ID),
+			})
+		} else if totalBytes > record.Limits.MaxBytes {
+			proposal.Warnings = append(proposal.Warnings, Warning{
+				Code:    "source_size_warning",
+				Summary: fmt.Sprintf("Source size exceeds bytes limit (%d > %d); distillation may fail. Consider scoping with `skillhub source triage %s --decision accept --path <subdir>`.", totalBytes, record.Limits.MaxBytes, candidate.ID),
+			})
+		}
+	}
 	proposal.Items = append(proposal.Items, Item{ID: record.ID, Summary: fmt.Sprintf("%s via %s at %s", identity.Name, adapterName, revision.Value), Impact: "Watch " + cadence + "; trust " + trust + "; license " + firstNonEmpty(license, "unknown") + "."})
 	proposal.SuggestedActions = append(proposal.SuggestedActions, Action{Label: "Confirm the reviewed onboarding proposal", Command: "source confirm", RequiresConfirmation: true})
 	if err := storeSourceProposal(root, proposal, service.Clock.Now()); err != nil {
@@ -347,6 +378,11 @@ func (service SourceService) ConfirmSourceProposal(ctx context.Context, path str
 		return result, nil
 	}
 	if pins != preview.Confirmation.Confirmation.Pins {
+		if pins.ProposalDigest != preview.Confirmation.Confirmation.Pins.ProposalDigest {
+			result := SourceMutationResult{Result: NewResult(StatusError, "Proposal digest does not match the preview; nothing was applied.")}
+			result.Error = &Error{Code: ErrorStaleProposal, Render: ErrorRender{Error: "The source proposal cannot be confirmed.", Why: "Proposal digest does not match the preview.", Fix: "Pass the exact proposal digest printed by triage, or re-run triage."}}
+			return result, nil
+		}
 		result := SourceMutationResult{Result: NewResult(StatusError, "Proposal is stale; nothing was applied.")}
 		result.Error = &Error{Code: ErrorStaleProposal, Render: ErrorRender{Error: "The source proposal can no longer be confirmed.", Why: "The confirmation pins do not match the reviewed proposal.", Fix: "Load or regenerate the proposal and confirm its exact ID, digest, and base version."}}
 		return result, nil
@@ -364,7 +400,12 @@ func (service SourceService) ConfirmSourceProposal(ctx context.Context, path str
 	if err != nil {
 		return SourceMutationResult{}, err
 	}
-	return sourceMutationResult("Source onboarding was published; curated skills are unchanged.", preview.Source.ID, receipt), nil
+	summary := fmt.Sprintf("Watching %s. First analysis is ready: ask your agent 'distill new sources' or run `skillhub distill prepare %s`.\nWatching does not auto-import skills; accepted insights can create draft skills.", preview.Source.ID, preview.Source.ID)
+	result := sourceMutationResult(summary, preview.Source.ID, receipt)
+	recordCurationTelemetry(ctx, service.Telemetry, root, curationTelemetryEvent(telemetry.EventSourceCandidateTriaged, map[string]any{
+		"candidate_id": preview.CandidateID, "source_id": preview.Source.ID, "status": "accepted", "triage": "accept",
+	}))
+	return result, nil
 }
 
 func (service SourceService) CheckSources(ctx context.Context, path string, ids []string, allDue bool) (SourceCheckResult, error) {
@@ -445,11 +486,20 @@ func (service SourceService) CheckSources(ctx context.Context, path string, ids 
 		// ContentDigest is the meaningful scoped identity. A Git commit that
 		// changes only outside Locator.Path must not create canonical work.
 		if record.CurrentRevision != nil && record.CurrentRevision.ContentDigest == revision.ContentDigest {
+			if record.DistilledRevision != nil && record.Status != "distill_pending" {
+				if err := store.Record(ctx, sourcepkg.CheckState{SourceID: record.ID, LastCheckedAt: now, Latency: time.Duration(item.LatencyMS) * time.Millisecond, Availability: "available", NextCheckAt: nextCheck(now, record.Monitoring.Cadence)}); err != nil {
+					warnOperational()
+				}
+				item.Status = "up_to_date"
+				result.Unchanged++
+				result.Results = append(result.Results, item)
+				continue
+			}
 			if err := store.Record(ctx, sourcepkg.CheckState{SourceID: record.ID, LastCheckedAt: now, Latency: time.Duration(item.LatencyMS) * time.Millisecond, Availability: "available", NextCheckAt: nextCheck(now, record.Monitoring.Cadence)}); err != nil {
 				warnOperational()
 			}
-			item.Status = "up_to_date"
-			result.Unchanged++
+			item.Status = "needs_analysis"
+			result.Changed++
 			result.Results = append(result.Results, item)
 			continue
 		}
@@ -483,19 +533,50 @@ func (service SourceService) CheckSources(ctx context.Context, path string, ids 
 			warnOperational()
 		}
 		item.Status = "changed"
+		if record.DistilledRevision == nil {
+			item.Status = "needs_analysis"
+		}
 		result.Changed++
 		result.Results = append(result.Results, item)
 	}
 	if len(requested) > 0 && result.Checked != len(requested) {
+		var missingIDs []string
+		for _, id := range ids {
+			found := false
+			for _, record := range records {
+				if record.ID == id {
+					found = true
+					break
+				}
+			}
+			if !found {
+				missingIDs = append(missingIDs, id)
+			}
+		}
 		result.Warnings = append(result.Warnings, Warning{Code: "source_not_found", Summary: "One or more requested source IDs were not found."})
+		if result.Checked == 0 && len(missingIDs) > 0 {
+			result.Status = StatusError
+			why := fmt.Sprintf("Source %q was not found.", missingIDs[0])
+			if len(missingIDs) > 1 {
+				why = fmt.Sprintf("Requested source IDs were not found: %s.", strings.Join(missingIDs, ", "))
+			}
+			result.Summary = "Source check failed."
+			result.Error = NewInvalidRequestError(why, "Run `skillhub source list` to view configured sources.")
+			return result, nil
+		}
 	}
 	if result.Unavailable > 0 {
 		result.Status = StatusPartialFailure
 		result.Summary = fmt.Sprintf("Checked %d source(s); %d changed, %d unchanged, %d unavailable. Curated skills are unchanged.", result.Checked, result.Changed, result.Unchanged, result.Unavailable)
 	}
+	events := make([]telemetry.Event, 0, len(result.Results))
 	for _, item := range result.Results {
 		result.Items = append(result.Items, Item{ID: item.SourceID, Summary: "Source check: " + item.Status, Impact: "Curated skills remain unchanged."})
+		events = append(events, curationTelemetryEvent(telemetry.EventSourceChecked, map[string]any{
+			"source_id": item.SourceID, "status": item.Status, "duration_ms": item.LatencyMS,
+		}))
 	}
+	recordCurationTelemetry(ctx, service.Telemetry, root, events...)
 	return result, nil
 }
 
@@ -574,6 +655,9 @@ func findCandidate(root, id string) (sourcepkg.Candidate, []byte, error) {
 	}
 	data, err := readWorkspaceFile(root, "sources/intake/"+id+".yaml")
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return sourcepkg.Candidate{}, nil, fmt.Errorf("source candidate %q was not found", id)
+		}
 		return sourcepkg.Candidate{}, nil, err
 	}
 	item, err := sourcepkg.ParseCandidate(data)
@@ -587,6 +671,9 @@ func readWorkspaceFile(root, path string) ([]byte, error) {
 	defer handle.Close()
 	info, err := handle.Lstat(path)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("%s: file not found: %w", path, os.ErrNotExist)
+		}
 		return nil, err
 	}
 	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
@@ -677,6 +764,10 @@ func retryDelay(count int) time.Duration {
 	return time.Duration(1<<uint(count-1)) * time.Hour
 }
 func sanitizeOperationalError(err error) string {
+	var limitErr *sourcepkg.LimitExceededError
+	if errors.As(err, &limitErr) {
+		return fmt.Sprintf("source exceeded %s limit (%d > %d)", limitErr.Limit, limitErr.Actual, limitErr.Max)
+	}
 	switch {
 	case errors.Is(err, context.DeadlineExceeded):
 		return "source check timed out"

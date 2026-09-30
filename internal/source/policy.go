@@ -118,7 +118,7 @@ func boundedRead(reader io.Reader, maximum int64) ([]byte, error) {
 		return nil, err
 	}
 	if int64(len(data)) > maximum {
-		return nil, ErrLimitExceeded
+		return nil, &LimitExceededError{Limit: "bytes", Actual: int64(len(data)), Max: maximum}
 	}
 	return data, nil
 }

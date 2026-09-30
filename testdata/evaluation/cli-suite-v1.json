@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "id": "cli-replay-v1",
+  "sanitization": "synthetic-content-free-v1",
+  "cases": [
+    {
+      "schema_version": 1,
+      "id": "review-code",
+      "partition": "held_out",
+      "tags": ["review", "resolved"],
+      "request": {
+        "schema_version": "1",
+        "request_id": "eval-review-code",
+        "task": {"description": "Review code changes in this pull request", "scope": "multi_step"},
+        "operation": "review"
+      },
+      "expected": {"acceptable_statuses": ["resolved"], "acceptable_primary": ["code-review"], "rationale": "Direct reviewed procedure match."},
+      "provenance": {"source": "synthetic", "reviewed_by": ["maintainer"], "reviewed_at": "2026-09-29"}
+    },
+    {
+      "schema_version": 1,
+      "id": "design-database",
+      "partition": "held_out",
+      "tags": ["database", "resolved"],
+      "request": {
+        "schema_version": "1",
+        "request_id": "eval-design-database",
+        "task": {"description": "Design database schema indexes and migrations", "scope": "multi_step"},
+        "operation": "design"
+      },
+      "expected": {"acceptable_statuses": ["resolved"], "acceptable_primary": ["database-design"], "rationale": "Direct database design match."},
+      "provenance": {"source": "synthetic", "reviewed_by": ["maintainer"], "reviewed_at": "2026-09-29"}
+    },
+    {
+      "schema_version": 1,
+      "id": "deploy-service",
+      "partition": "development",
+      "tags": ["deployment", "resolved"],
+      "request": {
+        "schema_version": "1",
+        "request_id": "eval-deploy-service",
+        "task": {"description": "Deploy application service to production", "scope": "multi_step"},
+        "operation": "operate"
+      },
+      "expected": {"acceptable_statuses": ["resolved"], "acceptable_primary": ["deploy-service"], "rationale": "Direct deployment match."},
+      "provenance": {"source": "synthetic", "reviewed_by": ["maintainer"], "reviewed_at": "2026-09-29"}
+    },
+    {
+      "schema_version": 1,
+      "id": "trivial-no-skill",
+      "partition": "development",
+      "tags": ["no-skill", "trivial"],
+      "request": {
+        "schema_version": "1",
+        "request_id": "eval-trivial-no-skill",
+        "task": {"description": "Fix a typo", "scope": "single_step"},
+        "operation": "other"
+      },
+      "expected": {"acceptable_statuses": ["no_skill"], "no_skill": true, "rationale": "Trivial task should abstain."},
+      "provenance": {"source": "synthetic", "reviewed_by": ["maintainer"], "reviewed_at": "2026-09-29"}
+    }
+  ]
+}

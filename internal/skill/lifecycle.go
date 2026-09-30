@@ -36,10 +36,10 @@ var idPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
 // RoutingInput is the curated routing subset needed to activate a skill.
 type RoutingInput struct {
-	Operations []string `yaml:"operations,omitempty" json:"operations"`
-	Triggers   []string `yaml:"triggers,omitempty" json:"triggers"`
-	NotFor     []string `yaml:"not_for" json:"not_for"`
-	MinScope   string   `yaml:"min_scope,omitempty" json:"min_scope"`
+	Operations []string `yaml:"operations,omitempty" json:"operations,omitempty"`
+	Triggers   []string `yaml:"triggers,omitempty" json:"triggers,omitempty"`
+	NotFor     []string `yaml:"not_for,omitempty" json:"not_for,omitempty"`
+	MinScope   string   `yaml:"min_scope,omitempty" json:"min_scope,omitempty"`
 }
 
 // CreateInput contains explicit draft fields. Content may be agent-authored,
@@ -136,8 +136,14 @@ func (manager Manager) PreviewCreate(ctx context.Context, root string, input Cre
 		return Proposal{}, errors.New("name and description are required")
 	}
 	if len(bytes.TrimSpace(input.Content)) == 0 {
-		input.Content = []byte("# " + strings.TrimSpace(input.Name) + "\n\n" + strings.TrimSpace(input.Description) + "\n")
+		template := fmt.Sprintf("# %s\n\n%s\n\n## When to use\n\n- Describe when your agent should choose this skill.\n\n## Steps\n\n1. First step.\n2. Second step.\n\n## Examples\n\n- Example input or trigger scenario.\n", strings.TrimSpace(input.Name), strings.TrimSpace(input.Description))
+		input.Content = []byte(template)
 	}
+	normalizedContent, err := ensureSkillFrontmatter(input.Content, input.ID, input.Description, nil)
+	if err != nil {
+		return Proposal{}, err
+	}
+	input.Content = normalizedContent
 	requestDigest := createRequestDigest(input)
 	idempotencyKey := lifecycleIdempotencyKey(input.IdempotencyKey, "skill_create", input.ID, requestDigest)
 	if prior, found, err := mutation.LookupOperation(root, mutation.WriteSet{Command: "skill_create", IdempotencyKey: idempotencyKey, RequestDigest: requestDigest}); err != nil {
@@ -208,11 +214,35 @@ func (manager Manager) PreviewUpdate(ctx context.Context, root, id string, input
 		return Proposal{}, err
 	}
 	changes := []mutation.Change{{Path: metadataPath, Contents: afterMetadata}}
+	entrypointPath := filepath.ToSlash(filepath.Join(filepath.Dir(metadataPath), "SKILL.md"))
+	description, _ := document["description"].(string)
 	if input.SetContent {
 		if len(bytes.TrimSpace(input.Content)) == 0 {
 			return Proposal{}, errors.New("SKILL.md content must not be empty")
 		}
-		changes = append(changes, mutation.Change{Path: filepath.ToSlash(filepath.Join(filepath.Dir(metadataPath), "SKILL.md")), Contents: normalizeText(input.Content)})
+		currentContent, err := readOptional(root, entrypointPath)
+		if err != nil {
+			return Proposal{}, err
+		}
+		normalized, err := ensureSkillFrontmatter(input.Content, id, description, currentContent)
+		if err != nil {
+			return Proposal{}, err
+		}
+		changes = append(changes, mutation.Change{Path: entrypointPath, Contents: normalized})
+	} else if input.Description != nil {
+		// The distributed SKILL.md frontmatter must keep matching the metadata.
+		currentContent, err := readOptional(root, entrypointPath)
+		if err != nil {
+			return Proposal{}, err
+		}
+		if header, body, ok := splitSkillFrontmatter(normalizeText(currentContent)); ok && currentContent != nil && frontmatterDescription(header) != strings.TrimSpace(description) {
+			updated, err := withFrontmatterDescription(header, description)
+			if err != nil {
+				return Proposal{}, fmt.Errorf("existing SKILL.md frontmatter is invalid: %w", err)
+			}
+			contents := append(append(append([]byte("---\n"), updated...), []byte("---\n")...), body...)
+			changes = append(changes, mutation.Change{Path: entrypointPath, Contents: contents})
+		}
 	}
 	return manager.plan(ctx, root, id, "skill_edit", changes, beforeMetadata, afterMetadata, fullDiff, idempotencyKey, requestDigest)
 }
@@ -612,6 +642,114 @@ func normalizeText(contents []byte) []byte {
 	return contents
 }
 
+func ensureSkillFrontmatter(contents []byte, id, description string, current []byte) ([]byte, error) {
+	contents = normalizeText(contents)
+	if header, _, ok := splitSkillFrontmatter(contents); ok {
+		if err := validateSkillFrontmatter(header, id); err != nil {
+			return nil, err
+		}
+		return contents, nil
+	}
+	var header []byte
+	if existing, _, ok := splitSkillFrontmatter(normalizeText(current)); ok {
+		if err := validateSkillFrontmatter(existing, id); err != nil {
+			return nil, fmt.Errorf("existing SKILL.md frontmatter is invalid: %w", err)
+		}
+		updated, err := withFrontmatterDescription(existing, description)
+		if err != nil {
+			return nil, fmt.Errorf("existing SKILL.md frontmatter is invalid: %w", err)
+		}
+		header = updated
+	} else {
+		generated, err := yaml.Marshal(struct {
+			Name        string `yaml:"name"`
+			Description string `yaml:"description"`
+		}{Name: id, Description: strings.TrimSpace(description)})
+		if err != nil {
+			return nil, err
+		}
+		header = generated
+	}
+	if !bytes.HasSuffix(header, []byte("\n")) {
+		header = append(header, '\n')
+	}
+	return normalizeText(append(append(append([]byte("---\n"), header...), []byte("---\n\n")...), contents...)), nil
+}
+
+// withFrontmatterDescription replaces only the description value, keeping every
+// other frontmatter key and its order.
+func withFrontmatterDescription(header []byte, description string) ([]byte, error) {
+	var document yaml.Node
+	if err := yaml.Unmarshal(header, &document); err != nil {
+		return nil, fmt.Errorf("parse SKILL.md YAML frontmatter: %w", err)
+	}
+	if len(document.Content) != 1 || document.Content[0].Kind != yaml.MappingNode {
+		return nil, errors.New("SKILL.md frontmatter must be a mapping")
+	}
+	mapping := document.Content[0]
+	description = strings.TrimSpace(description)
+	for index := 0; index+1 < len(mapping.Content); index += 2 {
+		if mapping.Content[index].Value == "description" {
+			mapping.Content[index+1] = &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: description}
+			return marshalFrontmatter(&document)
+		}
+	}
+	mapping.Content = append(mapping.Content,
+		&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "description"},
+		&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: description})
+	return marshalFrontmatter(&document)
+}
+
+func frontmatterDescription(header []byte) string {
+	var value map[string]any
+	if yaml.Unmarshal(header, &value) != nil {
+		return ""
+	}
+	description, _ := value["description"].(string)
+	return strings.TrimSpace(description)
+}
+
+func marshalFrontmatter(document *yaml.Node) ([]byte, error) {
+	var buffer bytes.Buffer
+	encoder := yaml.NewEncoder(&buffer)
+	encoder.SetIndent(2)
+	if err := encoder.Encode(document); err != nil {
+		return nil, err
+	}
+	if err := encoder.Close(); err != nil {
+		return nil, err
+	}
+	return buffer.Bytes(), nil
+}
+
+func splitSkillFrontmatter(contents []byte) (header, body []byte, ok bool) {
+	if !bytes.HasPrefix(contents, []byte("---\n")) {
+		return nil, contents, false
+	}
+	end := bytes.Index(contents[4:], []byte("\n---\n"))
+	if end < 0 {
+		return nil, contents, false
+	}
+	end += 4
+	return contents[4:end], contents[end+5:], true
+}
+
+func validateSkillFrontmatter(header []byte, id string) error {
+	var value map[string]any
+	if err := yaml.Unmarshal(header, &value); err != nil {
+		return fmt.Errorf("parse SKILL.md YAML frontmatter: %w", err)
+	}
+	name, _ := value["name"].(string)
+	description, _ := value["description"].(string)
+	if name != "" && name != id {
+		return fmt.Errorf("SKILL.md frontmatter name must be %q", id)
+	}
+	if strings.TrimSpace(description) == "" {
+		return errors.New("SKILL.md frontmatter description must be non-empty")
+	}
+	return nil
+}
+
 func summarize(changes []mutation.Change, before map[string][]byte) DiffSummary {
 	var result DiffSummary
 	for _, change := range changes {
@@ -652,6 +790,41 @@ func renderFullDiff(changes []mutation.Change, before map[string][]byte) string 
 		}
 	}
 	return output.String()
+}
+
+// ReadRouting returns the routing fields currently stored in a skill's
+// metadata, in any lifecycle state, so callers can change one field without
+// resetting the others.
+func ReadRouting(root, id string) (RoutingInput, error) {
+	_, _, document, err := loadSkill(root, id)
+	if err != nil {
+		return RoutingInput{}, err
+	}
+	routing := mapValue(document, "routing")
+	list := func(key string) []string {
+		items, _ := routing[key].([]any)
+		values := make([]string, 0, len(items))
+		for _, item := range items {
+			if text, ok := item.(string); ok {
+				values = append(values, text)
+			}
+		}
+		return values
+	}
+	minScope, _ := routing["min_scope"].(string)
+	return RoutingInput{Operations: list("operations"), Triggers: list("triggers"), NotFor: list("not_for"), MinScope: minScope}, nil
+}
+
+// ReadRationale returns the routing_review_rationale currently stored in a
+// skill's quality metadata, in any lifecycle state.
+func ReadRationale(root, id string) (string, error) {
+	_, _, document, err := loadSkill(root, id)
+	if err != nil {
+		return "", err
+	}
+	quality := mapValue(document, "quality")
+	rationale, _ := quality["routing_review_rationale"].(string)
+	return rationale, nil
 }
 
 // ReadEditableContent returns the current canonical entrypoint for a draft or

@@ -1,6 +1,6 @@
 ---
 title: "Phase 11 — Evidence-first resolver"
-status: todo
+status: done
 ---
 
 # Phase 11 — Evidence-first resolver

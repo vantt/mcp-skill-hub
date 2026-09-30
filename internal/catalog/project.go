@@ -74,7 +74,8 @@ func populate(ctx context.Context, tx *sql.Tx, input buildInput, builderVersion 
 		if err != nil {
 			return nil, err
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO skill_fts(skill_id,name,description,triggers) VALUES(?,?,?,?)`, item.ID, name, description, strings.Join(triggers, " ")); err != nil {
+		aliases := strings.Join(stringValues(item.Document["aliases"]), " ")
+		if _, err := tx.ExecContext(ctx, `INSERT INTO skill_fts(skill_id,name,aliases,description,triggers) VALUES(?,?,?,?,?)`, item.ID, name, aliases, description, strings.Join(triggers, " ")); err != nil {
 			return nil, err
 		}
 		if err := checkpoint("skills and routing"); err != nil {
@@ -254,7 +255,7 @@ func projectRouting(ctx context.Context, tx *sql.Tx, item entity) ([]string, err
 	routing, _ := item.Document["routing"].(map[string]any)
 	categories := map[string]any{
 		"operation": routing["operations"], "trigger": routing["triggers"], "exclusion": routing["not_for"],
-		"requirement": routing["requirements"], "relationship": []any{routing["distinguish_from"], routing["supporting"]},
+		"requirement": routing["requirements"], "relationship": []any{routing["distinguish_from"], routing["supporting"], routing["equivalent_to"]},
 	}
 	keys := []string{"operation", "trigger", "exclusion", "requirement", "relationship"}
 	var triggers []string
@@ -321,7 +322,7 @@ func expectedRowCounts(input buildInput) map[string]int64 {
 			counts["skills"]++
 			counts["skill_fts"]++
 			routing, _ := item.Document["routing"].(map[string]any)
-			for _, value := range []any{routing["operations"], routing["triggers"], routing["not_for"], routing["requirements"], []any{routing["distinguish_from"], routing["supporting"]}} {
+			for _, value := range []any{routing["operations"], routing["triggers"], routing["not_for"], routing["requirements"], []any{routing["distinguish_from"], routing["supporting"], routing["equivalent_to"]}} {
 				counts["routing_metadata"] += int64(len(stringValues(value)))
 			}
 		case "source":

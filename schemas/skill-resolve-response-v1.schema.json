@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillhub.local/schemas/skill-resolve-response-v1.schema.json",
+  "title": "Skill resolution response v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "resolution_id", "request_id", "context_revision", "status", "catalog_snapshot", "policy_revision", "reason_codes", "valid_for"],
+  "properties": {
+    "schema_version": {"const": "1"}, "resolution_id": {"type": "string", "minLength": 1}, "request_id": {"type": "string", "minLength": 1},
+    "context_revision": {"type": "integer", "minimum": 1}, "status": {"enum": ["resolved", "needs_context", "no_skill", "already_covered"]},
+    "catalog_snapshot": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}, "policy_revision": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "reason_codes": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "valid_for": {"type": "object", "additionalProperties": false, "required": ["scope_fingerprint"], "properties": {"operation": {"type": "string"}, "scope_fingerprint": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}}},
+    "primary": {"$ref": "#/$defs/primary"}, "supporting": {"type": "array", "maxItems": 2, "items": {"$ref": "#/$defs/supporting"}},
+    "question": {"$ref": "#/$defs/question"}, "no_skill": {"$ref": "#/$defs/noSkill"}, "covered_by": {"type": "string"}, "coverage_basis": {"type": "string"},
+    "warnings": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
+  },
+  "allOf": [
+    {"if": {"properties": {"status": {"const": "resolved"}}}, "then": {"required": ["primary", "supporting"], "not": {"anyOf": [{"required": ["question"]}, {"required": ["no_skill"]}, {"required": ["covered_by"]}, {"required": ["coverage_basis"]}]}}},
+    {"if": {"properties": {"status": {"const": "needs_context"}}}, "then": {"required": ["question"], "not": {"anyOf": [{"required": ["primary"]}, {"required": ["no_skill"]}, {"required": ["covered_by"]}, {"required": ["coverage_basis"]}]}}},
+    {"if": {"properties": {"status": {"const": "no_skill"}}}, "then": {"required": ["no_skill"], "not": {"anyOf": [{"required": ["primary"]}, {"required": ["question"]}, {"required": ["covered_by"]}, {"required": ["coverage_basis"]}]}}},
+    {"if": {"properties": {"status": {"const": "already_covered"}}}, "then": {"required": ["covered_by", "coverage_basis"], "not": {"anyOf": [{"required": ["primary"]}, {"required": ["question"]}, {"required": ["no_skill"]}]}}}
+  ],
+  "$defs": {
+    "primary": {"type": "object", "additionalProperties": false, "required": ["id", "version", "uri", "applicability", "confidence"], "properties": {"id": {"type": "string"}, "version": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}, "uri": {"type": "string", "pattern": "^skill://skillhub/[a-f0-9]{64}/[^/]+/SKILL\\.md$"}, "applicability": {"type": "string"}, "confidence": {"enum": ["high", "medium"]}}},
+    "supporting": {"type": "object", "additionalProperties": false, "required": ["id", "version", "uri", "role", "activation"], "properties": {"id": {"type": "string"}, "version": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}, "uri": {"type": "string", "pattern": "^skill://skillhub/[a-f0-9]{64}/[^/]+/SKILL\\.md$"}, "role": {"enum": ["validation", "research", "implementation", "review", "documentation", "operations"]}, "activation": {"enum": ["on-demand"]}}},
+    "question": {"type": "object", "additionalProperties": false, "required": ["id", "field", "text", "choices", "answer_from"], "properties": {"id": {"type": "string"}, "field": {"type": "string"}, "text": {"type": "string"}, "choices": {"type": "array", "minItems": 2, "items": {"type": "string"}, "uniqueItems": true}, "answer_from": {"const": "existing-context-first"}}},
+    "noSkill": {"type": "object", "additionalProperties": false, "required": ["reason_code", "retry_when"], "properties": {"reason_code": {"enum": ["below_applicability_floor", "low_expected_benefit", "catalog_gap", "constraint_conflict", "capability_unavailable", "unresolved_ambiguity", "below_min_scope", "missing_scope"]}, "retry_when": {"type": "string"}}}
+  }
+}

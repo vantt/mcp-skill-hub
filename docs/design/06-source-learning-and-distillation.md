@@ -342,6 +342,15 @@ flowchart LR
 
 Acceptance chooses adapter/ref/path, monitoring policy and optional curated-skill links. Human owns the decision.
 
+### 5.3 Import existing skills as drafts
+
+When onboarding or watching a repository that already contains canonical `SKILL.md` skill definitions, the user or agent can import them directly as **draft** skills:
+
+- **Discovery:** Scans the watched revision (bounded by source limits) for directories containing `SKILL.md`.
+- **Preview & confirmation:** Previews target IDs, collections, and conflicts with existing workspace skills before writing canonical state.
+- **Safety & governance:** Imported skills are always created in the `draft` state with provenance metadata (`source_id`, `revision`, `path`). They are never auto-activated. Existing IDs are skipped with an informative message and never overwritten.
+- **Activation:** The user or agent must explicitly review and activate each imported skill with `skillhub skill activate <id> --yes`.
+
 ## 6. Revision check
 
 `hub_status` reads local canonical/runtime state only. `source_check` is explicit network work.

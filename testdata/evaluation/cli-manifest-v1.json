@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "experiment_id": "cli-replay-v1",
+  "suite_digest": "sha256:a9422e51f18b8e5e5ddcfc9a0ff88ccdbb5a417518d448dca6a19009ece5dead",
+  "catalog_snapshot": "sha256:f30f00957b51300ad45a220bf5719ca3f00d27e7d4c018a96f60d0fa88a4dc5b",
+  "policy_revision": "sha256:3cf55442eebcc50c65e730dfa22ad4783b3befe2bae5e5123e2268f035f2830b",
+  "protocol_schema": "1",
+  "normalization_version": "fts-rules-v1",
+  "index_version": "sqlite-fts5-v2",
+  "fact_provider_fixture": "request-fixture",
+  "fact_provider_version": "v1",
+  "seed": 260929,
+  "binary": {
+    "version": "dev",
+    "commit": "none"
+  },
+  "variant": "sqlite-fts-rules"
+}

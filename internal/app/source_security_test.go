@@ -124,7 +124,8 @@ func testSourceRecord(id string, monitoring sourcepkg.Monitoring, current source
 		SchemaVersion: 1, ID: id, Adapter: "git", Locator: sourcepkg.Locator{Repository: "https://github.com/example/" + id + ".git", Ref: "main"},
 		Status: "watching", Identity: sourcepkg.Identity{Name: id, Canonical: "https://github.com/example/" + id + ".git", DefaultBranch: "main"},
 		Trust: sourcepkg.Trust{Source: "community"}, Monitoring: monitoring,
-		Limits:          sourcepkg.Limits{TimeoutSeconds: 20, MaxBytes: sourcepkg.DefaultMaxBytes, MaxFiles: sourcepkg.DefaultMaxFiles, MaxFileBytes: sourcepkg.DefaultMaxFileSize},
-		CurrentRevision: &current,
+		Limits:            sourcepkg.Limits{TimeoutSeconds: 20, MaxBytes: sourcepkg.DefaultMaxBytes, MaxFiles: sourcepkg.DefaultMaxFiles, MaxFileBytes: sourcepkg.DefaultMaxFileSize},
+		CurrentRevision:   &current,
+		DistilledRevision: &current,
 	}
 }
