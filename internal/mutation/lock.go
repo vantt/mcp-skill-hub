@@ -10,10 +10,9 @@ import (
 	"github.com/gofrs/flock"
 )
 
-const (
-	DefaultLockTimeout = 5 * time.Second
-	lockRetryDelay     = 25 * time.Millisecond
-)
+const lockRetryDelay = 25 * time.Millisecond
+
+var DefaultLockTimeout = 15 * time.Second
 
 // WorkspaceLock wraps the cross-process advisory workspace lock.
 type WorkspaceLock struct{ lock *flock.Flock }
