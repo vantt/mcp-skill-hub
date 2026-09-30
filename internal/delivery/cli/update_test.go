@@ -2,6 +2,7 @@ package cli
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bytes"
 	"compress/gzip"
 	"crypto/sha256"
@@ -11,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -44,10 +46,34 @@ func createCLITestTarGz(t *testing.T, binaryName string, content []byte) []byte 
 	return buf.Bytes()
 }
 
+func createCLITestArchive(t *testing.T, binaryName string, content []byte) []byte {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		var buf bytes.Buffer
+		zw := zip.NewWriter(&buf)
+		w, err := zw.Create(binaryName)
+		if err != nil {
+			t.Fatalf("create zip entry: %v", err)
+		}
+		if _, err := w.Write(content); err != nil {
+			t.Fatalf("write zip entry: %v", err)
+		}
+		if err := zw.Close(); err != nil {
+			t.Fatalf("close zip: %v", err)
+		}
+		return buf.Bytes()
+	}
+	return createCLITestTarGz(t, binaryName, content)
+}
+
 func setupCLIFixtureServer(t *testing.T, targetVersion string, archiveBytes []byte) *httptest.Server {
 	t.Helper()
 	releaseTag := "v" + targetVersion
-	archiveName := fmt.Sprintf("skillhub-%s-linux-amd64.tar.gz", targetVersion)
+	ext := "tar.gz"
+	if runtime.GOOS == "windows" {
+		ext = "zip"
+	}
+	archiveName := fmt.Sprintf("skillhub-%s-%s-%s.%s", targetVersion, runtime.GOOS, runtime.GOARCH, ext)
 
 	sum := sha256.Sum256(archiveBytes)
 	hashStr := fmt.Sprintf("%x", sum)
@@ -246,7 +272,11 @@ func TestUpdateCheckJSON(t *testing.T) {
 
 func TestUpdateApplySuccess(t *testing.T) {
 	newBinary := []byte("#!/bin/sh\ncase \"$1\" in version) echo \"0.2.0\";; esac\n")
-	archiveBytes := createCLITestTarGz(t, "skillhub", newBinary)
+	binName := "skillhub"
+	if runtime.GOOS == "windows" {
+		binName = "skillhub.exe"
+	}
+	archiveBytes := createCLITestArchive(t, binName, newBinary)
 	server := setupCLIFixtureServer(t, "0.2.0", archiveBytes)
 	defer server.Close()
 
@@ -282,7 +312,11 @@ func TestUpdateApplySuccess(t *testing.T) {
 
 func TestUpdateApplyJSON(t *testing.T) {
 	newBinary := []byte("#!/bin/sh\ncase \"$1\" in version) echo \"0.2.0\";; esac\n")
-	archiveBytes := createCLITestTarGz(t, "skillhub", newBinary)
+	binName := "skillhub"
+	if runtime.GOOS == "windows" {
+		binName = "skillhub.exe"
+	}
+	archiveBytes := createCLITestArchive(t, binName, newBinary)
 	server := setupCLIFixtureServer(t, "0.2.0", archiveBytes)
 	defer server.Close()
 
