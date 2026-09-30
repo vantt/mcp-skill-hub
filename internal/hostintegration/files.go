@@ -104,6 +104,9 @@ func splitRelative(path string) []string {
 }
 
 func rejectExistingSymlink(path string) error {
+	if runtime.GOOS == "darwin" && (path == "/var" || path == "/tmp" || path == "/etc") {
+		return nil
+	}
 	info, err := os.Lstat(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
