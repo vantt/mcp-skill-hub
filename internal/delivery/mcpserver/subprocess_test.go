@@ -382,6 +382,9 @@ func TestStdioEOFMalformedAndFrameLimit(t *testing.T) {
 	})
 
 	t.Run("clean signal", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("POSIX signals are not supported on Windows")
+		}
 		command := exec.Command(binary, "mcp", "serve", "--workspace", root)
 		stdin, _ := command.StdinPipe()
 		var stdout, stderr bytes.Buffer
