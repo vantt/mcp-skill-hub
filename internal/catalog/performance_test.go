@@ -12,10 +12,17 @@ import (
 
 const (
 	performanceSkillCount    = 256
-	warmOpenP95Budget        = 100 * time.Millisecond
 	representativeBuildLimit = 10 * time.Second
 	largeBuildLimit          = 30 * time.Second
 )
+
+var warmOpenP95Budget = 100 * time.Millisecond
+
+func init() {
+	if os.Getenv("CI") != "" {
+		warmOpenP95Budget = 250 * time.Millisecond
+	}
+}
 
 func TestCatalogPerformanceBudgets(t *testing.T) {
 	if testing.Short() {

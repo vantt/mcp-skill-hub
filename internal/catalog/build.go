@@ -550,7 +550,11 @@ func ensureRuntimeDirectory(root, relative string) error {
 }
 
 func sqliteDSN(path string, readOnly bool) string {
-	value := (&url.URL{Scheme: "file", Path: filepath.ToSlash(path)}).String()
+	p := filepath.ToSlash(filepath.Clean(path))
+	if !strings.HasPrefix(p, "/") {
+		p = "/" + p
+	}
+	value := (&url.URL{Scheme: "file", Path: p}).String()
 	if readOnly {
 		value += "?mode=ro&immutable=1"
 	}
