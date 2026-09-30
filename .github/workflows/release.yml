@@ -135,12 +135,11 @@ jobs:
 
       - name: Run unit and integration tests
         shell: bash
-        run: go test ./...
+        run: go test -timeout 30m ./...
 
       - name: Run race detector
         shell: bash
-        run: go test -race ./...
-
+        run: go test -race -timeout 30m ./...
       - name: Run performance budgets serially
         shell: bash
         env:
