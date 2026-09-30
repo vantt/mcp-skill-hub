@@ -12,9 +12,9 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"unicode"
-
 	"github.com/vantt/mcp-skill-hub/internal/canonical"
 	"github.com/vantt/mcp-skill-hub/internal/mutation"
 	"github.com/vantt/mcp-skill-hub/internal/version"
@@ -275,9 +275,12 @@ func buildDatabase(ctx context.Context, path string, input buildInput, builderVe
 	if err := os.Chmod(path, 0o600); err != nil {
 		return err
 	}
-	file, err := os.OpenFile(path, os.O_RDONLY, 0)
+	file, err := os.OpenFile(path, os.O_RDWR, 0)
 	if err != nil {
-		return err
+		file, err = os.OpenFile(path, os.O_RDONLY, 0)
+		if err != nil {
+			return err
+		}
 	}
 	if err = options.fail(FaultGenerationSync); err == nil {
 		err = file.Sync()
@@ -577,6 +580,9 @@ func removeGeneration(path string) {
 }
 
 func syncDirectory(path string) error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
 	directory, err := os.Open(path)
 	if err != nil {
 		return err

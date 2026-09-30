@@ -9,9 +9,9 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
-
 	"github.com/vantt/mcp-skill-hub/internal/app"
 	"github.com/vantt/mcp-skill-hub/internal/evaluation"
 	"github.com/vantt/mcp-skill-hub/internal/telemetry"
@@ -519,6 +519,9 @@ func publishFileWithoutOverwrite(source, target string) error {
 	}
 	if err := os.Remove(source); err != nil {
 		return fmt.Errorf("remove output staging file: %w", err)
+	}
+	if runtime.GOOS == "windows" {
+		return nil
 	}
 	directory, err := os.Open(filepath.Dir(target))
 	if err != nil {

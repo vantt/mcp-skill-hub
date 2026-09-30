@@ -326,6 +326,9 @@ func verifyExistingParents(root *os.Root, relative string) error {
 }
 
 func syncRootDir(root *os.Root, relative string) error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
 	if relative == "" {
 		relative = "."
 	}

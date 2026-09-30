@@ -9,6 +9,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"time"
 )
 
@@ -156,6 +158,9 @@ func writeAtomic(path string, contents []byte) error {
 	if err := os.Rename(name, path); err != nil {
 		return err
 	}
+	if runtime.GOOS == "windows" {
+		return nil
+	}
 	directory, err := os.Open(parent)
 	if err != nil {
 		return err
@@ -170,5 +175,19 @@ func writeAtomic(path string, contents []byte) error {
 func samePath(left, right string) bool {
 	absoluteLeft, leftErr := filepath.Abs(left)
 	absoluteRight, rightErr := filepath.Abs(right)
-	return leftErr == nil && rightErr == nil && filepath.Clean(absoluteLeft) == filepath.Clean(absoluteRight)
+	if leftErr != nil || rightErr != nil {
+		return false
+	}
+	ca := filepath.Clean(absoluteLeft)
+	cb := filepath.Clean(absoluteRight)
+	if realA, err := filepath.EvalSymlinks(ca); err == nil {
+		ca = filepath.Clean(realA)
+	}
+	if realB, err := filepath.EvalSymlinks(cb); err == nil {
+		cb = filepath.Clean(realB)
+	}
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(ca, cb)
+	}
+	return ca == cb
 }
