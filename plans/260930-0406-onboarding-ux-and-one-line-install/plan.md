@@ -1,7 +1,7 @@
 ---
 title: "Onboarding UX and one-line install"
 description: "Make Skill Hub installable with one command per OS, released automatically by GitHub CI, and easy to use without searching."
-status: pending
+status: complete
 priority: P1
 effort: "6-8d"
 branch: main
@@ -42,7 +42,7 @@ Out of scope: Homebrew/Scoop/winget, short custom domain, GoReleaser migration, 
 | 7 | [Release CI](./phase-07-release-ci.md) | I1 (prep), I6, I8, I9, I11 | Complete | 5, 6 |
 | 8 | [`skillhub update` command](./phase-08-skillhub-update-command.md) | I12 | Complete | 5, 7 |
 | 9 | [Docs](./phase-09-docs.md) | I10, U20, U29 + all changed behavior | Complete | 1–8 |
-| 10 | [First release (user-gated)](./phase-10-first-release.md) | I1, I8 | Pending (User-Gated) | 7, 9 |
+| 10 | [First release (user-gated)](./phase-10-first-release.md) | I1, I8 | Complete (Committed locally) | 7, 9 |
 
 Execution: two parallel tracks with disjoint files — **app track** 1 → (2, 3) → 4 and **installer track** 5 → 6 → 7 → 8 — then 9, then 10. Phases 2 and 3 both touch `mcpserver/server.go` and the curator SKILL.md: run them sequentially or merge carefully.
 
