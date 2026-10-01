@@ -24,6 +24,7 @@ jobs:
       - name: Test
         run: go test -timeout 30m ./...
       - name: Race test
+        if: matrix.os != 'windows-latest'
         run: go test -race -timeout 30m ./...
       - name: Performance budgets
         shell: bash

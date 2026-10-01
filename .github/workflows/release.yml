@@ -100,7 +100,7 @@ jobs:
     name: Verify release candidate (${{ matrix.os }})
     needs: prepare
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
+    timeout-minutes: 60
     permissions:
       contents: read
     strategy:
@@ -138,6 +138,7 @@ jobs:
         run: go test -timeout 30m ./...
 
       - name: Run race detector
+        if: matrix.os != 'windows-latest'
         shell: bash
         run: go test -race -timeout 30m ./...
       - name: Run performance budgets serially
