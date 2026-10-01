@@ -64,14 +64,14 @@ go build -o ~/.local/bin/skillhub ./cmd/skillhub
 
 ## What next
 
-- **Add your first skill.** Ask your agent: "Create a skill for reviewing reliability risks." Or use the CLI: see [Create a skill](docs/user-guide.md#create-a-skill).
-- **Bring in skills from a GitHub repo.** Ask your agent: "Import skills from https://github.com/owner/repo." Or CLI: `skillhub source import <source-id>`. See [Source onboarding and import](docs/user-guide.md#source-onboarding-and-skill-import).
+- **Curate your skills.** Use the [curating skills guide](docs/curating-skills.md) to collect sources, import or create drafts, review and edit skills, manage lifecycle states, and learn from upstream changes.
 - **Check health.** `skillhub status` shows what needs attention. `skillhub doctor` checks workspace and agent connections.
 - **See every command.** `skillhub help`, or `skillhub help <command>`.
 
 ## Documentation
 
-- [User guide](docs/user-guide.md): concepts, daily tasks, moving machines, troubleshooting, command cheat sheet.
+- [Curating skills](docs/curating-skills.md): collecting sources; importing, creating, reviewing, editing, and improving skills.
+- [User guide](docs/user-guide.md): setup, concepts, agent connections, moving machines, troubleshooting, and command reference.
 - [Release runbook](docs/release-runbook.md): how releases are built, signed, and verified.
 - [Design documents](docs/design/): architecture and decisions (written in Vietnamese).
 - [MCP compatibility matrix](docs/mcp-compatibility-matrix.json): tested agent clients.

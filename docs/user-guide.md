@@ -2,6 +2,8 @@
 
 This guide explains how to use Skill Hub day to day. If you have not set it up yet, follow the Quickstart in the [README](../README.md) first.
 
+For collecting, creating, reviewing, editing, and improving skills, use the dedicated [curating skills guide](curating-skills.md).
+
 Run `skillhub help` for the command list and `skillhub help <command>` for the flags and an example of each command. Connected projects automatically resolve the workspace from their configuration. For standalone CLI use outside connected projects, you can export the workspace location once:
 
 ```bash
@@ -31,7 +33,7 @@ Transitions go in order: draft to active to deprecated to archived. You cannot j
 
 **Insight and inbox.** When a source changes, the agent reads the changes and proposes ideas for your skills. These proposals are called insights and wait in the inbox. Nothing is applied until you say so.
 
-**Preview, then `--yes`.** Every command that changes something shows a preview first. Add `--yes` to apply it. A preview writes nothing.
+**Preview and confirmation.** Skill creation, edits, lifecycle transitions, imports, and insight application use preview followed by explicit confirmation. CLI commands that support `--yes` generate, validate, and apply a fresh proposal; not every mutation accepts `--yes`. Source capture and `triage` decisions to defer or reject apply immediately. See the [curation safety model](curating-skills.md#safety-model) before changing skills.
 
 **Search index (catalog).** A search index Skill Hub builds from your workspace files so lookups are fast. It is rebuilt automatically when you run read commands if the index is stale and files are valid, or you can rebuild manually at any time (`skillhub rebuild`). Your files are the truth; the search index is disposable.
 
@@ -93,70 +95,7 @@ Delete what `connect` wrote:
 
 Your workspace and skills are untouched.
 
-## Daily tasks
-
-Each task shows the natural-language way first and the CLI equivalent second. Connected agents have direct access to MCP curation tools (`skill_create_preview/confirm`, `skill_transition_preview/confirm`, `skill_list`, `skill_get`, `source_import_preview/confirm`).
-
-### Check on your hub
-
-Ask your agent: "Curate my Skill Hub." (The agent calls `hub_status`).
-
-```bash
-skillhub status
-```
-
-Both show what needs attention and one recommended next step. If there are uncommitted changes, `status` prints the exact `git -C <ws> add -A && git -C <ws> commit -m "..."` command to run.
-
-### Create a skill
-
-Ask your agent: "Create a skill for reviewing reliability risks. Use it when I ask to review reliability, not for designing a new service."
-
-The agent uses `skill_create_preview` to show you a draft proposal, then `skill_create_confirm` once you approve.
-
-With the CLI, preview first:
-
-```bash
-skillhub skill create --id reliability-review --collection software \
-  --name "Reliability Review" --description "Review reliability risks." \
-  --trigger "review reliability" --not-for "design a new service" \
-  --min-scope multi_step
-```
-
-Run the same command with `--yes` to create it as a draft:
-
-```bash
-skillhub skill create --id reliability-review --collection software \
-  --name "Reliability Review" --description "Review reliability risks." \
-  --trigger "review reliability" --not-for "design a new service" \
-  --min-scope multi_step --yes
-```
-
-It prints `Draft skill reliability-review saved.` and a clear `Next:` hint. `--min-scope` is `single_step`, `multi_step`, or `project`. Add `--full-diff` to see the full file changes in the preview.
-
-To start from your own text, add `--content-file notes.md`. Any readable regular file works (relative to the current folder, or absolute); symlinks and folders are refused, and the limit is 16 MiB. The file must start with `SKILL.md` front matter whose `name` matches the skill id.
-
-A draft can be incomplete. To activate it later it needs a trigger, at least one `--not-for` entry (or a `--rationale` explaining why none applies), and a `--min-scope`.
-
-### Edit a skill
-
-Ask your agent: "Change the reliability-review description to ..." (The agent calls `skill_update_preview` and `skill_update_confirm`).
-
-```bash
-skillhub skill edit reliability-review --description "Review reliability risks in a service." --yes
-skillhub skill edit reliability-review --editor --yes
-```
-
-`--editor` opens the skill text in `$VISUAL` or `$EDITOR`. `--content-file <file>` replaces the text from a file, as in the create step. The routing flags `--trigger`, `--not-for`, `--operation`, and `--min-scope` replace only the fields you pass; the others keep their values. Leave off `--yes` to preview first. An applied edit prints `Skill reliability-review updated; it is active.` (or the current state).
-
-### Activate, deprecate, or archive a skill
-
-Ask your agent: "Activate reliability-review." (The agent calls `skill_transition_preview` with target state `active`, then `skill_transition_confirm` after your confirmation).
-
-```bash
-skillhub skill activate reliability-review --yes
-skillhub skill deprecate reliability-review --yes
-skillhub skill archive reliability-review --yes
-```
+## Curate skills
 
 Without `--yes` each command previews. An applied change prints `Skill reliability-review is now active.` (or deprecated, archived). Follow the state order from the Concepts section.
 
