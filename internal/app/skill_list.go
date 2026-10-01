@@ -10,10 +10,13 @@ import (
 
 // SkillListEntry is one skill row from the current catalog generation.
 type SkillListEntry struct {
-	ID         string `json:"id"`
-	State      string `json:"state"`
-	Collection string `json:"collection"`
-	Name       string `json:"name"`
+	ID              string `json:"id"`
+	State           string `json:"state"`
+	LifecycleState  string `json:"lifecycle_state,omitempty"`
+	ActiveLocally   bool   `json:"active_locally"` // Deprecated compatibility alias for lifecycle_state == "active"
+	RoutingEligible bool   `json:"routing_eligible"`
+	Collection      string `json:"collection"`
+	Name            string `json:"name"`
 }
 
 // SkillListResult lists skills from the current catalog generation.
@@ -40,10 +43,7 @@ func (SkillService) ListSkills(ctx context.Context, path, state string) (SkillLi
 	if err != nil {
 		return SkillListResult{}, err
 	}
-	if err := catalog.EnsureFreshOrRebuild(ctx, root); err != nil {
-		return SkillListResult{}, err
-	}
-	handle, err := catalog.OpenCurrent(ctx, root)
+	handle, err := catalog.OpenWithFallback(ctx, root)
 	if err != nil {
 		return SkillListResult{}, err
 	}
@@ -65,12 +65,19 @@ func (SkillService) ListSkills(ctx context.Context, path, state string) (SkillLi
 		if err := rows.Scan(&entry.ID, &entry.State, &entry.Collection, &entry.Name); err != nil {
 			return SkillListResult{}, fmt.Errorf("read skill row: %w", err)
 		}
+		entry.LifecycleState = entry.State
+		entry.ActiveLocally = (entry.State == "active")
+		entry.RoutingEligible = (entry.State == "active")
 		skills = append(skills, entry)
 	}
 	if err := rows.Err(); err != nil {
 		return SkillListResult{}, fmt.Errorf("list skills: %w", err)
 	}
-	result := SkillListResult{Result: NewResult(StatusOK, fmt.Sprintf("%d skill(s).", len(skills))), Skills: skills}
+	summary := fmt.Sprintf("%d skill(s).", len(skills))
+	if handle.Status.ServingMode == catalog.ServingFallback {
+		summary = fmt.Sprintf("%d skill(s) (served from fallback generation %s).", len(skills), handle.Pointer.Generation)
+	}
+	result := SkillListResult{Result: NewResult(StatusOK, summary), Skills: skills}
 	for _, entry := range skills {
 		result.Items = append(result.Items, Item{ID: entry.ID, Summary: entry.Name, Impact: "State: " + entry.State + "; collection: " + entry.Collection + "."})
 	}

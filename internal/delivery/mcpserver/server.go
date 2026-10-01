@@ -94,7 +94,10 @@ func New(workspacePath string, diagnostics io.Writer) (*Server, *mcp.Server, err
 // Serve performs startup validation/rebuild before accepting stdio frames.
 func Serve(ctx context.Context, workspacePath string, diagnostics io.Writer) error {
 	if _, err := (app.CatalogService{}).EnsureCatalog(ctx, workspacePath); err != nil {
-		return fmt.Errorf("ensure catalog: %w", err)
+		if diagnostics == nil {
+			diagnostics = os.Stderr
+		}
+		fmt.Fprintf(diagnostics, "warning: catalog ensure/rebuild failed on startup: %v\n", err)
 	}
 	adapter, server, err := New(workspacePath, diagnostics)
 	if err != nil {
@@ -155,6 +158,11 @@ func (adapter *Server) listSkills(ctx context.Context, _ *mcp.ServerSession, par
 	if err != nil {
 		return nil, adapter.distributionRPCError(err)
 	}
+	if status, inspectErr := (app.CatalogService{}).InspectCatalog(ctx, adapter.workspace); inspectErr == nil {
+		if status.ServingMode == catalog.ServingFallback || status.Warning != "" {
+			adapter.logger.Warn("serving fallback catalog generation", "warning", status.Warning)
+		}
+	}
 	for _, item := range skipped {
 		adapter.logger.Warn("skill omitted from listing because it cannot be served", "skill_id", item.SkillID, "reason", item.Reason)
 	}
@@ -212,6 +220,11 @@ func toSkillEntry(entry app.DistributedSkill) skillEntry {
 
 func (adapter *Server) distributionRPCError(err error) error {
 	switch {
+	case errors.Is(err, app.ErrResourceContentUnavailable), errors.Is(err, skill.ErrResourceContentUnavailable):
+		correlation := correlationID()
+		adapter.logger.Error("skill resource content unavailable", "correlation_id", correlation)
+		data, _ := json.Marshal(map[string]string{"code": "resource_content_unavailable", "correlation_id": correlation})
+		return &jsonrpc.Error{Code: jsonrpc.CodeInternalError, Message: "The requested skill resource has changed or is missing on disk.", Data: data}
 	case errors.Is(err, skill.ErrResourceDigestMismatch):
 		correlation := correlationID()
 		adapter.logger.Error("skill resource integrity verification failed", "correlation_id", correlation)
@@ -238,9 +251,12 @@ func (adapter *Server) registerTools(server *mcp.Server) {
 	adapter.registerResolverTools(server)
 	adapter.registerSourceTools(server)
 	adapter.registerSourceImportTools(server)
+	adapter.registerSourceWatchTools(server)
 	adapter.registerCurationRunTools(server)
 	adapter.registerInsightTools(server)
 	adapter.registerSkillTools(server)
+	adapter.registerSkillAddTools(server)
+	adapter.registerSkillReviewTools(server)
 	adapter.registerWorkspaceTools(server)
 }
 
@@ -282,18 +298,28 @@ func addTool[In, Out any](server *mcp.Server, tool *mcp.Tool, handler mcp.ToolHa
 }
 
 func applyToolInputEnums(toolName string, schema *jsonschema.Schema) {
-	if toolName != "skill_feedback" || schema == nil {
+	if schema == nil {
 		return
 	}
-	enums := map[string][]any{
-		"outcome":     {"activated", "loaded", "used", "abandoned", "rejected", "completed", "failed"},
-		"reason_code": {"user_rejected", "scope_mismatch", "capability_unavailable", "constraint_conflict", "workflow_completed", "workflow_failed", "abandoned", "host_report"},
-		"utility":     {"helpful", "harmful", "neutral"},
-		"basis":       {"user", "evaluator", "controlled-benchmark"},
-	}
-	for name, values := range enums {
-		if property := schema.Properties[name]; property != nil {
-			property.Enum = values
+	switch toolName {
+	case "skill_feedback":
+		enums := map[string][]any{
+			"outcome":     {"activated", "loaded", "used", "abandoned", "rejected", "completed", "failed"},
+			"reason_code": {"user_rejected", "scope_mismatch", "capability_unavailable", "constraint_conflict", "workflow_completed", "workflow_failed", "abandoned", "host_report"},
+			"utility":     {"helpful", "harmful", "neutral"},
+			"basis":       {"user", "evaluator", "controlled-benchmark"},
+		}
+		for name, values := range enums {
+			if property := schema.Properties[name]; property != nil {
+				property.Enum = values
+			}
+		}
+	case "source_watch_preview":
+		if prop := schema.Properties["cadence"]; prop != nil {
+			prop.Enum = []any{"manual", "daily", "weekly"}
+		}
+		if prop := schema.Properties["trust"]; prop != nil {
+			prop.Enum = []any{"untrusted", "reviewed", "trusted"}
 		}
 	}
 }
@@ -450,6 +476,23 @@ func unavailable[T any](message string) (*mcp.CallToolResult, toolOutcome[T], er
 }
 
 func safeToolError(err error) toolError {
+	var appErr *app.Error
+	if errors.As(err, &appErr) && appErr != nil {
+		action := appErr.Render.Fix
+		if action == "" {
+			action = "Check request parameters and retry."
+		}
+		msg := appErr.Render.Error
+		if msg == "" {
+			msg = appErr.Error()
+		}
+		return toolError{
+			Code:            string(appErr.Code),
+			Message:         msg,
+			Retryable:       appErr.Code == app.ErrorStaleContext || appErr.Code == app.ErrorSnapshotExpired || appErr.Code == app.ErrorSourceUnavailable || appErr.Code == app.ErrorIndexStale,
+			SuggestedAction: action,
+		}
+	}
 	var missingActivationErr *app.MissingActivationRequirementsError
 	if errors.As(err, &missingActivationErr) {
 		return toolError{
@@ -465,6 +508,19 @@ func safeToolError(err error) toolError {
 			Message:         err.Error(),
 			Retryable:       false,
 			SuggestedAction: "Use skill_create_preview to create a new draft skill.",
+		}
+	}
+	var conflictErr *skill.EditConflictError
+	if errors.As(err, &conflictErr) || errors.Is(err, skill.ErrEditConflict) {
+		msg := "A concurrent edit conflict occurred on the skill content."
+		if conflictErr != nil {
+			msg = conflictErr.Error()
+		}
+		return toolError{
+			Code:            "edit_conflict",
+			Message:         msg,
+			Retryable:       false,
+			SuggestedAction: "Read the latest skill content and digest via skill_get, then retry skill_update_preview with the new expected_content_digest.",
 		}
 	}
 	if errors.Is(err, context.Canceled) {
@@ -505,6 +561,9 @@ func safeToolError(err error) toolError {
 	}
 	if errors.Is(err, sourcepkg.ErrRevisionMismatch) || errors.Is(err, sourcepkg.ErrHistoryUnavailable) {
 		return toolError{Code: "source_unavailable", Message: "The requested source revision is unavailable.", Retryable: true, SuggestedAction: "Refresh the source revision and retry."}
+	}
+	if errors.Is(err, catalog.ErrCatalogUnavailable) {
+		return toolError{Code: "index_stale", Message: "The derived catalog is unavailable or stale.", Retryable: true, SuggestedAction: "Run workspace_rebuild, then retry."}
 	}
 	message := strings.ToLower(err.Error())
 	if strings.Contains(message, "snapshot_expired") || strings.Contains(message, "cursor is invalid or expired") {

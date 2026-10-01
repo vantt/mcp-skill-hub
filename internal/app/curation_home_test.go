@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/vantt/mcp-skill-hub/internal/mutation"
@@ -283,5 +284,67 @@ func commitWorkspace(t *testing.T, root string) {
 		if output, err := command.CombinedOutput(); err != nil {
 			t.Fatalf("git %v: %v: %s", args, err, output)
 		}
+	}
+}
+
+func TestGetCurationHomeNeverReportsCountsKnownWhenInvalid(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "workspace")
+	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+		t.Fatal(err)
+	}
+	commitWorkspace(t, root)
+
+	// Create an active skill
+	path := filepath.Join(root, "skills", "core", "test-skill", "SKILL.md")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("---\nname: test-skill\ndescription: Test skill.\n---\n\n# Test\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	metadata := filepath.Join(filepath.Dir(path), "skill.meta.yaml")
+	if err := os.WriteFile(metadata, []byte("schema_version: 1\nid: test-skill\nname: test-skill\nstatus: active\ndescription: Test skill.\nrouting:\n  triggers: [test]\n  not_for: [none]\n  min_scope: single_step\nquality:\n  reviewed: true\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (CatalogService{}).BuildCatalogGeneration(t.Context(), root); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify home when healthy has CountsKnown == true
+	healthyHome, err := (CurationService{}).GetCurationHome(t.Context(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !healthyHome.CountsKnown {
+		t.Fatal("healthy home must have CountsKnown == true")
+	}
+
+	// Now introduce an invalid canonical file (BUG-08 scenario)
+	badMeta := filepath.Join(filepath.Dir(path), "skill.meta.yaml")
+	if err := os.WriteFile(badMeta, []byte("schema_version: 1\nid: test-skill\nstatus: shiny\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	invalidHome, err := (CurationService{}).GetCurationHome(t.Context(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if invalidHome.Workspace.Health != "invalid" {
+		t.Fatalf("workspace health = %q, want invalid", invalidHome.Workspace.Health)
+	}
+	// Crucial assertion for BUG-08:
+	if invalidHome.CountsKnown {
+		t.Fatal("invalid workspace must NEVER have CountsKnown == true; unknown counts must not become zero / 'No skills yet'")
+	}
+	for _, cat := range invalidHome.Categories {
+		if cat.Availability == AvailabilityAvailable {
+			t.Errorf("category %q should be unavailable when workspace is invalid", cat.Kind)
+		}
+	}
+	if invalidHome.Status != StatusRecoveryRequired {
+		t.Fatalf("status = %v, want StatusRecoveryRequired", invalidHome.Status)
+	}
+	if !strings.Contains(invalidHome.Summary, "Workspace needs repair") {
+		t.Fatalf("summary = %q, want repair guidance", invalidHome.Summary)
 	}
 }

@@ -24,12 +24,48 @@ import (
 )
 
 var (
-	ErrNotFound               = errors.New("skill not found")
-	ErrAlreadyExists          = errors.New("skill already exists")
-	ErrInvalidTransition      = errors.New("invalid skill lifecycle transition")
-	ErrSnapshotExpired        = errors.New("snapshot_expired")
-	ErrResourceDigestMismatch = errors.New("resource_digest_mismatch")
+	ErrNotFound                   = errors.New("skill not found")
+	ErrAlreadyExists              = errors.New("skill already exists")
+	ErrInvalidTransition          = errors.New("invalid skill lifecycle transition")
+	ErrSnapshotExpired            = errors.New("snapshot_expired")
+	ErrResourceDigestMismatch     = errors.New("resource_digest_mismatch")
+	ErrResourceContentUnavailable = errors.New("resource_content_unavailable")
+	ErrEditConflict               = errors.New("edit_conflict")
+	ErrUntouchedScaffold          = errors.New("untouched_scaffold")
 )
+
+// EditConflictError indicates an optimistic concurrency check failed.
+type EditConflictError struct {
+	Path           string `json:"path"`
+	ExpectedDigest string `json:"expected_digest"`
+	ActualDigest   string `json:"actual_digest"`
+}
+
+func (e *EditConflictError) Error() string {
+	return fmt.Sprintf("edit conflict on %s: expected digest %s, found %s", e.Path, e.ExpectedDigest, e.ActualDigest)
+}
+
+func (e *EditConflictError) Is(target error) bool {
+	return target == ErrEditConflict || target == mutation.ErrConflict
+}
+
+// ProposalKind identifies the domain kind of a proposal.
+type ProposalKind string
+
+const (
+	ProposalKindLifecycle ProposalKind = "lifecycle"
+	ProposalKindAdd       ProposalKind = "add"
+)
+
+// ScaffoldMarker is the deterministic marker placed in untouched generated templates.
+const ScaffoldMarker = "<!-- skillhub:scaffold -->"
+
+// EditableContent contains canonical bytes and digest for an editable skill file.
+type EditableContent struct {
+	Path    string `json:"path"`
+	Content []byte `json:"content"`
+	Digest  string `json:"digest"`
+}
 
 var collectionPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 var idPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
@@ -57,13 +93,14 @@ type CreateInput struct {
 
 // UpdateInput applies only explicitly supplied fields.
 type UpdateInput struct {
-	IdempotencyKey string
-	Name           *string
-	Description    *string
-	Content        []byte
-	SetContent     bool
-	Routing        *RoutingInput
-	Rationale      *string
+	IdempotencyKey        string
+	Name                  *string
+	Description           *string
+	Content               []byte
+	SetContent            bool
+	ExpectedContentDigest string
+	Routing               *RoutingInput
+	Rationale             *string
 }
 
 // DiffSummary gives progressive disclosure without requiring the full patch.
@@ -89,6 +126,7 @@ type RoutingImpactHook interface {
 // Proposal is an immutable, pinned lifecycle preview.
 type Proposal struct {
 	ID             string
+	Kind           ProposalKind
 	Digest         string
 	BaseSnapshot   string
 	SkillID        string
@@ -96,10 +134,23 @@ type Proposal struct {
 	Summary        DiffSummary
 	FullDiff       string
 	RoutingImpact  *RoutingImpact
+	RecoveryID     string
 	CreatedAt      time.Time
 	ExpiresAt      time.Time
 	planned        mutation.Proposal
 	alreadyApplied *mutation.Receipt
+}
+
+func (p Proposal) Planned() mutation.Proposal {
+	return p.planned
+}
+
+func (p Proposal) AlreadyApplied() *mutation.Receipt {
+	return p.alreadyApplied
+}
+
+func (p Proposal) WriteSet() mutation.WriteSet {
+	return p.planned.WriteSet
 }
 
 // MutationResult reports both the canonical receipt and the generation that
@@ -136,7 +187,7 @@ func (manager Manager) PreviewCreate(ctx context.Context, root string, input Cre
 		return Proposal{}, errors.New("name and description are required")
 	}
 	if len(bytes.TrimSpace(input.Content)) == 0 {
-		template := fmt.Sprintf("# %s\n\n%s\n\n## When to use\n\n- Describe when your agent should choose this skill.\n\n## Steps\n\n1. First step.\n2. Second step.\n\n## Examples\n\n- Example input or trigger scenario.\n", strings.TrimSpace(input.Name), strings.TrimSpace(input.Description))
+		template := fmt.Sprintf("%s\n# %s\n\n%s\n\n## When to use\n\n- Describe when your agent should choose this skill.\n\n## Steps\n\n1. First step.\n2. Second step.\n\n## Examples\n\n- Example input or trigger scenario.\n", ScaffoldMarker, strings.TrimSpace(input.Name), strings.TrimSpace(input.Description))
 		input.Content = []byte(template)
 	}
 	normalizedContent, err := ensureSkillFrontmatter(input.Content, input.ID, input.Description, nil)
@@ -224,11 +275,29 @@ func (manager Manager) PreviewUpdate(ctx context.Context, root, id string, input
 		if err != nil {
 			return Proposal{}, err
 		}
+		if input.ExpectedContentDigest != "" {
+			currentDigest := ""
+			if currentContent != nil {
+				sum := sha256.Sum256(currentContent)
+				currentDigest = "sha256:" + hex.EncodeToString(sum[:])
+			}
+			if currentDigest != input.ExpectedContentDigest {
+				return Proposal{}, &EditConflictError{
+					Path:           entrypointPath,
+					ExpectedDigest: input.ExpectedContentDigest,
+					ActualDigest:   currentDigest,
+				}
+			}
+		}
 		normalized, err := ensureSkillFrontmatter(input.Content, id, description, currentContent)
 		if err != nil {
 			return Proposal{}, err
 		}
-		changes = append(changes, mutation.Change{Path: entrypointPath, Contents: normalized})
+		entrypointChange := mutation.Change{Path: entrypointPath, Contents: normalized}
+		if input.ExpectedContentDigest != "" {
+			entrypointChange.BeforeDigest = input.ExpectedContentDigest
+		}
+		changes = append(changes, entrypointChange)
 	} else if input.Description != nil {
 		// The distributed SKILL.md frontmatter must keep matching the metadata.
 		currentContent, err := readOptional(root, entrypointPath)
@@ -241,8 +310,28 @@ func (manager Manager) PreviewUpdate(ctx context.Context, root, id string, input
 				return Proposal{}, fmt.Errorf("existing SKILL.md frontmatter is invalid: %w", err)
 			}
 			contents := append(append(append([]byte("---\n"), updated...), []byte("---\n")...), body...)
-			changes = append(changes, mutation.Change{Path: entrypointPath, Contents: contents})
+			entrypointChange := mutation.Change{Path: entrypointPath, Contents: contents}
+			if input.ExpectedContentDigest != "" {
+				entrypointChange.BeforeDigest = input.ExpectedContentDigest
+			}
+			changes = append(changes, entrypointChange)
+		} else if input.ExpectedContentDigest != "" {
+			changes = append(changes, mutation.Change{
+				Path:         entrypointPath,
+				BeforeDigest: input.ExpectedContentDigest,
+				Contents:     currentContent,
+			})
 		}
+	} else if input.ExpectedContentDigest != "" {
+		currentContent, err := readOptional(root, entrypointPath)
+		if err != nil {
+			return Proposal{}, err
+		}
+		changes = append(changes, mutation.Change{
+			Path:         entrypointPath,
+			BeforeDigest: input.ExpectedContentDigest,
+			Contents:     currentContent,
+		})
 	}
 	return manager.plan(ctx, root, id, "skill_edit", changes, beforeMetadata, afterMetadata, fullDiff, idempotencyKey, requestDigest)
 }
@@ -263,6 +352,16 @@ func (manager Manager) PreviewTransition(ctx context.Context, root, id, target s
 	metadataPath, beforeMetadata, document, err := loadSkill(root, id)
 	if err != nil {
 		return Proposal{}, err
+	}
+	if target == "active" {
+		entrypointPath := filepath.ToSlash(filepath.Join(filepath.Dir(metadataPath), "SKILL.md"))
+		content, err := readOptional(root, entrypointPath)
+		if err != nil {
+			return Proposal{}, err
+		}
+		if IsUntouchedScaffold(content) {
+			return Proposal{}, fmt.Errorf("%w: skill %s content is an untouched scaffold; replace placeholder instructions before activating", ErrUntouchedScaffold, id)
+		}
 	}
 	current, _ := document["status"].(string)
 	allowed := (current == "draft" && target == "active") || (current == "active" && target == "deprecated") || (current == "deprecated" && target == "archived")
@@ -303,11 +402,34 @@ func (manager Manager) plan(ctx context.Context, root, id, command string, chang
 		Command: command, IdempotencyKey: idempotencyKey, RequestDigest: requestDigest, Changes: changes,
 	})
 	if err != nil {
+		if errors.Is(err, mutation.ErrConflict) {
+			for _, ch := range changes {
+				if ch.BeforeDigest != "" {
+					actual, _ := readOptional(root, ch.Path)
+					actualDigest := ""
+					if actual != nil {
+						sum := sha256.Sum256(actual)
+						actualDigest = "sha256:" + hex.EncodeToString(sum[:])
+					}
+					if actualDigest != ch.BeforeDigest {
+						return Proposal{}, &EditConflictError{
+							Path:           ch.Path,
+							ExpectedDigest: ch.BeforeDigest,
+							ActualDigest:   actualDigest,
+						}
+					}
+				}
+			}
+		}
 		return Proposal{}, err
 	}
 	createdAt := manager.now()
+	kind := ProposalKindLifecycle
+	if command == "skill_add" {
+		kind = ProposalKindAdd
+	}
 	proposal := Proposal{
-		ID: planned.ID, Digest: planned.Digest, BaseSnapshot: planned.BaseCatalogSnapshot,
+		ID: planned.ID, Kind: kind, Digest: planned.Digest, BaseSnapshot: planned.BaseCatalogSnapshot,
 		SkillID: id, Command: command, Summary: summarize(changes, before), planned: planned,
 		CreatedAt: createdAt, ExpiresAt: createdAt.Add(proposalLifetime),
 	}
@@ -360,8 +482,12 @@ func (manager Manager) appliedProposal(root, id, command string, receipt mutatio
 	hash := sha256.Sum256([]byte(command + "\x00" + idempotencyKey + "\x00" + requestDigest + "\x00" + receipt.CatalogSnapshot))
 	digest := "sha256:" + hex.EncodeToString(hash[:])
 	now := manager.now()
+	kind := ProposalKindLifecycle
+	if command == "skill_add" {
+		kind = ProposalKindAdd
+	}
 	return Proposal{
-		ID: "PROP-" + hex.EncodeToString(hash[:10]), Digest: digest, BaseSnapshot: receipt.CatalogSnapshot,
+		ID: "PROP-" + hex.EncodeToString(hash[:10]), Kind: kind, Digest: digest, BaseSnapshot: receipt.CatalogSnapshot,
 		SkillID: id, Command: command, Summary: DiffSummary{}, alreadyApplied: &receipt,
 		CreatedAt: now, ExpiresAt: now.Add(proposalLifetime),
 	}
@@ -425,14 +551,15 @@ func updateRequestDigest(id string, input UpdateInput) string {
 		content = string(normalizeText(input.Content))
 	}
 	return normalizedDigest(struct {
-		ID          string
-		Name        *string
-		Description *string
-		Content     string
-		SetContent  bool
-		Routing     *RoutingInput
-		Rationale   *string
-	}{id, normalizeOptional(input.Name), normalizeOptional(input.Description), content, input.SetContent, routing, normalizeOptional(input.Rationale)})
+		ID                    string
+		Name                  *string
+		Description           *string
+		Content               string
+		SetContent            bool
+		ExpectedContentDigest string
+		Routing               *RoutingInput
+		Rationale             *string
+	}{id, normalizeOptional(input.Name), normalizeOptional(input.Description), content, input.SetContent, strings.TrimSpace(input.ExpectedContentDigest), routing, normalizeOptional(input.Rationale)})
 }
 
 func normalizeRouting(input RoutingInput) RoutingInput {
@@ -827,14 +954,50 @@ func ReadRationale(root, id string) (string, error) {
 	return rationale, nil
 }
 
+// ReadEditableSkill returns the current canonical entrypoint and its digest for a draft or
+// active skill. It is intended to seed an external-editor temporary file or MCP read-modify-write.
+func ReadEditableSkill(root, id string) (EditableContent, error) {
+	metadataPath, _, _, err := loadSkill(root, id)
+	if err != nil {
+		return EditableContent{}, err
+	}
+	entrypointPath := filepath.ToSlash(filepath.Join(filepath.Dir(metadataPath), "SKILL.md"))
+	contents, err := readOptionalRequired(root, entrypointPath)
+	if err != nil {
+		return EditableContent{}, err
+	}
+	sum := sha256.Sum256(contents)
+	return EditableContent{
+		Path:    entrypointPath,
+		Content: contents,
+		Digest:  "sha256:" + hex.EncodeToString(sum[:]),
+	}, nil
+}
+
 // ReadEditableContent returns the current canonical entrypoint for a draft or
 // active skill. It is intended only to seed an external-editor temporary file.
 func ReadEditableContent(root, id string) ([]byte, error) {
-	metadataPath, _, _, err := loadSkill(root, id)
+	editable, err := ReadEditableSkill(root, id)
 	if err != nil {
 		return nil, err
 	}
-	return readOptionalRequired(root, filepath.ToSlash(filepath.Join(filepath.Dir(metadataPath), "SKILL.md")))
+	return editable.Content, nil
+}
+
+// IsUntouchedScaffold reports whether content represents an untouched generated template.
+func IsUntouchedScaffold(content []byte) bool {
+	if len(bytes.TrimSpace(content)) == 0 {
+		return true
+	}
+	if bytes.Contains(content, []byte(ScaffoldMarker)) {
+		return true
+	}
+	s := string(content)
+	hasWhen := strings.Contains(s, "Describe when your agent should choose this skill.")
+	hasStep1 := strings.Contains(s, "1. First step.")
+	hasStep2 := strings.Contains(s, "2. Second step.")
+	hasExample := strings.Contains(s, "Example input or trigger scenario.")
+	return hasWhen && hasStep1 && hasStep2 && hasExample
 }
 
 func readOptionalRequired(root, relative string) ([]byte, error) {

@@ -260,6 +260,36 @@ func (service SourceService) previewOnboarding(ctx context.Context, root string,
 		return SourceProposal{}, fmt.Errorf("unsupported source adapter %q", adapterName)
 	}
 	locator := sourceLocator(candidate.Locator, adapterName, input.Ref, input.SourcePath)
+	if adapterName == "git" && strings.Contains(candidate.Locator, "github.com/") && (strings.Contains(candidate.Locator, "/tree/") || strings.Contains(candidate.Locator, "/blob/")) {
+		route, routeErr := sourcepkg.ParseGitHubLocator(candidate.Locator, input.Ref, input.SourcePath)
+		if routeErr != nil {
+			return SourceProposal{}, routeErr
+		}
+		if gitAdapter, ok := adapter.(sourcepkg.GitRepositoryAdapter); ok {
+			resolved, resolveErr := sourcepkg.ResolveGitHubRoute(ctx, gitAdapter, route)
+			if resolveErr != nil {
+				return SourceProposal{}, resolveErr
+			}
+			locator.Repository = resolved.Repository
+			locator.Ref = resolved.Ref
+			locator.Path = resolved.Path
+		} else {
+			locator.Repository = route.Repository
+			if route.Ref != "" {
+				locator.Ref = route.Ref
+				locator.Path = route.Path
+				if locator.Path == "" && route.Rest != "" {
+					locator.Path = strings.TrimPrefix(strings.TrimPrefix(route.Rest, route.Ref), "/")
+				}
+			} else if route.Rest != "" {
+				parts := strings.SplitN(route.Rest, "/", 2)
+				locator.Ref = parts[0]
+				if len(parts) > 1 {
+					locator.Path = parts[1]
+				}
+			}
+		}
+	}
 	if err := sourcepkg.ValidateLocator(adapterName, locator); err != nil {
 		return SourceProposal{}, err
 	}
@@ -281,7 +311,13 @@ func (service SourceService) previewOnboarding(ctx context.Context, root string,
 	}
 	cadence := input.Cadence
 	if cadence == "" {
-		cadence = "weekly"
+		if !input.MonitoringEnabled {
+			cadence = "manual"
+		} else {
+			cadence = "weekly"
+		}
+	} else if !input.MonitoringEnabled && cadence != "manual" {
+		cadence = "manual"
 	}
 	trust := input.Trust
 	if trust == "" {
@@ -292,9 +328,6 @@ func (service SourceService) previewOnboarding(ctx context.Context, root string,
 		license = identity.License
 	}
 	record := sourcepkg.Record{SchemaVersion: 1, ID: input.SourceID, Adapter: adapterName, Locator: locator, Status: "watching", Identity: identity, License: license, Trust: sourcepkg.Trust{Source: trust}, Monitoring: sourcepkg.Monitoring{Enabled: input.MonitoringEnabled, Cadence: cadence}, Limits: sourcepkg.Limits{TimeoutSeconds: int(sourcepkg.DefaultTimeout / time.Second), MaxBytes: sourcepkg.DefaultMaxBytes, MaxFiles: sourcepkg.DefaultMaxFiles, MaxFileBytes: sourcepkg.DefaultMaxFileSize}, CurrentRevision: &revision}
-	if !input.MonitoringEnabled && input.Cadence == "" {
-		record.Monitoring.Enabled = true
-	}
 	if _, err := sourcepkg.ParseRecord(mustYAML(record)); err != nil {
 		return SourceProposal{}, err
 	}
@@ -693,10 +726,22 @@ func normalizeCapturedLocator(raw string) (string, error) {
 		}
 		return u.String(), nil
 	}
-	if filepath.IsAbs(value) || !safeSourcePath(value) {
+	if strings.HasPrefix(value, "~/") || value == "~" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", sourcepkg.ErrInvalidLocator
+		}
+		if value == "~" {
+			value = home
+		} else {
+			value = filepath.Join(home, filepath.FromSlash(value[2:]))
+		}
+	}
+	clean := filepath.Clean(value)
+	if clean == "." || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
 		return "", sourcepkg.ErrInvalidLocator
 	}
-	return filepath.ToSlash(value), nil
+	return filepath.ToSlash(clean), nil
 }
 func safeSourcePath(value string) bool {
 	return value != "" && value != "." && value != ".." && !strings.HasPrefix(value, "../") && !strings.Contains(value, `\`)
@@ -736,6 +781,21 @@ func inferAdapter(locator string) string {
 func sourceLocator(value, adapter, ref, path string) sourcepkg.Locator {
 	switch adapter {
 	case "git":
+		if strings.Contains(value, "github.com/") && (strings.Contains(value, "/tree/") || strings.Contains(value, "/blob/")) {
+			route, err := sourcepkg.ParseGitHubLocator(value, ref, path)
+			if err == nil {
+				resolvedRef := route.Ref
+				resolvedPath := route.Path
+				if resolvedRef == "" && route.Rest != "" {
+					parts := strings.SplitN(route.Rest, "/", 2)
+					resolvedRef = parts[0]
+					if len(parts) > 1 {
+						resolvedPath = parts[1]
+					}
+				}
+				return sourcepkg.Locator{Repository: route.Repository, Ref: resolvedRef, Path: resolvedPath}
+			}
+		}
 		return sourcepkg.Locator{Repository: value, Ref: ref, Path: path}
 	case "filesystem":
 		return sourcepkg.Locator{Path: value}

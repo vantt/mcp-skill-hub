@@ -362,7 +362,7 @@ func TestSkillListShowsIDStateCollectionNameAndFiltersByState(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
 		t.Fatal(err)
 	}
-	if len(result.Skills) != 1 || result.Skills[0] != (app.SkillListEntry{ID: "list-me", State: "draft", Collection: "software", Name: "List Me"}) {
+	if len(result.Skills) != 1 || result.Skills[0].ID != "list-me" || result.Skills[0].State != "draft" || result.Skills[0].Collection != "software" || result.Skills[0].Name != "List Me" {
 		t.Fatalf("json skills = %#v", result.Skills)
 	}
 	if code, _, stderr := runCLI(t, "skill", "list", "--workspace", root, "--state", "bogus"); code != 2 || !strings.Contains(stderr, "unknown skill state") {

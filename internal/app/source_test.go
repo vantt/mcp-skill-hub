@@ -292,6 +292,141 @@ func TestCloneRebuildRetainsRevisionLosesOperationalTimesAndStatusDoesNotFetch(t
 	}
 }
 
+func TestSourceTriageMonitoringOptOutBUG01(t *testing.T) {
+	root := newSourceWorkspace(t)
+	adapter := &fakeSourceAdapter{revisions: map[string]sourcepkg.Revision{"source-no-monitor": revision("one")}, errors: map[string]error{}}
+	service := SourceService{
+		Clock:    sourceClock{now: time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC)},
+		IDs:      fixedSourceID("1122334455667788"),
+		Adapters: map[string]sourcepkg.Adapter{"git": adapter},
+	}
+
+	captured, err := service.CaptureSourceCandidate(t.Context(), root, SourceCandidateInput{
+		Locator: "https://github.com/example/skills.git",
+		Reason:  "test no monitor",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Triage with MonitoringEnabled: false and empty Cadence
+	preview, _, err := service.TriageSourceCandidate(t.Context(), root, SourceTriageInput{
+		CandidateID:       captured.Candidate.ID,
+		Decision:          "accept",
+		SourceID:          "source-no-monitor",
+		Adapter:           "git",
+		MonitoringEnabled: false,
+		Cadence:           "",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify BUG-01 is fixed: monitoring remains disabled and cadence defaults to manual
+	if preview.Source.Monitoring.Enabled {
+		t.Fatalf("BUG-01 regression: Monitoring.Enabled became true when MonitoringEnabled: false")
+	}
+	if preview.Source.Monitoring.Cadence != "manual" {
+		t.Fatalf("expected cadence manual, got %s", preview.Source.Monitoring.Cadence)
+	}
+
+	// Confirm into catalog and check persisted record
+	if _, err := service.ConfirmSourceProposal(t.Context(), root, preview, preview.Confirmation.Confirmation.Pins); err != nil {
+		t.Fatal(err)
+	}
+
+	recordData, err := os.ReadFile(filepath.Join(root, "sources", "catalog", "source-no-monitor.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, err := sourcepkg.ParseRecord(recordData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record.Monitoring.Enabled {
+		t.Fatalf("BUG-01 regression in persisted record: monitoring.enabled is true")
+	}
+	if record.Monitoring.Cadence != "manual" {
+		t.Fatalf("persisted record cadence = %s, want manual", record.Monitoring.Cadence)
+	}
+}
+
+func TestSourceTriageGitHubTreeURLBUG10(t *testing.T) {
+	root := newSourceWorkspace(t)
+	adapter := &fakeSourceAdapter{revisions: map[string]sourcepkg.Revision{"source-tree": revision("one")}, errors: map[string]error{}}
+	service := SourceService{
+		Clock:    sourceClock{now: time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC)},
+		IDs:      fixedSourceID("2233445566778899"),
+		Adapters: map[string]sourcepkg.Adapter{"git": adapter},
+	}
+
+	treeURL := "https://github.com/anthropics/skills/tree/main/skills/pdf"
+	captured, err := service.CaptureSourceCandidate(t.Context(), root, SourceCandidateInput{
+		Locator: treeURL,
+		Reason:  "test tree url",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	preview, _, err := service.TriageSourceCandidate(t.Context(), root, SourceTriageInput{
+		CandidateID:       captured.Candidate.ID,
+		Decision:          "accept",
+		SourceID:          "source-tree",
+		Adapter:           "git",
+		MonitoringEnabled: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify BUG-10 is fixed: locator repository is canonical repo URL and ref/path resolved
+	if preview.Source.Locator.Repository != "https://github.com/anthropics/skills.git" {
+		t.Fatalf("expected repo https://github.com/anthropics/skills.git, got %s", preview.Source.Locator.Repository)
+	}
+	if preview.Source.Locator.Ref != "main" {
+		t.Fatalf("expected ref main, got %s", preview.Source.Locator.Ref)
+	}
+	if preview.Source.Locator.Path != "skills/pdf" {
+		t.Fatalf("expected path skills/pdf, got %s", preview.Source.Locator.Path)
+	}
+}
+
+func TestSourceCaptureAndTriageLocalFolderBUG11(t *testing.T) {
+	root := newSourceWorkspace(t)
+	extFolder := filepath.Join(t.TempDir(), "external-folder")
+	if err := os.MkdirAll(extFolder, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(extFolder, "file.txt"), []byte("data"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cacheDir := filepath.Join(t.TempDir(), "cache")
+	adapter := sourcepkg.FilesystemAdapter{
+		Root:      extFolder,
+		CacheRoot: cacheDir,
+	}
+
+	service := SourceService{
+		Clock:    sourceClock{now: time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC)},
+		IDs:      fixedSourceID("3344556677889900"),
+		Adapters: map[string]sourcepkg.Adapter{"filesystem": adapter},
+	}
+
+	// Capture absolute folder outside workspace - must be accepted!
+	captured, err := service.CaptureSourceCandidate(t.Context(), root, SourceCandidateInput{
+		Locator: extFolder,
+		Reason:  "test abs folder",
+	})
+	if err != nil {
+		t.Fatalf("capture of external folder failed: %v", err)
+	}
+	if captured.Candidate.Status != "pending" {
+		t.Fatalf("expected pending status, got %s", captured.Candidate.Status)
+	}
+}
+
 func newSourceWorkspace(t *testing.T) string {
 	t.Helper()
 	root := filepath.Join(t.TempDir(), "workspace")

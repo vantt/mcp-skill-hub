@@ -70,3 +70,81 @@ func TestApplyRejectsSourceCheckout(t *testing.T) {
 		t.Fatal("Apply accepted a source checkout")
 	}
 }
+func TestInspectAcceptsCloneLikeAbsentEmptyCanonicalDirectories(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "workspace")
+	if _, err := Apply(root); err != nil {
+		t.Fatal(err)
+	}
+	// Simulate fresh git clone: delete all empty required canonical directories
+	for _, dir := range RequiredDirectories() {
+		dirPath := filepath.Join(root, filepath.FromSlash(dir))
+		_ = os.Remove(dirPath)
+	}
+	plan, err := Inspect(root)
+	if err != nil {
+		t.Fatalf("Inspect failed: %v", err)
+	}
+	if len(plan.Findings) != 0 {
+		t.Fatalf("expected 0 findings on clone-like workspace with absent empty directories, got: %#v", plan.Findings)
+	}
+}
+
+func TestInspectRejectsCanonicalDirectoryCollisionWithFileOrSymlink(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "workspace")
+	if _, err := Apply(root); err != nil {
+		t.Fatal(err)
+	}
+	// Replace a required directory with a regular file
+	target := filepath.Join(root, "history", "operations")
+	_ = os.Remove(target)
+	if err := os.WriteFile(target, []byte("collision"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := Inspect(root)
+	if err != nil {
+		t.Fatalf("Inspect failed: %v", err)
+	}
+	found := false
+	for _, f := range plan.Findings {
+		if f.ID == "directory_collision" && f.Path == "history/operations" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected directory_collision finding for history/operations, got: %#v", plan.Findings)
+	}
+}
+
+func TestInspectWithOptionsDetachedIgnoresMissingGitRepository(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "workspace")
+	if _, err := Apply(root); err != nil {
+		t.Fatal(err)
+	}
+	// Remove .git
+	_ = os.RemoveAll(filepath.Join(root, ".git"))
+
+	planAttached, err := InspectWithOptions(root, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hasGitMissing := false
+	for _, f := range planAttached.Findings {
+		if f.ID == "git_repository_missing" {
+			hasGitMissing = true
+		}
+	}
+	if !hasGitMissing {
+		t.Fatal("attached mode expected git_repository_missing finding")
+	}
+
+	planDetached, err := InspectWithOptions(root, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range planDetached.Findings {
+		if f.ID == "git_repository_missing" {
+			t.Fatalf("detached mode should not report git_repository_missing, got: %#v", f)
+		}
+	}
+}

@@ -70,6 +70,7 @@ type CurationHome struct {
 	Actions     []ActionItem      `json:"actions"`
 	Categories  []ActionCategory  `json:"categories"`
 	HomeSummary CurationSummary   `json:"home_summary"`
+	CountsKnown bool              `json:"-"`
 }
 
 // CurationService owns the local/offline Curation Home application query.
@@ -139,6 +140,9 @@ func (CurationService) GetCurationHome(ctx context.Context, path string) (Curati
 		} else {
 			markCatalogCategoriesUnavailable(state.Categories)
 		}
+	} else {
+		markCatalogCategoriesUnavailable(state.Categories)
+		state.CountsKnown = false
 	}
 	return deriveCurationHome(state), nil
 }
@@ -302,6 +306,7 @@ func deriveCurationHome(state homeState) CurationHome {
 			GitConfigured: state.GitConfigured, RecoveryPending: state.RecoveryPending,
 		},
 		Actions: []ActionItem{}, Categories: state.Categories, HomeSummary: state.Summary,
+		CountsKnown: state.CountsKnown,
 	}
 	if state.Health == "invalid" {
 		home.HomeSummary.InvalidWorkspaces = 1

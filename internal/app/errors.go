@@ -23,6 +23,17 @@ const (
 	ErrorStaleProposal                ErrorCode = "stale_proposal"
 	ErrorResourceReadFailed           ErrorCode = "resource_read_failed"
 	ErrorOperationCancelled           ErrorCode = "operation_cancelled"
+	ErrorAmbiguousLocator             ErrorCode = "ambiguous_locator"
+	ErrorAmbiguousRef                 ErrorCode = "ambiguous_ref"
+	ErrorSkillSelectionRequired       ErrorCode = "skill_selection_required"
+	ErrorSkillConflict                ErrorCode = "skill_conflict"
+	ErrorSourceConflict               ErrorCode = "source_conflict"
+	ErrorResourceLimitsExceeded       ErrorCode = "resource_limits_exceeded"
+	ErrorSourceChanged                ErrorCode = "source_changed"
+	ErrorEditConflict                 ErrorCode = "edit_conflict"
+	ErrorValidationFailed             ErrorCode = "validation_failed"
+	ErrorLocalWatchUnsupported        ErrorCode = "local_watch_unsupported"
+	ErrorResourceContentUnavailable   ErrorCode = "resource_content_unavailable"
 )
 
 // Error is the structured, user-safe error member of a Result.
@@ -30,6 +41,16 @@ type Error struct {
 	Code      ErrorCode   `json:"code"`
 	Retryable bool        `json:"retryable,omitempty"`
 	Render    ErrorRender `json:"render"`
+}
+
+func (e *Error) Error() string {
+	if e == nil {
+		return ""
+	}
+	if e.Render.Why != "" {
+		return e.Render.Error + ": " + e.Render.Why
+	}
+	return e.Render.Error
 }
 
 // ErrorRender is the required human-readable rendering of an Error.
@@ -92,4 +113,148 @@ func ErrorResult(err *Error) Result {
 	result := NewResult(StatusError, err.Render.Error)
 	result.Error = err
 	return result
+}
+
+// NewAmbiguousLocatorError reports multiple matches for a locator.
+func NewAmbiguousLocatorError(reason, fix string) *Error {
+	return &Error{
+		Code: ErrorAmbiguousLocator,
+		Render: ErrorRender{
+			Error: "The locator is ambiguous.",
+			Why:   reason,
+			Fix:   fix,
+		},
+	}
+}
+
+// NewAmbiguousRefError reports multiple matches for a ref or revision.
+func NewAmbiguousRefError(reason, fix string) *Error {
+	return &Error{
+		Code: ErrorAmbiguousRef,
+		Render: ErrorRender{
+			Error: "The reference is ambiguous.",
+			Why:   reason,
+			Fix:   fix,
+		},
+	}
+}
+
+// NewSkillSelectionRequiredError reports that explicit skill selection is needed.
+func NewSkillSelectionRequiredError(reason, fix string) *Error {
+	return &Error{
+		Code: ErrorSkillSelectionRequired,
+		Render: ErrorRender{
+			Error: "Skill selection is required.",
+			Why:   reason,
+			Fix:   fix,
+		},
+	}
+}
+
+// NewSkillConflictError reports an existing skill collision.
+func NewSkillConflictError(reason, fix string) *Error {
+	return &Error{
+		Code: ErrorSkillConflict,
+		Render: ErrorRender{
+			Error: "Skill conflict detected.",
+			Why:   reason,
+			Fix:   fix,
+		},
+	}
+}
+
+// NewSourceConflictError reports an existing source collision.
+func NewSourceConflictError(reason, fix string) *Error {
+	return &Error{
+		Code: ErrorSourceConflict,
+		Render: ErrorRender{
+			Error: "Source conflict detected.",
+			Why:   reason,
+			Fix:   fix,
+		},
+	}
+}
+
+// NewResourceLimitsExceededError reports file size or count limits exceeded.
+func NewResourceLimitsExceededError(reason, fix string) *Error {
+	return &Error{
+		Code: ErrorResourceLimitsExceeded,
+		Render: ErrorRender{
+			Error: "Resource limits exceeded.",
+			Why:   reason,
+			Fix:   fix,
+		},
+	}
+}
+
+// NewSourceChangedError reports that upstream source changed.
+func NewSourceChangedError(reason, fix string) *Error {
+	return &Error{
+		Code: ErrorSourceChanged,
+		Render: ErrorRender{
+			Error: "The source has changed.",
+			Why:   reason,
+			Fix:   fix,
+		},
+	}
+}
+
+// NewEditConflictError reports concurrent edit conflicts.
+func NewEditConflictError(reason, fix string) *Error {
+	return &Error{
+		Code: ErrorEditConflict,
+		Render: ErrorRender{
+			Error: "Edit conflict detected.",
+			Why:   reason,
+			Fix:   fix,
+		},
+	}
+}
+
+// NewStaleProposalError reports that a proposal is stale.
+func NewStaleProposalError(reason, fix string) *Error {
+	return &Error{
+		Code: ErrorStaleProposal,
+		Render: ErrorRender{
+			Error: "The proposal is stale.",
+			Why:   reason,
+			Fix:   fix,
+		},
+	}
+}
+
+// NewValidationFailedError reports validation failure.
+func NewValidationFailedError(reason, fix string) *Error {
+	return &Error{
+		Code: ErrorValidationFailed,
+		Render: ErrorRender{
+			Error: "Validation failed.",
+			Why:   reason,
+			Fix:   fix,
+		},
+	}
+}
+
+// NewLocalWatchUnsupportedError reports that local watch is unsupported.
+func NewLocalWatchUnsupportedError(reason, fix string) *Error {
+	return &Error{
+		Code: ErrorLocalWatchUnsupported,
+		Render: ErrorRender{
+			Error: "Local watch is unsupported.",
+			Why:   reason,
+			Fix:   fix,
+		},
+	}
+}
+
+// NewResourceContentUnavailableError reports that resource content is unavailable.
+func NewResourceContentUnavailableError(reason, fix string) *Error {
+	return &Error{
+		Code: ErrorResourceContentUnavailable,
+		Render: ErrorRender{
+			Error: "Resource content is unavailable.",
+			Why:   reason,
+			Fix:   fix,
+		},
+	}
 }

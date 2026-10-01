@@ -12,3 +12,8 @@
 .omp/
 .pi/
 engineer/
+.codex/
+.gemini/
+.mcp.json
+CLAUDE.md
+GEMINI.md

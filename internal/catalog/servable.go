@@ -2,11 +2,19 @@ package catalog
 
 import (
 	"bytes"
+	"context"
+	"crypto/sha256"
+	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
+	"github.com/vantt/mcp-skill-hub/internal/canonical"
+	"github.com/vantt/mcp-skill-hub/internal/mutation"
 	"gopkg.in/yaml.v3"
 )
 
@@ -105,4 +113,209 @@ func servableSkillWarnings(input buildInput) []string {
 		}
 	}
 	return warnings
+}
+
+// StateBasis identifies whether facts come from current canonical files or a published generation.
+type StateBasis string
+
+const (
+	BasisCanonical StateBasis = "canonical"
+	BasisServed    StateBasis = "served"
+)
+
+// CanonicalSkillFacts describes a skill's current state in the canonical workspace.
+type CanonicalSkillFacts struct {
+	Known          bool     `json:"known"`
+	Collection     string   `json:"collection,omitempty"`
+	Path           string   `json:"path,omitempty"`
+	Status         string   `json:"status,omitempty"`
+	Valid          bool     `json:"valid"`
+	Issues         []string `json:"issues,omitempty"`
+	EntrypointPath string   `json:"entrypoint_path,omitempty"`
+}
+
+// ServedSkillFacts describes a skill's state in the currently served/published generation.
+type ServedSkillFacts struct {
+	Known           bool   `json:"known"`
+	Indexed         bool   `json:"indexed"`
+	Generation      string `json:"generation,omitempty"`
+	CatalogSnapshot string `json:"catalog_snapshot,omitempty"`
+	Name            string `json:"name,omitempty"`
+	Description     string `json:"description,omitempty"`
+	Status          string `json:"status,omitempty"`
+	Servable        bool   `json:"servable"`
+	ServableReason  string `json:"servable_reason,omitempty"`
+	ResourceCount   int    `json:"resource_count"`
+	TotalBytes      int64  `json:"total_bytes"`
+}
+
+// SkillStateAssessment provides a basis-aware projection comparing canonical and served state.
+type SkillStateAssessment struct {
+	SkillID          string              `json:"skill_id"`
+	ServingMode      ServingMode         `json:"serving_mode"`
+	Warning          string              `json:"warning,omitempty"`
+	Canonical        CanonicalSkillFacts `json:"canonical"`
+	Served           ServedSkillFacts    `json:"served"`
+	ResourcesMatch   bool                `json:"resources_match"`
+	ChangedResources []string            `json:"changed_resources,omitempty"`
+	MissingResources []string            `json:"missing_resources,omitempty"`
+	Diverged         bool                `json:"diverged"`
+}
+
+// AssessSkillState assesses a skill's canonical and served facts under a shared lock.
+func AssessSkillState(ctx context.Context, root, id string) (SkillStateAssessment, error) {
+	lock, err := mutation.AcquireSharedLock(ctx, root, mutation.DefaultLockTimeout)
+	if err != nil {
+		return SkillStateAssessment{}, err
+	}
+	defer lock.Unlock()
+	return AssessSkillStateWhileLocked(ctx, root, id)
+}
+
+// AssessSkillStateWhileLocked assesses a skill while the caller already holds a shared lock.
+func AssessSkillStateWhileLocked(ctx context.Context, root, id string) (SkillStateAssessment, error) {
+	assessment := SkillStateAssessment{
+		SkillID:        id,
+		ServingMode:    ServingUnavailable,
+		ResourcesMatch: true,
+	}
+
+	// 1. Inspect canonical files
+	skillsDir := filepath.Join(root, "skills")
+	collections, err := os.ReadDir(skillsDir)
+	if err == nil {
+		for _, coll := range collections {
+			if !coll.IsDir() {
+				continue
+			}
+			metaPath := filepath.Join(skillsDir, coll.Name(), id, "skill.meta.yaml")
+			metaBytes, readErr := os.ReadFile(metaPath)
+			if readErr == nil {
+				assessment.Canonical.Known = true
+				assessment.Canonical.Collection = coll.Name()
+				assessment.Canonical.Path = "skills/" + coll.Name() + "/" + id
+				var meta struct {
+					Status string `yaml:"status"`
+				}
+				_ = yaml.Unmarshal(metaBytes, &meta)
+				assessment.Canonical.Status = meta.Status
+				entrypointPath := filepath.Join(skillsDir, coll.Name(), id, "SKILL.md")
+				if _, statErr := os.Stat(entrypointPath); statErr == nil {
+					assessment.Canonical.EntrypointPath = "skills/" + coll.Name() + "/" + id + "/SKILL.md"
+				}
+				break
+			}
+		}
+	}
+
+	if assessment.Canonical.Known {
+		allIssues, valErr := canonical.Validate(root)
+		if valErr == nil {
+			skillPrefix := assessment.Canonical.Path + "/"
+			var skillIssues []string
+			for _, issue := range allIssues {
+				if strings.HasPrefix(issue.Path, skillPrefix) {
+					skillIssues = append(skillIssues, issue.Path+": "+issue.Message)
+				}
+			}
+			assessment.Canonical.Issues = skillIssues
+			assessment.Canonical.Valid = len(skillIssues) == 0
+		}
+	}
+
+	// 2. Inspect published generation
+	published, pubErr := inspectPublishedWhileLocked(ctx, root)
+	if pubErr == nil && published.Pointer != nil && published.State != StateCorrupt && published.State != StateIncompatible {
+		dbPath := generationPath(root, *published.Pointer)
+		db, dbErr := sql.Open("sqlite", sqliteDSN(dbPath, true))
+		if dbErr == nil {
+			defer db.Close()
+			db.SetMaxOpenConns(1)
+			var name, desc, status string
+			queryErr := db.QueryRowContext(ctx, `SELECT name, description, status FROM skills WHERE id=?`, id).Scan(&name, &desc, &status)
+			if queryErr == nil {
+				assessment.Served.Known = true
+				assessment.Served.Indexed = true
+				assessment.Served.Generation = published.Pointer.Generation
+				assessment.Served.CatalogSnapshot = published.Pointer.CatalogSnapshot
+				assessment.Served.Name = name
+				assessment.Served.Description = desc
+				assessment.Served.Status = status
+
+				// Query resources
+				type resRow struct {
+					path      string
+					digest    string
+					sizeBytes int64
+				}
+				var rows []resRow
+				r, rErr := db.QueryContext(ctx, `SELECT path, digest, size_bytes FROM resources WHERE skill_id=? ORDER BY path`, id)
+				if rErr == nil {
+					for r.Next() {
+						var row resRow
+						if scanErr := r.Scan(&row.path, &row.digest, &row.sizeBytes); scanErr == nil {
+							rows = append(rows, row)
+						}
+					}
+					_ = r.Close()
+				}
+				assessment.Served.ResourceCount = len(rows)
+				var totalBytes int64
+				var entrypointBytes []byte
+				for _, res := range rows {
+					totalBytes += res.sizeBytes
+					// Check live file on disk
+					livePath := filepath.Join(root, filepath.FromSlash(res.path))
+					contents, readErr := os.ReadFile(livePath)
+					if readErr != nil {
+						assessment.MissingResources = append(assessment.MissingResources, res.path)
+						assessment.ResourcesMatch = false
+						continue
+					}
+					sum := sha256.Sum256(contents)
+					actualDigest := "sha256:" + hex.EncodeToString(sum[:])
+					if actualDigest != res.digest {
+						assessment.ChangedResources = append(assessment.ChangedResources, res.path)
+						assessment.ResourcesMatch = false
+					}
+					if strings.HasSuffix(res.path, "/SKILL.md") {
+						entrypointBytes = contents
+					}
+				}
+				assessment.Served.TotalBytes = totalBytes
+
+				// Assess servability
+				if entrypointBytes == nil {
+					assessment.Served.Servable = false
+					assessment.Served.ServableReason = "SKILL.md is missing or unreadable"
+				} else if valErr := ValidateServableSkill(id, entrypointBytes, len(rows), totalBytes); valErr != nil {
+					assessment.Served.Servable = false
+					assessment.Served.ServableReason = valErr.Error()
+				} else {
+					assessment.Served.Servable = true
+				}
+			} else if errors.Is(queryErr, sql.ErrNoRows) {
+				assessment.Served.Known = true
+				assessment.Served.Indexed = false
+				assessment.Served.Generation = published.Pointer.Generation
+				assessment.Served.CatalogSnapshot = published.Pointer.CatalogSnapshot
+			}
+		}
+	}
+
+	// Overall status & serving mode
+	status, inspectErr := InspectWhileLocked(ctx, root)
+	if inspectErr == nil {
+		assessment.ServingMode = status.ServingMode
+		assessment.Warning = status.Warning
+	}
+
+	// Compute divergence
+	if !assessment.ResourcesMatch {
+		assessment.Diverged = true
+	} else if assessment.Canonical.Known && assessment.Served.Known && assessment.Canonical.Status != assessment.Served.Status {
+		assessment.Diverged = true
+	}
+
+	return assessment, nil
 }

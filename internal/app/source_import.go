@@ -1,7 +1,6 @@
 package app
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -11,7 +10,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/vantt/mcp-skill-hub/internal/catalog"
 	"github.com/vantt/mcp-skill-hub/internal/mutation"
@@ -136,124 +134,68 @@ func (service SourceImportService) PreviewSourceImport(ctx context.Context, path
 		wanted[strings.ToLower(strings.TrimSpace(s))] = true
 	}
 
+	discoveredItems, err := DiscoverSkillsFromResources(opCtx, AdapterResourceReader{Adapter: adapter, Source: src, Revision: *record.CurrentRevision}, resources, scopePrefix)
+	if err != nil {
+		return SourceImportProposal{}, err
+	}
+
 	var discovered []DiscoveredSkill
 	var importable []DiscoveredSkill
 	var skipped []DiscoveredSkill
+	var pendingImports []DiscoveredSkillItem
+	var warnings []Warning
 
-	type skillToImport struct {
-		item        DiscoveredSkill
-		skillDir    string
-		skillMDPath string
-		skillMD     []byte
-		companions  []sourcepkg.Resource
-	}
-	var pendingImports []skillToImport
-
-	// Find all SKILL.md resources
-	for _, res := range resources {
-		if filepath.Base(res.Path) != "SKILL.md" {
-			continue
-		}
-		skillDir := filepath.ToSlash(filepath.Dir(res.Path))
-		if skillDir == "." {
-			skillDir = ""
-		}
-
-		skillMDBytes, readErr := adapter.Read(opCtx, src, *record.CurrentRevision, res.Path)
-		if readErr != nil {
-			return SourceImportProposal{}, fmt.Errorf("failed to read %s: %w", res.Path, readErr)
-		}
-
-		name, desc := parseSkillMDFrontmatter(skillMDBytes)
-		if name == "" {
-			if skillDir != "" {
-				name = filepath.Base(skillDir)
-			} else {
-				name = record.ID
-			}
-		}
-		if desc == "" {
-			desc = name
-		}
-
-		targetID := sanitizeSkillID(name)
-		if targetID == "" {
-			if skillDir != "" {
-				targetID = sanitizeSkillID(filepath.Base(skillDir))
-			}
-			if targetID == "" {
-				targetID = "imported-skill"
-			}
-		}
-
+	for _, item := range discoveredItems {
 		// Check filter
-		if len(wanted) > 0 && !wanted[strings.ToLower(name)] && !wanted[targetID] {
+		if len(wanted) > 0 && !wanted[strings.ToLower(item.Name)] && !wanted[item.TargetID] {
 			continue
 		}
 
 		discItem := DiscoveredSkill{
-			Name:        name,
-			TargetID:    targetID,
+			Name:        item.Name,
+			TargetID:    item.TargetID,
 			Collection:  "default",
-			Description: desc,
-			Path:        skillDir,
+			Description: item.Description,
+			Path:        item.SkillDir,
 		}
 
-		if existingSkills[targetID] {
+		if item.Error != "" {
 			discItem.Conflict = true
-			discItem.SkipReason = fmt.Sprintf("Skill %q already exists in workspace", targetID)
+			discItem.SkipReason = item.Error
+			skipped = append(skipped, discItem)
+		} else if existingSkills[item.TargetID] {
+			discItem.Conflict = true
+			discItem.SkipReason = fmt.Sprintf("Skill %q already exists in workspace", item.TargetID)
 			skipped = append(skipped, discItem)
 		} else {
-			// Find companion resources
-			var companions []sourcepkg.Resource
-			prefix := ""
-			if skillDir != "" {
-				prefix = skillDir + "/"
-			}
-			if prefix != "" {
-				for _, other := range resources {
-					if other.Path == res.Path {
-						continue
-					}
-					if strings.HasPrefix(other.Path, prefix) {
-						rel := strings.TrimPrefix(other.Path, prefix)
-						parts := strings.Split(rel, "/")
-						if len(parts) >= 2 && (parts[0] == "references" || parts[0] == "scripts" || parts[0] == "assets") {
-							companions = append(companions, other)
-						}
-					}
-				}
-			}
-
 			importable = append(importable, discItem)
-			pendingImports = append(pendingImports, skillToImport{
-				item:        discItem,
-				skillDir:    skillDir,
-				skillMDPath: res.Path,
-				skillMD:     skillMDBytes,
-				companions:  companions,
-			})
-			// Track so multiple skills with identical target ID in same import don't conflict
-			existingSkills[targetID] = true
+			pendingImports = append(pendingImports, item)
+			existingSkills[item.TargetID] = true
 		}
 		discovered = append(discovered, discItem)
+
+		// License warning (BUG-16)
+		if item.License.Warning != "" {
+			warnings = append(warnings, Warning{
+				Code:    "license_warning",
+				Summary: fmt.Sprintf("Skill %s: %s", item.TargetID, item.License.Warning),
+			})
+		}
 	}
 
 	sort.Slice(discovered, func(i, j int) bool { return discovered[i].TargetID < discovered[j].TargetID })
 	sort.Slice(importable, func(i, j int) bool { return importable[i].TargetID < importable[j].TargetID })
 	sort.Slice(skipped, func(i, j int) bool { return skipped[i].TargetID < skipped[j].TargetID })
-
 	now := service.Clock.Now().UTC()
 	nowISO := now.Format(time.RFC3339Nano)
 
 	var changes []mutation.Change
 	diff := SourceDiff{Added: []string{}, Modified: []string{}, Deleted: []string{}}
-	var warnings []Warning
 
 	for _, pi := range pendingImports {
-		targetID := pi.item.TargetID
+		targetID := pi.TargetID
 		// 1. Normalized SKILL.md
-		normMD, normErr := ensureImportedSkillFrontmatter(pi.skillMD, targetID, pi.item.Description)
+		normMD, _, normErr := ensureImportedSkillFrontmatter(pi.SkillMDBytes, targetID, pi.Description)
 		if normErr != nil {
 			return SourceImportProposal{}, normErr
 		}
@@ -265,9 +207,9 @@ func (service SourceImportService) PreviewSourceImport(ctx context.Context, path
 		metaDoc := map[string]any{
 			"schema_version": 1,
 			"id":             targetID,
-			"name":           pi.item.Name,
+			"name":           pi.Name,
 			"status":         "draft",
-			"description":    pi.item.Description,
+			"description":    pi.Description,
 			"routing": map[string]any{
 				"triggers":  []string{},
 				"not_for":   []string{},
@@ -280,7 +222,7 @@ func (service SourceImportService) PreviewSourceImport(ctx context.Context, path
 				"created_by": "source_import",
 				"source_id":  record.ID,
 				"revision":   record.CurrentRevision.Value,
-				"path":       pi.skillDir,
+				"path":       pi.SkillDir,
 			},
 			"history": []any{
 				map[string]any{
@@ -316,30 +258,10 @@ func (service SourceImportService) PreviewSourceImport(ctx context.Context, path
 		changes = append(changes, mutation.Change{Path: linkTarget, Contents: linkBytes})
 		diff.Added = append(diff.Added, linkTarget)
 
-		// 4. Companion files
-		prefix := ""
-		if pi.skillDir != "" {
-			prefix = pi.skillDir + "/"
-		}
-		for _, comp := range pi.companions {
-			compRel := strings.TrimPrefix(comp.Path, prefix)
-			compData, readErr := adapter.Read(opCtx, src, *record.CurrentRevision, comp.Path)
-			if readErr != nil {
-				warnings = append(warnings, Warning{Code: "companion_read_error", Summary: fmt.Sprintf("Could not read companion file %s: %v", comp.Path, readErr)})
-				continue
-			}
-			if len(compData) == 0 {
-				warnings = append(warnings, Warning{Code: "empty_companion", Summary: fmt.Sprintf("Skipped empty companion file %s", comp.Path)})
-				continue
-			}
-			ext := strings.ToLower(filepath.Ext(compRel))
-			if ext == ".md" || ext == ".txt" || ext == ".yaml" || ext == ".yml" || ext == ".json" {
-				if !utf8.Valid(compData) {
-					warnings = append(warnings, Warning{Code: "invalid_utf8", Summary: fmt.Sprintf("Skipped non-UTF-8 companion file %s", comp.Path)})
-					continue
-				}
-			}
-			compTarget := "skills/default/" + targetID + "/" + compRel
+		// 4. Companion files (BUG-04: byte-for-byte copy, no empty/binary skips)
+		for _, comp := range pi.Companions {
+			compData := pi.CompanionBytes[comp.Path]
+			compTarget := "skills/default/" + targetID + "/" + comp.Path
 			changes = append(changes, mutation.Change{Path: compTarget, Contents: compData})
 			diff.Added = append(diff.Added, compTarget)
 		}
@@ -619,100 +541,4 @@ func listWorkspaceSkillIDs(root string) (map[string]bool, error) {
 		}
 	}
 	return ids, nil
-}
-
-func parseSkillMDFrontmatter(contents []byte) (name, description string) {
-	header, _, ok := splitSkillFrontmatter(contents)
-	if !ok {
-		return "", ""
-	}
-	var value map[string]any
-	if err := yaml.Unmarshal(header, &value); err != nil {
-		return "", ""
-	}
-	if n, ok := value["name"].(string); ok {
-		name = strings.TrimSpace(n)
-	}
-	if d, ok := value["description"].(string); ok {
-		description = strings.TrimSpace(d)
-	}
-	return name, description
-}
-
-func ensureImportedSkillFrontmatter(contents []byte, id, description string) ([]byte, error) {
-	contents = normalizeText(contents)
-	if header, body, ok := splitSkillFrontmatter(contents); ok {
-		var doc yaml.Node
-		if err := yaml.Unmarshal(header, &doc); err == nil && len(doc.Content) == 1 && doc.Content[0].Kind == yaml.MappingNode {
-			mapping := doc.Content[0]
-			hasName := false
-			hasDesc := false
-			for i := 0; i+1 < len(mapping.Content); i += 2 {
-				if mapping.Content[i].Value == "name" {
-					mapping.Content[i+1] = &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: id}
-					hasName = true
-				} else if mapping.Content[i].Value == "description" {
-					if strings.TrimSpace(description) != "" {
-						mapping.Content[i+1] = &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: strings.TrimSpace(description)}
-					}
-					hasDesc = true
-				}
-			}
-			if !hasName {
-				mapping.Content = append([]*yaml.Node{{Kind: yaml.ScalarNode, Tag: "!!str", Value: "name"}, {Kind: yaml.ScalarNode, Tag: "!!str", Value: id}}, mapping.Content...)
-			}
-			if !hasDesc && strings.TrimSpace(description) != "" {
-				mapping.Content = append(mapping.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "description"}, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: strings.TrimSpace(description)})
-			}
-			var buf bytes.Buffer
-			enc := yaml.NewEncoder(&buf)
-			enc.SetIndent(2)
-			_ = enc.Encode(&doc)
-			_ = enc.Close()
-			return normalizeText(append(append([]byte("---\n"), buf.Bytes()...), append([]byte("---\n\n"), body...)...)), nil
-		}
-	}
-	// No frontmatter: prepend frontmatter
-	header := fmt.Sprintf("---\nname: %s\ndescription: %s\n---\n\n", id, strings.TrimSpace(description))
-	return normalizeText(append([]byte(header), contents...)), nil
-}
-
-func sanitizeSkillID(name string) string {
-	name = strings.ToLower(strings.TrimSpace(name))
-	var b strings.Builder
-	lastDash := false
-	for _, r := range name {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
-			b.WriteRune(r)
-			lastDash = false
-		} else if !lastDash && b.Len() > 0 {
-			b.WriteRune('-')
-			lastDash = true
-		}
-	}
-	res := strings.Trim(b.String(), "-")
-	if len(res) > 63 {
-		res = strings.Trim(res[:63], "-")
-	}
-	return res
-}
-
-func splitSkillFrontmatter(contents []byte) (header, body []byte, ok bool) {
-	if !bytes.HasPrefix(contents, []byte("---\n")) {
-		return nil, contents, false
-	}
-	end := bytes.Index(contents[4:], []byte("\n---\n"))
-	if end < 0 {
-		return nil, contents, false
-	}
-	end += 4
-	return contents[4:end], contents[end+5:], true
-}
-
-func normalizeText(contents []byte) []byte {
-	contents = bytes.ReplaceAll(contents, []byte("\r\n"), []byte("\n"))
-	if !bytes.HasSuffix(contents, []byte("\n")) {
-		contents = append(contents, '\n')
-	}
-	return contents
 }

@@ -27,30 +27,36 @@ Without it, pass `--workspace ~/skillhub` to each command, or run the command fr
 
 Transitions go in order: draft to active to deprecated to archived. You cannot jump from active straight to archived.
 
-**Source.** A Git repository (for example on GitHub) that you watch for useful skills. You first save it as a candidate, then decide whether to watch it. Watching a source never changes your skills by itself.
+**Source.** A remote Git repository (for example on GitHub) that you watch for useful skills or patterns. Watching a source records monitoring settings; it is not a background daemon and never changes your skills automatically.
 
-**Source import.** You can import existing skills from a watched source directly into your workspace as drafts (`skillhub source import`). They are never auto-activated; you review and activate them when ready.
+**Intent-first skill addition.** You can add existing skills directly from a GitHub repository or a local folder with `skillhub skill add <locator>`. Skills start as drafts and retain provenance.
 
-**Insight and inbox.** When a source changes, the agent reads the changes and proposes ideas for your skills. These proposals are called insights and wait in the inbox. Nothing is applied until you say so.
+**Diagnostic review.** `skillhub skill review <id>` compiles comprehensive offline diagnostic facts (schema validity, activation readiness, missing routing fields, resource inventories, git working-tree status). It is an informational diagnostic report, not an approval flag.
 
-**Preview and confirmation.** Skill creation, edits, lifecycle transitions, imports, and insight application use preview followed by explicit confirmation. CLI commands that support `--yes` generate, validate, and apply a fresh proposal; not every mutation accepts `--yes`. Source capture and `triage` decisions to defer or reject apply immediately. See the [curation safety model](curating-skills.md#safety-model) before changing skills.
+**Insight and inbox.** When watched sources change, the agent reads the changes and proposes ideas for your skills. These proposals are called insights and wait in the inbox. Nothing is applied until you approve it.
 
-**Search index (catalog).** A search index Skill Hub builds from your workspace files so lookups are fast. It is rebuilt automatically when you run read commands if the index is stale and files are valid, or you can rebuild manually at any time (`skillhub rebuild`). Your files are the truth; the search index is disposable.
+**State basis (canonical vs served).** Skill Hub maintains two distinct layers of state:
+- *Canonical state:* Validated YAML and Markdown files in your Git working tree (`skills/`, `sources/`, `distill/`). This is your durable authority.
+- *Served state:* The compiled SQLite catalog generation (`runtime/catalog/generations/<gen>.db`) used for agent routing. If canonical files change, unchanged skills remain servable with degraded diagnostics, while changed or deleted companion resources become unavailable (`resource_content_unavailable`). Historical bytes are never guessed.
+
+**Preview, confirmation, and recovery.** Mutating operations preview first. In the interactive CLI, you confirm using a short proposal ID (`skillhub skill confirm <proposal-id>`). MCP tools and automation require all three exact pins (`proposal_id`, `proposal_digest`, and `base_version`). Mutating CLI commands that accept `--yes` generate, validate, and apply a fresh proposal in one step. When using external editors (`--editor`), Skill Hub detects concurrent modifications via content digests (`edit_conflict`) and saves bounded 24-hour recovery files to `runtime/edits/` so edits are never lost.
 
 **Nothing commits for you.** Skill Hub writes files but never runs `git commit` or `git push`. You decide when to commit. `skillhub status` reminds you when there are uncommitted changes with the exact git commit command.
-
 ## Set up and connect agents
 
 ### Create the workspace
 
 ```bash
-skillhub init ~/skillhub          # preview
-skillhub init ~/skillhub --yes    # create
+skillhub init                    # preview the current directory
+skillhub init --yes              # initialize the current directory
+
+skillhub init ~/skillhub         # preview a dedicated workspace
+skillhub init ~/skillhub --yes   # create it
 git -C ~/skillhub add -A
 git -C ~/skillhub commit -m "Initialize Skill Hub workspace"
 ```
 
-`init` requires an empty directory (or a non-existent path). If run on a non-empty directory that is not already a workspace, `init` refuses with a message suggesting a dedicated path (override with `--force` only if intended). `init` also writes agent connection files inside the workspace, so an agent opened in `~/skillhub` itself already works.
+When the path is omitted, `init` uses the current directory. The target must be an empty directory (or a non-existent path). If it is non-empty and is not already a workspace, `init` refuses with a message suggesting a dedicated path; override with `--force` only when intentional. `init` also writes agent connection files inside the workspace, so an agent opened in the workspace itself already works.
 
 ### Connect one project (recommended)
 
@@ -99,7 +105,9 @@ Your workspace and skills are untouched.
 
 Skill curation has its own task-oriented guide:
 
-Turning source changes into insights (`skillhub distill ...`) is designed for the agent to run. The agent stops at proposals and states that active skills were not changed. To apply an insight, ask your agent: "Show me the top idea in my inbox," then approve it. The CLI form is `skillhub insight show|decide|apply|confirm` (see `skillhub help insight`).
+- [Curating skills](curating-skills.md) covers source collection, draft imports, skill creation and editing, review, lifecycle transitions, upstream learning, inbox decisions, and Git review.
+- Start with `skillhub status` or ask a connected agent, “Curate my Skill Hub.” Both return the current state and one recommended next action.
+- Return here for workspace setup, agent connections, routing behavior, migration, and troubleshooting.
 
 ## How the agent picks a skill
 
@@ -158,7 +166,7 @@ The error states that a host integration path contains a symbolic link (for exam
 2. Specify only unaffected hosts: `skillhub connect -g --host codex,gemini --workspace ~/skillhub --yes`
 3. Replace the symlink with a real directory.
 
-**The search index is stale.**
+**The search index is stale or degraded.**
 If you edit workspace files by hand, Skill Hub read commands (`skill list`, `skill show`, `status`) will automatically attempt an offline rebuild if canonical files validate. If validation fails or you want to rebuild manually, run:
 
 ```bash
@@ -166,6 +174,25 @@ skillhub validate    # shows exact file:line errors with fixes
 skillhub rebuild
 ```
 
+**Validating staged files before committing (`validate --staged`).**
+To verify that staged commits are structurally valid without running into working-tree differences, run:
+
+```bash
+skillhub validate --staged
+```
+
+`validate --staged` reads literal stage-0 blobs directly from the Git index without applying working-tree filters or checkout modifications, and it never mutates the index or working tree. Skill Hub does not ship a proprietary hook installer (`skillhub hook install` does not exist). You can call this one-line command from any hook manager (Husky, Lefthook, pre-commit, or directly in `.git/hooks/pre-commit`):
+
+```bash
+#!/bin/sh
+skillhub validate --staged
+```
+
+**Fresh clone or moving to a new machine.**
+After cloning a workspace repository onto a new workstation (`git clone <remote> ~/skillhub`), runtime SQLite databases do not exist. Run `skillhub rebuild` once to validate the canonical Git files and compile a fresh catalog generation.
+
+**Degraded MCP server startup.**
+If the SQLite catalog generation is missing or corrupt when an agent host starts `skillhub mcp serve`, the server launches in degraded fallback mode. Diagnostic tools (`hub_status`, `skill_review`, `workspace_validate`, `workspace_rebuild`) remain operational so the agent can inspect and repair the hub, while routing tools return actionable errors without crashing the connection.
 **Telemetry is degraded.**
 `skillhub telemetry health` reports an error such as "file is not a database". Telemetry is a disposable local record of usage. Discard and recreate it:
 
@@ -183,31 +210,34 @@ Restart the agent after `connect`. Check that the `skillhub` binary still exists
 
 | Task | Command |
 |---|---|
-| Create a workspace | `skillhub init <path> [--force] --yes` |
+| Create a workspace | `skillhub init [path] [--force] --yes` |
 | Connect a project | `skillhub connect [--workspace <path>] --yes` |
 | Connect all projects | `skillhub connect -g --workspace <path> --yes` |
 | Health and next step | `skillhub status` |
 | Diagnose and repair | `skillhub doctor [--fix [--yes]]` |
+| Add a skill (GitHub or local) | `skillhub skill add <locator> [--skill <n>\|--all] [--yes]` |
+| Create a draft | `skillhub skill create <id> --collection <c> --name <n> --description <d> [flags] [--yes]` |
+| Review diagnostic facts | `skillhub skill review <id> [--verbose]` |
+| Edit instructions or metadata | `skillhub skill edit <id> [--description ...] [--editor] [--yes]` |
+| Confirm a proposal | `skillhub skill confirm <proposal-id>` |
 | List skills | `skillhub skill list [--state <state>]` |
 | Read a skill (any state) | `skillhub skill show <id>` |
-| Create a draft | `skillhub skill create --id ... --collection ... --name ... --description ... [--yes]` |
-| Edit | `skillhub skill edit <id> [--description ...] [--editor] [--yes]` |
-| Change state | `skillhub skill activate\|deprecate\|archive <id> [--yes]` |
-| Save a source | `skillhub source capture <url> --reason <text>` |
-| List sources | `skillhub source list` |
-| Inspect a source | `skillhub source triage <id> --decision accept --source-id <name> [--path <subdir>] --adapter git` |
-| Confirm a proposal | `skillhub source confirm --proposal ... --proposal-digest ... --base-version ...` |
-| Import draft skills from source | `skillhub source import <source-id> [--path <subdir>] [--skill <name>] [--yes]` |
-| Check upstream | `skillhub check --all-due` or `--all` |
+| Change lifecycle state | `skillhub skill activate\|deprecate\|archive <id> [--yes]` |
+| Watch an upstream repository | `skillhub source watch <locator> [--cadence <c>] [--yes]` |
+| Check upstream for updates | `skillhub source check --all-due` or `--all` (alias: `skillhub check`) |
 | Review the inbox | `skillhub inbox` |
 | Act on an insight | `skillhub insight show\|decide\|apply\|confirm` |
-| Update binary in place | `skillhub update [--yes]` |
-| Ask for a skill | `skillhub resolve --request <file>` |
+| Save an intake candidate | `skillhub source capture <url> --reason <text>` |
+| List or triage candidates | `skillhub source list`; `skillhub source triage <id> ...` |
+| Import skills from source | `skillhub source import <source-id> [--path <subdir>] [--skill <name>] [--yes]` |
+| Ask for a skill recommendation | `skillhub resolve --request <file>` |
 | See uncommitted changes | `skillhub diff` |
-| Validate files | `skillhub validate` |
-| Rebuild the search index | `skillhub rebuild` |
-| Migrate the file format | `skillhub migrate [--to <n>] [--yes]` |
-| Telemetry | `skillhub telemetry health\|export\|purge --yes` |
+| Validate canonical files | `skillhub validate` |
+| Validate staged Git index | `skillhub validate --staged` |
+| Rebuild search catalog | `skillhub rebuild [--verbose]` |
+| Update binary in place | `skillhub update [--yes]` |
+| Migrate file format | `skillhub migrate [--to <n>] [--yes]` |
+| Telemetry inspection | `skillhub telemetry health\|export\|purge --yes` |
 | Version | `skillhub version` |
 
 Most commands accept `--workspace <path>` and `--json`.

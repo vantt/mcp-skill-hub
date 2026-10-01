@@ -181,8 +181,8 @@ func TestMultipleStdioProcessesConcurrentFramesAreBounded(t *testing.T) {
 					processErr = fmt.Errorf("process %d list %d: %w", process, iteration, err)
 					break
 				}
-				if len(listed.Tools) != 35 {
-					processErr = fmt.Errorf("process %d list %d: tools=%d", process, iteration, len(listed.Tools))
+				if len(listed.Tools) != len(expectedToolAnnotations()) {
+					processErr = fmt.Errorf("process %d list %d: tools=%d, want=%d", process, iteration, len(listed.Tools), len(expectedToolAnnotations()))
 					break
 				}
 				status, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "hub_status", Arguments: map[string]any{}})

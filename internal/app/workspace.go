@@ -84,6 +84,19 @@ func (service WorkspaceService) doctorInternal(path string, isInit bool) (Result
 	} else if statErr != nil {
 		return Result{}, statErr
 	}
+	if isInit {
+		if _, markerErr := os.Lstat(filepath.Join(root, ".skillhub")); errors.Is(markerErr, os.ErrNotExist) {
+			// An uninitialized target has no workspace lock to coordinate yet.
+			// Inspect it without creating runtime/locks so preview remains read-only.
+			plan, inspectErr := workspace.Inspect(root)
+			if inspectErr != nil {
+				return Result{}, inspectErr
+			}
+			return doctorResult(root, plan, nil, nil)
+		} else if markerErr != nil {
+			return Result{}, markerErr
+		}
+	}
 	lock, err := mutation.AcquireSharedLock(context.Background(), root, mutation.DefaultLockTimeout)
 	if err != nil {
 		return Result{}, err

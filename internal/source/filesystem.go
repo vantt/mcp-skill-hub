@@ -93,6 +93,26 @@ func (adapter FilesystemAdapter) CurrentRevision(ctx context.Context, source Sou
 	adapter = adapter.withLimits(source.Limits)
 	ctx, cancel := context.WithTimeout(ctx, adapter.Timeout)
 	defer cancel()
+
+	if source.Locator.SnapshotDigest != "" {
+		rev := Revision{
+			Kind:          "filesystem-snapshot",
+			Value:         source.Locator.SnapshotDigest,
+			ContentDigest: source.Locator.SnapshotDigest,
+			ObservedAt:    adapter.Now().UTC(),
+		}
+		manifest, err := adapter.loadManifest(ctx, rev)
+		if err != nil {
+			return Revision{}, err
+		}
+		return Revision{
+			Kind:          "filesystem-snapshot",
+			Value:         manifest.Digest,
+			ContentDigest: manifest.Digest,
+			ObservedAt:    manifest.CreatedAt,
+		}, nil
+	}
+
 	manifest, err := adapter.capture(ctx, source.Locator.Path)
 	if err != nil {
 		return Revision{}, err
@@ -303,11 +323,36 @@ func (adapter FilesystemAdapter) resolve(relative string) (string, error) {
 	return result, nil
 }
 
+// CaptureAuthorizedRoot captures a bounded immutable snapshot of an authorized directory
+// into the workspace-private cache root and returns the manifest.
+func (adapter FilesystemAdapter) CaptureAuthorizedRoot(ctx context.Context, authRoot AuthorizedLocalRoot, subpath string) (filesystemManifest, error) {
+	adapter = adapter.defaults()
+	root := authRoot.Path()
+	if root == "" {
+		return filesystemManifest{}, ErrInvalidLocator
+	}
+	if subpath != "" && subpath != "." {
+		if !safeResourcePath(subpath) {
+			return filesystemManifest{}, ErrInvalidLocator
+		}
+		root = filepath.Join(root, filepath.FromSlash(subpath))
+		info, err := os.Stat(root)
+		if err != nil || !info.IsDir() {
+			return filesystemManifest{}, ErrInvalidLocator
+		}
+	}
+	return adapter.captureDirectory(ctx, root)
+}
+
 func (adapter FilesystemAdapter) capture(ctx context.Context, relative string) (filesystemManifest, error) {
 	root, err := adapter.resolve(relative)
 	if err != nil {
 		return filesystemManifest{}, err
 	}
+	return adapter.captureDirectory(ctx, root)
+}
+
+func (adapter FilesystemAdapter) captureDirectory(ctx context.Context, root string) (filesystemManifest, error) {
 	cacheRoot, err := filepath.Abs(adapter.CacheRoot)
 	if err != nil {
 		return filesystemManifest{}, err
@@ -318,6 +363,9 @@ func (adapter FilesystemAdapter) capture(ctx context.Context, relative string) (
 	}
 	if rel, relErr := filepath.Rel(sourceRoot, cacheRoot); relErr == nil && (rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))) {
 		return filesystemManifest{}, fmt.Errorf("%w: filesystem cache must be outside the source subtree", ErrInvalidLocator)
+	}
+	if rel, relErr := filepath.Rel(cacheRoot, sourceRoot); relErr == nil && (rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))) {
+		return filesystemManifest{}, fmt.Errorf("%w: source root cannot be inside the filesystem cache", ErrInvalidLocator)
 	}
 	select {
 	case <-ctx.Done():
@@ -364,13 +412,13 @@ func (adapter FilesystemAdapter) capture(ctx context.Context, relative string) (
 			return err
 		}
 		if info.Mode()&os.ModeSymlink != 0 {
-			return fmt.Errorf("unsafe source symlink: %s", rel)
+			return fmt.Errorf("%w: unsafe source symlink: %s", ErrUnsafeFile, rel)
 		}
 		if info.IsDir() {
 			return nil
 		}
 		if !info.Mode().IsRegular() {
-			return fmt.Errorf("unsupported source object: %s", rel)
+			return fmt.Errorf("%w: unsupported source object: %s", ErrUnsafeFile, rel)
 		}
 		if len(resources) >= adapter.MaxFiles {
 			return &LimitExceededError{Limit: "files", Actual: int64(len(resources) + 1), Max: int64(adapter.MaxFiles)}

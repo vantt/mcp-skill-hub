@@ -89,8 +89,13 @@ func TestResourceWithInvalidUTF8IsDeliveredByteForByte(t *testing.T) {
 func TestDistributionReportsStaleCatalogAsIndexStale(t *testing.T) {
 	root := newMCPWorkspace(t)
 	session := connectDistributionSession(t, root)
-	edited := filepath.Join(root, "skills", "core", "review-skill", "references", "checks.md")
-	if err := os.WriteFile(edited, []byte("# Checks\n\nEdited outside the application.\n"), 0o644); err != nil {
+	// Corrupt the pointer and break canonical files so catalog cannot be served or rebuilt
+	currentPath := filepath.Join(root, "runtime", "catalog", "current.json")
+	if err := os.WriteFile(currentPath, []byte(`{"generation":"gen_broken","database":"nonexistent.db","catalog_snapshot":"missing"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	badMeta := filepath.Join(root, "skills", "core", "review-skill", "skill.meta.yaml")
+	if err := os.WriteFile(badMeta, []byte("invalid: yaml: ["), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	_, err := mcp.CallCustomMethod[*listSkillsParams, *listSkillsResult](t.Context(), session, "skills/list", &listSkillsParams{})
@@ -114,7 +119,7 @@ func TestSkillsListOmitsUnservableSkillInsteadOfFailing(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(bad, "skill.meta.yaml"), []byte(metadata), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(bad, "SKILL.md"), []byte("---\nname: different\ndescription: Mismatch.\n---\n\n# Renamed\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(bad, "SKILL.md"), []byte("---\nname: renamed-skill\ndescription: \"\"\n---\n\n# Renamed\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := (app.CatalogService{}).BuildCatalogGeneration(t.Context(), root); err != nil {
@@ -127,7 +132,7 @@ func TestSkillsListOmitsUnservableSkillInsteadOfFailing(t *testing.T) {
 	}
 	findSkillEntryByName(t, listed.Skills, "review-skill")
 	for _, entry := range listed.Skills {
-		if name, _ := entry.Frontmatter["name"].(string); name == "different" {
+		if name, _ := entry.Frontmatter["name"].(string); name == "renamed-skill" {
 			t.Fatalf("unservable skill was listed: %#v", entry)
 		}
 	}

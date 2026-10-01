@@ -123,6 +123,12 @@ func commitPrepared(root string, set WriteSet, changes []Change, resultSnapshot 
 	if err := options.inject(FaultManifestPhaseUpdate); err != nil {
 		return Receipt{}, err
 	}
+	if options.Context != nil {
+		if err := options.Context.Err(); err != nil {
+			_ = removeTransaction(txn)
+			return Receipt{}, err
+		}
+	}
 
 	domainCount := len(entries) - 1
 	for index := 0; index < domainCount; index++ {
@@ -162,6 +168,9 @@ func commitPrepared(root string, set WriteSet, changes []Change, resultSnapshot 
 	}
 	if err := options.inject(FaultManifestPhaseUpdate); err != nil {
 		return Receipt{}, err
+	}
+	if options.Context != nil && options.Context.Err() != nil {
+		return Receipt{}, fmt.Errorf("operation cancelled after canonical displacement; transaction %s remains recoverable: %w", set.OperationID, options.Context.Err())
 	}
 	if options.PostCanonical != nil {
 		published, err := options.PostCanonical(resultSnapshot)

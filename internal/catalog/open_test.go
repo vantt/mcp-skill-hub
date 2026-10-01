@@ -236,3 +236,130 @@ func TestOpenCurrentReportsUnavailableCatalogWithSentinel(t *testing.T) {
 		t.Fatalf("OpenCurrentLocked() error = %v, want ErrCatalogUnavailable", err)
 	}
 }
+
+func TestOpenWithFallbackServesCurrentWhenHealthy(t *testing.T) {
+	root := newWorkspace(t)
+	buildResult := build(t, root, BuildOptions{})
+
+	handle, err := OpenWithFallback(t.Context(), root)
+	if err != nil {
+		t.Fatalf("OpenWithFallback failed: %v", err)
+	}
+	defer handle.Close()
+
+	if handle.Status.ServingMode != ServingCurrent {
+		t.Fatalf("serving mode = %v, want %v", handle.Status.ServingMode, ServingCurrent)
+	}
+	if handle.Status.State != StateHealthy {
+		t.Fatalf("state = %v, want %v", handle.Status.State, StateHealthy)
+	}
+	if handle.Pointer.Generation != buildResult.Pointer.Generation {
+		t.Fatalf("generation = %q, want %q", handle.Pointer.Generation, buildResult.Pointer.Generation)
+	}
+}
+
+func TestOpenWithFallbackServesFallbackWhenCanonicalInvalid(t *testing.T) {
+	root := newWorkspace(t)
+	buildResult := build(t, root, BuildOptions{})
+
+	// Break canonical files with an invalid status (BUG-07)
+	writeCanonical(t, root, "skills/core/first/skill.meta.yaml", "schema_version: 1\nid: first\nname: First\nstatus: shiny\ndescription: Broken.\n")
+
+	// EnsureFreshOrRebuild must strictly reject the invalid canonical file
+	if err := EnsureFreshOrRebuild(t.Context(), root); err == nil {
+		t.Fatal("EnsureFreshOrRebuild should fail on invalid canonical file")
+	}
+
+	// OpenCurrent must strictly reject because state is not healthy
+	if _, err := OpenCurrent(t.Context(), root); !errors.Is(err, ErrCatalogUnavailable) {
+		t.Fatalf("OpenCurrent error = %v, want ErrCatalogUnavailable", err)
+	}
+
+	// OpenWithFallback must fall back to the published pointer with diagnostic warning
+	handle, err := OpenWithFallback(t.Context(), root)
+	if err != nil {
+		t.Fatalf("OpenWithFallback should succeed on fallback: %v", err)
+	}
+	defer handle.Close()
+
+	if handle.Status.ServingMode != ServingFallback {
+		t.Fatalf("serving mode = %v, want %v", handle.Status.ServingMode, ServingFallback)
+	}
+	if handle.Status.Warning == "" {
+		t.Fatal("fallback handle must carry diagnostic warning")
+	}
+	if handle.Pointer.Generation != buildResult.Pointer.Generation {
+		t.Fatalf("served generation = %q, want published %q", handle.Pointer.Generation, buildResult.Pointer.Generation)
+	}
+}
+
+func TestOpenWithFallbackAutoRebuildsWhenCanonicalValid(t *testing.T) {
+	root := newWorkspace(t)
+	first := build(t, root, BuildOptions{})
+
+	// Add a new valid skill
+	writeReplaySkill(t, root, "second")
+
+	handle, err := OpenWithFallback(t.Context(), root)
+	if err != nil {
+		t.Fatalf("OpenWithFallback failed: %v", err)
+	}
+	defer handle.Close()
+
+	if handle.Status.ServingMode != ServingCurrent {
+		t.Fatalf("serving mode = %v, want %v", handle.Status.ServingMode, ServingCurrent)
+	}
+	if handle.Pointer.Generation == first.Pointer.Generation {
+		t.Fatal("generation should have been rebuilt to include new skill")
+	}
+}
+
+func TestOpenWithFallbackRejectsCorruptGenerationWhenCanonicalInvalid(t *testing.T) {
+	root := newWorkspace(t)
+	result := build(t, root, BuildOptions{})
+	path := generationPath(root, result.Pointer)
+
+	// Invalidate canonical
+	writeCanonical(t, root, "skills/core/first/skill.meta.yaml", "schema_version: 1\nid: first\nstatus: shiny\n")
+
+	// Corrupt database
+	if err := os.Chmod(path, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("corrupt SQLite database content"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// Must fail because corrupt generation cannot be served as fallback and canonical is invalid
+	handle, err := OpenWithFallback(t.Context(), root)
+	if handle != nil || !errors.Is(err, ErrCatalogUnavailable) {
+		t.Fatalf("OpenWithFallback() = (%v, %v), want nil and ErrCatalogUnavailable", handle, err)
+	}
+}
+
+func TestOpenWithFallbackLockedRetainsLockUntilClose(t *testing.T) {
+	root := newWorkspace(t)
+	build(t, root, BuildOptions{})
+
+	handle, err := OpenWithFallbackLocked(t.Context(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+	defer cancel()
+	if lock, err := mutation.AcquireExclusiveLock(ctx, root, 50*time.Millisecond); err == nil {
+		_ = lock.Unlock()
+		t.Fatal("exclusive lock should be blocked while locked handle is open")
+	}
+
+	if err := handle.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	lock, err := mutation.AcquireExclusiveLock(t.Context(), root, time.Second)
+	if err != nil {
+		t.Fatalf("exclusive lock should be available after close: %v", err)
+	}
+	_ = lock.Unlock()
+}

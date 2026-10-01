@@ -64,13 +64,14 @@ go build -o ~/.local/bin/skillhub ./cmd/skillhub
 
 ## What next
 
-- **Curate your skills.** Use the [curating skills guide](docs/curating-skills.md) to collect sources, import or create drafts, review and edit skills, manage lifecycle states, and learn from upstream changes.
-- **Check health.** `skillhub status` shows what needs attention. `skillhub doctor` checks workspace and agent connections.
+- **Curate your skills.** Use the [curating skills guide](docs/curating-skills.md) to add skills (`skillhub skill add`), create workflows (`skillhub skill create`), review diagnostic facts (`skillhub skill review`), edit instructions (`skillhub skill edit --editor`), and watch repositories (`skillhub source watch`).
+- **Check health and changes.** `skillhub status` shows what needs attention. `skillhub diff` shows uncommitted changes, and `skillhub validate --staged` validates commits before staging.
+- **Diagnose issues.** `skillhub doctor` checks workspace and agent connections (`--fix` to repair).
 - **See every command.** `skillhub help`, or `skillhub help <command>`.
 
 ## Documentation
 
-- [Curating skills](docs/curating-skills.md): collecting sources; importing, creating, reviewing, editing, and improving skills.
+- [Curating skills](docs/curating-skills.md): adding, creating, reviewing, editing, and lifecycle management for skills.
 - [User guide](docs/user-guide.md): setup, concepts, agent connections, moving machines, troubleshooting, and command reference.
 - [Release runbook](docs/release-runbook.md): how releases are built, signed, and verified.
 - [Design documents](docs/design/): architecture and decisions (written in Vietnamese).

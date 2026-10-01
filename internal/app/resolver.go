@@ -55,12 +55,12 @@ func (service ResolverService) Resolve(ctx context.Context, path string, request
 		return response, err
 	}
 	stage = "catalog_open"
-	if request.Prior == nil {
-		if err := catalog.EnsureFreshOrRebuild(ctx, root); err != nil {
-			return response, err
-		}
+	var handle *catalog.Handle
+	if request.Prior != nil {
+		handle, err = catalog.OpenCurrentLocked(ctx, root)
+	} else {
+		handle, err = catalog.OpenWithFallbackLocked(ctx, root)
 	}
-	handle, err := catalog.OpenCurrentLocked(ctx, root)
 	if err != nil {
 		return response, err
 	}
@@ -109,12 +109,15 @@ func (service ResolverService) Resolve(ctx context.Context, path string, request
 		if response.Supporting == nil {
 			response.Supporting = []resolverpkg.Supporting{}
 		}
+		if handle.Status.ServingMode == catalog.ServingFallback && handle.Status.Warning != "" {
+			response.Warnings = append(response.Warnings, handle.Status.Warning)
+		}
 		if err != nil || response.Primary == nil {
 			return response, err
 		}
 		stage = "primary_manifest"
 		primary, err := buildDistributedSkill(ctx, root, handle, response.Primary.ID)
-		if errors.Is(err, catalog.ErrSkillNotServable) {
+		if errors.Is(err, catalog.ErrSkillNotServable) || errors.Is(err, ErrResourceContentUnavailable) {
 			excluded[response.Primary.ID] = struct{}{}
 			response = resolverpkg.Response{}
 			continue
@@ -128,7 +131,7 @@ func (service ResolverService) Resolve(ctx context.Context, path string, request
 		served := response.Supporting[:0]
 		for _, supporting := range response.Supporting {
 			entry, entryErr := buildDistributedSkill(ctx, root, handle, supporting.ID)
-			if errors.Is(entryErr, catalog.ErrSkillNotServable) {
+			if errors.Is(entryErr, catalog.ErrSkillNotServable) || errors.Is(entryErr, ErrResourceContentUnavailable) {
 				continue
 			}
 			if entryErr != nil {

@@ -252,7 +252,7 @@ func openDistributionGeneration(ctx context.Context, path string) (string, *cata
 	if err != nil {
 		return "", nil, err
 	}
-	handle, err := catalog.OpenCurrentLocked(ctx, root)
+	handle, err := catalog.OpenWithFallbackLocked(ctx, root)
 	if err != nil {
 		return "", nil, err
 	}
@@ -326,7 +326,7 @@ func buildDistributedSkill(ctx context.Context, root string, handle *catalog.Han
 	}
 	contents, err := readPinnedResource(root, entrypoint.Path, entrypoint.Digest)
 	if err != nil {
-		return DistributedSkill{}, err
+		return DistributedSkill{}, fmt.Errorf("%w: %w", catalog.ErrSkillNotServable, err)
 	}
 	if err := catalog.ValidateServableSkill(id, contents, len(digestInput), total); err != nil {
 		return DistributedSkill{}, err
@@ -334,6 +334,21 @@ func buildDistributedSkill(ctx context.Context, root string, handle *catalog.Han
 	frontmatter, err := catalog.ParseSkillFrontmatter(contents)
 	if err != nil {
 		return DistributedSkill{}, fmt.Errorf("%w: skill %s is not distributable: %v", catalog.ErrSkillNotServable, id, err)
+	}
+
+	// Verify all other distributed resources of this skill match their pinned digests
+	for _, res := range digestInput {
+		if res.Path == "SKILL.md" {
+			continue
+		}
+		for _, internal := range manifest.Resources {
+			if rel, ok := relativeSkillPath(internal.Path, id); ok && rel == res.Path {
+				if _, err := readPinnedResource(root, internal.Path, internal.Digest); err != nil {
+					return DistributedSkill{}, fmt.Errorf("%w: %w", catalog.ErrSkillNotServable, err)
+				}
+				break
+			}
+		}
 	}
 
 	sort.Slice(digestInput, func(i, j int) bool { return digestInput[i].Path < digestInput[j].Path })
@@ -404,23 +419,27 @@ func buildBundledCuratorSkill() (DistributedSkill, error) {
 	}, nil
 }
 
+// ErrResourceContentUnavailable indicates that a required skill resource has changed or is missing on disk.
+var ErrResourceContentUnavailable = errors.New("resource_content_unavailable")
+
 func readPinnedResource(root, relative, expectedDigest string) ([]byte, error) {
 	rootHandle, err := os.OpenRoot(root)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: open root: %v", ErrResourceContentUnavailable, err)
 	}
 	defer rootHandle.Close()
 	info, err := rootHandle.Lstat(relative)
 	if err != nil || info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-		return nil, skill.ErrSnapshotExpired
+		return nil, fmt.Errorf("%w: resource %s is missing or not regular: %w", ErrResourceContentUnavailable, relative, skill.ErrSnapshotExpired)
 	}
 	contents, err := rootHandle.ReadFile(relative)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: read resource %s: %v", ErrResourceContentUnavailable, relative, err)
 	}
 	sum := sha256.Sum256(contents)
-	if "sha256:"+hex.EncodeToString(sum[:]) != expectedDigest {
-		return nil, skill.ErrResourceDigestMismatch
+	actualDigest := "sha256:" + hex.EncodeToString(sum[:])
+	if actualDigest != expectedDigest {
+		return nil, fmt.Errorf("%w: resource %s digest mismatch (expected %s, got %s): %w", ErrResourceContentUnavailable, relative, expectedDigest, actualDigest, skill.ErrResourceDigestMismatch)
 	}
 	return contents, nil
 }

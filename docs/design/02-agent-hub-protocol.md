@@ -79,7 +79,7 @@ skillhub doctor --fix
 4. Chạy idempotent và giữ thay đổi dễ review bằng Git diff khi file nằm trong repository.
 5. Ghi rõ integration là native, adapter-backed hay instruction-only.
 
-`skillhub init <path>` là convenience shortcut vào cùng toàn bộ remediation flow, với `<path>` làm workspace hint; nó tương đương về hành vi với `skillhub doctor --fix --workspace <path>`. V1 không có `--scope`: một fix plan xử lý workspace, MCP registration và bootstrap instructions theo dependency order, sau khi user review/confirm.
+`skillhub init [path]` là convenience shortcut vào cùng toàn bộ remediation flow; khi bỏ qua `[path]`, current directory (`.`) được dùng làm workspace hint. Nó tương đương về hành vi với `skillhub doctor --fix --workspace <resolved-path>`. V1 không có `--scope`: một fix plan xử lý workspace, MCP registration và bootstrap instructions theo dependency order, sau khi user review/confirm.
 
 Bootstrap block phải tách hai intents:
 

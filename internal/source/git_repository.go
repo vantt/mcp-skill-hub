@@ -22,6 +22,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 	transportclient "github.com/go-git/go-git/v5/plumbing/transport/client"
 	githttp "github.com/go-git/go-git/v5/plumbing/transport/http"
+	"github.com/go-git/go-git/v5/storage/memory"
 )
 
 // go-git's transport registry is process-global. Serialize temporary transport
@@ -34,13 +35,14 @@ var gitTransportMu sync.Mutex
 // validates DNS, pins a validated address for each connection, preserves the
 // original TLS server name, and refuses redirects.
 type GitRepositoryAdapter struct {
-	CacheRoot   string
-	Timeout     time.Duration
-	MaxBytes    int64
-	MaxFiles    int
-	MaxFileSize int64
-	Now         func() time.Time
-	Resolver    IPResolver
+	CacheRoot         string
+	Timeout           time.Duration
+	MaxBytes          int64
+	MaxFiles          int
+	MaxFileSize       int64
+	Now               func() time.Time
+	Resolver          IPResolver
+	AllowFileProtocol bool
 }
 
 func (adapter GitRepositoryAdapter) defaults() GitRepositoryAdapter {
@@ -64,7 +66,7 @@ func (adapter GitRepositoryAdapter) defaults() GitRepositoryAdapter {
 
 func (adapter GitRepositoryAdapter) Identify(ctx context.Context, locator Locator) (Identity, error) {
 	adapter = adapter.defaults()
-	if _, err := ValidateRemoteURL(locator.Repository, false); err != nil {
+	if _, err := ValidateRemoteURLWithOptions(locator.Repository, URLValidationOptions{AllowFile: adapter.AllowFileProtocol}); err != nil {
 		return Identity{}, err
 	}
 	repository, _, err := adapter.syncMirror(ctx, locator.Repository)
@@ -366,9 +368,19 @@ func resolveCommit(repository *git.Repository, ref string) (plumbing.Hash, error
 		return head.Hash(), nil
 	}
 	clean := strings.TrimPrefix(strings.TrimPrefix(ref, "refs/heads/"), "refs/remotes/origin/")
-	for _, name := range []plumbing.ReferenceName{plumbing.NewBranchReferenceName(clean), plumbing.NewRemoteReferenceName("origin", clean), plumbing.ReferenceName(ref)} {
+	clean = strings.TrimPrefix(clean, "refs/tags/")
+	for _, name := range []plumbing.ReferenceName{
+		plumbing.NewBranchReferenceName(clean),
+		plumbing.NewRemoteReferenceName("origin", clean),
+		plumbing.NewTagReferenceName(clean),
+		plumbing.ReferenceName(ref),
+	} {
 		resolved, err := repository.Reference(name, true)
 		if err == nil {
+			tagObj, tagErr := repository.TagObject(resolved.Hash())
+			if tagErr == nil {
+				return tagObj.Target, nil
+			}
 			return resolved.Hash(), nil
 		}
 	}
@@ -402,7 +414,7 @@ func (adapter GitRepositoryAdapter) mirrorPath(repository string) (string, error
 	if adapter.CacheRoot == "" {
 		return "", errors.New("Git source cache root is required")
 	}
-	if _, err := ValidateRemoteURL(repository, false); err != nil {
+	if _, err := ValidateRemoteURLWithOptions(repository, URLValidationOptions{AllowFile: adapter.AllowFileProtocol}); err != nil {
 		return "", err
 	}
 	if err := os.MkdirAll(adapter.CacheRoot, 0o700); err != nil {
@@ -455,17 +467,16 @@ func (adapter GitRepositoryAdapter) syncMirror(ctx context.Context, remoteURL st
 		switch {
 		case errors.Is(statErr, os.ErrNotExist):
 			created = true
-			repository, statErr = git.PlainCloneContext(ctx, mirror, true, &git.CloneOptions{URL: remoteURL, NoCheckout: true, Tags: git.NoTags, SingleBranch: false})
-		case statErr != nil:
+			repository, statErr = git.PlainCloneContext(ctx, mirror, true, &git.CloneOptions{URL: remoteURL, NoCheckout: true, Tags: git.AllTags, SingleBranch: false})
 			return statErr
 		case info.Mode()&os.ModeSymlink != 0 || !info.IsDir():
 			return errors.New("unsafe Git mirror")
 		default:
 			repository, statErr = git.PlainOpen(mirror)
 			if statErr == nil {
-				remoteConfig := &config.RemoteConfig{Name: "origin", URLs: []string{remoteURL}, Fetch: []config.RefSpec{"+refs/heads/*:refs/heads/*"}}
+				remoteConfig := &config.RemoteConfig{Name: "origin", URLs: []string{remoteURL}, Fetch: []config.RefSpec{"+refs/heads/*:refs/heads/*", "+refs/tags/*:refs/tags/*"}}
 				remote := git.NewRemote(repository.Storer, remoteConfig)
-				statErr = remote.FetchContext(ctx, &git.FetchOptions{Tags: git.NoTags, Force: true, RefSpecs: remoteConfig.Fetch})
+				statErr = remote.FetchContext(ctx, &git.FetchOptions{Tags: git.AllTags, Force: true, RefSpecs: remoteConfig.Fetch})
 				if errors.Is(statErr, git.NoErrAlreadyUpToDate) {
 					statErr = nil
 				}
@@ -600,4 +611,105 @@ func min64(a, b int64) int64 {
 		return a
 	}
 	return b
+}
+
+// AdvertisedRef represents one ref advertised by a remote Git repository.
+type AdvertisedRef struct {
+	Name       string
+	Hash       string
+	PeeledHash string
+}
+
+// ListAdvertisedRefs queries the fresh advertised heads and tags from a remote repository.
+func (adapter GitRepositoryAdapter) ListAdvertisedRefs(ctx context.Context, remoteURL string) ([]AdvertisedRef, error) {
+	adapter = adapter.defaults()
+	if _, err := ValidateRemoteURLWithOptions(remoteURL, URLValidationOptions{AllowFile: adapter.AllowFileProtocol}); err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, adapter.Timeout)
+	defer cancel()
+
+	remote := git.NewRemote(memory.NewStorage(), &config.RemoteConfig{
+		Name: "origin",
+		URLs: []string{remoteURL},
+	})
+	var refs []*plumbing.Reference
+	err := adapter.withSafeTransport(func() error {
+		var listErr error
+		refs, listErr = remote.ListContext(ctx, &git.ListOptions{
+			PeelingOption: git.AppendPeeled,
+		})
+		return listErr
+	})
+	if err != nil {
+		return nil, fmt.Errorf("Git HTTPS source operation failed: %w", err)
+	}
+
+	peeled := make(map[string]string)
+	for _, ref := range refs {
+		name := string(ref.Name())
+		if strings.HasSuffix(name, "^{}") {
+			base := strings.TrimSuffix(name, "^{}")
+			peeled[base] = ref.Hash().String()
+		}
+	}
+	result := make([]AdvertisedRef, 0, len(refs))
+	for _, ref := range refs {
+		name := string(ref.Name())
+		if strings.HasSuffix(name, "^{}") {
+			continue
+		}
+		item := AdvertisedRef{
+			Name:       name,
+			Hash:       ref.Hash().String(),
+			PeeledHash: peeled[name],
+		}
+		result = append(result, item)
+	}
+	return result, nil
+}
+
+// ResolveRefCommit resolves a ref name or SHA to a full commit hash in the local mirror.
+func (adapter GitRepositoryAdapter) ResolveRefCommit(ctx context.Context, remoteURL, ref string) (string, error) {
+	adapter = adapter.defaults()
+	repository, _, err := adapter.syncMirror(ctx, remoteURL)
+	if err != nil {
+		return "", err
+	}
+	hash, err := resolveCommit(repository, ref)
+	if err != nil {
+		return "", err
+	}
+	return hash.String(), nil
+}
+
+// CommitHasSkill checks if the given commit hash at scopedPath contains a SKILL.md file.
+func (adapter GitRepositoryAdapter) CommitHasSkill(ctx context.Context, remoteURL, commitHash, scopedPath string) (bool, error) {
+	adapter = adapter.defaults()
+	repository, err := adapter.openMirror(remoteURL)
+	if err != nil {
+		var syncErr error
+		repository, _, syncErr = adapter.syncMirror(ctx, remoteURL)
+		if syncErr != nil {
+			return false, syncErr
+		}
+	}
+	hash := plumbing.NewHash(commitHash)
+	commit, err := repository.CommitObject(hash)
+	if err != nil {
+		return false, err
+	}
+	tree, err := commit.Tree()
+	if err != nil {
+		return false, err
+	}
+	targetPath := "SKILL.md"
+	if scopedPath != "" && scopedPath != "." {
+		targetPath = strings.TrimSuffix(scopedPath, "/") + "/SKILL.md"
+	}
+	entry, err := tree.FindEntry(targetPath)
+	if err != nil {
+		return false, nil
+	}
+	return entry.Mode == filemode.Regular || entry.Mode == filemode.Executable, nil
 }

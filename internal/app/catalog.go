@@ -85,3 +85,21 @@ func (CatalogService) EnsureCatalog(ctx context.Context, path string) (Result, e
 	}
 	return CatalogService{}.BuildCatalogGeneration(ctx, root)
 }
+
+// InspectCatalog reports the current catalog status without modifying state.
+func (CatalogService) InspectCatalog(ctx context.Context, path string) (catalog.Status, error) {
+	root, err := workspace.Discover(path)
+	if err != nil {
+		return catalog.Status{}, err
+	}
+	return catalog.Inspect(ctx, root)
+}
+
+// AssessSkill evaluates a skill's basis-aware state comparing canonical and served facts.
+func (CatalogService) AssessSkill(ctx context.Context, path, id string) (catalog.SkillStateAssessment, error) {
+	root, err := workspace.Discover(path)
+	if err != nil {
+		return catalog.SkillStateAssessment{}, err
+	}
+	return catalog.AssessSkillState(ctx, root, id)
+}

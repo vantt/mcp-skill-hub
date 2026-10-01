@@ -2,6 +2,7 @@ package schemas
 
 import (
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 
@@ -167,6 +168,150 @@ func TestExperimentManifestSchemaPinsReplayIdentities(t *testing.T) {
 	}
 	for index, document := range invalid {
 		t.Run(string(rune('a'+index)), func(t *testing.T) { validateJSON(t, ExperimentManifest, document, false) })
+	}
+}
+
+func loadSkillMetadataSchema() (*jsonschema.Schema, error) {
+	data, err := os.ReadFile("skill-metadata.schema.json")
+	if err != nil {
+		return nil, err
+	}
+	var schema jsonschema.Schema
+	if err := json.Unmarshal(data, &schema); err != nil {
+		return nil, err
+	}
+	return &schema, nil
+}
+
+func loadErrorEnvelopeSchema() (*jsonschema.Schema, error) {
+	data, err := os.ReadFile("error-envelope.schema.json")
+	if err != nil {
+		return nil, err
+	}
+	var schema jsonschema.Schema
+	if err := json.Unmarshal(data, &schema); err != nil {
+		return nil, err
+	}
+	return &schema, nil
+}
+
+func TestSkillMetadataProvenanceAndStructuredOrigin(t *testing.T) {
+	legacy := `{
+		"schema_version": 1,
+		"id": "my-skill",
+		"name": "My Skill",
+		"status": "draft",
+		"description": "Legacy provenance test",
+		"routing": {},
+		"provenance": {
+			"created_by": "source_import",
+			"source_id": "gh-source",
+			"revision": "v1.0",
+			"path": "skills/my-skill"
+		}
+	}`
+	validateJSON(t, loadSkillMetadataSchema, legacy, true)
+
+	validGithub := `{
+		"schema_version": 1,
+		"id": "my-skill",
+		"name": "My Skill",
+		"status": "draft",
+		"description": "GitHub origin test",
+		"routing": {},
+		"provenance": {
+			"origin": {
+				"kind": "github",
+				"repository": "https://github.com/anthropics/skills",
+				"ref": "main",
+				"commit": "8a1541c8a1541c8a1541c8a1541c8a1541c8a154",
+				"path": "skills/pdf"
+			}
+		}
+	}`
+	validateJSON(t, loadSkillMetadataSchema, validGithub, true)
+
+	validLocal := `{
+		"schema_version": 1,
+		"id": "my-skill",
+		"name": "My Skill",
+		"status": "draft",
+		"description": "Local origin test",
+		"routing": {},
+		"provenance": {
+			"origin": {
+				"kind": "local",
+				"name": "pdf",
+				"path": "skills/pdf",
+				"folder_digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+				"content_digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+				"transformations": ["strip_license"],
+				"added_at": "2026-10-01T12:00:00Z"
+			}
+		}
+	}`
+	validateJSON(t, loadSkillMetadataSchema, validLocal, true)
+
+	invalidCases := []struct {
+		name string
+		json string
+	}{
+		{
+			name: "local origin with repository",
+			json: replaceJSON(validLocal, `"name": "pdf",`, `"name": "pdf", "repository": "https://github.com/foo/bar",`),
+		},
+		{
+			name: "local origin with absolute path",
+			json: replaceJSON(validLocal, `"path": "skills/pdf"`, `"path": "/home/user/skills/pdf"`),
+		},
+		{
+			name: "local origin with tilde path",
+			json: replaceJSON(validLocal, `"path": "skills/pdf"`, `"path": "~/skills/pdf"`),
+		},
+		{
+			name: "local origin with path traversal",
+			json: replaceJSON(validLocal, `"path": "skills/pdf"`, `"path": "skills/../pdf"`),
+		},
+		{
+			name: "local origin with path in name",
+			json: replaceJSON(validLocal, `"name": "pdf"`, `"name": "dir/pdf"`),
+		},
+		{
+			name: "local origin with unknown property",
+			json: replaceJSON(validLocal, `"name": "pdf",`, `"name": "pdf", "extra": "unsafe",`),
+		},
+		{
+			name: "invalid digest",
+			json: replaceJSON(validLocal, `"folder_digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"`, `"folder_digest": "md5:bad"`),
+		},
+	}
+	for _, tc := range invalidCases {
+		t.Run(tc.name, func(t *testing.T) {
+			validateJSON(t, loadSkillMetadataSchema, tc.json, false)
+		})
+	}
+}
+
+func TestErrorEnvelopeSchemaAcceptsNewErrorCodes(t *testing.T) {
+	codes := []string{
+		"ambiguous_locator",
+		"ambiguous_ref",
+		"skill_selection_required",
+		"skill_conflict",
+		"source_conflict",
+		"resource_limits_exceeded",
+		"source_changed",
+		"edit_conflict",
+		"stale_proposal",
+		"validation_failed",
+		"local_watch_unsupported",
+		"resource_content_unavailable",
+	}
+	for _, code := range codes {
+		t.Run(code, func(t *testing.T) {
+			doc := `{"code":"` + code + `","render":{"ERROR":"failed","WHY":"because","FIX":"retry"}}`
+			validateJSON(t, loadErrorEnvelopeSchema, doc, true)
+		})
 	}
 }
 

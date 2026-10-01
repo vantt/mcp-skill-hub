@@ -50,7 +50,7 @@ func getManifest(ctx context.Context, root, id string, activeOnly bool) (Manifes
 	if !idPattern.MatchString(id) {
 		return Manifest{}, errors.New("skill id must be a lowercase kebab-case identifier")
 	}
-	handle, err := catalog.OpenCurrent(ctx, root)
+	handle, err := catalog.OpenWithFallback(ctx, root)
 	if err != nil {
 		return Manifest{}, fmt.Errorf("%w: %v", ErrSnapshotExpired, err)
 	}
@@ -93,7 +93,7 @@ func ReadResource(ctx context.Context, root, snapshot, path, expectedDigest stri
 	if !safeResourcePath(path) {
 		return nil, errors.New("resource path is invalid")
 	}
-	handle, err := catalog.OpenCurrent(ctx, root)
+	handle, err := catalog.OpenWithFallback(ctx, root)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrSnapshotExpired, err)
 	}

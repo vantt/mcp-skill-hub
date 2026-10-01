@@ -234,3 +234,153 @@ func write(t *testing.T, root, relative, contents string) {
 		t.Fatal(err)
 	}
 }
+func TestValidateEnforcesSkillFrontmatterNameMatchesSkillID(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "workspace")
+	if _, err := workspace.Apply(root); err != nil {
+		t.Fatal(err)
+	}
+	write(t, root, "skills/software/rr/skill.meta.yaml", "schema_version: 1\nid: rr\nname: RR\nstatus: draft\ndescription: Reliability reviewer.\nrouting: {}\n")
+	write(t, root, "skills/software/rr/SKILL.md", "---\nname: WRONG_NAME\n---\n# RR Skill\n")
+
+	issues, err := Validate(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := issueMessages(issues)
+	if !strings.Contains(joined, `SKILL.md frontmatter name "WRONG_NAME" does not match skill ID "rr"`) {
+		t.Fatalf("expected frontmatter mismatch issue, got:\n%s", joined)
+	}
+
+	// Fix frontmatter name
+	write(t, root, "skills/software/rr/SKILL.md", "---\nname: rr\n---\n# RR Skill\n")
+	issues, err = Validate(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(issues) != 0 {
+		t.Fatalf("expected 0 issues after fixing frontmatter name, got:\n%s", issueMessages(issues))
+	}
+}
+
+func TestValidateAcceptsCloneLikeWorkspaceWithAbsentEmptyDirectories(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "workspace")
+	if _, err := workspace.Apply(root); err != nil {
+		t.Fatal(err)
+	}
+	// Delete empty required directories to simulate fresh clone
+	for _, dir := range workspace.RequiredDirectories() {
+		_ = os.Remove(filepath.Join(root, filepath.FromSlash(dir)))
+	}
+	issues, err := Validate(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(issues) != 0 {
+		t.Fatalf("expected 0 issues on clone-like workspace, got:\n%s", issueMessages(issues))
+	}
+}
+
+func TestValidateCompanionResourcesOpaqueAndBounded(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "workspace")
+	if _, err := workspace.Apply(root); err != nil {
+		t.Fatal(err)
+	}
+	write(t, root, "skills/software/rr/skill.meta.yaml", "schema_version: 1\nid: rr\nname: RR\nstatus: draft\ndescription: Reliability reviewer.\nrouting: {}\n")
+	write(t, root, "skills/software/rr/SKILL.md", "---\nname: rr\n---\n# RR Skill\n")
+
+	// 1. Top-level LICENSE.txt
+	write(t, root, "skills/software/rr/LICENSE.txt", "MIT License\n")
+	// 2. Top-level forms.yaml (not a canonical entity, has arbitrary yaml)
+	write(t, root, "skills/software/rr/forms.yaml", "form_title: Feedback Form\nfields:\n  - name: rating\n    type: number\n")
+	// 3. Empty companion file
+	write(t, root, "skills/software/rr/empty.txt", "")
+	// 4. Binary asset
+	binaryData := "\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4"
+	write(t, root, "skills/software/rr/assets/logo.png", binaryData)
+	// 5. Nested template
+	write(t, root, "skills/software/rr/templates/nested/template.j2", "{% for item in items %}{{ item }}{% endfor %}")
+
+	issues, err := Validate(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(issues) != 0 {
+		t.Fatalf("expected all companion resources to pass validation, got:\n%s", issueMessages(issues))
+	}
+}
+
+func TestValidateDetachedModeWithoutGit(t *testing.T) {
+	root := filepath.Join(t.TempDir(), ".skillhub-validate-staged-test")
+	if _, err := workspace.Apply(root); err != nil {
+		t.Fatal(err)
+	}
+	// Remove .git
+	_ = os.RemoveAll(filepath.Join(root, ".git"))
+
+	unmerged := []string{"skills/software/conflict/SKILL.md"}
+	issues, err := ValidateDetached(root, unmerged)
+	if err != nil {
+		t.Fatalf("ValidateDetached failed: %v", err)
+	}
+	joined := issueMessages(issues)
+	if !strings.Contains(joined, "skills/software/conflict/SKILL.md: unresolved Git index conflict") {
+		t.Fatalf("expected unmerged conflict issue in detached mode, got:\n%s", joined)
+	}
+	if strings.Contains(joined, "Workspace is not a Git repository") {
+		t.Fatalf("detached mode must not report missing Git repository, got:\n%s", joined)
+	}
+}
+
+func TestValidateStructuredOriginValidation(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "workspace")
+	if _, err := workspace.Apply(root); err != nil {
+		t.Fatal(err)
+	}
+	write(t, root, "skills/software/rr/SKILL.md", "---\nname: rr\n---\n# RR Skill\n")
+
+	// Valid local origin
+	validLocalMeta := `schema_version: 1
+id: rr
+name: RR
+status: draft
+description: Reliability reviewer.
+routing: {}
+provenance:
+  origin:
+    kind: local
+    name: rr
+    path: skills/software/rr
+    folder_digest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+    added_at: '2026-10-01T12:00:00Z'
+`
+	write(t, root, "skills/software/rr/skill.meta.yaml", validLocalMeta)
+	issues, err := Validate(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(issues) != 0 {
+		t.Fatalf("expected valid local origin to pass, got:\n%s", issueMessages(issues))
+	}
+
+	// Invalid: absolute path in local origin
+	invalidAbsPathMeta := strings.Replace(validLocalMeta, "path: skills/software/rr", "path: /abs/path/rr", 1)
+	write(t, root, "skills/software/rr/skill.meta.yaml", invalidAbsPathMeta)
+	issues, err = Validate(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(issueMessages(issues), "provenance.origin.path must be a relative, safe skill path") {
+		t.Fatalf("expected rejection of absolute path in origin, got:\n%s", issueMessages(issues))
+	}
+
+	// Invalid: repository in local origin
+	invalidRepoMeta := strings.Replace(validLocalMeta, "kind: local", "kind: local\n    repository: https://github.com/foo/bar", 1)
+	write(t, root, "skills/software/rr/skill.meta.yaml", invalidRepoMeta)
+	issues, err = Validate(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(issueMessages(issues), "provenance.origin.repository is not allowed for local origin") {
+		t.Fatalf("expected rejection of repository in local origin, got:\n%s", issueMessages(issues))
+	}
+}

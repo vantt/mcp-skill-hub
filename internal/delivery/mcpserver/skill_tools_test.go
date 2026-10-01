@@ -2,6 +2,8 @@ package mcpserver
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -255,6 +257,17 @@ func TestSkillToolsLifecycleInMemory(t *testing.T) {
 	if !strings.Contains(got.Content, "Inspect error handling") {
 		t.Fatalf("unexpected skill_get content: %s", got.Content)
 	}
+	sum := sha256.Sum256([]byte(got.Content))
+	wantDigest := "sha256:" + hex.EncodeToString(sum[:])
+	if got.ContentDigest != wantDigest {
+		t.Fatalf("content_digest = %q, want %q", got.ContentDigest, wantDigest)
+	}
+	if got.StateBasis != "canonical" {
+		t.Fatalf("state_basis = %q, want canonical", got.StateBasis)
+	}
+	if got.LifecycleState != "active" {
+		t.Fatalf("lifecycle_state = %q, want active", got.LifecycleState)
+	}
 	if len(got.Routing.Triggers) != 1 || got.Routing.Triggers[0] != "review reliability failure handling" {
 		t.Fatalf("unexpected routing triggers: %#v", got.Routing)
 	}
@@ -367,6 +380,7 @@ func TestSkillToolsStdioSubprocess(t *testing.T) {
 			"skill_id":    "stdio-test-skill",
 			"name":        "Stdio Test Skill",
 			"description": "Tested over real stdio transport.",
+			"content":     "# Stdio Test Skill\n\nMeaningful procedures.\n",
 			"routing": map[string]any{
 				"triggers":  []string{"stdio test trigger"},
 				"not_for":   []string{"unrelated"},
@@ -451,5 +465,97 @@ func TestSkillToolsStdioSubprocess(t *testing.T) {
 	}
 	if len(getOutcome.Result.Routing.Triggers) != 1 || getOutcome.Result.Routing.Triggers[0] != "stdio test trigger" {
 		t.Fatalf("stdio skill_get routing triggers: %#v", getOutcome.Result.Routing)
+	}
+}
+
+func TestSkillUpdatePreviewWithExpectedContentDigest(t *testing.T) {
+	root := newEmptyMCPWorkspace(t)
+	session := connectInMemoryServer(t, root)
+
+	// 1. Create a draft skill
+	createRes, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name: "skill_create_preview",
+		Arguments: map[string]any{
+			"skill_id":    "digest-test-skill",
+			"name":        "Digest Test",
+			"description": "Testing expected content digest.",
+			"content":     "# Initial Instructions\n",
+		},
+	})
+	if err != nil || createRes.IsError {
+		t.Fatalf("create preview failed: %#v, %v", createRes, err)
+	}
+	var createOutcome toolOutcome[app.SkillProposal]
+	decodeStructuredContent(t, createRes, &createOutcome)
+	pins := createOutcome.Result.Confirmation.Confirmation.Pins
+
+	confRes, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name:      "skill_create_confirm",
+		Arguments: map[string]any{"proposal_id": pins.ProposalID, "proposal_digest": pins.ProposalDigest, "base_version": pins.BaseVersion},
+	})
+	if err != nil || confRes.IsError {
+		t.Fatalf("create confirm failed: %#v, %v", confRes, err)
+	}
+
+	// 2. Read skill to obtain exact content digest
+	getRes, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name:      "skill_get",
+		Arguments: map[string]any{"skill_id": "digest-test-skill"},
+	})
+	if err != nil || getRes.IsError {
+		t.Fatalf("skill_get failed: %#v, %v", getRes, err)
+	}
+	var getOutcome toolOutcome[skillGetResult]
+	decodeStructuredContent(t, getRes, &getOutcome)
+	initialDigest := getOutcome.Result.ContentDigest
+	if initialDigest == "" {
+		t.Fatal("content_digest was empty")
+	}
+
+	// 3. Stale digest update preview fails with edit_conflict
+	staleDigest := "sha256:" + strings.Repeat("a", 64)
+	staleRes, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name: "skill_update_preview",
+		Arguments: map[string]any{
+			"skill_id":                "digest-test-skill",
+			"content":                 "# Updated Body\n",
+			"expected_content_digest": staleDigest,
+		},
+	})
+	if err != nil {
+		t.Fatalf("call error: %v", err)
+	}
+	if !staleRes.IsError {
+		t.Fatal("expected stale expected_content_digest to fail")
+	}
+	var staleOutcome toolOutcome[app.SkillProposal]
+	decodeStructuredContent(t, staleRes, &staleOutcome)
+	if staleOutcome.Error == nil || staleOutcome.Error.Code != "edit_conflict" {
+		t.Fatalf("expected edit_conflict error, got %#v", staleOutcome.Error)
+	}
+
+	// 4. Matching digest update preview succeeds
+	matchRes, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name: "skill_update_preview",
+		Arguments: map[string]any{
+			"skill_id":                "digest-test-skill",
+			"content":                 "# Updated Body With Matching Digest\n",
+			"expected_content_digest": initialDigest,
+		},
+	})
+	if err != nil || matchRes.IsError {
+		t.Fatalf("matching digest update preview failed: %#v, %v", matchRes, err)
+	}
+
+	// 5. Omitted digest update preview succeeds (blind replacement)
+	blindRes, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name: "skill_update_preview",
+		Arguments: map[string]any{
+			"skill_id": "digest-test-skill",
+			"content":  "# Blind Replacement\n",
+		},
+	})
+	if err != nil || blindRes.IsError {
+		t.Fatalf("blind replacement update preview failed: %#v, %v", blindRes, err)
 	}
 }

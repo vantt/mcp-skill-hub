@@ -8,6 +8,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/vantt/mcp-skill-hub/internal/canonical"
 )
 
 func TestValidateWorkspaceApplicationContract(t *testing.T) {
@@ -107,5 +109,45 @@ func TestInspectGitDisablesConfiguredFSMonitor(t *testing.T) {
 	}
 	if _, err := os.Stat(marker); !os.IsNotExist(err) {
 		t.Fatalf("offline Git status invoked fsmonitor: %v", err)
+	}
+}
+func TestValidateWorkspaceAddsNoRuleBeyondCanonicalValidate(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "workspace")
+	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Workspace is valid: both return 0 issues
+	issues, err := canonical.Validate(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := (WorkspaceService{}).ValidateWorkspace(context.Background(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(issues) != 0 || res.Status != StatusOK {
+		t.Fatalf("clean workspace mismatch: canonical=%d, app=%s", len(issues), res.Status)
+	}
+
+	// 2. Add an invalid skill with frontmatter mismatch
+	skillDir := filepath.Join(root, "skills", "software", "test-skill")
+	_ = os.MkdirAll(skillDir, 0o755)
+	_ = os.WriteFile(filepath.Join(skillDir, "skill.meta.yaml"), []byte("schema_version: 1\nid: test-skill\nname: Test\nstatus: draft\ndescription: Test\nrouting: {}\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\nname: WRONG\n---\n# Test\n"), 0o644)
+
+	issues, err = canonical.Validate(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err = (WorkspaceService{}).ValidateWorkspace(context.Background(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(issues) != len(res.Items) {
+		t.Fatalf("issue count mismatch: canonical=%d, app=%d (ValidateWorkspace added or dropped rules)", len(issues), len(res.Items))
+	}
+	if res.Status != StatusError {
+		t.Fatalf("expected StatusError, got %s", res.Status)
 	}
 }

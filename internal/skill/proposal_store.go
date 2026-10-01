@@ -1,6 +1,9 @@
 package skill
 
 import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,6 +20,7 @@ const proposalLifetime = 24 * time.Hour
 
 type proposalArtifact struct {
 	Version        int               `json:"version"`
+	Kind           ProposalKind      `json:"kind,omitempty"`
 	CreatedAt      time.Time         `json:"created_at"`
 	ExpiresAt      time.Time         `json:"expires_at"`
 	ID             string            `json:"id"`
@@ -28,6 +32,7 @@ type proposalArtifact struct {
 	RoutingImpact  *RoutingImpact    `json:"routing_impact,omitempty"`
 	WriteSet       mutation.WriteSet `json:"write_set"`
 	AlreadyApplied *mutation.Receipt `json:"already_applied,omitempty"`
+	RecoveryID     string            `json:"recovery_id,omitempty"`
 }
 
 // StoreProposal persists only the bounded, exact mutation proposal under the
@@ -62,12 +67,17 @@ func StoreProposal(root string, proposal Proposal, now time.Time) error {
 		lifetime = proposal.ExpiresAt.Sub(proposal.CreatedAt)
 	}
 	expiresAt := createdAt.Add(lifetime)
+	kind := proposal.Kind
+	if kind == "" {
+		kind = ProposalKindLifecycle
+	}
 	artifact := proposalArtifact{
-		Version: 1, CreatedAt: createdAt, ExpiresAt: expiresAt,
+		Version: 1, Kind: kind, CreatedAt: createdAt, ExpiresAt: expiresAt,
 		ID: proposal.ID, Digest: proposal.Digest, BaseSnapshot: proposal.BaseSnapshot,
 		SkillID: proposal.SkillID, Command: proposal.Command, Summary: proposal.Summary,
 		RoutingImpact: proposal.RoutingImpact,
 		WriteSet:      proposal.planned.WriteSet, AlreadyApplied: proposal.alreadyApplied,
+		RecoveryID: proposal.RecoveryID,
 	}
 	data, err := json.Marshal(artifact)
 	if err != nil {
@@ -136,21 +146,27 @@ func LoadProposal(root, id string, now time.Time) (Proposal, error) {
 	if artifact.Version != 1 || artifact.ID != id || artifact.Digest == "" || artifact.BaseSnapshot == "" || !artifact.ExpiresAt.After(artifact.CreatedAt) {
 		return Proposal{}, errors.New("proposal artifact is invalid")
 	}
+	if artifact.Kind == "" {
+		artifact.Kind = ProposalKindLifecycle
+	} else if artifact.Kind != ProposalKindLifecycle && artifact.Kind != ProposalKindAdd {
+		return Proposal{}, fmt.Errorf("proposal artifact has unknown kind %q", artifact.Kind)
+	}
 	if !now.UTC().Before(artifact.ExpiresAt) {
 		_ = rootHandle.Remove(path)
 		return Proposal{}, errors.New("proposal artifact expired")
 	}
 	planned := mutation.Proposal{ID: artifact.ID, Digest: artifact.Digest, BaseCatalogSnapshot: artifact.BaseSnapshot, WriteSet: artifact.WriteSet}
 	return Proposal{
-		ID: artifact.ID, Digest: artifact.Digest, BaseSnapshot: artifact.BaseSnapshot,
+		ID: artifact.ID, Kind: artifact.Kind, Digest: artifact.Digest, BaseSnapshot: artifact.BaseSnapshot,
 		SkillID: artifact.SkillID, Command: artifact.Command, Summary: artifact.Summary,
-		RoutingImpact: artifact.RoutingImpact, CreatedAt: artifact.CreatedAt, ExpiresAt: artifact.ExpiresAt,
+		RoutingImpact: artifact.RoutingImpact, RecoveryID: artifact.RecoveryID, CreatedAt: artifact.CreatedAt, ExpiresAt: artifact.ExpiresAt,
 		planned: planned, alreadyApplied: artifact.AlreadyApplied,
 	}, nil
 }
 
 func cleanupExpiredProposals(root *os.Root, now time.Time) error {
 	entries, err := fs.ReadDir(root.FS(), "runtime/proposals")
+	_ = cleanupExpiredRecoveries(root, now)
 	if err != nil {
 		return err
 	}
@@ -212,4 +228,185 @@ func rejectSymlink(root *os.Root, path string) error {
 		return fmt.Errorf("unsafe runtime path: %s", path)
 	}
 	return nil
+}
+func recoveryArtifactPath(recoveryID string) string {
+	return "runtime/edits/" + recoveryID + ".md"
+}
+
+func validRecoveryID(id string) bool {
+	if len(id) < 5 || len(id) > 128 {
+		return false
+	}
+	for _, ch := range id {
+		if !((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-' || ch == '_') {
+			return false
+		}
+	}
+	return true
+}
+
+// SaveEditorRecovery persists edited bytes into a private recovery file associated with proposalID.
+// It returns an opaque recovery ID and writes no absolute paths to the artifact.
+func SaveEditorRecovery(root, proposalID string, content []byte, now time.Time) (string, error) {
+	if len(content) > 64<<20 {
+		return "", errors.New("recovery content exceeds size limit")
+	}
+	rootHandle, err := os.OpenRoot(root)
+	if err != nil {
+		return "", err
+	}
+	defer rootHandle.Close()
+
+	if err := rootHandle.MkdirAll("runtime/edits", 0o700); err != nil {
+		return "", fmt.Errorf("create recovery runtime directory: %w", err)
+	}
+	if err := rejectSymlink(rootHandle, "runtime"); err != nil {
+		return "", err
+	}
+	if err := rejectSymlink(rootHandle, "runtime/edits"); err != nil {
+		return "", err
+	}
+	if err := rootHandle.Chmod("runtime/edits", 0o700); err != nil {
+		return "", fmt.Errorf("restrict recovery runtime directory: %w", err)
+	}
+	_ = cleanupExpiredRecoveries(rootHandle, now.UTC())
+
+	sum := sha256.Sum256(content)
+	contentHash := hex.EncodeToString(sum[:])[:12]
+	recoveryID := fmt.Sprintf("REC-%s-%s", proposalID, contentHash)
+	if !validRecoveryID(recoveryID) {
+		recoveryID = fmt.Sprintf("REC-%s", contentHash)
+	}
+
+	path := recoveryArtifactPath(recoveryID)
+	temporary := path + ".tmp"
+	_ = rootHandle.Remove(temporary)
+	file, err := rootHandle.OpenFile(temporary, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return "", fmt.Errorf("create recovery artifact: %w", err)
+	}
+	if _, err = file.Write(content); err == nil {
+		err = file.Sync()
+	}
+	if closeErr := file.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		_ = rootHandle.Remove(temporary)
+		return "", err
+	}
+	if err := rootHandle.Rename(temporary, path); err != nil {
+		_ = rootHandle.Remove(temporary)
+		return "", fmt.Errorf("publish recovery artifact: %w", err)
+	}
+	return recoveryID, nil
+}
+
+// ReadEditorRecovery reads recovery content by opaque recovery ID.
+func ReadEditorRecovery(root, recoveryID string) ([]byte, error) {
+	if !validRecoveryID(recoveryID) {
+		return nil, errors.New("recovery ID is invalid")
+	}
+	rootHandle, err := os.OpenRoot(root)
+	if err != nil {
+		return nil, err
+	}
+	defer rootHandle.Close()
+	path := recoveryArtifactPath(recoveryID)
+	info, err := rootHandle.Lstat(path)
+	if err != nil {
+		return nil, err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() || (runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0) {
+		return nil, errors.New("recovery artifact is not a restrictive regular file")
+	}
+	data, err := rootHandle.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > 64<<20 {
+		return nil, errors.New("recovery artifact exceeds size limit")
+	}
+	return data, nil
+}
+
+// DeleteEditorRecovery removes a recovery artifact by opaque recovery ID.
+func DeleteEditorRecovery(root, recoveryID string) error {
+	if !validRecoveryID(recoveryID) {
+		return errors.New("recovery ID is invalid")
+	}
+	rootHandle, err := os.OpenRoot(root)
+	if err != nil {
+		return err
+	}
+	defer rootHandle.Close()
+	return rootHandle.Remove(recoveryArtifactPath(recoveryID))
+}
+
+// CleanupExpiredRecoveries removes recovery files older than the proposal TTL.
+func CleanupExpiredRecoveries(root string, now time.Time) error {
+	rootHandle, err := os.OpenRoot(root)
+	if err != nil {
+		return err
+	}
+	defer rootHandle.Close()
+	return cleanupExpiredRecoveries(rootHandle, now.UTC())
+}
+
+func cleanupExpiredRecoveries(root *os.Root, now time.Time) error {
+	entries, err := fs.ReadDir(root.FS(), "runtime/edits")
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	for _, entry := range entries {
+		path := "runtime/edits/" + entry.Name()
+		if entry.Type()&os.ModeSymlink != 0 {
+			_ = root.Remove(path)
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		if now.Sub(info.ModTime().UTC()) > proposalLifetime {
+			_ = root.Remove(path)
+		}
+	}
+	return nil
+}
+
+// ProposalHandler is a confirmation handler for a specific proposal kind.
+type ProposalHandler func(ctx context.Context, root string, proposal Proposal, pins mutation.Confirmation) (MutationResult, error)
+
+// ProposalDispatcher dispatches proposal confirmation by proposal kind.
+type ProposalDispatcher struct {
+	handlers map[ProposalKind]ProposalHandler
+}
+
+// NewProposalDispatcher creates an empty proposal dispatcher.
+func NewProposalDispatcher() *ProposalDispatcher {
+	return &ProposalDispatcher{
+		handlers: make(map[ProposalKind]ProposalHandler),
+	}
+}
+
+// Register registers a handler for a proposal kind.
+func (d *ProposalDispatcher) Register(kind ProposalKind, handler ProposalHandler) {
+	d.handlers[kind] = handler
+}
+
+// Dispatch executes the confirmation handler registered for the proposal kind.
+// If no handler is registered and the proposal is a lifecycle proposal, it executes Manager.Confirm.
+func (d *ProposalDispatcher) Dispatch(ctx context.Context, root string, proposal Proposal, pins mutation.Confirmation) (MutationResult, error) {
+	handler, ok := d.handlers[proposal.Kind]
+	if !ok {
+		if proposal.Kind == ProposalKindLifecycle || proposal.Kind == "" {
+			return (Manager{}).Confirm(ctx, root, proposal)
+		}
+		return MutationResult{}, fmt.Errorf("unsupported proposal kind %q", proposal.Kind)
+	}
+	return handler(ctx, root, proposal, pins)
 }

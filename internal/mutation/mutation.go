@@ -110,6 +110,7 @@ const (
 
 // Options provides deterministic failure injection without mutable globals.
 type Options struct {
+	Context       context.Context
 	Fault         func(FaultPoint) error
 	PostCanonical func(expectedCatalogSnapshot string) (Publication, error)
 }
@@ -207,7 +208,14 @@ func CommitWithOptions(root string, set WriteSet, options Options) (Receipt, err
 	if err := validWriteSet(set, true); err != nil {
 		return Receipt{}, err
 	}
-	lock, err := AcquireExclusiveLock(context.Background(), root, DefaultLockTimeout)
+	ctx := options.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return Receipt{}, err
+	}
+	lock, err := AcquireExclusiveLock(ctx, root, DefaultLockTimeout)
 	if err != nil {
 		return Receipt{}, err
 	}
@@ -216,8 +224,12 @@ func CommitWithOptions(root string, set WriteSet, options Options) (Receipt, err
 }
 
 func commitWhileLocked(root string, set WriteSet, options Options) (Receipt, error) {
+	if options.Context != nil {
+		if err := options.Context.Err(); err != nil {
+			return Receipt{}, err
+		}
+	}
 	if ids, err := pendingUnlocked(root); err != nil {
-		return Receipt{}, err
 	} else if len(ids) != 0 {
 		return Receipt{}, ErrRecoveryRequired
 	}

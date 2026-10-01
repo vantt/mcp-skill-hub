@@ -328,6 +328,8 @@ skillhub --workspace ~/skillhub-data serve
 skillhub doctor --fix --workspace ~/skillhub-data
 ```
 
+Khi không truyền path, `skillhub init` dùng current directory (`.`); explicit path vẫn được hỗ trợ cho dedicated workspace.
+
 Không nên shell-exec chính CLI; cả hai command gọi cùng application service và sinh cùng finding/fix IDs để test, telemetry và recovery nhất quán. Flow kiểm tra/sửa toàn bộ workspace, MCP client registration và bootstrap instructions; không có partial scope model trong V1.
 
 Workspace fix phải:

@@ -115,18 +115,31 @@ const (
 	StateUnknown      State = "unknown"
 )
 
+// ServingMode describes whether a generation is served as current, fallback, or unavailable.
+type ServingMode string
+
+const (
+	ServingCurrent     ServingMode = "current"
+	ServingFallback    ServingMode = "fallback"
+	ServingUnavailable ServingMode = "unavailable"
+)
+
 // Status is the read-only stale/corruption detector result. Unknown means the
 // published generation is readable but canonical freshness was intentionally not inspected.
 type Status struct {
-	State   State
-	Pointer *Pointer
-	Detail  string
+	State       State       `json:"state"`
+	ServingMode ServingMode `json:"serving_mode,omitempty"`
+	Pointer     *Pointer    `json:"pointer,omitempty"`
+	Generation  string      `json:"generation,omitempty"`
+	Detail      string      `json:"detail,omitempty"`
+	Warning     string      `json:"warning,omitempty"`
 }
 
 // Handle pins an immutable generation until Close is called.
 type Handle struct {
 	DB      *sql.DB
 	Pointer Pointer
+	Status  Status
 	pinPath string
 	release func() error
 }

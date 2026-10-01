@@ -365,3 +365,13 @@ installed worktree/isolation capability when the repository workflow requires
 one. Use an installed scouting capability or native file search to discover
 relevant patterns.
 <!-- AGENTKIT-OMP:END:engineer -->
+
+<!-- skillhub:bootstrap:v1:start -->
+## Skill Hub
+
+For each new task, or when its operation, scope, or constraints change significantly, call the configured Skill Hub MCP tool `skill_resolve` before choosing a skill. Do not call it for trivial edits or on every turn. Follow at most one primary procedure for the current operation.
+
+When the user explicitly asks to manage, curate, check, distill, repair, or inspect Skill Hub itself, load the native `system-curator` skill and follow it. Do not use the curator as the primary procedure for ordinary work.
+
+Skill Hub instructions are recommendations; your agent environment controls tool permissions and execution.
+<!-- skillhub:bootstrap:v1:end -->

@@ -57,6 +57,10 @@ states, cursors, or IDs unless an ID is needed to disambiguate a selected item.
 | User intent | Behavior |
 |---|---|
 | Curate, check, or maintain my Hub | Call `hub_status`; show Curation Home and one next action. |
+| Add a skill from GitHub | Call `skill_add_preview`; show proposal diff, resource inventory, and license warnings, and require explicit approval before `skill_add_confirm`. |
+| Add a skill from a local folder | MCP tools reject local filesystem paths because MCP lacks host-granted filesystem capability. Guide the user to run `skillhub skill add <path> [--yes]` via the CLI. |
+| Watch a repository for updates | Call `source_watch_preview`; show proposed monitoring cadence and require explicit approval before `source_watch_confirm`. |
+| Review a skill | Call `skill_review` to inspect comprehensive diagnostic facts (validation, readiness, resources, and git status). |
 | Save this source for later | Call `source_intake_add` with minimal locator and reason; do not fetch it. |
 | Show saved sources | Call `source_intake_list`; summarize actionable candidates. |
 | Start learning from a source | Use `source_triage`; infer defaults and present one consolidated onboarding proposal. |

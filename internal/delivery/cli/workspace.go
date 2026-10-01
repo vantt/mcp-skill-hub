@@ -15,7 +15,7 @@ import (
 func runInit(args []string, stdout, stderr io.Writer) int {
 	path, jsonOutput, yes, verbose, force, err := initFlags(args)
 	if err != nil {
-		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub init <path>` to preview, then add `--yes` to apply.")
+		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub init [path]` to preview, then add `--yes` to apply.")
 	}
 	result, err := (app.WorkspaceService{}).Init(path, yes, force)
 	compact := err == nil && !jsonOutput && !verbose && result.Error == nil &&
@@ -57,7 +57,7 @@ func renderInitSummary(stdout io.Writer, workspacePath string, result app.Result
 	}
 	fmt.Fprintf(stdout, "\nNext:\n")
 	fmt.Fprintf(stdout, "  1. Commit the workspace: git -C %s add -A && git -C %s commit -m \"Initialize Skill Hub workspace\"\n", workspacePath, workspacePath)
-	fmt.Fprintf(stdout, "  2. Connect your project: cd <your project> && skillhub connect --workspace %s --yes\n", workspacePath)
+	fmt.Fprintf(stdout, "  2. Connect another project: cd <project> && skillhub connect --workspace %s --yes\n", workspacePath)
 	fmt.Fprintf(stdout, "     (add -g instead to connect every project: skillhub connect -g --workspace %s --yes)\n", workspacePath)
 	fmt.Fprintln(stdout, "  3. Open your agent there and ask: \"curate my Skill Hub\"")
 }
@@ -66,15 +66,15 @@ func runValidate(ctx context.Context, args []string, stdout, stderr io.Writer) i
 	if errors.Is(ctx.Err(), context.Canceled) {
 		return writeWorkspaceResult(app.Result{}, context.Canceled, stdout, stderr, hasJSONFlag(args))
 	}
-	path, jsonOutput, err := workspaceFlag(args)
+	path, jsonOutput, staged, err := validateFlags(args)
 	if err != nil {
 		var resErr *WorkspaceResolutionError
 		if errors.As(err, &resErr) {
 			return writeWorkspaceResolutionError(stdout, stderr, jsonOutput, resErr)
 		}
-		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub validate --workspace <path>`.")
+		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub validate [--staged] [--workspace <path>]`.")
 	}
-	result, err := (app.WorkspaceService{}).ValidateWorkspace(ctx, path)
+	result, err := executeValidate(ctx, path, staged)
 	if err != nil {
 		return writeInvalidWorkspace(stdout, stderr, jsonOutput, err)
 	}
@@ -89,6 +89,10 @@ func runValidate(ctx context.Context, args []string, stdout, stderr io.Writer) i
 		return 0
 	}
 	if result.Status == app.StatusError {
+		if result.Error != nil && len(result.Items) == 0 {
+			fmt.Fprintf(stderr, "ERROR: %s\nWHY: %s\nFIX: %s\n", result.Error.Render.Error, result.Error.Render.Why, result.Error.Render.Fix)
+			return 2
+		}
 		fmt.Fprintln(stderr, "Workspace validation failed:")
 		for _, item := range result.Items {
 			fmt.Fprintf(stderr, "- %s\n  FIX: %s\n", item.Summary, item.Impact)
@@ -130,13 +134,13 @@ func initFlags(args []string) (path string, jsonOutput, yes, verbose, force bool
 			force = true
 		default:
 			if strings.HasPrefix(arg, "-") || path != "" {
-				return "", jsonOutput, yes, verbose, force, fmt.Errorf("init requires exactly one workspace path")
+				return "", jsonOutput, yes, verbose, force, fmt.Errorf("init accepts at most one workspace path")
 			}
 			path = arg
 		}
 	}
 	if path == "" {
-		return "", jsonOutput, yes, verbose, force, fmt.Errorf("init requires exactly one workspace path")
+		path = "."
 	}
 	return path, jsonOutput, yes, verbose, force, nil
 }

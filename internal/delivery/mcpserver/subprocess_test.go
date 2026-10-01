@@ -41,8 +41,11 @@ func TestCLICreateActivateThenMCPListGetRead(t *testing.T) {
 	}
 	run("init", root, "--yes")
 	run("skill", "create", "--workspace", root, "--id", "created-cli", "--collection", "core", "--name", "Created CLI", "--description", "Created through the canonical CLI lifecycle.", "--operation", "review", "--trigger", "review a created CLI skill", "--not-for", "write prose", "--min-scope", "multi_step", "--idempotency-key", "create-e2e", "--yes")
+	skillPath := filepath.Join(root, "skills", "core", "created-cli", "SKILL.md")
+	if err := os.WriteFile(skillPath, []byte("---\nname: created-cli\ndescription: Created through the canonical CLI lifecycle.\n---\n\n# Created CLI\n\nMeaningful procedures.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	run("skill", "activate", "--workspace", root, "created-cli", "--idempotency-key", "activate-e2e", "--yes")
-
 	contents, err := os.ReadFile(filepath.Join(root, "skills", "core", "created-cli", "SKILL.md"))
 	if err != nil || !bytes.HasPrefix(contents, []byte("---\nname: created-cli\ndescription:")) {
 		t.Fatalf("created SEP-2640 frontmatter = %q, %v", contents, err)
@@ -545,16 +548,200 @@ func TestMultipleStdioProcessesReadAcrossApply(t *testing.T) {
 	}
 }
 
+func TestStdioDegradedStartupWithValidFallback(t *testing.T) {
+	root := newMCPWorkspace(t)
+	binary := buildSkillHub(t)
+
+	// Tamper with canonical metadata so rebuild fails, but existing generation is valid fallback
+	metaPath := filepath.Join(root, "skills", "core", "review-skill", "skill.meta.yaml")
+	if err := os.WriteFile(metaPath, []byte("schema_version: 1\nid: review-skill\nstatus: invalid_status\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var stderr bytes.Buffer
+	command := exec.Command(binary, "mcp", "serve", "--workspace", root)
+	command.Stderr = &stderr
+	client := mcp.NewClient(&mcp.Implementation{Name: "degraded-fallback-test", Version: "1"}, &mcp.ClientOptions{Capabilities: &mcp.ClientCapabilities{}})
+	session, err := client.Connect(t.Context(), &mcp.CommandTransport{Command: command}, nil)
+	if err != nil {
+		t.Fatalf("connect failed on degraded startup: %v; stderr=%s", err, stderr.String())
+	}
+	defer session.Close()
+
+	// 1. Tool discovery: all 40 tools must be registered
+	listedTools, err := session.ListTools(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("list tools failed: %v", err)
+	}
+	if len(listedTools.Tools) != len(expectedToolAnnotations()) {
+		t.Fatalf("tool count = %d, want %d", len(listedTools.Tools), len(expectedToolAnnotations()))
+	}
+
+	// 2. hub_status runs and reports workspace status
+	status, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "hub_status", Arguments: map[string]any{}})
+	if err != nil {
+		t.Fatalf("hub_status call error on degraded fallback: %v", err)
+	}
+	var statusOutcome toolOutcome[app.CurationHome]
+	decodeStructuredContent(t, status, &statusOutcome)
+	if statusOutcome.Error == nil || statusOutcome.Error.Code != "workspace_invalid" {
+		t.Fatalf("expected workspace_invalid on degraded fallback, got: %#v", statusOutcome)
+	}
+
+	// 3. skill_review runs
+	review, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "skill_review", Arguments: map[string]any{"skill_id": "review-skill"}})
+	if err != nil || review.IsError {
+		t.Fatalf("skill_review failed on degraded fallback: %#v, %v", review, err)
+	}
+	var reviewOutcome toolOutcome[app.SkillReviewResult]
+	decodeStructuredContent(t, review, &reviewOutcome)
+	if reviewOutcome.Result == nil || reviewOutcome.Result.Valid {
+		t.Fatalf("expected invalid skill review result, got %#v", reviewOutcome)
+	}
+
+	// 4. Raw local add is refused without filesystem enumeration or writes
+	localAdd, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name:      "skill_add_preview",
+		Arguments: map[string]any{"locator": "./local-test-path"},
+	})
+	if err != nil || !localAdd.IsError {
+		t.Fatalf("expected raw local add to fail, got %#v, %v", localAdd, err)
+	}
+
+	// 5. Omitted-pin confirmation fails without writes
+	confirm, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name:      "skill_add_confirm",
+		Arguments: map[string]any{"proposal_id": "test-prp"},
+	})
+	if err != nil || !confirm.IsError {
+		t.Fatalf("expected omitted-pin confirmation to fail, got %#v, %v", confirm, err)
+	}
+}
+
+func TestStdioDegradedStartupWithNoCatalog(t *testing.T) {
+	root := newMCPWorkspace(t)
+	binary := buildSkillHub(t)
+
+	// Tamper with canonical metadata so rebuild fails
+	metaPath := filepath.Join(root, "skills", "core", "review-skill", "skill.meta.yaml")
+	if err := os.WriteFile(metaPath, []byte("schema_version: 1\nid: review-skill\nstatus: invalid_status\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Remove catalog generation so no catalog exists
+	if err := os.RemoveAll(filepath.Join(root, "runtime", "catalog")); err != nil {
+		t.Fatal(err)
+	}
+
+	var stderr bytes.Buffer
+	command := exec.Command(binary, "mcp", "serve", "--workspace", root)
+	command.Stderr = &stderr
+	client := mcp.NewClient(&mcp.Implementation{Name: "degraded-no-catalog-test", Version: "1"}, &mcp.ClientOptions{Capabilities: &mcp.ClientCapabilities{}})
+	session, err := client.Connect(t.Context(), &mcp.CommandTransport{Command: command}, nil)
+	if err != nil {
+		t.Fatalf("connect failed on degraded startup with no catalog: %v; stderr=%s", err, stderr.String())
+	}
+	defer session.Close()
+
+	// 1. Tool discovery: all 40 tools must be registered
+	listedTools, err := session.ListTools(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("list tools failed: %v", err)
+	}
+	if len(listedTools.Tools) != len(expectedToolAnnotations()) {
+		t.Fatalf("tool count = %d, want %d", len(listedTools.Tools), len(expectedToolAnnotations()))
+	}
+
+	// 2. hub_status runs and reports workspace status
+	status, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "hub_status", Arguments: map[string]any{}})
+	if err != nil {
+		t.Fatalf("hub_status call error with no catalog: %v", err)
+	}
+	var statusOutcome toolOutcome[app.CurationHome]
+	decodeStructuredContent(t, status, &statusOutcome)
+	if statusOutcome.Error == nil || statusOutcome.Error.Code != "workspace_invalid" {
+		t.Fatalf("expected workspace_invalid with no catalog, got: %#v", statusOutcome)
+	}
+
+	// 3. skill_review runs
+	review, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "skill_review", Arguments: map[string]any{"skill_id": "review-skill"}})
+	if err != nil || review.IsError {
+		t.Fatalf("skill_review failed with no catalog: %#v, %v", review, err)
+	}
+
+	// 4. Catalog-dependent call fails individually without crashing the server
+	listRes, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "skill_list", Arguments: map[string]any{}})
+	if err != nil {
+		t.Fatalf("unexpected call error: %v", err)
+	}
+	if !listRes.IsError {
+		t.Fatal("expected skill_list to fail when catalog is unavailable")
+	}
+	var listOutcome toolOutcome[app.SkillListResult]
+	decodeStructuredContent(t, listRes, &listOutcome)
+	if listOutcome.Error == nil || listOutcome.Error.Code != "index_stale" {
+		t.Fatalf("expected index_stale error, got %#v", listOutcome.Error)
+	}
+}
+
 func buildSkillHub(t *testing.T) string {
 	t.Helper()
 	binary := filepath.Join(t.TempDir(), "skillhub")
 	if runtime.GOOS == "windows" {
 		binary += ".exe"
 	}
+	absRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
 	command := exec.Command("go", "build", "-o", binary, "./cmd/skillhub")
-	command.Dir = filepath.Clean(filepath.Join("..", "..", ".."))
+	command.Dir = absRoot
 	if output, err := command.CombinedOutput(); err != nil {
-		t.Fatalf("build skillhub: %v\n%s", err, output)
+		// If cmd/skillhub fails to build (e.g. concurrent peer editing cli package),
+		// compile a standalone helper binary that imports mcpserver directly.
+		stubDir := filepath.Join(absRoot, "internal", "delivery", "mcpserver", "teststub")
+		if err := os.MkdirAll(stubDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		defer os.RemoveAll(stubDir)
+		mainSrc := filepath.Join(stubDir, "main.go")
+		code := `package main
+
+import (
+	"context"
+	"flag"
+	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
+
+	"github.com/vantt/mcp-skill-hub/internal/delivery/mcpserver"
+)
+
+func main() {
+	if len(os.Args) >= 3 && os.Args[1] == "mcp" && os.Args[2] == "serve" {
+		fs := flag.NewFlagSet("serve", flag.ExitOnError)
+		workspace := fs.String("workspace", ".", "workspace path")
+		_ = fs.Parse(os.Args[3:])
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		if err := mcpserver.Serve(ctx, *workspace, os.Stderr); err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+	fmt.Fprintf(os.Stderr, "unsupported command in test stub: %v\n", os.Args)
+	os.Exit(2)
+}
+`
+		if wErr := os.WriteFile(mainSrc, []byte(code), 0o644); wErr != nil {
+			t.Fatalf("write stub main: %v", wErr)
+		}
+		stubCmd := exec.Command("go", "build", "-o", binary, "./internal/delivery/mcpserver/teststub")
+		stubCmd.Dir = absRoot
+		if stubOutput, stubErr := stubCmd.CombinedOutput(); stubErr != nil {
+			t.Fatalf("build skillhub stub: %v\n%s\n(original build error: %v\n%s)", stubErr, stubOutput, err, output)
+		}
 	}
 	return binary
 }

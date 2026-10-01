@@ -40,9 +40,28 @@ type Issue struct {
 	Fix     string
 }
 
+// ValidationOptions configures canonical validation for working trees or detached snapshots.
+type ValidationOptions struct {
+	Detached      bool
+	UnmergedPaths []string
+}
+
 // Validate checks workspace structure, canonical files, identity, references, and conflict markers.
 func Validate(root string) ([]Issue, error) {
-	plan, err := workspace.Inspect(root)
+	return ValidateWithOptions(root, ValidationOptions{})
+}
+
+// ValidateDetached checks a detached snapshot with caller-supplied index facts.
+func ValidateDetached(root string, unmergedPaths []string) ([]Issue, error) {
+	return ValidateWithOptions(root, ValidationOptions{
+		Detached:      true,
+		UnmergedPaths: unmergedPaths,
+	})
+}
+
+// ValidateWithOptions checks workspace structure, canonical files, identity, references, and conflict markers.
+func ValidateWithOptions(root string, opts ValidationOptions) ([]Issue, error) {
+	plan, err := workspace.InspectWithOptions(root, opts.Detached)
 	if err != nil {
 		return nil, err
 	}
@@ -57,12 +76,18 @@ func Validate(root string) ([]Issue, error) {
 		}
 		return append(issues, Issue{Path: ".", Message: err.Error()}), nil
 	}
-	conflicts, err := workspace.UnmergedGitPaths(root)
-	if err != nil {
-		return nil, err
-	}
-	for _, path := range conflicts {
-		issues = append(issues, Issue{Path: path, Message: "unresolved Git index conflict"})
+	if opts.Detached {
+		for _, path := range opts.UnmergedPaths {
+			issues = append(issues, Issue{Path: path, Message: "unresolved Git index conflict"})
+		}
+	} else {
+		conflicts, err := workspace.UnmergedGitPaths(root)
+		if err != nil {
+			return nil, err
+		}
+		for _, path := range conflicts {
+			issues = append(issues, Issue{Path: path, Message: "unresolved Git index conflict"})
+		}
 	}
 	rootHandle, err := os.OpenRoot(root)
 	if err != nil {
@@ -88,7 +113,7 @@ func Validate(root string) ([]Issue, error) {
 		if hasConflictMarker(string(contents)) {
 			issues = append(issues, Issue{Path: rel, Message: "unresolved Git conflict marker"})
 		}
-		if !strings.HasSuffix(rel, ".yaml") && !strings.HasSuffix(rel, ".yml") {
+		if !entityPath(rel) {
 			continue
 		}
 		parsedID, parsedRefs, shapeErr := parseYAMLIdentity(rel, contents)
@@ -300,6 +325,9 @@ func validCanonicalPath(path string) bool {
 }
 
 func entityPath(path string) bool {
+	if strings.HasPrefix(path, "skills/") {
+		return strings.HasSuffix(path, "/skill.meta.yaml")
+	}
 	return (strings.HasPrefix(path, "sources/") || strings.HasPrefix(path, "distill/") || strings.HasPrefix(path, "history/operations/") || strings.HasPrefix(path, "registry/collections/") || strings.HasPrefix(path, "evals/routing/")) && (strings.HasSuffix(path, ".yaml") || strings.HasSuffix(path, ".yml"))
 }
 

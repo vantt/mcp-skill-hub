@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
@@ -63,6 +64,42 @@ func TestInitPreviewsUntilYes(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, ".skillhub", "schema-version")); err != nil {
 		t.Fatalf("confirmed init did not create workspace: %v", err)
+	}
+}
+
+func TestInitDefaultsToCurrentDirectory(t *testing.T) {
+	root := t.TempDir()
+	t.Chdir(root)
+
+	var stdout, stderr bytes.Buffer
+	if exitCode := Run([]string{"init"}, &stdout, &stderr); exitCode != 0 {
+		t.Fatalf("init preview exit code = %d, stderr = %q", exitCode, stderr.String())
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		t.Fatalf("read current directory after preview: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("init preview wrote to the current directory: %v", entries)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if exitCode := Run([]string{"init", "--yes"}, &stdout, &stderr); exitCode != 0 {
+		t.Fatalf("confirmed init exit code = %d, stderr = %q", exitCode, stderr.String())
+	}
+	if _, err := os.Stat(filepath.Join(root, ".skillhub", "schema-version")); err != nil {
+		t.Fatalf("confirmed init did not initialize the current directory: %v", err)
+	}
+}
+
+func TestInitRejectsMultipleWorkspacePaths(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if exitCode := Run([]string{"init", "first", "second"}, &stdout, &stderr); exitCode != 2 {
+		t.Fatalf("init exit code = %d, want 2", exitCode)
+	}
+	if !strings.Contains(stderr.String(), "init accepts at most one workspace path") {
+		t.Fatalf("unexpected init error: %q", stderr.String())
 	}
 }
 

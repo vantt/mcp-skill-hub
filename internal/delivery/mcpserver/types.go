@@ -105,6 +105,32 @@ type confirmationInput struct {
 	BaseVersion    string `json:"base_version"`
 }
 
+type skillAddPreviewInput struct {
+	Locator        string `json:"locator" jsonschema:"Public GitHub repository URL (e.g. https://github.com/owner/repo). Local filesystem paths are rejected."`
+	Selection      string `json:"selection,omitempty" jsonschema:"Optional selected skill name or relative path when multiple skills exist in the repository."`
+	All            bool   `json:"all,omitempty" jsonschema:"Import all discovered skills when multiple exist in the repository."`
+	TargetID       string `json:"target_id,omitempty" jsonschema:"Optional explicit target skill ID (lowercase alphanumeric with dashes)."`
+	Collection     string `json:"collection,omitempty" jsonschema:"Target collection name, defaults to 'default'."`
+	IdempotencyKey string `json:"idempotency_key,omitempty" jsonschema:"Optional idempotency key."`
+	FullDiff       bool   `json:"full_diff,omitempty" jsonschema:"Whether to return full unified diff instead of summary."`
+}
+
+type sourceWatchPreviewInput struct {
+	Locator           string `json:"locator" jsonschema:"Public GitHub repository URL (e.g. https://github.com/owner/repo). Local folders are rejected."`
+	SourceID          string `json:"source_id,omitempty" jsonschema:"Optional explicit source identifier. Derived from repo/path if omitted."`
+	Ref               string `json:"ref,omitempty" jsonschema:"Optional branch, tag, or commit ref to monitor. Defaults to default branch."`
+	Path              string `json:"path,omitempty" jsonschema:"Optional subdirectory path within the repository to scope watching."`
+	Cadence           string `json:"cadence,omitempty" jsonschema:"Monitoring cadence: manual, daily, or weekly. Defaults to daily when monitoring is enabled."`
+	MonitoringEnabled *bool  `json:"monitoring_enabled,omitempty" jsonschema:"Whether background monitoring check is enabled."`
+	Trust             string `json:"trust,omitempty" jsonschema:"Trust tier: untrusted, reviewed, or trusted. Defaults to untrusted."`
+	License           string `json:"license,omitempty" jsonschema:"Optional license override if not automatically detected."`
+	IdempotencyKey    string `json:"idempotency_key,omitempty" jsonschema:"Optional caller-provided idempotency key."`
+}
+
+type skillReviewInput struct {
+	SkillID string `json:"skill_id" jsonschema:"Skill identifier to review."`
+}
+
 type sourceImportPreviewInput struct {
 	SourceID       string   `json:"source_id" jsonschema:"Source identifier to import skills from."`
 	Path           string   `json:"path,omitempty" jsonschema:"Optional subdirectory within the source repository to search for skills."`
@@ -113,14 +139,15 @@ type sourceImportPreviewInput struct {
 }
 
 type skillUpdatePreviewInput struct {
-	SkillID        string              `json:"skill_id"`
-	Name           *string             `json:"name,omitempty"`
-	Description    *string             `json:"description,omitempty"`
-	Content        *string             `json:"content,omitempty"`
-	Routing        *skill.RoutingInput `json:"routing,omitempty"`
-	Rationale      *string             `json:"rationale,omitempty"`
-	IdempotencyKey string              `json:"idempotency_key,omitempty"`
-	FullDiff       bool                `json:"full_diff,omitempty"`
+	SkillID               string              `json:"skill_id"`
+	Name                  *string             `json:"name,omitempty"`
+	Description           *string             `json:"description,omitempty"`
+	Content               *string             `json:"content,omitempty"`
+	ExpectedContentDigest string              `json:"expected_content_digest,omitempty"`
+	Routing               *skill.RoutingInput `json:"routing,omitempty"`
+	Rationale             *string             `json:"rationale,omitempty"`
+	IdempotencyKey        string              `json:"idempotency_key,omitempty"`
+	FullDiff              bool                `json:"full_diff,omitempty"`
 }
 
 type skillCreatePreviewInput struct {
@@ -151,16 +178,23 @@ type skillGetInput struct {
 }
 
 type skillGetResult struct {
-	SkillID         string             `json:"skill_id"`
-	Name            string             `json:"name"`
-	Description     string             `json:"description"`
-	Status          string             `json:"status"`
-	Path            string             `json:"path"`
-	CatalogSnapshot string             `json:"catalog_snapshot"`
-	Content         string             `json:"content"`
-	Routing         skill.RoutingInput `json:"routing"`
-	Rationale       string             `json:"rationale,omitempty"`
-	Resources       []skill.Resource   `json:"resources"`
+	SkillID          string             `json:"skill_id"`
+	Name             string             `json:"name"`
+	Description      string             `json:"description"`
+	Status           string             `json:"status"`
+	Path             string             `json:"path"`
+	CatalogSnapshot  string             `json:"catalog_snapshot"`
+	Content          string             `json:"content"`
+	ContentDigest    string             `json:"content_digest"`
+	StateBasis       string             `json:"state_basis"`
+	LifecycleState   string             `json:"lifecycle_state"`
+	RoutingEligible  bool               `json:"routing_eligible"`
+	Diverged         bool               `json:"diverged"`
+	ChangedResources []string           `json:"changed_resources,omitempty"`
+	MissingResources []string           `json:"missing_resources,omitempty"`
+	Routing          skill.RoutingInput `json:"routing"`
+	Rationale        string             `json:"rationale,omitempty"`
+	Resources        []skill.Resource   `json:"resources"`
 }
 
 type outcomeRecordInput struct {

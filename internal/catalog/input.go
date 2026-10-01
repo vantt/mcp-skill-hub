@@ -129,7 +129,7 @@ func readInput(root string) (buildInput, error) {
 			}
 			input.CanonicalSchemaVersion = version
 		}
-		if strings.HasSuffix(file.Path, ".yaml") || strings.HasSuffix(file.Path, ".yml") {
+		if isCanonicalEntityPath(file.Path) {
 			item, ok, err := parseEntity(file)
 			if err != nil {
 				return buildInput{}, err
@@ -287,6 +287,13 @@ func classifyEntity(path string) string {
 	default:
 		return "entity"
 	}
+}
+
+func isCanonicalEntityPath(path string) bool {
+	if strings.HasPrefix(path, "skills/") {
+		return strings.HasSuffix(path, "/skill.meta.yaml")
+	}
+	return (strings.HasPrefix(path, "sources/") || strings.HasPrefix(path, "distill/") || strings.HasPrefix(path, "history/operations/") || strings.HasPrefix(path, "registry/collections/") || strings.HasPrefix(path, "evals/routing/")) && (strings.HasSuffix(path, ".yaml") || strings.HasSuffix(path, ".yml"))
 }
 
 func catalogAffecting(path string) bool {

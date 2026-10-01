@@ -20,19 +20,29 @@ type sourceFlags struct {
 
 func runSource(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), "source requires a subcommand", "Run `skillhub source capture|list|show|triage|confirm|import`.")
+		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), "source requires a subcommand", "Run `skillhub source watch|check|capture|list|show|triage|confirm|import`.")
 	}
 	sub := args[0]
+	if sub == "check" {
+		return runCheck(ctx, args[1:], stdout, stderr)
+	}
 	switch sub {
-	case "capture", "list", "show", "triage", "confirm", "import":
+	case "watch", "capture", "list", "show", "triage", "confirm", "import":
 	default:
-		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), fmt.Sprintf("unsupported source subcommand %q", sub), "Run `skillhub source capture|list|show|triage|confirm|import`.")
+		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), fmt.Sprintf("unsupported source subcommand %q", sub), "Run `skillhub source watch|check|capture|list|show|triage|confirm|import`.")
 	}
 	flags, positionals, err := parseSourceFlags(args[1:])
 	if err != nil {
 		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Review source command arguments and retry.")
 	}
 	switch sub {
+	case "watch":
+		if len(flags.skills) > 0 {
+			return writeInvalidRequest(stdout, stderr, flags.jsonOutput, `unknown argument "--skill"`, "watch does not take --skill.")
+		}
+		if len(positionals) != 1 {
+			return writeInvalidRequest(stdout, stderr, flags.jsonOutput, "watch requires one locator", "Run `skillhub source watch <locator> [--id <id>] [--ref <ref>] [--path <path>] [--cadence daily|weekly|manual] [--yes]`.")
+		}
 	case "capture":
 		if flags.yes {
 			return writeInvalidRequest(stdout, stderr, flags.jsonOutput, `unknown argument "--yes"`, "capture applies immediately without --yes.")
@@ -95,6 +105,12 @@ func runSource(ctx context.Context, args []string, stdout, stderr io.Writer) int
 	flags.workspace = resolved
 	service := app.SourceService{}
 	switch sub {
+	case "watch":
+		locator := ""
+		if len(positionals) > 0 {
+			locator = positionals[0]
+		}
+		return runSourceWatch(ctx, service, flags, locator, stdout, stderr)
 	case "capture":
 		if len(positionals) != 1 || flags.reason == "" {
 			return writeInvalidRequest(stdout, stderr, flags.jsonOutput, "capture requires one locator and --reason", "Run `skillhub source capture <locator> --reason <text> --workspace <path>`.")
@@ -217,7 +233,7 @@ func parseSourceFlags(args []string) (sourceFlags, []string, error) {
 			return args[i], nil
 		}
 		switch value {
-		case "--workspace", "--reason", "--status", "--decision", "--source-id", "--adapter", "--ref", "--path", "--license", "--trust", "--cadence", "--skill-id", "--proposal", "--proposal-digest", "--base-version", "--idempotency-key":
+		case "--workspace", "--reason", "--status", "--decision", "--source-id", "--id", "--adapter", "--ref", "--path", "--license", "--trust", "--cadence", "--skill-id", "--proposal", "--proposal-digest", "--base-version", "--idempotency-key":
 			item, err := next()
 			if err != nil {
 				return flags, nil, err
@@ -231,7 +247,7 @@ func parseSourceFlags(args []string) (sourceFlags, []string, error) {
 				flags.status = item
 			case "--decision":
 				flags.decision = item
-			case "--source-id":
+			case "--source-id", "--id":
 				flags.sourceID = item
 			case "--adapter":
 				flags.adapter = item

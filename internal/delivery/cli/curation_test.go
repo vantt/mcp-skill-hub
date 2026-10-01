@@ -103,6 +103,61 @@ func TestDiffOutputUsesRelativePaths(t *testing.T) {
 		t.Fatalf("unsafe diff output: %s", stdout.String())
 	}
 }
+func TestStatusInvalidWorkspaceDoesNotPrintNoSkillsYetBUG08(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "workspace")
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
+		t.Fatal(stderr.String())
+	}
+	// Introduce an invalid file into the workspace
+	brokenSkill := filepath.Join(root, "skills", "core", "broken", "SKILL.md")
+	_ = os.MkdirAll(filepath.Dir(brokenSkill), 0o700)
+	_ = os.WriteFile(brokenSkill, []byte("---\nname: broken\n"), 0o600)
+
+	stdout.Reset()
+	stderr.Reset()
+	code := Run([]string{"status", "--workspace", root}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("status exit = %d: %s", code, stderr.String())
+	}
+	out := stdout.String()
+	// BUG-08: When health is invalid, it must NOT print "No skills yet" or counts
+	if strings.Contains(out, "No skills yet") {
+		t.Errorf("invalid workspace must not print 'No skills yet' (BUG-08):\n%s", out)
+	}
+	if strings.Contains(out, "active skills") || strings.Contains(out, "active skill") {
+		t.Errorf("invalid workspace must not print skill counts (BUG-08):\n%s", out)
+	}
+	if !strings.Contains(out, "Workspace invalid") {
+		t.Errorf("status missing 'Workspace invalid':\n%s", out)
+	}
+	if !strings.Contains(out, "FIX:") {
+		t.Errorf("status missing repair FIX guidance:\n%s", out)
+	}
+}
+
+func TestStatusSuggestsRunnableCreateCommandBUG17(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "workspace")
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
+		t.Fatal(stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	code := Run([]string{"status", "--workspace", root}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("status exit = %d: %s", code, stderr.String())
+	}
+	out := stdout.String()
+	// BUG-17: Should suggest a runnable create command, not `skill create ...`
+	if strings.Contains(out, "skill create ...") {
+		t.Errorf("status still contains unrunnable 'skill create ...' (BUG-17):\n%s", out)
+	}
+	if !strings.Contains(out, "skillhub skill create my-skill") {
+		t.Errorf("status missing runnable skill create suggestion:\n%s", out)
+	}
+}
 
 func commitCLIWorkspace(t *testing.T, root string) {
 	t.Helper()

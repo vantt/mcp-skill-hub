@@ -62,6 +62,12 @@ func validateSkills(root string, files []string) []Issue {
 			}
 			continue
 		}
+		if len(parts) == 4 && parts[3] == "SKILL.md" {
+			if entryIssues := validateSkillEntrypoint(path, filepath.Join(root, filepath.FromSlash(path)), parts[2]); len(entryIssues) > 0 {
+				issues = append(issues, entryIssues...)
+			}
+			continue
+		}
 		if err := validateSkillResource(path, filepath.Join(root, filepath.FromSlash(path))); err != nil {
 			issues = append(issues, Issue{Path: path, Message: err.Error()})
 		}
@@ -158,8 +164,63 @@ func validateSkillMetadata(path string, contents []byte) (skillMetadata, []Issue
 	if content := values["content"]; content != nil && content.Kind != yaml.MappingNode {
 		add("content must be a mapping")
 	}
-	if provenance := values["provenance"]; provenance != nil && provenance.Kind != yaml.MappingNode {
-		add("provenance must be a mapping")
+	if provenance := values["provenance"]; provenance != nil {
+		if provenance.Kind != yaml.MappingNode {
+			add("provenance must be a mapping")
+		} else {
+			provValues, err := mappingValues(provenance, stringSet("created_by", "source_id", "revision", "path", "origin"))
+			if err != nil {
+				add("invalid provenance: " + err.Error())
+			} else {
+				if origin := provValues["origin"]; origin != nil {
+					if origin.Kind != yaml.MappingNode {
+						add("provenance.origin must be a mapping")
+					} else {
+						originValues, err := mappingValues(origin, stringSet("kind", "repository", "ref", "commit", "path", "name", "folder_digest", "content_digest", "transformations", "added_at"))
+						if err != nil {
+							add("invalid provenance.origin: " + err.Error())
+						} else {
+							kind := scalar(originValues["kind"])
+							if !oneOf(kind, "github", "git", "local") {
+								add("provenance.origin.kind must be github, git, or local", originValues["kind"])
+							}
+							if kind == "local" {
+								if repo := scalar(originValues["repository"]); repo != "" {
+									add("provenance.origin.repository is not allowed for local origin", originValues["repository"])
+								}
+								if p := scalar(originValues["path"]); p != "" && isUnsafeLocalPath(p) {
+									add("provenance.origin.path must be a relative, safe skill path", originValues["path"])
+								}
+								if name := scalar(originValues["name"]); name != "" && isUnsafeLocalName(name) {
+									add("provenance.origin.name must be a basename without path separators or absolute label", originValues["name"])
+								}
+							} else {
+								if p := scalar(originValues["path"]); p != "" && isUnsafeLocalPath(p) {
+									add("provenance.origin.path must be a relative, safe path", originValues["path"])
+								}
+							}
+							if addedAt := scalar(originValues["added_at"]); addedAt != "" {
+								if _, err := time.Parse(time.RFC3339Nano, addedAt); err != nil {
+									add("provenance.origin.added_at must be an RFC3339 timestamp", originValues["added_at"])
+								}
+							}
+							for _, digestField := range []string{"folder_digest", "content_digest"} {
+								if d := scalar(originValues[digestField]); d != "" {
+									if !isValidDigest(d) {
+										add("provenance.origin."+digestField+" must be a lowercase SHA-256 digest (e.g. sha256:<hex>)", originValues[digestField])
+									}
+								}
+							}
+							if transforms := originValues["transformations"]; transforms != nil {
+								if _, err := stringSequence(transforms); err != nil {
+									add("provenance.origin.transformations " + err.Error())
+								}
+							}
+						}
+					}
+				}
+			}
+		}
 	}
 	if quality := values["quality"]; quality != nil {
 		if err := validateQuality(quality); err != nil {
@@ -239,36 +300,88 @@ func validateSkillMetadata(path string, contents []byte) (skillMetadata, []Issue
 	return item, issues
 }
 
+func validateSkillEntrypoint(path, absolute, skillID string) []Issue {
+	var issues []Issue
+	info, err := os.Lstat(absolute)
+	if err != nil {
+		return []Issue{{Path: path, Message: err.Error()}}
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return []Issue{{Path: path, Message: "skill entrypoint must be a regular file"}}
+	}
+	if info.Size() == 0 {
+		return []Issue{{Path: path, Message: "skill resource must not be empty"}}
+	}
+	if info.Size() > maxSkillResourceBytes {
+		return []Issue{{Path: path, Message: fmt.Sprintf("skill resource exceeds %d bytes", maxSkillResourceBytes)}}
+	}
+	contents, err := os.ReadFile(absolute)
+	if err != nil {
+		return []Issue{{Path: path, Message: err.Error()}}
+	}
+	if !utf8.Valid(contents) {
+		return []Issue{{Path: path, Message: "text skill resource must be valid UTF-8"}}
+	}
+	if fmName, line, ok := parseFrontmatterName(contents); ok && fmName != "" && fmName != skillID {
+		issues = append(issues, Issue{
+			Path:    path,
+			Line:    line,
+			Message: fmt.Sprintf("SKILL.md frontmatter name %q does not match skill ID %q", fmName, skillID),
+			Fix:     fmt.Sprintf("Update frontmatter name to %q, remove the name field, or use `skillhub skill edit %s`.", skillID, skillID),
+		})
+	}
+	return issues
+}
+
 func validateSkillResource(path, absolute string) error {
 	parts := strings.Split(path, "/")
 	if len(parts) < 4 {
 		return fmt.Errorf("skill resource must be under skills/<collection>/<skill>")
 	}
-	base := filepath.Base(path)
-	if base != "SKILL.md" && parts[3] != "references" && parts[3] != "scripts" && parts[3] != "assets" {
-		return fmt.Errorf("skill resources must be SKILL.md or live under references, scripts, or assets")
-	}
-	info, err := os.Stat(absolute)
+	info, err := os.Lstat(absolute)
 	if err != nil {
 		return err
 	}
-	if info.Size() == 0 {
-		return fmt.Errorf("skill resource must not be empty")
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return fmt.Errorf("skill resource must be a regular file")
 	}
 	if info.Size() > maxSkillResourceBytes {
 		return fmt.Errorf("skill resource exceeds %d bytes", maxSkillResourceBytes)
 	}
-	ext := strings.ToLower(filepath.Ext(path))
-	if base == "SKILL.md" || oneOf(ext, ".md", ".txt", ".yaml", ".yml", ".json") {
-		contents, err := os.ReadFile(absolute)
-		if err != nil {
-			return err
-		}
-		if !utf8.Valid(contents) {
-			return fmt.Errorf("text skill resource must be valid UTF-8")
+	return nil
+}
+
+func isUnsafeLocalPath(p string) bool {
+	p = filepath.ToSlash(p)
+	if strings.HasPrefix(p, "/") || strings.HasPrefix(p, "~") || strings.Contains(p, "..") {
+		return true
+	}
+	if len(p) >= 2 && p[1] == ':' {
+		return true
+	}
+	return false
+}
+
+func isUnsafeLocalName(name string) bool {
+	if strings.ContainsAny(name, "/\\:") || strings.HasPrefix(name, "~") || strings.Contains(name, "..") {
+		return true
+	}
+	return false
+}
+
+func isValidDigest(d string) bool {
+	if strings.HasPrefix(d, "sha256:") {
+		d = strings.TrimPrefix(d, "sha256:")
+	}
+	if len(d) != 64 {
+		return false
+	}
+	for _, c := range d {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+			return false
 		}
 	}
-	return nil
+	return true
 }
 
 func mappingValues(node *yaml.Node, allowed map[string]struct{}) (map[string]*yaml.Node, error) {

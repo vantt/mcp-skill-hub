@@ -310,3 +310,146 @@ func TestSourceCandidateCaptureIdempotent(t *testing.T) {
 		t.Fatalf("expected 1 intake file, found %d", len(entries))
 	}
 }
+func TestSourceImportFolderScopedPreservesCompanionsBUG04(t *testing.T) {
+	root := newSourceWorkspace(t)
+	now := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
+
+	sourceRec := sourcepkg.Record{
+		SchemaVersion: 1,
+		ID:            "ap",
+		Locator: sourcepkg.Locator{
+			Repository: "https://github.com/anthropics/skills.git",
+		},
+		Adapter:         "git",
+		Status:          "watching",
+		Identity:        sourcepkg.Identity{Name: "skills", Canonical: "https://github.com/anthropics/skills.git"},
+		Limits:          sourcepkg.Limits{TimeoutSeconds: 20, MaxBytes: sourcepkg.DefaultMaxBytes, MaxFiles: sourcepkg.DefaultMaxFiles, MaxFileBytes: sourcepkg.DefaultMaxFileSize},
+		Monitoring:      sourcepkg.Monitoring{Enabled: true, Cadence: "weekly"},
+		CurrentRevision: ptrRevision(revision("commit-8a1541c")),
+	}
+	srcBytes, _ := sourcepkg.MarshalCanonical(sourceRec)
+	_ = os.WriteFile(filepath.Join(root, "sources", "catalog", "ap.yaml"), srcBytes, 0o644)
+	_, _ = catalog.BuildCatalogGeneration(context.Background(), root, catalog.BuildOptions{})
+
+	binaryBytes := []byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x01}
+	fakeFiles := map[string][]byte{
+		"skills/pdf/SKILL.md":           []byte("---\nname: pdf\ndescription: PDF Processing\nlicense: Proprietary. LICENSE.txt has complete terms\n---\n\n# PDF Tool\n"),
+		"skills/pdf/LICENSE.txt":        []byte("Commercial License Terms\n"),
+		"skills/pdf/forms.md":           []byte("# Forms Markdown\n"),
+		"skills/pdf/reference.md":       []byte("# Reference Markdown\n"),
+		"skills/pdf/scripts/extract.py": []byte("print('extracting')\n"),
+		"skills/pdf/empty.txt":          []byte(""),
+		"skills/pdf/assets/icon.png":    binaryBytes,
+	}
+
+	resources := []sourcepkg.Resource{
+		{Path: "skills/pdf/SKILL.md", Size: int64(len(fakeFiles["skills/pdf/SKILL.md"]))},
+		{Path: "skills/pdf/LICENSE.txt", Size: int64(len(fakeFiles["skills/pdf/LICENSE.txt"]))},
+		{Path: "skills/pdf/forms.md", Size: int64(len(fakeFiles["skills/pdf/forms.md"]))},
+		{Path: "skills/pdf/reference.md", Size: int64(len(fakeFiles["skills/pdf/reference.md"]))},
+		{Path: "skills/pdf/scripts/extract.py", Size: int64(len(fakeFiles["skills/pdf/scripts/extract.py"]))},
+		{Path: "skills/pdf/empty.txt", Size: 0},
+		{Path: "skills/pdf/assets/icon.png", Size: int64(len(binaryBytes))},
+	}
+
+	adapter := &fakeImportAdapter{
+		resources: resources,
+		files:     fakeFiles,
+	}
+
+	importService := SourceImportService{
+		Clock: sourceClock{now: now},
+		Adapters: map[string]sourcepkg.Adapter{
+			"git": adapter,
+		},
+	}
+
+	// Folder-scoped import using Path: "skills/pdf"
+	preview, err := importService.PreviewSourceImport(context.Background(), root, SourceImportPreviewInput{
+		SourceID: "ap",
+		Path:     "skills/pdf",
+	})
+	if err != nil {
+		t.Fatalf("PreviewSourceImport failed: %v", err)
+	}
+
+	if len(preview.Importable) != 1 || preview.Importable[0].TargetID != "pdf" {
+		t.Fatalf("expected 1 importable skill 'pdf', got %#v", preview.Importable)
+	}
+
+	// Verify BUG-16: warning generated for proprietary license
+	hasLicenseWarning := false
+	for _, w := range preview.Warnings {
+		if strings.Contains(w.Summary, "proprietary") {
+			hasLicenseWarning = true
+			break
+		}
+	}
+	if !hasLicenseWarning {
+		t.Errorf("expected warning for proprietary license in preview, got %v", preview.Warnings)
+	}
+
+	// Verify all 7 files + metadata + link are in diff.Added (9 files total)
+	expectedAdded := []string{
+		"skills/default/pdf/SKILL.md",
+		"skills/default/pdf/skill.meta.yaml",
+		"sources/skills/LINK-pdf--ap.yaml",
+		"skills/default/pdf/LICENSE.txt",
+		"skills/default/pdf/forms.md",
+		"skills/default/pdf/reference.md",
+		"skills/default/pdf/scripts/extract.py",
+		"skills/default/pdf/empty.txt",
+		"skills/default/pdf/assets/icon.png",
+	}
+
+	addedMap := make(map[string]bool)
+	for _, a := range preview.Diff.Added {
+		addedMap[a] = true
+	}
+	for _, exp := range expectedAdded {
+		if !addedMap[exp] {
+			t.Errorf("expected added path %s missing from preview diff: %v", exp, preview.Diff.Added)
+		}
+	}
+
+	// Confirm the import
+	pins := preview.Confirmation.Confirmation.Pins
+	result, err := importService.ConfirmSourceImport(context.Background(), root, preview, pins)
+	if err != nil {
+		t.Fatalf("ConfirmSourceImport failed: %v", err)
+	}
+
+	if result.ImportedCount != 1 || len(result.ImportedIDs) != 1 || result.ImportedIDs[0] != "pdf" {
+		t.Fatalf("unexpected import result: %#v", result)
+	}
+
+	// Verify files on disk
+	for _, rel := range []string{
+		"skills/default/pdf/SKILL.md",
+		"skills/default/pdf/skill.meta.yaml",
+		"sources/skills/LINK-pdf--ap.yaml",
+		"skills/default/pdf/LICENSE.txt",
+		"skills/default/pdf/forms.md",
+		"skills/default/pdf/reference.md",
+		"skills/default/pdf/scripts/extract.py",
+		"skills/default/pdf/empty.txt",
+		"skills/default/pdf/assets/icon.png",
+	} {
+		filePath := filepath.Join(root, filepath.FromSlash(rel))
+		if _, statErr := os.Stat(filePath); statErr != nil {
+			t.Errorf("expected imported file %s does not exist: %v", rel, statErr)
+		}
+	}
+
+	// Verify empty file was preserved
+	emptyData, _ := os.ReadFile(filepath.Join(root, "skills", "default", "pdf", "empty.txt"))
+	if len(emptyData) != 0 {
+		t.Errorf("expected empty file, got %d bytes", len(emptyData))
+	}
+
+	// Verify binary file was preserved
+	binData, _ := os.ReadFile(filepath.Join(root, "skills", "default", "pdf", "assets", "icon.png"))
+	if string(binData) != string(binaryBytes) {
+		t.Errorf("binary content mismatch: got %v, want %v", binData, binaryBytes)
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -16,12 +17,34 @@ const (
 )
 
 var (
-	ErrInvalidLocator     = errors.New("invalid source locator")
-	ErrUnsafeAddress      = errors.New("source address is local or private")
-	ErrLimitExceeded      = errors.New("source resource limit exceeded")
-	ErrRevisionMismatch   = errors.New("source revision is no longer current")
-	ErrHistoryUnavailable = errors.New("source revision history is unavailable")
+	ErrInvalidLocator        = errors.New("invalid source locator")
+	ErrUnsafeAddress         = errors.New("source address is local or private")
+	ErrLimitExceeded         = errors.New("source resource limit exceeded")
+	ErrRevisionMismatch      = errors.New("source revision is no longer current")
+	ErrHistoryUnavailable    = errors.New("source revision history is unavailable")
+	ErrAmbiguousRef          = errors.New("ambiguous git reference")
+	ErrAmbiguousLocator      = errors.New("ambiguous source locator")
+	ErrLocalWatchUnsupported = errors.New("local watch unsupported")
+	ErrUnsafeFile            = errors.New("unsafe file in source directory")
 )
+
+// AmbiguousRefError provides specific information and guidance for ambiguous git references.
+type AmbiguousRefError struct {
+	Candidates []string
+	Ref        string
+	Path       string
+}
+
+func (e *AmbiguousRefError) Error() string {
+	if len(e.Candidates) > 0 {
+		return fmt.Sprintf("ambiguous git reference %q matches candidates: %s (specify --ref or --path)", e.Ref, strings.Join(e.Candidates, ", "))
+	}
+	return fmt.Sprintf("ambiguous git reference %q (specify --ref or --path)", e.Ref)
+}
+
+func (e *AmbiguousRefError) Is(target error) bool {
+	return target == ErrAmbiguousRef
+}
 
 // LimitExceededError provides specific information about which resource limit was breached.
 type LimitExceededError struct {
@@ -44,11 +67,13 @@ func (e *LimitExceededError) Is(target error) bool {
 
 // Locator is an adapter-neutral, credential-free source location.
 type Locator struct {
-	URL        string `json:"url,omitempty" yaml:"url,omitempty"`
-	Repository string `json:"repository,omitempty" yaml:"repository,omitempty"`
-	Path       string `json:"path,omitempty" yaml:"path,omitempty"`
-	Ref        string `json:"ref,omitempty" yaml:"ref,omitempty"`
-	Mode       string `json:"mode,omitempty" yaml:"mode,omitempty"`
+	URL            string `json:"url,omitempty" yaml:"url,omitempty"`
+	Repository     string `json:"repository,omitempty" yaml:"repository,omitempty"`
+	Path           string `json:"path,omitempty" yaml:"path,omitempty"`
+	Ref            string `json:"ref,omitempty" yaml:"ref,omitempty"`
+	Mode           string `json:"mode,omitempty" yaml:"mode,omitempty"`
+	SnapshotID     string `json:"snapshot_id,omitempty" yaml:"snapshot_id,omitempty"`
+	SnapshotDigest string `json:"snapshot_digest,omitempty" yaml:"snapshot_digest,omitempty"`
 }
 
 // Source is the minimum adapter input derived from a canonical source record.

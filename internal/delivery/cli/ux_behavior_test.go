@@ -9,7 +9,9 @@ import (
 
 func createDraftSkill(t *testing.T, root, id string, extra ...string) {
 	t.Helper()
-	args := append([]string{"skill", "create", "--workspace", root, "--id", id, "--collection", "software", "--name", "Demo", "--description", "Demo skill.", "--trigger", "demo it", "--min-scope", "multi_step", "--yes"}, extra...)
+	contentFile := filepath.Join(t.TempDir(), id+"-content.md")
+	_ = os.WriteFile(contentFile, []byte("---\nname: "+id+"\ndescription: Demo skill.\n---\n\n# Demo\n\nReal procedural instructions to replace untouched scaffold.\n"), 0o600)
+	args := append([]string{"skill", "create", "--workspace", root, "--id", id, "--collection", "software", "--name", "Demo", "--description", "Demo skill.", "--trigger", "demo it", "--min-scope", "multi_step", "--content-file", contentFile, "--yes"}, extra...)
 	if code, stdout, stderr := runCLI(t, args...); code != 0 {
 		t.Fatalf("create exit = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -17,7 +19,9 @@ func createDraftSkill(t *testing.T, root, id string, extra ...string) {
 
 func TestSkillApplyReportsResultingStateWithoutPreviewText(t *testing.T) {
 	root := initTestWorkspace(t)
-	code, stdout, stderr := runCLI(t, "skill", "create", "--workspace", root, "--id", "demo", "--collection", "software", "--name", "Demo", "--description", "Demo skill.", "--trigger", "demo it", "--not-for", "unrelated", "--min-scope", "multi_step", "--yes")
+	contentFile := filepath.Join(t.TempDir(), "demo-content.md")
+	_ = os.WriteFile(contentFile, []byte("---\nname: demo\ndescription: Demo skill.\n---\n\n# Demo\n\nReal procedural instructions to replace untouched scaffold.\n"), 0o600)
+	code, stdout, stderr := runCLI(t, "skill", "create", "--workspace", root, "--id", "demo", "--collection", "software", "--name", "Demo", "--description", "Demo skill.", "--trigger", "demo it", "--not-for", "unrelated", "--min-scope", "multi_step", "--content-file", contentFile, "--yes")
 	if code != 0 {
 		t.Fatalf("create exit = %d: %s", code, stderr)
 	}

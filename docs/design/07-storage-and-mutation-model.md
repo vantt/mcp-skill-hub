@@ -105,6 +105,7 @@ skillhub-workspace/
 │   ├── catalog/
 │   │   ├── current.json
 │   │   └── generations/<generation>.db
+│   ├── edits/                         # 24h bounded recovery artifacts (REC-*.md)
 │   ├── operational.db
 │   ├── telemetry.db
 │   ├── locks/
@@ -135,7 +136,7 @@ Recovery transactions nằm ngoài `runtime/` để `rm -rf runtime && skillhub 
 | Telemetry | resolution timing, UX events | Không | Loss allowed |
 | Cache | source responses, embeddings | Không | Refetch/recompute allowed |
 | Recovery WAL | pending staged mutation | Tạm thời bắt buộc | Recover before normal operation |
-
+| Editor recovery artifacts | temporary edits buffer with 24h TTL (`runtime/edits/`) | Không | Auto-cleanup after TTL / proposal confirm |
 Không được đặt durable sequence/cursor/decision chỉ trong SQLite.
 
 ## 6. Canonical representation rules
@@ -577,7 +578,7 @@ flowchart LR
 Cùng application service `BuildCatalogGeneration` được gọi bởi:
 
 ```text
-skillhub init <path>
+skillhub init [path]  # path defaults to the current directory
 → create/validate empty canonical skeleton
 → rebuild
 
@@ -594,9 +595,35 @@ server/workspace open
 → auto-rebuild when generation is absent or derived schema is incompatible
 ```
 
-Startup auto-rebuild chỉ chạy khi canonical tree hợp lệ và không có pending recovery transaction. Nếu canonical invalid, Hub không tự sửa; nếu build tốn thời gian, command/status phải report progress thay vì trông như treo.
+### 15.2 State basis, fallback and degraded startup
 
-### 15.2 Immutable build input
+Skill Hub phân biệt rõ ràng hai tầng state basis:
+1. **Canonical state:** Dữ liệu chuẩn được version trong Git working tree (`skills/`, `sources/`, `distill/`).
+2. **Served state:** Catalog SQLite generation (`runtime/catalog/generations/<gen>.db`) được compiled để phục vụ resolver.
+
+**Resource-verified fallback:**
+- Khi canonical files bị chỉnh sửa ngoài luồng (direct editing, git pull/merge) hoặc generation bị cũ: các skill mà files không đổi và match digest vẫn có thể servable với diagnostics báo degraded.
+- Khi companion resources (`references/`, `scripts/`, `assets/`) bị sửa đổi hoặc xóa mà chưa rebuild, các resources đó không thể load được (`resource_content_unavailable`). Hub **không bao giờ đoán hoặc tái tạo historical bytes từ cache cũ**.
+- **Mutation blocking:** Khi canonical workspace invalid, mọi managed mutation (`skill create`, `skill edit`, `skill activate`, etc.) bị block với `workspace_invalid` hoặc `validation_failed` cho đến khi canonical files được sửa.
+- **Fresh clone:** Sau khi `git clone`, runtime directory hoàn toàn trống. Chạy `skillhub rebuild` (hoặc bất kỳ read command nào) sẽ validate canonical files và build catalog generation đầu tiên.
+- **Degraded MCP startup:** Nếu SQLite catalog bị thiếu hoặc corrupt khi agent khởi động MCP stdio server (`skillhub mcp serve`), server sẽ boot ở degraded mode. Các diagnostic tools (`hub_status`, `skill_review`, `workspace_validate`, `workspace_rebuild`) vẫn hoạt động bình thường để agent chẩn đoán và khắc phục, trong khi các routing tools trả về actionable errors mà không crash stdio transport.
+
+### 15.3 Staged validation (`validate --staged`)
+
+Để hỗ trợ Git pre-commit workflows mà không bị ảnh hưởng bởi uncommitted working-tree changes:
+- `skillhub validate --staged` đọc trực tiếp stage-0 blob objects từ Git index.
+- Không chạy checkout filters, không mutate Git index, và không đụng working tree.
+- Không có proprietary hook installer (`skillhub hook install` không tồn tại). Người dùng gọi trực tiếp một dòng `skillhub validate --staged` từ hook manager bất kỳ (Husky, Lefthook, pre-commit framework, hoặc script `.git/hooks/pre-commit`).
+
+### 15.4 Editor concurrency and 24-hour recovery artifacts
+
+Khi chỉnh sửa skill bằng external editor (`skillhub skill edit <id> --editor`):
+- Trước khi mở editor, Hub ghi lại digest của canonical content hiện tại (`expectedContentDigest`).
+- Khi editor đóng, Hub đối chiếu digest: nếu canonical content bị writer khác sửa trong lúc editor đang mở, Hub từ chối preview với lỗi `edit_conflict`.
+- Trước khi preview và khi phát hiện conflict, Hub lưu lại buffer đã sửa vào recovery file bất biến tại `runtime/edits/REC-<proposal-id>-<timestamp>.md` với permission 0600.
+- Recovery files có TTL 24 giờ và được tự động dọn dẹp khi proposal được confirm hoặc khi hết hạn.
+
+### 15.5 Immutable build input
 
 Rebuild không đọc trực tiếp từng file rồi vừa đọc vừa insert live DB. Nó tạo một immutable build input:
 

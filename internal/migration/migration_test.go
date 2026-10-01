@@ -131,6 +131,9 @@ func TestLegacyMigrationRejectsOtherInvalidLayout(t *testing.T) {
 	if err := os.RemoveAll(filepath.Join(root, "skills")); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(root, "skills"), []byte("not a directory"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := DefaultRegistry().Preview(root, 1); err == nil || !strings.Contains(err.Error(), "not otherwise v1-compatible") {
 		t.Fatalf("invalid legacy layout error = %v", err)
 	}

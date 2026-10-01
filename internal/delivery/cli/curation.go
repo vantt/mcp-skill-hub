@@ -40,11 +40,15 @@ func runStatus(ctx context.Context, args []string, stdout, stderr io.Writer) int
 
 func renderCurationHome(writer io.Writer, home app.CurationHome, workspacePath string) {
 	fmt.Fprintln(writer, home.Summary)
-	if home.Workspace.Health == "valid" && home.Workspace.Index != "current" {
+	if home.Workspace.Health != "valid" {
+		for _, item := range home.Items {
+			fmt.Fprintf(writer, "- %s\n", item.Summary)
+		}
+	} else if home.Workspace.Index != "current" {
 		fmt.Fprintln(writer, "Skill and source counts are unavailable until the search index is rebuilt.")
-	} else if home.HomeSummary.ActiveSkills == 0 && home.HomeSummary.WatchingSources == 0 {
-		fmt.Fprintln(writer, "No skills yet. Next: ask your agent 'create a skill for ...' or run `skillhub skill create ...`")
-	} else {
+	} else if home.CountsKnown && home.HomeSummary.ActiveSkills == 0 && home.HomeSummary.WatchingSources == 0 {
+		fmt.Fprintln(writer, "No skills yet. Next: ask your agent 'create a skill for ...' or run `skillhub skill create my-skill --collection core --name \"My Skill\" --description \"Skill description\"`")
+	} else if home.CountsKnown {
 		skillWord := "skills"
 		if home.HomeSummary.ActiveSkills == 1 {
 			skillWord = "skill"

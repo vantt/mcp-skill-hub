@@ -172,9 +172,12 @@ Git workspace clean
 | User intent | System skill behavior |
 |---|---|
 | “Curate/check my hub” | Show Curation Home, recommend one next action |
+| “Add/use this skill” | Preview adding a draft skill (`skill_add_preview` for GitHub locators; guide to CLI for local folders) |
+| “Watch this repo for updates” | Preview monitoring an upstream repository (`source_watch_preview`) without importing skills |
+| “Review this skill” | Run diagnostic review (`skill_review`) reporting validation, readiness, resources, and git status |
 | “Add/save this repo for later” | Capture Source Candidate with minimal metadata |
 | “Start learning from this source” | Detect defaults, present one onboarding proposal |
-| “Check for updates” | Check due/all requested sources; summarize changed/unavailable |
+| “Check for updates” | Check due/all requested sources (`source_check`); summarize changed/unavailable |
 | “Distill all changed sources” | Batch distill to findings/insights; stop before semantic apply |
 | “Show what source X taught us” | Summarize findings, open evidence on demand |
 | “Review pending insights” | Rank/group inbox, present one decision at a time |
@@ -187,7 +190,6 @@ Git workspace clean
 | “Show workspace changes” | Show grouped curation diff, then raw Git diff on request |
 
 Unknown intent should produce a small clarification, not a command list dump.
-
 ## 6. Action and approval policy
 
 | Action | Default confirmation policy |
@@ -589,35 +591,35 @@ CLI is not a second product model. Commands map to the same intents and applicat
 
 ```text
 skillhub status                         # Curation Home
-skillhub check [--all-due]              # explicit network source check
-skillhub source capture <locator>
+skillhub skill add <locator>            # intent-first draft skill addition
+skillhub skill create <id>              # create draft workflow
+skillhub skill review <id>              # comprehensive diagnostic review
+skillhub skill edit <id> [--editor]     # edit instructions or metadata
+skillhub skill confirm <proposal-id>    # confirm proposal by short ID
+skillhub skill activate <id>            # lifecycle transitions
+skillhub skill deprecate <id>
+skillhub skill archive <id>
+skillhub source watch <locator>         # intent-first repository monitoring
+skillhub source check [--all-due]       # check watched sources (alias: skillhub check)
+skillhub source capture <locator>       # advanced intake: record candidate
 skillhub source list
 skillhub source show <id>
+skillhub source triage <id>             # advanced intake: triage candidate
+skillhub source import <id>             # advanced intake: import discovered skills
 
-skillhub run list
-skillhub run show <id>
-skillhub run retry <id>
-skillhub run cancel <id>
-
-skillhub inbox
+skillhub distill prepare|start|submit   # granular distillation steps
+skillhub inbox                          # review insight proposals
 skillhub insight show <id>
-skillhub insight plan <id>
-skillhub insight reject <id> --reason <text>
+skillhub insight decide <id>
 skillhub insight apply <id>             # preview + interactive confirm
 
-skillhub skill create
-skillhub skill edit <id>
-skillhub skill activate <id>
-skillhub skill deprecate <id>
-
-skillhub validate
-skillhub rebuild
-skillhub diff
-skillhub doctor
-skillhub doctor --fix
+skillhub validate [--staged]            # validate working tree or staged index
+skillhub rebuild                        # rebuild search catalog
+skillhub diff                           # show uncommitted changes
+skillhub doctor [--fix]                 # diagnose and repair
 ```
 
-Distillation semantic work is primarily Agent-executed. CLI `run` commands inspect/retry/cancel prepared work; a future configured provider may add headless execution without changing lifecycle semantics.
+Distillation semantic work is primarily Agent-executed. CLI commands expose each step for automation, scripting, and recovery.
 
 ### 16.1 CLI output rules
 
@@ -633,7 +635,10 @@ Distillation semantic work is primarily Agent-executed. CLI `run` commands inspe
 | UX intent | MCP tool | Application command |
 |---|---|---|
 | Show Curation Home | `hub_status` | `GetCurationHome` |
-| Capture source | `source_intake_add` | `CaptureSourceCandidate` |
+| Add skill (GitHub) | `skill_add_preview/confirm` | `PreviewSkillAdd` / `ConfirmSkillAdd` |
+| Watch source | `source_watch_preview/confirm` | `PreviewSourceWatch` / `ConfirmSourceWatch` |
+| Review skill diagnostics | `skill_review` | `ReviewSkill` |
+| Capture source candidate | `source_intake_add` | `CaptureSourceCandidate` |
 | Triage/onboard source | `source_triage` | `TriageSourceCandidate` |
 | Check updates | `source_check` | `CheckSources` |
 | Start distillation | `curation_run_start` | `PrepareDistillRuns` |
@@ -651,11 +656,10 @@ Distillation semantic work is primarily Agent-executed. CLI `run` commands inspe
 | List skills | `skill_list` | `ListSkills` |
 | Get skill | `skill_get` | `ReadSkill` |
 | Routing impact | `routing_evaluate` | `EvaluateRoutingChange` |
-| Validate | `workspace_validate` | `ValidateWorkspace` |
+| Validate workspace | `workspace_validate` | `ValidateWorkspace` / `ValidateStaged` |
 | Rebuild derived DB | `workspace_rebuild` | `BuildCatalogGeneration` |
 | Show changes | `workspace_diff` | `GetCurationDiff` |
 | Record outcome | `outcome_record` | `RecordIncorporationOutcome` |
-
 Application commands own semantics; CLI and MCP adapters only validate transport and map results.
 
 ## 18. Internal model derived from UX

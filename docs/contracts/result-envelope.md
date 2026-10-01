@@ -44,10 +44,15 @@ progressive-disclosure boundary, not embedded by default. See
 [UX fixtures](ux-fixtures.md).
 
 Public identifiers that a caller must resubmit (such as an insight, proposal,
-or operation identifier) are opaque strings. A semantic confirmation must also
-pin the proposal digest and base version as required by
-[Source Learning and Distillation](../design/06-source-learning-and-distillation.md).
+or operation identifier) are opaque strings. In the interactive CLI, users can
+confirm proposals by short ID (`skillhub skill confirm <proposal-id>`), while MCP
+and automation endpoints require all three pins: `proposal_id`, `proposal_digest`,
+and `base_version` as governed by [action-confirmation-policy.schema.json](../../schemas/action-confirmation-policy.schema.json).
 
+State-reporting results explicitly disclose state basis: canonical facts
+derived from the local Git working tree versus served facts from the active SQLite
+catalog generation (`servable`, `catalog_snapshot`, `generation`). Unconfirmed editor
+sessions store bounded 24-hour recovery artifacts in `runtime/edits/` to prevent data loss.
 ## Field classifications
 
 | Classification | Fields | Compatibility rule |

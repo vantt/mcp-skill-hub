@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -121,15 +122,24 @@ func ParseRecord(data []byte) (Record, error) {
 func ValidateLocator(adapter string, locator Locator) error {
 	switch adapter {
 	case "git":
-		if _, err := ValidateRemoteURL(locator.Repository, false); err != nil {
+		if _, err := ValidateRemoteURLWithOptions(locator.Repository, URLValidationOptions{AllowFile: true}); err != nil {
 			return err
 		}
 		if locator.Path != "" && !safeResourcePath(locator.Path) {
 			return ErrInvalidLocator
 		}
 	case "filesystem":
-		if !safeResourcePath(locator.Path) {
-			return ErrInvalidLocator
+		if locator.SnapshotDigest != "" {
+			if !validDigest(locator.SnapshotDigest) {
+				return ErrInvalidLocator
+			}
+			if locator.Path != "" && !safeResourcePath(locator.Path) {
+				return ErrInvalidLocator
+			}
+		} else {
+			if !safeSourceLocatorPath(locator.Path) {
+				return ErrInvalidLocator
+			}
 		}
 	case "immutable-http", "living-http":
 		if _, err := ValidateRemoteURL(locator.URL, false); err != nil {
@@ -139,6 +149,17 @@ func ValidateLocator(adapter string, locator Locator) error {
 		return fmt.Errorf("%w: unsupported adapter %q", ErrInvalidLocator, adapter)
 	}
 	return nil
+}
+
+func safeSourceLocatorPath(value string) bool {
+	if value == "" || strings.ContainsRune(value, '\x00') {
+		return false
+	}
+	clean := filepath.Clean(value)
+	if clean == "." || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return false
+	}
+	return true
 }
 
 func validateRevision(value Revision) error {

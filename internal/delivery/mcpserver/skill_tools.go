@@ -2,12 +2,15 @@ package mcpserver
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/catalog"
 	"github.com/vantt/mcp-skill-hub/internal/skill"
 )
 
@@ -50,6 +53,12 @@ func (adapter *Server) registerSkillTools(server *mcp.Server) {
 		Description: "Apply exactly one persisted draft skill creation proposal. All proposal_id, proposal_digest, and base_version pins are required and exact replay returns the prior receipt.",
 		Annotations: annotations(false, true, true, false),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input confirmationInput) (*mcp.CallToolResult, toolOutcome[app.SkillMutationResult], error) {
+		if strings.TrimSpace(input.ProposalID) == "" || strings.TrimSpace(input.ProposalDigest) == "" || strings.TrimSpace(input.BaseVersion) == "" {
+			return failure[app.SkillMutationResult](app.NewInvalidRequestError(
+				"proposal_id, proposal_digest, and base_version pins are required",
+				"Supply all confirmation pins.",
+			))
+		}
 		service := app.SkillService{}
 		preview, err := service.LoadSkillProposal(ctx, adapter.workspace, input.ProposalID)
 		if err != nil {
@@ -98,6 +107,12 @@ func (adapter *Server) registerSkillTools(server *mcp.Server) {
 		Description: "Apply exactly one persisted skill lifecycle transition proposal. All proposal_id, proposal_digest, and base_version pins are required and exact replay returns the prior receipt.",
 		Annotations: annotations(false, true, true, false),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input confirmationInput) (*mcp.CallToolResult, toolOutcome[app.SkillMutationResult], error) {
+		if strings.TrimSpace(input.ProposalID) == "" || strings.TrimSpace(input.ProposalDigest) == "" || strings.TrimSpace(input.BaseVersion) == "" {
+			return failure[app.SkillMutationResult](app.NewInvalidRequestError(
+				"proposal_id, proposal_digest, and base_version pins are required",
+				"Supply all confirmation pins.",
+			))
+		}
 		service := app.SkillService{}
 		preview, err := service.LoadSkillProposal(ctx, adapter.workspace, input.ProposalID)
 		if err != nil {
@@ -155,17 +170,32 @@ func (adapter *Server) registerSkillTools(server *mcp.Server) {
 				break
 			}
 		}
+		sum := sha256.Sum256([]byte(skillResult.Content))
+		contentDigest := "sha256:" + hex.EncodeToString(sum[:])
+		assessment, _ := catalog.AssessSkillState(ctx, adapter.workspace, id)
+		lifecycleState := skillResult.Manifest.Status
+		if lifecycleState == "" {
+			lifecycleState = assessment.Canonical.Status
+		}
+		routingEligible := (lifecycleState == "active") && (!assessment.Served.Known || assessment.Served.Servable)
 		return success(skillGetResult{
-			SkillID:         skillResult.Manifest.SkillID,
-			Name:            skillResult.Manifest.Name,
-			Description:     skillResult.Manifest.Description,
-			Status:          skillResult.Manifest.Status,
-			Path:            path,
-			CatalogSnapshot: skillResult.Manifest.CatalogSnapshot,
-			Content:         skillResult.Content,
-			Routing:         routing,
-			Rationale:       rationale,
-			Resources:       skillResult.Manifest.Resources,
+			SkillID:          skillResult.Manifest.SkillID,
+			Name:             skillResult.Manifest.Name,
+			Description:      skillResult.Manifest.Description,
+			Status:           skillResult.Manifest.Status,
+			Path:             path,
+			CatalogSnapshot:  skillResult.Manifest.CatalogSnapshot,
+			Content:          skillResult.Content,
+			ContentDigest:    contentDigest,
+			StateBasis:       string(catalog.BasisCanonical),
+			LifecycleState:   lifecycleState,
+			RoutingEligible:  routingEligible,
+			Diverged:         assessment.Diverged,
+			ChangedResources: assessment.ChangedResources,
+			MissingResources: assessment.MissingResources,
+			Routing:          routing,
+			Rationale:        rationale,
+			Resources:        skillResult.Manifest.Resources,
 		})
 	})
 }

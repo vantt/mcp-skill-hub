@@ -1,6 +1,6 @@
 {
   "schema_version": "1",
-  "generated_at": "2026-09-29T21:15:00+07:00",
+  "generated_at": "2026-10-01T12:00:00+07:00",
   "server": {
     "name": "skillhub",
     "transport": "stdio",
@@ -22,6 +22,18 @@
       },
       "operations": ["tools/list", "tools/call", "skills/list", "skills/get", "resources/read"],
       "evidence": "go test ./internal/delivery/mcpserver -count=1 -run TestModernAndLegacySDKContracts"
+    },
+    {
+      "client": "github.com/modelcontextprotocol/go-sdk",
+      "client_version": "v1.8.0",
+      "status": "verified",
+      "transport": "stdio",
+      "protocol_revisions": ["2026-07-28"],
+      "negotiation_labels": {
+        "2026-07-28": "server/discover modern negotiation"
+      },
+      "operations": ["tools/list", "tools/call", "hub_status", "skill_review", "skill_add_preview", "skill_add_confirm", "skill_list"],
+      "evidence": "go test ./internal/delivery/mcpserver -count=1 -run 'TestStdioDegradedStartupWith(ValidFallback|NoCatalog)'"
     },
     {
       "client": "@modelcontextprotocol/inspector",

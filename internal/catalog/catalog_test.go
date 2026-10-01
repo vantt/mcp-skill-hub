@@ -449,3 +449,70 @@ func logicalRows(t *testing.T, root string) []string {
 	}
 	return result
 }
+func TestCatalogBuildAcceptsCloneLikeWorkspaceWithAbsentEmptyDirectories(t *testing.T) {
+	root := newWorkspace(t)
+	writeCanonical(t, root, "skills/core/review/skill.meta.yaml", "schema_version: 1\nid: review\nname: Review\nstatus: active\ndescription: Review code.\nrouting:\n  triggers: [review code]\n  not_for: [write prose]\n  min_scope: multi_step\n")
+	writeCanonical(t, root, "skills/core/review/SKILL.md", "# Review\nUse evidence.\n")
+
+	// Delete all empty required directories to simulate fresh clone
+	for _, dir := range workspace.RequiredDirectories() {
+		_ = os.Remove(filepath.Join(root, filepath.FromSlash(dir)))
+	}
+
+	result, err := BuildCatalogGeneration(context.Background(), root, BuildOptions{})
+	if err != nil {
+		t.Fatalf("expected catalog build to succeed on clone-like workspace, got: %v", err)
+	}
+	if result.Pointer.Generation == "" {
+		t.Fatal("expected published generation, got empty")
+	}
+}
+
+func TestCatalogBuildPreservesCompanionResourcesWithoutTreatingThemAsEntities(t *testing.T) {
+	root := newWorkspace(t)
+	writeCanonical(t, root, "skills/core/review/skill.meta.yaml", "schema_version: 1\nid: review\nname: Review\nstatus: active\ndescription: Review code.\nrouting:\n  triggers: [review code]\n  not_for: [write prose]\n  min_scope: multi_step\n")
+	writeCanonical(t, root, "skills/core/review/SKILL.md", "# Review\nUse evidence.\n")
+
+	// Add companion resources
+	writeCanonical(t, root, "skills/core/review/LICENSE.txt", "MIT License\n")
+	writeCanonical(t, root, "skills/core/review/forms.yaml", "form_title: Feedback\n")
+	writeCanonical(t, root, "skills/core/review/empty.txt", "")
+	writeCanonical(t, root, "skills/core/review/assets/icon.png", "\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR")
+
+	result, err := BuildCatalogGeneration(context.Background(), root, BuildOptions{})
+	if err != nil {
+		t.Fatalf("expected catalog build to succeed with companion resources, got: %v", err)
+	}
+	if result.RowCounts["skills"] != 1 {
+		t.Fatalf("expected 1 skill count, got %d", result.RowCounts["skills"])
+	}
+
+	// Verify that forms.yaml was NOT added to canonical_entities table as an entity
+	handle, err := OpenCurrent(context.Background(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer handle.Close()
+
+	var count int
+	if err := handle.DB.QueryRow(`SELECT count(*) FROM canonical_entities WHERE path LIKE '%forms.yaml%'`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("forms.yaml must not be recorded as a canonical entity, got count=%d", count)
+	}
+}
+
+func TestCatalogBuildAndValidateParityOnFrontmatterMismatch(t *testing.T) {
+	root := newWorkspace(t)
+	writeCanonical(t, root, "skills/core/review/skill.meta.yaml", "schema_version: 1\nid: review\nname: Review\nstatus: active\ndescription: Review code.\nrouting:\n  triggers: [review code]\n  not_for: [write prose]\n  min_scope: multi_step\n")
+	writeCanonical(t, root, "skills/core/review/SKILL.md", "---\nname: WRONG_NAME\n---\n# Review\n")
+
+	_, err := BuildCatalogGeneration(context.Background(), root, BuildOptions{})
+	if err == nil {
+		t.Fatal("expected catalog build to fail on SKILL.md frontmatter name mismatch, got nil")
+	}
+	if !strings.Contains(err.Error(), "WRONG_NAME") {
+		t.Fatalf("expected error mentioning WRONG_NAME, got: %v", err)
+	}
+}

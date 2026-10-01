@@ -1,10 +1,12 @@
 package mutation
 
 import (
+	"context"
 	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -308,5 +310,126 @@ func TestRollForwardRefusesMalformedOrTraversalManifestWithoutTouchingSentinel(t
 				t.Fatalf("out-of-root sentinel changed: got %q, want %q", got, original)
 			}
 		})
+	}
+}
+func TestMutationCancellationWaitingForLockWritesNothing(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "workspace")
+	if _, err := workspace.Apply(root); err != nil {
+		t.Fatal(err)
+	}
+
+	// Cancelled context before acquisition
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	set := WriteSet{
+		OperationID: "OP-CANCEL-LOCK",
+		Command:     "create_source",
+		Changes:     []Change{{Path: "sources/catalog/SRC-CANCEL.yaml", Contents: []byte("id: SRC-CANCEL\n")}},
+	}
+	_, err := CommitWithOptions(root, set, Options{Context: ctx})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
+	}
+
+	// Verify nothing written
+	if _, err := os.Stat(filepath.Join(root, "sources", "catalog", "SRC-CANCEL.yaml")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("file should not exist after cancellation: %v", err)
+	}
+	entries, _ := os.ReadDir(filepath.Join(root, ".skillhub", "transactions"))
+	if len(entries) != 0 {
+		t.Fatalf("no transactions should remain after cancellation before lock, got %d", len(entries))
+	}
+}
+
+func TestMutationCancellationBeforeCanonicalDisplacementWritesNothing(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "workspace")
+	if _, err := workspace.Apply(root); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	set := WriteSet{
+		OperationID: "OP-CANCEL-BEFORE-DISPLACE",
+		Command:     "create_source",
+		Changes:     []Change{{Path: "sources/catalog/SRC-PRE-DISPLACE.yaml", Contents: []byte("id: SRC-PRE-DISPLACE\n")}},
+	}
+
+	// Cancel context when manifest is prepared, right before displacement starts
+	options := Options{
+		Context: ctx,
+		Fault: func(point FaultPoint) error {
+			if point == FaultManifestPhaseUpdate {
+				cancel()
+			}
+			return nil
+		},
+	}
+
+	_, err := CommitWithOptions(root, set, options)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
+	}
+
+	// Verify nothing was written to canonical layout
+	if _, err := os.Stat(filepath.Join(root, "sources", "catalog", "SRC-PRE-DISPLACE.yaml")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("canonical file must not exist when cancelled before displacement: %v", err)
+	}
+
+	// Verify transaction directory was removed
+	txnDir := filepath.Join(root, ".skillhub", "transactions", "OP-CANCEL-BEFORE-DISPLACE")
+	if _, err := os.Stat(txnDir); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("transaction directory must be removed on pre-displacement cancellation: %v", err)
+	}
+}
+
+func TestMutationCancellationAfterDisplacementReachesDurableRecovery(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "workspace")
+	if _, err := workspace.Apply(root); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	set := WriteSet{
+		OperationID: "OP-CANCEL-POST-DISPLACE",
+		Command:     "create_source",
+		Changes:     []Change{{Path: "sources/catalog/SRC-POST-DISPLACE.yaml", Contents: []byte("id: SRC-POST-DISPLACE\n")}},
+	}
+
+	// Cancel context during first canonical replace (after displacement has started)
+	options := Options{
+		Context: ctx,
+		Fault: func(point FaultPoint) error {
+			if point == FaultFirstCanonicalReplace {
+				cancel()
+			}
+			return nil
+		},
+	}
+
+	_, err := CommitWithOptions(root, set, options)
+	if err == nil {
+		t.Fatal("expected error on cancelled mutation")
+	}
+	if !strings.Contains(err.Error(), "remains recoverable") {
+		t.Fatalf("expected outcome indicating transaction remains recoverable, got: %v", err)
+	}
+
+	// Verify file was applied to canonical layout
+	if _, err := os.Stat(filepath.Join(root, "sources", "catalog", "SRC-POST-DISPLACE.yaml")); err != nil {
+		t.Fatalf("canonical file should be applied when cancellation happens post-displacement: %v", err)
+	}
+
+	// Verify transaction is in recoverable state and RollForward cleans it up
+	recoveries, err := InspectRecoveryWhileLocked(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recoveries) != 1 || recoveries[0].OperationID != "OP-CANCEL-POST-DISPLACE" {
+		t.Fatalf("expected 1 recoverable transaction, got %#v", recoveries)
+	}
+
+	if err := RollForward(root); err != nil {
+		t.Fatalf("RollForward failed: %v", err)
 	}
 }

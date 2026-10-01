@@ -71,18 +71,18 @@ func inspectPublishedWhileLocked(ctx context.Context, root string) (Status, erro
 	}
 	pointer, err := readPointer(root)
 	if errors.Is(err, os.ErrNotExist) {
-		return Status{State: StateMissing, Detail: "catalog generation pointer is missing"}, nil
+		return Status{State: StateMissing, ServingMode: ServingUnavailable, Detail: "catalog generation pointer is missing"}, nil
 	}
 	if err != nil {
-		return Status{State: StateCorrupt, Detail: err.Error()}, nil
+		return Status{State: StateCorrupt, ServingMode: ServingUnavailable, Detail: err.Error()}, nil
 	}
 	if pointer.DerivedSchemaVersion != DerivedSchemaVersion {
-		return Status{State: StateIncompatible, Pointer: &pointer, Detail: "derived schema version is incompatible"}, nil
+		return Status{State: StateIncompatible, ServingMode: ServingUnavailable, Pointer: &pointer, Generation: pointer.Generation, Detail: "derived schema version is incompatible"}, nil
 	}
 	if err := verifyPointerDatabase(ctx, root, pointer); err != nil {
-		return Status{State: StateCorrupt, Pointer: &pointer, Detail: err.Error()}, nil
+		return Status{State: StateCorrupt, ServingMode: ServingUnavailable, Pointer: &pointer, Generation: pointer.Generation, Detail: err.Error()}, nil
 	}
-	return Status{State: StateUnknown, Pointer: &pointer, Detail: "canonical freshness was not inspected while workspace recovery is pending"}, nil
+	return Status{State: StateUnknown, ServingMode: ServingCurrent, Pointer: &pointer, Generation: pointer.Generation, Detail: "canonical freshness was not inspected while workspace recovery is pending"}, nil
 }
 
 // InspectWhileLocked reports freshness while the caller holds a workspace lock.
@@ -97,9 +97,32 @@ func InspectWhileLocked(ctx context.Context, root string) (Status, error) {
 		return Status{}, err
 	}
 	if snapshot.CatalogSnapshot != pointer.CatalogSnapshot || snapshot.ProjectionInputDigest != pointer.ProjectionInputDigest {
-		return Status{State: StateStale, Pointer: &pointer, Detail: "canonical inputs differ from the published generation"}, nil
+		issues, valErr := canonical.Validate(root)
+		if valErr == nil && len(issues) > 0 {
+			return Status{
+				State:       StateStale,
+				ServingMode: ServingFallback,
+				Pointer:     &pointer,
+				Generation:  pointer.Generation,
+				Detail:      fmt.Sprintf("canonical validation failed: %s: %s", issues[0].Path, issues[0].Message),
+				Warning:     fmt.Sprintf("canonical validation failed: %s: %s; serving published catalog generation %s as fallback", issues[0].Path, issues[0].Message, pointer.Generation),
+			}, nil
+		}
+		return Status{
+			State:       StateStale,
+			ServingMode: ServingFallback,
+			Pointer:     &pointer,
+			Generation:  pointer.Generation,
+			Detail:      "canonical inputs differ from the published generation",
+			Warning:     fmt.Sprintf("canonical inputs differ from published catalog generation %s", pointer.Generation),
+		}, nil
 	}
-	return Status{State: StateHealthy, Pointer: &pointer}, nil
+	return Status{
+		State:       StateHealthy,
+		ServingMode: ServingCurrent,
+		Pointer:     &pointer,
+		Generation:  pointer.Generation,
+	}, nil
 }
 
 // ErrSnapshotUnavailable reports that no retained, valid immutable generation
@@ -125,7 +148,12 @@ func OpenSnapshot(ctx context.Context, root, catalogSnapshot string) (*Handle, e
 		}
 		return nil, fmt.Errorf("%w: %v", ErrSnapshotUnavailable, err)
 	}
-	handle, err := openPinnedGeneration(ctx, root, pointer)
+	handle, err := openPinnedGenerationWithStatus(ctx, root, pointer, Status{
+		State:       StateHealthy,
+		ServingMode: ServingCurrent,
+		Pointer:     &pointer,
+		Generation:  pointer.Generation,
+	})
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, ctxErr
@@ -185,10 +213,20 @@ func openCurrentWhileLocked(ctx context.Context, root string) (*Handle, error) {
 	if status.State != StateHealthy || status.Pointer == nil {
 		return nil, catalogUnavailableError{state: status.State, detail: status.Detail}
 	}
-	return openPinnedGeneration(ctx, root, *status.Pointer)
+	return openPinnedGenerationWithStatus(ctx, root, *status.Pointer, status)
 }
 
 func openPinnedGeneration(ctx context.Context, root string, pointer Pointer) (*Handle, error) {
+	status := Status{
+		State:       StateHealthy,
+		ServingMode: ServingCurrent,
+		Pointer:     &pointer,
+		Generation:  pointer.Generation,
+	}
+	return openPinnedGenerationWithStatus(ctx, root, pointer, status)
+}
+
+func openPinnedGenerationWithStatus(ctx context.Context, root string, pointer Pointer, status Status) (*Handle, error) {
 	pinDirectory := filepath.Join(root, "runtime", "catalog", "pins", pointer.Generation)
 	if err := ensureRuntimeDirectory(root, filepath.ToSlash(filepath.Join("runtime", "catalog", "pins", pointer.Generation))); err != nil {
 		return nil, err
@@ -229,7 +267,134 @@ func openPinnedGeneration(ctx context.Context, root string, pointer Pointer) (*H
 		removePin(pinPath)
 		return nil, err
 	}
-	return &Handle{DB: database, Pointer: pointer, pinPath: pinPath}, nil
+	return &Handle{DB: database, Pointer: pointer, Status: status, pinPath: pinPath}, nil
+}
+
+const maxOpenRetries = 3
+
+// OpenWithFallback opens the current generation, or falls back to the published pointer
+// if canonical files are invalid. If the catalog is stale and canonical files are valid,
+// it rebuilds under publication locking and returns the fresh generation.
+func OpenWithFallback(ctx context.Context, root string) (*Handle, error) {
+	return openWithFallback(ctx, root, false)
+}
+
+// OpenWithFallbackLocked is like OpenWithFallback but retains the shared workspace lock
+// until Handle.Close() is called. Callers that read canonical files described by the
+// generation use it so no mutation can commit between the open and the read.
+func OpenWithFallbackLocked(ctx context.Context, root string) (*Handle, error) {
+	return openWithFallback(ctx, root, true)
+}
+
+// OpenServable is an alias for OpenWithFallback.
+func OpenServable(ctx context.Context, root string) (*Handle, error) {
+	return OpenWithFallback(ctx, root)
+}
+
+// OpenServableLocked is an alias for OpenWithFallbackLocked.
+func OpenServableLocked(ctx context.Context, root string) (*Handle, error) {
+	return OpenWithFallbackLocked(ctx, root)
+}
+
+func openWithFallback(ctx context.Context, root string, keepLock bool) (*Handle, error) {
+	for range maxOpenRetries {
+		if err := waitForContext(ctx); err != nil {
+			return nil, err
+		}
+		lock, err := mutation.AcquireSharedLock(ctx, root, mutation.DefaultLockTimeout)
+		if err != nil {
+			return nil, err
+		}
+
+		published, err := inspectPublishedWhileLocked(ctx, root)
+		if err != nil {
+			_ = lock.Unlock()
+			return nil, err
+		}
+
+		if published.State == StateMissing {
+			issues, valErr := canonical.Validate(root)
+			if valErr != nil || len(issues) > 0 {
+				_ = lock.Unlock()
+				detail := "catalog generation pointer is missing"
+				if len(issues) > 0 {
+					detail += " and canonical validation failed: " + issues[0].Message
+				}
+				return nil, catalogUnavailableError{state: StateMissing, detail: detail}
+			}
+			_ = lock.Unlock()
+			if _, buildErr := BuildCatalogGeneration(ctx, root, BuildOptions{}); buildErr != nil {
+				return nil, buildErr
+			}
+			continue
+		}
+
+		if published.State == StateCorrupt || published.State == StateIncompatible {
+			issues, valErr := canonical.Validate(root)
+			if valErr != nil || len(issues) > 0 {
+				_ = lock.Unlock()
+				return nil, catalogUnavailableError{state: published.State, detail: published.Detail}
+			}
+			_ = lock.Unlock()
+			if _, buildErr := BuildCatalogGeneration(ctx, root, BuildOptions{}); buildErr != nil {
+				return nil, buildErr
+			}
+			continue
+		}
+
+		pointer := *published.Pointer
+		status, err := InspectWhileLocked(ctx, root)
+		if err != nil {
+			_ = lock.Unlock()
+			return nil, err
+		}
+
+		if status.State == StateHealthy {
+			handle, openErr := openPinnedGenerationWithStatus(ctx, root, pointer, status)
+			if openErr != nil {
+				_ = lock.Unlock()
+				return nil, openErr
+			}
+			if keepLock {
+				handle.release = lock.Unlock
+			} else {
+				_ = lock.Unlock()
+			}
+			return handle, nil
+		}
+
+		// Status is Stale. Check canonical validation.
+		issues, valErr := canonical.Validate(root)
+		if valErr != nil {
+			_ = lock.Unlock()
+			return nil, valErr
+		}
+
+		if len(issues) > 0 {
+			// Canonical validation failed: fall back strictly to published pointer!
+			status.ServingMode = ServingFallback
+			status.Warning = fmt.Sprintf("canonical validation failed: %s: %s; serving published catalog generation %s as fallback", issues[0].Path, issues[0].Message, pointer.Generation)
+			handle, openErr := openPinnedGenerationWithStatus(ctx, root, pointer, status)
+			if openErr != nil {
+				_ = lock.Unlock()
+				return nil, openErr
+			}
+			if keepLock {
+				handle.release = lock.Unlock
+			} else {
+				_ = lock.Unlock()
+			}
+			return handle, nil
+		}
+
+		// Canonical files are valid, but catalog is stale: rebuild under publication locking!
+		_ = lock.Unlock()
+		if _, buildErr := BuildCatalogGeneration(ctx, root, BuildOptions{}); buildErr != nil {
+			return nil, buildErr
+		}
+		// Restart observation after rebuild.
+	}
+	return nil, fmt.Errorf("%w: exceeded %d retry attempts observing fresh catalog generation", ErrCatalogUnavailable, maxOpenRetries)
 }
 
 func removePin(path string) {

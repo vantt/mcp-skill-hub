@@ -23,7 +23,7 @@ Setup:
   status    Show what needs attention next
 
 Skills:
-  skill     List, show, create, edit, and change the state of skills
+  skill     List, show, create, edit, review, add, and change the state of skills
 
 Sources & learning:
   source    Register and inspect skill sources
@@ -52,13 +52,13 @@ inside the workspace. Run ` + "`skillhub <command> --help`" + ` for a command's 
 `
 
 var commandUsage = map[string]string{
-	"init": `Usage: skillhub init <path> [--yes] [--force] [--verbose] [--json]
+	"init": `Usage: skillhub init [path] [--yes] [--force] [--verbose] [--json]
 
-Create a Skill Hub workspace at <path> and connect agents to it. Without --yes
-the command previews what it would do (directory structure, git repository,
-agent connections, search index). --force allows initializing into an existing
-non-empty directory. --verbose adds generation IDs, digests, and row counts;
---json prints the full machine-readable result.
+Create a Skill Hub workspace at [path], or in the current directory when path
+is omitted. Without --yes the command previews what it would do (directory
+structure, git repository, agent connections, search index). --force allows
+initializing into an existing non-empty directory. --verbose adds generation
+IDs, digests, and row counts; --json prints the full machine-readable result.
 `,
 	"connect": `Usage: skillhub connect [--project <dir>] [-g|--global] [--workspace <path>]
                         [--host claude|codex|gemini]... [--yes] [--json]
@@ -86,14 +86,19 @@ Show workspace health and the single recommended next action.
 	"skill": `Usage: skillhub skill <subcommand> [flags]
 
 Subcommands:
-  list [--state draft|active|deprecated|archived]   List skills
-  show <id> [--verbose]                             Show a skill in any state
-  create --id <id> --collection <c> --name <n> --description <d> [--content-file <f>]
+  add <locator> [--skill <name> | --all] [--id <id>] [--collection <c>] [--ref <r>] [--path <p>] [--yes]
+                                                    Add draft skills from local or remote locator
+  create <id> --collection <c> --name <n> --description <d> [--content-file <f>]
          [--operation <o>]... [--trigger <t>]... [--not-for <n>]... [--min-scope <s>] [--yes]
+                                                    Create a new draft skill (--id <id> remains valid)
+  show <id> [--verbose]                             Show a skill in any state
+  review <id> [--verbose]                           Comprehensive diagnostic review of a skill
   edit <id> [--name <n>] [--description <d>] [--rationale <r>] [--content-file <f>|--editor]
        [--operation <o>]... [--trigger <t>]... [--not-for <n>]... [--min-scope <s>] [--yes]
   activate <id> | deprecate <id> | archive <id> [--yes]
-  confirm --proposal <id> --proposal-digest <d> --base-version <v>
+  confirm <proposal-id> | --proposal <id> --proposal-digest <d> --base-version <v>
+                                                    Apply a skill add or mutation proposal
+  list [--state draft|active|deprecated|archived]   List skills
 
 --content-file takes any readable markdown file (relative to the current directory
 or absolute). Frontmatter is optional; if present, its "name" field must match the skill id.
@@ -103,13 +108,20 @@ On edit, routing flags you pass replace that field; the others keep their values
 An active skill needs a trigger, a --not-for entry (or a --rationale), and --min-scope.
 
 Examples:
-  skillhub skill create --id my-skill --collection core --name "My Skill" --description "Review changes" --trigger "review code" --not-for "write prose" --min-scope single_step --yes
+  skillhub skill add https://github.com/anthropics/skills --skill pdf --yes
+  skillhub skill create my-skill --collection core --name "My Skill" --description "Review changes" --trigger "review code" --not-for "write prose" --min-scope single_step --yes
+  skillhub skill review my-skill
   skillhub skill edit my-skill --editor
+  skillhub skill confirm PROP-123
   skillhub skill activate my-skill --yes
 `,
 	"source": `Usage: skillhub source <subcommand> [--workspace <path>] [flags]
 
 Subcommands:
+  watch <locator> [--id <id>] [--ref <r>] [--path <p>] [--cadence daily|weekly|manual] [--yes]
+                                      Watch a remote source for updates
+  check SELECTOR... | --all-due | --all
+                                      Check watched sources for updates (alias of skillhub check)
   capture <locator> --reason <text>   Record a candidate source (applies immediately; no --yes)
   list [--status <s>]                 List candidates and sources
   show <id>                           Show one candidate or source
@@ -205,10 +217,11 @@ experiment manifest (see ` + "`skillhub eval manifest`" + `). Developer tool.
 
 Example: skillhub resolution replay --case case.json --manifest manifest.json
 `,
-	"validate": `Usage: skillhub validate [--workspace <path>] [--json]
+	"validate": `Usage: skillhub validate [--workspace <path>] [--staged] [--json]
 
-Validate the canonical workspace files (skills, sources, schema). Prints each
-problem with its file. Run it after editing files by hand, before ` + "`skillhub rebuild`" + `.
+Validate the canonical workspace files (skills, sources, schema). Use --staged
+to validate files currently staged in the Git index without touching the working tree.
+Prints each problem with its file. Run it after editing files by hand, before ` + "`skillhub rebuild`" + `.
 
 Example: skillhub validate
 `,

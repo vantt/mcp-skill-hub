@@ -316,11 +316,15 @@ change = adapter-specific version/digest gap
 
 Fetch timestamp alone is not a reliable content revision unless no better identity exists; then mark confidence/limitations.
 
-## 5. Source Intake and triage
+## 5. Source Intake and Monitoring
 
-### 5.1 Capture
+Skill Hub supports two source intake routes:
+1. **Intent-first source watching (`source watch <locator>`):** Registers an upstream Git repository for ongoing monitoring in one step, deriving repository locator, default ref (`main`), and cadence (`weekly`). Watching a source records monitoring configuration; it is not a background daemon, does not poll automatically, and does not alter active skills. Local filesystem paths cannot be watched (`local_watch_unsupported`).
+2. **Advanced multi-stage intake:** Candidate capture, explicit triage, and confirmation remain supported for governance workflows requiring candidate reason audit logs or manual approval gates.
 
-Capture must be low friction:
+### 5.1 Capture (advanced intake)
+
+Capture records a candidate locator with minimal friction:
 
 ```text
 user/agent finds source
@@ -328,9 +332,9 @@ user/agent finds source
 → no clone, taxonomy or target skill required
 ```
 
-MCP/CLI surfaces return candidate ID. Duplicate locator/digest detection warns but does not silently merge conceptual sources.
+MCP/CLI surfaces return candidate ID (`SRCQ-...`). Duplicate locator/digest detection warns but does not silently merge conceptual sources.
 
-### 5.2 Triage
+### 5.2 Triage (advanced intake)
 
 ```mermaid
 flowchart LR
@@ -340,7 +344,7 @@ flowchart LR
     PREVIEW -->|reject with reason| REJECT[Close candidate]
 ```
 
-Acceptance chooses adapter/ref/path, monitoring policy and optional curated-skill links. Human owns the decision.
+Acceptance chooses adapter/ref/path, monitoring policy, and optional curated-skill links. Human owns the decision. Confirmation requires exact pins (`proposal_id`, `proposal_digest`, `base_version`) or short ID in CLI.
 
 ### 5.3 Import existing skills as drafts
 
@@ -353,8 +357,7 @@ When onboarding or watching a repository that already contains canonical `SKILL.
 
 ## 6. Revision check
 
-`hub_status` reads local canonical/runtime state only. `source_check` is explicit network work.
-
+`hub_status` reads local canonical/runtime state only. `source_check` (aliased as `check`) is explicit network work that contacts remote repositories and compares advertised Git references:
 ```mermaid
 sequenceDiagram
     participant C as Curator or Scheduler

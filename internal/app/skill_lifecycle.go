@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
-	"github.com/vantt/mcp-skill-hub/internal/catalog"
 	"github.com/vantt/mcp-skill-hub/internal/mutation"
 	"github.com/vantt/mcp-skill-hub/internal/skill"
 )
@@ -48,6 +48,7 @@ type SkillProposal struct {
 	FullDiff      string               `json:"full_diff,omitempty"`
 	Confirmation  ConfirmationPolicy   `json:"confirmation"`
 	RoutingImpact *skill.RoutingImpact `json:"routing_impact,omitempty"`
+	RecoveryID    string               `json:"recovery_id,omitempty"`
 	proposal      skill.Proposal
 }
 
@@ -67,6 +68,8 @@ type SkillMutationResult struct {
 	Result
 	SkillID         string              `json:"skill_id"`
 	State           string              `json:"state,omitempty"`
+	LifecycleState  string              `json:"lifecycle_state,omitempty"`
+	RoutingEligible bool                `json:"routing_eligible"`
 	OperationID     string              `json:"operation_id"`
 	ChangedPaths    []string            `json:"changed_paths"`
 	CatalogSnapshot string              `json:"catalog_snapshot"`
@@ -107,6 +110,12 @@ func (service SkillService) PreviewSkillUpdate(ctx context.Context, path, id str
 	}
 	proposal, err := service.Manager.PreviewUpdate(ctx, root, id, input, fullDiff)
 	if err != nil {
+		var conflictErr *skill.EditConflictError
+		if errors.As(err, &conflictErr) {
+			why := fmt.Sprintf("SKILL.md was modified concurrently: expected %s, found %s.", conflictErr.ExpectedDigest, conflictErr.ActualDigest)
+			fix := fmt.Sprintf("Re-read current content with `skillhub skill review %s` or inspect differences, then retry your edit.", id)
+			return SkillProposal{}, NewEditConflictError(why, fix)
+		}
 		if errors.Is(err, skill.ErrNotFound) {
 			return SkillProposal{}, fmt.Errorf("%w: Skill %s does not exist; use skill_create_preview", skill.ErrNotFound, id)
 		}
@@ -155,6 +164,12 @@ func (service SkillService) previewTransition(ctx context.Context, path, id, tar
 	}
 	proposal, err := service.Manager.PreviewTransition(ctx, root, id, target, fullDiff, idempotencyKey)
 	if err != nil {
+		if errors.Is(err, skill.ErrUntouchedScaffold) {
+			return SkillProposal{}, &MissingActivationRequirementsError{
+				SkillID: id,
+				Missing: []string{"content (untouched scaffold instructions; edit instructions before activation)"},
+			}
+		}
 		return SkillProposal{}, err
 	}
 	if err := skill.StoreProposal(root, proposal, time.Now()); err != nil {
@@ -200,11 +215,16 @@ func (service SkillService) ConfirmSkillMutation(ctx context.Context, path strin
 		return SkillMutationResult{}, err
 	}
 	state := skillStateAfter(ctx, root, preview)
+	activeLocally := (state == "active")
 	response := SkillMutationResult{
 		Result:  NewResult(StatusApplied, appliedSkillSummary(preview.SkillID, preview.Command, state)),
-		SkillID: preview.SkillID, State: state, OperationID: result.OperationID, ChangedPaths: result.ChangedPaths,
+		SkillID: preview.SkillID, State: state, LifecycleState: state,
+		RoutingEligible: activeLocally, OperationID: result.OperationID, ChangedPaths: result.ChangedPaths,
 		CatalogSnapshot: result.CatalogSnapshot, Generation: result.Generation,
-		ActiveLocally: true, GitDirty: result.GitDirty,
+		ActiveLocally: activeLocally, GitDirty: result.GitDirty,
+	}
+	if preview.proposal.RecoveryID != "" {
+		_ = skill.DeleteEditorRecovery(root, preview.proposal.RecoveryID)
 	}
 	response.Items = append(response.Items,
 		Item{ID: "operation", Summary: result.OperationID, Impact: "Immutable managed-mutation receipt."},
@@ -253,7 +273,8 @@ func (SkillService) ReadSkillRationale(ctx context.Context, path, id string) (st
 }
 
 // CheckActivationRequirements returns all missing requirements for activating a skill.
-// Active skills require at least one trigger, not_for or rationale, and min_scope.
+// Active skills require at least one trigger, not_for or rationale, min_scope,
+// and must not be an untouched generated scaffold template.
 func (SkillService) CheckActivationRequirements(ctx context.Context, path, id string) ([]string, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -270,7 +291,14 @@ func (SkillService) CheckActivationRequirements(ctx context.Context, path, id st
 	if err != nil {
 		return nil, err
 	}
+	content, err := skill.ReadEditableContent(root, id)
+	if err != nil {
+		return nil, err
+	}
 	var missing []string
+	if skill.IsUntouchedScaffold(content) {
+		missing = append(missing, "content (replace untouched scaffold instructions)")
+	}
 	if len(routing.Triggers) == 0 {
 		missing = append(missing, "trigger")
 	}
@@ -286,9 +314,6 @@ func (SkillService) CheckActivationRequirements(ctx context.Context, path, id st
 func (SkillService) ReadSkill(ctx context.Context, path, id string) (SkillReadResult, error) {
 	root, err := skill.ResolveWorkspace(path)
 	if err != nil {
-		return SkillReadResult{}, err
-	}
-	if err := catalog.EnsureFreshOrRebuild(ctx, root); err != nil {
 		return SkillReadResult{}, err
 	}
 	manifest, err := skill.GetManifestAnyState(ctx, root, id)
@@ -307,6 +332,11 @@ func (SkillService) ReadSkill(ctx context.Context, path, id string) (SkillReadRe
 	}
 	contents, err := skill.ReadResource(ctx, root, manifest.CatalogSnapshot, entry.Path, entry.Digest)
 	if err != nil {
+		if errors.Is(err, skill.ErrResourceDigestMismatch) {
+			why := fmt.Sprintf("Current canonical content for %s no longer matches published manifest digest %s.", entry.Path, entry.Digest)
+			fix := fmt.Sprintf("Run `skillhub rebuild` to publish current canonical files, or inspect differences with `skillhub skill review %s`.", id)
+			return SkillReadResult{}, NewResourceContentUnavailableError(why, fix)
+		}
 		return SkillReadResult{}, err
 	}
 	response := SkillReadResult{Result: NewResult(StatusOK, fmt.Sprintf("Skill %s (%s) loaded.", id, manifest.Status)), Manifest: manifest, Content: string(contents)}
@@ -356,7 +386,9 @@ func makeSkillProposal(proposal skill.Proposal, summary string) SkillProposal {
 			PolicyRevision: "policy_v1", ActionClass: "semantic", ApplicationCommand: proposal.Command,
 			Confirmation: ConfirmationRequirement{Required: true, Mode: "preview-and-approval", Pins: pins},
 		},
-		RoutingImpact: proposal.RoutingImpact, proposal: proposal,
+		RoutingImpact: proposal.RoutingImpact,
+		RecoveryID:    proposal.RecoveryID,
+		proposal:      proposal,
 	}
 	response.Items = append(response.Items, Item{ID: proposal.ID, Summary: diffSummary(proposal.Summary), Impact: "No canonical files changed during preview."})
 	response.SuggestedActions = append(response.SuggestedActions, Action{Label: "Confirm the reviewed proposal", Command: proposal.Command, RequiresConfirmation: true})
@@ -396,4 +428,116 @@ func gitMutationSummary(dirty bool) string {
 		return "Canonical changes are not committed to Git."
 	}
 	return "Git working tree is clean."
+}
+
+// ConfirmProposal loads a stored proposal by ID, verifies optional confirmation pins,
+// and dispatches confirmation to the handler registered for the proposal's kind.
+func (service SkillService) ConfirmProposal(ctx context.Context, path, proposalID string, pins *ConfirmationPins) (SkillMutationResult, error) {
+	if err := ctx.Err(); err != nil {
+		return SkillMutationResult{}, err
+	}
+	root, err := skill.ResolveWorkspace(path)
+	if err != nil {
+		return SkillMutationResult{}, err
+	}
+	stored, err := skill.LoadProposal(root, proposalID, time.Now())
+	if err != nil {
+		return SkillMutationResult{}, err
+	}
+	preview := makeSkillProposal(stored, "Stored proposal")
+	effectivePins := preview.Confirmation.Confirmation.Pins
+	if pins != nil {
+		effectivePins = *pins
+	}
+	return service.ConfirmSkillMutation(ctx, path, preview, effectivePins)
+}
+
+// DispatchConfirmProposal dispatches confirmation of a proposal by ID across any registered kind.
+func (service SkillService) DispatchConfirmProposal(ctx context.Context, path, proposalID string, pins *ConfirmationPins) (any, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	root, err := skill.ResolveWorkspace(path)
+	if err != nil {
+		return nil, err
+	}
+	stored, err := skill.LoadProposal(root, proposalID, time.Now())
+	if err != nil {
+		return nil, err
+	}
+	preview := makeSkillProposal(stored, "Stored proposal")
+	effectivePins := preview.Confirmation.Confirmation.Pins
+	if pins != nil {
+		effectivePins = *pins
+	}
+	if stored.Kind == skill.ProposalKindLifecycle || stored.Kind == "" {
+		return service.ConfirmSkillMutation(ctx, path, preview, effectivePins)
+	}
+	customProposalConfirmersMu.RLock()
+	confirmer, ok := customProposalConfirmers[stored.Kind]
+	customProposalConfirmersMu.RUnlock()
+	if !ok {
+		return nil, fmt.Errorf("unsupported or unregistered proposal kind %q", stored.Kind)
+	}
+	return confirmer(ctx, path, stored, effectivePins)
+}
+
+var (
+	customProposalConfirmers   = make(map[skill.ProposalKind]func(ctx context.Context, path string, p skill.Proposal, pins ConfirmationPins) (any, error))
+	customProposalConfirmersMu sync.RWMutex
+)
+
+// RegisterProposalConfirmer registers a custom handler for non-lifecycle proposal kinds (e.g. ProposalKindAdd).
+func RegisterProposalConfirmer(kind skill.ProposalKind, fn func(ctx context.Context, path string, p skill.Proposal, pins ConfirmationPins) (any, error)) {
+	customProposalConfirmersMu.Lock()
+	defer customProposalConfirmersMu.Unlock()
+	customProposalConfirmers[kind] = fn
+}
+
+// ReadEditableSkill returns the canonical entrypoint and its digest for a skill.
+func (SkillService) ReadEditableSkill(ctx context.Context, path, id string) (skill.EditableContent, error) {
+	if err := ctx.Err(); err != nil {
+		return skill.EditableContent{}, err
+	}
+	root, err := skill.ResolveWorkspace(path)
+	if err != nil {
+		return skill.EditableContent{}, err
+	}
+	return skill.ReadEditableSkill(root, id)
+}
+
+// SaveEditorRecovery persists edited bytes to private recovery storage and returns an opaque recovery ID.
+func (SkillService) SaveEditorRecovery(ctx context.Context, path, proposalID string, content []byte) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	root, err := skill.ResolveWorkspace(path)
+	if err != nil {
+		return "", err
+	}
+	return skill.SaveEditorRecovery(root, proposalID, content, time.Now())
+}
+
+// ReadEditorRecovery reads recovery content by opaque recovery ID.
+func (SkillService) ReadEditorRecovery(ctx context.Context, path, recoveryID string) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	root, err := skill.ResolveWorkspace(path)
+	if err != nil {
+		return nil, err
+	}
+	return skill.ReadEditorRecovery(root, recoveryID)
+}
+
+// DeleteEditorRecovery deletes a recovery artifact by opaque recovery ID.
+func (SkillService) DeleteEditorRecovery(ctx context.Context, path, recoveryID string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	root, err := skill.ResolveWorkspace(path)
+	if err != nil {
+		return err
+	}
+	return skill.DeleteEditorRecovery(root, recoveryID)
 }

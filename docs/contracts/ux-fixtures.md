@@ -66,12 +66,11 @@ remain available at L2 or L3 when needed for review or recovery.
 ## Mutations, confirmation, and errors
 
 `expect.confirmation` uses the complete shape in
-`action-confirmation-policy.schema.json`, including `policy_revision`,
+[action-confirmation-policy.schema.json](../../schemas/action-confirmation-policy.schema.json), including `policy_revision`,
 `action_class`, `application_command`, and its nested `confirmation` object.
 The scenario's `when.intent` supplies the explicit request for mechanical or
 network operations; semantic actions instead require preview-and-approval
-pins named `proposal_id`, `proposal_digest`, and `base_version`. The initial classes are:
-
+pins named `proposal_id`, `proposal_digest`, and `base_version` (or short proposal ID in the CLI). The initial classes are:
 | Class | Fixture expectation |
 |---|---|
 | `read-only` | Runs immediately. |
@@ -103,7 +102,9 @@ successful work was discarded.
 ## Required journey coverage
 
 The fixture suite covers healthy and invalid/recovery-required Curation Home;
+intent-first skill add, skill create, skill review, and source watch workflows;
 due, changed, and unavailable sources; high-value insight review; stale
-proposal and dirty-Git-after-apply paths; and interrupted or partially failed
+proposal and dirty-Git-after-apply paths; staged validation (`validate --staged`)
+reading literal index blobs without filters; and interrupted or partially failed
 distillation. It preserves the status-first, offline nature of Curation Home:
 network access is represented only by an explicit source-check action.

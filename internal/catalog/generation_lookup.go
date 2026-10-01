@@ -63,7 +63,7 @@ func FindGenerationForOperation(ctx context.Context, root, operationID, catalogS
 		}
 		database.SetMaxOpenConns(1)
 		var found int
-		queryErr := database.QueryRowContext(ctx, `SELECT 1 FROM generation_metadata gm JOIN operations op ON op.id=? WHERE gm.singleton=1 AND gm.catalog_snapshot=? AND op.result_catalog_snapshot=? AND op.status='applied' LIMIT 1`, operationID, catalogSnapshot, catalogSnapshot).Scan(&found)
+		queryErr := database.QueryRowContext(ctx, `SELECT 1 FROM generation_metadata gm JOIN operations op ON op.id=? WHERE gm.singleton=1 AND gm.derived_schema_version=? AND gm.catalog_snapshot=? AND op.result_catalog_snapshot=? AND op.status='applied' LIMIT 1`, operationID, DerivedSchemaVersion, catalogSnapshot, catalogSnapshot).Scan(&found)
 		closeErr := database.Close()
 		if queryErr != nil && !errors.Is(queryErr, sql.ErrNoRows) {
 			return "", queryErr

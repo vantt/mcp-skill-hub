@@ -79,6 +79,11 @@ func Discover(path string) (string, error) {
 
 // Inspect returns only mechanical setup findings. It never writes to disk.
 func Inspect(root string) (Plan, error) {
+	return InspectWithOptions(root, false)
+}
+
+// InspectWithOptions returns mechanical setup findings with optional detached mode.
+func InspectWithOptions(root string, detached bool) (Plan, error) {
 	root, err := filepath.Abs(root)
 	if err != nil {
 		return Plan{}, fmt.Errorf("make workspace path absolute: %w", err)
@@ -98,7 +103,7 @@ func Inspect(root string) (Plan, error) {
 	if err := safeTarget(root); err != nil {
 		return Plan{}, err
 	}
-	if !isGitRepository(root) {
+	if !detached && !isGitRepository(root) {
 		findings = append(findings, Finding{"git_repository_missing", ".git", "Workspace is not a Git repository.", true})
 	}
 	skillhubPath := filepath.Join(root, ".skillhub")
@@ -125,8 +130,32 @@ func Inspect(root string) (Plan, error) {
 		}
 	}
 	for _, dir := range requiredDirectories {
-		if info, err := os.Stat(filepath.Join(root, filepath.FromSlash(dir))); err != nil || !info.IsDir() {
-			findings = append(findings, Finding{"directory_missing", dir, "Required canonical directory is missing.", true})
+		target := filepath.Join(root, filepath.FromSlash(dir))
+		info, err := os.Lstat(target)
+		if err == nil {
+			if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+				findings = append(findings, Finding{"directory_collision", dir, "Required canonical directory path is occupied by a non-directory.", false})
+			}
+		} else if !errors.Is(err, os.ErrNotExist) {
+			components := strings.Split(filepath.ToSlash(dir), "/")
+			current := root
+			collision := false
+			for _, comp := range components {
+				current = filepath.Join(current, comp)
+				compInfo, compErr := os.Lstat(current)
+				if compErr == nil {
+					if compInfo.Mode()&os.ModeSymlink != 0 || !compInfo.IsDir() {
+						findings = append(findings, Finding{"directory_collision", dir, "Required canonical directory path is occupied by a non-directory.", false})
+						collision = true
+						break
+					}
+				} else if errors.Is(compErr, os.ErrNotExist) {
+					break
+				}
+			}
+			if !collision {
+				return Plan{}, fmt.Errorf("stat canonical directory %s: %w", dir, err)
+			}
 		}
 	}
 	ignore, err := readCanonicalFileBounded(filepath.Join(root, ".gitignore"), ".gitignore")

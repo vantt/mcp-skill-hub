@@ -1,6 +1,6 @@
 # Curating skills
 
-This guide covers the recurring work of building and maintaining a useful Skill Hub collection: collecting external sources, importing or creating draft skills, reviewing and editing them, controlling their lifecycle, and learning from upstream changes.
+This guide covers the recurring work of building and maintaining a useful Skill Hub collection: adding skills from remote repositories or local folders, creating draft skills, reviewing diagnostic facts, editing instructions, controlling lifecycle states, watching upstream sources, and learning from upstream changes.
 
 Complete the [README quickstart](../README.md#quickstart) first. For workspace setup, agent connections, moving machines, and troubleshooting, use the [general user guide](user-guide.md).
 
@@ -16,195 +16,208 @@ The agent checks local status and recommends one next action. The CLI equivalent
 skillhub status
 ```
 
-Use the recommended action rather than running every workflow. Most sessions need only one of these paths:
+Use the recommended action rather than running every workflow. Most curation sessions follow one of two beginner journeys:
 
-| Goal | Path |
+**Skill authoring and adoption journey:**
+```text
+status → skill add OR skill create → skill review / skill edit → activate
+```
+
+**Source monitoring and learning journey:**
+```text
+status → source watch → source check → distill / inbox
+```
+
+| Goal | Recommended path |
 |---|---|
-| Bring in complete skills from a repository | Collect source → import drafts → review → activate |
-| Learn patterns from a repository without copying its skills | Collect source → check updates → distill → review inbox |
-| Capture your own reusable workflow | Create draft → review and edit → activate |
-| Improve an existing skill | Inspect → edit or apply an insight → review diff |
-| Retire a skill | Deprecate → archive |
+| Bring in a complete skill from a repository or folder | `skillhub skill add <locator> [--skill <name>] [--yes]` → review → activate |
+| Capture your own reusable workflow | `skillhub skill create <id> ... [--yes]` → review and edit → activate |
+| Inspect comprehensive diagnostic facts | `skillhub skill review <id>` |
+| Edit instructions or routing metadata | `skillhub skill edit <id> [--editor] [--yes]` |
+| Control lifecycle | `skillhub skill activate|deprecate|archive <id> [--yes]` |
+| Watch an upstream repository for updates | `skillhub source watch <locator> [--yes]` → `skillhub source check --all-due` |
+| Learn patterns without copying skills | `source watch` → `source check` → distill → review inbox |
+| Advanced intake, staged governance, or recovery | `source capture` → `source triage` → `source confirm` → `source import` |
 
 ## Safety model
 
-Skill Hub separates evidence, proposals, and active behavior:
+Skill Hub enforces durable boundaries between evidence, proposals, canonical files, and active behavior:
 
-- Watching a source does not change skills.
-- Imported and newly created skills start as `draft`; agents cannot be routed to them.
-- Mutating commands preview by default. `--yes` applies the freshly generated preview but never bypasses validation.
-- MCP mutations use a pinned preview followed by explicit confirmation.
-- Existing skill IDs are not overwritten during source import.
-- Skill Hub writes workspace files but never runs `git commit` or `git push`.
+- **Drafts by default:** Newly added and newly created skills always start in `draft` state. They are never recommended by the resolver or loaded by agents until explicitly activated.
+- **Preview before confirm:** Mutating commands preview their proposed changes by default. Passing `--yes` confirms only the freshly generated preview; it never skips validation or blindly overrides conflicts.
+- **Confirmation pins:** In the interactive CLI, users confirm proposals by short ID (`skillhub skill confirm <proposal-id>`). Automated interfaces and MCP tools require all three exact pins (`proposal_id`, `proposal_digest`, and `base_version`).
+- **No silent overwrites:** If a skill or source identifier already exists in the workspace, operations halt with `skill_conflict` or `source_conflict`.
+- **Local add is CLI-only:** Adding from a local filesystem path is interactive CLI-only. MCP tools reject raw local paths to maintain host security boundaries.
+- **No local watch:** `source watch` supports remote Git repositories only. Local directories cannot be watched (`local_watch_unsupported`).
+- **Watch is not a daemon:** Watching a source records monitoring configuration; it does not run a background daemon, poll automatically, or import skills. Upstream checks occur only when you or an authorized workflow run `skillhub source check`.
+- **Review is diagnostic, not approval:** `skill review` compiles diagnostic facts (validation, readiness, resources, provenance, git status); it is not an approval gate and does not mutate lifecycle state.
+- **Skill Hub never commits or pushes:** Skill Hub writes canonical workspace files but never executes `git commit` or `git push`. You inspect changes with `skillhub diff` and commit them when ready.
 
-Before confirming a change, verify its target, effect on active skills, and displayed diff. Use `skillhub diff` before committing workspace changes.
+---
 
-## Collect a source
+## Add a skill (`skillhub skill add`)
 
-A **source** is an upstream Git repository that may contain reusable skills or useful patterns. Collection has three stages so that saving a URL, deciding to trust it, and importing content remain separate decisions.
+`skillhub skill add` is the intent-first front door for bringing in an existing skill. It inspects the locator, inventories resources, creates a proposal, and imports the skill as a `draft`.
 
-### 1. Save a candidate
+### Add from a public GitHub repository
 
-Ask your agent:
-
-> Save https://github.com/owner/repo as a source candidate because it contains useful testing and review patterns.
-
-CLI:
+Add a single skill by folder URL:
 
 ```bash
-skillhub source capture https://github.com/owner/repo.git \
-  --reason "Useful testing and review patterns"
+skillhub skill add https://github.com/anthropics/skills/tree/main/skills/pdf --yes
 ```
 
-`capture` is idempotent and records the candidate locally without fetching or accepting it. Keep the returned candidate ID, such as `SRCQ-XXXXXXXXXXXX`.
-
-### 2. Review and accept the candidate
-
-Inspect saved candidates:
+When a repository contains multiple skills at the root or under a subpath, specify the skill name:
 
 ```bash
-skillhub source list
-skillhub source show SRCQ-XXXXXXXXXXXX
+skillhub skill add https://github.com/anthropics/skills --skill pdf --yes
 ```
 
-Then preview acceptance and choose a stable local source ID:
+To import all skills discovered in the repository at once:
 
 ```bash
-skillhub source triage SRCQ-XXXXXXXXXXXX \
-  --decision accept \
-  --source-id owner-repo \
-  --adapter git
+skillhub skill add https://github.com/anthropics/skills --all --yes
 ```
 
-The source ID (`owner-repo`) identifies **which registered source** later commands use. It is not a repository path. For a large repository, limit the watched scope during onboarding:
+*Rules for multi-skill sources:*
+- If a source contains multiple skills and you pass neither `--skill <name>` nor `--all`, the command halts with `skill_selection_required` and lists available skill names.
+- `--all` imports every discovered skill as an independent draft. `--id` cannot be used with `--all`.
+- You can specify `--ref <branch-or-tag>` and `--path <subpath>` explicitly if they are not part of the URL. Skill Hub queries fresh advertised refs from the remote repository.
+
+### Add from a local folder (CLI only)
+
+You can add a skill directly from a local directory:
 
 ```bash
-skillhub source triage SRCQ-XXXXXXXXXXXX \
-  --decision accept \
-  --source-id owner-repo \
-  --adapter git \
-  --path skills
+skillhub skill add ./path/to/local-skill --yes
 ```
 
-Here `--path skills` identifies **which subdirectory inside that source** is relevant.
+*Privacy and security boundaries for local add:*
+- **CLI-only:** Local folder import is available exclusively through the CLI. MCP tools reject local filesystem locators (`./`, `../`, `~/`, absolute paths, `file://`) with `invalid_request` because the MCP server has no host-granted filesystem selection capability. Connected agents instruct the user to run `skillhub skill add` via the CLI.
+- **Privacy-safe snapshots:** When reading a local directory, Skill Hub captures only the skill entrypoint (`SKILL.md`) and authorized companion resources (`references/`, `scripts/`, `assets/`). It ignores `.git`, hidden files, editor metadata, and files exceeding size limits.
+- **Companion inventory:** The proposal inventories all companion files and total byte counts. If a skill exceeds configured limits, the operation halts with `resource_limits_exceeded`.
+- **License warnings:** Upstream license indicators are detected and displayed as informational warnings. License detection is advisory and does not constitute formal legal clearance.
 
-### 3. Confirm onboarding
+---
 
-Acceptance prints a proposal ID, proposal digest, and base version. Confirm using those exact values:
+## Create a skill from your own workflow (`skillhub skill create`)
 
-```bash
-skillhub source confirm \
-  --proposal PROP-... \
-  --proposal-digest sha256:... \
-  --base-version sha256:...
-```
-
-The source is now watched and its first analysis can be prepared. Active skills remain unchanged.
-
-## Import existing skills as drafts
-
-Use this path when a watched source already contains skill folders you want to adopt.
-
-Preview every discovered skill under a subdirectory:
+When you want to capture a custom workflow rather than importing from upstream, create a new draft:
 
 ```bash
-skillhub source import owner-repo --path skills
-```
-
-Or narrow the preview to named skills:
-
-```bash
-skillhub source import owner-repo --path skills \
-  --skill code-review \
-  --skill testing
-```
-
-After reviewing importable skills and ID conflicts, apply the import:
-
-```bash
-skillhub source import owner-repo --path skills --yes
-```
-
-`owner-repo` selects the registered source; `--path skills` scopes discovery within that source. Imported skills retain source provenance, remain `draft`, and require separate review and activation.
-
-## Create a skill from your own workflow
-
-Use a draft to capture a recurring workflow that is not owned by an upstream source.
-
-Ask your agent:
-
-> Create a skill for reviewing reliability risks. Use it when I ask to review reliability, not when I ask to design a new service.
-
-The agent previews a draft and asks for approval before creating it. CLI preview:
-
-```bash
-skillhub skill create --id reliability-review --collection software \
+skillhub skill create reliability-review \
+  --collection software \
   --name "Reliability Review" \
-  --description "Review reliability risks." \
+  --description "Review service failure modes and operational risks." \
   --trigger "review reliability" \
   --not-for "design a new service" \
-  --min-scope multi_step
+  --min-scope multi_step \
+  --yes
 ```
 
-Re-run the command with `--yes` to generate, validate, and apply a fresh proposal. Add `--full-diff` to the preview when you need the complete file changes.
+*Creation requirements:*
+- `--id`: Stable skill identifier (lowercase letters, digits, and hyphens).
+- `--collection`: Collection folder name (e.g. `software`, `core`).
+- `--name` and `--description`: Plain-language purpose.
+- Routing metadata: `--trigger <text>`, `--not-for <text>` (or `--rationale <text>`), and `--min-scope single_step|multi_step|project`.
+- Initial content: Pass `--content-file <path>` to seed instructions from an existing Markdown file. If omitted, Skill Hub seeds a draft template.
+- *Scaffold guard:* Newly created skills containing untouched template placeholder text cannot be activated until genuine instructions are provided.
 
-To start from prepared Markdown, pass `--content-file <file>`. Front matter is optional; if present, its `name` must match the skill ID. The file must be a readable regular file, not a symlink or directory.
+---
 
-## Review a draft before activation
+## Review diagnostic facts (`skillhub skill review`)
 
-List and inspect skills in any state:
+Before activating a draft or after modifying an existing skill, run a comprehensive diagnostic review:
 
 ```bash
-skillhub skill list
-skillhub skill list --state draft
-skillhub skill show reliability-review --verbose
+skillhub skill review reliability-review
 ```
 
-Review the draft as a routing contract, not only as prose:
-
-1. **Purpose:** the name and description say what outcome the skill owns.
-2. **Positive boundary:** triggers describe concrete requests that should load it.
-3. **Negative boundary:** `not-for` entries prevent plausible misrouting. Use a rationale only when no honest negative boundary exists.
-4. **Minimum scope:** `single_step`, `multi_step`, or `project` matches the smallest task that justifies loading the skill.
-5. **Instructions:** the content is actionable, scoped, and free of source-specific assumptions that do not apply locally.
-6. **Provenance:** for imported skills, the source, revision, and path are expected and trusted.
-7. **Overlap:** compare active skills and remove ambiguous ownership before activation.
-
-Activation validation requires at least one trigger, a `not-for` entry or rationale, and a minimum scope.
-
-## Edit and improve a skill
-
-Ask your agent for the intended outcome rather than dictating file edits:
-
-> Tighten reliability-review so it handles service failure modes but not architecture design.
-
-The agent previews the semantic change before applying it. CLI examples:
+Add `--verbose` to view catalog snapshots, generation identifiers, and full git file lists:
 
 ```bash
-skillhub skill edit reliability-review \
-  --description "Review failure modes and operational risks in a service."
+skillhub skill review reliability-review --verbose
+```
 
+`skill review` is an offline, read-only diagnostic report compiled directly from canonical files without rebuilding the catalog. It reports:
+1. **Lifecycle state:** `draft`, `active`, `deprecated`, or `archived`.
+2. **Canonical validity:** Structural schema validation of `SKILL.md` and metadata.
+3. **Routing eligibility:** Whether triggers, negative boundaries (`not-for`), and minimum scope are complete and non-conflicting.
+4. **Served status:** Whether the skill is currently indexed and servable in the active SQLite catalog generation (`ServedFacts`).
+5. **Resource status:** Total file count, byte size, entrypoint path, and companion resource inventory.
+6. **Provenance:** Upstream repository locator, commit revision, and subpath, or local authoring designation.
+7. **Git working-tree status:** Clean or dirty (staged, unstaged, untracked changes in the skill folder).
+8. **Activation readiness:** Actionable warnings, such as untouched scaffold text or missing routing fields.
+
+`skill review` reports diagnostic facts to assist human decision-making. It does not store an approval flag and does not activate the skill.
+
+---
+
+## Edit and improve a skill (`skillhub skill edit`)
+
+Update metadata, routing boundaries, or instruction text:
+
+### Edit in your preferred external editor
+
+Open the skill in `$VISUAL` or `$EDITOR`:
+
+```bash
 skillhub skill edit reliability-review --editor
 ```
 
-Without `--yes`, both commands preview. Add `--yes` only after reviewing the change. `--content-file <file>` replaces the instruction text. Routing flags such as `--trigger`, `--not-for`, `--operation`, and `--min-scope` replace only the field supplied; other fields remain unchanged.
+Skill Hub opens a permission-restricted temporary copy (mode 0600) in your editor.
 
-For an active skill, editing changes active local content after confirmation. Review `skillhub diff` before committing.
+*Digest-pinned editor conflict semantics:*
+- Before opening the editor, Skill Hub records the SHA-256 digest of the current canonical content.
+- If another process or user modifies the canonical file while your editor session is open, Skill Hub detects the mismatch and refuses to preview or apply the edit, returning `edit_conflict`. This prevents lost updates.
+- **24-hour recovery artifacts:** Whenever an editor session closes with changes, Skill Hub persists an immutable copy of your edited buffer to `runtime/edits/REC-<proposal-id>-<timestamp>.md` before previewing. If an edit conflict occurs or the proposal is cancelled, your work is preserved in this recovery file. Recovery files have a 24-hour TTL and are cleaned up automatically upon proposal confirmation or expiration.
+
+### Edit via flags or content file
+
+You can update fields directly from the command line:
+
+```bash
+skillhub skill edit reliability-review \
+  --description "Review failure modes, resilience policies, and operational risks." \
+  --yes
+```
+
+To replace the instruction text directly from a file:
+
+```bash
+skillhub skill edit reliability-review \
+  --content-file ./updated-instructions.md \
+  --yes
+```
+
+*Explicit blind replacement:* Passing `--content-file <file>` without an editor session performs a standard preview against the current canonical base version without expecting an editor-captured digest.
+
+Routing flags (`--trigger`, `--not-for`, `--operation`, `--min-scope`) replace only the specified fields; unmentioned routing fields retain their existing values.
+
+### Confirming an edit proposal
+
+When run without `--yes`, `skill edit` prints a preview with a diff and a short confirmation command:
+
+```bash
+skillhub skill confirm PROP-XXXXX
+```
+
+---
 
 ## Activate, deprecate, and archive
 
-A skill moves through this lifecycle:
+Skill lifecycle transitions follow a strict sequence:
 
 ```text
 draft → active → deprecated → archived
 ```
 
-- `draft`: under review; never recommended by the resolver.
-- `active`: eligible for routing.
-- `deprecated`: retained while being phased out.
-- `archived`: retired and kept for history.
+- **`draft`:** Being authored, reviewed, or imported. Not eligible for agent routing.
+- **`active`:** Validated, reviewed, and eligible for resolver recommendations.
+- **`deprecated`:** Retained for backward compatibility while being phased out.
+- **`archived`:** Retired and kept for historical audit; not servable.
 
-Preview lifecycle changes by omitting `--yes`; apply them after review:
+Preview transitions by omitting `--yes`; apply them after reviewing routing impact:
 
 ```bash
 skillhub skill activate reliability-review --yes
@@ -212,76 +225,173 @@ skillhub skill deprecate reliability-review --yes
 skillhub skill archive reliability-review --yes
 ```
 
-Transitions are ordered. An active skill must be deprecated before it can be archived.
+Transitions are strictly ordered. An active skill cannot jump directly to archived; it must be deprecated first. If activation validation fails (e.g. missing triggers or untouched scaffold), the transition is blocked with `validation_failed`.
 
-## Learn from source updates
+---
 
-Use source learning when you want improvements rather than a direct copy of upstream skills.
+## Watch and learn from upstream sources
 
-Check sources explicitly:
+Use source watching when you want to monitor upstream repositories for improvements rather than copying complete skills.
+
+### Watch a repository (`skillhub source watch`)
+
+Register an upstream Git repository for ongoing monitoring:
 
 ```bash
-skillhub check --all-due
-skillhub check --all
-skillhub check owner-repo
+skillhub source watch https://github.com/owner/repo --cadence weekly --yes
 ```
 
-A check contacts watched sources and records revision changes; it never edits skills. Then ask your agent:
+- `--cadence`: `daily`, `weekly`, or `manual` (default: `weekly`).
+- `--ref`: Watch a specific branch or tag (default: `main`).
+- `--path`: Scope monitoring to a specific subdirectory.
+- Watching a source records the monitor in `sources/catalog/<source-id>.yaml`. It does not fetch upstream content immediately, does not import skills, and does not alter active skills.
+
+### Check for updates (`skillhub source check`)
+
+Check watched sources to detect upstream revision changes:
+
+```bash
+skillhub source check --all-due
+skillhub source check --all
+skillhub source check owner-repo
+```
+
+*Top-level compatibility spelling:* `skillhub check` is fully supported as an exact alias of `skillhub source check`.
+
+A source check queries remote repositories, compares advertised commit hashes, and records new revisions. It never modifies your curated skills.
+
+### Distill changes and review the inbox
+
+When sources have new revisions, ask your connected agent:
 
 > Distill changed sources and show me the most valuable idea.
 
-The agent prepares pinned source revisions, reads the source evidence, records findings, and proposes insights. Distillation does not apply proposals to active skills.
+The agent starts a distill run, analyzes changes, produces findings, and places insight proposals in your inbox. Distillation never modifies active skills.
 
-Review the ranked inbox:
+Inspect and act on insights in the inbox:
 
 ```bash
 skillhub inbox
-skillhub insight show <insight-id>
+skillhub insight show INS-101
+skillhub insight decide INS-101 --decision reject --reason "Already addressed in our reliability review"
 ```
 
-For each insight, decide whether to plan, reject, mark obsolete, or reopen it. Rejection requires a reason:
+Applying an insight generates a pinned preview. Approve the proposal only after inspecting the diff.
 
-```bash
-skillhub insight decide <insight-id> \
-  --decision reject \
-  --reason "Already covered by the active reliability skill"
-```
+---
 
-Applying an insight is a separate preview-and-confirm operation. Prefer the connected agent for this flow: it maps findings to exact artifacts, shows impact and a bounded diff, and stops for explicit approval. CLI details are available through `skillhub help insight`.
+## Resource-verified fallback and state basis
 
-## Review and save workspace changes
+Skill Hub maintains a clear distinction between two layers of state:
 
-Inspect canonical changes after an import, creation, edit, lifecycle transition, or accepted insight:
+1. **Canonical state:** The validated YAML, Markdown, and resource files stored in your local Git repository (`skills/`, `sources/`, `distill/`).
+2. **Served state:** The compiled SQLite search catalog (`runtime/catalog/generations/<gen>.db`) used for sub-millisecond agent routing.
+
+### Resource fallback behavior
+
+When canonical files are modified by hand or an external Git merge:
+- **Unchanged skills:** If a skill's files are untouched and match recorded digests, the skill remains servable from the catalog, though diagnostics may note that the catalog generation is stale.
+- **Modified or missing resources:** If companion resource files have changed or been deleted in the working tree, they become unavailable (`resource_content_unavailable`). Historical bytes are **never guessed, synthesized, or restored from stale caches**.
+- **Mutation blocking:** If canonical workspace files fail validation, managed mutations (`skill create`, `skill edit`, `skill activate`, etc.) are blocked with `workspace_invalid` or `validation_failed` until canonical files are corrected.
+- **Fresh-clone semantics:** When a workspace is cloned onto a new machine, no runtime database exists. Running `skillhub rebuild` or any read command triggers validation and compiles a fresh catalog generation directly from canonical files.
+- **Degraded MCP startup:** If the catalog database is missing or corrupt when an agent starts `skillhub mcp serve`, the server launches in degraded fallback mode. Diagnostic tools (`hub_status`, `skill_review`, `workspace_validate`, `workspace_rebuild`) remain operational so the agent can diagnose and repair the hub, while routing tools return actionable errors without crashing the stdio transport.
+
+---
+
+## Review and commit workspace changes
+
+Skill Hub never commits or pushes Git repositories automatically. Inspect canonical changes and validate files before committing:
 
 ```bash
 skillhub diff
 skillhub validate
 ```
 
-Commit only after the affected skills and routing metadata pass review:
+### Staged index validation (`validate --staged`)
+
+Before committing, validate the exact files staged in the Git index:
+
+```bash
+skillhub validate --staged
+```
+
+*Staged validation guarantees:*
+- **Literal index blobs:** It reads literal stage-0 blobs directly from the Git index without applying working-tree filters or checkout modifications.
+- **Zero side-effects:** It never mutates the Git index or working tree.
+- **No hook installer:** Skill Hub does not include a proprietary hook installer (`skillhub hook install` does not exist).
+- **Pre-commit integration:** You can add this command directly to any Git hook manager (Husky, Lefthook, pre-commit, or `.git/hooks/pre-commit`):
+
+```bash
+#!/bin/sh
+skillhub validate --staged
+```
+
+### Commit your changes
+
+Once validation passes, commit your changes using standard Git:
 
 ```bash
 git -C ~/skillhub add -A
 git -C ~/skillhub commit -m "Curate Skill Hub skills"
 ```
 
-Skill Hub never pushes automatically. Push through your normal Git workflow when you want the workspace backed up or shared.
+Push to your remote backup using standard `git push`.
+
+---
+
+## Advanced intake and recovery
+
+The original multi-step source intake commands remain fully supported for advanced workflows, formal compliance review, and recovery. They are not required for everyday skill curation.
+
+```bash
+# 1. Record an intake candidate without network access
+skillhub source capture https://github.com/owner/repo.git --reason "Audit candidate"
+
+# 2. Inspect candidates
+skillhub source list
+skillhub source show SRCQ-XXXXXXXXXXXX
+
+# 3. Triage candidate and preview onboarding
+skillhub source triage SRCQ-XXXXXXXXXXXX \
+  --decision accept \
+  --source-id audit-repo \
+  --adapter git \
+  --path skills
+
+# 4. Confirm onboarding with exact pins
+skillhub source confirm \
+  --proposal PROP-YYYYY \
+  --proposal-digest sha256:... \
+  --base-version sha256:...
+
+# 5. Import discovered skills as drafts
+skillhub source import audit-repo --path skills --yes
+```
+
+Use this workflow when you require multi-stage governance, audit logging of candidate intake reasons, or precise scope isolation before watching.
+
+---
 
 ## Command map
 
 | Intent | Command |
 |---|---|
-| See hub state and one next action | `skillhub status` |
-| Save a source candidate | `skillhub source capture <locator> --reason <text>` |
-| List or inspect source records | `skillhub source list`; `skillhub source show <id>` |
-| Decide whether to watch a source | `skillhub source triage <candidate-id> --decision ...` |
-| Confirm source onboarding | `skillhub source confirm --proposal ... --proposal-digest ... --base-version ...` |
-| Import draft skills | `skillhub source import <source-id> [--path <subdir>] [--skill <name>]... [--yes]` |
-| Create or edit a draft | `skillhub skill create ...`; `skillhub skill edit <id> ...` |
-| Inspect skills | `skillhub skill list`; `skillhub skill show <id> --verbose` |
-| Change lifecycle state | `skillhub skill activate|deprecate|archive <id> [--yes]` |
-| Check upstream revisions | `skillhub check --all-due|--all|<source-id>...` |
-| Review proposed improvements | `skillhub inbox`; `skillhub insight show <id>` |
-| Inspect workspace changes | `skillhub diff`; `skillhub validate` |
+| See hub status and recommended next action | `skillhub status` |
+| Add a skill from GitHub or local folder | `skillhub skill add <locator> [--skill <name>\|--all] [--yes]` |
+| Create a new draft skill | `skillhub skill create <id> --collection <c> --name <n> --description <d> [flags] [--yes]` |
+| Run comprehensive diagnostic review | `skillhub skill review <id> [--verbose]` |
+| Edit skill instructions or routing | `skillhub skill edit <id> [--editor\|--content-file <f>] [flags] [--yes]` |
+| Confirm a proposed mutation | `skillhub skill confirm <proposal-id>` |
+| Inspect skill details | `skillhub skill list [--state <s>]`; `skillhub skill show <id> [--verbose]` |
+| Change lifecycle state | `skillhub skill activate\|deprecate\|archive <id> [--yes]` |
+| Watch a remote repository | `skillhub source watch <locator> [--cadence daily\|weekly\|manual] [--yes]` |
+| Check watched sources for updates | `skillhub source check --all-due\|--all` (or `skillhub check ...`) |
+| Review insight proposals in inbox | `skillhub inbox`; `skillhub insight show <id>` |
+| Decide an insight proposal | `skillhub insight decide <id> --decision accept\|reject [flags]` |
+| Show uncommitted canonical changes | `skillhub diff` |
+| Validate working-tree files | `skillhub validate` |
+| Validate staged Git index files | `skillhub validate --staged` |
+| Rebuild derived search catalog | `skillhub rebuild [--verbose]` |
+| Diagnose and repair connections | `skillhub doctor [--fix [--yes]]` |
 
-Run `skillhub help <command>` for the current flags and examples. Most commands also accept `--workspace <path>` and `--json`.
+Run `skillhub help <command>` for detailed flag specifications and examples. Most commands accept `--workspace <path>` and `--json`.

@@ -96,8 +96,8 @@ func TestClarificationAnswerIsAcceptedByAnIndependentResolverInstance(t *testing
 
 func TestResolveSkipsSkillWithUnservableFiles(t *testing.T) {
 	root := newDistributionFixtureWorkspace(t)
-	// The frontmatter name does not match the skill id, so it can never be served.
-	writeDistributionFixtureSkill(t, root, "broken-review", "review kafka consumer retries", "---\nname: other\ndescription: Mismatch.\n---\n\n# Broken\n", nil)
+	// The frontmatter description is blank, so it can never be served.
+	writeDistributionFixtureSkill(t, root, "broken-review", "review kafka consumer retries", "---\nname: broken-review\ndescription: \"\"\n---\n\n# Broken\n", nil)
 	writeDistributionFixtureSkill(t, root, "working-review", "review kafka consumer retries", servableEntrypoint("working-review"), nil)
 	build := rebuildFixtureCatalog(t, root)
 	warned := false
@@ -179,17 +179,119 @@ func TestResourceMIMETypesDoNotDependOnHostDatabase(t *testing.T) {
 	}
 }
 
-func TestDistributionReportsStaleCatalogWithSentinelError(t *testing.T) {
+func TestDistributionReportsCorruptCatalogWithSentinelError(t *testing.T) {
 	root := newDistributionFixtureWorkspace(t)
 	writeDistributionFixtureSkill(t, root, "code-review", "review code", servableEntrypoint("code-review"), nil)
-	rebuildFixtureCatalog(t, root)
-	if err := os.WriteFile(filepath.Join(root, "skills", "core", "code-review", "SKILL.md"), []byte(servableEntrypoint("code-review")+"\nEdited outside the application.\n"), 0o644); err != nil {
+	result := rebuildFixtureCatalog(t, root)
+
+	// Make canonical invalid so auto-rebuild cannot run
+	if err := os.WriteFile(filepath.Join(root, "skills", "core", "code-review", "skill.meta.yaml"), []byte("schema_version: 1\nid: code-review\nstatus: shiny\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+
+	// Corrupt SQLite database
+	dbPath := filepath.Join(root, "runtime", "catalog", filepath.FromSlash(result.Pointer.Database))
+	if err := os.Chmod(dbPath, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dbPath, []byte("corrupt SQLite content"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
 	if _, _, err := (DistributionService{}).ListSkills(t.Context(), root); !errors.Is(err, catalog.ErrCatalogUnavailable) {
 		t.Fatalf("ListSkills error = %v, want ErrCatalogUnavailable", err)
 	}
 	if _, err := (DistributionService{}).ReadResource(t.Context(), root, "skill://skillhub/"+strings.Repeat("a", 64)+"/code-review/SKILL.md"); !errors.Is(err, catalog.ErrCatalogUnavailable) {
 		t.Fatalf("ReadResource error = %v, want ErrCatalogUnavailable", err)
+	}
+}
+
+func TestResolverContinuityDuringInvalidCanonicalEdit(t *testing.T) {
+	root := newDistributionFixtureWorkspace(t)
+	writeDistributionFixtureSkill(t, root, "skill-a", "review kafka consumer retries", servableEntrypoint("skill-a"), nil)
+	writeDistributionFixtureSkill(t, root, "skill-b", "review database migrations", servableEntrypoint("skill-b"), nil)
+	buildResult := rebuildFixtureCatalog(t, root)
+
+	// 1. Invalidate skill-b with an invalid metadata status (BUG-07)
+	badMeta := "schema_version: 1\nid: skill-b\nname: skill-b\nstatus: shiny\ndescription: Broken skill.\n"
+	if err := os.WriteFile(filepath.Join(root, "skills", "core", "skill-b", "skill.meta.yaml"), []byte(badMeta), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. Resolve for skill-a's task. It should succeed via fallback with a warning!
+	request := resolverpkg.Request{
+		SchemaVersion: resolverpkg.SchemaVersion, RequestID: "req-fallback",
+		Task: resolverpkg.Task{Description: "review kafka consumer retries", Scope: "multi_step"}, Operation: "review",
+	}
+	response, err := (ResolverService{Cache: resolverpkg.NewCache(8)}).Resolve(t.Context(), root, request)
+	if err != nil {
+		t.Fatalf("resolve failed during unrelated canonical invalidation: %v", err)
+	}
+	if response.Primary == nil || response.Primary.ID != "skill-a" {
+		t.Fatalf("expected skill-a to be recommended, got: %#v", response.Primary)
+	}
+	if response.CatalogSnapshot != buildResult.Pointer.CatalogSnapshot {
+		t.Fatalf("expected catalog snapshot %q, got %q", buildResult.Pointer.CatalogSnapshot, response.CatalogSnapshot)
+	}
+	hasFallbackWarning := false
+	for _, w := range response.Warnings {
+		if strings.Contains(w, "fallback") || strings.Contains(w, "canonical validation failed") {
+			hasFallbackWarning = true
+			break
+		}
+	}
+	if !hasFallbackWarning {
+		t.Fatalf("expected fallback warning in response.Warnings: %#v", response.Warnings)
+	}
+
+	// 3. Show / GetSkill for skill-a succeeds
+	distSkill, err := (DistributionService{}).GetSkill(t.Context(), root, response.Primary.URI)
+	if err != nil {
+		t.Fatalf("GetSkill failed for unchanged skill during fallback: %v", err)
+	}
+	if distSkill.SkillID != "skill-a" {
+		t.Fatalf("got skill %q, want skill-a", distSkill.SkillID)
+	}
+
+	// 4. Now tamper with skill-a's entrypoint (break its live resource)
+	tampered := "---\nname: skill-a\ndescription: Fixture skill skill-a.\n---\n\n# Tampered bytes\n"
+	if err := os.WriteFile(filepath.Join(root, "skills", "core", "skill-a", "SKILL.md"), []byte(tampered), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// 5. Resolve again: skill-a MUST now be excluded!
+	response2, err := (ResolverService{Cache: resolverpkg.NewCache(8)}).Resolve(t.Context(), root, request)
+	if err != nil {
+		t.Fatalf("resolve failed: %v", err)
+	}
+	if response2.Primary != nil && response2.Primary.ID == "skill-a" {
+		t.Fatalf("skill-a should be excluded when its live resources differ from generation digest: %#v", response2)
+	}
+
+	// 6. GetSkill for skill-a must now return ErrResourceContentUnavailable
+	_, getErr := (DistributionService{}).GetSkill(t.Context(), root, response.Primary.URI)
+	if !errors.Is(getErr, ErrResourceContentUnavailable) {
+		t.Fatalf("GetSkill error = %v, want ErrResourceContentUnavailable", getErr)
+	}
+
+	// 7. ListSkillsReport must report skill-a in skipped
+	entries, _, skipped, err := (DistributionService{}).ListSkillsReport(t.Context(), root)
+	if err != nil {
+		t.Fatalf("ListSkillsReport failed: %v", err)
+	}
+	foundSkippedA := false
+	for _, sk := range skipped {
+		if sk.SkillID == "skill-a" {
+			foundSkippedA = true
+			break
+		}
+	}
+	if !foundSkippedA {
+		t.Fatalf("expected skill-a to be skipped in ListSkillsReport: %#v", skipped)
+	}
+	for _, entry := range entries {
+		if entry.SkillID == "skill-a" {
+			t.Fatalf("skill-a should not be served: %#v", entry)
+		}
 	}
 }

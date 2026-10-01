@@ -3,6 +3,8 @@ package app
 import (
 	"bytes"
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -134,5 +136,86 @@ func createActiveDistributionSkill(t *testing.T, root, id, name string) {
 	result, err = service.ConfirmSkillMutation(t.Context(), root, activation, activation.Confirmation.Confirmation.Pins)
 	if err != nil || result.Error != nil {
 		t.Fatalf("activate %s = %#v, %v", id, result, err)
+	}
+}
+
+func TestDistributionServesFallbackWhenCanonicalInvalid(t *testing.T) {
+	root := newSkillWorkspace(t)
+	createActiveDistributionSkill(t, root, "stable-skill", "Stable Skill")
+	service := DistributionService{}
+
+	entriesBefore, _, err := service.ListSkills(t.Context(), root)
+	if err != nil || len(entriesBefore) != 2 {
+		t.Fatalf("entries before = %#v, %v", entriesBefore, err)
+	}
+
+	// Break canonical files with an unrelated invalid skill
+	metaPath := filepath.Join(root, "skills", "core", "broken", "skill.meta.yaml")
+	if err := os.MkdirAll(filepath.Dir(metaPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(metaPath, []byte("schema_version: 1\nid: broken\nstatus: shiny\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// ListSkills should continue serving the unchanged fallback skills
+	entries, _, err := service.ListSkills(t.Context(), root)
+	if err != nil {
+		t.Fatalf("ListSkills failed during canonical fallback: %v", err)
+	}
+	foundStable := false
+	for _, entry := range entries {
+		if entry.SkillID == "stable-skill" {
+			foundStable = true
+			break
+		}
+	}
+	if !foundStable {
+		t.Fatalf("stable-skill should be served in fallback mode: %#v", entries)
+	}
+}
+
+func TestDistributionRejectsChangedResourceWithContentUnavailable(t *testing.T) {
+	root := newSkillWorkspace(t)
+	createActiveDistributionSkill(t, root, "tampered-skill", "Tampered Skill")
+	service := DistributionService{}
+
+	entries, _, err := service.ListSkills(t.Context(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var targetURI string
+	for _, entry := range entries {
+		if entry.SkillID == "tampered-skill" {
+			targetURI = entry.URI
+			break
+		}
+	}
+	if targetURI == "" {
+		t.Fatal("target URI not found")
+	}
+
+	// Tamper with live SKILL.md
+	entrypointPath := filepath.Join(root, "skills", "core", "tampered-skill", "SKILL.md")
+	if err := os.WriteFile(entrypointPath, []byte("---\nname: tampered-skill\ndescription: Mutated.\n---\n\n# Mutated bytes\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Also invalidate metadata so auto-rebuild doesn't simply update the catalog
+	metaPath := filepath.Join(root, "skills", "core", "tampered-skill", "skill.meta.yaml")
+	if err := os.WriteFile(metaPath, []byte("schema_version: 1\nid: tampered-skill\nstatus: shiny\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// GetSkill must report ErrResourceContentUnavailable
+	_, getErr := service.GetSkill(t.Context(), root, targetURI)
+	if !errors.Is(getErr, ErrResourceContentUnavailable) {
+		t.Fatalf("GetSkill error = %v, want ErrResourceContentUnavailable", getErr)
+	}
+
+	// ReadResource must report ErrResourceContentUnavailable
+	_, readErr := service.ReadResource(t.Context(), root, targetURI)
+	if !errors.Is(readErr, ErrResourceContentUnavailable) {
+		t.Fatalf("ReadResource error = %v, want ErrResourceContentUnavailable", readErr)
 	}
 }

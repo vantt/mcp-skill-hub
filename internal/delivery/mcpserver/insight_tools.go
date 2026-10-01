@@ -50,17 +50,27 @@ func (adapter *Server) registerInsightTools(server *mcp.Server) {
 		})
 	addTool(server, &mcp.Tool{Name: "insight_apply_confirm", Title: "Confirm insight application", Description: "Apply exactly one persisted insight proposal. All proposal_id, proposal_digest, and base_version pins are required and exact replay returns the prior receipt.", Annotations: annotations(false, true, true, false)},
 		func(ctx context.Context, _ *mcp.CallToolRequest, input confirmationInput) (*mcp.CallToolResult, toolOutcome[app.InsightApplicationResult], error) {
+			if strings.TrimSpace(input.ProposalID) == "" || strings.TrimSpace(input.ProposalDigest) == "" || strings.TrimSpace(input.BaseVersion) == "" {
+				return failure[app.InsightApplicationResult](app.NewInvalidRequestError("proposal_id, proposal_digest, and base_version pins are required", "Supply all confirmation pins."))
+			}
 			return appResult((app.InsightService{}).ConfirmInsightApplication(ctx, adapter.workspace, input.ProposalID, input.ProposalDigest, input.BaseVersion))
 		})
 
 	addTool(server, &mcp.Tool{Name: "skill_update_preview", Title: "Preview skill update", Description: "Persist a validated skill update preview and return exact confirmation pins. No canonical skill files change during preview.", Annotations: annotations(false, false, false, false)},
 		func(ctx context.Context, _ *mcp.CallToolRequest, input skillUpdatePreviewInput) (*mcp.CallToolResult, toolOutcome[app.SkillProposal], error) {
-			update := skill.UpdateInput{IdempotencyKey: input.IdempotencyKey, Name: input.Name, Description: input.Description, Routing: input.Routing, Rationale: input.Rationale}
+			update := skill.UpdateInput{
+				IdempotencyKey:        input.IdempotencyKey,
+				Name:                  input.Name,
+				Description:           input.Description,
+				ExpectedContentDigest: strings.TrimSpace(input.ExpectedContentDigest),
+				Routing:               input.Routing,
+				Rationale:             input.Rationale,
+			}
 			if input.Content != nil {
 				update.SetContent = true
 				update.Content = []byte(*input.Content)
 			}
-			if input.Name == nil && input.Description == nil && input.Content == nil && input.Routing == nil && input.Rationale == nil {
+			if input.Name == nil && input.Description == nil && input.Content == nil && input.Routing == nil && input.Rationale == nil && input.ExpectedContentDigest == "" {
 				return failure[app.SkillProposal](fmt.Errorf("at least one update field is required"))
 			}
 			proposal, err := (app.SkillService{}).PreviewSkillUpdate(ctx, adapter.workspace, input.SkillID, update, input.FullDiff)
@@ -80,6 +90,9 @@ func (adapter *Server) registerInsightTools(server *mcp.Server) {
 		})
 	addTool(server, &mcp.Tool{Name: "skill_update_confirm", Title: "Confirm skill update", Description: "Apply exactly one persisted skill proposal. All proposal_id, proposal_digest, and base_version pins are required and exact replay returns the prior receipt.", Annotations: annotations(false, true, true, false)},
 		func(ctx context.Context, _ *mcp.CallToolRequest, input confirmationInput) (*mcp.CallToolResult, toolOutcome[app.SkillMutationResult], error) {
+			if strings.TrimSpace(input.ProposalID) == "" || strings.TrimSpace(input.ProposalDigest) == "" || strings.TrimSpace(input.BaseVersion) == "" {
+				return failure[app.SkillMutationResult](app.NewInvalidRequestError("proposal_id, proposal_digest, and base_version pins are required", "Supply all confirmation pins."))
+			}
 			service := app.SkillService{}
 			preview, err := service.LoadSkillProposal(ctx, adapter.workspace, input.ProposalID)
 			if err != nil {

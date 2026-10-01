@@ -28,25 +28,10 @@ func (WorkspaceService) ValidateWorkspace(ctx context.Context, path string) (Res
 	if err != nil {
 		return Result{}, err
 	}
-	files, _ := workspace.RelativeFiles(root)
-	for _, rel := range files {
-		if strings.HasPrefix(rel, "skills/") && strings.HasSuffix(rel, "/SKILL.md") {
-			parts := strings.Split(rel, "/")
-			if len(parts) >= 3 {
-				skillID := parts[len(parts)-2]
-				if content, readErr := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel))); readErr == nil {
-					if fmName, line, ok := parseFrontmatterName(content); ok && fmName != "" && fmName != skillID {
-						issues = append(issues, canonical.Issue{
-							Path:    rel,
-							Line:    line,
-							Message: fmt.Sprintf("SKILL.md frontmatter name %q does not match skill ID %q", fmName, skillID),
-							Fix:     fmt.Sprintf("Update frontmatter name to %q, remove the name field, or use `skillhub skill edit %s`.", skillID, skillID),
-						})
-					}
-				}
-			}
-		}
-	}
+	return formatValidationResult(issues), nil
+}
+
+func formatValidationResult(issues []canonical.Issue) Result {
 	result := NewResult(StatusOK, "Workspace validation passed.")
 	for index, issue := range issues {
 		summary := issue.Path
@@ -77,7 +62,7 @@ func (WorkspaceService) ValidateWorkspace(ctx context.Context, path string) (Res
 			},
 		}
 	}
-	return result, nil
+	return result
 }
 
 // DiffGroup is a stable, path-safe summary of changed canonical files.
@@ -325,21 +310,108 @@ func groupDiffFiles(files []DiffFile, roots ...string) []DiffGroup {
 	return result
 }
 
-func parseFrontmatterName(content []byte) (string, int, bool) {
-	if !bytes.HasPrefix(content, []byte("---\n")) && !bytes.HasPrefix(content, []byte("---\r\n")) {
-		return "", 0, false
+// GitPathSummary provides clean staged and unstaged canonical path summaries.
+type GitPathSummary struct {
+	Configured bool       `json:"configured"`
+	Dirty      bool       `json:"dirty"`
+	Staged     []DiffFile `json:"staged"`
+	Unstaged   []DiffFile `json:"unstaged"`
+	Untracked  []DiffFile `json:"untracked"`
+	Unmerged   []DiffFile `json:"unmerged"`
+}
+
+// GetGitPathSummary returns staged, unstaged, untracked, and unmerged path summaries.
+func (WorkspaceService) GetGitPathSummary(ctx context.Context, path string) (GitPathSummary, error) {
+	root, err := workspace.Discover(path)
+	if err != nil {
+		return GitPathSummary{}, err
 	}
-	lines := strings.Split(string(content), "\n")
-	for i := 1; i < len(lines); i++ {
-		line := strings.TrimSpace(lines[i])
-		if line == "---" {
-			break
+	cmd := offlineGitCommand(ctx, root, "status", "--porcelain=v2", "-z")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return GitPathSummary{Configured: false}, nil
+	}
+	summary, err := parsePorcelainSummary(output)
+	if err != nil {
+		return GitPathSummary{}, err
+	}
+	summary.Configured = true
+	return summary, nil
+}
+
+func parsePorcelainSummary(output []byte) (GitPathSummary, error) {
+	records := bytes.Split(output, []byte{0})
+	var summary GitPathSummary
+	appendSafe := func(rawPath string, list *[]DiffFile, status string) error {
+		p := filepath.ToSlash(rawPath)
+		if !safeRelativePath(p) {
+			return errors.New("Git reported an unsafe workspace path")
 		}
-		if strings.HasPrefix(line, "name:") {
-			val := strings.TrimSpace(strings.TrimPrefix(line, "name:"))
-			val = strings.Trim(val, `"'`)
-			return val, i + 1, true
+		if canonicalDiffPath(p) {
+			*list = append(*list, DiffFile{Path: p, Status: status})
+		}
+		return nil
+	}
+	for index := 0; index < len(records); index++ {
+		record := records[index]
+		if len(record) == 0 || record[0] == '#' {
+			continue
+		}
+		switch record[0] {
+		case '1':
+			fields := bytes.SplitN(record, []byte{' '}, 9)
+			if len(fields) != 9 || len(fields[1]) != 2 {
+				return GitPathSummary{}, errors.New("parse Git ordinary status record")
+			}
+			stagedStatus := string(fields[1][0])
+			unstagedStatus := string(fields[1][1])
+			path := string(fields[8])
+			if stagedStatus != "." {
+				if err := appendSafe(path, &summary.Staged, stagedStatus); err != nil {
+					return GitPathSummary{}, err
+				}
+			}
+			if unstagedStatus != "." {
+				if err := appendSafe(path, &summary.Unstaged, unstagedStatus); err != nil {
+					return GitPathSummary{}, err
+				}
+			}
+		case '2':
+			fields := bytes.SplitN(record, []byte{' '}, 10)
+			if len(fields) != 10 || len(fields[1]) != 2 {
+				return GitPathSummary{}, errors.New("parse Git rename status record")
+			}
+			index++
+			path := string(fields[9])
+			stagedStatus := string(fields[1][0])
+			unstagedStatus := string(fields[1][1])
+			if stagedStatus != "." {
+				if err := appendSafe(path, &summary.Staged, stagedStatus); err != nil {
+					return GitPathSummary{}, err
+				}
+			}
+			if unstagedStatus != "." {
+				if err := appendSafe(path, &summary.Unstaged, unstagedStatus); err != nil {
+					return GitPathSummary{}, err
+				}
+			}
+		case 'u':
+			fields := bytes.SplitN(record, []byte{' '}, 11)
+			if len(fields) != 11 || len(fields[1]) != 2 {
+				return GitPathSummary{}, errors.New("parse Git unmerged status record")
+			}
+			if err := appendSafe(string(fields[10]), &summary.Unmerged, string(fields[1])); err != nil {
+				return GitPathSummary{}, err
+			}
+		case '?':
+			if len(record) < 3 || record[1] != ' ' {
+				return GitPathSummary{}, errors.New("parse Git untracked status record")
+			}
+			if err := appendSafe(string(record[2:]), &summary.Untracked, "??"); err != nil {
+				return GitPathSummary{}, err
+			}
 		}
 	}
-	return "", 0, false
+	summary.Dirty = len(summary.Staged) > 0 || len(summary.Unstaged) > 0 || len(summary.Untracked) > 0 || len(summary.Unmerged) > 0
+	return summary, nil
 }

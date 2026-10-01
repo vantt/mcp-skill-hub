@@ -21,14 +21,34 @@ func Digest(data []byte) string {
 	return "sha256:" + hex.EncodeToString(sum[:])
 }
 
+// URLValidationOptions configures remote URL validation rules.
+type URLValidationOptions struct {
+	AllowHTTP bool
+	AllowFile bool
+}
+
 // ValidateRemoteURL permits credential-free HTTPS only. HTTP can be enabled for
 // controlled tests, but address policy is never bypassed.
 func ValidateRemoteURL(raw string, allowHTTP bool) (*url.URL, error) {
+	return ValidateRemoteURLWithOptions(raw, URLValidationOptions{AllowHTTP: allowHTTP})
+}
+
+// ValidateRemoteURLWithOptions permits credential-free HTTPS, and optionally HTTP or local file URLs for tests.
+func ValidateRemoteURLWithOptions(raw string, opts URLValidationOptions) (*url.URL, error) {
 	u, err := url.Parse(raw)
-	if err != nil || u.Hostname() == "" || u.User != nil || u.Fragment != "" {
+	if err != nil || u.User != nil || u.Fragment != "" {
 		return nil, ErrInvalidLocator
 	}
-	if u.Scheme != "https" && !(allowHTTP && u.Scheme == "http") {
+	if opts.AllowFile && u.Scheme == "file" {
+		if u.Path == "" {
+			return nil, ErrInvalidLocator
+		}
+		return u, nil
+	}
+	if u.Hostname() == "" {
+		return nil, ErrInvalidLocator
+	}
+	if u.Scheme != "https" && !(opts.AllowHTTP && u.Scheme == "http") {
 		return nil, fmt.Errorf("%w: allowed protocol is https", ErrInvalidLocator)
 	}
 	if u.RawQuery != "" {
@@ -47,7 +67,6 @@ func ValidateRemoteURL(raw string, allowHTTP bool) (*url.URL, error) {
 	}
 	return u, nil
 }
-
 func numericAddressLike(host string) bool {
 	if host == "" {
 		return false

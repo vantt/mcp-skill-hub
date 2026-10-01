@@ -64,6 +64,15 @@ func TestSkillLifecycleCreateActivateReadDeprecateArchive(t *testing.T) {
 	if createdResult.State != "draft" || createdResult.Summary != "Draft skill consumer-review saved." {
 		t.Fatalf("create result state/summary = %q / %q", createdResult.State, createdResult.Summary)
 	}
+	if createdResult.ActiveLocally {
+		t.Fatalf("BUG-13: draft skill had active_locally = true")
+	}
+	if createdResult.RoutingEligible {
+		t.Fatalf("draft skill had routing_eligible = true")
+	}
+	if createdResult.LifecycleState != "draft" {
+		t.Fatalf("draft skill lifecycle_state = %q, want draft", createdResult.LifecycleState)
+	}
 	draft, err := service.ReadSkill(ctx, root, "consumer-review")
 	if err != nil || draft.Manifest.Status != "draft" || !strings.Contains(draft.Content, "Use evidence") {
 		t.Fatalf("draft read = %#v, %v", draft, err)
@@ -79,6 +88,9 @@ func TestSkillLifecycleCreateActivateReadDeprecateArchive(t *testing.T) {
 	activatedResult, err := service.ConfirmSkillMutation(ctx, root, activated, activated.Confirmation.Confirmation.Pins)
 	if err != nil || activatedResult.Status != StatusApplied || activatedResult.Summary != "Skill consumer-review is now active." || activatedResult.State != "active" {
 		t.Fatalf("activate result = %#v, %v", activatedResult, err)
+	}
+	if !activatedResult.ActiveLocally || !activatedResult.RoutingEligible || activatedResult.LifecycleState != "active" {
+		t.Fatalf("activate result states mismatch: active_locally=%v, routing_eligible=%v, lifecycle_state=%q", activatedResult.ActiveLocally, activatedResult.RoutingEligible, activatedResult.LifecycleState)
 	}
 	read, err := service.ReadSkill(ctx, root, "consumer-review")
 	if err != nil || !strings.Contains(read.Content, "Use evidence") || read.Manifest.Status != "active" || len(read.Manifest.Resources) != 1 {
@@ -172,6 +184,7 @@ func TestSkillLifecycleRetriesReturnOriginalOperationAndGeneration(t *testing.T)
 	service := SkillService{}
 	createInput := skill.CreateInput{
 		ID: "retry-skill", IdempotencyKey: "caller-create-42", Collection: "software", Name: "Retry Skill", Description: "Retry safely.",
+		Content: []byte("# Retry Skill\n\nRetry instructions.\n"),
 		Routing: skill.RoutingInput{Triggers: []string{"retry skill"}, NotFor: []string{"unrelated work"}, MinScope: "single_step"},
 	}
 	preview, err := service.PreviewCreate(ctx, root, createInput, false)
@@ -246,6 +259,7 @@ func TestProductionRoutingImpactCoversCreateRoutingEditAndActivation(t *testing.
 	service := SkillService{}
 	created, err := service.PreviewCreate(ctx, root, skill.CreateInput{
 		ID: "routing-impact", Collection: "software", Name: "Routing Impact", Description: "Measure direct routing.",
+		Content: []byte("---\nname: routing-impact\ndescription: Measure direct routing.\n---\n\n# Routing Impact\n\nInstructions for measuring routing impact.\n"),
 		Routing: skill.RoutingInput{Triggers: []string{"route this"}, NotFor: []string{"other"}, MinScope: "single_step"},
 	}, false)
 	if err != nil || created.RoutingImpact == nil || created.RoutingImpact.Summary == "" {
@@ -381,5 +395,265 @@ func createAndActivateSkill(t *testing.T, service SkillService, root string) {
 	}
 	if _, err := service.ConfirmSkillMutation(ctx, root, preview, preview.Confirmation.Confirmation.Pins); err != nil {
 		t.Fatal(err)
+	}
+}
+func TestPreviewSkillUpdateEditConflictPrecondition(t *testing.T) {
+	ctx := context.Background()
+	root := newSkillWorkspace(t)
+	service := SkillService{}
+
+	createAndActivateSkill(t, service, root)
+
+	// Writer A reads editable skill content and digest
+	editable, err := service.ReadEditableSkill(ctx, root, "consumer-review")
+	if err != nil {
+		t.Fatalf("ReadEditableSkill failed: %v", err)
+	}
+
+	// Writer B changes the file concurrently
+	entrypointPath := filepath.Join(root, filepath.FromSlash(editable.Path))
+	writerBContent := "---\nname: consumer-review\ndescription: Review consumers.\n---\n\n# Writer B Changed\n"
+	if err := os.WriteFile(entrypointPath, []byte(writerBContent), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// Writer A attempts to preview update using the old expected digest
+	_, err = service.PreviewSkillUpdate(ctx, root, "consumer-review", skill.UpdateInput{
+		SetContent:            true,
+		Content:               []byte("# Writer A Desired\n"),
+		ExpectedContentDigest: editable.Digest,
+	}, false)
+	if err == nil {
+		t.Fatal("expected PreviewSkillUpdate to fail with edit conflict")
+	}
+
+	var appErr *Error
+	if !errors.As(err, &appErr) {
+		t.Fatalf("expected *app.Error, got: %T (%v)", err, err)
+	}
+	if appErr.Code != ErrorEditConflict {
+		t.Fatalf("appErr.Code = %q, want %q", appErr.Code, ErrorEditConflict)
+	}
+
+	// Verify Writer B's bytes survived intact
+	surviving, err := os.ReadFile(entrypointPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(surviving) != writerBContent {
+		t.Fatalf("Writer B's content was overwritten: %q", string(surviving))
+	}
+}
+
+func TestCheckActivationRequirementsBlocksUntouchedScaffold(t *testing.T) {
+	ctx := context.Background()
+	root := newSkillWorkspace(t)
+	service := SkillService{}
+
+	// 1. Create a draft with no content (generates scaffold)
+	created, err := service.PreviewCreate(ctx, root, skill.CreateInput{
+		ID:          "scaffold-guard",
+		Collection:  "software",
+		Name:        "Scaffold Guard",
+		Description: "Guard test description.",
+		Routing:     skill.RoutingInput{Triggers: []string{"guard"}, NotFor: []string{"other"}, MinScope: "single_step"},
+	}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.ConfirmSkillMutation(ctx, root, created, created.Confirmation.Confirmation.Pins); err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. Check activation requirements
+	missing, err := service.CheckActivationRequirements(ctx, root, "scaffold-guard")
+	if err != nil {
+		t.Fatalf("CheckActivationRequirements failed: %v", err)
+	}
+	hasScaffoldMissing := false
+	for _, m := range missing {
+		if strings.Contains(m, "scaffold") {
+			hasScaffoldMissing = true
+			break
+		}
+	}
+	if !hasScaffoldMissing {
+		t.Fatalf("expected missing requirements to mention scaffold, got: %v", missing)
+	}
+
+	// 3. PreviewActivate must fail with MissingActivationRequirementsError
+	_, err = service.PreviewActivate(ctx, root, "scaffold-guard", false)
+	if err == nil {
+		t.Fatal("expected PreviewActivate to fail on untouched scaffold")
+	}
+	var missingErr *MissingActivationRequirementsError
+	if !errors.As(err, &missingErr) {
+		t.Fatalf("expected *MissingActivationRequirementsError, got: %v", err)
+	}
+
+	// 4. Update content to real instructions
+	editable, err := service.ReadEditableSkill(ctx, root, "scaffold-guard")
+	if err != nil {
+		t.Fatal(err)
+	}
+	editProposal, err := service.PreviewSkillUpdate(ctx, root, "scaffold-guard", skill.UpdateInput{
+		SetContent:            true,
+		Content:               []byte("# Real Instructions\n\nMeaningful procedures.\n"),
+		ExpectedContentDigest: editable.Digest,
+	}, false)
+	if err != nil {
+		t.Fatalf("PreviewSkillUpdate failed: %v", err)
+	}
+	if _, err := service.ConfirmSkillMutation(ctx, root, editProposal, editProposal.Confirmation.Confirmation.Pins); err != nil {
+		t.Fatal(err)
+	}
+
+	// 5. Now activation succeeds
+	activated, err := service.PreviewActivate(ctx, root, "scaffold-guard", false)
+	if err != nil {
+		t.Fatalf("PreviewActivate should succeed after scaffold replaced: %v", err)
+	}
+	if _, err := service.ConfirmSkillMutation(ctx, root, activated, activated.Confirmation.Confirmation.Pins); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestConfirmProposalDispatcherByIDAndExplicitPins(t *testing.T) {
+	ctx := context.Background()
+	root := newSkillWorkspace(t)
+	service := SkillService{}
+
+	preview, err := service.PreviewCreate(ctx, root, skill.CreateInput{
+		ID:          "dispatch-test",
+		Collection:  "software",
+		Name:        "Dispatch Test",
+		Description: "Testing proposal dispatch.",
+		Content:     []byte("# Instructions\n"),
+		Routing:     skill.RoutingInput{Triggers: []string{"dispatch"}, NotFor: []string{"none"}, MinScope: "single_step"},
+	}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Confirm using short proposal ID only (nil pins)
+	res, err := service.ConfirmProposal(ctx, root, preview.Confirmation.Confirmation.Pins.ProposalID, nil)
+	if err != nil {
+		t.Fatalf("short ConfirmProposal failed: %v", err)
+	}
+	if res.SkillID != "dispatch-test" || res.State != "draft" {
+		t.Fatalf("unexpected result: %#v", res)
+	}
+
+	// 2. Preview transition and confirm with explicit pins
+	transPreview, err := service.PreviewActivate(ctx, root, "dispatch-test", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pins := transPreview.Confirmation.Confirmation.Pins
+	res2, err := service.ConfirmProposal(ctx, root, pins.ProposalID, &pins)
+	if err != nil {
+		t.Fatalf("explicit pin ConfirmProposal failed: %v", err)
+	}
+	if res2.SkillID != "dispatch-test" || res2.State != "active" {
+		t.Fatalf("unexpected activate result: %#v", res2)
+	}
+}
+
+func TestEditorRecoveryLifecycleInService(t *testing.T) {
+	ctx := context.Background()
+	root := newSkillWorkspace(t)
+	service := SkillService{}
+
+	content := []byte("# Unsaved Editor Content\n")
+	recID, err := service.SaveEditorRecovery(ctx, root, "PROP-editor-service", content)
+	if err != nil {
+		t.Fatalf("SaveEditorRecovery failed: %v", err)
+	}
+	if !strings.HasPrefix(recID, "REC-") {
+		t.Fatalf("unexpected recovery ID: %s", recID)
+	}
+
+	readBack, err := service.ReadEditorRecovery(ctx, root, recID)
+	if err != nil {
+		t.Fatalf("ReadEditorRecovery failed: %v", err)
+	}
+	if string(readBack) != string(content) {
+		t.Fatalf("recovery content = %q, want %q", readBack, content)
+	}
+
+	if err := service.DeleteEditorRecovery(ctx, root, recID); err != nil {
+		t.Fatalf("DeleteEditorRecovery failed: %v", err)
+	}
+	if _, err := service.ReadEditorRecovery(ctx, root, recID); err == nil {
+		t.Fatal("expected ReadEditorRecovery to fail after deletion")
+	}
+}
+func TestSkillListBasisAwareAndFallback(t *testing.T) {
+	ctx := context.Background()
+	root := newSkillWorkspace(t)
+	service := SkillService{}
+
+	createAndActivateSkill(t, service, root)
+
+	// Create a draft skill too
+	draftPreview, err := service.PreviewCreate(ctx, root, skill.CreateInput{
+		ID:          "list-draft",
+		Collection:  "software",
+		Name:        "List Draft",
+		Description: "Draft in listing.",
+		Content:     []byte("# List Draft\n"),
+		Routing:     skill.RoutingInput{Triggers: []string{"draft"}, MinScope: "single_step"},
+	}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.ConfirmSkillMutation(ctx, root, draftPreview, draftPreview.Confirmation.Confirmation.Pins); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. List all skills
+	res, err := service.ListSkills(ctx, root, "")
+	if err != nil {
+		t.Fatalf("ListSkills failed: %v", err)
+	}
+	if len(res.Skills) != 2 {
+		t.Fatalf("expected 2 skills, got %d", len(res.Skills))
+	}
+	for _, entry := range res.Skills {
+		if entry.ID == "consumer-review" {
+			if entry.State != "active" || entry.LifecycleState != "active" || !entry.ActiveLocally || !entry.RoutingEligible {
+				t.Fatalf("active skill entry basis mismatch: %#v", entry)
+			}
+		}
+		if entry.ID == "list-draft" {
+			if entry.State != "draft" || entry.LifecycleState != "draft" || entry.ActiveLocally || entry.RoutingEligible {
+				t.Fatalf("draft skill entry basis mismatch: %#v", entry)
+			}
+		}
+	}
+
+	// 2. Filter by draft
+	draftRes, err := service.ListSkills(ctx, root, "draft")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(draftRes.Skills) != 1 || draftRes.Skills[0].ID != "list-draft" {
+		t.Fatalf("unexpected draft filter result: %#v", draftRes.Skills)
+	}
+
+	// 3. Fallback when workspace has invalid canonical file (BUG-07)
+	brokenDir := filepath.Join(root, "skills", "software", "broken")
+	_ = os.MkdirAll(brokenDir, 0o755)
+	_ = os.WriteFile(filepath.Join(brokenDir, "skill.meta.yaml"), []byte("invalid-yaml: ["), 0o600)
+
+	fallbackRes, err := service.ListSkills(ctx, root, "")
+	if err != nil {
+		t.Fatalf("ListSkills should succeed via fallback when canonical has invalid file, got: %v", err)
+	}
+	if len(fallbackRes.Skills) == 0 {
+		t.Fatal("expected fallback to serve skills from published generation")
+	}
+	if !strings.Contains(fallbackRes.Summary, "fallback generation") {
+		t.Fatalf("expected summary to mention fallback generation: %s", fallbackRes.Summary)
 	}
 }

@@ -50,7 +50,17 @@
         "routing_review_rationale": {"type": "string", "minLength": 1}
       }
     },
-    "provenance": {"type": "object"},
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "created_by": {"type": "string"},
+        "source_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"},
+        "revision": {"type": "string"},
+        "path": {"type": "string"},
+        "origin": {"$ref": "#/$defs/origin"}
+      }
+    },
     "history": {
       "type": "array",
       "items": {
@@ -68,6 +78,31 @@
     "updated_at": {"type": "string", "format": "date-time"}
   },
   "$defs": {
+    "origin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {"enum": ["github", "git", "local"]},
+        "repository": {"type": "string", "minLength": 1},
+        "ref": {"type": "string", "minLength": 1},
+        "commit": {"type": "string", "minLength": 1},
+        "path": {"type": "string", "pattern": "^([a-zA-Z0-9_.-]*[a-zA-Z0-9_-][a-zA-Z0-9_.-]*)(/[a-zA-Z0-9_.-]*[a-zA-Z0-9_-][a-zA-Z0-9_.-]*)*$"},
+        "name": {"type": "string", "pattern": "^[a-zA-Z0-9_.-]*[a-zA-Z0-9_-][a-zA-Z0-9_.-]*$"},
+        "folder_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "content_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "transformations": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "added_at": {"type": "string", "format": "date-time"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"kind": {"const": "local"}}},
+          "then": {
+            "not": {"required": ["repository"]}
+          }
+        }
+      ]
+    },
     "factRequirement": {"type": "object", "additionalProperties": false, "required": ["key", "value"], "properties": {"key": {"type": "string", "minLength": 1}, "value": {"type": "string", "minLength": 1}}},
     "factRequirements": {"type": "object", "additionalProperties": false, "properties": {"all": {"type": "array", "items": {"$ref": "#/$defs/factRequirement"}}, "any": {"type": "array", "items": {"$ref": "#/$defs/factRequirement"}}}},
     "capabilityRequirements": {"type": "object", "additionalProperties": false, "properties": {"all": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}, "any": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}}},

@@ -52,6 +52,7 @@ func expectedToolAnnotations() map[string][4]bool {
 		"source_intake_add": {false, false, true, false}, "source_intake_list": {true, false, false, false},
 		"source_triage": {false, false, false, true}, "source_check": {false, false, false, true},
 		"source_import_preview": {false, false, false, false}, "source_import_confirm": {false, true, true, false},
+		"source_watch_preview": {false, false, false, true}, "source_watch_confirm": {false, true, true, false},
 		"curation_run_start": {false, false, true, true}, "curation_run_submit": {false, false, false, false},
 		"curation_run_get": {true, false, true, false}, "curation_run_retry": {false, false, false, false},
 		"curation_run_cancel": {false, false, false, false}, "observation_list": {true, false, false, false},
@@ -61,6 +62,8 @@ func expectedToolAnnotations() map[string][4]bool {
 		"skill_create_preview": {false, false, false, false}, "skill_create_confirm": {false, true, true, false},
 		"skill_transition_preview": {false, false, false, false}, "skill_transition_confirm": {false, true, true, false},
 		"skill_list": {true, false, false, false}, "skill_get": {true, false, false, false},
+		"skill_add_preview": {false, false, false, true}, "skill_add_confirm": {false, true, true, false},
+		"skill_review":         {true, false, false, false},
 		"skill_update_preview": {false, false, false, false}, "skill_update_confirm": {false, true, true, false},
 		"routing_evaluate": {true, false, true, false}, "outcome_record": {false, false, true, false},
 		"curation_session_record": {false, false, true, false},
@@ -124,10 +127,13 @@ func TestModernAndLegacySDKContracts(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(listedTools.Tools) != 35 {
-				t.Fatalf("tool count = %d, want 35", len(listedTools.Tools))
-			}
 			wantAnnotations := expectedToolAnnotations()
+			if len(wantAnnotations) != 40 {
+				t.Fatalf("expectedToolAnnotations count = %d, want 40", len(wantAnnotations))
+			}
+			if len(listedTools.Tools) != len(wantAnnotations) {
+				t.Fatalf("tool count = %d, want %d", len(listedTools.Tools), len(wantAnnotations))
+			}
 			for _, tool := range listedTools.Tools {
 				inputSchema, _ := json.Marshal(tool.InputSchema)
 				if !strings.Contains(string(inputSchema), `"additionalProperties":false`) {
