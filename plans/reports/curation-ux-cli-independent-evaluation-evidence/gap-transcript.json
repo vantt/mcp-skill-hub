@@ -1,0 +1,250 @@
+[
+  {
+    "command": [
+      "/tmp/skillhub-cli-eval-FJVolj/skillhub",
+      "skill",
+      "show",
+      "reliability-review",
+      "--workspace",
+      "/tmp/skillhub-cli-eval-FJVolj/hub"
+    ],
+    "exit": 0,
+    "stdout": "Skill: Reliability Review (reliability-review)\nState: active\nFile: skills/software/reliability-review/SKILL.md\nTriggers: review reliability\nNot for: design service\nMin scope: multi_step\n\n---\nname: reliability-review\ndescription: Review reliability risks.\n---\n\n# Reliability Review\n\nReview reliability risks.\n\n## When to use\n\n- Describe when your agent should choose this skill.\n\n## Steps\n\n1. First step.\n2. Second step.\n\n## Examples\n\n- Example input or trigger scenario.\n\nDirect active edit.\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/tmp/skillhub-cli-eval-FJVolj/skillhub",
+      "skill",
+      "show",
+      "reliability-review",
+      "--workspace",
+      "/tmp/skillhub-cli-eval-FJVolj/hub"
+    ],
+    "exit": 2,
+    "stdout": "",
+    "stderr": "ERROR: The request cannot be accepted.\nWHY: search index is stale: canonical validation failed: skills/software/reliability-review/skill.meta.yaml: routing.min_scope must be single_step, multi_step, or project (run `skillhub validate` to inspect)\nFIX: Add `--min-scope <single_step|multi_step|project>`: run `skillhub skill edit reliability-review --min-scope single_step --yes`, then retry.\n"
+  },
+  {
+    "command": [
+      "/tmp/skillhub-cli-eval-FJVolj/skillhub",
+      "validate",
+      "--workspace",
+      "/tmp/skillhub-cli-eval-FJVolj/hub"
+    ],
+    "exit": 2,
+    "stdout": "",
+    "stderr": "Workspace validation failed:\n- skills/software/reliability-review/skill.meta.yaml:16: routing.min_scope must be single_step, multi_step, or project\n  FIX: Run `skillhub skill edit reliability-review --min-scope <single_step|multi_step|project> --yes`\n"
+  },
+  {
+    "command": [
+      "/tmp/skillhub-cli-eval-FJVolj/skillhub",
+      "skill",
+      "show",
+      "reliability-review",
+      "--workspace",
+      "/tmp/skillhub-cli-eval-FJVolj/hub"
+    ],
+    "exit": 0,
+    "stdout": "Skill: Reliability Review (reliability-review)\nState: active\nFile: skills/software/reliability-review/SKILL.md\nTriggers: review reliability\nNot for: design service\nMin scope: multi_step\n\n---\nname: reliability-review\ndescription: Review reliability risks.\n---\n\n# Reliability Review\n\nReview reliability risks.\n\n## When to use\n\n- Describe when your agent should choose this skill.\n\n## Steps\n\n1. First step.\n2. Second step.\n\n## Examples\n\n- Example input or trigger scenario.\n\nDirect active edit.\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/tmp/skillhub-cli-eval-FJVolj/skillhub",
+      "source",
+      "capture",
+      "runtime/incoming/fixture/references",
+      "--reason",
+      "Monitor disabled test",
+      "--json",
+      "--workspace",
+      "/tmp/skillhub-cli-eval-FJVolj/hub"
+    ],
+    "exit": 0,
+    "stdout": "{\"schema_version\":\"1\",\"status\":\"applied\",\"summary\":\"Source candidate captured; no network fetch or skill changes were made.\",\"items\":[{\"id\":\"SRCQ-9494AAD4B6B4\",\"summary\":\"runtime/incoming/fixture/references\",\"impact\":\"Pending source triage.\"}],\"suggested_actions\":[],\"warnings\":[],\"error\":null,\"candidate\":{\"schema_version\":1,\"id\":\"SRCQ-9494AAD4B6B4\",\"locator\":\"runtime/incoming/fixture/references\",\"captured_at\":\"2026-10-01T09:50:40.550206671Z\",\"reason\":\"Monitor disabled test\",\"status\":\"pending\"},\"operation_id\":\"OP-902e62d32f0ac400d635a34924bb071b\"}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/tmp/skillhub-cli-eval-FJVolj/skillhub",
+      "source",
+      "triage",
+      "SRCQ-9494AAD4B6B4",
+      "--decision",
+      "accept",
+      "--source-id",
+      "no-monitor-fixture",
+      "--no-monitor",
+      "--json",
+      "--workspace",
+      "/tmp/skillhub-cli-eval-FJVolj/hub"
+    ],
+    "exit": 0,
+    "stdout": "{\"schema_version\":\"1\",\"status\":\"action_required\",\"summary\":\"Source onboarding is ready for review.\",\"items\":[{\"id\":\"no-monitor-fixture\",\"summary\":\"references via filesystem at sha256:43de0b4a3107e6cf0cd76c7362a66732a9d00abb6004e6f6d44c92fd7b808452\",\"impact\":\"Watch weekly; trust community; license unknown.\"}],\"suggested_actions\":[{\"label\":\"Confirm the reviewed onboarding proposal\",\"command\":\"source confirm\",\"requires_confirmation\":true}],\"warnings\":[],\"error\":null,\"candidate_id\":\"SRCQ-9494AAD4B6B4\",\"source\":{\"schema_version\":1,\"id\":\"no-monitor-fixture\",\"adapter\":\"filesystem\",\"locator\":{\"path\":\"runtime/incoming/fixture/references\"},\"status\":\"watching\",\"identity\":{\"name\":\"references\",\"canonical\":\"runtime/incoming/fixture/references\",\"path\":\".\"},\"trust\":{\"source\":\"community\",\"reviewed\":false},\"monitoring\":{\"enabled\":true,\"cadence\":\"weekly\"},\"limits\":{\"timeout_seconds\":20,\"max_bytes\":8388608,\"max_files\":2048,\"max_file_bytes\":2097152},\"current_revision\":{\"kind\":\"filesystem-snapshot\",\"value\":\"sha256:43de0b4a3107e6cf0cd76c7362a66732a9d00abb6004e6f6d44c92fd7b808452\",\"content_digest\":\"sha256:43de0b4a3107e6cf0cd76c7362a66732a9d00abb6004e6f6d44c92fd7b808452\",\"observed_at\":\"2026-10-01T09:50:41.328407148Z\"}},\"diff\":{\"added\":[\"sources/catalog/no-monitor-fixture.yaml\"],\"modified\":[\"sources/intake/SRCQ-9494AAD4B6B4.yaml\"],\"deleted\":[]},\"confirmation\":{\"policy_revision\":\"policy_v1\",\"action_class\":\"semantic\",\"application_command\":\"TriageSourceCandidate\",\"confirmation\":{\"required\":true,\"mode\":\"preview-and-approval\",\"pins\":{\"proposal_id\":\"PROP-89389920f2c64d7aa872\",\"proposal_digest\":\"sha256:89389920f2c64d7aa8725dea9f17d543821061b2c240a67cac1abf11724a6756\",\"base_version\":\"sha256:5df6246a18a65ba0fc800e1107537359745a0193a3cda3a6bc7d27f5ed8d7527\"}}}}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/tmp/skillhub-cli-eval-FJVolj/skillhub",
+      "skill",
+      "create",
+      "--id",
+      "json-draft",
+      "--collection",
+      "core",
+      "--name",
+      "JSON draft",
+      "--description",
+      "Inspect draft effect",
+      "--yes",
+      "--json",
+      "--workspace",
+      "/tmp/skillhub-cli-eval-FJVolj/hub"
+    ],
+    "exit": 0,
+    "stdout": "{\"schema_version\":\"1\",\"status\":\"applied\",\"summary\":\"Draft skill json-draft saved.\",\"items\":[{\"id\":\"operation\",\"summary\":\"OP-484d09446c4f0317bfe7a93da8a2f868\",\"impact\":\"Immutable managed-mutation receipt.\"},{\"id\":\"catalog_snapshot\",\"summary\":\"sha256:1b16addf840a0611c1a6ebd97f3b5656622750ab0cee7b6b01efc11a6454cb1d\",\"impact\":\"Active local catalog version.\"},{\"id\":\"generation\",\"summary\":\"gen-68999193e7d4348e29b73910558b0091\",\"impact\":\"Published immutable catalog generation.\"},{\"id\":\"git_state\",\"summary\":\"Canonical changes are not committed to Git.\",\"impact\":\"Git commit remains user-controlled.\"}],\"suggested_actions\":[],\"warnings\":[],\"error\":null,\"skill_id\":\"json-draft\",\"state\":\"draft\",\"operation_id\":\"OP-484d09446c4f0317bfe7a93da8a2f868\",\"changed_paths\":[\"skills/core/json-draft/SKILL.md\",\"skills/core/json-draft/skill.meta.yaml\",\"history/operations/2026/10/OP-484d09446c4f0317bfe7a93da8a2f868.yaml\"],\"catalog_snapshot\":\"sha256:1b16addf840a0611c1a6ebd97f3b5656622750ab0cee7b6b01efc11a6454cb1d\",\"generation\":\"gen-68999193e7d4348e29b73910558b0091\",\"active_locally\":true,\"git_dirty\":true,\"proposal\":{\"schema_version\":\"1\",\"status\":\"action_required\",\"summary\":\"Draft skill creation is ready for review.\",\"items\":[{\"id\":\"PROP-519532a79cbc669cd8ac\",\"summary\":\"2 added, 0 modified, 0 deleted canonical file(s).\",\"impact\":\"No canonical files changed during preview.\"}],\"suggested_actions\":[{\"label\":\"Confirm the reviewed proposal\",\"command\":\"skill_create\",\"requires_confirmation\":true}],\"warnings\":[],\"error\":null,\"skill_id\":\"json-draft\",\"command\":\"skill_create\",\"diff\":{\"added\":[\"skills/core/json-draft/SKILL.md\",\"skills/core/json-draft/skill.meta.yaml\"],\"modified\":null,\"deleted\":null},\"confirmation\":{\"policy_revision\":\"policy_v1\",\"action_class\":\"semantic\",\"application_command\":\"skill_create\",\"confirmation\":{\"required\":true,\"mode\":\"preview-and-approval\",\"pins\":{\"proposal_id\":\"PROP-519532a79cbc669cd8ac\",\"proposal_digest\":\"sha256:519532a79cbc669cd8ac3a334b48c725cd27b5077b33a94ac8838e703b1670ad\",\"base_version\":\"sha256:5df6246a18a65ba0fc800e1107537359745a0193a3cda3a6bc7d27f5ed8d7527\"}}},\"routing_impact\":{\"summary\":\"Direct routing fields for json-draft were evaluated against sha256:5df6246a18a65ba0fc800e1107537359745a0193a3cda3a6bc7d27f5ed8d7527.\",\"warnings\":null}}}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "-C",
+      "/tmp/skillhub-cli-eval-FJVolj/hub",
+      "add",
+      "-A"
+    ],
+    "exit": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "-C",
+      "/tmp/skillhub-cli-eval-FJVolj/hub",
+      "add",
+      "skills/software/reliability-review/SKILL.md"
+    ],
+    "exit": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/tmp/skillhub-cli-eval-FJVolj/skillhub",
+      "validate",
+      "--workspace",
+      "/tmp/skillhub-cli-eval-FJVolj/hub"
+    ],
+    "exit": 0,
+    "stdout": "Workspace validation passed.\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "-C",
+      "/tmp/skillhub-cli-eval-FJVolj/hub",
+      "checkout-index",
+      "--all",
+      "--prefix=/tmp/skillhub-cli-eval-FJVolj/staged-complete/"
+    ],
+    "exit": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "init",
+      "--template=",
+      "/tmp/skillhub-cli-eval-FJVolj/staged-complete"
+    ],
+    "exit": 0,
+    "stdout": "Initialized empty Git repository in /tmp/skillhub-cli-eval-FJVolj/staged-complete/.git/\n",
+    "stderr": "hint: Using 'master' as the name for the initial branch. This default branch name\nhint: is subject to change. To configure the initial branch name to use in all\nhint: of your new repositories, which will suppress this warning, call:\nhint: \nhint: \tgit config --global init.defaultBranch <name>\nhint: \nhint: Names commonly chosen instead of 'master' are 'main', 'trunk' and\nhint: 'development'. The just-created branch can be renamed via this command:\nhint: \nhint: \tgit branch -m <name>\n"
+  },
+  {
+    "command": [
+      "/tmp/skillhub-cli-eval-FJVolj/skillhub",
+      "validate",
+      "--workspace",
+      "/tmp/skillhub-cli-eval-FJVolj/staged-complete"
+    ],
+    "exit": 2,
+    "stdout": "",
+    "stderr": "Workspace validation failed:\n- skills/software/reliability-review/SKILL.md:2: SKILL.md frontmatter name \"wrong-name\" does not match skill ID \"reliability-review\"\n  FIX: Update frontmatter name to \"reliability-review\", remove the name field, or use `skillhub skill edit reliability-review`.\n"
+  },
+  {
+    "command": [
+      "git",
+      "-C",
+      "/tmp/skillhub-cli-eval-FJVolj/hub",
+      "add",
+      "skills/software/reliability-review/SKILL.md"
+    ],
+    "exit": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/tmp/skillhub-cli-eval-FJVolj/skillhub",
+      "validate",
+      "--workspace",
+      "/tmp/skillhub-cli-eval-FJVolj/hub"
+    ],
+    "exit": 2,
+    "stdout": "",
+    "stderr": "Workspace validation failed:\n- skills/software/reliability-review/skill.meta.yaml:16: routing.min_scope must be single_step, multi_step, or project\n  FIX: Run `skillhub skill edit reliability-review --min-scope <single_step|multi_step|project> --yes`\n"
+  },
+  {
+    "command": [
+      "git",
+      "-C",
+      "/tmp/skillhub-cli-eval-FJVolj/hub",
+      "checkout-index",
+      "--all",
+      "--prefix=/tmp/skillhub-cli-eval-FJVolj/staged-inverse/"
+    ],
+    "exit": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "init",
+      "--template=",
+      "/tmp/skillhub-cli-eval-FJVolj/staged-inverse"
+    ],
+    "exit": 0,
+    "stdout": "Initialized empty Git repository in /tmp/skillhub-cli-eval-FJVolj/staged-inverse/.git/\n",
+    "stderr": "hint: Using 'master' as the name for the initial branch. This default branch name\nhint: is subject to change. To configure the initial branch name to use in all\nhint: of your new repositories, which will suppress this warning, call:\nhint: \nhint: \tgit config --global init.defaultBranch <name>\nhint: \nhint: Names commonly chosen instead of 'master' are 'main', 'trunk' and\nhint: 'development'. The just-created branch can be renamed via this command:\nhint: \nhint: \tgit branch -m <name>\n"
+  },
+  {
+    "command": [
+      "/tmp/skillhub-cli-eval-FJVolj/skillhub",
+      "validate",
+      "--workspace",
+      "/tmp/skillhub-cli-eval-FJVolj/staged-inverse"
+    ],
+    "exit": 0,
+    "stdout": "Workspace validation passed.\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/tmp/skillhub-cli-eval-FJVolj/skillhub",
+      "skill",
+      "show",
+      "reliability-review",
+      "--workspace",
+      "/tmp/skillhub-cli-eval-FJVolj/hub"
+    ],
+    "exit": 0,
+    "stdout": "Skill: Reliability Review (reliability-review)\nState: active\nFile: skills/software/reliability-review/SKILL.md\nTriggers: review reliability\nNot for: design service\nMin scope: multi_step\n\n---\nname: reliability-review\ndescription: Review reliability risks.\n---\n\n# Reliability Review\n\nReview reliability risks.\n\n## When to use\n\n- Describe when your agent should choose this skill.\n\n## Steps\n\n1. First step.\n2. Second step.\n\n## Examples\n\n- Example input or trigger scenario.\n\nDirect active edit.\n",
+    "stderr": ""
+  }
+]

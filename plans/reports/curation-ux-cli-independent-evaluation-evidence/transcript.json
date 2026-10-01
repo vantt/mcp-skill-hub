@@ -1,0 +1,412 @@
+[
+  {
+    "command": [
+      "/tmp/skillhub-cli-eval-FJVolj/skillhub",
+      "skill",
+      "edit",
+      "reliability-review",
+      "--editor",
+      "--full-diff",
+      "--workspace",
+      "/tmp/skillhub-cli-eval-FJVolj/hub"
+    ],
+    "exit": 0,
+    "stdout": "Skill edit is ready for review.\n- 0 added, 2 modified, 0 deleted file(s).\n- Proposal: PROP-a3aaa55355feffc16ab2\n- Digest: sha256:a3aaa55355feffc16ab24102b3c8ddb1ffa909c291075e133d6eddaf3a4014bf\n- Base version: sha256:570f2ec70db12433efe63e16af1f1d6463417045f19ea05c2b47bd207972f500\n--- a/skills/software/reliability-review/SKILL.md\n+++ b/skills/software/reliability-review/SKILL.md\n----\n-name: reliability-review\n-description: Review reliability risks.\n----\n-\n-# Reliability Review\n-\n-Review reliability risks.\n-\n-## When to use\n-\n-- Describe when your agent should choose this skill.\n-\n-## Steps\n-\n-1. First step.\n-2. Second step.\n-\n-## Examples\n-\n-- Example input or trigger scenario.\n+---\n+name: reliability-review\n+description: Review reliability risks.\n+---\n+\n+# Reliability Review\n+\n+Review reliability risks.\n+\n+## When to use\n+\n+- Describe when your agent should choose this skill.\n+\n+## Steps\n+\n+1. First step.\n+2. Second step.\n+\n+## Examples\n+\n+- Example input or trigger scenario.\n+\n+Editor A added this instruction.\n--- a/skills/software/reliability-review/skill.meta.yaml\n+++ b/skills/software/reliability-review/skill.meta.yaml\n-created_at: \"2026-10-01T09:47:25.62155791Z\"\n-description: Review reliability risks.\n-history:\n-    - occurred_at: \"2026-10-01T09:47:25.62155791Z\"\n-      state: draft\n-id: reliability-review\n-name: Reliability Review\n-provenance:\n-    created_by: skillhub\n-quality:\n-    reviewed: false\n-routing:\n-    min_scope: multi_step\n-    not_for:\n-        - design service\n-    operations: []\n-    triggers:\n-        - review reliability\n-schema_version: 1\n-status: draft\n-updated_at: \"2026-10-01T09:47:25.62155791Z\"\n+created_at: \"2026-10-01T09:47:25.62155791Z\"\n+description: Review reliability risks.\n+history:\n+    - occurred_at: \"2026-10-01T09:47:25.62155791Z\"\n+      state: draft\n+id: reliability-review\n+name: Reliability Review\n+provenance:\n+    created_by: skillhub\n+quality:\n+    reviewed: false\n+routing:\n+    min_scope: multi_step\n+    not_for:\n+        - design service\n+    operations: []\n+    triggers:\n+        - review reliability\n+schema_version: 1\n+status: draft\n+updated_at: \"2026-10-01T09:48:56.114289794Z\"\n\nNo files changed. Confirm with:\n  skillhub skill confirm --proposal PROP-a3aaa55355feffc16ab2 --proposal-digest sha256:a3aaa55355feffc16ab24102b3c8ddb1ffa909c291075e133d6eddaf3a4014bf --base-version sha256:570f2ec70db12433efe63e16af1f1d6463417045f19ea05c2b47bd207972f500\nor re-run with --yes to apply directly.\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/tmp/skillhub-cli-eval-FJVolj/skillhub",
+      "skill",
+      "activate",
+      "reliability-review",
+      "--yes",
+      "--workspace",
+      "/tmp/skillhub-cli-eval-FJVolj/hub"
+    ],
+    "exit": 0,
+    "stdout": "Skill reliability-review is now active.\nNext: ask your agent to use it, or inspect with `skillhub skill show reliability-review`. Commit with `git -C <ws> commit`.\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/tmp/skillhub-cli-eval-FJVolj/skillhub",
+      "skill",
+      "show",
+      "reliability-review",
+      "--workspace",
+      "/tmp/skillhub-cli-eval-FJVolj/hub"
+    ],
+    "exit": 0,
+    "stdout": "Skill: Reliability Review (reliability-review)\nState: active\nFile: skills/software/reliability-review/SKILL.md\nTriggers: review reliability\nNot for: design service\nMin scope: multi_step\n\n---\nname: reliability-review\ndescription: Review reliability risks.\n---\n\n# Reliability Review\n\nReview reliability risks.\n\n## When to use\n\n- Describe when your agent should choose this skill.\n\n## Steps\n\n1. First step.\n2. Second step.\n\n## Examples\n\n- Example input or trigger scenario.\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/tmp/skillhub-cli-eval-FJVolj/skillhub",
+      "diff",
+      "--workspace",
+      "/tmp/skillhub-cli-eval-FJVolj/hub"
+    ],
+    "exit": 0,
+    "stdout": "Git has 6 uncommitted file(s).\nactive skills (2):\n  untracked  skills/software/reliability-review/SKILL.md\n  untracked  skills/software/reliability-review/skill.meta.yaml\noperation history (2):\n  untracked  history/operations/2026/10/OP-60d7f55ab8b832d58d480052b5dcbe68.yaml\n  untracked  history/operations/2026/10/OP-c8736331654ef94db6bcdec08c286e64.yaml\nworkspace config (2):\n  untracked  .gitignore\n  untracked  .skillhub/schema-version\n\nTo commit these changes, run:\n  git -C /tmp/skillhub-cli-eval-FJVolj/hub add -A && git -C /tmp/skillhub-cli-eval-FJVolj/hub commit -m \"...\"\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/tmp/skillhub-cli-eval-FJVolj/skillhub",
+      "source",
+      "capture",
+      "runtime/incoming/fixture",
+      "--reason",
+      "Controlled bounded fixture",
+      "--json",
+      "--workspace",
+      "/tmp/skillhub-cli-eval-FJVolj/hub"
+    ],
+    "exit": 0,
+    "stdout": "{\"schema_version\":\"1\",\"status\":\"applied\",\"summary\":\"Source candidate captured; no network fetch or skill changes were made.\",\"items\":[{\"id\":\"SRCQ-47F1282621BD\",\"summary\":\"runtime/incoming/fixture\",\"impact\":\"Pending source triage.\"}],\"suggested_actions\":[],\"warnings\":[],\"error\":null,\"candidate\":{\"schema_version\":1,\"id\":\"SRCQ-47F1282621BD\",\"locator\":\"runtime/incoming/fixture\",\"captured_at\":\"2026-10-01T09:48:57.056693501Z\",\"reason\":\"Controlled bounded fixture\",\"status\":\"pending\"},\"operation_id\":\"OP-60fabaca9e35ad83c3b9328ef0ddc6cc\"}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/tmp/skillhub-cli-eval-FJVolj/skillhub",
+      "source",
+      "triage",
+      "SRCQ-47F1282621BD",
+      "--decision",
+      "accept",
+      "--source-id",
+      "fixture",
+      "--adapter",
+      "filesystem",
+      "--json",
+      "--workspace",
+      "/tmp/skillhub-cli-eval-FJVolj/hub"
+    ],
+    "exit": 0,
+    "stdout": "{\"schema_version\":\"1\",\"status\":\"action_required\",\"summary\":\"Source onboarding is ready for review.\",\"items\":[{\"id\":\"fixture\",\"summary\":\"fixture via filesystem at sha256:6a27a7ea12ab990d51d3d635c73834ee12d5bed1f5d503ea9266389feb387949\",\"impact\":\"Watch weekly; trust community; license unknown.\"}],\"suggested_actions\":[{\"label\":\"Confirm the reviewed onboarding proposal\",\"command\":\"source confirm\",\"requires_confirmation\":true}],\"warnings\":[],\"error\":null,\"candidate_id\":\"SRCQ-47F1282621BD\",\"source\":{\"schema_version\":1,\"id\":\"fixture\",\"adapter\":\"filesystem\",\"locator\":{\"path\":\"runtime/incoming/fixture\"},\"status\":\"watching\",\"identity\":{\"name\":\"fixture\",\"canonical\":\"runtime/incoming/fixture\",\"path\":\".\"},\"trust\":{\"source\":\"community\",\"reviewed\":false},\"monitoring\":{\"enabled\":true,\"cadence\":\"weekly\"},\"limits\":{\"timeout_seconds\":20,\"max_bytes\":8388608,\"max_files\":2048,\"max_file_bytes\":2097152},\"current_revision\":{\"kind\":\"filesystem-snapshot\",\"value\":\"sha256:6a27a7ea12ab990d51d3d635c73834ee12d5bed1f5d503ea9266389feb387949\",\"content_digest\":\"sha256:6a27a7ea12ab990d51d3d635c73834ee12d5bed1f5d503ea9266389feb387949\",\"observed_at\":\"2026-10-01T09:48:57.700850363Z\"}},\"diff\":{\"added\":[\"sources/catalog/fixture.yaml\"],\"modified\":[\"sources/intake/SRCQ-47F1282621BD.yaml\"],\"deleted\":[]},\"confirmation\":{\"policy_revision\":\"policy_v1\",\"action_class\":\"semantic\",\"application_command\":\"TriageSourceCandidate\",\"confirmation\":{\"required\":true,\"mode\":\"preview-and-approval\",\"pins\":{\"proposal_id\":\"PROP-6d71d8c0bb43fe99947a\",\"proposal_digest\":\"sha256:6d71d8c0bb43fe99947ad73988ed70608bf6a138ae971f59cd41e60c151880f9\",\"base_version\":\"sha256:e790a63487f4d254c8de7e658baf15ac811e99b4cdd157d83201ef54944f3365\"}}}}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/tmp/skillhub-cli-eval-FJVolj/skillhub",
+      "source",
+      "confirm",
+      "--proposal",
+      "PROP-6d71d8c0bb43fe99947a",
+      "--proposal-digest",
+      "sha256:6d71d8c0bb43fe99947ad73988ed70608bf6a138ae971f59cd41e60c151880f9",
+      "--base-version",
+      "sha256:e790a63487f4d254c8de7e658baf15ac811e99b4cdd157d83201ef54944f3365",
+      "--workspace",
+      "/tmp/skillhub-cli-eval-FJVolj/hub"
+    ],
+    "exit": 0,
+    "stdout": "Watching fixture. First analysis is ready: ask your agent 'distill new sources' or run `skillhub distill prepare fixture`.\nWatching does not auto-import skills; accepted insights can create draft skills.\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/tmp/skillhub-cli-eval-FJVolj/skillhub",
+      "source",
+      "import",
+      "fixture",
+      "--workspace",
+      "/tmp/skillhub-cli-eval-FJVolj/hub"
+    ],
+    "exit": 0,
+    "stdout": "Found 1 skill(s) (1 importable, 0 skipped).\n- fixture-review -> fixture-review [draft] (importable)\n\nProposal: PROP-5d669e3eeef74663f625\nDigest: sha256:5d669e3eeef74663f62592ee445f404e05382075c1a80f3f142d7ef900b40fc9\nBase version: sha256:e790a63487f4d254c8de7e658baf15ac811e99b4cdd157d83201ef54944f3365\nConfirm with:\n  skillhub source import fixture --proposal PROP-5d669e3eeef74663f625 --proposal-digest sha256:5d669e3eeef74663f62592ee445f404e05382075c1a80f3f142d7ef900b40fc9 --base-version sha256:e790a63487f4d254c8de7e658baf15ac811e99b4cdd157d83201ef54944f3365\nor re-run with --yes to import directly.\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/tmp/skillhub-cli-eval-FJVolj/skillhub",
+      "source",
+      "import",
+      "fixture",
+      "--yes",
+      "--workspace",
+      "/tmp/skillhub-cli-eval-FJVolj/hub"
+    ],
+    "exit": 0,
+    "stdout": "Imported 1 draft skill (fixture-review). Next: review with `skillhub skill show fixture-review`, then `skillhub skill activate fixture-review --yes` (or ask your agent).\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/tmp/skillhub-cli-eval-FJVolj/skillhub",
+      "source",
+      "import",
+      "fixture",
+      "--yes",
+      "--workspace",
+      "/tmp/skillhub-cli-eval-FJVolj/hub"
+    ],
+    "exit": 0,
+    "stdout": "Found 1 skill(s) (0 importable, 1 skipped).\n- skipped fixture-review: Skill \"fixture-review\" already exists in workspace\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/tmp/skillhub-cli-eval-FJVolj/skillhub",
+      "skill",
+      "show",
+      "fixture-review",
+      "--workspace",
+      "/tmp/skillhub-cli-eval-FJVolj/hub"
+    ],
+    "exit": 0,
+    "stdout": "Skill: fixture-review (fixture-review)\nState: draft\nFile: skills/default/fixture-review/SKILL.md\nTriggers: (none)\nNot for: (none)\nMin scope: (none)\n\n---\nname: fixture-review\ndescription: Review a bounded fixture.\n---\n\n\n# Fixture Review\n\nRead the supplied change and report a reproducible defect with evidence.\n\nDirect draft edit.\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/tmp/skillhub-cli-eval-FJVolj/skillhub",
+      "skill",
+      "show",
+      "reliability-review",
+      "--workspace",
+      "/tmp/skillhub-cli-eval-FJVolj/hub"
+    ],
+    "exit": 0,
+    "stdout": "Skill: Reliability Review (reliability-review)\nState: active\nFile: skills/software/reliability-review/SKILL.md\nTriggers: review reliability\nNot for: design service\nMin scope: multi_step\n\n---\nname: reliability-review\ndescription: Review reliability risks.\n---\n\n# Reliability Review\n\nReview reliability risks.\n\n## When to use\n\n- Describe when your agent should choose this skill.\n\n## Steps\n\n1. First step.\n2. Second step.\n\n## Examples\n\n- Example input or trigger scenario.\n\nDirect active edit.\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/tmp/skillhub-cli-eval-FJVolj/skillhub",
+      "skill",
+      "show",
+      "reliability-review",
+      "--workspace",
+      "/tmp/skillhub-cli-eval-FJVolj/hub"
+    ],
+    "exit": 0,
+    "stdout": "Skill: Reliability Review (reliability-review)\nState: active\nFile: skills/software/reliability-review/SKILL.md\nTriggers: review reliability\nNot for: design service\nMin scope: multi_step\n\n---\nname: [invalid\n---\nBad edit\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/tmp/skillhub-cli-eval-FJVolj/skillhub",
+      "validate",
+      "--workspace",
+      "/tmp/skillhub-cli-eval-FJVolj/hub"
+    ],
+    "exit": 2,
+    "stdout": "",
+    "stderr": "Workspace validation failed:\n- skills/software/reliability-review/SKILL.md:2: SKILL.md frontmatter name \"[invalid\" does not match skill ID \"reliability-review\"\n  FIX: Update frontmatter name to \"reliability-review\", remove the name field, or use `skillhub skill edit reliability-review`.\n"
+  },
+  {
+    "command": [
+      "/tmp/skillhub-cli-eval-FJVolj/skillhub",
+      "skill",
+      "show",
+      "reliability-review",
+      "--workspace",
+      "/tmp/skillhub-cli-eval-FJVolj/hub"
+    ],
+    "exit": 0,
+    "stdout": "Skill: Reliability Review (reliability-review)\nState: active\nFile: skills/software/reliability-review/SKILL.md\nTriggers: review reliability\nNot for: design service\nMin scope: multi_step\n\n---\nname: reliability-review\ndescription: Review reliability risks.\n---\n\n# Reliability Review\n\nReview reliability risks.\n\n## When to use\n\n- Describe when your agent should choose this skill.\n\n## Steps\n\n1. First step.\n2. Second step.\n\n## Examples\n\n- Example input or trigger scenario.\n\nDirect active edit.\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/tmp/skillhub-cli-eval-FJVolj/skillhub",
+      "skill",
+      "edit",
+      "reliability-review",
+      "--editor",
+      "--full-diff",
+      "--json",
+      "--workspace",
+      "/tmp/skillhub-cli-eval-FJVolj/hub"
+    ],
+    "exit": 0,
+    "stdout": "{\"schema_version\":\"1\",\"status\":\"action_required\",\"summary\":\"Skill edit is ready for review.\",\"items\":[{\"id\":\"PROP-3d86fd8f8c190df5b9fe\",\"summary\":\"0 added, 2 modified, 0 deleted canonical file(s).\",\"impact\":\"No canonical files changed during preview.\"}],\"suggested_actions\":[{\"label\":\"Confirm the reviewed proposal\",\"command\":\"skill_edit\",\"requires_confirmation\":true}],\"warnings\":[],\"error\":null,\"skill_id\":\"reliability-review\",\"command\":\"skill_edit\",\"diff\":{\"added\":null,\"modified\":[\"skills/software/reliability-review/SKILL.md\",\"skills/software/reliability-review/skill.meta.yaml\"],\"deleted\":null},\"full_diff\":\"--- a/skills/software/reliability-review/SKILL.md\\n+++ b/skills/software/reliability-review/SKILL.md\\n----\\n-name: reliability-review\\n-description: Writer B description\\n----\\n-\\n-# Reliability Review\\n-\\n-Review reliability risks.\\n-\\n-## When to use\\n-\\n-- Describe when your agent should choose this skill.\\n-\\n-## Steps\\n-\\n-1. First step.\\n-2. Second step.\\n-\\n-## Examples\\n-\\n-- Example input or trigger scenario.\\n-\\n-Direct active edit.\\n+---\\n+name: reliability-review\\n+description: Review reliability risks.\\n+---\\n+\\n+# Reliability Review\\n+\\n+Review reliability risks.\\n+\\n+## When to use\\n+\\n+- Describe when your agent should choose this skill.\\n+\\n+## Steps\\n+\\n+1. First step.\\n+2. Second step.\\n+\\n+## Examples\\n+\\n+- Example input or trigger scenario.\\n+\\n+Direct active edit.\\n+\\n+Editor A added this instruction.\\n--- a/skills/software/reliability-review/skill.meta.yaml\\n+++ b/skills/software/reliability-review/skill.meta.yaml\\n-created_at: \\\"2026-10-01T09:47:25.62155791Z\\\"\\n-description: Writer B description\\n-history:\\n-    - occurred_at: \\\"2026-10-01T09:47:25.62155791Z\\\"\\n-      state: draft\\n-    - from: draft\\n-      occurred_at: \\\"2026-10-01T09:48:56.338268838Z\\\"\\n-      state: active\\n-id: reliability-review\\n-name: Reliability Review\\n-provenance:\\n-    created_by: skillhub\\n-quality:\\n-    reviewed: true\\n-routing:\\n-    min_scope: multi_step\\n-    not_for:\\n-        - design service\\n-    operations: []\\n-    triggers:\\n-        - review reliability\\n-schema_version: 1\\n-status: active\\n-updated_at: \\\"2026-10-01T09:48:59.9938727Z\\\"\\n+created_at: \\\"2026-10-01T09:47:25.62155791Z\\\"\\n+description: Writer B description\\n+history:\\n+    - occurred_at: \\\"2026-10-01T09:47:25.62155791Z\\\"\\n+      state: draft\\n+    - from: draft\\n+      occurred_at: \\\"2026-10-01T09:48:56.338268838Z\\\"\\n+      state: active\\n+id: reliability-review\\n+name: Reliability Review\\n+provenance:\\n+    created_by: skillhub\\n+quality:\\n+    reviewed: true\\n+routing:\\n+    min_scope: multi_step\\n+    not_for:\\n+        - design service\\n+    operations: []\\n+    triggers:\\n+        - review reliability\\n+schema_version: 1\\n+status: active\\n+updated_at: \\\"2026-10-01T09:49:00.740309465Z\\\"\\n\",\"confirmation\":{\"policy_revision\":\"policy_v1\",\"action_class\":\"semantic\",\"application_command\":\"skill_edit\",\"confirmation\":{\"required\":true,\"mode\":\"preview-and-approval\",\"pins\":{\"proposal_id\":\"PROP-3d86fd8f8c190df5b9fe\",\"proposal_digest\":\"sha256:3d86fd8f8c190df5b9fe5028aa9a3fe0226683455513761468e593032085b624\",\"base_version\":\"sha256:33ce53f4a1c4636eb43900221ba5b8ce9534f44ebb983d24fc119b003bf83239\"}}}}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/tmp/skillhub-cli-eval-FJVolj/skillhub",
+      "skill",
+      "confirm",
+      "--proposal",
+      "PROP-3d86fd8f8c190df5b9fe",
+      "--proposal-digest",
+      "sha256:3d86fd8f8c190df5b9fe5028aa9a3fe0226683455513761468e593032085b624",
+      "--base-version",
+      "sha256:33ce53f4a1c4636eb43900221ba5b8ce9534f44ebb983d24fc119b003bf83239",
+      "--workspace",
+      "/tmp/skillhub-cli-eval-FJVolj/hub"
+    ],
+    "exit": 0,
+    "stdout": "Skill reliability-review updated; it is active.\nNext: ask your agent to use it, or inspect with `skillhub skill show reliability-review`. Commit with `git -C <ws> commit`.\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/tmp/skillhub-cli-eval-FJVolj/skillhub",
+      "skill",
+      "show",
+      "reliability-review",
+      "--workspace",
+      "/tmp/skillhub-cli-eval-FJVolj/hub"
+    ],
+    "exit": 0,
+    "stdout": "Skill: Reliability Review (reliability-review)\nState: active\nFile: skills/software/reliability-review/SKILL.md\nTriggers: review reliability\nNot for: design service\nMin scope: multi_step\n\n---\nname: reliability-review\ndescription: Review reliability risks.\n---\n\n# Reliability Review\n\nReview reliability risks.\n\n## When to use\n\n- Describe when your agent should choose this skill.\n\n## Steps\n\n1. First step.\n2. Second step.\n\n## Examples\n\n- Example input or trigger scenario.\n\nDirect active edit.\n\nEditor A added this instruction.\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "-C",
+      "/tmp/skillhub-cli-eval-FJVolj/hub",
+      "add",
+      "skills/software/reliability-review"
+    ],
+    "exit": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "-C",
+      "/tmp/skillhub-cli-eval-FJVolj/hub",
+      "add",
+      "skills/software/reliability-review/SKILL.md"
+    ],
+    "exit": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/tmp/skillhub-cli-eval-FJVolj/skillhub",
+      "validate",
+      "--workspace",
+      "/tmp/skillhub-cli-eval-FJVolj/hub"
+    ],
+    "exit": 0,
+    "stdout": "Workspace validation passed.\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "-C",
+      "/tmp/skillhub-cli-eval-FJVolj/hub",
+      "add",
+      ".skillhub/schema-version"
+    ],
+    "exit": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "-C",
+      "/tmp/skillhub-cli-eval-FJVolj/hub",
+      "checkout-index",
+      "--all",
+      "--prefix=/tmp/skillhub-cli-eval-FJVolj/staged/"
+    ],
+    "exit": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/tmp/skillhub-cli-eval-FJVolj/skillhub",
+      "validate",
+      "--workspace",
+      "/tmp/skillhub-cli-eval-FJVolj/staged"
+    ],
+    "exit": 2,
+    "stdout": "",
+    "stderr": "Workspace validation failed:\n- .git: Workspace is not a Git repository.\n  FIX: Correct this file and run `skillhub validate`.\n- .gitignore: Required Git ignore entry is missing: /.skillhub/transactions/\n  FIX: Correct this file and run `skillhub validate`.\n- .gitignore: Required Git ignore entry is missing: /runtime/\n  FIX: Correct this file and run `skillhub validate`.\n- config/schemas: Required canonical directory is missing.\n  FIX: Correct this file and run `skillhub validate`.\n- distill/comparisons: Required canonical directory is missing.\n  FIX: Correct this file and run `skillhub validate`.\n- distill/skills: Required canonical directory is missing.\n  FIX: Correct this file and run `skillhub validate`.\n- distill/sources: Required canonical directory is missing.\n  FIX: Correct this file and run `skillhub validate`.\n- evals/routing/cases: Required canonical directory is missing.\n  FIX: Correct this file and run `skillhub validate`.\n- evals/routing/suites: Required canonical directory is missing.\n  FIX: Correct this file and run `skillhub validate`.\n- history/operations: Required canonical directory is missing.\n  FIX: Correct this file and run `skillhub validate`.\n- registry/collections: Required canonical directory is missing.\n  FIX: Correct this file and run `skillhub validate`.\n- sources/catalog: Required canonical directory is missing.\n  FIX: Correct this file and run `skillhub validate`.\n- sources/intake: Required canonical directory is missing.\n  FIX: Correct this file and run `skillhub validate`.\n- sources/skills: Required canonical directory is missing.\n  FIX: Correct this file and run `skillhub validate`.\n- skills/software/reliability-review/SKILL.md:2: SKILL.md frontmatter name \"[invalid\" does not match skill ID \"reliability-review\"\n  FIX: Update frontmatter name to \"reliability-review\", remove the name field, or use `skillhub skill edit reliability-review`.\n"
+  },
+  {
+    "command": [
+      "git",
+      "-C",
+      "/tmp/skillhub-cli-eval-FJVolj/hub",
+      "show",
+      ":skills/software/reliability-review/SKILL.md"
+    ],
+    "exit": 0,
+    "stdout": "---\nname: [invalid\n---\nBad staged edit\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/tmp/skillhub-cli-eval-FJVolj/skillhub",
+      "source",
+      "capture",
+      "/tmp/skillhub-cli-eval-FJVolj/hub/incoming/fixture",
+      "--reason",
+      "Absolute path trial",
+      "--workspace",
+      "/tmp/skillhub-cli-eval-FJVolj/hub"
+    ],
+    "exit": 2,
+    "stdout": "",
+    "stderr": "ERROR: The request cannot be accepted.\nWHY: invalid source locator\nFIX: Correct the source locator, policy, or workspace state and retry.\n"
+  },
+  {
+    "command": [
+      "/tmp/skillhub-cli-eval-FJVolj/skillhub",
+      "source",
+      "capture",
+      "https://github.com/owner/repo/tree/feature/foo/skills/check",
+      "--reason",
+      "Folder URL trial",
+      "--workspace",
+      "/tmp/skillhub-cli-eval-FJVolj/hub"
+    ],
+    "exit": 0,
+    "stdout": "Source candidate captured; no network fetch or skill changes were made.\nCandidate: SRCQ-EADC921787F0\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/tmp/skillhub-cli-eval-FJVolj/skillhub",
+      "skill",
+      "add",
+      "incoming/fixture",
+      "--workspace",
+      "/tmp/skillhub-cli-eval-FJVolj/hub"
+    ],
+    "exit": 2,
+    "stdout": "",
+    "stderr": "ERROR: The request cannot be accepted.\nWHY: unsupported skill subcommand \"add\"\nFIX: Review `skillhub skill add` arguments and retry.\n"
+  },
+  {
+    "command": [
+      "/tmp/skillhub-cli-eval-FJVolj/skillhub",
+      "source",
+      "watch",
+      "incoming/fixture",
+      "--workspace",
+      "/tmp/skillhub-cli-eval-FJVolj/hub"
+    ],
+    "exit": 2,
+    "stdout": "",
+    "stderr": "ERROR: The request cannot be accepted.\nWHY: unsupported source subcommand \"watch\"\nFIX: Run `skillhub source capture|list|show|triage|confirm|import`.\n"
+  },
+  {
+    "command": [
+      "/tmp/skillhub-cli-eval-FJVolj/skillhub",
+      "skill",
+      "review",
+      "fixture-review",
+      "--workspace",
+      "/tmp/skillhub-cli-eval-FJVolj/hub"
+    ],
+    "exit": 2,
+    "stdout": "",
+    "stderr": "ERROR: The request cannot be accepted.\nWHY: unsupported skill subcommand \"review\"\nFIX: Review `skillhub skill review` arguments and retry.\n"
+  }
+]
