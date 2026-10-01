@@ -408,7 +408,7 @@ jobs:
           sed -e "s/^\$DEFAULT_VERSION = '@SKILLHUB_VERSION@'/\$DEFAULT_VERSION = '${VERSION}'/" scripts/install.ps1 > release/install.ps1
           chmod 0644 release/install.ps1
           grep -Eq "^DEFAULT_VERSION='${VERSION}'\$" release/install.sh || { echo "ERROR: DEFAULT_VERSION not stamped in install.sh" >&2; exit 1; }
-          grep -Eq "^\$DEFAULT_VERSION = '${VERSION}'\$" release/install.ps1 || { echo "ERROR: DEFAULT_VERSION not stamped in install.ps1" >&2; exit 1; }
+          grep -Fq "\$DEFAULT_VERSION = '${VERSION}'" release/install.ps1 || { echo "ERROR: DEFAULT_VERSION not stamped in install.ps1" >&2; exit 1; }
 
       - name: Generate deterministic checksums
         shell: bash
