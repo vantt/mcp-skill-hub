@@ -28,13 +28,18 @@ func TestAuthorizedLocalRootLifecycleAndSerializationProtection(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	realSourceDir, err := filepath.EvalSymlinks(sourceDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	// Direct directory
 	authRoot, err := NewAuthorizedLocalRoot(sourceDir)
 	if err != nil {
 		t.Fatalf("NewAuthorizedLocalRoot failed: %v", err)
 	}
-	if authRoot.Path() != sourceDir {
-		t.Fatalf("expected path %q, got %q", sourceDir, authRoot.Path())
+	if authRoot.Path() != realSourceDir {
+		t.Fatalf("expected path %q, got %q", realSourceDir, authRoot.Path())
 	}
 
 	// File path points to parent folder
@@ -42,8 +47,8 @@ func TestAuthorizedLocalRootLifecycleAndSerializationProtection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewAuthorizedLocalRoot from file failed: %v", err)
 	}
-	if authFromFile.Path() != sourceDir {
-		t.Fatalf("expected parent dir %q, got %q", sourceDir, authFromFile.Path())
+	if authFromFile.Path() != realSourceDir {
+		t.Fatalf("expected parent dir %q, got %q", realSourceDir, authFromFile.Path())
 	}
 
 	// Symlinked root is resolved once
@@ -53,8 +58,8 @@ func TestAuthorizedLocalRootLifecycleAndSerializationProtection(t *testing.T) {
 		if err != nil {
 			t.Fatalf("NewAuthorizedLocalRoot symlink failed: %v", err)
 		}
-		if authSymlink.Path() != sourceDir {
-			t.Fatalf("expected resolved target %q, got %q", sourceDir, authSymlink.Path())
+		if authSymlink.Path() != realSourceDir {
+			t.Fatalf("expected resolved target %q, got %q", realSourceDir, authSymlink.Path())
 		}
 	}
 
