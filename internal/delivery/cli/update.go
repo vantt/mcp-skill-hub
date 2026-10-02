@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
 	"github.com/vantt/mcp-skill-hub/internal/selfupdate"
 )
 
@@ -43,7 +44,8 @@ func runUpdate(ctx context.Context, args []string, stdout, stderr io.Writer) int
 				_ = writeJSON(stdout, result)
 				return 1
 			}
-			fmt.Fprintf(stderr, "ERROR: %s\nWHY: %s\nFIX: %s\n", suErr.Summary, suErr.Why, suErr.Fix)
+			p := termui.New(stderr)
+			p.Error(suErr.Summary, suErr.Why, suErr.Fix)
 			return 1
 		}
 
@@ -52,7 +54,8 @@ func runUpdate(ctx context.Context, args []string, stdout, stderr io.Writer) int
 			_ = writeJSON(stdout, result)
 			return 1
 		}
-		fmt.Fprintf(stderr, "ERROR: %s\nWHY: %v\nFIX: Retry the update or inspect the installation.\n", err.Error(), err)
+		p := termui.New(stderr)
+		p.Error(err.Error(), err.Error(), "Retry the update or inspect the installation.")
 		return 1
 	}
 
@@ -70,13 +73,15 @@ func runUpdate(ctx context.Context, args []string, stdout, stderr io.Writer) int
 			{ID: "target_version", Summary: res.TargetVersion, Impact: "Target release version."},
 		}
 		if err := writeJSON(stdout, result); err != nil {
-			fmt.Fprintf(stderr, "ERROR: Unable to write the command result.\nWHY: %v\nFIX: Check the output destination and retry.\n", err)
+			p := termui.New(stderr)
+			p.Error("Unable to write the command result.", err.Error(), "Check the output destination and retry.")
 			return 1
 		}
 		return 0
 	}
 
-	fmt.Fprintln(stdout, res.Message)
+	p := termui.New(stdout)
+	p.Line(res.Message)
 	return 0
 }
 
