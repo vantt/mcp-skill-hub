@@ -697,21 +697,16 @@ func (service SkillAddService) ConfirmSkillAdd(ctx context.Context, path string,
 	service = service.defaults(root)
 	now := service.Clock.Now().UTC()
 
-	// Check expiration
-	if !preview.expiresAt.IsZero() && !now.Before(preview.expiresAt) {
+	switch verifyProposalPins(now, preview.expiresAt, true, false, preview.Confirmation.Confirmation.Pins, pins) {
+	case proposalExpired:
 		return SkillAddResult{
 			Result: ErrorResult(NewStaleProposalError("proposal expired; nothing was applied", "Regenerate the add proposal.")),
 		}, nil
-	}
-
-	// Check confirmation pins
-	expectedPins := preview.Confirmation.Confirmation.Pins
-	if pins != expectedPins {
-		if pins.ProposalDigest != expectedPins.ProposalDigest {
-			return SkillAddResult{
-				Result: ErrorResult(NewStaleProposalError("proposal digest does not match preview; nothing was applied", "Pass the exact proposal digest printed by the preview, or re-run with --yes.")),
-			}, nil
-		}
+	case proposalDigestMismatch:
+		return SkillAddResult{
+			Result: ErrorResult(NewStaleProposalError("proposal digest does not match preview; nothing was applied", "Pass the exact proposal digest printed by the preview, or re-run with --yes.")),
+		}, nil
+	case proposalPinsMismatch:
 		return SkillAddResult{
 			Result: ErrorResult(NewStaleProposalError("confirmation pins do not match; nothing was applied", "Load or regenerate the add proposal.")),
 		}, nil

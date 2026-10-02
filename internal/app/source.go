@@ -405,17 +405,16 @@ func (service SourceService) ConfirmSourceProposal(ctx context.Context, path str
 	if service.Clock == nil {
 		service.Clock = SystemClock{}
 	}
-	if preview.expiresAt.IsZero() || !service.Clock.Now().UTC().Before(preview.expiresAt) {
+	switch verifyProposalPins(service.Clock.Now().UTC(), preview.expiresAt, true, true, preview.Confirmation.Confirmation.Pins, pins) {
+	case proposalExpired:
 		result := SourceMutationResult{Result: NewResult(StatusError, "Proposal expired; nothing was applied.")}
 		result.Error = &Error{Code: ErrorStaleProposal, Render: ErrorRender{Error: "The source proposal can no longer be confirmed.", Why: "The reviewed proposal expired.", Fix: "Regenerate and review the proposal."}}
 		return result, nil
-	}
-	if pins != preview.Confirmation.Confirmation.Pins {
-		if pins.ProposalDigest != preview.Confirmation.Confirmation.Pins.ProposalDigest {
-			result := SourceMutationResult{Result: NewResult(StatusError, "Proposal digest does not match the preview; nothing was applied.")}
-			result.Error = &Error{Code: ErrorStaleProposal, Render: ErrorRender{Error: "The source proposal cannot be confirmed.", Why: "Proposal digest does not match the preview.", Fix: "Pass the exact proposal digest printed by triage, or re-run triage."}}
-			return result, nil
-		}
+	case proposalDigestMismatch:
+		result := SourceMutationResult{Result: NewResult(StatusError, "Proposal digest does not match the preview; nothing was applied.")}
+		result.Error = &Error{Code: ErrorStaleProposal, Render: ErrorRender{Error: "The source proposal cannot be confirmed.", Why: "Proposal digest does not match the preview.", Fix: "Pass the exact proposal digest printed by triage, or re-run triage."}}
+		return result, nil
+	case proposalPinsMismatch:
 		result := SourceMutationResult{Result: NewResult(StatusError, "Proposal is stale; nothing was applied.")}
 		result.Error = &Error{Code: ErrorStaleProposal, Render: ErrorRender{Error: "The source proposal can no longer be confirmed.", Why: "The confirmation pins do not match the reviewed proposal.", Fix: "Load or regenerate the proposal and confirm its exact ID, digest, and base version."}}
 		return result, nil

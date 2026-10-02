@@ -197,10 +197,10 @@ func (service SkillService) LoadSkillProposal(ctx context.Context, path, proposa
 
 // ConfirmSkillMutation applies exactly the preview and pins supplied by the caller.
 func (service SkillService) ConfirmSkillMutation(ctx context.Context, path string, preview SkillProposal, pins ConfirmationPins) (SkillMutationResult, error) {
-	if pins != preview.Confirmation.Confirmation.Pins {
-		if pins.ProposalDigest != preview.Confirmation.Confirmation.Pins.ProposalDigest {
-			return digestMismatchSkillProposal(preview), nil
-		}
+	switch verifyProposalPins(time.Time{}, time.Time{}, false, false, preview.Confirmation.Confirmation.Pins, pins) {
+	case proposalDigestMismatch:
+		return digestMismatchSkillProposal(preview), nil
+	case proposalPinsMismatch:
 		return staleSkillProposal(preview), nil
 	}
 	root, err := skill.ResolveWorkspace(path)

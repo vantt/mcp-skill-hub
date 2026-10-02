@@ -513,15 +513,17 @@ func (service InsightService) ConfirmInsightApplication(ctx context.Context, pat
 	if err != nil {
 		return InsightApplicationResult{}, err
 	}
-	if proposal.Digest != digest {
+	expectedPins := ConfirmationPins{ProposalID: proposal.ID, ProposalDigest: proposal.Digest, BaseVersion: proposal.BaseSnapshot}
+	suppliedPins := ConfirmationPins{ProposalID: proposalID, ProposalDigest: digest, BaseVersion: base}
+	switch verifyProposalPins(time.Time{}, time.Time{}, false, false, expectedPins, suppliedPins) {
+	case proposalDigestMismatch:
 		confirmation := ConfirmationPolicy{PolicyRevision: "policy_v1", ActionClass: "semantic", ApplicationCommand: "ConfirmInsightApplication", Confirmation: ConfirmationRequirement{Required: true, Mode: "preview-and-approval", Pins: ConfirmationPins{ProposalID: proposal.ID, ProposalDigest: proposal.Digest, BaseVersion: proposal.BaseSnapshot}}}
 		result := InsightApplicationResult{Result: NewResult(StatusError, "Proposal digest does not match the preview; nothing was applied."), Confirmation: confirmation, InsightID: proposal.InsightID}
 		result.Items = append(result.Items, Item{ID: proposal.ID, Summary: "Proposal digest does not match the preview", Impact: "Active content remains unchanged."})
 		result.SuggestedActions = append(result.SuggestedActions, Action{Label: "Pass the matching proposal digest", Command: "ConfirmInsightApplication"})
 		result.Error = &Error{Code: ErrorStaleProposal, Render: ErrorRender{Error: "The proposal can no longer be confirmed.", Why: "Proposal digest does not match the preview.", Fix: "Pass the exact proposal digest printed by the preview command."}}
 		return result, nil
-	}
-	if proposal.ID != proposalID || proposal.BaseSnapshot != base {
+	case proposalPinsMismatch:
 		return staleInsightApplication(proposal), nil
 	}
 	var planned mutation.Proposal

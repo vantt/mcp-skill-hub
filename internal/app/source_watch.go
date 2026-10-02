@@ -325,21 +325,18 @@ func (service SourceService) ConfirmSourceWatch(ctx context.Context, path string
 		return SourceMutationResult{}, err
 	}
 
-	if preview.expiresAt.IsZero() || !service.Clock.Now().UTC().Before(preview.expiresAt) {
+	switch verifyProposalPins(service.Clock.Now().UTC(), preview.expiresAt, true, true, preview.Confirmation.Confirmation.Pins, pins) {
+	case proposalExpired:
 		return SourceMutationResult{
 			Result: ErrorResult(NewStaleProposalError("The reviewed source watch proposal expired.", "Regenerate the watch proposal.")),
 		}, nil
-	}
-
-	expectedPins := preview.Confirmation.Confirmation.Pins
-	if pins.ProposalID != expectedPins.ProposalID || pins.BaseVersion != expectedPins.BaseVersion {
-		return SourceMutationResult{
-			Result: ErrorResult(NewStaleProposalError("Confirmation pins do not match the reviewed proposal.", "Confirm with exact proposal ID, digest, and base version.")),
-		}, nil
-	}
-	if pins.ProposalDigest != expectedPins.ProposalDigest {
+	case proposalDigestMismatch:
 		return SourceMutationResult{
 			Result: ErrorResult(NewStaleProposalError("Proposal digest does not match the preview.", "Pass the exact proposal digest printed by preview.")),
+		}, nil
+	case proposalPinsMismatch:
+		return SourceMutationResult{
+			Result: ErrorResult(NewStaleProposalError("Confirmation pins do not match the reviewed proposal.", "Confirm with exact proposal ID, digest, and base version.")),
 		}, nil
 	}
 

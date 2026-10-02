@@ -331,17 +331,16 @@ func (service SourceImportService) ConfirmSourceImport(ctx context.Context, path
 		service.Clock = SystemClock{}
 	}
 	now := service.Clock.Now().UTC()
-	if preview.expiresAt.IsZero() || !now.Before(preview.expiresAt) {
+	switch verifyProposalPins(now, preview.expiresAt, true, true, preview.Confirmation.Confirmation.Pins, pins) {
+	case proposalExpired:
 		result := SourceImportResult{Result: NewResult(StatusError, "Proposal expired; nothing was applied.")}
 		result.Error = &Error{Code: ErrorStaleProposal, Render: ErrorRender{Error: "The source import proposal can no longer be confirmed.", Why: "The proposal expired.", Fix: "Regenerate the import proposal."}}
 		return result, nil
-	}
-	if pins != preview.Confirmation.Confirmation.Pins {
-		if pins.ProposalDigest != preview.Confirmation.Confirmation.Pins.ProposalDigest {
-			result := SourceImportResult{Result: NewResult(StatusError, "Proposal digest does not match the preview; nothing was applied.")}
-			result.Error = &Error{Code: ErrorStaleProposal, Render: ErrorRender{Error: "The source import proposal cannot be confirmed.", Why: "Proposal digest does not match the preview.", Fix: "Pass the exact proposal digest printed by the preview, or re-run with --yes."}}
-			return result, nil
-		}
+	case proposalDigestMismatch:
+		result := SourceImportResult{Result: NewResult(StatusError, "Proposal digest does not match the preview; nothing was applied.")}
+		result.Error = &Error{Code: ErrorStaleProposal, Render: ErrorRender{Error: "The source import proposal cannot be confirmed.", Why: "Proposal digest does not match the preview.", Fix: "Pass the exact proposal digest printed by the preview, or re-run with --yes."}}
+		return result, nil
+	case proposalPinsMismatch:
 		result := SourceImportResult{Result: NewResult(StatusError, "Proposal is stale; nothing was applied.")}
 		result.Error = &Error{Code: ErrorStaleProposal, Render: ErrorRender{Error: "The source import proposal can no longer be confirmed.", Why: "Confirmation pins do not match.", Fix: "Load or regenerate the import proposal."}}
 		return result, nil
