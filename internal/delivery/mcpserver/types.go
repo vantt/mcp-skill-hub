@@ -179,6 +179,10 @@ type skillGetInput struct {
 
 type skillGetResult = app.SkillDetail
 
+type errorEnvelope struct {
+	Error *app.Error `json:"error"`
+}
+
 type outcomeRecordInput struct {
 	IncorporationID string   `json:"incorporation_id"`
 	EventID         string   `json:"event_id"`

@@ -20,6 +20,30 @@ func ClassifyError(err error) *Error {
 	if err == nil {
 		return nil
 	}
+	if classified := classifyAppError(err); classified != nil {
+		return classified
+	}
+	if classified := classifyLifecycleMutationSentinels(err); classified != nil {
+		return classified
+	}
+	if classified := classifySourceCatalogSentinels(err); classified != nil {
+		return classified
+	}
+	if classified := classifySubstringRules(err); classified != nil {
+		return classified
+	}
+
+	return &Error{
+		Code:      ErrorInternal,
+		Retryable: true,
+		Render: ErrorRender{
+			Error: "The operation failed internally.",
+			Fix:   "Retry once; if the failure persists, use the correlation ID with stderr diagnostics.",
+		},
+	}
+}
+
+func classifyAppError(err error) *Error {
 	var appErr *Error
 	if errors.As(err, &appErr) && appErr != nil {
 		return appErr
@@ -60,6 +84,10 @@ func ClassifyError(err error) *Error {
 			},
 		}
 	}
+	return nil
+}
+
+func classifyLifecycleMutationSentinels(err error) *Error {
 	if errors.Is(err, context.Canceled) {
 		return &Error{
 			Code:      ErrorOperationCancelled,
@@ -170,6 +198,10 @@ func ClassifyError(err error) *Error {
 			},
 		}
 	}
+	return nil
+}
+
+func classifySourceCatalogSentinels(err error) *Error {
 	if errors.Is(err, sourcepkg.ErrInvalidLocator) || errors.Is(err, sourcepkg.ErrUnsafeAddress) || errors.Is(err, sourcepkg.ErrLimitExceeded) {
 		return &Error{
 			Code:      ErrorInvalidRequest,
@@ -200,8 +232,11 @@ func ClassifyError(err error) *Error {
 			},
 		}
 	}
+	return nil
+}
 
-	// Substring rules: these exist only for errors that are not yet typed; new code must return *Error or a sentinel.
+// Substring rules: these exist only for errors that are not yet typed; new code must return *Error or a sentinel.
+func classifySubstringRules(err error) *Error {
 	message := strings.ToLower(err.Error())
 	if strings.Contains(message, "snapshot_expired") || strings.Contains(message, "cursor is invalid or expired") {
 		return &Error{
@@ -263,15 +298,7 @@ func ClassifyError(err error) *Error {
 			},
 		}
 	}
-
-	return &Error{
-		Code:      ErrorInternal,
-		Retryable: true,
-		Render: ErrorRender{
-			Error: "The operation failed internally.",
-			Fix:   "Retry once; if the failure persists, use the correlation ID with stderr diagnostics.",
-		},
-	}
+	return nil
 }
 
 func knownRequestMessage(message string) bool {

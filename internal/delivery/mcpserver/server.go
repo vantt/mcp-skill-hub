@@ -615,6 +615,7 @@ func makePage[T any](items []T, limit int, lastKey, owner, filter string, key fu
 }
 
 func applicationError(value any) *app.Error {
+	_ = errorEnvelope{}
 	return app.ErrorOf(value, nil)
 }
 
