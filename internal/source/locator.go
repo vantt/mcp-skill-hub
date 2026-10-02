@@ -254,12 +254,18 @@ func ParseGitHubLocatorWithOptions(rawURL, explicitRef, explicitPath string, opt
 			if len(segments) < 4 {
 				return nil, fmt.Errorf("%w: blob route requires ref and file path", ErrInvalidLocator)
 			}
-			if segments[len(segments)-1] != "SKILL.md" {
+			last := segments[len(segments)-1]
+			if last == "SKILL.md" {
+				routeKind = "blob"
+				// The folder is the parent of SKILL.md
+				rest = strings.Join(segments[3:len(segments)-1], "/")
+			} else if filepath.Ext(last) != "" {
 				return nil, fmt.Errorf("%w: link the skill folder or its SKILL.md", ErrInvalidLocator)
+			} else {
+				// The user linked a directory using /blob/ instead of /tree/
+				routeKind = "tree"
+				rest = strings.Join(segments[3:], "/")
 			}
-			routeKind = "blob"
-			// The folder is the parent of SKILL.md
-			rest = strings.Join(segments[3:len(segments)-1], "/")
 		default:
 			return nil, fmt.Errorf("%w: unsupported GitHub route %q", ErrInvalidLocator, kind)
 		}
@@ -470,7 +476,7 @@ func ResolveGitHubRoute(ctx context.Context, adapter GitRepositoryAdapter, route
 		candPath = strings.TrimPrefix(candPath, "/")
 		candPath = filepath.ToSlash(filepath.Clean(candPath))
 		candidateNames = append(candidateNames, c.fullRef)
-		hasSkill, err := adapter.CommitHasSkill(ctx, repoURL, c.hash, candPath)
+		hasSkill, err := adapter.CommitHasSkill(ctx, repoURL, c.name, c.hash, candPath)
 		if err == nil && hasSkill {
 			withSkill = append(withSkill, viableCandidate{cand: c, path: candPath})
 		}

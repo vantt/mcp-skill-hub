@@ -152,6 +152,13 @@ func TestParseGitHubLocatorStructuralRoutes(t *testing.T) {
 			wantRest: "main/skills/pdf",
 		},
 		{
+			name:     "blob route with folder treated as tree",
+			url:      "https://github.com/openclaw/openclaw/blob/main/.agents/skills/test-audit",
+			wantRepo: "https://github.com/openclaw/openclaw.git",
+			wantKind: "tree",
+			wantRest: "main/.agents/skills/test-audit",
+		},
+		{
 			name:        "blob route with other file rejected",
 			url:         "https://github.com/anthropics/skills/blob/main/skills/pdf/other.md",
 			wantErrPart: "link the skill folder or its SKILL.md",

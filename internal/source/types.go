@@ -10,10 +10,12 @@ import (
 )
 
 const (
-	DefaultTimeout     = 20 * time.Second
-	DefaultMaxBytes    = int64(8 << 20)
-	DefaultMaxFiles    = 2048
-	DefaultMaxFileSize = int64(2 << 20)
+	DefaultTimeout        = 20 * time.Second
+	DefaultMirrorTimeout  = 3 * time.Minute
+	DefaultMaxBytes       = int64(8 << 20)
+	DefaultMaxMirrorBytes = int64(1 << 30) // 1 GiB for Git repository mirrors
+	DefaultMaxFiles       = 2048
+	DefaultMaxFileSize    = int64(2 << 20)
 )
 
 var (

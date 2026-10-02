@@ -37,7 +37,9 @@ var gitTransportMu sync.Mutex
 type GitRepositoryAdapter struct {
 	CacheRoot         string
 	Timeout           time.Duration
+	MirrorTimeout     time.Duration
 	MaxBytes          int64
+	MaxMirrorBytes    int64
 	MaxFiles          int
 	MaxFileSize       int64
 	Now               func() time.Time
@@ -49,8 +51,14 @@ func (adapter GitRepositoryAdapter) defaults() GitRepositoryAdapter {
 	if adapter.Timeout <= 0 {
 		adapter.Timeout = DefaultTimeout
 	}
+	if adapter.MirrorTimeout <= 0 {
+		adapter.MirrorTimeout = DefaultMirrorTimeout
+	}
 	if adapter.MaxBytes <= 0 {
 		adapter.MaxBytes = DefaultMaxBytes
+	}
+	if adapter.MaxMirrorBytes <= 0 {
+		adapter.MaxMirrorBytes = DefaultMaxMirrorBytes
 	}
 	if adapter.MaxFiles <= 0 {
 		adapter.MaxFiles = DefaultMaxFiles
@@ -69,7 +77,7 @@ func (adapter GitRepositoryAdapter) Identify(ctx context.Context, locator Locato
 	if _, err := ValidateRemoteURLWithOptions(locator.Repository, URLValidationOptions{AllowFile: adapter.AllowFileProtocol}); err != nil {
 		return Identity{}, err
 	}
-	repository, _, err := adapter.syncMirror(ctx, locator.Repository)
+	repository, _, err := adapter.syncMirror(ctx, locator.Repository, locator.Ref)
 	if err != nil {
 		return Identity{}, err
 	}
@@ -134,7 +142,7 @@ func (adapter GitRepositoryAdapter) Identify(ctx context.Context, locator Locato
 
 func (adapter GitRepositoryAdapter) CurrentRevision(ctx context.Context, source Source) (Revision, error) {
 	adapter = adapter.withLimits(source.Limits)
-	repository, _, err := adapter.syncMirror(ctx, source.Locator.Repository)
+	repository, _, err := adapter.syncMirror(ctx, source.Locator.Repository, source.Locator.Ref)
 	if err != nil {
 		return Revision{}, err
 	}
@@ -395,8 +403,14 @@ func resolveCommit(repository *git.Repository, ref string) (plumbing.Hash, error
 
 func (adapter GitRepositoryAdapter) withLimits(limits Limits) GitRepositoryAdapter {
 	adapter = adapter.defaults()
-	if limits.TimeoutSeconds > 0 && time.Duration(limits.TimeoutSeconds)*time.Second < adapter.Timeout {
-		adapter.Timeout = time.Duration(limits.TimeoutSeconds) * time.Second
+	if limits.TimeoutSeconds > 0 {
+		t := time.Duration(limits.TimeoutSeconds) * time.Second
+		if t < adapter.Timeout {
+			adapter.Timeout = t
+		}
+		if t > adapter.MirrorTimeout {
+			adapter.MirrorTimeout = t
+		}
 	}
 	if limits.MaxBytes > 0 && limits.MaxBytes < adapter.MaxBytes {
 		adapter.MaxBytes = limits.MaxBytes
@@ -452,13 +466,17 @@ func (adapter GitRepositoryAdapter) openMirror(repository string) (*git.Reposito
 	return git.PlainOpen(mirror)
 }
 
-func (adapter GitRepositoryAdapter) syncMirror(ctx context.Context, remoteURL string) (*git.Repository, string, error) {
+func (adapter GitRepositoryAdapter) syncMirror(ctx context.Context, remoteURL string, ref string) (*git.Repository, string, error) {
 	adapter = adapter.defaults()
 	mirror, err := adapter.mirrorPath(remoteURL)
 	if err != nil {
 		return nil, "", err
 	}
-	ctx, cancel := context.WithTimeout(ctx, adapter.Timeout)
+	timeout := adapter.MirrorTimeout
+	if timeout <= 0 {
+		timeout = DefaultMirrorTimeout
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	var repository *git.Repository
 	created := false
@@ -467,18 +485,68 @@ func (adapter GitRepositoryAdapter) syncMirror(ctx context.Context, remoteURL st
 		switch {
 		case errors.Is(statErr, os.ErrNotExist):
 			created = true
-			repository, statErr = git.PlainCloneContext(ctx, mirror, true, &git.CloneOptions{URL: remoteURL, NoCheckout: true, Tags: git.AllTags, SingleBranch: false})
+			var refName plumbing.ReferenceName
+			if ref != "" && ref != "HEAD" {
+				clean := strings.TrimPrefix(strings.TrimPrefix(ref, "refs/heads/"), "refs/tags/")
+				refName = plumbing.NewBranchReferenceName(clean)
+			}
+			cloneOpts := &git.CloneOptions{
+				URL:          remoteURL,
+				NoCheckout:   true,
+				SingleBranch: true,
+				Depth:        1,
+				Tags:         git.NoTags,
+			}
+			if refName != "" {
+				cloneOpts.ReferenceName = refName
+			}
+			repository, statErr = git.PlainCloneContext(ctx, mirror, true, cloneOpts)
+			if statErr != nil && refName != "" {
+				clean := strings.TrimPrefix(strings.TrimPrefix(ref, "refs/heads/"), "refs/tags/")
+				cloneOpts.ReferenceName = plumbing.NewTagReferenceName(clean)
+				repository, statErr = git.PlainCloneContext(ctx, mirror, true, cloneOpts)
+				if statErr != nil {
+					cloneOpts.ReferenceName = ""
+					repository, statErr = git.PlainCloneContext(ctx, mirror, true, cloneOpts)
+				}
+			}
 			return statErr
 		case info.Mode()&os.ModeSymlink != 0 || !info.IsDir():
 			return errors.New("unsafe Git mirror")
 		default:
 			repository, statErr = git.PlainOpen(mirror)
 			if statErr == nil {
-				remoteConfig := &config.RemoteConfig{Name: "origin", URLs: []string{remoteURL}, Fetch: []config.RefSpec{"+refs/heads/*:refs/heads/*", "+refs/tags/*:refs/tags/*"}}
-				remote := git.NewRemote(repository.Storer, remoteConfig)
-				statErr = remote.FetchContext(ctx, &git.FetchOptions{Tags: git.AllTags, Force: true, RefSpecs: remoteConfig.Fetch})
-				if errors.Is(statErr, git.NoErrAlreadyUpToDate) {
-					statErr = nil
+				if ref != "" && ref != "HEAD" {
+					clean := strings.TrimPrefix(strings.TrimPrefix(ref, "refs/heads/"), "refs/tags/")
+					refSpec := config.RefSpec("+refs/heads/" + clean + ":refs/heads/" + clean)
+					remoteConfig := &config.RemoteConfig{Name: "origin", URLs: []string{remoteURL}, Fetch: []config.RefSpec{refSpec}}
+					remote := git.NewRemote(repository.Storer, remoteConfig)
+					fetchErr := remote.FetchContext(ctx, &git.FetchOptions{
+						Depth:    1,
+						Tags:     git.NoTags,
+						Force:    true,
+						RefSpecs: remoteConfig.Fetch,
+					})
+					if fetchErr != nil && !errors.Is(fetchErr, git.NoErrAlreadyUpToDate) {
+						tagSpec := config.RefSpec("+refs/tags/" + clean + ":refs/tags/" + clean)
+						remoteConfig = &config.RemoteConfig{Name: "origin", URLs: []string{remoteURL}, Fetch: []config.RefSpec{tagSpec}}
+						remote = git.NewRemote(repository.Storer, remoteConfig)
+						_ = remote.FetchContext(ctx, &git.FetchOptions{
+							Depth:    1,
+							Tags:     git.NoTags,
+							Force:    true,
+							RefSpecs: remoteConfig.Fetch,
+						})
+					}
+				} else {
+					remoteConfig := &config.RemoteConfig{Name: "origin", URLs: []string{remoteURL}, Fetch: []config.RefSpec{"+refs/heads/*:refs/heads/*"}}
+					remote := git.NewRemote(repository.Storer, remoteConfig)
+					_ = remote.FetchContext(ctx, &git.FetchOptions{
+						Depth:    1,
+						Tags:     git.NoTags,
+						Force:    true,
+						RefSpecs: remoteConfig.Fetch,
+					})
 				}
 			}
 		}
@@ -501,7 +569,15 @@ func (adapter GitRepositoryAdapter) withSafeTransport(operation func() error) er
 	gitTransportMu.Lock()
 	defer gitTransportMu.Unlock()
 	original := transportclient.Protocols["https"]
-	client := newPinnedHTTPClient(adapter.Timeout, adapter.Resolver, adapter.MaxBytes, true)
+	timeout := adapter.MirrorTimeout
+	if timeout <= 0 {
+		timeout = DefaultMirrorTimeout
+	}
+	maxBytes := adapter.MaxMirrorBytes
+	if maxBytes <= 0 {
+		maxBytes = DefaultMaxMirrorBytes
+	}
+	client := newPinnedHTTPClient(timeout, adapter.Resolver, maxBytes, true)
 	transportclient.InstallProtocol("https", githttp.NewClient(client))
 	defer transportclient.InstallProtocol("https", original)
 	return operation()
@@ -534,7 +610,11 @@ func (adapter GitRepositoryAdapter) checkMirrorSize(mirror string) error {
 			return errors.New("unsafe object in Git mirror")
 		}
 		total += info.Size()
-		if total > adapter.MaxBytes {
+		maxBytes := adapter.MaxMirrorBytes
+		if maxBytes <= 0 {
+			maxBytes = DefaultMaxMirrorBytes
+		}
+		if total > maxBytes {
 			return ErrLimitExceeded
 		}
 		return nil
@@ -672,7 +752,7 @@ func (adapter GitRepositoryAdapter) ListAdvertisedRefs(ctx context.Context, remo
 // ResolveRefCommit resolves a ref name or SHA to a full commit hash in the local mirror.
 func (adapter GitRepositoryAdapter) ResolveRefCommit(ctx context.Context, remoteURL, ref string) (string, error) {
 	adapter = adapter.defaults()
-	repository, _, err := adapter.syncMirror(ctx, remoteURL)
+	repository, _, err := adapter.syncMirror(ctx, remoteURL, ref)
 	if err != nil {
 		return "", err
 	}
@@ -684,18 +764,24 @@ func (adapter GitRepositoryAdapter) ResolveRefCommit(ctx context.Context, remote
 }
 
 // CommitHasSkill checks if the given commit hash at scopedPath contains a SKILL.md file.
-func (adapter GitRepositoryAdapter) CommitHasSkill(ctx context.Context, remoteURL, commitHash, scopedPath string) (bool, error) {
+func (adapter GitRepositoryAdapter) CommitHasSkill(ctx context.Context, remoteURL, ref, commitHash, scopedPath string) (bool, error) {
 	adapter = adapter.defaults()
 	repository, err := adapter.openMirror(remoteURL)
 	if err != nil {
 		var syncErr error
-		repository, _, syncErr = adapter.syncMirror(ctx, remoteURL)
+		repository, _, syncErr = adapter.syncMirror(ctx, remoteURL, ref)
 		if syncErr != nil {
 			return false, syncErr
 		}
 	}
 	hash := plumbing.NewHash(commitHash)
 	commit, err := repository.CommitObject(hash)
+	if err != nil {
+		if newRepo, _, syncErr := adapter.syncMirror(ctx, remoteURL, ref); syncErr == nil {
+			repository = newRepo
+			commit, err = repository.CommitObject(hash)
+		}
+	}
 	if err != nil {
 		return false, err
 	}

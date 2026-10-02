@@ -299,9 +299,9 @@ func (service SkillAddService) PreviewSkillAdd(ctx context.Context, path string,
 			Locator: sourcepkg.Locator{
 				Repository: resolved.Repository,
 				Ref:        ref,
-				Path:       "",
+				Path:       resolved.Path,
 			},
-			Limits: sourcepkg.Limits{TimeoutSeconds: 30, MaxBytes: sourcepkg.DefaultMaxBytes, MaxFiles: sourcepkg.DefaultMaxFiles, MaxFileBytes: sourcepkg.DefaultMaxFileSize},
+			Limits: sourcepkg.Limits{TimeoutSeconds: 180, MaxBytes: sourcepkg.DefaultMaxBytes, MaxFiles: sourcepkg.DefaultMaxFiles, MaxFileBytes: sourcepkg.DefaultMaxFileSize},
 		}
 
 		var rev sourcepkg.Revision
@@ -324,7 +324,7 @@ func (service SkillAddService) PreviewSkillAdd(ctx context.Context, path string,
 			}
 		}
 
-		resources, listErr := gitAdapter.List(ctx, src, rev, sourcepkg.Scope{Prefix: resolved.Path})
+		resources, listErr := gitAdapter.List(ctx, src, rev, sourcepkg.Scope{})
 		if listErr != nil {
 			return SkillAddProposal{}, fmt.Errorf("list repository resources: %w", listErr)
 		}
@@ -351,7 +351,7 @@ func (service SkillAddService) PreviewSkillAdd(ctx context.Context, path string,
 				Revision: rev,
 			},
 			resources:   resources,
-			scopePrefix: resolved.Path,
+			scopePrefix: "",
 		}
 	}
 
