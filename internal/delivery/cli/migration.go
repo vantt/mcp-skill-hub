@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
 )
 
 func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer) int {
@@ -24,25 +25,28 @@ func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer) in
 	if err != nil {
 		return writeInvalidRequest(stdout, stderr, jsonOutput, err.Error(), "Run `skillhub doctor --workspace <path>` and review a fresh migration preview before retrying.")
 	}
-	if jsonOutput {
-		if err := writeJSON(stdout, result); err != nil {
-			fmt.Fprintln(stderr, err)
-			return 1
+	return writeResult(stdout, stderr, jsonOutput, result, func(p *termui.Printer) {
+		p.Line(result.Summary)
+		var fields []termui.Field
+		fields = append(fields,
+			termui.Field{Label: "Source schema version", Value: fmt.Sprintf("%d", result.SourceSchemaVersion)},
+			termui.Field{Label: "Target schema version", Value: fmt.Sprintf("%d", result.TargetSchemaVersion)},
+		)
+		if result.ProposalID != "" {
+			fields = append(fields,
+				termui.Field{Label: "Proposal", Value: result.ProposalID},
+				termui.Field{Label: "Proposal digest", Value: result.ProposalDigest},
+				termui.Field{Label: "Base version", Value: result.BaseCatalogSnapshot},
+			)
 		}
-		return 0
-	}
-	fmt.Fprintln(stdout, result.Summary)
-	fmt.Fprintf(stdout, "Source schema version: %d\nTarget schema version: %d\n", result.SourceSchemaVersion, result.TargetSchemaVersion)
-	if result.ProposalID != "" {
-		fmt.Fprintf(stdout, "Proposal: %s\nProposal digest: %s\nBase version: %s\n", result.ProposalID, result.ProposalDigest, result.BaseCatalogSnapshot)
-	}
-	for _, change := range result.Changes {
-		fmt.Fprint(stdout, change.Diff)
-	}
-	if result.Receipt != nil {
-		fmt.Fprintf(stdout, "Operation: %s\n", result.Receipt.OperationID)
-	}
-	return 0
+		if result.Receipt != nil {
+			fields = append(fields, termui.Field{Label: "Operation", Value: result.Receipt.OperationID})
+		}
+		p.Fields(fields...)
+		for _, change := range result.Changes {
+			p.Raw(change.Diff)
+		}
+	})
 }
 
 func migrationFlags(args []string) (workspacePath string, target int, yes, jsonOutput bool, err error) {

@@ -67,7 +67,7 @@ func TestMigrateCLIHumanPreviewIncludesPinnedDiff(t *testing.T) {
 		t.Fatalf("preview exit = %d: %s", code, stderr.String())
 	}
 	output := stdout.String()
-	for _, expected := range []string{"Source schema version: 0", "Target schema version: 1", "Proposal digest: sha256:", "+++ b/.skillhub/schema-version", "+1"} {
+	for _, expected := range []string{"Source schema version:  0", "Target schema version:  1", "Proposal digest:        sha256:", "+++ b/.skillhub/schema-version", "+1"} {
 		if !strings.Contains(output, expected) {
 			t.Fatalf("human preview lacks %q:\n%s", expected, output)
 		}
