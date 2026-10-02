@@ -5,9 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/vantt/mcp-skill-hub/internal/app"
-	"github.com/vantt/mcp-skill-hub/internal/evaluation"
-	"github.com/vantt/mcp-skill-hub/internal/telemetry"
 	"io"
 	"io/fs"
 	"os"
@@ -15,6 +12,11 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
+	"github.com/vantt/mcp-skill-hub/internal/evaluation"
+	"github.com/vantt/mcp-skill-hub/internal/telemetry"
 )
 
 type evaluationFlags struct {
@@ -104,21 +106,27 @@ func runEvaluationManifest(ctx context.Context, args []string, stdout, stderr io
 		}
 	}
 	if flags.jsonOutput {
-		if _, err := stdout.Write(contents); err != nil {
-			fmt.Fprintf(stderr, "ERROR: Unable to write the experiment manifest.\nWHY: %v\nFIX: Check the output destination and retry.\n", err)
+		p := termui.New(stdout)
+		p.Raw(string(contents))
+		if p.Err() != nil {
+			pErr := termui.New(stderr)
+			pErr.Error("Unable to write the experiment manifest.", p.Err().Error(), "Check the output destination and retry.")
 			return 1
 		}
 		return 0
 	}
-	fmt.Fprintf(stdout, "Experiment manifest preview (default seed %d when --seed is omitted):\n", app.EvaluationDefaultSeed)
-	if _, err := stdout.Write(contents); err != nil {
-		fmt.Fprintf(stderr, "ERROR: Unable to write the experiment manifest preview.\nWHY: %v\nFIX: Check the output destination and retry.\n", err)
+	p := termui.New(stdout)
+	p.Line(fmt.Sprintf("Experiment manifest preview (default seed %d when --seed is omitted):", app.EvaluationDefaultSeed))
+	p.Raw(string(contents))
+	if p.Err() != nil {
+		pErr := termui.New(stderr)
+		pErr.Error("Unable to write the experiment manifest preview.", p.Err().Error(), "Check the output destination and retry.")
 		return 1
 	}
 	if flags.outputPath == "" {
-		fmt.Fprintln(stdout, "No file was written; pass --output <new-file> to save this manifest.")
+		p.Line("No file was written; pass --output <new-file> to save this manifest.")
 	} else {
-		fmt.Fprintf(stdout, "Manifest written to %s.\n", flags.outputPath)
+		p.Line(fmt.Sprintf("Manifest written to %s.", flags.outputPath))
 	}
 	return 0
 }
@@ -182,8 +190,11 @@ func runEvaluationPromotion(ctx context.Context, args []string, stdout, stderr i
 		}
 	}
 	if flags.jsonOutput {
-		if _, err := stdout.Write(contents); err != nil {
-			fmt.Fprintf(stderr, "ERROR: Unable to write the promotion draft.\nWHY: %v\nFIX: Check the output destination and retry.\n", err)
+		p := termui.New(stdout)
+		p.Raw(string(contents))
+		if p.Err() != nil {
+			pErr := termui.New(stderr)
+			pErr.Error("Unable to write the promotion draft.", p.Err().Error(), "Check the output destination and retry.")
 			return 1
 		}
 		return 0
@@ -404,8 +415,11 @@ func finishEvaluation(ctx context.Context, report evaluation.Report, operationEr
 		}
 	}
 	if flags.jsonOutput {
-		if _, err := stdout.Write(contents); err != nil {
-			fmt.Fprintf(stderr, "ERROR: Unable to write the evaluation report.\nWHY: %v\nFIX: Check the output destination and retry.\n", err)
+		p := termui.New(stdout)
+		p.Raw(string(contents))
+		if p.Err() != nil {
+			pErr := termui.New(stderr)
+			pErr.Error("Unable to write the evaluation report.", p.Err().Error(), "Check the output destination and retry.")
 			return 1
 		}
 		return 0
@@ -416,35 +430,40 @@ func finishEvaluation(ctx context.Context, report evaluation.Report, operationEr
 			correct++
 		}
 	}
-	fmt.Fprintf(stdout, "%s complete: %d samples, %d correct.\n", label, report.Samples, correct)
+	p := termui.New(stdout)
+	p.Line(fmt.Sprintf("%s complete: %d samples, %d correct.", label, report.Samples, correct))
 	top1 := report.Metrics.AcceptableTop1
-	fmt.Fprintf(stdout, "Acceptable top-1: %d/%d.\n", top1.Numerator, top1.Denominator)
+	p.Line(fmt.Sprintf("Acceptable top-1: %d/%d.", top1.Numerator, top1.Denominator))
 	if flags.outputPath != "" {
-		fmt.Fprintf(stdout, "Report written to %s.\n", flags.outputPath)
+		p.Line(fmt.Sprintf("Report written to %s.", flags.outputPath))
 	}
 	return 0
 }
 
 func writePromotionSummary(draft telemetry.PromotionDraft, contents []byte, flags promotionFlags, stdout, stderr io.Writer) int {
-	var output strings.Builder
-	fmt.Fprintf(&output, "Promotion draft for resolution %s (review required; incomplete).\n", draft.ResolutionID)
-	output.WriteString("Sanitized draft:\n")
-	output.Write(contents)
-	fmt.Fprintf(&output, "Removed fields: %s.\n", promotionFieldList(draft.Sanitization.RemovedFields))
-	fmt.Fprintf(&output, "Unavailable fields: %s.\n", promotionFieldList(draft.Sanitization.UnavailableFields))
+	p := termui.New(stdout)
+	p.Line(fmt.Sprintf("Promotion draft for resolution %s (review required; incomplete).", draft.ResolutionID))
+	p.Line("Sanitized draft:")
+	p.Raw(string(contents))
+	if !strings.HasSuffix(string(contents), "\n") {
+		p.Raw("\n")
+	}
+	p.Line(fmt.Sprintf("Removed fields: %s.", promotionFieldList(draft.Sanitization.RemovedFields)))
+	p.Line(fmt.Sprintf("Unavailable fields: %s.", promotionFieldList(draft.Sanitization.UnavailableFields)))
 	if flags.yes {
-		fmt.Fprintf(&output, "Draft written to %s.\n", flags.outputPath)
-		output.WriteString("Next step: review and complete every required human field, then add the sanitized case through the normal reviewed canonical workflow.\n")
+		p.Line(fmt.Sprintf("Draft written to %s.", flags.outputPath))
+		p.Line("Next step: review and complete every required human field, then add the sanitized case through the normal reviewed canonical workflow.")
 	} else {
-		output.WriteString("No file was written.\n")
+		p.Line("No file was written.")
 		if flags.outputPath == "" {
-			output.WriteString("Next step: choose a non-canonical draft path, review this preview, then rerun with --output <new-file> --yes.\n")
+			p.Line("Next step: choose a non-canonical draft path, review this preview, then rerun with --output <new-file> --yes.")
 		} else {
-			fmt.Fprintf(&output, "Next step: review this preview, then rerun with --output %s --yes.\n", flags.outputPath)
+			p.Line(fmt.Sprintf("Next step: review this preview, then rerun with --output %s --yes.", flags.outputPath))
 		}
 	}
-	if _, err := io.WriteString(stdout, output.String()); err != nil {
-		fmt.Fprintf(stderr, "ERROR: Unable to write the promotion preview.\nWHY: %v\nFIX: Check the output destination and retry.\n", err)
+	if p.Err() != nil {
+		pErr := termui.New(stderr)
+		pErr.Error("Unable to write the promotion preview.", p.Err().Error(), "Check the output destination and retry.")
 		return 1
 	}
 	return 0
