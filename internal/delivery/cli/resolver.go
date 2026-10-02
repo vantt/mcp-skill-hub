@@ -51,39 +51,34 @@ func runResolve(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		}
 		return writeInvalidWorkspace(stdout, stderr, jsonOutput, err)
 	}
-	if jsonOutput {
-		if err := writeJSON(stdout, response); err != nil {
-			fmt.Fprintf(stderr, "ERROR: Unable to write the resolution response.\nWHY: %v\nFIX: Check the output destination and retry.\n", err)
-			return 1
+	return writeResult(stdout, stderr, jsonOutput, response, func(p *termui.Printer) {
+		switch response.Status {
+		case resolverpkg.StatusResolved:
+			p.Line(fmt.Sprintf("Resolved %s (%s confidence). Host approval is required before activation.", response.Primary.ID, response.Primary.Confidence))
+		case resolverpkg.StatusNeedsContext:
+			p.Line(response.Question.Text)
+			if len(response.Question.Choices) > 0 {
+				p.Line(fmt.Sprintf("Choices: %s", strings.Join(response.Question.Choices, " | ")))
+			}
+			field := response.Question.Field
+			if field == "" {
+				field = "scope"
+			}
+			sampleChoice := "single_step"
+			if len(response.Question.Choices) > 0 {
+				sampleChoice = response.Question.Choices[0]
+			}
+			p.Blank()
+			p.Line(fmt.Sprintf("To answer, set %q in your request JSON, e.g.:\n  {\"task\": {\"description\": \"...\", %q: %q}}", field, field, sampleChoice))
+			if response.ResolutionID != "" {
+				p.Line(fmt.Sprintf("or provide prior in your request:\n  {\"prior\": {\"resolution_id\": %q, \"answers\": {%q: %q}}}", response.ResolutionID, field, sampleChoice))
+			}
+		case resolverpkg.StatusAlreadyCovered:
+			p.Line(fmt.Sprintf("The active procedure %s already covers this task.", response.CoveredBy))
+		case resolverpkg.StatusNoSkill:
+			p.Line(fmt.Sprintf("No skill recommended: %s.", response.NoSkill.ReasonCode))
 		}
-		return 0
-	}
-	switch response.Status {
-	case resolverpkg.StatusResolved:
-		fmt.Fprintf(stdout, "Resolved %s (%s confidence). Host approval is required before activation.\n", response.Primary.ID, response.Primary.Confidence)
-	case resolverpkg.StatusNeedsContext:
-		fmt.Fprintln(stdout, response.Question.Text)
-		if len(response.Question.Choices) > 0 {
-			fmt.Fprintf(stdout, "Choices: %s\n", strings.Join(response.Question.Choices, " | "))
-		}
-		field := response.Question.Field
-		if field == "" {
-			field = "scope"
-		}
-		sampleChoice := "single_step"
-		if len(response.Question.Choices) > 0 {
-			sampleChoice = response.Question.Choices[0]
-		}
-		fmt.Fprintf(stdout, "\nTo answer, set %q in your request JSON, e.g.:\n  {\"task\": {\"description\": \"...\", %q: %q}}\n", field, field, sampleChoice)
-		if response.ResolutionID != "" {
-			fmt.Fprintf(stdout, "or provide prior in your request:\n  {\"prior\": {\"resolution_id\": %q, \"answers\": {%q: %q}}}\n", response.ResolutionID, field, sampleChoice)
-		}
-	case resolverpkg.StatusAlreadyCovered:
-		fmt.Fprintf(stdout, "The active procedure %s already covers this task.\n", response.CoveredBy)
-	case resolverpkg.StatusNoSkill:
-		fmt.Fprintf(stdout, "No skill recommended: %s.\n", response.NoSkill.ReasonCode)
-	}
-	return 0
+	})
 }
 
 // classifyResolveError maps resolver failures to the same stable codes the MCP
