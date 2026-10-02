@@ -129,7 +129,8 @@ func TestSkillEditorRecoveryLifecycleBUG03AndBUG12(t *testing.T) {
 	}
 
 	// Check that recovery artifact was saved and mentioned in stderr
-	if !strings.Contains(errBuf.String(), "runtime/edits/REC-") {
+	expectedPrefix := filepath.Join("runtime", "edits", "REC-")
+	if !strings.Contains(errBuf.String(), expectedPrefix) && !strings.Contains(errBuf.String(), "runtime/edits/REC-") {
 		t.Errorf("stderr missing recovery artifact path: %s", errBuf.String())
 	}
 
