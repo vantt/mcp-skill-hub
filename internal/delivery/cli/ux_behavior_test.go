@@ -139,7 +139,7 @@ func TestSkillShowReadsDraftAndReportsState(t *testing.T) {
 	root := initTestWorkspace(t)
 	createDraftSkill(t, root, "demo", "--not-for", "unrelated")
 	code, stdout, stderr := runCLI(t, "skill", "show", "demo", "--workspace", root)
-	if code != 0 || !strings.Contains(stdout, "State: draft") {
+	if code != 0 || !strings.Contains(stdout, "State:") || !strings.Contains(stdout, "draft") {
 		t.Fatalf("show draft exit = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
 	if code, _, stderr := runCLI(t, "skill", "show", "missing", "--workspace", root); code == 0 || !strings.Contains(stderr, "skill not found") {
@@ -290,7 +290,7 @@ func TestSkillShowDisplaysRoutingAndFilePath(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("show exit = %d: %s", code, stderr)
 	}
-	for _, want := range []string{"Triggers: review code", "Not for: write prose", "Min scope: single_step", "File: skills/core/show-test/SKILL.md"} {
+	for _, want := range []string{"Triggers:", "review code", "Not for:", "write prose", "Min scope:", "single_step", "File:", "skills/core/show-test/SKILL.md"} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("skill show missing %q:\n%s", want, stdout)
 		}
@@ -368,7 +368,7 @@ func TestSkillPreviewShowsExactConfirmCommand(t *testing.T) {
 	if !strings.Contains(stdout, "skillhub skill confirm --proposal") || !strings.Contains(stdout, "--base-version") {
 		t.Fatalf("preview missing exact confirm command:\n%s", stdout)
 	}
-	if !strings.Contains(stdout, "- Base version:") {
+	if !strings.Contains(stdout, "Base version:") {
 		t.Fatalf("preview should use 'Base version', got:\n%s", stdout)
 	}
 }

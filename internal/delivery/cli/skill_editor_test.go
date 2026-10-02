@@ -110,8 +110,8 @@ func TestSkillEditorRecoveryLifecycleBUG03AndBUG12(t *testing.T) {
 	var proposalID string
 	for _, line := range strings.Split(outStr, "\n") {
 		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "- Proposal:") {
-			proposalID = strings.TrimSpace(strings.TrimPrefix(line, "- Proposal:"))
+		if strings.HasPrefix(line, "Proposal:") {
+			proposalID = strings.TrimSpace(strings.TrimPrefix(line, "Proposal:"))
 			break
 		}
 	}

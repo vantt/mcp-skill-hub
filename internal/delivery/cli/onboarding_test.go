@@ -387,10 +387,10 @@ func TestFirstRunStatusRecommendsCommitThenConnect(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit = %d: %s", code, stderr)
 	}
-	if got := strings.Count(stdout, "Recommended next:"); got != 1 {
+	if got := strings.Count(stdout, "Next: Commit the new workspace"); got != 1 {
 		t.Fatalf("want exactly one recommendation, got %d:\n%s", got, stdout)
 	}
-	if !strings.Contains(stdout, "Recommended next: Commit the new workspace") || !strings.Contains(stdout, "skillhub connect") || strings.Contains(stdout, "Recommended next: Review uncommitted changes") {
+	if !strings.Contains(stdout, "Next: Commit the new workspace") || !strings.Contains(stdout, "skillhub connect") || strings.Contains(stdout, "Next: Review uncommitted changes") {
 		t.Fatalf("first-run guidance missing:\n%s", stdout)
 	}
 }

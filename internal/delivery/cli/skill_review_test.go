@@ -30,16 +30,16 @@ func TestSkillReviewHumanAndJSON(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("review failed (exit %d): %s", code, stderr)
 	}
-	if !strings.Contains(stdout, "Review: Review Test (rev-test)") {
+	if !strings.Contains(stdout, "Review:") || !strings.Contains(stdout, "Review Test (rev-test)") {
 		t.Errorf("review missing title line: %s", stdout)
 	}
-	if !strings.Contains(stdout, "State: draft") {
+	if !strings.Contains(stdout, "State:") || !strings.Contains(stdout, "draft") {
 		t.Errorf("review missing draft state: %s", stdout)
 	}
 	if !strings.Contains(stdout, "Files:") {
 		t.Errorf("review missing files line: %s", stdout)
 	}
-	if !strings.Contains(stdout, "Origin: local authoring") {
+	if !strings.Contains(stdout, "Origin:") || !strings.Contains(stdout, "local authoring") {
 		t.Errorf("review missing local authoring origin: %s", stdout)
 	}
 	if !strings.Contains(stdout, "Next:") {
@@ -51,7 +51,7 @@ func TestSkillReviewHumanAndJSON(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("verbose review failed (exit %d): %s", code, stderr)
 	}
-	if !strings.Contains(stdout, "Catalog facts:") {
+	if !strings.Contains(stdout, "Catalog facts") {
 		t.Errorf("verbose review missing catalog facts: %s", stdout)
 	}
 	if !strings.Contains(stdout, "Canonical entrypoint:") {

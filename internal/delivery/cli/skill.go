@@ -124,8 +124,9 @@ func runSkill(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 		case app.SkillMutationResult:
 			return writeSkillMutation(stdout, stderr, flags.jsonOutput, flags.verbose, r, flags.workspace)
 		case app.SkillAddResult:
-			return writeSkillAddResult(stdout, stderr, flags.jsonOutput, flags.verbose, r, flags.workspace)
-		default:
+			return writeResult(stdout, stderr, flags.jsonOutput, r, func(p *termui.Printer) {
+				writeSkillAddResult(p, flags.verbose, r)
+			})
 			if flags.jsonOutput {
 				if err := writeJSON(stdout, res); err != nil {
 					p := termui.New(stderr)

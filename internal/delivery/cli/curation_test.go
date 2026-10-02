@@ -41,7 +41,7 @@ func TestStatusHumanJSONAndQuietUseOneModel(t *testing.T) {
 		t.Fatalf("human status exit = %d: %s", code, stderr.String())
 	}
 	human := stdout.String()
-	if !strings.Contains(human, home.Summary) || !strings.Contains(human, "Recommended next: "+home.SuggestedActions[0].Label) {
+	if !strings.Contains(human, home.Summary) || !strings.Contains(human, "Next: "+home.SuggestedActions[0].Label) {
 		t.Fatalf("human status did not render JSON model:\n%s\n%#v", human, home)
 	}
 
