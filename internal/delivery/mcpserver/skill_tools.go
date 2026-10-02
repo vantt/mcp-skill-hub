@@ -2,15 +2,12 @@ package mcpserver
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/vantt/mcp-skill-hub/internal/app"
-	"github.com/vantt/mcp-skill-hub/internal/catalog"
 	"github.com/vantt/mcp-skill-hub/internal/skill"
 )
 
@@ -144,8 +141,7 @@ func (adapter *Server) registerSkillTools(server *mcp.Server) {
 		if id == "" {
 			return failure[skillGetResult](fmt.Errorf("skill_id is required"))
 		}
-		service := app.SkillService{}
-		skillResult, err := service.ReadSkill(ctx, adapter.workspace, id)
+		detail, err := (app.SkillService{}).GetSkillDetail(ctx, adapter.workspace, id)
 		if err != nil {
 			if errors.Is(err, skill.ErrNotFound) {
 				item := toolError{
@@ -158,44 +154,6 @@ func (adapter *Server) registerSkillTools(server *mcp.Server) {
 			}
 			return failure[skillGetResult](err)
 		}
-		routing, err := service.ReadSkillRouting(ctx, adapter.workspace, id)
-		if err != nil {
-			return failure[skillGetResult](err)
-		}
-		rationale, _ := service.ReadSkillRationale(ctx, adapter.workspace, id)
-		path := ""
-		for _, res := range skillResult.Manifest.Resources {
-			if strings.HasSuffix(res.Path, "/SKILL.md") {
-				path = res.Path
-				break
-			}
-		}
-		sum := sha256.Sum256([]byte(skillResult.Content))
-		contentDigest := "sha256:" + hex.EncodeToString(sum[:])
-		assessment, _ := catalog.AssessSkillState(ctx, adapter.workspace, id)
-		lifecycleState := skillResult.Manifest.Status
-		if lifecycleState == "" {
-			lifecycleState = assessment.Canonical.Status
-		}
-		routingEligible := (lifecycleState == "active") && (!assessment.Served.Known || assessment.Served.Servable)
-		return success(skillGetResult{
-			SkillID:          skillResult.Manifest.SkillID,
-			Name:             skillResult.Manifest.Name,
-			Description:      skillResult.Manifest.Description,
-			Status:           skillResult.Manifest.Status,
-			Path:             path,
-			CatalogSnapshot:  skillResult.Manifest.CatalogSnapshot,
-			Content:          skillResult.Content,
-			ContentDigest:    contentDigest,
-			StateBasis:       string(catalog.BasisCanonical),
-			LifecycleState:   lifecycleState,
-			RoutingEligible:  routingEligible,
-			Diverged:         assessment.Diverged,
-			ChangedResources: assessment.ChangedResources,
-			MissingResources: assessment.MissingResources,
-			Routing:          routing,
-			Rationale:        rationale,
-			Resources:        skillResult.Manifest.Resources,
-		})
+		return success(detail)
 	})
 }

@@ -177,25 +177,7 @@ type skillGetInput struct {
 	SkillID string `json:"skill_id"`
 }
 
-type skillGetResult struct {
-	SkillID          string             `json:"skill_id"`
-	Name             string             `json:"name"`
-	Description      string             `json:"description"`
-	Status           string             `json:"status"`
-	Path             string             `json:"path"`
-	CatalogSnapshot  string             `json:"catalog_snapshot"`
-	Content          string             `json:"content"`
-	ContentDigest    string             `json:"content_digest"`
-	StateBasis       string             `json:"state_basis"`
-	LifecycleState   string             `json:"lifecycle_state"`
-	RoutingEligible  bool               `json:"routing_eligible"`
-	Diverged         bool               `json:"diverged"`
-	ChangedResources []string           `json:"changed_resources,omitempty"`
-	MissingResources []string           `json:"missing_resources,omitempty"`
-	Routing          skill.RoutingInput `json:"routing"`
-	Rationale        string             `json:"rationale,omitempty"`
-	Resources        []skill.Resource   `json:"resources"`
-}
+type skillGetResult = app.SkillDetail
 
 type outcomeRecordInput struct {
 	IncorporationID string   `json:"incorporation_id"`
