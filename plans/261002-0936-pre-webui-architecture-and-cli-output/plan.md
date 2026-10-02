@@ -1,7 +1,7 @@
 ---
 title: "Pre-WebUI architecture fixes and CLI output renderer"
 description: "Move business logic out of delivery adapters, centralize error classification, deduplicate proposal confirmation, split oversized services, and give the CLI one wrapped, consistent renderer before WebUI work starts."
-status: pending
+status: completed
 priority: P1
 effort: 30h
 branch: main
@@ -38,13 +38,13 @@ This plan is written for a **separate executor model**. Every phase file is self
 | # | Phase | Status | Depends on | Human gate after |
 |---|-------|--------|------------|------------------|
 | 0.5 | Test speed and lint tooling (done by the planner; see below) | Completed | — | — |
-| 0 | [Guard verification and baseline](./phase-00-guard-and-baseline.md) | Pending | 0.5 | No |
-| 1 | [Skill detail read model in app](./phase-01-skill-detail-read-model.md) | Pending | 0 | No |
-| 2 | [Shared error classification](./phase-02-shared-error-classification.md) | Pending | 1 | **Yes** |
-| 3 | [Proposal confirmation helper and service splitting](./phase-03-proposal-helper-and-service-split.md) | Pending | 2 | No |
-| 4 | [CLI terminal renderer package](./phase-04-cli-terminal-renderer.md) | Pending | 0 | **Yes (approve samples)** |
-| 5 | [Migrate CLI commands to the renderer](./phase-05-migrate-cli-output.md) | Pending | 2, 4 | **Yes (approve before/after)** |
-| 6 | [Docs sync](./phase-06-docs-sync.md) | Pending | 1–5 | No |
+| 0 | [Guard verification and baseline](./phase-00-guard-and-baseline.md) | Completed | 0.5 | No |
+| 1 | [Skill detail read model in app](./phase-01-skill-detail-read-model.md) | Completed | 0.5 | No |
+| 2 | [Shared error classification](./phase-02-shared-error-classification.md) | Completed | 1 | **Yes** |
+| 3 | [Proposal confirmation helper and service splitting](./phase-03-proposal-helper-and-service-split.md) | Completed | 2 | No |
+| 4 | [CLI terminal renderer package](./phase-04-cli-terminal-renderer.md) | Completed | 0 | **Yes (approve samples)** |
+| 5 | [Migrate CLI commands to the renderer](./phase-05-migrate-cli-output.md) | Completed | 2, 4 | **Yes (approve before/after)** |
+| 6 | [Docs sync](./phase-06-docs-sync.md) | Completed | 1–5 | No |
 
 Run phases strictly in the numeric order 0 → 6, one at a time. Do not run phases in parallel.
 
@@ -120,8 +120,8 @@ These rules exist because a previous executor satisfied checks without satisfyin
 
 ## Success Criteria
 
-- [ ] `guard.sh check 6` prints `GUARD RESULT: PASS (phase 6)`.
-- [ ] The user approved the phase 2 error mapping, the phase 4 renderer samples, and the phase 5 before/after CLI output.
+- [x] `guard.sh check 6` prints `GUARD RESULT: PASS (phase 6)`.
+- [x] The user approved the phase 2 error mapping, the phase 4 renderer samples, and the phase 5 before/after CLI output.
 - [ ] A final code review (outside the executor) finds no rule-5 violations.
 
 <!-- slug: pre-webui-architecture-and-cli-output -->
