@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
 	"github.com/vantt/mcp-skill-hub/internal/telemetry"
 )
 
@@ -56,7 +57,8 @@ func runTelemetry(ctx context.Context, args []string, stdout, stderr io.Writer) 
 		if jsonOutput {
 			return writeTelemetryJSON(stdout, stderr, health)
 		}
-		fmt.Fprintf(stdout, "Telemetry is %s: %d written, %d dropped, %d rejected, %d errors.\n", health.State, health.Written, health.Dropped, health.Rejected, health.Errors)
+		p := termui.New(stdout)
+		p.Line(fmt.Sprintf("Telemetry is %s: %d written, %d dropped, %d rejected, %d errors.", health.State, health.Written, health.Dropped, health.Rejected, health.Errors))
 		return 0
 	case "preview":
 		preview, operationErr := service.Preview(ctx, workspacePath, 0)
@@ -82,7 +84,8 @@ func runTelemetry(ctx context.Context, args []string, stdout, stderr io.Writer) 
 		if jsonOutput {
 			return writeTelemetryJSON(stdout, stderr, result)
 		}
-		fmt.Fprintf(stdout, "Exported %d sanitized telemetry events (%d bytes) to %s.\n", result.Events, result.Bytes, result.Path)
+		p := termui.New(stdout)
+		p.Line(fmt.Sprintf("Exported %d sanitized telemetry events (%d bytes) to %s.", result.Events, result.Bytes, result.Path))
 		return 0
 	case "purge":
 		if operationErr := service.Purge(ctx, workspacePath); operationErr != nil {
@@ -95,7 +98,8 @@ func runTelemetry(ctx context.Context, args []string, stdout, stderr io.Writer) 
 		if jsonOutput {
 			return writeTelemetryJSON(stdout, stderr, telemetryPurgeResult{Status: "purged"})
 		}
-		fmt.Fprintln(stdout, "Telemetry purged.")
+		p := termui.New(stdout)
+		p.Line("Telemetry purged.")
 		return 0
 	default:
 		panic("validated telemetry subcommand")
@@ -187,12 +191,15 @@ func writeTelemetryPreview(preview telemetry.Preview, stdout, stderr io.Writer, 
 	if jsonOutput {
 		return writeTelemetryJSON(stdout, stderr, telemetryPreviewResult{Version: preview.Version, Events: preview.Events, Skipped: preview.Skipped, JSONL: string(preview.JSONL)})
 	}
+	p := termui.New(stdout)
 	if len(preview.JSONL) == 0 {
-		fmt.Fprintln(stdout, "No telemetry events.")
+		p.Line("No telemetry events.")
 		return 0
 	}
-	if _, err := stdout.Write(preview.JSONL); err != nil {
-		fmt.Fprintf(stderr, "ERROR: Unable to write telemetry preview.\nWHY: %v\nFIX: Check the output destination and retry.\n", err)
+	p.Raw(string(preview.JSONL))
+	if p.Err() != nil {
+		pErr := termui.New(stderr)
+		pErr.Error("Unable to write telemetry preview.", p.Err().Error(), "Check the output destination and retry.")
 		return 1
 	}
 	return 0
@@ -200,7 +207,8 @@ func writeTelemetryPreview(preview telemetry.Preview, stdout, stderr io.Writer, 
 
 func writeTelemetryJSON(stdout, stderr io.Writer, value any) int {
 	if err := writeJSON(stdout, value); err != nil {
-		fmt.Fprintf(stderr, "ERROR: Unable to write telemetry result.\nWHY: %v\nFIX: Check the output destination and retry.\n", err)
+		p := termui.New(stderr)
+		p.Error("Unable to write telemetry result.", err.Error(), "Check the output destination and retry.")
 		return 1
 	}
 	return 0
@@ -223,15 +231,16 @@ func writeTelemetryError(err error, workspacePath string, stdout, stderr io.Writ
 	}})
 	if jsonOutput {
 		if writeErr := writeJSON(stdout, result); writeErr != nil {
-			fmt.Fprintln(stderr, writeErr)
+			p := termui.New(stderr)
+			p.Line(writeErr.Error())
 			return 1
 		}
 		return 2
 	}
-	fmt.Fprintf(stderr, "ERROR: %s\nWHY: %s\nFIX: %s\n", result.Error.Render.Error, result.Error.Render.Why, result.Error.Render.Fix)
+	p := termui.New(stderr)
+	p.Error(result.Error.Render.Error, result.Error.Render.Why, result.Error.Render.Fix)
 	return 2
 }
-
 func shellQuote(value string) string {
 	if value != "" && strings.IndexFunc(value, func(r rune) bool {
 		return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("/._-:+@%", r))
