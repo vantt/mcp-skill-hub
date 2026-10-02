@@ -12,6 +12,7 @@ import (
 )
 
 func TestSkillAddLocalPreviewAndConfirm(t *testing.T) {
+	t.Parallel()
 	root := initTestWorkspace(t)
 	temp := t.TempDir()
 	sourceDir := filepath.Join(temp, "pdf-tools")
@@ -63,6 +64,7 @@ func TestSkillAddLocalPreviewAndConfirm(t *testing.T) {
 }
 
 func TestSkillAddMultiSelectionAndAll(t *testing.T) {
+	t.Parallel()
 	root := initTestWorkspace(t)
 	temp := t.TempDir()
 	sourceDir := filepath.Join(temp, "bundle")
@@ -102,6 +104,7 @@ func TestSkillAddMultiSelectionAndAll(t *testing.T) {
 }
 
 func TestSkillAddShortConfirmDispatched(t *testing.T) {
+	t.Parallel()
 	root := initTestWorkspace(t)
 	temp := t.TempDir()
 	sourceDir := filepath.Join(temp, "short-confirm-skill")

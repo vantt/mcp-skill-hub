@@ -1,0 +1,34 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  # standard = errcheck, govet, ineffassign, staticcheck, unused
+  default: standard
+  enable:
+    - funlen
+    - misspell
+    - revive
+  settings:
+    funlen:
+      # Long functions hide multiple responsibilities; tests are exempt below.
+      lines: 120
+      statements: -1
+      ignore-comments: true
+    revive:
+      rules:
+        - name: argument-limit
+          arguments: [6]
+  exclusions:
+    presets:
+      - std-error-handling
+    rules:
+      - path: _test\.go
+        linters:
+          - funlen
+          - revive
+
+formatters:
+  enable:
+    - gofmt

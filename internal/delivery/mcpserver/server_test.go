@@ -73,6 +73,7 @@ func expectedToolAnnotations() map[string][4]bool {
 }
 
 func TestNewDoesNotOpenTelemetry(t *testing.T) {
+	t.Parallel()
 	root := newMCPWorkspace(t)
 	databasePath := filepath.Join(root, "runtime", "telemetry.db")
 	if err := os.RemoveAll(databasePath); err != nil {
@@ -88,6 +89,7 @@ func TestNewDoesNotOpenTelemetry(t *testing.T) {
 }
 
 func TestModernAndLegacySDKContracts(t *testing.T) {
+	t.Parallel()
 	root := newMCPWorkspace(t)
 	for _, version := range []string{"2026-07-28", "2025-11-25"} {
 		t.Run(version, func(t *testing.T) {
@@ -265,6 +267,7 @@ func TestModernAndLegacySDKContracts(t *testing.T) {
 }
 
 func TestResolverLoadsOnlySelectedDistributionEntries(t *testing.T) {
+	t.Parallel()
 	root := newMCPWorkspace(t)
 	badDirectory := filepath.Join(root, "skills", "core", "unrelated-bad")
 	if err := os.MkdirAll(badDirectory, 0o755); err != nil {
@@ -294,6 +297,7 @@ func TestResolverLoadsOnlySelectedDistributionEntries(t *testing.T) {
 }
 
 func TestDistributionUsesTopLevelSkillEntrypoint(t *testing.T) {
+	t.Parallel()
 	root := newMCPWorkspace(t)
 	nested := filepath.Join(root, "skills", "core", "review-skill", "references", "SKILL.md")
 	if err := os.WriteFile(nested, []byte("---\nname: nested-skill\ndescription: Supporting content only.\n---\n\n# Nested\n"), 0o644); err != nil {
@@ -321,6 +325,7 @@ func TestDistributionUsesTopLevelSkillEntrypoint(t *testing.T) {
 }
 
 func TestPaginationAndConfirmationBoundaries(t *testing.T) {
+	t.Parallel()
 	root := newMCPWorkspace(t)
 	adapter, server, err := New(root, nil)
 	if err != nil {
@@ -453,6 +458,7 @@ func TestPaginationAndConfirmationBoundaries(t *testing.T) {
 }
 
 func TestPlainNewCurationRecorderOwnsShortLivedLifecycle(t *testing.T) {
+	t.Parallel()
 	root := newMCPWorkspace(t)
 	_, server, err := New(root, nil)
 	if err != nil {
@@ -484,6 +490,7 @@ func TestPlainNewCurationRecorderOwnsShortLivedLifecycle(t *testing.T) {
 }
 
 func TestPlainNewFeedbackHasNoImplicitTelemetryLifecycle(t *testing.T) {
+	t.Parallel()
 	root := newMCPWorkspace(t)
 	_, server, err := New(root, nil)
 	if err != nil {
@@ -515,6 +522,7 @@ func TestPlainNewFeedbackHasNoImplicitTelemetryLifecycle(t *testing.T) {
 	}
 }
 
+// Runs serially: it asserts on the process-global MCP diagnostics logger that New replaces.
 func TestSafeErrorMappingDoesNotLeakUnknownDetails(t *testing.T) {
 	root := newMCPWorkspace(t)
 	var diagnostics bytes.Buffer
@@ -544,6 +552,7 @@ func TestSafeErrorMappingDoesNotLeakUnknownDetails(t *testing.T) {
 }
 
 func TestOpaqueCursorMultiPageAndIntegrity(t *testing.T) {
+	t.Parallel()
 	items := []string{"alpha", "bravo", "charlie", "delta", "echo"}
 	filter := "status=active"
 	owner := pageOwner(filter, items)
@@ -630,6 +639,7 @@ func decodeStructuredContent(t *testing.T, result *mcp.CallToolResult, target an
 }
 
 func TestSkillSnapshotExpiryAndMalformedCursor(t *testing.T) {
+	t.Parallel()
 	root := newMCPWorkspace(t)
 	adapter := app.DistributionService{}
 	entries, _, err := adapter.ListSkills(t.Context(), root)

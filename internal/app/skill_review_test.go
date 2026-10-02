@@ -12,6 +12,7 @@ import (
 )
 
 func TestReviewSkillUntouchedDraft(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	root := newSkillWorkspace(t)
 	service := SkillService{}
@@ -63,6 +64,7 @@ func TestReviewSkillUntouchedDraft(t *testing.T) {
 }
 
 func TestReviewSkillReadyDraft(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	root := newSkillWorkspace(t)
 	service := SkillService{}
@@ -99,6 +101,7 @@ func TestReviewSkillReadyDraft(t *testing.T) {
 }
 
 func TestReviewSkillActiveAndDivergence(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	root := newSkillWorkspace(t)
 	service := SkillService{}
@@ -173,6 +176,7 @@ func TestReviewSkillActiveAndDivergence(t *testing.T) {
 }
 
 func TestReviewSkillTolerantOfBrokenCatalog(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	root := newSkillWorkspace(t)
 	service := SkillService{}
@@ -203,6 +207,7 @@ func TestReviewSkillTolerantOfBrokenCatalog(t *testing.T) {
 }
 
 func TestReviewSkillDeprecatedAndArchived(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	root := newSkillWorkspace(t)
 	service := SkillService{}

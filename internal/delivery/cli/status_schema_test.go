@@ -13,6 +13,7 @@ import (
 )
 
 func TestStatusJSONValidatesAgainstVersionedSchema(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
 	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {

@@ -29,6 +29,7 @@ import (
 )
 
 func TestCLICreateActivateThenMCPListGetRead(t *testing.T) {
+	t.Parallel()
 	binary := buildSkillHub(t)
 	root := filepath.Join(t.TempDir(), "workspace")
 	run := func(args ...string) []byte {
@@ -92,6 +93,7 @@ func TestCLICreateActivateThenMCPListGetRead(t *testing.T) {
 	}
 }
 
+// Runs serially: it asserts on the process-global MCP diagnostics logger that New replaces.
 func TestMCPSourceUsesServeTelemetryRecorderWithoutPersistingRawInput(t *testing.T) {
 	root := newMCPWorkspace(t)
 	binary := buildSkillHub(t)
@@ -133,6 +135,7 @@ func TestMCPSourceUsesServeTelemetryRecorderWithoutPersistingRawInput(t *testing
 	}
 }
 
+// Runs serially: it asserts on the process-global MCP diagnostics logger that New replaces.
 func TestMCPCurationSessionRecordExportsObservedEvidence(t *testing.T) {
 	root := newMCPWorkspace(t)
 	before, err := (app.WorkspaceService{}).GetCurationDiff(t.Context(), root)
@@ -205,6 +208,7 @@ func TestMCPCurationSessionRecordExportsObservedEvidence(t *testing.T) {
 }
 
 func TestMCPResolveTelemetryLifecycle(t *testing.T) {
+	t.Parallel()
 	root := newMCPWorkspace(t)
 	binary := buildSkillHub(t)
 	privateDescription := "review changed code for private-task-description"
@@ -315,6 +319,7 @@ func callMCPResolve(t *testing.T, binary, root string, arguments map[string]any,
 }
 
 func TestBuiltStdioLifecycleAndSemanticParity(t *testing.T) {
+	t.Parallel()
 	root := newMCPWorkspace(t)
 	binary := buildSkillHub(t)
 	var stderr bytes.Buffer
@@ -364,6 +369,7 @@ func TestBuiltStdioLifecycleAndSemanticParity(t *testing.T) {
 }
 
 func TestStdioEOFMalformedAndFrameLimit(t *testing.T) {
+	t.Parallel()
 	root := newMCPWorkspace(t)
 	binary := buildSkillHub(t)
 
@@ -466,6 +472,7 @@ func TestStdioEOFMalformedAndFrameLimit(t *testing.T) {
 }
 
 func TestMultipleStdioProcessesReadAcrossApply(t *testing.T) {
+	t.Parallel()
 	root := newMCPWorkspace(t)
 	binary := buildSkillHub(t)
 	entries, _, err := (app.DistributionService{}).ListSkills(t.Context(), root)
@@ -549,6 +556,7 @@ func TestMultipleStdioProcessesReadAcrossApply(t *testing.T) {
 }
 
 func TestStdioDegradedStartupWithValidFallback(t *testing.T) {
+	t.Parallel()
 	root := newMCPWorkspace(t)
 	binary := buildSkillHub(t)
 
@@ -619,6 +627,7 @@ func TestStdioDegradedStartupWithValidFallback(t *testing.T) {
 }
 
 func TestStdioDegradedStartupWithNoCatalog(t *testing.T) {
+	t.Parallel()
 	root := newMCPWorkspace(t)
 	binary := buildSkillHub(t)
 

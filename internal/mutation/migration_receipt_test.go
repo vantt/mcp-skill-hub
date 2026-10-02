@@ -10,6 +10,7 @@ import (
 )
 
 func TestMigrationReceiptRoundTripPreservesStructuredVersions(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := workspace.Apply(root); err != nil {
 		t.Fatal(err)
@@ -45,6 +46,7 @@ func TestMigrationReceiptRoundTripPreservesStructuredVersions(t *testing.T) {
 }
 
 func TestMutationRejectsPartialSchemaVersionMetadata(t *testing.T) {
+	t.Parallel()
 	source := 0
 	err := validWriteSet(WriteSet{OperationID: "OP-PARTIAL", Command: "migration", SourceSchemaVersion: &source, Changes: []Change{{Path: ".skillhub/schema-version", Contents: []byte("1\n")}}}, true)
 	if err == nil {

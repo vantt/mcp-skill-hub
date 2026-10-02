@@ -12,6 +12,7 @@ import (
 )
 
 func TestTelemetryServiceUsesWorkspaceLocalContentFreeStore(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	outside := filepath.Join(t.TempDir(), "outside.db")
 	service := TelemetryService{Config: telemetry.Config{Path: outside, ContentMode: "debug", BufferSize: 8}}
@@ -62,6 +63,7 @@ func TestTelemetryServiceUsesWorkspaceLocalContentFreeStore(t *testing.T) {
 }
 
 func TestTelemetryServiceRejectsSymlinkedRuntime(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	outside := t.TempDir()
 	if err := os.Symlink(outside, filepath.Join(root, "runtime")); err != nil {
@@ -76,6 +78,7 @@ func TestTelemetryServiceRejectsSymlinkedRuntime(t *testing.T) {
 }
 
 func TestTelemetryServicePromotionDraftIsSanitizedAndDeterministic(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	service := TelemetryService{}
 	recorder, err := service.Open(root)
@@ -131,6 +134,7 @@ func TestTelemetryServicePromotionDraftIsSanitizedAndDeterministic(t *testing.T)
 }
 
 func TestTelemetryServicePromotionDraftReportsMissingAndAmbiguousResolution(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	service := TelemetryService{}
 	if _, err := service.PromotionDraft(t.Context(), root, "res-missing"); !errors.Is(err, telemetry.ErrPromotionNotFound) {
@@ -165,6 +169,7 @@ func containsString(values []string, target string) bool {
 }
 
 func TestTelemetryServiceReportsConfigurationAndContextFailures(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	service := TelemetryService{Config: telemetry.Config{BufferSize: -1}}
 	if _, err := service.Open(root); err == nil {

@@ -45,6 +45,7 @@ func connectInMemoryServer(t *testing.T, root string) *mcp.ClientSession {
 }
 
 func TestSkillUpdatePreviewUnknownID(t *testing.T) {
+	t.Parallel()
 	root := newEmptyMCPWorkspace(t)
 	session := connectInMemoryServer(t, root)
 
@@ -73,6 +74,7 @@ func TestSkillUpdatePreviewUnknownID(t *testing.T) {
 }
 
 func TestSkillToolsLifecycleInMemory(t *testing.T) {
+	t.Parallel()
 	root := newEmptyMCPWorkspace(t)
 	session := connectInMemoryServer(t, root)
 
@@ -355,6 +357,7 @@ func TestSkillToolsLifecycleInMemory(t *testing.T) {
 }
 
 func TestSkillToolsStdioSubprocess(t *testing.T) {
+	t.Parallel()
 	binary := buildSkillHub(t)
 	root := filepath.Join(t.TempDir(), "workspace")
 
@@ -469,6 +472,7 @@ func TestSkillToolsStdioSubprocess(t *testing.T) {
 }
 
 func TestSkillUpdatePreviewWithExpectedContentDigest(t *testing.T) {
+	t.Parallel()
 	root := newEmptyMCPWorkspace(t)
 	session := connectInMemoryServer(t, root)
 

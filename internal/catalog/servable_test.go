@@ -7,6 +7,7 @@ import (
 )
 
 func TestBuildWarnsAboutActiveSkillsThatCannotBeServed(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	meta := func(id string) string {
 		return "schema_version: 1\nid: " + id + "\nname: Skill\nstatus: active\ndescription: Fixture skill.\nrouting:\n  triggers: [fixture]\n  not_for: [unrelated]\n  min_scope: single_step\n"
@@ -29,6 +30,7 @@ func TestBuildWarnsAboutActiveSkillsThatCannotBeServed(t *testing.T) {
 }
 
 func TestValidateServableSkillRequiresMatchingFrontmatter(t *testing.T) {
+	t.Parallel()
 	good := []byte("---\nname: alpha\ndescription: Does things.\n---\n\n# Alpha\n")
 	if err := ValidateServableSkill("alpha", good, 1, int64(len(good))); err != nil {
 		t.Fatalf("servable skill rejected: %v", err)
@@ -48,6 +50,7 @@ func TestValidateServableSkillRequiresMatchingFrontmatter(t *testing.T) {
 }
 
 func TestAssessSkillStateHealthySkill(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	meta := "schema_version: 1\nid: review\nname: review\nstatus: active\ndescription: Code review skill.\nrouting:\n  triggers: [review code]\n  not_for: [marketing]\n  min_scope: single_step\n"
 	writeCanonical(t, root, "skills/core/review/skill.meta.yaml", meta)
@@ -76,6 +79,7 @@ func TestAssessSkillStateHealthySkill(t *testing.T) {
 }
 
 func TestAssessSkillStateInvalidCanonicalEdit(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	meta := "schema_version: 1\nid: review\nname: review\nstatus: active\ndescription: Code review skill.\nrouting:\n  triggers: [review code]\n  not_for: [marketing]\n  min_scope: single_step\n"
 	writeCanonical(t, root, "skills/core/review/skill.meta.yaml", meta)
@@ -111,6 +115,7 @@ func TestAssessSkillStateInvalidCanonicalEdit(t *testing.T) {
 }
 
 func TestAssessSkillStateChangedLiveResource(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	meta := "schema_version: 1\nid: review\nname: review\nstatus: active\ndescription: Code review skill.\nrouting:\n  triggers: [review code]\n  not_for: [marketing]\n  min_scope: single_step\n"
 	writeCanonical(t, root, "skills/core/review/skill.meta.yaml", meta)

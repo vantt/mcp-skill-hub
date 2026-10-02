@@ -15,6 +15,7 @@ import (
 )
 
 func TestProposalArtifactRoundTripIsRestrictiveAndExpires(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := workspace.Apply(root); err != nil {
 		t.Fatal(err)
@@ -48,6 +49,7 @@ func TestProposalArtifactRoundTripIsRestrictiveAndExpires(t *testing.T) {
 }
 
 func TestCreateGeneratesAndEditPreservesSkillFrontmatter(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := workspace.Apply(root); err != nil {
 		t.Fatal(err)
@@ -81,6 +83,7 @@ func TestCreateGeneratesAndEditPreservesSkillFrontmatter(t *testing.T) {
 }
 
 func TestManagerRechecksProposalExpiryAtConfirm(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := workspace.Apply(root); err != nil {
 		t.Fatal(err)
@@ -101,6 +104,7 @@ func TestManagerRechecksProposalExpiryAtConfirm(t *testing.T) {
 }
 
 func TestEditableContentRejectsSymlink(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := workspace.Apply(root); err != nil {
 		t.Fatal(err)
@@ -126,6 +130,7 @@ func TestEditableContentRejectsSymlink(t *testing.T) {
 }
 
 func TestEditKeepsSkillFrontmatterDescriptionInSyncWithMetadata(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := workspace.Apply(root); err != nil {
 		t.Fatal(err)
@@ -178,6 +183,7 @@ func TestEditKeepsSkillFrontmatterDescriptionInSyncWithMetadata(t *testing.T) {
 	}
 }
 func TestProposalKindEnvelopeAndLegacyCompatibility(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := workspace.Apply(root); err != nil {
 		t.Fatal(err)
@@ -278,6 +284,7 @@ func TestProposalKindEnvelopeAndLegacyCompatibility(t *testing.T) {
 }
 
 func TestEditorRecoveryLifecycleAndCleanup(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := workspace.Apply(root); err != nil {
 		t.Fatal(err)
@@ -335,6 +342,7 @@ func TestEditorRecoveryLifecycleAndCleanup(t *testing.T) {
 }
 
 func TestProposalDispatcherDispatchByKind(t *testing.T) {
+	t.Parallel()
 	dispatcher := NewProposalDispatcher()
 	calledAdd := false
 	dispatcher.Register(ProposalKindAdd, func(ctx context.Context, root string, p Proposal, pins mutation.Confirmation) (MutationResult, error) {

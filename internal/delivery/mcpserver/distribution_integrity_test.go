@@ -41,6 +41,7 @@ func connectDistributionSession(t *testing.T, root string) *mcp.ClientSession {
 }
 
 func TestResourceWithInvalidUTF8IsDeliveredByteForByte(t *testing.T) {
+	t.Parallel()
 	root := newMCPWorkspace(t)
 	invalid := []byte("id,value\n\xff\xfe,1\n")
 	assets := filepath.Join(root, "skills", "core", "review-skill", "assets")
@@ -87,6 +88,7 @@ func TestResourceWithInvalidUTF8IsDeliveredByteForByte(t *testing.T) {
 }
 
 func TestDistributionReportsStaleCatalogAsIndexStale(t *testing.T) {
+	t.Parallel()
 	root := newMCPWorkspace(t)
 	session := connectDistributionSession(t, root)
 	// Corrupt the pointer and break canonical files so catalog cannot be served or rebuilt
@@ -110,6 +112,7 @@ func TestDistributionReportsStaleCatalogAsIndexStale(t *testing.T) {
 }
 
 func TestSkillsListOmitsUnservableSkillInsteadOfFailing(t *testing.T) {
+	t.Parallel()
 	root := newMCPWorkspace(t)
 	bad := filepath.Join(root, "skills", "core", "renamed-skill")
 	if err := os.MkdirAll(bad, 0o755); err != nil {

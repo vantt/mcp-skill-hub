@@ -56,6 +56,7 @@ func FuzzMutationPathConfinement(f *testing.F) {
 }
 
 func TestEveryMutationFaultRecoversCanonicalAuthority(t *testing.T) {
+	t.Parallel()
 	points := []FaultPoint{
 		FaultTransactionCreated,
 		FaultStagedFile,
@@ -103,6 +104,7 @@ func TestEveryMutationFaultRecoversCanonicalAuthority(t *testing.T) {
 }
 
 func TestMutationDiskFullDuringStagingPreservesAuthority(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	set := WriteSet{OperationID: "OP-DISK-FULL", Command: "create_source", Changes: []Change{{Path: "sources/catalog/SRC-DISK-FULL.yaml", Contents: []byte("id: SRC-DISK-FULL\n")}}}
 	_, err := CommitWithOptions(root, set, Options{Fault: func(point FaultPoint) error {
@@ -126,6 +128,7 @@ func TestMutationDiskFullDuringStagingPreservesAuthority(t *testing.T) {
 }
 
 func TestMutationReadOnlyWorkspaceFailsClosedWhereSupported(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
 		t.Skip("directory permission enforcement is not reliable on this platform or as root")
 	}
@@ -179,6 +182,7 @@ func assertHardeningReplacementState(t *testing.T, root string, wantNew bool) {
 }
 
 func TestCommitRejectsMutationWhoseReceiptWouldExceedAggregateLimit(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	path := "sources/catalog/SRC-NEAR-LIMIT.yaml"
 	before := []byte("id: SRC-NEAR-LIMIT\nname: old\n")

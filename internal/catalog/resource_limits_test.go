@@ -10,6 +10,7 @@ import (
 )
 
 func TestCatalogInputRejectsOversizedCanonicalFile(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	path := filepath.Join(root, "skills", "oversized", "SKILL.md")
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -32,6 +33,7 @@ func TestCatalogInputRejectsOversizedCanonicalFile(t *testing.T) {
 }
 
 func TestReadCanonicalInputAcceptsExactLimitAndRejectsSymlink(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	path := filepath.Join(root, "exact.bin")
 	file, err := os.Create(path)

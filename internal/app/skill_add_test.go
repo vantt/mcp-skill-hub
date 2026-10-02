@@ -17,6 +17,7 @@ import (
 )
 
 func TestSkillAddLocalDirectHappyPathBUG11(t *testing.T) {
+	t.Parallel()
 	root := newSourceWorkspace(t)
 	temp := t.TempDir()
 	sourceDir := filepath.Join(temp, "my-external-skill")
@@ -191,6 +192,7 @@ Step 1: Do something useful.
 }
 
 func TestSkillAddImmutableSnapshotAndOriginalDeletion(t *testing.T) {
+	t.Parallel()
 	root := newSourceWorkspace(t)
 	temp := t.TempDir()
 	sourceDir := filepath.Join(temp, "ephemeral-skill")
@@ -237,6 +239,7 @@ func TestSkillAddImmutableSnapshotAndOriginalDeletion(t *testing.T) {
 }
 
 func TestSkillAddDeterministicIdempotencyReplayAndCacheLoss(t *testing.T) {
+	t.Parallel()
 	root := newSourceWorkspace(t)
 	temp := t.TempDir()
 	sourceDir := filepath.Join(temp, "replay-skill")
@@ -308,6 +311,7 @@ func TestSkillAddDeterministicIdempotencyReplayAndCacheLoss(t *testing.T) {
 }
 
 func TestSkillAddTargetIDConflictDetectionAndRename(t *testing.T) {
+	t.Parallel()
 	root := newSourceWorkspace(t)
 	temp := t.TempDir()
 
@@ -362,6 +366,7 @@ func TestSkillAddTargetIDConflictDetectionAndRename(t *testing.T) {
 }
 
 func TestSkillAddSelectionSemantics(t *testing.T) {
+	t.Parallel()
 	root := newSourceWorkspace(t)
 	temp := t.TempDir()
 
@@ -421,6 +426,7 @@ func TestSkillAddSelectionSemantics(t *testing.T) {
 }
 
 func TestSkillAddLicenseWarningsBUG16(t *testing.T) {
+	t.Parallel()
 	root := newSourceWorkspace(t)
 	temp := t.TempDir()
 
@@ -453,6 +459,7 @@ func TestSkillAddLicenseWarningsBUG16(t *testing.T) {
 }
 
 func TestSkillAddProposalDispatchIntegration(t *testing.T) {
+	t.Parallel()
 	root := newSourceWorkspace(t)
 	temp := t.TempDir()
 	sourceDir := filepath.Join(temp, "dispatch-skill")
@@ -482,6 +489,7 @@ func TestSkillAddProposalDispatchIntegration(t *testing.T) {
 }
 
 func TestSkillAddConfirmationPinsMismatchRejected(t *testing.T) {
+	t.Parallel()
 	root := newSourceWorkspace(t)
 	temp := t.TempDir()
 	sourceDir := filepath.Join(temp, "pins-skill")
@@ -511,6 +519,7 @@ func TestSkillAddConfirmationPinsMismatchRejected(t *testing.T) {
 }
 
 func TestSkillAddSmokeMutateOriginalAfterPreview(t *testing.T) {
+	t.Parallel()
 	root := newSourceWorkspace(t)
 	temp := t.TempDir()
 	sourceDir := filepath.Join(temp, "smoke-skill")
@@ -612,6 +621,7 @@ func TestSkillAddSmokeMutateOriginalAfterPreview(t *testing.T) {
 	}
 }
 func TestSkillAddRemoteGitRealAdapter(t *testing.T) {
+	t.Parallel()
 	root := newSourceWorkspace(t)
 	repoDir := t.TempDir()
 	repo, err := git.PlainInit(repoDir, false)

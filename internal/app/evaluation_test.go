@@ -18,6 +18,7 @@ import (
 )
 
 func TestEvaluationServiceGenerateManifestRunsImmediatelyWithoutCanonicalMutation(t *testing.T) {
+	t.Parallel()
 	root, current := evaluationCurrentWorkspace(t)
 	suite, suitePath := evaluationSuiteFixture(t)
 	before, err := canonical.Scan(root)
@@ -59,6 +60,7 @@ func TestEvaluationServiceGenerateManifestRunsImmediatelyWithoutCanonicalMutatio
 }
 
 func TestEvaluationServiceGenerateManifestUsesExplicitSeedAndStrictSuite(t *testing.T) {
+	t.Parallel()
 	root, _ := evaluationCurrentWorkspace(t)
 	_, suitePath := evaluationSuiteFixture(t)
 	seed := int64(0)
@@ -80,6 +82,7 @@ func TestEvaluationServiceGenerateManifestUsesExplicitSeedAndStrictSuite(t *test
 }
 
 func TestEvaluationServiceReplaysCurrentAndHistoricalSnapshotsExactly(t *testing.T) {
+	t.Parallel()
 	root, historical, current := evaluationWorkspace(t)
 	suite, suitePath := evaluationSuiteFixture(t)
 
@@ -100,6 +103,7 @@ func TestEvaluationServiceReplaysCurrentAndHistoricalSnapshotsExactly(t *testing
 }
 
 func TestEvaluationServiceReplaysStrictCaseFromPinnedSnapshot(t *testing.T) {
+	t.Parallel()
 	root, current := evaluationCurrentWorkspace(t)
 	test := evaluationCase("case-replay", evaluation.PartitionDevelopment)
 	casePath := filepath.Join(t.TempDir(), "case.json")
@@ -121,6 +125,7 @@ func TestEvaluationServiceReplaysStrictCaseFromPinnedSnapshot(t *testing.T) {
 }
 
 func TestEvaluationServiceFailsClosedWhenSnapshotIsUnavailable(t *testing.T) {
+	t.Parallel()
 	root, current := evaluationCurrentWorkspace(t)
 	suite, suitePath := evaluationSuiteFixture(t)
 	manifest := evaluationManifest(t, root, current, suite, nil)
@@ -133,6 +138,7 @@ func TestEvaluationServiceFailsClosedWhenSnapshotIsUnavailable(t *testing.T) {
 }
 
 func TestEvaluationServiceFailsClosedOnPolicyAndEnvironmentMismatch(t *testing.T) {
+	t.Parallel()
 	root, current := evaluationCurrentWorkspace(t)
 	suite, suitePath := evaluationSuiteFixture(t)
 	base := evaluationManifest(t, root, current, suite, nil)
@@ -174,6 +180,7 @@ func TestEvaluationServiceFailsClosedOnPolicyAndEnvironmentMismatch(t *testing.T
 }
 
 func TestEvaluationServiceReportBytesAreDeterministic(t *testing.T) {
+	t.Parallel()
 	root, current := evaluationCurrentWorkspace(t)
 	suite, suitePath := evaluationSuiteFixture(t)
 	manifest := evaluationManifest(t, root, current, suite, nil)
@@ -201,6 +208,7 @@ func TestEvaluationServiceReportBytesAreDeterministic(t *testing.T) {
 }
 
 func TestEvaluationServiceDoesNotMutateCanonicalState(t *testing.T) {
+	t.Parallel()
 	root, current := evaluationCurrentWorkspace(t)
 	suite, suitePath := evaluationSuiteFixture(t)
 	manifest := evaluationManifest(t, root, current, suite, nil)

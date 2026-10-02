@@ -55,6 +55,7 @@ func writeSkill(t *testing.T, root, id, fmName, body string) {
 }
 
 func TestStagedValidationOppositeResults(t *testing.T) {
+	t.Parallel()
 	root := setupTestGitRepo(t)
 	svc := WorkspaceService{}
 	ctx := context.Background()
@@ -117,6 +118,7 @@ func TestStagedValidationOppositeResults(t *testing.T) {
 }
 
 func TestStagedValidationNeverRunsGitFilters(t *testing.T) {
+	t.Parallel()
 	root := setupTestGitRepo(t)
 	svc := WorkspaceService{}
 	ctx := context.Background()
@@ -164,6 +166,7 @@ func TestStagedValidationNeverRunsGitFilters(t *testing.T) {
 }
 
 func TestStagedValidationPreservesIndexBytesAndGitStatus(t *testing.T) {
+	t.Parallel()
 	root := setupTestGitRepo(t)
 	svc := WorkspaceService{}
 	ctx := context.Background()
@@ -204,6 +207,7 @@ func TestStagedValidationPreservesIndexBytesAndGitStatus(t *testing.T) {
 }
 
 func TestGetGitPathSummary(t *testing.T) {
+	t.Parallel()
 	root := setupTestGitRepo(t)
 	svc := WorkspaceService{}
 	ctx := context.Background()
@@ -266,6 +270,7 @@ func TestGetGitPathSummary(t *testing.T) {
 }
 
 func TestReadGitIndexIdentity(t *testing.T) {
+	t.Parallel()
 	root := setupTestGitRepo(t)
 	ctx := context.Background()
 

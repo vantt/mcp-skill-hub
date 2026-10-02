@@ -8,6 +8,7 @@ import (
 )
 
 func TestInsightApplyRejectsYesInHumanAndJSONModes(t *testing.T) {
+	t.Parallel()
 	for _, jsonMode := range []bool{false, true} {
 		name := "human"
 		args := []string{"apply", "INS-one", "--workspace", t.TempDir(), "--proposal-file", "unused.json", "--yes"}

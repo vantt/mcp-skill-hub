@@ -13,6 +13,7 @@ import (
 )
 
 func TestDistillCLIRecordsSanitizedPrepareAndSubmitEvents(t *testing.T) {
+	t.Parallel()
 	root := onboardCLIFilesystemSource(t)
 	code, stdout, stderr := runCLIForTest([]string{"distill", "prepare", "source-a", "--workspace", root, "--json"})
 	if code != 0 {
@@ -70,6 +71,7 @@ func TestDistillCLIRecordsSanitizedPrepareAndSubmitEvents(t *testing.T) {
 }
 
 func TestDistillCLIBlockedTelemetryPreservesSuccessAndErrorContracts(t *testing.T) {
+	t.Parallel()
 	normal := newSourceCLIWorkspace(t)
 	blocked := newSourceCLIWorkspace(t)
 	if err := os.WriteFile(filepath.Join(blocked, "runtime", "telemetry.db"), []byte("blocked telemetry"), 0o600); err != nil {

@@ -10,6 +10,7 @@ import (
 )
 
 func TestTelemetryCLIHealthPreviewExportAndPurge(t *testing.T) {
+	t.Parallel()
 	root, requestPath := telemetryCLIWorkspace(t)
 	var stdout, stderr bytes.Buffer
 	if code := Run([]string{"resolve", "--workspace", root, "--request", requestPath, "--json"}, &stdout, &stderr); code != 0 {
@@ -94,6 +95,7 @@ func TestTelemetryCLIHealthPreviewExportAndPurge(t *testing.T) {
 }
 
 func TestTelemetryCLIRejectsUnsafeAndUnboundedArguments(t *testing.T) {
+	t.Parallel()
 	root, _ := telemetryCLIWorkspace(t)
 	existing := filepath.Join(t.TempDir(), "existing.jsonl")
 	if err := os.WriteFile(existing, []byte("keep"), 0o600); err != nil {
@@ -132,6 +134,7 @@ func TestTelemetryCLIRejectsUnsafeAndUnboundedArguments(t *testing.T) {
 }
 
 func TestResolveCLIIgnoresTelemetryStorageFailure(t *testing.T) {
+	t.Parallel()
 	root, requestPath := telemetryCLIWorkspace(t)
 	database := filepath.Join(root, "runtime", "telemetry.db")
 	if err := os.WriteFile(database, []byte("corrupt telemetry"), 0o600); err != nil {
@@ -169,6 +172,7 @@ func telemetryCLIWorkspace(t *testing.T) (string, string) {
 }
 
 func TestTelemetryHealthWithCorruptStoreSuggestsPurgeNotWorkspaceRepair(t *testing.T) {
+	t.Parallel()
 	root, _ := telemetryCLIWorkspace(t)
 	if err := os.WriteFile(filepath.Join(root, "runtime", "telemetry.db"), []byte("corrupt telemetry"), 0o600); err != nil {
 		t.Fatal(err)
@@ -204,6 +208,7 @@ func TestTelemetryHealthWithCorruptStoreSuggestsPurgeNotWorkspaceRepair(t *testi
 }
 
 func TestTelemetryHealthReportsCountersFromEarlierCommands(t *testing.T) {
+	t.Parallel()
 	root, requestPath := telemetryCLIWorkspace(t)
 	var stdout, stderr bytes.Buffer
 	for i := 0; i < 2; i++ {

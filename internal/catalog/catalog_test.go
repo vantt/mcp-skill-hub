@@ -17,6 +17,7 @@ import (
 )
 
 func TestDeleteRuntimeRebuildsOfflineAndRecreatesDisposableDatabases(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	writeCanonical(t, root, "skills/core/review/skill.meta.yaml", "schema_version: 1\nid: review\nname: Review\nstatus: active\ndescription: Review code.\naliases: [patch-inspector]\nrouting:\n  triggers: [review code]\n  operations: [review]\n  not_for: [write prose]\n  min_scope: multi_step\n")
 	writeCanonical(t, root, "skills/core/review/SKILL.md", "# Review\nUse evidence.\n")
@@ -64,6 +65,7 @@ func TestDeleteRuntimeRebuildsOfflineAndRecreatesDisposableDatabases(t *testing.
 }
 
 func TestEquivalentBuildsHaveDeterministicLogicalResults(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	writeCanonical(t, root, "skills/core/review/skill.meta.yaml", "schema_version: 1\nid: review\nname: Review\nstatus: active\ndescription: Review code.\nrouting:\n  triggers: [review code, inspect diff]\n  not_for: [write prose]\n  min_scope: multi_step\n")
 	writeCanonical(t, root, "skills/core/review/SKILL.md", "# Review\n")
@@ -81,6 +83,7 @@ func TestEquivalentBuildsHaveDeterministicLogicalResults(t *testing.T) {
 }
 
 func TestCanonicalChangeDuringBuildRejectsPublish(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	initial := build(t, root, BuildOptions{})
 	_, err := BuildCatalogGeneration(context.Background(), root, BuildOptions{BeforePublish: func() error {
@@ -100,6 +103,7 @@ func TestCanonicalChangeDuringBuildRejectsPublish(t *testing.T) {
 }
 
 func TestCorruptGenerationPreservesPreviousPointer(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	initial := build(t, root, BuildOptions{})
 	_, err := BuildCatalogGeneration(context.Background(), root, BuildOptions{BeforeVerify: func(path string) error {
@@ -118,6 +122,7 @@ func TestCorruptGenerationPreservesPreviousPointer(t *testing.T) {
 }
 
 func TestSourceOnlyChangeAltersProjectionDigestNotCatalogSnapshot(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	writeCanonical(t, root, "sources/catalog/SRC-1.yaml", "schema_version: 1\nid: SRC-1\nadapter: git\nlocator: https://example.invalid/repo\n")
 	first := build(t, root, BuildOptions{})
@@ -132,6 +137,7 @@ func TestSourceOnlyChangeAltersProjectionDigestNotCatalogSnapshot(t *testing.T) 
 }
 
 func TestOperationReceiptsRestoreIdempotencyProjectionWithoutReplay(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	set := mutation.WriteSet{OperationID: "OP-RECEIPT", Command: "create_source", IdempotencyKey: "source:create:1", Changes: []mutation.Change{{Path: "sources/catalog/source.yaml", Contents: []byte("id: SRC-1\nadapter: git\n")}}}
 	if _, err := mutation.Commit(root, set); err != nil {
@@ -165,6 +171,7 @@ func TestOperationReceiptsRestoreIdempotencyProjectionWithoutReplay(t *testing.T
 }
 
 func TestPinnedOldGenerationIsDeferredUntilClose(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	first := build(t, root, BuildOptions{})
 	handle, err := OpenCurrent(context.Background(), root)
@@ -192,6 +199,7 @@ func TestPinnedOldGenerationIsDeferredUntilClose(t *testing.T) {
 }
 
 func TestStrictProjectionValidationRejectsInvalidCanonicalEntities(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name, path, contents, want string
 	}{
@@ -219,6 +227,7 @@ func TestStrictProjectionValidationRejectsInvalidCanonicalEntities(t *testing.T)
 }
 
 func TestFaultInjectionPreservesRecoverablePointer(t *testing.T) {
+	t.Parallel()
 	for _, point := range []FaultPoint{FaultDatabaseClose, FaultGenerationSync, FaultGenerationsDirSync, FaultPointerTempSync, FaultPointerRename, FaultPointerDirSync} {
 		t.Run(string(point), func(t *testing.T) {
 			root := newWorkspace(t)
@@ -256,6 +265,7 @@ func TestFaultInjectionPreservesRecoverablePointer(t *testing.T) {
 }
 
 func TestPostPublishCanonicalChangeReturnsExplicitStaleResult(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	result, err := BuildCatalogGeneration(context.Background(), root, BuildOptions{AfterPointerPublish: func() {
 		writeCanonical(t, root, "sources/catalog/source.yaml", "schema_version: 1\nid: source\nadapter: git\nlocator: https://example.invalid/repo\n")
@@ -272,6 +282,7 @@ func TestPostPublishCanonicalChangeReturnsExplicitStaleResult(t *testing.T) {
 }
 
 func TestInspectPublishedReportsUnknownWithoutCanonicalFreshnessRead(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	build(t, root, BuildOptions{})
 	writeCanonical(t, root, "sources/catalog/source.yaml", "schema_version: 1\nid: source\nadapter: git\nlocator: https://example.invalid/repo\n")
@@ -286,6 +297,7 @@ func TestInspectPublishedReportsUnknownWithoutCanonicalFreshnessRead(t *testing.
 }
 
 func TestInspectReportsMissingStaleAndHealthy(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	status, err := Inspect(context.Background(), root)
 	if err != nil || status.State != StateMissing {
@@ -304,6 +316,7 @@ func TestInspectReportsMissingStaleAndHealthy(t *testing.T) {
 }
 
 func TestCorruptDisposableDatabasesAreResetWithoutBlockingCatalog(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	if err := os.MkdirAll(filepath.Join(root, "runtime"), 0o700); err != nil {
 		t.Fatal(err)
@@ -323,6 +336,7 @@ func TestCorruptDisposableDatabasesAreResetWithoutBlockingCatalog(t *testing.T) 
 }
 
 func TestGarbageCollectionHonorsAgeAndReclaimsAbandonedPins(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	first := build(t, root, BuildOptions{})
 	handle, err := OpenCurrent(context.Background(), root)
@@ -365,6 +379,7 @@ func TestGarbageCollectionHonorsAgeAndReclaimsAbandonedPins(t *testing.T) {
 }
 
 func TestAllRecognizedKindsProjectIntoSupportedTables(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	writeCanonical(t, root, "skills/core/skill/skill.meta.yaml", "schema_version: 1\nid: skill\nname: Alpha Skill\nstatus: active\ndescription: Alpha projection fixture.\nrouting:\n  triggers: [alpha]\n  not_for: [beta]\n  min_scope: multi_step\n")
 	writeCanonical(t, root, "skills/core/skill/SKILL.md", "# Alpha fixture token\n")
@@ -450,6 +465,7 @@ func logicalRows(t *testing.T, root string) []string {
 	return result
 }
 func TestCatalogBuildAcceptsCloneLikeWorkspaceWithAbsentEmptyDirectories(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	writeCanonical(t, root, "skills/core/review/skill.meta.yaml", "schema_version: 1\nid: review\nname: Review\nstatus: active\ndescription: Review code.\nrouting:\n  triggers: [review code]\n  not_for: [write prose]\n  min_scope: multi_step\n")
 	writeCanonical(t, root, "skills/core/review/SKILL.md", "# Review\nUse evidence.\n")
@@ -469,6 +485,7 @@ func TestCatalogBuildAcceptsCloneLikeWorkspaceWithAbsentEmptyDirectories(t *test
 }
 
 func TestCatalogBuildPreservesCompanionResourcesWithoutTreatingThemAsEntities(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	writeCanonical(t, root, "skills/core/review/skill.meta.yaml", "schema_version: 1\nid: review\nname: Review\nstatus: active\ndescription: Review code.\nrouting:\n  triggers: [review code]\n  not_for: [write prose]\n  min_scope: multi_step\n")
 	writeCanonical(t, root, "skills/core/review/SKILL.md", "# Review\nUse evidence.\n")
@@ -504,6 +521,7 @@ func TestCatalogBuildPreservesCompanionResourcesWithoutTreatingThemAsEntities(t 
 }
 
 func TestCatalogBuildAndValidateParityOnFrontmatterMismatch(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	writeCanonical(t, root, "skills/core/review/skill.meta.yaml", "schema_version: 1\nid: review\nname: Review\nstatus: active\ndescription: Review code.\nrouting:\n  triggers: [review code]\n  not_for: [write prose]\n  min_scope: multi_step\n")
 	writeCanonical(t, root, "skills/core/review/SKILL.md", "---\nname: WRONG_NAME\n---\n# Review\n")

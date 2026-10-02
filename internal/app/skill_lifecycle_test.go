@@ -22,6 +22,7 @@ func (hook routingHookFunc) Evaluate(ctx context.Context, root, id, snapshot str
 }
 
 func TestSkillPreviewExposesOptionalRoutingImpact(t *testing.T) {
+	t.Parallel()
 	root := newSkillWorkspace(t)
 	called := false
 	service := SkillService{Manager: skill.Manager{RoutingHook: routingHookFunc(func(_ context.Context, _, id, snapshot string, before, after []byte) (skill.RoutingImpact, error) {
@@ -38,6 +39,7 @@ func TestSkillPreviewExposesOptionalRoutingImpact(t *testing.T) {
 }
 
 func TestSkillLifecycleCreateActivateReadDeprecateArchive(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	root := newSkillWorkspace(t)
 	clock := time.Date(2026, 9, 28, 18, 0, 0, 0, time.UTC)
@@ -135,6 +137,7 @@ func TestSkillLifecycleCreateActivateReadDeprecateArchive(t *testing.T) {
 }
 
 func TestSkillPublicationFailureIsRecoveredByDoctorBeforeFinalization(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	root := newSkillWorkspace(t)
 	service := SkillService{}
@@ -179,6 +182,7 @@ func TestSkillPublicationFailureIsRecoveredByDoctorBeforeFinalization(t *testing
 }
 
 func TestSkillLifecycleRetriesReturnOriginalOperationAndGeneration(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	root := newSkillWorkspace(t)
 	service := SkillService{}
@@ -254,6 +258,7 @@ func TestSkillLifecycleRetriesReturnOriginalOperationAndGeneration(t *testing.T)
 }
 
 func TestProductionRoutingImpactCoversCreateRoutingEditAndActivation(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	root := newSkillWorkspace(t)
 	service := SkillService{}
@@ -292,6 +297,7 @@ func countGenerationDatabases(t *testing.T, root string) int {
 }
 
 func TestSkillStaleProposalIsRejectedWithoutReceipt(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	root := newSkillWorkspace(t)
 	service := SkillService{}
@@ -318,6 +324,7 @@ func TestSkillStaleProposalIsRejectedWithoutReceipt(t *testing.T) {
 }
 
 func TestInvalidExternalEditPreservesPublishedGeneration(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	root := newSkillWorkspace(t)
 	service := SkillService{}
@@ -344,6 +351,7 @@ func TestInvalidExternalEditPreservesPublishedGeneration(t *testing.T) {
 }
 
 func TestDigestPinnedReadReturnsSnapshotExpiredAfterExternalChange(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	root := newSkillWorkspace(t)
 	service := SkillService{}
@@ -398,6 +406,7 @@ func createAndActivateSkill(t *testing.T, service SkillService, root string) {
 	}
 }
 func TestPreviewSkillUpdateEditConflictPrecondition(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	root := newSkillWorkspace(t)
 	service := SkillService{}
@@ -446,6 +455,7 @@ func TestPreviewSkillUpdateEditConflictPrecondition(t *testing.T) {
 }
 
 func TestCheckActivationRequirementsBlocksUntouchedScaffold(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	root := newSkillWorkspace(t)
 	service := SkillService{}
@@ -519,6 +529,7 @@ func TestCheckActivationRequirementsBlocksUntouchedScaffold(t *testing.T) {
 }
 
 func TestConfirmProposalDispatcherByIDAndExplicitPins(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	root := newSkillWorkspace(t)
 	service := SkillService{}
@@ -560,6 +571,7 @@ func TestConfirmProposalDispatcherByIDAndExplicitPins(t *testing.T) {
 }
 
 func TestEditorRecoveryLifecycleInService(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	root := newSkillWorkspace(t)
 	service := SkillService{}
@@ -589,6 +601,7 @@ func TestEditorRecoveryLifecycleInService(t *testing.T) {
 	}
 }
 func TestSkillListBasisAwareAndFallback(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	root := newSkillWorkspace(t)
 	service := SkillService{}

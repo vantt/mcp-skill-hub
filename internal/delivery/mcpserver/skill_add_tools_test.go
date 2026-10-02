@@ -10,6 +10,7 @@ import (
 )
 
 func TestSkillAddPreviewRejectsRawLocalLocators(t *testing.T) {
+	t.Parallel()
 	root := newEmptyMCPWorkspace(t)
 	session := connectInMemoryServer(t, root)
 
@@ -61,6 +62,7 @@ func TestSkillAddPreviewRejectsRawLocalLocators(t *testing.T) {
 }
 
 func TestSkillAddConfirmPinRequirements(t *testing.T) {
+	t.Parallel()
 	root := newEmptyMCPWorkspace(t)
 	session := connectInMemoryServer(t, root)
 

@@ -13,6 +13,7 @@ import (
 )
 
 func TestBuildReportsProgressAndCancelsBeforePublish(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := workspace.Apply(root); err != nil {
 		t.Fatal(err)
@@ -45,6 +46,7 @@ func TestBuildReportsProgressAndCancelsBeforePublish(t *testing.T) {
 }
 
 func TestBuildPopulationReportsPeriodicProgressAndObservesCancellation(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := workspace.Apply(root); err != nil {
 		t.Fatal(err)
@@ -74,6 +76,7 @@ func TestBuildPopulationReportsPeriodicProgressAndObservesCancellation(t *testin
 }
 
 func TestBuildProgressCompletesAfterPublish(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := workspace.Apply(root); err != nil {
 		t.Fatal(err)

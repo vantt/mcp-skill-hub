@@ -49,6 +49,7 @@ func (failingWriter) Write([]byte) (int, error) {
 }
 
 func TestInitPreviewsUntilYes(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
 	if exitCode := Run([]string{"init", root}, &stdout, &stderr); exitCode != 0 {
@@ -94,6 +95,7 @@ func TestInitDefaultsToCurrentDirectory(t *testing.T) {
 }
 
 func TestInitRejectsMultipleWorkspacePaths(t *testing.T) {
+	t.Parallel()
 	var stdout, stderr bytes.Buffer
 	if exitCode := Run([]string{"init", "first", "second"}, &stdout, &stderr); exitCode != 2 {
 		t.Fatalf("init exit code = %d, want 2", exitCode)

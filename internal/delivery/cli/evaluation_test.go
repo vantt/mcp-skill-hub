@@ -20,6 +20,7 @@ import (
 )
 
 func TestEvaluationCLICommittedArtifactsRunAndRegenerateDeterministically(t *testing.T) {
+	t.Parallel()
 	_, filename, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("locate evaluation test source")
@@ -132,6 +133,7 @@ func copyEvaluationFixtureTree(t *testing.T, source, destination string) {
 }
 
 func TestEvaluationCLIManifestGeneratesRunnableArtifactWithoutCanonicalMutation(t *testing.T) {
+	t.Parallel()
 	root, suitePath, _, _ := evaluationCLIFixtures(t)
 	canonicalBefore := snapshotCanonicalEvaluationAndPolicy(t, root)
 	base := []string{"eval", "manifest", "--workspace", root, "--suite", suitePath, "--experiment-id", "generated-cli", "--variant", "production-deterministic"}
@@ -190,6 +192,7 @@ func TestEvaluationCLIManifestGeneratesRunnableArtifactWithoutCanonicalMutation(
 }
 
 func TestEvaluationCLIManifestRejectsInvalidArgumentsAndOverwrite(t *testing.T) {
+	t.Parallel()
 	root, suitePath, _, _ := evaluationCLIFixtures(t)
 	output := filepath.Join(t.TempDir(), "manifest.json")
 	if err := os.WriteFile(output, []byte("keep"), 0o600); err != nil {
@@ -219,6 +222,7 @@ func TestEvaluationCLIManifestRejectsInvalidArgumentsAndOverwrite(t *testing.T) 
 }
 
 func TestEvaluationCLIProducesDeterministicJSONAndAtomicOutput(t *testing.T) {
+	t.Parallel()
 	root, suitePath, manifestPath, _ := evaluationCLIFixtures(t)
 	output := filepath.Join(t.TempDir(), "reports", "evaluation.json")
 	args := []string{"eval", "run", "--workspace", root, "--suite", suitePath, "--manifest", manifestPath, "--partition", "held_out", "--output", output, "--json"}
@@ -265,6 +269,7 @@ func TestEvaluationCLIProducesDeterministicJSONAndAtomicOutput(t *testing.T) {
 }
 
 func TestEvaluationPromotionCLIPreviewsAndWritesSanitizedReviewDraft(t *testing.T) {
+	t.Parallel()
 	root, _, _, _ := evaluationCLIFixtures(t)
 	seedPromotionTelemetry(t, root, "res-promote", "code-review")
 	canonicalBefore := snapshotCanonicalEvaluationAndPolicy(t, root)
@@ -329,6 +334,7 @@ func TestEvaluationPromotionCLIPreviewsAndWritesSanitizedReviewDraft(t *testing.
 }
 
 func TestEvaluationPromotionCLIRejectsUnsafeConfirmationAndResolutionErrors(t *testing.T) {
+	t.Parallel()
 	root, _, _, _ := evaluationCLIFixtures(t)
 	seedPromotionTelemetry(t, root, "res-conflict", "code-review")
 	seedPromotionTelemetry(t, root, "res-conflict", "architecture-review")
@@ -368,6 +374,7 @@ func TestEvaluationPromotionCLIRejectsUnsafeConfirmationAndResolutionErrors(t *t
 }
 
 func TestResolutionReplayCLIUsesStrictPinnedCase(t *testing.T) {
+	t.Parallel()
 	root, _, manifestPath, casePath := evaluationCLIFixtures(t)
 	manifestData, err := os.ReadFile(manifestPath)
 	if err != nil {
@@ -406,6 +413,7 @@ func TestResolutionReplayCLIUsesStrictPinnedCase(t *testing.T) {
 }
 
 func TestEvaluationCLIRejectsUnknownManifestFieldsInvalidPartitionsAndUnsafeOutput(t *testing.T) {
+	t.Parallel()
 	root, suitePath, manifestPath, _ := evaluationCLIFixtures(t)
 	data, err := os.ReadFile(manifestPath)
 	if err != nil {
@@ -453,6 +461,7 @@ func TestEvaluationCLIRejectsUnknownManifestFieldsInvalidPartitionsAndUnsafeOutp
 }
 
 func TestEvaluationCLIPropagatesCancellation(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	root, suitePath, manifestPath, _ := evaluationCLIFixtures(t)
@@ -589,6 +598,7 @@ func writeCLIJSON(t *testing.T, path string, value any) {
 }
 
 func TestEvaluationCLIRejectsOversizedFlagValue(t *testing.T) {
+	t.Parallel()
 	var stdout, stderr bytes.Buffer
 	if code := Run([]string{"eval", "run", "--workspace", strings.Repeat("w", maxDeliveryValueSize+1), "--suite", "suite.json", "--manifest", "manifest.json", "--json"}, &stdout, &stderr); code != 2 {
 		t.Fatalf("code=%d stdout=%s stderr=%s", code, stdout.String(), stderr.String())
@@ -601,6 +611,7 @@ func TestEvaluationCLIRejectsOversizedFlagValue(t *testing.T) {
 }
 
 func TestResolutionReplayAcceptsCLIGeneratedCaseManifest(t *testing.T) {
+	t.Parallel()
 	root, suitePath, _, casePath := evaluationCLIFixtures(t)
 	manifestPath := filepath.Join(t.TempDir(), "case-manifest.json")
 	var stdout, stderr bytes.Buffer
@@ -634,6 +645,7 @@ func TestResolutionReplayAcceptsCLIGeneratedCaseManifest(t *testing.T) {
 }
 
 func TestEvaluationHumanOutputCountsCorrectOutcomesLikeJSON(t *testing.T) {
+	t.Parallel()
 	root, suitePath, manifestPath, _ := evaluationCLIFixtures(t)
 	var stdout, stderr bytes.Buffer
 	if code := Run([]string{"eval", "run", "--workspace", root, "--suite", suitePath, "--manifest", manifestPath}, &stdout, &stderr); code != 0 {

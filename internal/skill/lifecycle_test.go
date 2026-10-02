@@ -13,6 +13,7 @@ import (
 )
 
 func TestReadEditableSkillReturnsContentAndDigest(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := workspace.Apply(root); err != nil {
 		t.Fatal(err)
@@ -46,6 +47,7 @@ func TestReadEditableSkillReturnsContentAndDigest(t *testing.T) {
 }
 
 func TestUpdateWithExpectedContentDigestDetectsConflict(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := workspace.Apply(root); err != nil {
 		t.Fatal(err)
@@ -114,6 +116,7 @@ func TestUpdateWithExpectedContentDigestDetectsConflict(t *testing.T) {
 }
 
 func TestUpdateBlindReplacementRemainsCompatible(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := workspace.Apply(root); err != nil {
 		t.Fatal(err)
@@ -153,6 +156,7 @@ func TestUpdateBlindReplacementRemainsCompatible(t *testing.T) {
 }
 
 func TestUntouchedScaffoldRejectsActivationUntilReplaced(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := workspace.Apply(root); err != nil {
 		t.Fatal(err)
@@ -210,6 +214,7 @@ func TestUntouchedScaffoldRejectsActivationUntilReplaced(t *testing.T) {
 }
 
 func TestGenuineSkillsWithoutMarkerCanActivate(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := workspace.Apply(root); err != nil {
 		t.Fatal(err)

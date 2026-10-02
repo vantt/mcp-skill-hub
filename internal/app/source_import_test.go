@@ -43,6 +43,7 @@ func (a *fakeImportAdapter) Read(_ context.Context, _ sourcepkg.Source, _ source
 }
 
 func TestSourceImportPreviewAndConfirmWithConflictSkipping(t *testing.T) {
+	t.Parallel()
 	root := newSourceWorkspace(t)
 	now := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
 
@@ -215,6 +216,7 @@ func TestSourceImportPreviewAndConfirmWithConflictSkipping(t *testing.T) {
 }
 
 func TestSourceImportOversizeLimitError(t *testing.T) {
+	t.Parallel()
 	root := newSourceWorkspace(t)
 	now := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
 
@@ -265,6 +267,7 @@ func TestSourceImportOversizeLimitError(t *testing.T) {
 }
 
 func TestSourceCandidateCaptureIdempotent(t *testing.T) {
+	t.Parallel()
 	root := newSourceWorkspace(t)
 	now := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
 
@@ -311,6 +314,7 @@ func TestSourceCandidateCaptureIdempotent(t *testing.T) {
 	}
 }
 func TestSourceImportFolderScopedPreservesCompanionsBUG04(t *testing.T) {
+	t.Parallel()
 	root := newSourceWorkspace(t)
 	now := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
 

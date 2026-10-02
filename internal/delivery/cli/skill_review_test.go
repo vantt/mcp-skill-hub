@@ -12,6 +12,7 @@ import (
 )
 
 func TestSkillReviewHumanAndJSON(t *testing.T) {
+	t.Parallel()
 	root := initTestWorkspace(t)
 	contentFile := filepath.Join(t.TempDir(), "content.md")
 	_ = os.WriteFile(contentFile, []byte("---\nname: rev-test\ndescription: Review test skill.\n---\n\n# Review Test\n\nInstructions.\n"), 0o600)

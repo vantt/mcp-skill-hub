@@ -18,6 +18,7 @@ import (
 )
 
 func TestInsightRankingTraversesCompleteComparisonGraphAndCountsUniqueSources(t *testing.T) {
+	t.Parallel()
 	item := distillpkg.Insight{Priority: "high", ObservationIDs: []string{"OBS-a"}, ComparisonIDs: []string{"CMP-all"}}
 	observations := map[string]distillpkg.Observation{
 		"OBS-a": {ID: "OBS-a", SourceID: "source-a", Status: "active"},
@@ -32,6 +33,7 @@ func TestInsightRankingTraversesCompleteComparisonGraphAndCountsUniqueSources(t 
 }
 
 func TestApplicationMappingsCoverDirectAndComparisonObservationsWithoutDuplicates(t *testing.T) {
+	t.Parallel()
 	item := distillpkg.Insight{ObservationIDs: []string{"OBS-direct"}, ComparisonIDs: []string{"CMP-one"}}
 	comparisons := map[string]distillpkg.Comparison{"CMP-one": {ObservationIDs: []string{"OBS-direct", "OBS-member"}}}
 	targets := []string{"skills/software/example/SKILL.md"}
@@ -57,6 +59,7 @@ func TestApplicationMappingsCoverDirectAndComparisonObservationsWithoutDuplicate
 }
 
 func TestInsightApplyIsAtomicTraceableIdempotentAndOutcomeExplicit(t *testing.T) {
+	t.Parallel()
 	root, distillService, adapter, item := workspaceWithPendingInsight(t)
 	service := InsightService{Clock: distillClock{value: time.Date(2026, 9, 29, 6, 0, 0, 0, time.UTC)}, IDs: fixedSourceID("application000001")}
 	inbox, err := service.GetInsightInbox(context.Background(), root)
@@ -123,6 +126,7 @@ func TestInsightApplyIsAtomicTraceableIdempotentAndOutcomeExplicit(t *testing.T)
 }
 
 func TestInsightStalePathAppliesNothing(t *testing.T) {
+	t.Parallel()
 	root, _, _, item := workspaceWithPendingInsight(t)
 	service := InsightService{Clock: distillClock{value: time.Date(2026, 9, 29, 6, 0, 0, 0, time.UTC)}, IDs: fixedSourceID("staleproposal001")}
 	path := "skills/software/consumer-review/SKILL.md"
@@ -157,6 +161,7 @@ func TestInsightStalePathAppliesNothing(t *testing.T) {
 }
 
 func TestRejectedInsightRequiresMaterialEvidenceAndExplicitReopen(t *testing.T) {
+	t.Parallel()
 	root, distillService, adapter, item := workspaceWithPendingInsight(t)
 	service := InsightService{Clock: distillClock{value: time.Date(2026, 9, 29, 6, 0, 0, 0, time.UTC)}, IDs: fixedSourceID("decision0000001")}
 	rejected, err := service.DecideInsight(context.Background(), root, item.ID, InsightDecisionInput{Decision: "reject", Rationale: "Existing workflow already covers this evidence."})
@@ -199,6 +204,7 @@ func TestRejectedInsightRequiresMaterialEvidenceAndExplicitReopen(t *testing.T) 
 }
 
 func TestWorkspaceValidationRejectsDanglingIncorporationEdits(t *testing.T) {
+	t.Parallel()
 	root, _, _, item := workspaceWithPendingInsight(t)
 	service := InsightService{Clock: distillClock{value: time.Date(2026, 9, 29, 6, 0, 0, 0, time.UTC)}, IDs: fixedSourceID("validation000001")}
 	path := "skills/software/consumer-review/SKILL.md"
@@ -229,6 +235,7 @@ func TestWorkspaceValidationRejectsDanglingIncorporationEdits(t *testing.T) {
 }
 
 func TestInterruptedInsightApplyLeavesRecoverableLifecycleTransaction(t *testing.T) {
+	t.Parallel()
 	root, _, _, item := workspaceWithPendingInsight(t)
 	service := InsightService{Clock: distillClock{value: time.Date(2026, 9, 29, 6, 0, 0, 0, time.UTC)}, IDs: fixedSourceID("atomicfailure001")}
 	path := "skills/software/consumer-review/SKILL.md"

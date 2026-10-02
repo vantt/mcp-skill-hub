@@ -3,6 +3,7 @@ package app
 import "testing"
 
 func TestFirstRunRecommendationRequiresEmptyUncommittedWorkspace(t *testing.T) {
+	t.Parallel()
 	base := homeState{Health: "valid", Index: "current", GitDirty: true, GitConfigured: true, CountsKnown: true}
 	cases := []struct {
 		name     string
@@ -29,6 +30,7 @@ func TestFirstRunRecommendationRequiresEmptyUncommittedWorkspace(t *testing.T) {
 }
 
 func TestStaleIndexHeadlineRecommendsRebuild(t *testing.T) {
+	t.Parallel()
 	home := deriveCurationHome(homeState{Health: "valid", Index: "stale", GitDirty: true, GitConfigured: true})
 	if len(home.SuggestedActions) != 1 || home.Actions[0].Kind != "rebuild_index" {
 		t.Fatalf("actions = %#v", home.Actions)

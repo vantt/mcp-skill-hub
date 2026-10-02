@@ -10,6 +10,7 @@ import (
 )
 
 func TestValidateStagedAndWorkingTree(t *testing.T) {
+	t.Parallel()
 	root := initTestWorkspace(t)
 
 	// 1. Working tree validate passes on clean workspace

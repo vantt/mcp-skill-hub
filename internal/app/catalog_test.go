@@ -10,6 +10,7 @@ import (
 )
 
 func TestEnsureCatalogKeepsHealthyGenerationAndRebuildsMissingPointer(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
 		t.Fatal(err)
@@ -40,6 +41,7 @@ func TestEnsureCatalogKeepsHealthyGenerationAndRebuildsMissingPointer(t *testing
 }
 
 func TestCatalogServiceInspectAndAssessSkill(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
 		t.Fatal(err)

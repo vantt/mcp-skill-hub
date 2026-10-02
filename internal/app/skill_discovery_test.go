@@ -9,6 +9,7 @@ import (
 )
 
 func TestSanitizeSkillID(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		input    string
 		expected string
@@ -30,6 +31,7 @@ func TestSanitizeSkillID(t *testing.T) {
 }
 
 func TestSkillFrontmatterParsingAndValidation(t *testing.T) {
+	t.Parallel()
 	// Valid frontmatter with all fields
 	valid := []byte(`---
 name: my-skill
@@ -77,6 +79,7 @@ name: [unclosed list
 }
 
 func TestEnsureImportedSkillFrontmatterPreservesContentAndNormalizes(t *testing.T) {
+	t.Parallel()
 	// Existing frontmatter with different name and custom fields
 	input := []byte("---\r\nname: Original Name\r\ndescription: Existing desc\r\nlicense: Apache-2.0\r\ncustom_field: 42\r\n---\r\n\r\n# Body Heading\r\n\r\nBody text\r\n")
 
@@ -143,6 +146,7 @@ func TestEnsureImportedSkillFrontmatterPreservesContentAndNormalizes(t *testing.
 }
 
 func TestDetectSkillLicense(t *testing.T) {
+	t.Parallel()
 	// 1. Declared standard license, no file
 	info1 := detectSkillLicense("MIT", nil)
 	if info1.Declared != "MIT" || info1.IsUnknown || info1.IsProprietary || info1.Warning != "" {
@@ -178,6 +182,7 @@ func TestDetectSkillLicense(t *testing.T) {
 }
 
 func TestDiscoverSkillsFromResources_FolderScopedBUG04(t *testing.T) {
+	t.Parallel()
 	// BUG-04 scenario: Folder-scoped source where SKILL.md is at root (skillDir == "")
 	// Contains: SKILL.md, LICENSE.txt, forms.md, reference.md, scripts/extract.py, empty.txt, binary.bin
 	files := map[string][]byte{
@@ -259,6 +264,7 @@ func TestDiscoverSkillsFromResources_FolderScopedBUG04(t *testing.T) {
 }
 
 func TestDiscoverSkillsFromResources_MultipleAndNested(t *testing.T) {
+	t.Parallel()
 	files := map[string][]byte{
 		"skills/parent/SKILL.md":         []byte("---\nname: Parent\ndescription: Parent Skill\n---\n"),
 		"skills/parent/top-file.txt":     []byte("parent file"),

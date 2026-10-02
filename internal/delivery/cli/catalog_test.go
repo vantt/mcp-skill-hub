@@ -13,6 +13,7 @@ import (
 )
 
 func TestRebuildCancellationUsesStructuredContract(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
 	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
@@ -35,6 +36,7 @@ func TestRebuildCancellationUsesStructuredContract(t *testing.T) {
 }
 
 func TestRebuildHumanOutputIncludesProgress(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
 	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
@@ -63,6 +65,7 @@ func TestRebuildHumanOutputIncludesProgress(t *testing.T) {
 }
 
 func TestRebuildUsesSharedResultEnvelope(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
 	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {

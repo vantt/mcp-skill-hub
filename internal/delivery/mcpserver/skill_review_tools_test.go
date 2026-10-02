@@ -9,6 +9,7 @@ import (
 )
 
 func TestSkillReviewOfflineWithoutCatalog(t *testing.T) {
+	t.Parallel()
 	root := newEmptyMCPWorkspace(t)
 	session := connectInMemoryServer(t, root)
 
@@ -62,6 +63,7 @@ func TestSkillReviewOfflineWithoutCatalog(t *testing.T) {
 }
 
 func TestSkillReviewNonexistent(t *testing.T) {
+	t.Parallel()
 	root := newEmptyMCPWorkspace(t)
 	session := connectInMemoryServer(t, root)
 
@@ -85,6 +87,7 @@ func TestSkillReviewNonexistent(t *testing.T) {
 }
 
 func TestSkillReviewWhenCanonicalCorrupt(t *testing.T) {
+	t.Parallel()
 	root := newEmptyMCPWorkspace(t)
 	session := connectInMemoryServer(t, root)
 

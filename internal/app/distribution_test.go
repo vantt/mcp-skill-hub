@@ -14,6 +14,7 @@ import (
 )
 
 func TestDistributionServesBundledSystemCurator(t *testing.T) {
+	t.Parallel()
 	root := newSkillWorkspace(t)
 	service := DistributionService{}
 
@@ -74,6 +75,7 @@ func TestDistributionServesBundledSystemCurator(t *testing.T) {
 }
 
 func TestDistributionRejectsWorkspaceSystemCuratorCollisionAndKeepsBundleAvailable(t *testing.T) {
+	t.Parallel()
 	root := newSkillWorkspace(t)
 	service := DistributionService{}
 	before, _, err := service.ListSkills(t.Context(), root)
@@ -140,6 +142,7 @@ func createActiveDistributionSkill(t *testing.T, root, id, name string) {
 }
 
 func TestDistributionServesFallbackWhenCanonicalInvalid(t *testing.T) {
+	t.Parallel()
 	root := newSkillWorkspace(t)
 	createActiveDistributionSkill(t, root, "stable-skill", "Stable Skill")
 	service := DistributionService{}
@@ -176,6 +179,7 @@ func TestDistributionServesFallbackWhenCanonicalInvalid(t *testing.T) {
 }
 
 func TestDistributionRejectsChangedResourceWithContentUnavailable(t *testing.T) {
+	t.Parallel()
 	root := newSkillWorkspace(t)
 	createActiveDistributionSkill(t, root, "tampered-skill", "Tampered Skill")
 	service := DistributionService{}

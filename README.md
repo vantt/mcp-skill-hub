@@ -80,7 +80,10 @@ go build -o ~/.local/bin/skillhub ./cmd/skillhub
 ## Development
 
 ```bash
-go test ./...
-go vet ./...
+make check      # go vet + golangci-lint (new issues since origin/main) + full test suite
+make test-race  # full suite with the race detector
+make lint-all   # every lint finding, including existing debt
 go run ./cmd/skillhub help
 ```
+
+Tests run in parallel by default. A test that sets environment variables, changes the working directory, or asserts on process-global state must stay serial (no `t.Parallel()`).

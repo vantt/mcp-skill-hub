@@ -101,6 +101,7 @@ func (a revisionAdapter) List(_ context.Context, src sourcepkg.Source, rev sourc
 }
 
 func TestDistillOperationsEmitSanitizedOrderedTelemetry(t *testing.T) {
+	t.Parallel()
 	root, service, adapter := newDistillWorkspace(t, "source-a", false)
 	sink := &captureTelemetrySink{}
 	service.Telemetry = sink
@@ -144,6 +145,7 @@ func TestDistillOperationsEmitSanitizedOrderedTelemetry(t *testing.T) {
 }
 
 func TestDistillTelemetryPanicDoesNotChangeFinalization(t *testing.T) {
+	t.Parallel()
 	root, service, adapter := newDistillWorkspace(t, "source-a", false)
 	service.Telemetry = panickingTelemetrySink{}
 	run := prepareAndStart(t, root, service, "source-a")
@@ -154,6 +156,7 @@ func TestDistillTelemetryPanicDoesNotChangeFinalization(t *testing.T) {
 }
 
 func TestDistillFinalizesArtifactsAndCursorAtomicallyWithoutEditingSkill(t *testing.T) {
+	t.Parallel()
 	root, service, adapter := newDistillWorkspace(t, "source-a", false)
 	beforeSkill, err := os.ReadFile(filepath.Join(root, "skills/software/consumer-review/SKILL.md"))
 	if err != nil {
@@ -194,6 +197,7 @@ func TestDistillFinalizesArtifactsAndCursorAtomicallyWithoutEditingSkill(t *test
 }
 
 func TestDistillRejectsEvidenceNotPinnedToTargetAndDoesNotAdvanceCursor(t *testing.T) {
+	t.Parallel()
 	root, service, adapter := newDistillWorkspace(t, "source-a", false)
 	sink := &captureTelemetrySink{}
 	service.Telemetry = sink
@@ -225,6 +229,7 @@ func TestDistillRejectsEvidenceNotPinnedToTargetAndDoesNotAdvanceCursor(t *testi
 }
 
 func TestDistillAwaitingDecisionOnlyForBlockingCoverageAndRetryCancel(t *testing.T) {
+	t.Parallel()
 	root, service, adapter := newDistillWorkspace(t, "source-a", false)
 	sink := &captureTelemetrySink{}
 	service.Telemetry = sink
@@ -268,6 +273,7 @@ func TestDistillAwaitingDecisionOnlyForBlockingCoverageAndRetryCancel(t *testing
 }
 
 func TestDistillGeneratesRemovalTombstoneAndMarksComparisonStale(t *testing.T) {
+	t.Parallel()
 	root, service, adapter := newDistillWorkspace(t, "source-a", false)
 	sink := &captureTelemetrySink{}
 	service.Telemetry = sink
@@ -324,6 +330,7 @@ func TestDistillGeneratesRemovalTombstoneAndMarksComparisonStale(t *testing.T) {
 }
 
 func TestDistillPrepareAndSubmitRecoverOriginalResultsAfterLostResponses(t *testing.T) {
+	t.Parallel()
 	root, service, adapter := newDistillWorkspace(t, "source-a", false)
 	prepared, err := service.PrepareDistillRuns(context.Background(), root, DistillPrepareInput{SourceIDs: []string{"source-a"}, IdempotencyKey: "prepare-lost-response"})
 	if err != nil || prepared.Prepared != 1 {
@@ -353,6 +360,7 @@ func TestDistillPrepareAndSubmitRecoverOriginalResultsAfterLostResponses(t *test
 }
 
 func TestDistillBatchIsolatesSourcePreparationFailure(t *testing.T) {
+	t.Parallel()
 	root, service, _ := newDistillWorkspace(t, "source-a", true)
 	result, err := service.PrepareDistillRuns(context.Background(), root, DistillPrepareInput{SourceIDs: []string{"source-a", "source-b"}})
 	if err != nil {
@@ -364,6 +372,7 @@ func TestDistillBatchIsolatesSourcePreparationFailure(t *testing.T) {
 }
 
 func TestCatalogRebuildRejectsExternallyEditedInvalidFinalizedRunState(t *testing.T) {
+	t.Parallel()
 	root, service, adapter := newDistillWorkspace(t, "source-a", false)
 	run := prepareAndStart(t, root, service, "source-a")
 	if _, err := service.SubmitDistillRun(context.Background(), root, run.ID, validSubmission(run, adapter)); err != nil {
@@ -399,6 +408,7 @@ func TestCatalogRebuildRejectsExternallyEditedInvalidFinalizedRunState(t *testin
 }
 
 func TestDistillBatchFinalizeIsolatesAndRecoversEachSource(t *testing.T) {
+	t.Parallel()
 	root, service, adapter := newDistillWorkspace(t, "source-a", true)
 	delete(adapter.fail, "source-b")
 	service.IDs = &sequenceDistillID{}
@@ -438,6 +448,7 @@ func TestDistillBatchFinalizeIsolatesAndRecoversEachSource(t *testing.T) {
 }
 
 func TestDistillCrashRecoveryKeepsCursorAndArtifactsTogether(t *testing.T) {
+	t.Parallel()
 	root, service, adapter := newDistillWorkspace(t, "source-a", false)
 	run := prepareAndStart(t, root, service, "source-a")
 	injected := errors.New("crash after first canonical replacement")

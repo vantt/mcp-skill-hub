@@ -14,6 +14,7 @@ import (
 )
 
 func TestMigrationServicePreviewThenApply(t *testing.T) {
+	t.Parallel()
 	root := newLegacyAppWorkspace(t)
 	service := MigrationService{}
 	preview, err := service.Migrate(t.Context(), root, 1, false)
@@ -58,6 +59,7 @@ func TestMigrationServicePreviewThenApply(t *testing.T) {
 }
 
 func TestDoctorDirectsLegacyWorkspaceToMigrationWithoutChangingIt(t *testing.T) {
+	t.Parallel()
 	root := newLegacyAppWorkspace(t)
 	result, err := (WorkspaceService{}).DoctorFix(root, true)
 	if err != nil {
@@ -72,6 +74,7 @@ func TestDoctorDirectsLegacyWorkspaceToMigrationWithoutChangingIt(t *testing.T) 
 }
 
 func TestRebuildNeverUpgradesIncompatibleCanonicalVersion(t *testing.T) {
+	t.Parallel()
 	root := newLegacyAppWorkspace(t)
 	if _, err := (CatalogService{}).BuildCatalogGeneration(t.Context(), root); err == nil {
 		t.Fatal("rebuild accepted incompatible canonical version")
@@ -86,6 +89,7 @@ func TestRebuildNeverUpgradesIncompatibleCanonicalVersion(t *testing.T) {
 }
 
 func TestDerivedOnlyIncompatibilityAutoRebuildsWhenCanonicalIsValid(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
 		t.Fatal(err)
@@ -139,6 +143,7 @@ func newLegacyAppWorkspace(t *testing.T) string {
 }
 
 func TestDoctorFixDoesNotWriteMarkerForLegacyCloneWithoutControlDirectory(t *testing.T) {
+	t.Parallel()
 	root := newLegacyAppWorkspace(t)
 	if err := os.WriteFile(filepath.Join(root, "sources", "catalog", "SRC-CLONE.yaml"), []byte("id: SRC-CLONE\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -160,6 +165,7 @@ func TestDoctorFixDoesNotWriteMarkerForLegacyCloneWithoutControlDirectory(t *tes
 }
 
 func TestMigrateReplayFailsWhenMarkerWasLostAfterApply(t *testing.T) {
+	t.Parallel()
 	root := newLegacyAppWorkspace(t)
 	service := MigrationService{}
 	if _, err := service.Migrate(t.Context(), root, 1, true); err != nil {

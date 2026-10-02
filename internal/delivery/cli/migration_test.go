@@ -12,6 +12,7 @@ import (
 )
 
 func TestMigrateCLIJSONPreviewAndConfirmation(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
 	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
@@ -51,6 +52,7 @@ func TestMigrateCLIJSONPreviewAndConfirmation(t *testing.T) {
 }
 
 func TestMigrateCLIHumanPreviewIncludesPinnedDiff(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
 	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
@@ -73,6 +75,7 @@ func TestMigrateCLIHumanPreviewIncludesPinnedDiff(t *testing.T) {
 }
 
 func TestMigrateCLIValidatesFlags(t *testing.T) {
+	t.Parallel()
 	var stdout, stderr bytes.Buffer
 	if code := Run([]string{"migrate", "--to", "nope", "--json"}, &stdout, &stderr); code != 2 {
 		t.Fatalf("invalid flags exit = %d", code)

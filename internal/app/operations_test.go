@@ -13,6 +13,7 @@ import (
 )
 
 func TestValidateWorkspaceApplicationContract(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
 		t.Fatal(err)
@@ -31,6 +32,7 @@ func TestValidateWorkspaceApplicationContract(t *testing.T) {
 }
 
 func TestGetCurationDiffGroupsRelativeCanonicalPaths(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
 		t.Fatal(err)
@@ -67,6 +69,7 @@ func TestGetCurationDiffGroupsRelativeCanonicalPaths(t *testing.T) {
 }
 
 func TestParsePorcelainV2RenameClassifiesSourceAndDestination(t *testing.T) {
+	t.Parallel()
 	output := []byte("2 R. N... 100644 100644 100644 aaaaaaa bbbbbbb R100 sources/catalog/new.yaml\x00skills/core/old/SKILL.md\x00")
 	files, err := parsePorcelain(output)
 	if err != nil {
@@ -83,6 +86,7 @@ func TestParsePorcelainV2RenameClassifiesSourceAndDestination(t *testing.T) {
 }
 
 func TestParsePorcelainRejectsAbsolutePath(t *testing.T) {
+	t.Parallel()
 	if _, err := parsePorcelain([]byte("? /tmp/secret\x00")); err == nil {
 		t.Fatal("absolute Git path was accepted")
 	}
@@ -112,6 +116,7 @@ func TestInspectGitDisablesConfiguredFSMonitor(t *testing.T) {
 	}
 }
 func TestValidateWorkspaceAddsNoRuleBeyondCanonicalValidate(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
 		t.Fatal(err)

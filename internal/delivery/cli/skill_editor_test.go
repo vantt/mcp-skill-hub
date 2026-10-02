@@ -10,6 +10,7 @@ import (
 )
 
 func TestSkillCreatePositionalIDAndConflict(t *testing.T) {
+	t.Parallel()
 	root := initTestWorkspace(t)
 
 	// 1. Conflicting positional ID and --id fails immediately
@@ -175,6 +176,7 @@ func TestSkillEditorRecoveryLifecycleBUG03AndBUG12(t *testing.T) {
 }
 
 func TestSkillMutationCommitHintUsesActualWorkspaceBUG14(t *testing.T) {
+	t.Parallel()
 	root := initTestWorkspace(t)
 	contentFile := filepath.Join(t.TempDir(), "content.md")
 	_ = os.WriteFile(contentFile, []byte("---\nname: hint-skill\ndescription: Test commit hint.\n---\n\n# Hint\n\nReal procedural instructions to replace untouched scaffold.\n"), 0o600)

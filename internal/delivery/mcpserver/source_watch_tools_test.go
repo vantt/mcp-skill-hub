@@ -9,6 +9,7 @@ import (
 )
 
 func TestSourceWatchPreviewRejectsLocalFolders(t *testing.T) {
+	t.Parallel()
 	root := newEmptyMCPWorkspace(t)
 	session := connectInMemoryServer(t, root)
 
@@ -44,6 +45,7 @@ func TestSourceWatchPreviewRejectsLocalFolders(t *testing.T) {
 }
 
 func TestSourceWatchConfirmPinRequirements(t *testing.T) {
+	t.Parallel()
 	root := newEmptyMCPWorkspace(t)
 	session := connectInMemoryServer(t, root)
 

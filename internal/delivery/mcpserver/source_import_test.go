@@ -10,6 +10,7 @@ import (
 )
 
 func TestSourceImportMCPPreviewAndConfirm(t *testing.T) {
+	t.Parallel()
 	root := newEmptyMCPWorkspace(t)
 
 	// Create an upstream filesystem source directory with a skill

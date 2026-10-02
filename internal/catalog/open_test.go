@@ -14,6 +14,7 @@ import (
 )
 
 func TestOpenSnapshotOpensExactCurrentGenerationReadOnly(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	result := build(t, root, BuildOptions{})
 
@@ -31,6 +32,7 @@ func TestOpenSnapshotOpensExactCurrentGenerationReadOnly(t *testing.T) {
 }
 
 func TestOpenSnapshotOpensRetainedHistoricalGeneration(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	first := build(t, root, BuildOptions{})
 	writeReplaySkill(t, root, "first")
@@ -50,6 +52,7 @@ func TestOpenSnapshotOpensRetainedHistoricalGeneration(t *testing.T) {
 }
 
 func TestOpenSnapshotUnavailableNeverFallsBack(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	current := build(t, root, BuildOptions{})
 	missing := "sha256:" + strings.Repeat("f", 64)
@@ -67,6 +70,7 @@ func TestOpenSnapshotUnavailableNeverFallsBack(t *testing.T) {
 }
 
 func TestOpenSnapshotRejectsCorruptMatchingGeneration(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	result := build(t, root, BuildOptions{})
 	path := generationPath(root, result.Pointer)
@@ -84,6 +88,7 @@ func TestOpenSnapshotRejectsCorruptMatchingGeneration(t *testing.T) {
 }
 
 func TestOpenSnapshotRejectsSymlinkGeneration(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	result := build(t, root, BuildOptions{})
 	path := generationPath(root, result.Pointer)
@@ -109,6 +114,7 @@ func TestOpenSnapshotRejectsSymlinkGeneration(t *testing.T) {
 }
 
 func TestOpenSnapshotPinProtectsGenerationAndIsCleanedOnClose(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	first := build(t, root, BuildOptions{})
 	writeReplaySkill(t, root, "second")
@@ -147,6 +153,7 @@ func TestOpenSnapshotPinProtectsGenerationAndIsCleanedOnClose(t *testing.T) {
 }
 
 func TestOpenSnapshotSelectsEquivalentGenerationByLexicalID(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	first := build(t, root, BuildOptions{})
 	second := build(t, root, BuildOptions{})
@@ -175,6 +182,7 @@ func writeReplaySkill(t *testing.T, root, description string) {
 }
 
 func TestConcurrentOpenAndCloseNeverFailsOnPinDirectory(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	build(t, root, BuildOptions{})
 
@@ -205,6 +213,7 @@ func TestConcurrentOpenAndCloseNeverFailsOnPinDirectory(t *testing.T) {
 }
 
 func TestOpenCurrentLockedBlocksMutationUntilClose(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	build(t, root, BuildOptions{})
 	handle, err := OpenCurrentLocked(context.Background(), root)
@@ -228,6 +237,7 @@ func TestOpenCurrentLockedBlocksMutationUntilClose(t *testing.T) {
 }
 
 func TestOpenCurrentReportsUnavailableCatalogWithSentinel(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	build(t, root, BuildOptions{})
 	writeCanonical(t, root, "skills/core/late/skill.meta.yaml", "schema_version: 1\nid: late\n")
@@ -238,6 +248,7 @@ func TestOpenCurrentReportsUnavailableCatalogWithSentinel(t *testing.T) {
 }
 
 func TestOpenWithFallbackServesCurrentWhenHealthy(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	buildResult := build(t, root, BuildOptions{})
 
@@ -259,6 +270,7 @@ func TestOpenWithFallbackServesCurrentWhenHealthy(t *testing.T) {
 }
 
 func TestOpenWithFallbackServesFallbackWhenCanonicalInvalid(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	buildResult := build(t, root, BuildOptions{})
 
@@ -294,6 +306,7 @@ func TestOpenWithFallbackServesFallbackWhenCanonicalInvalid(t *testing.T) {
 }
 
 func TestOpenWithFallbackAutoRebuildsWhenCanonicalValid(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	first := build(t, root, BuildOptions{})
 
@@ -315,6 +328,7 @@ func TestOpenWithFallbackAutoRebuildsWhenCanonicalValid(t *testing.T) {
 }
 
 func TestOpenWithFallbackRejectsCorruptGenerationWhenCanonicalInvalid(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	result := build(t, root, BuildOptions{})
 	path := generationPath(root, result.Pointer)
@@ -338,6 +352,7 @@ func TestOpenWithFallbackRejectsCorruptGenerationWhenCanonicalInvalid(t *testing
 }
 
 func TestOpenWithFallbackLockedRetainsLockUntilClose(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	build(t, root, BuildOptions{})
 

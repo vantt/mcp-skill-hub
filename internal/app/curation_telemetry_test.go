@@ -12,6 +12,7 @@ import (
 )
 
 func TestCurationTelemetryServiceDerivesPinsAndNeverMutatesCanonicalState(t *testing.T) {
+	t.Parallel()
 	root := newResolverWorkspace(t)
 	before, err := (WorkspaceService{}).GetCurationDiff(t.Context(), root)
 	if err != nil {
@@ -76,6 +77,7 @@ func TestCurationTelemetryServiceDerivesPinsAndNeverMutatesCanonicalState(t *tes
 }
 
 func TestCurationTelemetryServiceRequiresExplicitObservedValues(t *testing.T) {
+	t.Parallel()
 	root := newResolverWorkspace(t)
 	service := CurationTelemetryService{}
 	for name, input := range map[string]CurationSessionInput{

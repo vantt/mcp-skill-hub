@@ -7,6 +7,7 @@ import (
 )
 
 func TestSourceWatchRemoteValidationAndJSON(t *testing.T) {
+	t.Parallel()
 	root := initTestWorkspace(t)
 
 	// 1. Missing locator fails
@@ -39,6 +40,7 @@ func TestSourceWatchRemoteValidationAndJSON(t *testing.T) {
 	}
 }
 func TestSourceWatchRejectsLocalFolders(t *testing.T) {
+	t.Parallel()
 	root := initTestWorkspace(t)
 	code, _, stderr := runCLI(t, "source", "watch", "./local-folder", "--workspace", root)
 	if code != 2 {
@@ -50,6 +52,7 @@ func TestSourceWatchRejectsLocalFolders(t *testing.T) {
 }
 
 func TestSourceCheckAliasParity(t *testing.T) {
+	t.Parallel()
 	root := initTestWorkspace(t)
 
 	// Compare `check --all` and `source check --all`

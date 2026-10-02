@@ -59,6 +59,7 @@ func servableEntrypoint(id string) string {
 }
 
 func TestClarificationAnswerIsAcceptedByAnIndependentResolverInstance(t *testing.T) {
+	t.Parallel()
 	root := newDistributionFixtureWorkspace(t)
 	writeDistributionFixtureSkill(t, root, "code-review", "review code changes pull requests", servableEntrypoint("code-review"), nil)
 	rebuildFixtureCatalog(t, root)
@@ -95,6 +96,7 @@ func TestClarificationAnswerIsAcceptedByAnIndependentResolverInstance(t *testing
 }
 
 func TestResolveSkipsSkillWithUnservableFiles(t *testing.T) {
+	t.Parallel()
 	root := newDistributionFixtureWorkspace(t)
 	// The frontmatter description is blank, so it can never be served.
 	writeDistributionFixtureSkill(t, root, "broken-review", "review kafka consumer retries", "---\nname: broken-review\ndescription: \"\"\n---\n\n# Broken\n", nil)
@@ -140,6 +142,7 @@ func TestResolveSkipsSkillWithUnservableFiles(t *testing.T) {
 }
 
 func TestReadResourceDeliversNonUTF8TextAsBinaryWithMatchingDigest(t *testing.T) {
+	t.Parallel()
 	root := newDistributionFixtureWorkspace(t)
 	invalid := []byte("id,value\n\xff\xfe,1\n")
 	writeDistributionFixtureSkill(t, root, "data-review", "review csv exports", servableEntrypoint("data-review"), map[string][]byte{"assets/data.csv": invalid, "references/notes.md": []byte("# Notes\n")})
@@ -169,6 +172,7 @@ func TestReadResourceDeliversNonUTF8TextAsBinaryWithMatchingDigest(t *testing.T)
 }
 
 func TestResourceMIMETypesDoNotDependOnHostDatabase(t *testing.T) {
+	t.Parallel()
 	for path, want := range map[string]string{
 		"SKILL.md": "text/markdown", "references/a.md": "text/markdown", "assets/data.csv": "text/csv; charset=utf-8",
 		"scripts/run.py": "text/x-python; charset=utf-8", "assets/cfg.yaml": "application/yaml", "assets/blob.bin": "application/octet-stream",
@@ -180,6 +184,7 @@ func TestResourceMIMETypesDoNotDependOnHostDatabase(t *testing.T) {
 }
 
 func TestDistributionReportsCorruptCatalogWithSentinelError(t *testing.T) {
+	t.Parallel()
 	root := newDistributionFixtureWorkspace(t)
 	writeDistributionFixtureSkill(t, root, "code-review", "review code", servableEntrypoint("code-review"), nil)
 	result := rebuildFixtureCatalog(t, root)
@@ -207,6 +212,7 @@ func TestDistributionReportsCorruptCatalogWithSentinelError(t *testing.T) {
 }
 
 func TestResolverContinuityDuringInvalidCanonicalEdit(t *testing.T) {
+	t.Parallel()
 	root := newDistributionFixtureWorkspace(t)
 	writeDistributionFixtureSkill(t, root, "skill-a", "review kafka consumer retries", servableEntrypoint("skill-a"), nil)
 	writeDistributionFixtureSkill(t, root, "skill-b", "review database migrations", servableEntrypoint("skill-b"), nil)

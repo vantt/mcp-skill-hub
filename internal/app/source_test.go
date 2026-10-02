@@ -60,6 +60,7 @@ func (*fakeSourceAdapter) List(context.Context, sourcepkg.Source, sourcepkg.Revi
 }
 
 func TestSourceOperationsEmitSanitizedPostOperationTelemetry(t *testing.T) {
+	t.Parallel()
 	root := newSourceWorkspace(t)
 	sink := &captureTelemetrySink{}
 	adapter := &fakeSourceAdapter{revisions: map[string]sourcepkg.Revision{"source-a": revision("one")}, errors: map[string]error{}}
@@ -109,6 +110,7 @@ func TestSourceOperationsEmitSanitizedPostOperationTelemetry(t *testing.T) {
 }
 
 func TestSourceTelemetryPanicDoesNotChangeCaptureResult(t *testing.T) {
+	t.Parallel()
 	root := newSourceWorkspace(t)
 	service := SourceService{Clock: sourceClock{now: time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC)}, IDs: fixedSourceID("0011223344556677"), Telemetry: panickingTelemetrySink{}}
 	result, err := service.CaptureSourceCandidate(t.Context(), root, SourceCandidateInput{Locator: "sources/private", Reason: "private reason"})
@@ -121,6 +123,7 @@ func TestSourceTelemetryPanicDoesNotChangeCaptureResult(t *testing.T) {
 }
 
 func TestSourceChecksPreserveUnchangedCanonicalStatePersistChangesAndIsolateFailures(t *testing.T) {
+	t.Parallel()
 	root := newSourceWorkspace(t)
 	adapter := &fakeSourceAdapter{revisions: map[string]sourcepkg.Revision{}, errors: map[string]error{}}
 	clock := sourceClock{now: time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC)}
@@ -221,6 +224,7 @@ func TestSourceChecksPreserveUnchangedCanonicalStatePersistChangesAndIsolateFail
 }
 
 func TestCloneRebuildRetainsRevisionLosesOperationalTimesAndStatusDoesNotFetch(t *testing.T) {
+	t.Parallel()
 	root := newSourceWorkspace(t)
 	adapter := &fakeSourceAdapter{revisions: map[string]sourcepkg.Revision{"source-a": revision("one")}, errors: map[string]error{}}
 	service := SourceService{Clock: sourceClock{now: time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC)}, IDs: fixedSourceID("0011223344556677"), Adapters: map[string]sourcepkg.Adapter{"git": adapter}}
@@ -293,6 +297,7 @@ func TestCloneRebuildRetainsRevisionLosesOperationalTimesAndStatusDoesNotFetch(t
 }
 
 func TestSourceTriageMonitoringOptOutBUG01(t *testing.T) {
+	t.Parallel()
 	root := newSourceWorkspace(t)
 	adapter := &fakeSourceAdapter{revisions: map[string]sourcepkg.Revision{"source-no-monitor": revision("one")}, errors: map[string]error{}}
 	service := SourceService{
@@ -352,6 +357,7 @@ func TestSourceTriageMonitoringOptOutBUG01(t *testing.T) {
 }
 
 func TestSourceTriageGitHubTreeURLBUG10(t *testing.T) {
+	t.Parallel()
 	root := newSourceWorkspace(t)
 	adapter := &fakeSourceAdapter{revisions: map[string]sourcepkg.Revision{"source-tree": revision("one")}, errors: map[string]error{}}
 	service := SourceService{
@@ -393,6 +399,7 @@ func TestSourceTriageGitHubTreeURLBUG10(t *testing.T) {
 }
 
 func TestSourceCaptureAndTriageLocalFolderBUG11(t *testing.T) {
+	t.Parallel()
 	root := newSourceWorkspace(t)
 	extFolder := filepath.Join(t.TempDir(), "external-folder")
 	if err := os.MkdirAll(extFolder, 0o700); err != nil {

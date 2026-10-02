@@ -43,6 +43,7 @@ func TestGitDirtyDisablesRepositoryFsmonitorAndHooks(t *testing.T) {
 }
 
 func TestCommitWritesReceiptAndIsPinned(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := workspace.Apply(root); err != nil {
 		t.Fatal(err)
@@ -67,6 +68,7 @@ func TestCommitWritesReceiptAndIsPinned(t *testing.T) {
 }
 
 func TestRollForwardCompletesPreparedTransaction(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := workspace.Apply(root); err != nil {
 		t.Fatal(err)
@@ -91,6 +93,7 @@ func TestRollForwardCompletesPreparedTransaction(t *testing.T) {
 }
 
 func TestRollForwardRefusesExternalChange(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := workspace.Apply(root); err != nil {
 		t.Fatal(err)
@@ -114,6 +117,7 @@ func TestRollForwardRefusesExternalChange(t *testing.T) {
 }
 
 func TestRollForwardValidatesEveryStageBeforeApplying(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := workspace.Apply(root); err != nil {
 		t.Fatal(err)
@@ -139,6 +143,7 @@ func TestRollForwardValidatesEveryStageBeforeApplying(t *testing.T) {
 }
 
 func TestCommitRejectsInvalidVirtualTreeWithoutWriting(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := workspace.Apply(root); err != nil {
 		t.Fatal(err)
@@ -159,6 +164,7 @@ func TestCommitRejectsInvalidVirtualTreeWithoutWriting(t *testing.T) {
 }
 
 func TestCommitDeletesPinnedPath(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := workspace.Apply(root); err != nil {
 		t.Fatal(err)
@@ -177,6 +183,7 @@ func TestCommitDeletesPinnedPath(t *testing.T) {
 }
 
 func TestCommitRejectsUnsafeOperationID(t *testing.T) {
+	t.Parallel()
 	for _, id := range []string{".", "..", "../escape", "OP\nINJECT"} {
 		root := filepath.Join(t.TempDir(), "workspace")
 		if _, err := workspace.Apply(root); err != nil {
@@ -207,6 +214,7 @@ func appendTestReceipt(t *testing.T, txn string, m *manifest) {
 }
 
 func TestManifestValidationTable(t *testing.T) {
+	t.Parallel()
 	domain := change{Path: "sources/catalog/SRC-MANIFEST.yaml", AfterDigest: digest([]byte("id: SRC-MANIFEST\n")), Staged: "after/sources/catalog/SRC-MANIFEST.yaml"}
 	receipt := change{Path: "history/operations/2026/09/OP-MANIFEST.yaml", AfterDigest: digest([]byte("receipt")), Staged: "after/history/operations/2026/09/OP-MANIFEST.yaml", Receipt: true}
 	tests := []struct {
@@ -234,6 +242,7 @@ func TestManifestValidationTable(t *testing.T) {
 }
 
 func TestRollForwardRefusesMalformedOrTraversalManifestWithoutTouchingSentinel(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		manifest []byte
@@ -313,6 +322,7 @@ func TestRollForwardRefusesMalformedOrTraversalManifestWithoutTouchingSentinel(t
 	}
 }
 func TestMutationCancellationWaitingForLockWritesNothing(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := workspace.Apply(root); err != nil {
 		t.Fatal(err)
@@ -343,6 +353,7 @@ func TestMutationCancellationWaitingForLockWritesNothing(t *testing.T) {
 }
 
 func TestMutationCancellationBeforeCanonicalDisplacementWritesNothing(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := workspace.Apply(root); err != nil {
 		t.Fatal(err)
@@ -384,6 +395,7 @@ func TestMutationCancellationBeforeCanonicalDisplacementWritesNothing(t *testing
 }
 
 func TestMutationCancellationAfterDisplacementReachesDurableRecovery(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := workspace.Apply(root); err != nil {
 		t.Fatal(err)

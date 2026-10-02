@@ -18,6 +18,7 @@ import (
 )
 
 func TestEveryCatalogFaultPreservesCanonicalAuthorityAndRecoverablePointer(t *testing.T) {
+	t.Parallel()
 	points := []FaultPoint{FaultDatabaseClose, FaultGenerationSync, FaultGenerationsDirSync, FaultPointerTempSync, FaultPointerRename, FaultPointerDirSync}
 	for _, point := range points {
 		t.Run(string(point), func(t *testing.T) {
@@ -64,6 +65,7 @@ func TestEveryCatalogFaultPreservesCanonicalAuthorityAndRecoverablePointer(t *te
 }
 
 func TestCatalogDiskFullWriteFailurePreservesPreviousGeneration(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	initial := build(t, root, BuildOptions{})
 	before, err := canonical.Scan(root)
@@ -90,6 +92,7 @@ func TestCatalogDiskFullWriteFailurePreservesPreviousGeneration(t *testing.T) {
 }
 
 func TestCatalogReadOnlyGenerationDirectoryFailsClosedWhereSupported(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
 		t.Skip("directory permission enforcement is not reliable on this platform or as root")
 	}
@@ -114,6 +117,7 @@ func TestCatalogReadOnlyGenerationDirectoryFailsClosedWhereSupported(t *testing.
 }
 
 func TestCatalogGarbageCollectionHandlesClockSkew(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	first := build(t, root, BuildOptions{})
 	writeCanonical(t, root, "sources/catalog/clock.yaml", "schema_version: 1\nid: clock\nadapter: git\nlocator: https://example.invalid/clock\n")

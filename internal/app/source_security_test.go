@@ -12,6 +12,7 @@ import (
 )
 
 func TestAllDueExcludesManualAndDisabledButExplicitIDsStillRun(t *testing.T) {
+	t.Parallel()
 	root := newSourceWorkspace(t)
 	now := time.Date(2026, 9, 29, 1, 0, 0, 0, time.UTC)
 	for _, record := range []sourcepkg.Record{
@@ -42,6 +43,7 @@ func TestAllDueExcludesManualAndDisabledButExplicitIDsStillRun(t *testing.T) {
 }
 
 func TestCorruptOperationalDatabaseDoesNotBlockStatusAndSourceBecomesDue(t *testing.T) {
+	t.Parallel()
 	root := newSourceWorkspace(t)
 	record := testSourceRecord("due-after-reset", sourcepkg.Monitoring{Enabled: true, Cadence: "weekly"}, revision("old"))
 	data, err := sourcepkg.MarshalCanonical(record)
@@ -64,6 +66,7 @@ func TestCorruptOperationalDatabaseDoesNotBlockStatusAndSourceBecomesDue(t *test
 }
 
 func TestChangedSourceIsScheduledOnlyAfterCanonicalPublication(t *testing.T) {
+	t.Parallel()
 	root := newSourceWorkspace(t)
 	now := time.Date(2026, 9, 29, 1, 0, 0, 0, time.UTC)
 	record := testSourceRecord("publish-failure", sourcepkg.Monitoring{Enabled: true, Cadence: "weekly"}, revision("old"))
@@ -97,6 +100,7 @@ func TestChangedSourceIsScheduledOnlyAfterCanonicalPublication(t *testing.T) {
 }
 
 func TestSourceProposalExpiryIsRecheckedAtConfirmation(t *testing.T) {
+	t.Parallel()
 	root := newSourceWorkspace(t)
 	now := time.Date(2026, 9, 29, 1, 0, 0, 0, time.UTC)
 	adapter := &fakeSourceAdapter{revisions: map[string]sourcepkg.Revision{"expiring-source": revision("one")}, errors: map[string]error{}}

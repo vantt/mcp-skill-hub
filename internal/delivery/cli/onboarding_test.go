@@ -28,6 +28,7 @@ func initTestWorkspace(t *testing.T) string {
 }
 
 func TestHelpEntryPointsPrintUsageAndExitZero(t *testing.T) {
+	t.Parallel()
 	for _, args := range [][]string{{}, {"help"}, {"--help"}, {"-h"}} {
 		code, stdout, stderr := runCLI(t, args...)
 		if code != 0 || stderr != "" {
@@ -42,6 +43,7 @@ func TestHelpEntryPointsPrintUsageAndExitZero(t *testing.T) {
 }
 
 func TestCommandHelpPrintsThatCommandsUsage(t *testing.T) {
+	t.Parallel()
 	cases := map[string]string{
 		"init": "--verbose", "connect": "--global", "doctor": "--fix", "status": "--quiet",
 		"skill": "list", "source": "capture", "mcp": "serve", "check": "Check sources",
@@ -57,6 +59,7 @@ func TestCommandHelpPrintsThatCommandsUsage(t *testing.T) {
 }
 
 func TestUnknownCommandPointsToHelp(t *testing.T) {
+	t.Parallel()
 	code, _, stderr := runCLI(t, "frobnicate")
 	if code != 2 || !strings.Contains(stderr, "skillhub help") || strings.Contains(stderr, "skillhub version") {
 		t.Fatalf("exit = %d stderr = %q", code, stderr)
@@ -64,6 +67,7 @@ func TestUnknownCommandPointsToHelp(t *testing.T) {
 }
 
 func TestInitDefaultOutputIsShortSummaryWithoutDigests(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	code, stdout, stderr := runCLI(t, "init", root, "--yes")
 	if code != 0 {
@@ -82,6 +86,7 @@ func TestInitDefaultOutputIsShortSummaryWithoutDigests(t *testing.T) {
 }
 
 func TestInitVerboseAndJSONKeepGenerationDigestsAndCounts(t *testing.T) {
+	t.Parallel()
 	verboseRoot := filepath.Join(t.TempDir(), "workspace")
 	code, stdout, stderr := runCLI(t, "init", verboseRoot, "--yes", "--verbose")
 	if code != 0 {
@@ -111,6 +116,7 @@ func TestInitVerboseAndJSONKeepGenerationDigestsAndCounts(t *testing.T) {
 }
 
 func TestInitPreviewDescribesPlannedDirectoryCreation(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	code, stdout, stderr := runCLI(t, "init", root)
 	if code != 0 {
@@ -202,6 +208,7 @@ func TestConnectWithoutWorkspaceExplainsHowToProvideOne(t *testing.T) {
 }
 
 func TestConnectRejectsUninitializedWorkspaceAndBadFlags(t *testing.T) {
+	t.Parallel()
 	empty := t.TempDir()
 	if code, _, stderr := runCLI(t, "connect", "--project", t.TempDir(), "--workspace", empty); code != 2 || !strings.Contains(stderr, "skillhub init") {
 		t.Fatalf("uninitialized workspace exit = %d stderr = %q", code, stderr)
@@ -215,6 +222,7 @@ func TestConnectRejectsUninitializedWorkspaceAndBadFlags(t *testing.T) {
 }
 
 func TestConnectRefusesConflictingManagedBlockWithoutWriting(t *testing.T) {
+	t.Parallel()
 	workspace := initTestWorkspace(t)
 	project := t.TempDir()
 	broken := "<!-- skillhub:bootstrap:v1:start -->\nunterminated\n"
@@ -276,6 +284,7 @@ func TestConnectGlobalWritesUserScopeAndPreservesClaudeConfig(t *testing.T) {
 }
 
 func TestConnectJSONUsesResultEnvelope(t *testing.T) {
+	t.Parallel()
 	workspace := initTestWorkspace(t)
 	code, stdout, stderr := runCLI(t, "connect", "--project", t.TempDir(), "--workspace", workspace, "--json")
 	if code != 0 {
@@ -336,6 +345,7 @@ func TestWorkspaceEnvironmentPrecedence(t *testing.T) {
 }
 
 func TestSkillListShowsIDStateCollectionNameAndFiltersByState(t *testing.T) {
+	t.Parallel()
 	root := initTestWorkspace(t)
 	if code, _, stderr := runCLI(t, "skill", "create", "--workspace", root, "--id", "list-me", "--collection", "software", "--name", "List Me", "--description", "listing", "--trigger", "list", "--not-for", "other", "--min-scope", "single_step", "--yes"); code != 0 {
 		t.Fatalf("create exit = %d: %s", code, stderr)
@@ -371,6 +381,7 @@ func TestSkillListShowsIDStateCollectionNameAndFiltersByState(t *testing.T) {
 }
 
 func TestFirstRunStatusRecommendsCommitThenConnect(t *testing.T) {
+	t.Parallel()
 	root := initTestWorkspace(t)
 	code, stdout, stderr := runCLI(t, "status", "--workspace", root)
 	if code != 0 {

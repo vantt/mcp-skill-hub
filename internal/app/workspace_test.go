@@ -12,6 +12,7 @@ import (
 )
 
 func TestInitRequiresConfirmationBeforeMutation(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	service := WorkspaceService{}
 	preview, err := service.Init(root, false)
@@ -36,6 +37,7 @@ func TestInitRequiresConfirmationBeforeMutation(t *testing.T) {
 }
 
 func TestDoctorHostIntegrationPreviewIsReadOnlyAndDependencyOrdered(t *testing.T) {
+	t.Parallel()
 	root := healthyWorkspaceWithoutHosts(t)
 	result, err := (WorkspaceService{}).Doctor(root)
 	if err != nil {
@@ -61,6 +63,7 @@ func TestDoctorHostIntegrationPreviewIsReadOnlyAndDependencyOrdered(t *testing.T
 }
 
 func TestDoctorFixAppliesAllHostArtifactsAndIsIdempotent(t *testing.T) {
+	t.Parallel()
 	root := healthyWorkspaceWithoutHosts(t)
 	service := WorkspaceService{}
 	applied, err := service.DoctorFix(root, true)
@@ -103,6 +106,7 @@ func TestDoctorFixAppliesAllHostArtifactsAndIsIdempotent(t *testing.T) {
 }
 
 func TestRemediationRejectsSkillhubSymlink(t *testing.T) {
+	t.Parallel()
 	service := WorkspaceService{}
 	for _, remediation := range []struct {
 		name  string
@@ -128,6 +132,7 @@ func TestRemediationRejectsSkillhubSymlink(t *testing.T) {
 }
 
 func TestDoctorFixRebuildsMissingRuntime(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	service := WorkspaceService{}
 	if _, err := service.Init(root, true); err != nil {
@@ -151,6 +156,7 @@ func TestDoctorFixRebuildsMissingRuntime(t *testing.T) {
 }
 
 func TestDoctorHealthyWorkspaceCreatesOnlyAdvisoryLockState(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
 		t.Fatal(err)
@@ -168,6 +174,7 @@ func TestDoctorHealthyWorkspaceCreatesOnlyAdvisoryLockState(t *testing.T) {
 }
 
 func TestInitIsReadOnlyAndConfirmationInitializes(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	service := WorkspaceService{}
 	preview, err := service.Init(root, false)
@@ -193,6 +200,7 @@ func TestInitIsReadOnlyAndConfirmationInitializes(t *testing.T) {
 }
 
 func TestDoctorFixRejectsMissingWorkspace(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	service := WorkspaceService{}
 	if _, err := service.Doctor(root); err == nil {
@@ -207,6 +215,7 @@ func TestDoctorFixRejectsMissingWorkspace(t *testing.T) {
 }
 
 func TestExistingWorkspaceDoctorFixNeverSilentlyChangesCanonicalVersion(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	service := WorkspaceService{}
 	if _, err := service.Init(root, true); err != nil {
@@ -241,6 +250,7 @@ func TestExistingWorkspaceDoctorFixNeverSilentlyChangesCanonicalVersion(t *testi
 }
 
 func TestDoctorPreviewsRecoveryConflictWithoutOfferingFix(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
 		t.Fatal(err)
@@ -275,6 +285,7 @@ func TestDoctorPreviewsRecoveryConflictWithoutOfferingFix(t *testing.T) {
 }
 
 func TestDoctorReportsAndFixesPendingRecovery(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
 		t.Fatal(err)

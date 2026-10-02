@@ -16,6 +16,7 @@ import (
 )
 
 func TestPlanAndConfirmPinProposalAndCanonicalState(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	set := WriteSet{OperationID: "OP-PLAN", Command: "create_source", IdempotencyKey: "create:SRC-PLAN", Changes: []Change{{Path: "sources/catalog/SRC-PLAN.yaml", Contents: []byte("id: SRC-PLAN\n")}}}
 	proposal, err := PlanMutation(root, set)
@@ -40,6 +41,7 @@ func TestPlanAndConfirmPinProposalAndCanonicalState(t *testing.T) {
 }
 
 func TestIdempotentRetryReturnsFaithfulStructuredReceipt(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	set := WriteSet{OperationID: "OP-FIRST", Command: "create_source", IdempotencyKey: "source:create:one", Changes: []Change{{Path: "sources/catalog/SRC-ONE.yaml", Contents: []byte("id: SRC-ONE\nname: 'id: OP-SECOND'\n")}}}
 	first, err := Commit(root, set)
@@ -63,6 +65,7 @@ func TestIdempotentRetryReturnsFaithfulStructuredReceipt(t *testing.T) {
 }
 
 func TestRollbackRestoresBeforeImagesForPartialReplacement(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	original := []byte("id: SRC-EXISTING\nname: original\n")
 	path := "sources/catalog/SRC-EXISTING.yaml"
@@ -96,6 +99,7 @@ func TestRollbackRestoresBeforeImagesForPartialReplacement(t *testing.T) {
 }
 
 func TestRollbackRestoresPartiallyAppliedTransaction(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	set := threeFileWriteSet("OP-ROLLBACK")
 	injected := errors.New("stop after first replacement")
@@ -115,6 +119,7 @@ func TestRollbackRestoresPartiallyAppliedTransaction(t *testing.T) {
 }
 
 func TestFaultInjectionAlwaysRecoversToOldOrNewState(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		point      FaultPoint
@@ -167,6 +172,7 @@ func TestFaultInjectionAlwaysRecoversToOldOrNewState(t *testing.T) {
 }
 
 func TestPlanAllocatesConfirmableUniqueOperationIDs(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	set := WriteSet{Command: "create_source", Changes: []Change{{Path: "sources/catalog/SRC-ALLOCATED.yaml", Contents: []byte("id: SRC-ALLOCATED\n")}}}
 	first, err := PlanMutation(root, set)
@@ -187,6 +193,7 @@ func TestPlanAllocatesConfirmableUniqueOperationIDs(t *testing.T) {
 }
 
 func TestLostResponseReplanReturnsOriginalResult(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	payload := WriteSet{Command: "create_source", IdempotencyKey: "lost-response", Changes: []Change{{Path: "sources/catalog/SRC-LOST.yaml", Contents: []byte("id: SRC-LOST\n")}}}
 	firstPlan, err := PlanMutation(root, payload)
@@ -220,6 +227,7 @@ func TestLostResponseReplanReturnsOriginalResult(t *testing.T) {
 }
 
 func TestRecoveryContinuesAfterTargetWasDisplaced(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	path := "sources/catalog/SRC-DISPLACED.yaml"
 	before := []byte("id: SRC-DISPLACED\nname: old\n")
@@ -251,6 +259,7 @@ func TestRecoveryContinuesAfterTargetWasDisplaced(t *testing.T) {
 }
 
 func TestLostResponseAfterJournalCleanupReplanReturnsReceipt(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	payload := WriteSet{Command: "create_source", IdempotencyKey: "lost-after-cleanup", Changes: []Change{{Path: "sources/catalog/SRC-CLEANUP.yaml", Contents: []byte("id: SRC-CLEANUP\n")}}}
 	planned, err := PlanMutation(root, payload)
@@ -281,6 +290,7 @@ func TestLostResponseAfterJournalCleanupReplanReturnsReceipt(t *testing.T) {
 }
 
 func TestPostCanonicalFailureRetainsRecoverableWALAndRecoveryPublishes(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	set := WriteSet{OperationID: "OP-PUBLISH-FAIL", Command: "create_source", Changes: []Change{{Path: "sources/catalog/SRC-PUBLISH.yaml", Contents: []byte("schema_version: 1\nid: SRC-PUBLISH\nadapter: git\n")}}}
 	proposal, err := PlanMutation(root, set)
@@ -314,6 +324,7 @@ func TestPostCanonicalFailureRetainsRecoverableWALAndRecoveryPublishes(t *testin
 }
 
 func TestPostCanonicalCallbackKeepsConcurrentMutationOutsideLifecycle(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	first, err := PlanMutation(root, WriteSet{OperationID: "OP-FIRST-PUBLISH", Command: "create_source", Changes: []Change{{Path: "sources/catalog/SRC-FIRST.yaml", Contents: []byte("schema_version: 1\nid: SRC-FIRST\nadapter: git\n")}}})
 	if err != nil {
@@ -351,6 +362,7 @@ func TestPostCanonicalCallbackKeepsConcurrentMutationOutsideLifecycle(t *testing
 }
 
 func TestTransactionFilesRemainRestrictive(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	failure := errors.New("inspect prepared WAL")
 	_, err := CommitWithOptions(root, WriteSet{OperationID: "OP-PRIVATE-WAL", Command: "create_source", Changes: []Change{{Path: "sources/catalog/SRC-PRIVATE.yaml", Contents: []byte("id: SRC-PRIVATE\n")}}}, Options{Fault: func(point FaultPoint) error {
@@ -389,6 +401,7 @@ func TestTransactionFilesRemainRestrictive(t *testing.T) {
 }
 
 func TestLateExternalEditIsDisplacedRevalidatedAndRestored(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	path := "sources/catalog/SRC-RACE.yaml"
 	original := []byte("id: SRC-RACE\nname: original\n")
@@ -414,6 +427,7 @@ func TestLateExternalEditIsDisplacedRevalidatedAndRestored(t *testing.T) {
 }
 
 func TestParentSymlinkReplacementFailsClosed(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	external := t.TempDir()
 	parent := filepath.Join(root, "sources", "catalog")
@@ -438,6 +452,7 @@ func TestParentSymlinkReplacementFailsClosed(t *testing.T) {
 }
 
 func TestConcurrentWritersSerializeWithoutLostUpdates(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	start := make(chan struct{})
 	errs := make(chan error, 2)
@@ -468,6 +483,7 @@ func TestConcurrentWritersSerializeWithoutLostUpdates(t *testing.T) {
 }
 
 func TestPendingTransactionBlocksNormalWritesAndClassifiesProgress(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	failure := errors.New("interrupt first path")
 	_, err := CommitWithOptions(root, threeFileWriteSet("OP-PENDING-BLOCK"), Options{Fault: func(point FaultPoint) error {
@@ -497,6 +513,7 @@ func TestPendingTransactionBlocksNormalWritesAndClassifiesProgress(t *testing.T)
 }
 
 func TestRollbackAfterReceiptFaultRestoresReplaceDeleteAndCreate(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	deletePath := "sources/catalog/SRC-A-DELETE.yaml"
 	replacePath := "sources/catalog/SRC-B-REPLACE.yaml"
@@ -542,6 +559,7 @@ func TestRollbackAfterReceiptFaultRestoresReplaceDeleteAndCreate(t *testing.T) {
 }
 
 func TestRollbackRefusesUnknownPathWithoutOverwriting(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	failure := errors.New("partial apply")
 	set := threeFileWriteSet("OP-UNKNOWN-ROLLBACK")
@@ -569,6 +587,7 @@ func TestRollbackRefusesUnknownPathWithoutOverwriting(t *testing.T) {
 }
 
 func TestReplacementPreservesPermissionsAndNewFilesUseCanonicalDefault(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	path := "sources/catalog/SRC-MODE.yaml"
 	before := []byte("id: SRC-MODE\nname: old\n")
@@ -593,6 +612,7 @@ func TestReplacementPreservesPermissionsAndNewFilesUseCanonicalDefault(t *testin
 }
 
 func TestSharedAndExclusiveLocksHaveBoundedWait(t *testing.T) {
+	t.Parallel()
 	root := newWorkspace(t)
 	first, err := AcquireSharedLock(context.Background(), root, time.Second)
 	if err != nil {

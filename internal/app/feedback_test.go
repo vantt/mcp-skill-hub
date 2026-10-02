@@ -12,6 +12,7 @@ import (
 )
 
 func TestFeedbackUsesInjectedRecorderAndPreservesSemanticIdempotency(t *testing.T) {
+	t.Parallel()
 	root := newSkillWorkspace(t)
 	recorder, err := (TelemetryService{}).Open(root)
 	if err != nil {
@@ -66,6 +67,7 @@ func TestFeedbackUsesInjectedRecorderAndPreservesSemanticIdempotency(t *testing.
 }
 
 func TestFeedbackOwnsRecorderWhenNotInjected(t *testing.T) {
+	t.Parallel()
 	root := newSkillWorkspace(t)
 	recorder, err := telemetry.Open(telemetry.Config{WorkspaceRoot: root, Path: filepath.Join(root, "runtime", "telemetry.db")})
 	if err != nil {
@@ -95,6 +97,7 @@ func TestFeedbackOwnsRecorderWhenNotInjected(t *testing.T) {
 }
 
 func TestFeedbackRecordsLoadedAsDistinctFunnelEvent(t *testing.T) {
+	t.Parallel()
 	root := newSkillWorkspace(t)
 	recorder, err := (TelemetryService{}).Open(root)
 	if err != nil {
@@ -115,6 +118,7 @@ func TestFeedbackRecordsLoadedAsDistinctFunnelEvent(t *testing.T) {
 }
 
 func TestFeedbackAcceptsSupportingRecommendationAndRejectsUnretainedIdentifiers(t *testing.T) {
+	t.Parallel()
 	root := newSkillWorkspace(t)
 	recorder, err := (TelemetryService{}).Open(root)
 	if err != nil {
@@ -141,6 +145,7 @@ func TestFeedbackAcceptsSupportingRecommendationAndRejectsUnretainedIdentifiers(
 }
 
 func TestFeedbackRequiresEmptySelectionWhenResolutionRecommendedNoSkills(t *testing.T) {
+	t.Parallel()
 	root := newSkillWorkspace(t)
 	recorder, err := (TelemetryService{}).Open(root)
 	if err != nil {
@@ -162,6 +167,7 @@ func TestFeedbackRequiresEmptySelectionWhenResolutionRecommendedNoSkills(t *test
 }
 
 func TestFeedbackRejectsUnknownResolutionUnsupportedOutcomeAndUnbasedUtility(t *testing.T) {
+	t.Parallel()
 	root := newSkillWorkspace(t)
 	utility := "helpful"
 	for _, input := range []FeedbackInput{

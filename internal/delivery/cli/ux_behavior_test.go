@@ -18,6 +18,7 @@ func createDraftSkill(t *testing.T, root, id string, extra ...string) {
 }
 
 func TestSkillApplyReportsResultingStateWithoutPreviewText(t *testing.T) {
+	t.Parallel()
 	root := initTestWorkspace(t)
 	contentFile := filepath.Join(t.TempDir(), "demo-content.md")
 	_ = os.WriteFile(contentFile, []byte("---\nname: demo\ndescription: Demo skill.\n---\n\n# Demo\n\nReal procedural instructions to replace untouched scaffold.\n"), 0o600)
@@ -52,6 +53,7 @@ func TestSkillApplyReportsResultingStateWithoutPreviewText(t *testing.T) {
 }
 
 func TestSkillPreviewStillExplainsHowToApply(t *testing.T) {
+	t.Parallel()
 	root := initTestWorkspace(t)
 	code, stdout, _ := runCLI(t, "skill", "create", "--workspace", root, "--id", "demo", "--collection", "software", "--name", "Demo", "--description", "Demo skill.")
 	if code != 0 || !strings.Contains(stdout, "No files changed") {
@@ -60,6 +62,7 @@ func TestSkillPreviewStillExplainsHowToApply(t *testing.T) {
 }
 
 func TestSourceHelpDoesNotPromiseCaptureConfirmation(t *testing.T) {
+	t.Parallel()
 	code, stdout, _ := runCLI(t, "source", "--help")
 	if code != 0 || strings.Contains(stdout, "preview; --yes applies") || !strings.Contains(stdout, "applies immediately") {
 		t.Fatalf("source help = %d:\n%s", code, stdout)
@@ -98,6 +101,7 @@ func TestSkillEditReadsContentFileFromOutsideWorkspace(t *testing.T) {
 }
 
 func TestReadContentFileRefusesUnsafeInputs(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	target := filepath.Join(dir, "real.md")
 	if err := os.WriteFile(target, []byte("body"), 0o600); err != nil {
@@ -131,6 +135,7 @@ func TestReadContentFileRefusesUnsafeInputs(t *testing.T) {
 }
 
 func TestSkillShowReadsDraftAndReportsState(t *testing.T) {
+	t.Parallel()
 	root := initTestWorkspace(t)
 	createDraftSkill(t, root, "demo", "--not-for", "unrelated")
 	code, stdout, stderr := runCLI(t, "skill", "show", "demo", "--workspace", root)
@@ -143,6 +148,7 @@ func TestSkillShowReadsDraftAndReportsState(t *testing.T) {
 }
 
 func TestSkillActivateWithoutNotForNamesTheExactFix(t *testing.T) {
+	t.Parallel()
 	root := initTestWorkspace(t)
 	createDraftSkill(t, root, "demo")
 	code, _, stderr := runCLI(t, "skill", "activate", "demo", "--workspace", root, "--yes")
@@ -162,6 +168,7 @@ func TestSkillActivateWithoutNotForNamesTheExactFix(t *testing.T) {
 }
 
 func TestStatusOnlyCallsWorkspaceNewWhenNothingHasBeenAdded(t *testing.T) {
+	t.Parallel()
 	root := initTestWorkspace(t)
 	code, stdout, _ := runCLI(t, "status", "--workspace", root)
 	if code != 0 || !strings.Contains(stdout, "Workspace is new") {
@@ -175,6 +182,7 @@ func TestStatusOnlyCallsWorkspaceNewWhenNothingHasBeenAdded(t *testing.T) {
 }
 
 func TestStatusReportsStaleIndexAndRebuildAfterHandEdit(t *testing.T) {
+	t.Parallel()
 	root := initTestWorkspace(t)
 	createDraftSkill(t, root, "demo", "--not-for", "unrelated")
 	entry := filepath.Join(root, "skills", "software", "demo", "SKILL.md")
@@ -193,6 +201,7 @@ func TestStatusReportsStaleIndexAndRebuildAfterHandEdit(t *testing.T) {
 }
 
 func TestPerCommandHelpHasRealUsage(t *testing.T) {
+	t.Parallel()
 	want := map[string][]string{
 		"check": {"--all-due", "Example"}, "distill": {"prepare", "submit", "Example"}, "inbox": {"Example"},
 		"insight": {"decide", "confirm", "Example"}, "resolve": {"--request", "Example"}, "resolution": {"replay", "--manifest"},
@@ -215,6 +224,7 @@ func TestPerCommandHelpHasRealUsage(t *testing.T) {
 }
 
 func TestTelemetryPurgeWithoutYesShowsExactCommand(t *testing.T) {
+	t.Parallel()
 	root := initTestWorkspace(t)
 	code, _, stderr := runCLI(t, "telemetry", "purge", "--workspace", root)
 	if code != 2 || !strings.Contains(stderr, "FIX: Run `skillhub telemetry purge --workspace <path> --yes`.") {
@@ -223,6 +233,7 @@ func TestTelemetryPurgeWithoutYesShowsExactCommand(t *testing.T) {
 }
 
 func TestTelemetryHealthIsCleanAfterPurgingACorruptStore(t *testing.T) {
+	t.Parallel()
 	root := initTestWorkspace(t)
 	if err := os.MkdirAll(filepath.Join(root, "runtime"), 0o700); err != nil {
 		t.Fatal(err)
@@ -245,6 +256,7 @@ func TestTelemetryHealthIsCleanAfterPurgingACorruptStore(t *testing.T) {
 }
 
 func TestSkillCreateStarterTemplateAndNextStep(t *testing.T) {
+	t.Parallel()
 	root := initTestWorkspace(t)
 	code, stdout, stderr := runCLI(t, "skill", "create", "--workspace", root, "--id", "starter-skill", "--collection", "core", "--name", "Starter Skill", "--description", "Starter description.", "--yes")
 	if code != 0 {
@@ -268,6 +280,7 @@ func TestSkillCreateStarterTemplateAndNextStep(t *testing.T) {
 }
 
 func TestSkillShowDisplaysRoutingAndFilePath(t *testing.T) {
+	t.Parallel()
 	root := initTestWorkspace(t)
 	code, _, stderr := runCLI(t, "skill", "create", "--workspace", root, "--id", "show-test", "--collection", "core", "--name", "Show Test", "--description", "Show description.", "--trigger", "review code", "--not-for", "write prose", "--min-scope", "single_step", "--yes")
 	if code != 0 {
@@ -288,6 +301,7 @@ func TestSkillShowDisplaysRoutingAndFilePath(t *testing.T) {
 }
 
 func TestSkillActivateMissingRequirementsCombinedCommand(t *testing.T) {
+	t.Parallel()
 	root := initTestWorkspace(t)
 	code, _, stderr := runCLI(t, "skill", "create", "--workspace", root, "--id", "missing-reqs", "--collection", "core", "--name", "Missing Reqs", "--description", "Missing description.", "--yes")
 	if code != 0 {
@@ -303,6 +317,7 @@ func TestSkillActivateMissingRequirementsCombinedCommand(t *testing.T) {
 }
 
 func TestInitRefusesNonEmptyDirectoryUnlessForce(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	skillDir := filepath.Join(dir, "skills", "core", "existing")
 	if err := os.MkdirAll(skillDir, 0o755); err != nil {
@@ -322,6 +337,7 @@ func TestInitRefusesNonEmptyDirectoryUnlessForce(t *testing.T) {
 }
 
 func TestDiffGroupsDraftSkills(t *testing.T) {
+	t.Parallel()
 	root := initTestWorkspace(t)
 	code, _, stderr := runCLI(t, "skill", "create", "--workspace", root, "--id", "draft-diff", "--collection", "core", "--name", "Draft Diff", "--description", "Draft diff description.", "--yes")
 	if code != 0 {
@@ -343,6 +359,7 @@ func TestDiffGroupsDraftSkills(t *testing.T) {
 }
 
 func TestSkillPreviewShowsExactConfirmCommand(t *testing.T) {
+	t.Parallel()
 	root := initTestWorkspace(t)
 	code, stdout, stderr := runCLI(t, "skill", "create", "--workspace", root, "--id", "preview-test", "--collection", "core", "--name", "Preview Test", "--description", "Preview description.")
 	if code != 0 {

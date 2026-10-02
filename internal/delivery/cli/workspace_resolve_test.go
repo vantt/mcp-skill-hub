@@ -427,6 +427,7 @@ func TestSubcommandTyposAndFlagsReportedBeforeWorkspaceError(t *testing.T) {
 }
 
 func TestDoctorFixDoesNotCreateWorkspaceAtMissingPath(t *testing.T) {
+	t.Parallel()
 	missingPath := filepath.Join(t.TempDir(), "nonexistent", "workspace")
 	var stdout, stderr bytes.Buffer
 
@@ -477,6 +478,7 @@ func TestStatusInsideConnectedProjectSucceeds(t *testing.T) {
 }
 
 func TestUnknownIDsExitNonZero(t *testing.T) {
+	t.Parallel()
 	ws := initWorkspace(t)
 
 	// 1. check <unknown-id> exits non-zero and reports unknown source

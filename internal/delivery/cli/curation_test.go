@@ -14,6 +14,7 @@ import (
 )
 
 func TestStatusHumanJSONAndQuietUseOneModel(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
 	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
@@ -55,6 +56,7 @@ func TestStatusHumanJSONAndQuietUseOneModel(t *testing.T) {
 }
 
 func TestStatusRejectsConflictingOutputModes(t *testing.T) {
+	t.Parallel()
 	var stdout, stderr bytes.Buffer
 	if code := Run([]string{"status", "--json", "--quiet"}, &stdout, &stderr); code != 2 {
 		t.Fatalf("exit = %d", code)
@@ -65,6 +67,7 @@ func TestStatusRejectsConflictingOutputModes(t *testing.T) {
 }
 
 func TestValidatePropagatesApplicationCancellation(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	var stdout, stderr bytes.Buffer
@@ -81,6 +84,7 @@ func TestValidatePropagatesApplicationCancellation(t *testing.T) {
 }
 
 func TestDiffOutputUsesRelativePaths(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
 	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
@@ -104,6 +108,7 @@ func TestDiffOutputUsesRelativePaths(t *testing.T) {
 	}
 }
 func TestStatusInvalidWorkspaceDoesNotPrintNoSkillsYetBUG08(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
 	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
@@ -137,6 +142,7 @@ func TestStatusInvalidWorkspaceDoesNotPrintNoSkillsYetBUG08(t *testing.T) {
 }
 
 func TestStatusSuggestsRunnableCreateCommandBUG17(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
 	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {

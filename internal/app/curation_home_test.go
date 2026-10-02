@@ -78,6 +78,7 @@ type curationFixture struct {
 }
 
 func TestCurationHomePhaseZeroFixtures(t *testing.T) {
+	t.Parallel()
 	fixtures, err := filepath.Glob(filepath.Join("..", "..", "testdata", "ux", "curation-home", "*.yaml"))
 	if err != nil || len(fixtures) != 3 {
 		t.Fatalf("curation fixtures = %v, %v", fixtures, err)
@@ -174,6 +175,7 @@ func assertFixtureEvidenceReferences(t *testing.T, fixture curationFixture) {
 }
 
 func TestCurationHomePrioritizesInvalidRecoveryStaleAndGit(t *testing.T) {
+	t.Parallel()
 	home := deriveCurationHome(homeState{
 		Health: "invalid", Index: "stale", GitDirty: true, GitConfigured: true,
 		RecoveryPending: true, RecoveryID: "op-recovery",
@@ -199,6 +201,7 @@ func TestCurationHomePrioritizesInvalidRecoveryStaleAndGit(t *testing.T) {
 }
 
 func TestGetCurationHomePrioritizesStaleIndexBeforeGitChanges(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
 		t.Fatal(err)
@@ -225,6 +228,7 @@ func TestGetCurationHomePrioritizesStaleIndexBeforeGitChanges(t *testing.T) {
 }
 
 func TestGetCurationHomeReportsUnknownIndexDuringPendingRecovery(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
 		t.Fatal(err)
@@ -258,6 +262,7 @@ func TestGetCurationHomeReportsUnknownIndexDuringPendingRecovery(t *testing.T) {
 }
 
 func TestGetCurationHomeReadsHealthyWorkspaceOffline(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
 		t.Fatal(err)
@@ -288,6 +293,7 @@ func commitWorkspace(t *testing.T, root string) {
 }
 
 func TestGetCurationHomeNeverReportsCountsKnownWhenInvalid(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
 		t.Fatal(err)

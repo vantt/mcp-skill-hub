@@ -45,6 +45,7 @@ func (sink *captureTelemetrySink) Record(event telemetry.Event) {
 }
 
 func TestResolverResultIsIndependentOfNilFailingAndFullTelemetry(t *testing.T) {
+	t.Parallel()
 	root := newResolverWorkspace(t)
 	request := privateResolverRequest()
 	baseline, baselineErr := (ResolverService{Cache: resolverpkg.NewCache(8)}).Resolve(t.Context(), root, request)
@@ -78,6 +79,7 @@ func TestResolverResultIsIndependentOfNilFailingAndFullTelemetry(t *testing.T) {
 }
 
 func TestResolverTelemetryIsMinimizedAndSeparatesRecommendation(t *testing.T) {
+	t.Parallel()
 	root := newResolverWorkspace(t)
 	createAndActivateSkill(t, SkillService{}, root)
 	sink := &captureTelemetrySink{}
@@ -137,6 +139,7 @@ func TestResolverTelemetryIsMinimizedAndSeparatesRecommendation(t *testing.T) {
 }
 
 func TestResolutionTelemetryPayloadRetainsPrimaryAndSupportingRecommendationIDs(t *testing.T) {
+	t.Parallel()
 	response := resolverpkg.Response{
 		Status:     resolverpkg.StatusResolved,
 		Primary:    &resolverpkg.Recommendation{ID: "primary-skill", Confidence: "high"},
@@ -156,6 +159,7 @@ func TestResolutionTelemetryPayloadRetainsPrimaryAndSupportingRecommendationIDs(
 }
 
 func TestResolverRecordsSanitizedFailureWithoutChangingError(t *testing.T) {
+	t.Parallel()
 	root := newResolverWorkspace(t)
 	request := privateResolverRequest()
 	request.SchemaVersion = "unsupported"
@@ -177,6 +181,7 @@ func TestResolverRecordsSanitizedFailureWithoutChangingError(t *testing.T) {
 }
 
 func TestTelemetryPurgeAndDeletionDoNotAlterResolution(t *testing.T) {
+	t.Parallel()
 	root := newResolverWorkspace(t)
 	request := privateResolverRequest()
 	service := TelemetryService{Config: telemetry.Config{BufferSize: 8}}

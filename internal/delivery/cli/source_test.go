@@ -16,6 +16,7 @@ import (
 )
 
 func TestSourceCaptureListAndExplicitEmptyCheck(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := workspace.Apply(root); err != nil {
 		t.Fatal(err)
@@ -43,6 +44,7 @@ func TestSourceCaptureListAndExplicitEmptyCheck(t *testing.T) {
 }
 
 func TestSourceCaptureRejectsCredentialBearingLocator(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	if _, err := workspace.Apply(root); err != nil {
 		t.Fatal(err)
@@ -58,6 +60,7 @@ func TestSourceCaptureRejectsCredentialBearingLocator(t *testing.T) {
 }
 
 func TestSourceCLIBlockedTelemetryPreservesSuccessAndErrorContracts(t *testing.T) {
+	t.Parallel()
 	normal := newSourceCLIWorkspace(t)
 	blocked := newSourceCLIWorkspace(t)
 	if err := os.WriteFile(filepath.Join(blocked, "runtime", "telemetry.db"), []byte("blocked telemetry"), 0o600); err != nil {
@@ -84,6 +87,7 @@ func TestSourceCLIBlockedTelemetryPreservesSuccessAndErrorContracts(t *testing.T
 }
 
 func TestSourceCLIRecordsSanitizedCaptureAndCheckEvents(t *testing.T) {
+	t.Parallel()
 	root := onboardCLIFilesystemSource(t)
 	code, stdout, stderr := runCLIForTest([]string{"check", "source-a", "--workspace", root, "--json"})
 	if code != 0 {
@@ -153,6 +157,7 @@ func onboardCLIFilesystemSource(t *testing.T) string {
 }
 
 func TestSourceShowPrintsWithoutListHeader(t *testing.T) {
+	t.Parallel()
 	root := onboardCLIFilesystemSource(t)
 	code, stdout, stderr := runCLIForTest([]string{"source", "show", "source-a", "--workspace", root})
 	if code != 0 {
@@ -167,6 +172,7 @@ func TestSourceShowPrintsWithoutListHeader(t *testing.T) {
 }
 
 func TestSourceImportCLI(t *testing.T) {
+	t.Parallel()
 	root := newSourceCLIWorkspace(t)
 	fixture := filepath.Join(root, "sources", "upstream")
 	skillDir := filepath.Join(fixture, "calc-tool")

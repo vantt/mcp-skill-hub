@@ -13,6 +13,7 @@ import (
 const testGitHubURL = "https://github.com/example/skills.git"
 
 func TestLocalWatchReturnsUnsupportedWithoutWrites(t *testing.T) {
+	t.Parallel()
 	root := newSourceWorkspace(t)
 	service := SourceService{
 		Clock: sourceClock{now: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)},
@@ -41,6 +42,7 @@ func TestLocalWatchReturnsUnsupportedWithoutWrites(t *testing.T) {
 }
 
 func TestSourceWatchPreviewAndConfirmPublicGitHub(t *testing.T) {
+	t.Parallel()
 	root := newSourceWorkspace(t)
 
 	adapter := &fakeSourceAdapter{
@@ -112,6 +114,7 @@ func TestSourceWatchPreviewAndConfirmPublicGitHub(t *testing.T) {
 }
 
 func TestSourceWatchIdempotencyAndConflict(t *testing.T) {
+	t.Parallel()
 	root := newSourceWorkspace(t)
 
 	adapter := &fakeSourceAdapter{
@@ -187,6 +190,7 @@ func TestSourceWatchIdempotencyAndConflict(t *testing.T) {
 }
 
 func TestMonitoringDisabledRemainsFalseBUG01(t *testing.T) {
+	t.Parallel()
 	root := newSourceWorkspace(t)
 
 	adapter := &fakeSourceAdapter{
@@ -245,6 +249,7 @@ func TestMonitoringDisabledRemainsFalseBUG01(t *testing.T) {
 }
 
 func TestSourceWatchStaleProposalFails(t *testing.T) {
+	t.Parallel()
 	root := newSourceWorkspace(t)
 
 	adapter := &fakeSourceAdapter{

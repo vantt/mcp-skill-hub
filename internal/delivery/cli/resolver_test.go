@@ -12,6 +12,7 @@ import (
 )
 
 func TestResolveCLIExposesStructuredApplicationContractWithoutActivating(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
 	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
@@ -51,6 +52,7 @@ func TestResolveCLIExposesStructuredApplicationContractWithoutActivating(t *test
 }
 
 func TestResolveCLIRejectsUnknownRequestFields(t *testing.T) {
+	t.Parallel()
 	requestPath := filepath.Join(t.TempDir(), "request.json")
 	if err := os.WriteFile(requestPath, []byte(`{"schema_version":"1","request_id":"req","task":{"description":"review code"},"domain":"client-taxonomy"}`), 0o600); err != nil {
 		t.Fatal(err)
@@ -76,6 +78,7 @@ func writeResolverFixture(t *testing.T, root, relative, contents string) {
 }
 
 func TestResolveCLIClarificationRoundTripAndErrorClassification(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
 	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {

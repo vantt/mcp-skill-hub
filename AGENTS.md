@@ -375,3 +375,13 @@ When the user explicitly asks to manage, curate, check, distill, repair, or insp
 
 Skill Hub instructions are recommendations; your agent environment controls tool permissions and execution.
 <!-- skillhub:bootstrap:v1:end -->
+
+## Testing
+
+### Before Adding a Test
+- When writing, changing, reviewing, or sweeping tests, use the `test-audit` skill.
+- A test must protect observable behavior, a contract, or a credible regression. Use the smallest test that reliably proves it.
+- Not every change needs a new test. Skip tests that only mirror small, reversible implementation changes; renames, copy, config, docs, and pure refactors usually need none. Cover only the paths the change puts at risk, not every failure or edge case.
+- Each contract has one owner test at the strongest boundary. Prefer extending an existing case or table over a near-duplicate test; avoid combinatorial matrices.
+- Do not create exports, wrappers, or seams that only tests use.
+- Bug fixes: the regression test must fail on the pre-fix code for the intended reason.

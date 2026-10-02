@@ -13,6 +13,7 @@ import (
 )
 
 func TestSkillCLIEndToEndPreviewConfirmActivateShowAndArchive(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
 	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
@@ -73,6 +74,7 @@ func TestSkillCLIEndToEndPreviewConfirmActivateShowAndArchive(t *testing.T) {
 }
 
 func TestSkillCLIConfirmsStoredExactProposalAndRejectsInterveningEdit(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
 	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
