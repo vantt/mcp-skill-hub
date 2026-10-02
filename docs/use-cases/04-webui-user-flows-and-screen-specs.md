@@ -18,7 +18,7 @@ Các quyết định sau là ràng buộc đầu vào cho screen design:
 5. **Không force overwrite:** Xung đột chỉnh sửa phải được giải quyết bằng cách đọc phiên bản mới, merge và tạo proposal mới. WebUI không cung cấp hành động ghi đè bỏ qua concurrency guard.
 6. **Không tự động Git commit/push:** WebUI chỉ hiển thị working-tree state và changed paths do application service trả về.
 7. **Thiết bị:** Desktop là bề mặt chính. Tablet và mobile vẫn phải sử dụng được theo quy tắc responsive tại mục 7; editor/diff không được cắt mất nội dung.
-8. **Delivery adapter:** `internal/delivery` hiện chỉ có `cli/` và `mcpserver/`. WebUI v1 cần một HTTP adapter local (backend scope) gọi cùng application service và tái sử dụng chuẩn hóa lỗi của MCP adapter (`safeToolError`) vì nhiều service trả plain Go error. Screen design dùng error code đã chuẩn hóa tại mục 6.
+8. **Delivery adapter:** `internal/delivery` hiện chỉ có `cli/` và `mcpserver/`. WebUI v1 cần một HTTP adapter local (backend scope) gọi cùng application service và sử dụng chuẩn hóa lỗi của application layer (`app.ClassifyError`) vì nhiều service trả plain Go error. Screen design dùng error code đã chuẩn hóa tại mục 6.
 9. **Mutation trực tiếp có chủ đích:** `insight_decide`, `curation_run_cancel` và `source_check` không có Preview → Confirm trong contract. Cancel run và Obsolete insight dùng destructive confirmation; Check source được ghi rõ là có cập nhật revision/trạng thái source.
 
 ### Ngoài phạm vi v1
@@ -606,7 +606,7 @@ Quy tắc chung:
 
 ## 6. Error handling mapping
 
-Bảng dưới là code mà WebUI thực sự nhận được sau chuẩn hóa (cùng logic `safeToolError` của MCP adapter, `internal/delivery/mcpserver/server.go`). Không dùng `stale_base_version` hoặc `scaffold_unmodified` làm transport code. Mọi error render theo `ERROR`/`WHY`/`FIX` của backend; UI không tự viết lại nguyên nhân.
+Bảng dưới là code mà WebUI thực sự nhận được sau chuẩn hóa qua `app.ClassifyError`. Không dùng `stale_base_version` hoặc `scaffold_unmodified` làm transport code. Mọi error render theo `ERROR`/`WHY`/`FIX` của backend; UI không tự viết lại nguyên nhân.
 
 | Error code | Nguồn thực tế | UI feedback | Recovery action |
 |---|---|---|---|
@@ -634,7 +634,7 @@ Bảng dưới là code mà WebUI thực sự nhận được sau chuẩn hóa (
 
 **Partial result không phải error code:** `CheckSources` trả per-item `status`/`error`; `curation_run_start` trả `prepared`/`started`/`failed` và per-item `error`; app result có thể mang `status: partial_failure`. UI dùng summary banner và lỗi từng item (mục 4.4), không báo thành công toàn phần.
 
-**Validation phải chặn ở client:** một số lỗi validation hiện không khớp marker chuẩn hóa nên bị trả về `internal_error`: `SKILL.md` không đổi trong insight apply (“application path … is unchanged”), decision thiếu rationale (“requires a rationale”) và Plan một insight không ở `pending`. WebUI phải chặn các trường hợp này trước khi gửi (so sánh content sau khi chuẩn hóa newline cuối, rationale bắt buộc, action theo bảng status mục 2.9). Nếu vẫn nhận `internal_error`, render generic và giữ input. Chuẩn hóa các lỗi này thành `invalid_request` là backend follow-up.
+**Validation client-side:** Các lỗi validation như nội dung `SKILL.md` không đổi, thiếu rationale, Plan khi insight không ở `pending` hoặc Reopen khi insight không ở `rejected` nay đều trả về `invalid_request`, và WebUI vẫn chủ động validate phía client để tránh các round-trip không cần thiết.
 
 **Code có trong registry nhưng runtime chưa phát ra:** `source_changed`, `validation_failed`, `resource_limits_exceeded`, `ambiguous_locator`, `partial_distill_failure`, `run_interrupted`. Không thiết kế state riêng cho chúng trong v1; nếu xuất hiện, render theo ERROR/WHY/FIX chung.
 
