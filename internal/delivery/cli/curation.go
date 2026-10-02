@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
 )
 
 func runStatus(ctx context.Context, args []string, stdout, stderr io.Writer) int {
@@ -25,13 +26,15 @@ func runStatus(ctx context.Context, args []string, stdout, stderr io.Writer) int
 	}
 	if jsonOutput {
 		if err := writeJSON(stdout, home); err != nil {
-			fmt.Fprintf(stderr, "ERROR: Unable to write the command result.\nWHY: %v\nFIX: Check the output destination and retry.\n", err)
+			p := termui.New(stderr)
+			p.Error("Unable to write the command result.", err.Error(), "Check the output destination and retry.")
 			return 1
 		}
 		return 0
 	}
 	if quiet {
-		fmt.Fprintln(stdout, home.Status)
+		p := termui.New(stdout)
+		p.Line(string(home.Status))
 		return 0
 	}
 	renderCurationHome(stdout, home, path)
@@ -39,10 +42,12 @@ func runStatus(ctx context.Context, args []string, stdout, stderr io.Writer) int
 }
 
 func renderCurationHome(writer io.Writer, home app.CurationHome, workspacePath string) {
+	p := termui.New(writer)
+	var fields []termui.Field
 	if workspacePath != "" {
-		fmt.Fprintf(writer, "Workspace:  %s\n", workspacePath)
+		fields = append(fields, termui.Field{Label: "Workspace", Value: workspacePath})
 	}
-	fmt.Fprintf(writer, "Status:     %s\n\n", home.Summary)
+	fields = append(fields, termui.Field{Label: "Status", Value: home.Summary})
 
 	gitState := "clean"
 	if !home.Workspace.GitConfigured {
@@ -50,42 +55,47 @@ func renderCurationHome(writer io.Writer, home app.CurationHome, workspacePath s
 	} else if home.Workspace.GitDirty {
 		gitState = "has uncommitted changes"
 	}
-	fmt.Fprintf(writer, "Health:     Workspace %s; search index %s; Git %s.\n", home.Workspace.Health, home.Workspace.Index, gitState)
+	healthVal := fmt.Sprintf("Workspace %s; search index %s; Git %s.", home.Workspace.Health, home.Workspace.Index, gitState)
+	fields = append(fields, termui.Field{Label: "Health", Value: healthVal})
 
 	if home.Workspace.Health != "valid" {
 		if len(home.Items) > 0 {
-			fmt.Fprintln(writer, "\nIssues:")
+			var issueLines []string
 			for _, item := range home.Items {
-				fmt.Fprintf(writer, "  - %s\n", item.Summary)
+				issueLines = append(issueLines, item.Summary)
 			}
+			p.Fields(fields...)
+			p.Heading("Issues")
+			p.Bullets(issueLines...)
+			fields = nil
 		}
 	} else if home.Workspace.Index != "current" {
-		fmt.Fprintln(writer, "Inventory:  Skill and source counts are unavailable until the search index is rebuilt.")
+		fields = append(fields, termui.Field{Label: "Inventory", Value: "Skill and source counts are unavailable until the search index is rebuilt."})
 	} else if home.CountsKnown && home.HomeSummary.ActiveSkills == 0 && home.HomeSummary.WatchingSources == 0 {
-		fmt.Fprintln(writer, "Inventory:  No skills yet.")
-		fmt.Fprintln(writer, "            Next: ask your agent 'create a skill for ...' or run:")
-		fmt.Fprintln(writer, "              skillhub skill create my-skill --collection core --name \"My Skill\" --description \"Skill description\"")
+		inv := "No skills yet.\nNext: ask your agent 'create a skill for ...' or run:\n  skillhub skill create my-skill --collection core --name \"My Skill\" --description \"Skill description\""
+		fields = append(fields, termui.Field{Label: "Inventory", Value: inv})
 	} else if home.CountsKnown {
-		skillWord := "skills"
-		if home.HomeSummary.ActiveSkills == 1 {
-			skillWord = "skill"
-		}
-		sourceWord := "sources"
-		if home.HomeSummary.WatchingSources == 1 {
-			sourceWord = "source"
-		}
-		fmt.Fprintf(writer, "Inventory:  %d active %s; %d watched %s.\n", home.HomeSummary.ActiveSkills, skillWord, home.HomeSummary.WatchingSources, sourceWord)
+		inv := fmt.Sprintf("%s; %s.", termui.Plural(home.HomeSummary.ActiveSkills, "active skill", "active skills"), termui.Plural(home.HomeSummary.WatchingSources, "watched source", "watched sources"))
+		fields = append(fields, termui.Field{Label: "Inventory", Value: inv})
+	}
+
+	if len(fields) > 0 {
+		p.Fields(fields...)
 	}
 
 	if home.Error != nil {
-		fmt.Fprintf(writer, "\nERROR: %s\nWHY: %s\nFIX: %s\n", home.Error.Render.Error, home.Error.Render.Why, home.Error.Render.Fix)
+		p.Error(home.Error.Render.Error, home.Error.Render.Why, home.Error.Render.Fix)
 	}
+
 	if len(home.SuggestedActions) > 0 && home.SuggestedActions[0].Label != "" {
-		label := home.SuggestedActions[0].Label
-		if label == "Review uncommitted changes" {
-			label = fmt.Sprintf("Review uncommitted changes: git -C %s add -A && git -C %s commit -m \"Update skills\"", workspacePath, workspacePath)
+		p.Blank()
+		action := home.SuggestedActions[0]
+		if action.Label == "Review uncommitted changes" {
+			cmd := fmt.Sprintf("git -C %s add -A && git -C %s commit -m \"Update skills\"", workspacePath, workspacePath)
+			p.Next("Review uncommitted changes", cmd)
+		} else {
+			p.Next(action.Label, action.Command)
 		}
-		fmt.Fprintf(writer, "\nRecommended next: %s.\n", label)
 	}
 }
 
@@ -104,21 +114,25 @@ func runDiff(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	}
 	if jsonOutput {
 		if err := writeJSON(stdout, result); err != nil {
-			fmt.Fprintln(stderr, err)
+			p := termui.New(stderr)
+			p.Line(err.Error())
 			return 1
 		}
 		return 0
 	}
-	fmt.Fprintln(stdout, result.Summary)
+	p := termui.New(stdout)
+	p.Line(result.Summary)
 	for _, group := range result.Groups {
 		label := strings.ReplaceAll(group.Kind, "_", " ")
-		fmt.Fprintf(stdout, "%s (%d):\n", label, group.Count)
+		p.Line(fmt.Sprintf("%s (%d):", label, group.Count))
 		for _, file := range group.Files {
 			statusWord := diffStatusWord(file.Status)
-			fmt.Fprintf(stdout, "  %s  %s\n", statusWord, file.Path)
+			p.Line(fmt.Sprintf("  %s  %s", statusWord, file.Path))
 		}
 	}
-	fmt.Fprintf(stdout, "\nTo commit these changes, run:\n  git -C %s add -A && git -C %s commit -m \"...\"\n", path, path)
+	p.Blank()
+	p.Line("To commit these changes, run:")
+	p.Command(fmt.Sprintf("git -C %s add -A && git -C %s commit -m \"...\"", path, path))
 	return 0
 }
 
