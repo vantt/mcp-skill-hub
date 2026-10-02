@@ -6,6 +6,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
 	"github.com/vantt/mcp-skill-hub/internal/delivery/mcpserver"
 )
 
@@ -32,7 +33,8 @@ func runMCP(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	}
 	workspacePath = resolved
 	if err := mcpserver.Serve(ctx, workspacePath, stderr); err != nil {
-		fmt.Fprintln(stderr, "MCP server stopped because startup or transport validation failed; inspect workspace health with `skillhub doctor`.")
+		p := termui.New(stderr)
+		p.Line("MCP server stopped because startup or transport validation failed; inspect workspace health with `skillhub doctor`.")
 		return 1
 	}
 	return 0
