@@ -28,6 +28,11 @@ type Result struct {
 	Details          map[string]any `json:"details,omitempty"`
 }
 
+// ApplicationError returns the structured error carried by this Result, if any.
+func (r Result) ApplicationError() *Error {
+	return r.Error
+}
+
 // NewResult creates a result with the fields that must always be present.
 func NewResult(status Status, summary string) Result {
 	return Result{

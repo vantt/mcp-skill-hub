@@ -23,9 +23,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/vantt/mcp-skill-hub/internal/app"
 	"github.com/vantt/mcp-skill-hub/internal/catalog"
-	"github.com/vantt/mcp-skill-hub/internal/mutation"
 	"github.com/vantt/mcp-skill-hub/internal/skill"
-	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
 	"github.com/vantt/mcp-skill-hub/internal/telemetry"
 	"github.com/vantt/mcp-skill-hub/internal/workspace"
 	contractschemas "github.com/vantt/mcp-skill-hub/schemas"
@@ -476,115 +474,39 @@ func unavailable[T any](message string) (*mcp.CallToolResult, toolOutcome[T], er
 }
 
 func safeToolError(err error) toolError {
-	var appErr *app.Error
-	if errors.As(err, &appErr) && appErr != nil {
-		action := appErr.Render.Fix
-		if action == "" {
-			action = "Check request parameters and retry."
-		}
-		msg := appErr.Render.Error
-		if msg == "" {
-			msg = appErr.Error()
-		}
-		return toolError{
-			Code:            string(appErr.Code),
-			Message:         msg,
-			Retryable:       appErr.Code == app.ErrorStaleContext || appErr.Code == app.ErrorSnapshotExpired || appErr.Code == app.ErrorSourceUnavailable || appErr.Code == app.ErrorIndexStale,
-			SuggestedAction: action,
-		}
+	var originalAppErr *app.Error
+	isAppErr := errors.As(err, &originalAppErr) && originalAppErr != nil
+
+	appErr := app.ClassifyError(err)
+	if appErr == nil {
+		return toolError{}
 	}
-	var missingActivationErr *app.MissingActivationRequirementsError
-	if errors.As(err, &missingActivationErr) {
-		return toolError{
-			Code:            "invalid_request",
-			Message:         missingActivationErr.Error(),
-			Retryable:       false,
-			SuggestedAction: fmt.Sprintf("Run skill_update_preview to configure the missing fields (%s) before activating.", strings.Join(missingActivationErr.Missing, ", ")),
-		}
+
+	msg := appErr.Render.Error
+	if msg == "" {
+		msg = appErr.Error()
 	}
-	if strings.Contains(err.Error(), "does not exist; use skill_create_preview") {
-		return toolError{
-			Code:            "invalid_request",
-			Message:         err.Error(),
-			Retryable:       false,
-			SuggestedAction: "Use skill_create_preview to create a new draft skill.",
-		}
+
+	if appErr.Code == app.ErrorInternal {
+		return internalToolError(msg)
 	}
-	var conflictErr *skill.EditConflictError
-	if errors.As(err, &conflictErr) || errors.Is(err, skill.ErrEditConflict) {
-		msg := "A concurrent edit conflict occurred on the skill content."
-		if conflictErr != nil {
-			msg = conflictErr.Error()
-		}
-		return toolError{
-			Code:            "edit_conflict",
-			Message:         msg,
-			Retryable:       false,
-			SuggestedAction: "Read the latest skill content and digest via skill_get, then retry skill_update_preview with the new expected_content_digest.",
-		}
+
+	action := appErr.Render.Fix
+	if action == "" {
+		action = "Check request parameters and retry."
 	}
-	if errors.Is(err, context.Canceled) {
-		return toolError{Code: "operation_cancelled", Message: "The operation was cancelled before completion.", Retryable: true, SuggestedAction: "Retry when ready."}
+
+	retryable := appErr.Retryable
+	if isAppErr {
+		retryable = appErr.Code == app.ErrorStaleContext || appErr.Code == app.ErrorSnapshotExpired || appErr.Code == app.ErrorSourceUnavailable || appErr.Code == app.ErrorIndexStale
 	}
-	if errors.Is(err, telemetry.ErrFeedbackResolutionNotFound) {
-		return toolError{Code: "unknown_resolution", Message: "The prior resolution is unavailable.", Retryable: true, SuggestedAction: "Start a new resolution request."}
+
+	return toolError{
+		Code:            string(appErr.Code),
+		Message:         msg,
+		Retryable:       retryable,
+		SuggestedAction: action,
 	}
-	if errors.Is(err, telemetry.ErrFeedbackConflict) {
-		return toolError{Code: "invalid_request", Message: "The event ID conflicts with existing feedback.", Retryable: false, SuggestedAction: "Retry with the original feedback or use a new event_id."}
-	}
-	if errors.Is(err, telemetry.ErrCurationSessionConflict) {
-		return toolError{Code: "invalid_request", Message: "The event ID conflicts with existing curation measurements.", Retryable: false, SuggestedAction: "Retry with the original measurements or use a new event_id."}
-	}
-	if errors.Is(err, skill.ErrSnapshotExpired) {
-		return toolError{Code: "snapshot_expired", Message: "The pinned snapshot is no longer available.", Retryable: true, SuggestedAction: "Resolve or list again before retrying."}
-	}
-	if errors.Is(err, skill.ErrResourceDigestMismatch) {
-		return toolError{Code: "resource_digest_mismatch", Message: "Resource integrity verification failed; no bytes were used.", Retryable: false, SuggestedAction: "Validate and rebuild the catalog before retrying."}
-	}
-	if errors.Is(err, skill.ErrNotFound) || errors.Is(err, skill.ErrAlreadyExists) || errors.Is(err, skill.ErrInvalidTransition) || errors.Is(err, mutation.ErrIdempotencyConflict) {
-		return toolError{Code: "invalid_request", Message: "The request conflicts with the current object state.", Retryable: false, SuggestedAction: "Refresh the object state, correct the request, and retry."}
-	}
-	if errors.Is(err, mutation.ErrConflict) {
-		return toolError{Code: "stale_context", Message: "The request was based on stale canonical state.", Retryable: true, SuggestedAction: "Refresh the object and regenerate the operation before retrying."}
-	}
-	if errors.Is(err, mutation.ErrRecoveryRequired) {
-		return toolError{Code: "recovery_required", Message: "Workspace recovery is required before another mutation.", Retryable: true, SuggestedAction: "Run workspace validation and recovery before retrying."}
-	}
-	if errors.Is(err, mutation.ErrWorkspaceBusy) {
-		return internalToolError("The workspace lock could not be acquired.")
-	}
-	if errors.Is(err, os.ErrPermission) {
-		return toolError{Code: "permission_denied", Message: "The operation is not permitted.", Retryable: false, SuggestedAction: "Correct workspace permissions or host policy before retrying."}
-	}
-	if errors.Is(err, sourcepkg.ErrInvalidLocator) || errors.Is(err, sourcepkg.ErrUnsafeAddress) || errors.Is(err, sourcepkg.ErrLimitExceeded) {
-		return toolError{Code: "invalid_request", Message: "The request violates a source locator or resource limit.", Retryable: false, SuggestedAction: "Correct the bounded source request and retry."}
-	}
-	if errors.Is(err, sourcepkg.ErrRevisionMismatch) || errors.Is(err, sourcepkg.ErrHistoryUnavailable) {
-		return toolError{Code: "source_unavailable", Message: "The requested source revision is unavailable.", Retryable: true, SuggestedAction: "Refresh the source revision and retry."}
-	}
-	if errors.Is(err, catalog.ErrCatalogUnavailable) {
-		return toolError{Code: "index_stale", Message: "The derived catalog is unavailable or stale.", Retryable: true, SuggestedAction: "Run workspace_rebuild, then retry."}
-	}
-	message := strings.ToLower(err.Error())
-	if strings.Contains(message, "snapshot_expired") || strings.Contains(message, "cursor is invalid or expired") {
-		return toolError{Code: "snapshot_expired", Message: "The pinned snapshot or cursor is no longer available.", Retryable: true, SuggestedAction: "Restart the list or resolution and retry with its new pins."}
-	}
-	if strings.Contains(message, "schema_version") || strings.Contains(message, "unsupported schema") {
-		return toolError{Code: "unsupported_schema", Message: "The requested schema major is not supported.", SuggestedAction: "Use schema_version 1."}
-	}
-	if strings.Contains(message, "prior clarification was not issued") {
-		return toolError{Code: "unknown_resolution", Message: "The prior resolution is unavailable.", Retryable: true, SuggestedAction: "Start a new resolution request."}
-	}
-	if strings.Contains(message, "prior clarification is stale") || strings.Contains(message, "does not match this request") {
-		return toolError{Code: "stale_context", Message: "The prior resolution no longer matches the current request.", Retryable: true, SuggestedAction: "Start a new resolution with the current context."}
-	}
-	if strings.Contains(message, "catalog is stale") || strings.Contains(message, "catalog is missing") || strings.Contains(message, "catalog is corrupt") {
-		return toolError{Code: "index_stale", Message: "The derived catalog is unavailable or stale.", Retryable: true, SuggestedAction: "Run workspace_rebuild, then retry."}
-	}
-	if knownRequestError(message) {
-		return toolError{Code: "invalid_request", Message: "The request conflicts with validation rules or the current object state.", Retryable: false, SuggestedAction: "Inspect the tool schema and current object state, correct the request, and retry."}
-	}
-	return internalToolError("The operation failed internally.")
 }
 
 func internalToolError(message string) toolError {
@@ -593,19 +515,6 @@ func internalToolError(message string) toolError {
 		logger.Error("MCP tool internal failure", "correlation_id", correlation)
 	}
 	return toolError{Code: "internal_error", Message: message, Retryable: true, SuggestedAction: "Retry once; if the failure persists, use the correlation ID with stderr diagnostics.", CorrelationID: correlation}
-}
-
-func knownRequestError(message string) bool {
-	for _, marker := range []string{
-		" is required", " are required", " must ", " cannot ", " invalid", "not found", "does not exist",
-		"already exists", "already used", "unsupported", "conflict", "stale proposal", "exceeds ",
-		"not one of", "no changes", "unsafe source", "awaiting-decision", "confirmation pins",
-	} {
-		if strings.Contains(message, marker) {
-			return true
-		}
-	}
-	return false
 }
 
 func correlationID() string {
@@ -706,17 +615,7 @@ func makePage[T any](items []T, limit int, lastKey, owner, filter string, key fu
 }
 
 func applicationError(value any) *app.Error {
-	data, err := json.Marshal(value)
-	if err != nil {
-		return &app.Error{Code: app.ErrorInternal, Retryable: true, Render: app.ErrorRender{Error: "The result could not be encoded.", Fix: "Retry or inspect diagnostics."}}
-	}
-	var envelope struct {
-		Error *app.Error `json:"error"`
-	}
-	if json.Unmarshal(data, &envelope) != nil {
-		return &app.Error{Code: app.ErrorInternal, Retryable: true, Render: app.ErrorRender{Error: "The result could not be encoded.", Fix: "Retry or inspect diagnostics."}}
-	}
-	return envelope.Error
+	return app.ErrorOf(value, nil)
 }
 
 func appResult[T any](value T, err error) (*mcp.CallToolResult, toolOutcome[T], error) {
