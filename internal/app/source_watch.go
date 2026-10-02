@@ -37,20 +37,8 @@ func (service SourceService) PreviewSourceWatch(ctx context.Context, path string
 	service = service.defaults(root)
 
 	rawLocator := strings.TrimSpace(input.Locator)
-	if rawLocator == "" {
-		return SourceProposal{
-			Result: ErrorResult(NewInvalidRequestError("source locator is required", "Provide a public GitHub repository URL.")),
-		}, nil
-	}
-
-	// Reject local folders with typed ErrorLocalWatchUnsupported
-	if !strings.Contains(rawLocator, "://") || strings.HasPrefix(rawLocator, "./") || strings.HasPrefix(rawLocator, "../") || strings.HasPrefix(rawLocator, "~/") || filepath.IsAbs(rawLocator) {
-		return SourceProposal{
-			Result: ErrorResult(NewLocalWatchUnsupportedError(
-				"local folders are machine-specific; watch is supported for public GitHub repositories only",
-				"re-run skill add after updating",
-			)),
-		}, nil
+	if valProp := validateSourceWatchLocator(rawLocator); valProp != nil {
+		return *valProp, nil
 	}
 
 	adapter, ok := service.Adapters["git"]
@@ -58,62 +46,126 @@ func (service SourceService) PreviewSourceWatch(ctx context.Context, path string
 		return SourceProposal{}, errors.New("git source adapter is not configured")
 	}
 
+	inspectionContext, cancelInspection := context.WithTimeout(ctx, sourcepkg.DefaultTimeout)
+	defer cancelInspection()
+
+	resolved, resProp := resolveSourceWatchRoute(inspectionContext, adapter, rawLocator, input.Ref, input.Path)
+	if resProp != nil {
+		return *resProp, nil
+	}
+
+	cfg, cfgProp := deriveSourceWatchConfig(input, resolved)
+	if cfgProp != nil {
+		return *cfgProp, nil
+	}
+
+	_, records, err := readSourceRecords(root)
+	if err != nil {
+		return SourceProposal{}, err
+	}
+	if collisionProp := checkExistingSourceCollisions(records, cfg); collisionProp != nil {
+		return *collisionProp, nil
+	}
+
+	record, revision, recProp, err := buildSourceWatchRecord(inspectionContext, adapter, cfg, input.License)
+	if err != nil {
+		return SourceProposal{}, err
+	}
+	if recProp != nil {
+		return *recProp, nil
+	}
+
+	proposal, err := buildAndStoreSourceWatchProposal(root, service.Clock, record, input.IdempotencyKey)
+	if err != nil {
+		return SourceProposal{}, err
+	}
+
+	appendSourceSizeWarnings(inspectionContext, adapter, record, revision, &proposal)
+	return proposal, nil
+}
+
+func validateSourceWatchLocator(rawLocator string) *SourceProposal {
+	if rawLocator == "" {
+		prop := SourceProposal{
+			Result: ErrorResult(NewInvalidRequestError("source locator is required", "Provide a public GitHub repository URL.")),
+		}
+		return &prop
+	}
+	if !strings.Contains(rawLocator, "://") || strings.HasPrefix(rawLocator, "./") || strings.HasPrefix(rawLocator, "../") || strings.HasPrefix(rawLocator, "~/") || filepath.IsAbs(rawLocator) {
+		prop := SourceProposal{
+			Result: ErrorResult(NewLocalWatchUnsupportedError(
+				"local folders are machine-specific; watch is supported for public GitHub repositories only",
+				"re-run skill add after updating",
+			)),
+		}
+		return &prop
+	}
+	return nil
+}
+
+func resolveSourceWatchRoute(inspectionContext context.Context, adapter sourcepkg.Adapter, rawLocator, refInput, pathInput string) (*sourcepkg.ResolvedGitHubRoute, *SourceProposal) {
 	allowFile := false
 	if ga, isGit := adapter.(sourcepkg.GitRepositoryAdapter); isGit {
 		allowFile = ga.AllowFileProtocol
 	}
 
-	// Parse GitHub URL structurally
-	route, err := sourcepkg.ParseGitHubLocatorWithOptions(rawLocator, input.Ref, input.Path, sourcepkg.GitHubLocatorOptions{AllowFile: allowFile})
+	route, err := sourcepkg.ParseGitHubLocatorWithOptions(rawLocator, refInput, pathInput, sourcepkg.GitHubLocatorOptions{AllowFile: allowFile})
 	if err != nil {
-		return SourceProposal{
+		prop := SourceProposal{
 			Result: ErrorResult(NewInvalidRequestError(err.Error(), "Provide a valid public GitHub URL (e.g. https://github.com/owner/repo).")),
-		}, nil
+		}
+		return nil, &prop
 	}
 
-	// Resolve route (ref and path)
-	inspectionContext, cancelInspection := context.WithTimeout(ctx, sourcepkg.DefaultTimeout)
-	defer cancelInspection()
-
-	var resolved *sourcepkg.ResolvedGitHubRoute
 	if ga, isGit := adapter.(sourcepkg.GitRepositoryAdapter); isGit {
-		var resolveErr error
-		resolved, resolveErr = sourcepkg.ResolveGitHubRoute(inspectionContext, ga, route)
+		resolved, resolveErr := sourcepkg.ResolveGitHubRoute(inspectionContext, ga, route)
 		if resolveErr != nil {
 			var ambErr *sourcepkg.AmbiguousRefError
 			if errors.As(resolveErr, &ambErr) {
-				return SourceProposal{
+				prop := SourceProposal{
 					Result: ErrorResult(NewAmbiguousRefError(
 						ambErr.Error(),
 						"Specify an unambiguous --ref or --path flag.",
 					)),
-				}, nil
+				}
+				return nil, &prop
 			}
-			return SourceProposal{
+			prop := SourceProposal{
 				Result: ErrorResult(NewInvalidRequestError(
 					resolveErr.Error(),
 					"Verify the GitHub repository and ref exist, or specify --ref explicitly.",
 				)),
-			}, nil
+			}
+			return nil, &prop
 		}
-	} else {
-		ref := route.Ref
-		if ref == "" {
-			ref = "main"
-		}
-		path := route.Path
-		if path == "" && route.Rest != "" {
-			path = route.Rest
-		}
-		resolved = &sourcepkg.ResolvedGitHubRoute{
-			Repository: route.Repository,
-			Ref:        ref,
-			Path:       path,
-			Commit:     "0123456789abcdef0123456789abcdef01234567",
-		}
+		return resolved, nil
 	}
 
-	// Monitoring policy: explicit false remains false regardless of cadence.
+	ref := route.Ref
+	if ref == "" {
+		ref = "main"
+	}
+	path := route.Path
+	if path == "" && route.Rest != "" {
+		path = route.Rest
+	}
+	return &sourcepkg.ResolvedGitHubRoute{
+		Repository: route.Repository,
+		Ref:        ref,
+		Path:       path,
+		Commit:     "0123456789abcdef0123456789abcdef01234567",
+	}, nil
+}
+
+type sourceWatchConfig struct {
+	locator           sourcepkg.Locator
+	sourceID          string
+	monitoringEnabled bool
+	cadence           string
+	trust             string
+}
+
+func deriveSourceWatchConfig(input SourceWatchInput, resolved *sourcepkg.ResolvedGitHubRoute) (sourceWatchConfig, *SourceProposal) {
 	monitoringEnabled := true
 	if input.MonitoringEnabled != nil {
 		monitoringEnabled = *input.MonitoringEnabled
@@ -139,37 +191,40 @@ func (service SourceService) PreviewSourceWatch(ctx context.Context, path string
 		Path:       resolved.Path,
 	}
 
-	// Derive or validate source ID
 	sourceID := strings.TrimSpace(input.SourceID)
 	if sourceID != "" {
 		if !safeSourceID(sourceID) {
-			return SourceProposal{
+			prop := SourceProposal{
 				Result: ErrorResult(NewInvalidRequestError(
 					"invalid source ID: "+sourceID,
 					"Use lowercase letters, numbers, hyphens, and underscores (max 128 characters).",
 				)),
-			}, nil
+			}
+			return sourceWatchConfig{}, &prop
 		}
 	} else {
 		sourceID = deriveSourceID(resolved.Repository, resolved.Path)
 	}
 
-	// Read existing sources to check idempotency and collisions
-	_, records, err := readSourceRecords(root)
-	if err != nil {
-		return SourceProposal{}, err
-	}
+	return sourceWatchConfig{
+		locator:           locator,
+		sourceID:          sourceID,
+		monitoringEnabled: monitoringEnabled,
+		cadence:           cadence,
+		trust:             trust,
+	}, nil
+}
 
+func checkExistingSourceCollisions(records []sourcepkg.Record, cfg sourceWatchConfig) *SourceProposal {
 	for _, rec := range records {
-		sameID := (rec.ID == sourceID)
-		sameLocator := (rec.Locator.Repository == locator.Repository && rec.Locator.Ref == locator.Ref && rec.Locator.Path == locator.Path)
-		exactPolicy := (rec.Monitoring.Enabled == monitoringEnabled && rec.Monitoring.Cadence == cadence)
+		sameID := (rec.ID == cfg.sourceID)
+		sameLocator := (rec.Locator.Repository == cfg.locator.Repository && rec.Locator.Ref == cfg.locator.Ref && rec.Locator.Path == cfg.locator.Path)
+		exactPolicy := (rec.Monitoring.Enabled == cfg.monitoringEnabled && rec.Monitoring.Cadence == cfg.cadence)
 
 		if sameID {
 			if sameLocator && exactPolicy {
-				// Identical request is idempotent success
-				return SourceProposal{
-					Result: NewResult(StatusOK, fmt.Sprintf("Source %q is already being watched with identical configuration.", sourceID)),
+				prop := SourceProposal{
+					Result: NewResult(StatusOK, fmt.Sprintf("Source %q is already being watched with identical configuration.", cfg.sourceID)),
 					Source: rec,
 					Diff:   SourceDiff{Added: []string{}, Modified: []string{}, Deleted: []string{}},
 					Confirmation: ConfirmationPolicy{
@@ -178,19 +233,21 @@ func (service SourceService) PreviewSourceWatch(ctx context.Context, path string
 						ApplicationCommand: "PreviewSourceWatch",
 						Confirmation:       ConfirmationRequirement{Required: false},
 					},
-				}, nil
+				}
+				return &prop
 			}
-			return SourceProposal{
+			prop := SourceProposal{
 				Result: ErrorResult(NewSourceConflictError(
-					fmt.Sprintf("source %q already exists with different configuration", sourceID),
+					fmt.Sprintf("source %q already exists with different configuration", cfg.sourceID),
 					"Specify a different --source-id with `--source-id <id>`, or re-run with matching policy.",
 				)),
-			}, nil
+			}
+			return &prop
 		}
 
 		if sameLocator {
 			if exactPolicy {
-				return SourceProposal{
+				prop := SourceProposal{
 					Result: NewResult(StatusOK, fmt.Sprintf("Source locator is already being watched under ID %q.", rec.ID)),
 					Source: rec,
 					Diff:   SourceDiff{Added: []string{}, Modified: []string{}, Deleted: []string{}},
@@ -200,46 +257,52 @@ func (service SourceService) PreviewSourceWatch(ctx context.Context, path string
 						ApplicationCommand: "PreviewSourceWatch",
 						Confirmation:       ConfirmationRequirement{Required: false},
 					},
-				}, nil
+				}
+				return &prop
 			}
-			return SourceProposal{
+			prop := SourceProposal{
 				Result: ErrorResult(NewSourceConflictError(
 					fmt.Sprintf("source locator is already configured under ID %q with different policy", rec.ID),
 					fmt.Sprintf("Update the existing source or pass matching policy for %s.", rec.ID),
 				)),
-			}, nil
+			}
+			return &prop
 		}
 	}
+	return nil
+}
 
-	// Identify identity and current revision from adapter
-	identity, err := adapter.Identify(inspectionContext, locator)
+func buildSourceWatchRecord(inspectionContext context.Context, adapter sourcepkg.Adapter, cfg sourceWatchConfig, licenseInput string) (sourcepkg.Record, sourcepkg.Revision, *SourceProposal, error) {
+	identity, err := adapter.Identify(inspectionContext, cfg.locator)
 	if err != nil {
-		return SourceProposal{
+		prop := SourceProposal{
 			Result: ErrorResult(NewInvalidRequestError("failed to identify repository: "+err.Error(), "Verify repository is accessible.")),
-		}, nil
+		}
+		return sourcepkg.Record{}, sourcepkg.Revision{}, &prop, nil
 	}
-	revision, err := adapter.CurrentRevision(inspectionContext, sourcepkg.Source{ID: sourceID, Locator: locator})
+	revision, err := adapter.CurrentRevision(inspectionContext, sourcepkg.Source{ID: cfg.sourceID, Locator: cfg.locator})
 	if err != nil {
-		return SourceProposal{
+		prop := SourceProposal{
 			Result: ErrorResult(NewInvalidRequestError("failed to determine revision: "+err.Error(), "Verify repository and ref exist.")),
-		}, nil
+		}
+		return sourcepkg.Record{}, sourcepkg.Revision{}, &prop, nil
 	}
 
-	license := input.License
+	license := licenseInput
 	if license == "" {
 		license = identity.License
 	}
 
 	record := sourcepkg.Record{
 		SchemaVersion: 1,
-		ID:            sourceID,
+		ID:            cfg.sourceID,
 		Adapter:       "git",
-		Locator:       locator,
+		Locator:       cfg.locator,
 		Status:        "watching",
 		Identity:      identity,
 		License:       license,
-		Trust:         sourcepkg.Trust{Source: trust},
-		Monitoring:    sourcepkg.Monitoring{Enabled: monitoringEnabled, Cadence: cadence},
+		Trust:         sourcepkg.Trust{Source: cfg.trust},
+		Monitoring:    sourcepkg.Monitoring{Enabled: cfg.monitoringEnabled, Cadence: cfg.cadence},
 		Limits: sourcepkg.Limits{
 			TimeoutSeconds: int(sourcepkg.DefaultTimeout / time.Second),
 			MaxBytes:       sourcepkg.DefaultMaxBytes,
@@ -250,21 +313,24 @@ func (service SourceService) PreviewSourceWatch(ctx context.Context, path string
 	}
 
 	if _, err := sourcepkg.ParseRecord(mustYAML(record)); err != nil {
-		return SourceProposal{}, err
+		return sourcepkg.Record{}, sourcepkg.Revision{}, nil, err
 	}
+	return record, revision, nil, nil
+}
 
+func buildAndStoreSourceWatchProposal(root string, clock Clock, record sourcepkg.Record, idempotencyKey string) (SourceProposal, error) {
 	sourceBytes, _ := sourcepkg.MarshalCanonical(record)
 	sourcePath := "sources/catalog/" + record.ID + ".yaml"
 	changes := []mutation.Change{{Path: sourcePath, Contents: sourceBytes}}
 	diff := SourceDiff{Added: []string{sourcePath}, Modified: []string{}, Deleted: []string{}}
-	set := mutation.WriteSet{Command: "source_watch", IdempotencyKey: input.IdempotencyKey, Changes: changes}
+	set := mutation.WriteSet{Command: "source_watch", IdempotencyKey: idempotencyKey, Changes: changes}
 	planned, err := mutation.PlanMutation(root, set)
 	if err != nil {
 		return SourceProposal{}, err
 	}
 
 	pins := ConfirmationPins{ProposalID: planned.ID, ProposalDigest: planned.Digest, BaseVersion: planned.BaseCatalogSnapshot}
-	expiresAt := service.Clock.Now().UTC().Add(24 * time.Hour)
+	expiresAt := clock.Now().UTC().Add(24 * time.Hour)
 	proposal := SourceProposal{
 		Result: NewResult(StatusActionRequired, fmt.Sprintf("Source watch proposal for %s is ready for review.", record.ID)),
 		Source: record,
@@ -283,7 +349,14 @@ func (service SourceService) PreviewSourceWatch(ctx context.Context, path string
 		expiresAt: expiresAt,
 	}
 
-	resources, listErr := adapter.List(inspectionContext, sourcepkg.Source{ID: sourceID, Locator: locator, Limits: record.Limits}, revision, sourcepkg.Scope{})
+	if err := storeSourceProposal(root, proposal, clock.Now().UTC()); err != nil {
+		return SourceProposal{}, err
+	}
+	return proposal, nil
+}
+
+func appendSourceSizeWarnings(inspectionContext context.Context, adapter sourcepkg.Adapter, record sourcepkg.Record, revision sourcepkg.Revision, proposal *SourceProposal) {
+	resources, listErr := adapter.List(inspectionContext, sourcepkg.Source{ID: record.ID, Locator: record.Locator, Limits: record.Limits}, revision, sourcepkg.Scope{})
 	var limitErr *sourcepkg.LimitExceededError
 	if errors.As(listErr, &limitErr) {
 		proposal.Warnings = append(proposal.Warnings, Warning{
@@ -307,12 +380,6 @@ func (service SourceService) PreviewSourceWatch(ctx context.Context, path string
 			})
 		}
 	}
-
-	if err := storeSourceProposal(root, proposal, service.Clock.Now().UTC()); err != nil {
-		return SourceProposal{}, err
-	}
-
-	return proposal, nil
 }
 
 // ConfirmSourceWatch confirms a reviewed source watch proposal and commits the catalog source record.
