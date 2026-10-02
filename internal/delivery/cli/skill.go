@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
 	"github.com/vantt/mcp-skill-hub/internal/skill"
 )
 
@@ -54,7 +55,8 @@ func runSkill(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 		}
 		if flags.jsonOutput {
 			if err := writeJSON(stdout, result); err != nil {
-				fmt.Fprintln(stderr, err)
+				p := termui.New(stderr)
+				p.Line(err.Error())
 				return 1
 			}
 		} else {
@@ -78,21 +80,28 @@ func runSkill(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 			if minScope == "" {
 				minScope = "(none)"
 			}
-			fmt.Fprintf(stdout, "Skill: %s (%s)\n", result.Manifest.Name, flags.id)
-			fmt.Fprintf(stdout, "State: %s\n", result.Manifest.Status)
+			p := termui.New(stdout)
+			var fields []termui.Field
+			fields = append(fields,
+				termui.Field{Label: "Skill", Value: fmt.Sprintf("%s (%s)", result.Manifest.Name, flags.id)},
+				termui.Field{Label: "State", Value: result.Manifest.Status},
+			)
 			if filePath != "" {
-				fmt.Fprintf(stdout, "File: %s\n", filePath)
+				fields = append(fields, termui.Field{Label: "File", Value: filePath})
 			}
-			fmt.Fprintf(stdout, "Triggers: %s\n", triggers)
-			fmt.Fprintf(stdout, "Not for: %s\n", notFor)
-			fmt.Fprintf(stdout, "Min scope: %s\n", minScope)
+			fields = append(fields,
+				termui.Field{Label: "Triggers", Value: triggers},
+				termui.Field{Label: "Not for", Value: notFor},
+				termui.Field{Label: "Min scope", Value: minScope},
+			)
 			if flags.verbose {
-				fmt.Fprintf(stdout, "Catalog snapshot: %s\n", result.Manifest.CatalogSnapshot)
+				fields = append(fields, termui.Field{Label: "Catalog snapshot", Value: result.Manifest.CatalogSnapshot})
 			}
-			fmt.Fprintln(stdout)
-			fmt.Fprint(stdout, result.Content)
+			p.Fields(fields...)
+			p.Blank()
+			p.Raw(result.Content)
 			if !strings.HasSuffix(result.Content, "\n") {
-				fmt.Fprintln(stdout)
+				p.Raw("\n")
 			}
 		}
 		return 0
@@ -119,12 +128,14 @@ func runSkill(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 		default:
 			if flags.jsonOutput {
 				if err := writeJSON(stdout, res); err != nil {
-					fmt.Fprintln(stderr, err)
+					p := termui.New(stderr)
+					p.Line(err.Error())
 					return 1
 				}
 				return 0
 			}
-			fmt.Fprintf(stdout, "Proposal %s confirmed.\n", flags.proposalID)
+			p := termui.New(stdout)
+			p.Line(fmt.Sprintf("Proposal %s confirmed.", flags.proposalID))
 			return 0
 		}
 	}
@@ -196,20 +207,22 @@ func runSkill(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 		preview, err = service.PreviewSkillUpdate(ctx, flags.workspace, flags.id, update, fullDiff)
 		if err != nil {
 			if recoveryID != "" && !flags.jsonOutput {
-				fmt.Fprintf(stderr, "Edited content saved to %s\n", recPath)
+				p := termui.New(stderr)
+				p.Line(fmt.Sprintf("Edited content saved to %s", recPath))
 			}
 			return writeSkillErrorFor(flags.id, stdout, stderr, flags.jsonOutput, err)
 		}
 		if preview.Error != nil {
 			if recoveryID != "" && !flags.jsonOutput {
-				fmt.Fprintf(stderr, "Edited content saved to %s\n", recPath)
+				p := termui.New(stderr)
+				p.Line(fmt.Sprintf("Edited content saved to %s", recPath))
 			}
 			if flags.jsonOutput {
 				_ = writeJSON(stdout, preview)
 				return 2
 			}
-			fmt.Fprintf(stderr, "ERROR: %s\nWHY: %s\nFIX: %s\n",
-				preview.Error.Render.Error, preview.Error.Render.Why, preview.Error.Render.Fix)
+			p := termui.New(stderr)
+			p.Error(preview.Error.Render.Error, preview.Error.Render.Why, preview.Error.Render.Fix)
 			return 2
 		}
 		if recoveryID != "" {
@@ -232,7 +245,8 @@ func runSkill(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 	}
 	if !flags.jsonOutput && preview.RoutingImpact != nil {
 		for _, warning := range preview.RoutingImpact.Warnings {
-			fmt.Fprintf(stdout, "WARNING: %s\n", warning)
+			p := termui.New(stdout)
+			p.Warning(warning)
 		}
 	}
 	result, err := service.ConfirmSkillMutation(ctx, flags.workspace, preview, preview.Confirmation.Confirmation.Pins)
@@ -507,51 +521,46 @@ func mergeRouting(current skill.RoutingInput, flags skillFlags) *skill.RoutingIn
 }
 
 func writeSkillPreview(stdout, stderr io.Writer, jsonOutput bool, preview app.SkillProposal) int {
-	if jsonOutput {
-		if err := writeJSON(stdout, preview); err != nil {
-			fmt.Fprintln(stderr, err)
-			return 1
+	return writeResult(stdout, stderr, jsonOutput, preview, func(p *termui.Printer) {
+		p.Line(preview.Summary)
+		p.Bullets(fmt.Sprintf("%d added, %d modified, %d deleted file(s).", len(preview.Diff.Added), len(preview.Diff.Modified), len(preview.Diff.Deleted)))
+		pins := preview.Confirmation.Confirmation.Pins
+		p.Fields(
+			termui.Field{Label: "Proposal", Value: pins.ProposalID},
+			termui.Field{Label: "Digest", Value: pins.ProposalDigest},
+			termui.Field{Label: "Base version", Value: pins.BaseVersion},
+		)
+		if preview.RoutingImpact != nil {
+			p.Fields(termui.Field{Label: "Routing impact", Value: preview.RoutingImpact.Summary})
+			for _, warning := range preview.RoutingImpact.Warnings {
+				p.Warning(warning)
+			}
 		}
-		return 0
-	}
-	fmt.Fprintln(stdout, preview.Summary)
-	fmt.Fprintf(stdout, "- %d added, %d modified, %d deleted file(s).\n", len(preview.Diff.Added), len(preview.Diff.Modified), len(preview.Diff.Deleted))
-	pins := preview.Confirmation.Confirmation.Pins
-	fmt.Fprintf(stdout, "- Proposal: %s\n- Digest: %s\n- Base version: %s\n", pins.ProposalID, pins.ProposalDigest, pins.BaseVersion)
-	if preview.RoutingImpact != nil {
-		fmt.Fprintf(stdout, "- Routing impact: %s\n", preview.RoutingImpact.Summary)
-		for _, warning := range preview.RoutingImpact.Warnings {
-			fmt.Fprintf(stdout, "  WARNING: %s\n", warning)
+		if preview.FullDiff != "" {
+			p.Raw(preview.FullDiff)
+			if !strings.HasSuffix(preview.FullDiff, "\n") {
+				p.Raw("\n")
+			}
 		}
-	}
-	if preview.FullDiff != "" {
-		fmt.Fprintln(stdout, preview.FullDiff)
-	}
-	fmt.Fprintf(stdout, "No files changed. Confirm with:\n  skillhub skill confirm --proposal %s --proposal-digest %s --base-version %s\n  (or: skillhub skill confirm %s)\nor re-run with --yes to apply directly.\n", pins.ProposalID, pins.ProposalDigest, pins.BaseVersion, pins.ProposalID)
-	return 0
+		p.Line(fmt.Sprintf("No files changed. Confirm with:\n  skillhub skill confirm --proposal %s --proposal-digest %s --base-version %s\n  (or: skillhub skill confirm %s)\nor re-run with --yes to apply directly.", pins.ProposalID, pins.ProposalDigest, pins.BaseVersion, pins.ProposalID))
+	})
 }
 
 func writeSkillMutation(stdout, stderr io.Writer, jsonOutput, verbose bool, result app.SkillMutationResult, workspacePath string) int {
-	if jsonOutput {
-		if err := writeJSON(stdout, result); err != nil {
-			fmt.Fprintln(stderr, err)
-			return 1
-		}
-	} else if result.Error != nil {
-		fmt.Fprintf(stderr, "ERROR: %s\nWHY: %s\nFIX: %s\n", result.Error.Render.Error, result.Error.Render.Why, result.Error.Render.Fix)
-	} else {
-		fmt.Fprintln(stdout, result.Summary)
+	return writeResult(stdout, stderr, jsonOutput, result, func(p *termui.Printer) {
+		p.Line(result.Summary)
 		if verbose {
-			fmt.Fprintf(stdout, "Operation: %s\nCatalog snapshot: %s\nGeneration: %s\nGit dirty: %t\n", result.OperationID, result.CatalogSnapshot, result.Generation, result.GitDirty)
+			p.Fields(
+				termui.Field{Label: "Operation", Value: result.OperationID},
+				termui.Field{Label: "Catalog snapshot", Value: result.CatalogSnapshot},
+				termui.Field{Label: "Generation", Value: result.Generation},
+				termui.Field{Label: "Git dirty", Value: fmt.Sprintf("%t", result.GitDirty)},
+			)
 		}
 		if next := nextStepForSkill(result, workspacePath); next != "" {
-			fmt.Fprintf(stdout, "Next: %s\n", next)
+			p.Next(next, "")
 		}
-	}
-	if result.Status == app.StatusError {
-		return 2
-	}
-	return 0
+	})
 }
 
 func nextStepForSkill(result app.SkillMutationResult, workspacePath string) string {
@@ -643,11 +652,13 @@ func writeStructuredSkillError(stdout, stderr io.Writer, jsonOutput bool, struct
 	result := app.ErrorResult(structured)
 	if jsonOutput {
 		if err := writeJSON(stdout, result); err != nil {
-			fmt.Fprintln(stderr, err)
+			p := termui.New(stderr)
+			p.Line(err.Error())
 		}
 		return
 	}
-	fmt.Fprintf(stderr, "ERROR: %s\nWHY: %s\nFIX: %s\n", structured.Render.Error, structured.Render.Why, structured.Render.Fix)
+	p := termui.New(stderr)
+	p.Error(structured.Render.Error, structured.Render.Why, structured.Render.Fix)
 }
 
 func runSkillList(ctx context.Context, service app.SkillService, flags skillFlags, stdout, stderr io.Writer) int {
@@ -655,26 +666,16 @@ func runSkillList(ctx context.Context, service app.SkillService, flags skillFlag
 	if err != nil {
 		return writeSkillError(stdout, stderr, flags.jsonOutput, err)
 	}
-	if flags.jsonOutput {
-		if err := writeJSON(stdout, result); err != nil {
-			fmt.Fprintln(stderr, err)
-			return 1
+	return writeResult(stdout, stderr, flags.jsonOutput, result, func(p *termui.Printer) {
+		if len(result.Skills) == 0 {
+			p.Line("No skills found.")
+			return
 		}
-		return 0
-	}
-	if len(result.Skills) == 0 {
-		fmt.Fprintln(stdout, "No skills found.")
-		return 0
-	}
-	idWidth, stateWidth, collectionWidth := len("ID"), len("STATE"), len("COLLECTION")
-	for _, entry := range result.Skills {
-		idWidth = max(idWidth, len(entry.ID))
-		stateWidth = max(stateWidth, len(entry.State))
-		collectionWidth = max(collectionWidth, len(entry.Collection))
-	}
-	fmt.Fprintf(stdout, "%-*s  %-*s  %-*s  %s\n", idWidth, "ID", stateWidth, "STATE", collectionWidth, "COLLECTION", "NAME")
-	for _, entry := range result.Skills {
-		fmt.Fprintf(stdout, "%-*s  %-*s  %-*s  %s\n", idWidth, entry.ID, stateWidth, entry.State, collectionWidth, entry.Collection, entry.Name)
-	}
-	return 0
+		headers := []string{"ID", "STATE", "COLLECTION", "NAME"}
+		rows := make([][]string, 0, len(result.Skills))
+		for _, entry := range result.Skills {
+			rows = append(rows, []string{entry.ID, entry.State, entry.Collection, entry.Name})
+		}
+		p.Table(headers, rows)
+	})
 }
