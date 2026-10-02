@@ -291,18 +291,37 @@ func (service SkillAddService) PreviewSkillAdd(ctx context.Context, path string,
 			}
 		}
 
+		ref := resolved.Ref
+		if ref == "" {
+			ref = resolved.Commit
+		}
 		src := sourcepkg.Source{
 			Locator: sourcepkg.Locator{
 				Repository: resolved.Repository,
-				Ref:        resolved.Ref,
-				Path:       resolved.Path,
+				Ref:        ref,
+				Path:       "",
 			},
-			Limits: sourcepkg.Limits{TimeoutSeconds: 20, MaxBytes: sourcepkg.DefaultMaxBytes, MaxFiles: sourcepkg.DefaultMaxFiles, MaxFileBytes: sourcepkg.DefaultMaxFileSize},
+			Limits: sourcepkg.Limits{TimeoutSeconds: 30, MaxBytes: sourcepkg.DefaultMaxBytes, MaxFiles: sourcepkg.DefaultMaxFiles, MaxFileBytes: sourcepkg.DefaultMaxFileSize},
 		}
-		rev := sourcepkg.Revision{
-			Kind:          "git-commit",
-			Value:         resolved.Commit,
-			ContentDigest: "sha256:" + resolved.Commit + strings.Repeat("0", 64-len(resolved.Commit)),
+
+		var rev sourcepkg.Revision
+		if _, isGit := gitAdapter.(sourcepkg.GitRepositoryAdapter); isGit {
+			var revErr error
+			rev, revErr = gitAdapter.CurrentRevision(ctx, src)
+			if revErr != nil {
+				return SkillAddProposal{
+					Result: ErrorResult(NewInvalidRequestError("failed to determine repository revision: "+revErr.Error(), "Verify repository and ref exist.")),
+				}, nil
+			}
+		} else {
+			rev = sourcepkg.Revision{
+				Kind:          "git-commit",
+				Value:         resolved.Commit,
+				ContentDigest: "sha256:" + resolved.Commit + strings.Repeat("0", 64-len(resolved.Commit)),
+			}
+			if r, err := gitAdapter.CurrentRevision(ctx, src); err == nil && r.Value != "" {
+				rev = r
+			}
 		}
 
 		resources, listErr := gitAdapter.List(ctx, src, rev, sourcepkg.Scope{Prefix: resolved.Path})

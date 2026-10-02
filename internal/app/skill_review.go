@@ -146,6 +146,13 @@ func (SkillService) ReviewSkill(ctx context.Context, path, id string) (SkillRevi
 			SourceLocator  string `yaml:"source_locator"`
 			SourceRevision string `yaml:"source_revision"`
 			UpstreamPath   string `yaml:"upstream_path"`
+			Origin         struct {
+				Kind       string `yaml:"kind"`
+				Repository string `yaml:"repository"`
+				Ref        string `yaml:"ref"`
+				Commit     string `yaml:"commit"`
+				Path       string `yaml:"path"`
+			} `yaml:"origin"`
 		} `yaml:"provenance"`
 	}
 	_ = yaml.Unmarshal(skillMetaBytes, &metaDoc)
@@ -271,14 +278,26 @@ func (SkillService) ReviewSkill(ctx context.Context, path, id string) (SkillRevi
 
 	// 8. Provenance
 	var prov *SkillProvenance
-	if metaDoc.Provenance.CreatedBy != "" || metaDoc.Provenance.SourceID != "" || metaDoc.Provenance.SourceLocator != "" {
+	if metaDoc.Provenance.CreatedBy != "" || metaDoc.Provenance.SourceID != "" || metaDoc.Provenance.SourceLocator != "" || metaDoc.Provenance.Origin.Repository != "" {
+		sourceLocator := metaDoc.Provenance.SourceLocator
+		if sourceLocator == "" && metaDoc.Provenance.Origin.Repository != "" {
+			sourceLocator = metaDoc.Provenance.Origin.Repository
+		}
+		sourceRevision := metaDoc.Provenance.SourceRevision
+		if sourceRevision == "" && metaDoc.Provenance.Origin.Commit != "" {
+			sourceRevision = metaDoc.Provenance.Origin.Commit
+		}
+		upstreamPath := metaDoc.Provenance.UpstreamPath
+		if upstreamPath == "" && metaDoc.Provenance.Origin.Path != "" {
+			upstreamPath = metaDoc.Provenance.Origin.Path
+		}
 		prov = &SkillProvenance{
 			CreatedBy:      metaDoc.Provenance.CreatedBy,
 			CreatedAt:      metaDoc.Provenance.CreatedAt,
 			SourceID:       metaDoc.Provenance.SourceID,
-			SourceLocator:  metaDoc.Provenance.SourceLocator,
-			SourceRevision: metaDoc.Provenance.SourceRevision,
-			UpstreamPath:   metaDoc.Provenance.UpstreamPath,
+			SourceLocator:  sourceLocator,
+			SourceRevision: sourceRevision,
+			UpstreamPath:   upstreamPath,
 		}
 	}
 

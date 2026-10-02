@@ -10,7 +10,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/vantt/mcp-skill-hub/internal/canonical"
+	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
 )
 
 func TestSkillAddLocalDirectHappyPathBUG11(t *testing.T) {
@@ -606,5 +609,68 @@ func TestSkillAddSmokeMutateOriginalAfterPreview(t *testing.T) {
 	issues, valErr := canonical.Validate(root)
 	if valErr != nil || len(issues) != 0 {
 		t.Fatalf("canonical validation issues: %v, %v", valErr, issues)
+	}
+}
+func TestSkillAddRemoteGitRealAdapter(t *testing.T) {
+	root := newSourceWorkspace(t)
+	repoDir := t.TempDir()
+	repo, err := git.PlainInit(repoDir, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wt, err := repo.Worktree()
+	if err != nil {
+		t.Fatal(err)
+	}
+	skillDir := filepath.Join(repoDir, "my-skill")
+	if err := os.MkdirAll(skillDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\nname: my-skill\ndescription: Test git skill\n---\nBody\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := wt.Add("."); err != nil {
+		t.Fatal(err)
+	}
+	_, err = wt.Commit("initial", &git.CommitOptions{
+		Author: &object.Signature{Name: "Tester", Email: "tester@example.com", When: time.Now()},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	adapter := sourcepkg.GitRepositoryAdapter{
+		CacheRoot:         filepath.Join(root, "runtime", "sources", "git"),
+		AllowFileProtocol: true,
+	}
+	service := SkillAddService{
+		Clock:    sourceClock{now: time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC)},
+		Adapters: map[string]sourcepkg.Adapter{"git": adapter},
+	}
+
+	fileURL := "file://" + filepath.ToSlash(repoDir)
+	preview, err := service.PreviewSkillAdd(context.Background(), root, SkillAddInput{
+		Locator: fileURL,
+	})
+	if err != nil || preview.Error != nil {
+		t.Fatalf("preview failed: %v, %#v", err, preview.Error)
+	}
+	if preview.SkillID != "my-skill" {
+		t.Fatalf("expected skill ID my-skill, got %s", preview.SkillID)
+	}
+
+	pins := preview.Confirmation.Confirmation.Pins
+	result, err := service.ConfirmSkillAdd(context.Background(), root, preview, pins)
+	if err != nil || result.Error != nil {
+		t.Fatalf("confirm failed: %v, %#v", err, result.Error)
+	}
+
+	reviewService := SkillService{}
+	reviewResult, err := reviewService.ReviewSkill(context.Background(), root, "my-skill")
+	if err != nil || reviewResult.Error != nil {
+		t.Fatalf("review failed: %v, %#v", err, reviewResult.Error)
+	}
+	if reviewResult.Provenance == nil || reviewResult.Provenance.SourceLocator == "" {
+		t.Fatalf("expected provenance locator, got %#v", reviewResult.Provenance)
 	}
 }
