@@ -1,0 +1,111 @@
+===== width 100 =====
+Review:       Long Review (long-review)
+Collection:   core
+Description:  Review a multi-module change for correctness, regressions, security posture,
+              documentation impact and rollout risk, recording evidence for every finding before
+              recommending a fix, and never approving a change whose cross-module contracts were not
+              traced to their callers.
+State:        draft (valid; routing: not eligible; servable)
+Files:        2 file(s), 1.4 KB (entrypoint: skills/core/long-review/SKILL.md)
+Origin:       local authoring (not watched)
+Git:          clean
+
+Activation readiness
+  - Missing required field: trigger
+  - Missing required field: not_for or rationale (quality.routing_review_rationale)
+  - Missing required field: min_scope
+
+Next: Complete required activation fields (trigger, not_for or rationale
+      (quality.routing_review_rationale), min_scope) with `skillhub skill edit long-review`.
+
+Workspace:  <TMP>/workspace
+Status:     Git has uncommitted canonical changes.
+Health:     Workspace valid; search index current; Git has uncommitted changes.
+Inventory:  No skills yet.
+
+Next: Review uncommitted changes
+  $ git -C <TMP>/workspace add -A && git -C <TMP>/workspace commit -m "Update skills"
+
+ERROR: The request cannot be accepted.
+WHY: skill long-review requires: trigger, not_for or rationale (quality.routing_review_rationale),
+     min_scope
+FIX: Run
+     `skillhub skill edit long-review --trigger "<when to use>" --not-for "<when not to use>" --min-scope single_step --yes`,
+     then retry `skillhub skill activate long-review --yes`.
+
+ID                           STATE   COLLECTION  NAME
+long-review                  draft   core        Review a multi-module change for correctness,
+                                                 regressions, security posture, and docs
+git-expert                   active  core        Git expert operations and repository analysis
+super-comprehensive-auditor  active  community   A very comprehensive skill with a super long
+                                                 description name that easily exceeds ninety
+                                                 characters in length
+
+===== width 60 =====
+Review:       Long Review (long-review)
+Collection:   core
+Description:  Review a multi-module change for correctness,
+              regressions, security posture, documentation
+              impact and rollout risk, recording evidence
+              for every finding before recommending a fix,
+              and never approving a change whose
+              cross-module contracts were not traced to
+              their callers.
+State:        draft (valid; routing: not eligible; servable)
+Files:        2 file(s), 1.4 KB (entrypoint:
+              skills/core/long-review/SKILL.md)
+Origin:       local authoring (not watched)
+Git:          clean
+
+Activation readiness
+  - Missing required field: trigger
+  - Missing required field: not_for or rationale
+    (quality.routing_review_rationale)
+  - Missing required field: min_scope
+
+Next: Complete required activation fields (trigger, not_for
+      or rationale (quality.routing_review_rationale),
+      min_scope) with `skillhub skill edit long-review`.
+
+Workspace:  <TMP>/workspace
+Status:     Git has uncommitted canonical changes.
+Health:     Workspace valid; search index current; Git has
+            uncommitted changes.
+Inventory:  No skills yet.
+
+Next: Review uncommitted changes
+  $ git -C <TMP>/workspace add -A && git -C <TMP>/workspace commit -m "Update skills"
+
+ERROR: The request cannot be accepted.
+WHY: skill long-review requires: trigger, not_for or
+     rationale (quality.routing_review_rationale), min_scope
+FIX: Run
+     `skillhub skill edit long-review --trigger "<when to use>" --not-for "<when not to use>" --min-scope single_step --yes`,
+     then retry `skillhub skill activate long-review --yes`.
+
+ID                           STATE   COLLECTION  NAME
+long-review                  draft   core        Review a
+                                                 multi-module
+                                                 change for
+                                                 correctness,
+                                                 regressions,
+                                                 security
+                                                 posture,
+                                                 and docs
+git-expert                   active  core        Git expert
+                                                 operations
+                                                 and
+                                                 repository
+                                                 analysis
+super-comprehensive-auditor  active  community   A very
+                                                 comprehensive
+                                                 skill with
+                                                 a super
+                                                 long
+                                                 description
+                                                 name that
+                                                 easily
+                                                 exceeds
+                                                 ninety
+                                                 characters
+                                                 in length
