@@ -96,13 +96,101 @@ func (SkillService) ReviewSkill(ctx context.Context, path, id string) (SkillRevi
 		return SkillReviewResult{}, err
 	}
 
-	// 1. Locate the skill directory directly from canonical storage
-	skillsDir := filepath.Join(root, "skills")
-	collections, err := os.ReadDir(skillsDir)
+	foundCollection, skillRelDir, skillMetaBytes, err := locateSkillDir(root, id)
 	if err != nil {
 		return SkillReviewResult{}, err
 	}
 
+	metaDoc := parseSkillReviewMeta(skillMetaBytes)
+	entrypointRelPath, entrypointDigest, entrypointBytes := inspectCanonicalEntrypoint(root, skillRelDir)
+	canonicalIssues, valid := checkCanonicalIssues(root, skillRelDir)
+	readiness, isScaffold, missingFields := checkActivationReadiness(entrypointBytes, metaDoc, valid)
+
+	fullSkillDir := filepath.Join(root, filepath.FromSlash(skillRelDir))
+	resourceStatus, resources, totalBytes := inventorySkillResources(root, fullSkillDir, entrypointRelPath, entrypointDigest)
+
+	canonicalFacts := catalog.CanonicalSkillFacts{
+		Known:          true,
+		Collection:     foundCollection,
+		Path:           skillRelDir,
+		Status:         metaDoc.Status,
+		Valid:          valid,
+		Issues:         canonicalIssues,
+		EntrypointPath: entrypointRelPath,
+	}
+	servedFacts, diverged, changedResources, missingResources := assessServedSkillFacts(ctx, root, id, &canonicalFacts)
+	prov := extractSkillProvenance(metaDoc)
+	gitSummary := getSkillGitSummary(ctx, root, skillRelDir+"/")
+
+	nextAction := computeNextAction(id, skillRelDir, metaDoc.Status, valid, canonicalIssues, readiness, isScaffold, missingFields, diverged, changedResources, missingResources, servedFacts, gitSummary)
+
+	activeLocally := (metaDoc.Status == "active")
+	routingEligible := activeLocally && (!servedFacts.Known || servedFacts.Servable)
+
+	result := SkillReviewResult{
+		Result:              NewResult(StatusOK, fmt.Sprintf("Review for skill %s: %s", id, nextAction)),
+		SkillID:             id,
+		Collection:          foundCollection,
+		Name:                metaDoc.Name,
+		Description:         metaDoc.Description,
+		LifecycleState:      metaDoc.Status,
+		ActiveLocally:       activeLocally,
+		RoutingEligible:     routingEligible,
+		Valid:               valid,
+		CanonicalIssues:     canonicalIssues,
+		ActivationReadiness: readiness,
+		ResourceStatus:      resourceStatus,
+		CanonicalFacts:      canonicalFacts,
+		ServedFacts:         servedFacts,
+		Diverged:            diverged,
+		ChangedResources:    changedResources,
+		MissingResources:    missingResources,
+		Provenance:          prov,
+		Git:                 gitSummary,
+		NextAction:          nextAction,
+	}
+
+	appendSkillReviewItems(&result, len(resources), totalBytes, missingFields)
+	return result, nil
+}
+
+type skillReviewMeta struct {
+	Name        string `yaml:"name"`
+	Status      string `yaml:"status"`
+	Description string `yaml:"description"`
+	Routing     struct {
+		Operations []string `yaml:"operations"`
+		Triggers   []string `yaml:"triggers"`
+		NotFor     []string `yaml:"not_for"`
+		MinScope   string   `yaml:"min_scope"`
+	} `yaml:"routing"`
+	Quality struct {
+		Reviewed               bool   `yaml:"reviewed"`
+		RoutingReviewRationale string `yaml:"routing_review_rationale"`
+	} `yaml:"quality"`
+	Provenance struct {
+		CreatedBy      string `yaml:"created_by"`
+		CreatedAt      string `yaml:"created_at"`
+		SourceID       string `yaml:"source_id"`
+		SourceLocator  string `yaml:"source_locator"`
+		SourceRevision string `yaml:"source_revision"`
+		UpstreamPath   string `yaml:"upstream_path"`
+		Origin         struct {
+			Kind       string `yaml:"kind"`
+			Repository string `yaml:"repository"`
+			Ref        string `yaml:"ref"`
+			Commit     string `yaml:"commit"`
+			Path       string `yaml:"path"`
+		} `yaml:"origin"`
+	} `yaml:"provenance"`
+}
+
+func locateSkillDir(root, id string) (string, string, []byte, error) {
+	skillsDir := filepath.Join(root, "skills")
+	collections, err := os.ReadDir(skillsDir)
+	if err != nil {
+		return "", "", nil, err
+	}
 	var foundCollection string
 	var skillMetaBytes []byte
 	for _, coll := range collections {
@@ -118,60 +206,34 @@ func (SkillService) ReviewSkill(ctx context.Context, path, id string) (SkillRevi
 		}
 	}
 	if foundCollection == "" {
-		return SkillReviewResult{}, skill.ErrNotFound
+		return "", "", nil, skill.ErrNotFound
 	}
-
 	skillRelDir := filepath.ToSlash(filepath.Join("skills", foundCollection, id))
-	fullSkillDir := filepath.Join(root, filepath.FromSlash(skillRelDir))
+	return foundCollection, skillRelDir, skillMetaBytes, nil
+}
 
-	// 2. Parse skill.meta.yaml
-	var metaDoc struct {
-		Name        string `yaml:"name"`
-		Status      string `yaml:"status"`
-		Description string `yaml:"description"`
-		Routing     struct {
-			Operations []string `yaml:"operations"`
-			Triggers   []string `yaml:"triggers"`
-			NotFor     []string `yaml:"not_for"`
-			MinScope   string   `yaml:"min_scope"`
-		} `yaml:"routing"`
-		Quality struct {
-			Reviewed               bool   `yaml:"reviewed"`
-			RoutingReviewRationale string `yaml:"routing_review_rationale"`
-		} `yaml:"quality"`
-		Provenance struct {
-			CreatedBy      string `yaml:"created_by"`
-			CreatedAt      string `yaml:"created_at"`
-			SourceID       string `yaml:"source_id"`
-			SourceLocator  string `yaml:"source_locator"`
-			SourceRevision string `yaml:"source_revision"`
-			UpstreamPath   string `yaml:"upstream_path"`
-			Origin         struct {
-				Kind       string `yaml:"kind"`
-				Repository string `yaml:"repository"`
-				Ref        string `yaml:"ref"`
-				Commit     string `yaml:"commit"`
-				Path       string `yaml:"path"`
-			} `yaml:"origin"`
-		} `yaml:"provenance"`
-	}
+func parseSkillReviewMeta(skillMetaBytes []byte) skillReviewMeta {
+	var metaDoc skillReviewMeta
 	_ = yaml.Unmarshal(skillMetaBytes, &metaDoc)
 	if metaDoc.Status == "" {
 		metaDoc.Status = "draft"
 	}
+	return metaDoc
+}
 
-	// 3. Read canonical entrypoint (SKILL.md)
+func inspectCanonicalEntrypoint(root, skillRelDir string) (string, string, []byte) {
 	entrypointRelPath := skillRelDir + "/SKILL.md"
 	fullEntrypointPath := filepath.Join(root, filepath.FromSlash(entrypointRelPath))
 	entrypointBytes, _ := os.ReadFile(fullEntrypointPath)
-
 	entrypointDigest := ""
 	if entrypointBytes != nil {
 		sum := sha256.Sum256(entrypointBytes)
 		entrypointDigest = "sha256:" + hex.EncodeToString(sum[:])
 	}
+	return entrypointRelPath, entrypointDigest, entrypointBytes
+}
 
-	// 4. Validate canonical rules offline
+func checkCanonicalIssues(root, skillRelDir string) ([]string, bool) {
 	allIssues, _ := canonical.Validate(root)
 	var canonicalIssues []string
 	prefix := skillRelDir + "/"
@@ -180,9 +242,10 @@ func (SkillService) ReviewSkill(ctx context.Context, path, id string) (SkillRevi
 			canonicalIssues = append(canonicalIssues, fmt.Sprintf("%s: %s", issue.Path, issue.Message))
 		}
 	}
-	valid := len(canonicalIssues) == 0
+	return canonicalIssues, len(canonicalIssues) == 0
+}
 
-	// 5. Activation readiness
+func checkActivationReadiness(entrypointBytes []byte, metaDoc skillReviewMeta, valid bool) (ActivationReadiness, bool, []string) {
 	isScaffold := skill.IsUntouchedScaffold(entrypointBytes)
 	var missingFields []string
 	if isScaffold {
@@ -206,8 +269,10 @@ func (SkillService) ReviewSkill(ctx context.Context, path, id string) (SkillRevi
 	if metaDoc.Status == "active" && !readiness.Ready {
 		readiness.Warnings = append(readiness.Warnings, "skill is marked active but has unmet activation requirements")
 	}
+	return readiness, isScaffold, missingFields
+}
 
-	// 6. Canonical resource inventory
+func inventorySkillResources(root, fullSkillDir, entrypointRelPath, entrypointDigest string) (SkillResourceStatus, []ResourceItem, int64) {
 	var resources []ResourceItem
 	var totalBytes int64
 	_ = filepath.WalkDir(fullSkillDir, func(p string, d fs.DirEntry, walkErr error) error {
@@ -245,63 +310,48 @@ func (SkillService) ReviewSkill(ctx context.Context, path, id string) (SkillRevi
 		TotalBytes:       totalBytes,
 		Resources:        resources,
 	}
+	return resourceStatus, resources, totalBytes
+}
 
-	// 7. Served generation facts & assessment (tolerant of broken/unavailable catalog)
+func assessServedSkillFacts(ctx context.Context, root, id string, canonicalFacts *catalog.CanonicalSkillFacts) (catalog.ServedSkillFacts, bool, []string, []string) {
 	assessment, assessErr := catalog.AssessSkillState(ctx, root, id)
-	canonicalFacts := catalog.CanonicalSkillFacts{
-		Known:          true,
-		Collection:     foundCollection,
-		Path:           skillRelDir,
-		Status:         metaDoc.Status,
-		Valid:          valid,
-		Issues:         canonicalIssues,
-		EntrypointPath: entrypointRelPath,
+	if assessErr != nil {
+		return catalog.ServedSkillFacts{Known: false}, false, nil, nil
 	}
-	var servedFacts catalog.ServedSkillFacts
-	diverged := false
-	var changedResources []string
-	var missingResources []string
-
-	if assessErr == nil {
-		servedFacts = assessment.Served
-		diverged = assessment.Diverged
-		changedResources = assessment.ChangedResources
-		missingResources = assessment.MissingResources
-		if len(canonicalFacts.Issues) == 0 && len(assessment.Canonical.Issues) > 0 {
-			canonicalFacts.Issues = assessment.Canonical.Issues
-			canonicalFacts.Valid = assessment.Canonical.Valid
-		}
-	} else {
-		// Tolerant fallback: catalog may be unavailable or corrupt
-		servedFacts = catalog.ServedSkillFacts{Known: false}
+	if len(canonicalFacts.Issues) == 0 && len(assessment.Canonical.Issues) > 0 {
+		canonicalFacts.Issues = assessment.Canonical.Issues
+		canonicalFacts.Valid = assessment.Canonical.Valid
 	}
+	return assessment.Served, assessment.Diverged, assessment.ChangedResources, assessment.MissingResources
+}
 
-	// 8. Provenance
-	var prov *SkillProvenance
-	if metaDoc.Provenance.CreatedBy != "" || metaDoc.Provenance.SourceID != "" || metaDoc.Provenance.SourceLocator != "" || metaDoc.Provenance.Origin.Repository != "" {
-		sourceLocator := metaDoc.Provenance.SourceLocator
-		if sourceLocator == "" && metaDoc.Provenance.Origin.Repository != "" {
-			sourceLocator = metaDoc.Provenance.Origin.Repository
-		}
-		sourceRevision := metaDoc.Provenance.SourceRevision
-		if sourceRevision == "" && metaDoc.Provenance.Origin.Commit != "" {
-			sourceRevision = metaDoc.Provenance.Origin.Commit
-		}
-		upstreamPath := metaDoc.Provenance.UpstreamPath
-		if upstreamPath == "" && metaDoc.Provenance.Origin.Path != "" {
-			upstreamPath = metaDoc.Provenance.Origin.Path
-		}
-		prov = &SkillProvenance{
-			CreatedBy:      metaDoc.Provenance.CreatedBy,
-			CreatedAt:      metaDoc.Provenance.CreatedAt,
-			SourceID:       metaDoc.Provenance.SourceID,
-			SourceLocator:  sourceLocator,
-			SourceRevision: sourceRevision,
-			UpstreamPath:   upstreamPath,
-		}
+func extractSkillProvenance(metaDoc skillReviewMeta) *SkillProvenance {
+	if metaDoc.Provenance.CreatedBy == "" && metaDoc.Provenance.SourceID == "" && metaDoc.Provenance.SourceLocator == "" && metaDoc.Provenance.Origin.Repository == "" {
+		return nil
 	}
+	sourceLocator := metaDoc.Provenance.SourceLocator
+	if sourceLocator == "" && metaDoc.Provenance.Origin.Repository != "" {
+		sourceLocator = metaDoc.Provenance.Origin.Repository
+	}
+	sourceRevision := metaDoc.Provenance.SourceRevision
+	if sourceRevision == "" && metaDoc.Provenance.Origin.Commit != "" {
+		sourceRevision = metaDoc.Provenance.Origin.Commit
+	}
+	upstreamPath := metaDoc.Provenance.UpstreamPath
+	if upstreamPath == "" && metaDoc.Provenance.Origin.Path != "" {
+		upstreamPath = metaDoc.Provenance.Origin.Path
+	}
+	return &SkillProvenance{
+		CreatedBy:      metaDoc.Provenance.CreatedBy,
+		CreatedAt:      metaDoc.Provenance.CreatedAt,
+		SourceID:       metaDoc.Provenance.SourceID,
+		SourceLocator:  sourceLocator,
+		SourceRevision: sourceRevision,
+		UpstreamPath:   upstreamPath,
+	}
+}
 
-	// 9. Git status
+func getSkillGitSummary(ctx context.Context, root, prefix string) SkillGitSummary {
 	var gitSummary SkillGitSummary
 	pathSummary, gitErr := (WorkspaceService{}).GetGitPathSummary(ctx, root)
 	if gitErr == nil && pathSummary.Configured {
@@ -328,73 +378,45 @@ func (SkillService) ReviewSkill(ctx context.Context, path, id string) (SkillRevi
 		}
 		gitSummary.Dirty = len(gitSummary.Staged)+len(gitSummary.Unstaged)+len(gitSummary.Untracked)+len(gitSummary.Unmerged) > 0
 	}
+	return gitSummary
+}
 
-	// 10. Deterministic next action
-	nextAction := computeNextAction(id, skillRelDir, metaDoc.Status, valid, canonicalIssues, readiness, isScaffold, missingFields, diverged, changedResources, missingResources, servedFacts, gitSummary)
-
-	activeLocally := (metaDoc.Status == "active")
-	routingEligible := activeLocally && (!servedFacts.Known || servedFacts.Servable)
-
-	result := SkillReviewResult{
-		Result:              NewResult(StatusOK, fmt.Sprintf("Review for skill %s: %s", id, nextAction)),
-		SkillID:             id,
-		Collection:          foundCollection,
-		Name:                metaDoc.Name,
-		Description:         metaDoc.Description,
-		LifecycleState:      metaDoc.Status,
-		ActiveLocally:       activeLocally,
-		RoutingEligible:     routingEligible,
-		Valid:               valid,
-		CanonicalIssues:     canonicalIssues,
-		ActivationReadiness: readiness,
-		ResourceStatus:      resourceStatus,
-		CanonicalFacts:      canonicalFacts,
-		ServedFacts:         servedFacts,
-		Diverged:            diverged,
-		ChangedResources:    changedResources,
-		MissingResources:    missingResources,
-		Provenance:          prov,
-		Git:                 gitSummary,
-		NextAction:          nextAction,
-	}
-
-	// Build human-readable progressive disclosure items
-	statusImpact := fmt.Sprintf("Lifecycle: %s.", metaDoc.Status)
-	if servedFacts.Known {
-		statusImpact += fmt.Sprintf(" Served generation: %s.", servedFacts.Generation)
+func appendSkillReviewItems(result *SkillReviewResult, resCount int, totalBytes int64, missingFields []string) {
+	statusImpact := fmt.Sprintf("Lifecycle: %s.", result.LifecycleState)
+	if result.ServedFacts.Known {
+		statusImpact += fmt.Sprintf(" Served generation: %s.", result.ServedFacts.Generation)
 	} else {
 		statusImpact += " Not currently served in published generation."
 	}
-	result.Items = append(result.Items, Item{ID: "status", Summary: metaDoc.Status, Impact: statusImpact})
+	result.Items = append(result.Items, Item{ID: "status", Summary: result.LifecycleState, Impact: statusImpact})
 
 	validSummary := "Canonical files valid."
-	if !valid {
-		validSummary = fmt.Sprintf("%d canonical issue(s) detected.", len(canonicalIssues))
+	if !result.Valid {
+		validSummary = fmt.Sprintf("%d canonical issue(s) detected.", len(result.CanonicalIssues))
 	}
 	result.Items = append(result.Items, Item{ID: "validity", Summary: validSummary, Impact: "Validated offline against canonical schema."})
 
 	readinessSummary := "Ready for activation."
-	if !readiness.Ready {
+	if !result.ActivationReadiness.Ready {
 		readinessSummary = fmt.Sprintf("Not ready for activation: missing %s.", strings.Join(missingFields, ", "))
 	}
 	result.Items = append(result.Items, Item{ID: "readiness", Summary: readinessSummary, Impact: "Activation requirements check."})
 
-	resSummary := fmt.Sprintf("%d canonical file(s), %d bytes.", len(resources), totalBytes)
-	if diverged {
-		resSummary += fmt.Sprintf(" Diverged from served generation (%d modified, %d missing).", len(changedResources), len(missingResources))
+	resSummary := fmt.Sprintf("%d canonical file(s), %d bytes.", resCount, totalBytes)
+	if result.Diverged {
+		resSummary += fmt.Sprintf(" Diverged from served generation (%d modified, %d missing).", len(result.ChangedResources), len(result.MissingResources))
 	}
 	result.Items = append(result.Items, Item{ID: "resources", Summary: resSummary, Impact: "Disk resource inventory."})
 
-	if gitSummary.Configured {
+	if result.Git.Configured {
 		gitText := "Git clean."
-		if gitSummary.Dirty {
-			gitText = fmt.Sprintf("Git changes: %d staged, %d unstaged, %d untracked.", len(gitSummary.Staged), len(gitSummary.Unstaged), len(gitSummary.Untracked))
+		if result.Git.Dirty {
+			gitText = fmt.Sprintf("Git changes: %d staged, %d unstaged, %d untracked.", len(result.Git.Staged), len(result.Git.Unstaged), len(result.Git.Untracked))
 		}
 		result.Items = append(result.Items, Item{ID: "git", Summary: gitText, Impact: "Repository change tracking."})
 	}
 
-	result.Items = append(result.Items, Item{ID: "next_action", Summary: nextAction, Impact: "Recommended next step."})
-	return result, nil
+	result.Items = append(result.Items, Item{ID: "next_action", Summary: result.NextAction, Impact: "Recommended next step."})
 }
 
 func computeNextAction(id, relDir, status string, valid bool, canonicalIssues []string, readiness ActivationReadiness, isScaffold bool, missingFields []string, diverged bool, changed, missing []string, served catalog.ServedSkillFacts, git SkillGitSummary) string {
