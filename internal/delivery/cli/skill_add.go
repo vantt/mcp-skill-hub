@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
 )
 
 // runSkillAdd executes the intent-first skill add workflow.
@@ -69,28 +70,10 @@ func runSkillAdd(ctx context.Context, service app.SkillService, flags skillFlags
 	if err != nil {
 		return writeSkillErrorFor(flags.id, stdout, stderr, flags.jsonOutput, err)
 	}
-	if preview.Error != nil {
-		if flags.jsonOutput {
-			if writeErr := writeJSON(stdout, preview); writeErr != nil {
-				fmt.Fprintln(stderr, writeErr)
-				return 1
-			}
-			return 2
-		}
-		fmt.Fprintf(stderr, "ERROR: %s\nWHY: %s\nFIX: %s\n",
-			preview.Error.Render.Error, preview.Error.Render.Why, preview.Error.Render.Fix)
-		return 2
-	}
-
 	if !flags.yes {
-		if flags.jsonOutput {
-			if writeErr := writeJSON(stdout, preview); writeErr != nil {
-				fmt.Fprintln(stderr, writeErr)
-				return 1
-			}
-			return 0
-		}
-		return writeSkillAddPreview(stdout, preview)
+		return writeResult(stdout, stderr, flags.jsonOutput, preview, func(p *termui.Printer) {
+			writeSkillAddPreview(p, preview)
+		})
 	}
 
 	// Apply immediately with fresh preview pins
@@ -98,31 +81,13 @@ func runSkillAdd(ctx context.Context, service app.SkillService, flags skillFlags
 	if err != nil {
 		return writeSkillErrorFor(flags.id, stdout, stderr, flags.jsonOutput, err)
 	}
-	if result.Error != nil {
-		if flags.jsonOutput {
-			if writeErr := writeJSON(stdout, result); writeErr != nil {
-				fmt.Fprintln(stderr, writeErr)
-				return 1
-			}
-			return 2
-		}
-		fmt.Fprintf(stderr, "ERROR: %s\nWHY: %s\nFIX: %s\n",
-			result.Error.Render.Error, result.Error.Render.Why, result.Error.Render.Fix)
-		return 2
-	}
 
-	if flags.jsonOutput {
-		if writeErr := writeJSON(stdout, result); writeErr != nil {
-			fmt.Fprintln(stderr, writeErr)
-			return 1
-		}
-		return 0
-	}
-
-	return writeSkillAddResult(stdout, stderr, flags.jsonOutput, flags.verbose, result, flags.workspace)
+	return writeResult(stdout, stderr, flags.jsonOutput, result, func(p *termui.Printer) {
+		writeSkillAddResult(p, flags.verbose, result)
+	})
 }
 
-func writeSkillAddPreview(stdout io.Writer, preview app.SkillAddProposal) int {
+func writeSkillAddPreview(p *termui.Printer, preview app.SkillAddProposal) {
 	skillName := preview.SkillID
 	if len(preview.SkillIDs) > 1 {
 		skillName = strings.Join(preview.SkillIDs, ", ")
@@ -145,33 +110,26 @@ func writeSkillAddPreview(stdout io.Writer, preview app.SkillAddProposal) int {
 		originDesc = preview.Origin.Path
 	}
 
-	fmt.Fprintf(stdout, "Add %s as a draft from %s.\n", skillName, originDesc)
-	fmt.Fprintf(stdout, "%d files, %d bytes. Origin retained. Watching: off. Agent use: off.\n",
-		len(preview.Resources), preview.TotalBytes)
-	fmt.Fprintln(stdout, "No collection files changed.")
+	p.Line(fmt.Sprintf("Add %s as a draft from %s.", skillName, originDesc))
+	p.Line(fmt.Sprintf("%s, %s. Origin retained. Watching: off. Agent use: off.",
+		termui.Plural(len(preview.Resources), "file", "files"), termui.Bytes(preview.TotalBytes)))
+	p.Line("No collection files changed.")
 	pins := preview.Confirmation.Confirmation.Pins
-	fmt.Fprintf(stdout, "Next: skillhub skill confirm %s\n", pins.ProposalID)
-	return 0
+	p.Line(fmt.Sprintf("Next: skillhub skill confirm %s", pins.ProposalID))
 }
 
-func writeSkillAddResult(stdout, stderr io.Writer, jsonOutput, verbose bool, result app.SkillAddResult, workspacePath string) int {
-	if jsonOutput {
-		if err := writeJSON(stdout, result); err != nil {
-			fmt.Fprintln(stderr, err)
-			return 1
-		}
-		return 0
-	}
-
+func writeSkillAddResult(p *termui.Printer, verbose bool, result app.SkillAddResult) {
 	skillName := result.SkillID
 	if len(result.SkillIDs) > 1 {
 		skillName = strings.Join(result.SkillIDs, ", ")
 	}
-	fmt.Fprintf(stdout, "Draft %s added. Agent use: off. Watching: off. Changes are not committed.\n", skillName)
+	p.Line(fmt.Sprintf("Draft %s added. Agent use: off. Watching: off. Changes are not committed.", skillName))
 	if verbose {
-		fmt.Fprintf(stdout, "Operation: %s\nCatalog snapshot: %s\nGeneration: %s\n",
-			result.OperationID, result.CatalogSnapshot, result.Generation)
+		p.Fields(
+			termui.Field{Label: "Operation", Value: result.OperationID},
+			termui.Field{Label: "Catalog snapshot", Value: result.CatalogSnapshot},
+			termui.Field{Label: "Generation", Value: result.Generation},
+		)
 	}
-	fmt.Fprintf(stdout, "Next: skillhub skill review %s\n", result.SkillID)
-	return 0
+	p.Line(fmt.Sprintf("Next: skillhub skill review %s", result.SkillID))
 }
