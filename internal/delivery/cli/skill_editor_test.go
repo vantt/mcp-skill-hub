@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -65,11 +66,26 @@ func TestSkillEditorRecoveryLifecycleBUG03AndBUG12(t *testing.T) {
 
 	// Prepare an editor script that modifies the file to valid content
 	scriptDir := t.TempDir()
-	goodScript := filepath.Join(scriptDir, "editor-good.sh")
-	_ = os.WriteFile(goodScript, []byte("#!/bin/sh\ncat << 'EOF' > \"$1\"\n---\nname: edit-target\ndescription: Target for editor.\n---\n\n# Target\n\nUpdated valuable instructions via editor.\nEOF\n"), 0o755)
+	var goodScript, badScript string
+	var goodVisual, badVisual string
+	if runtime.GOOS == "windows" {
+		goodScript = filepath.Join(scriptDir, "editor-good.bat")
+		_ = os.WriteFile(goodScript, []byte("@echo off\r\n(echo ---\r\necho name: edit-target\r\necho description: Target for editor.\r\necho ---\r\necho.\r\necho # Target\r\necho.\r\necho Updated valuable instructions via editor.) > %1\r\n"), 0o755)
+		badScript = filepath.Join(scriptDir, "editor-bad.bat")
+		_ = os.WriteFile(badScript, []byte("@echo off\r\n(echo ---\r\necho name: mismatched-name\r\necho description: Target for editor.\r\necho ---\r\necho.\r\necho # Bad\r\necho.\r\necho VALUABLE RECOVERY DATA.) > %1\r\n"), 0o755)
+		goodVisual = "cmd.exe /c " + goodScript
+		badVisual = "cmd.exe /c " + badScript
+	} else {
+		goodScript = filepath.Join(scriptDir, "editor-good.sh")
+		_ = os.WriteFile(goodScript, []byte("#!/bin/sh\ncat << 'EOF' > \"$1\"\n---\nname: edit-target\ndescription: Target for editor.\n---\n\n# Target\n\nUpdated valuable instructions via editor.\nEOF\n"), 0o755)
+		badScript = filepath.Join(scriptDir, "editor-bad.sh")
+		_ = os.WriteFile(badScript, []byte("#!/bin/sh\ncat << 'EOF' > \"$1\"\n---\nname: mismatched-name\ndescription: Target for editor.\n---\n\n# Bad\n\nVALUABLE RECOVERY DATA.\nEOF\n"), 0o755)
+		goodVisual = goodScript
+		badVisual = badScript
+	}
 
 	// 1. Run skill edit --editor without --yes: preview test (BUG-12)
-	t.Setenv("VISUAL", goodScript)
+	t.Setenv("VISUAL", goodVisual)
 	var stdout bytes.Buffer
 	var errBuf bytes.Buffer
 	code = Run([]string{"skill", "edit", "edit-target", "--editor", "--workspace", root}, &stdout, &errBuf)
@@ -103,9 +119,7 @@ func TestSkillEditorRecoveryLifecycleBUG03AndBUG12(t *testing.T) {
 	}
 
 	// 2. Test BUG-03: Preview failure preserves recovery artifact
-	badScript := filepath.Join(scriptDir, "editor-bad.sh")
-	_ = os.WriteFile(badScript, []byte("#!/bin/sh\ncat << 'EOF' > \"$1\"\n---\nname: mismatched-name\ndescription: Target for editor.\n---\n\n# Bad\n\nVALUABLE RECOVERY DATA.\nEOF\n"), 0o755)
-	t.Setenv("VISUAL", badScript)
+	t.Setenv("VISUAL", badVisual)
 
 	stdout.Reset()
 	errBuf.Reset()

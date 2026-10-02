@@ -294,6 +294,13 @@ func createTestGitRepo(t *testing.T) (string, *git.Repository) {
 
 	return dir, repo
 }
+func fileURLFromPath(path string) string {
+	slash := filepath.ToSlash(path)
+	if !strings.HasPrefix(slash, "/") {
+		slash = "/" + slash
+	}
+	return "file://" + slash
+}
 
 func TestResolveGitHubRouteWithLocalRepo(t *testing.T) {
 	repoDir, _ := createTestGitRepo(t)
@@ -301,7 +308,7 @@ func TestResolveGitHubRouteWithLocalRepo(t *testing.T) {
 		CacheRoot:         t.TempDir(),
 		AllowFileProtocol: true,
 	}
-	fileURL := "file://" + filepath.ToSlash(repoDir)
+	fileURL := fileURLFromPath(repoDir)
 
 	ctx := context.Background()
 
@@ -427,7 +434,7 @@ func TestResolveGitHubRouteBranchTagCollision(t *testing.T) {
 		CacheRoot:         t.TempDir(),
 		AllowFileProtocol: true,
 	}
-	fileURL := "file://" + filepath.ToSlash(dir)
+	fileURL := fileURLFromPath(dir)
 
 	route := &ParsedGitHubRoute{
 		Repository: fileURL,
