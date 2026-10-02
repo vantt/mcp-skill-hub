@@ -450,8 +450,8 @@ func TestDoctorFixDoesNotCreateWorkspaceAtMissingPath(t *testing.T) {
 	if _, err := os.Stat(missingPath); !os.IsNotExist(err) {
 		t.Fatalf("doctor --fix --yes created directory: %v", err)
 	}
-	if !strings.Contains(stderr.String(), "No Skill Hub workspace at "+missingPath) {
-		t.Fatalf("expected 'No Skill Hub workspace at %s', got:\n%s", missingPath, stderr.String())
+	if !strings.Contains(stderr.String(), "No Skill Hub workspace at") || !strings.Contains(stderr.String(), missingPath) {
+		t.Fatalf("expected 'No Skill Hub workspace at' and %s, got:\n%s", missingPath, stderr.String())
 	}
 }
 

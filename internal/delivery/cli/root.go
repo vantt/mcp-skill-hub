@@ -8,6 +8,7 @@ import (
 	"io"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
 )
 
 // Run executes a Skill Hub command and returns a process exit code.
@@ -93,13 +94,15 @@ func writeInvalidRequest(stdout, stderr io.Writer, jsonOutput bool, reason, fix 
 	result := app.ErrorResult(app.NewInvalidRequestError(reason, fix))
 	if jsonOutput {
 		if err := writeJSON(stdout, result); err != nil {
-			fmt.Fprintf(stderr, "ERROR: Unable to write the command result.\nWHY: %v\nFIX: Check the output destination and retry.\n", err)
+			p := termui.New(stderr)
+			p.Error("Unable to write the command result.", err.Error(), "Check the output destination and retry.")
 			return 1
 		}
 		return 2
 	}
 
-	fmt.Fprintf(stderr, "ERROR: %s\nWHY: %s\nFIX: %s\n", result.Error.Render.Error, result.Error.Render.Why, result.Error.Render.Fix)
+	p := termui.New(stderr)
+	p.Error(result.Error.Render.Error, result.Error.Render.Why, result.Error.Render.Fix)
 	return 2
 }
 

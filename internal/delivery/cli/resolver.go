@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
 	resolverpkg "github.com/vantt/mcp-skill-hub/internal/resolver"
 	"github.com/vantt/mcp-skill-hub/internal/skill"
 	"github.com/vantt/mcp-skill-hub/internal/telemetry"
@@ -119,12 +120,14 @@ func writeStructuredError(stdout, stderr io.Writer, jsonOutput bool, failure *ap
 	result := app.ErrorResult(failure)
 	if jsonOutput {
 		if err := writeJSON(stdout, result); err != nil {
-			fmt.Fprintln(stderr, err)
+			p := termui.New(stderr)
+			p.Line(err.Error())
 			return 1
 		}
 		return 2
 	}
-	fmt.Fprintf(stderr, "ERROR: %s\nWHY: %s\nFIX: %s\n", failure.Render.Error, failure.Render.Why, failure.Render.Fix)
+	p := termui.New(stderr)
+	p.Error(failure.Render.Error, failure.Render.Why, failure.Render.Fix)
 	return 2
 }
 
