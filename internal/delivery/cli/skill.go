@@ -127,6 +127,7 @@ func runSkill(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 			return writeResult(stdout, stderr, flags.jsonOutput, r, func(p *termui.Printer) {
 				writeSkillAddResult(p, flags.verbose, r)
 			})
+		default:
 			if flags.jsonOutput {
 				if err := writeJSON(stdout, res); err != nil {
 					p := termui.New(stderr)

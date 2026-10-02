@@ -8,11 +8,12 @@ import (
 )
 
 // writeResult is the single exit path for a command value that was returned without a Go error.
-//   JSON mode:  writeJSON(stdout, value); returns 2 when app.ErrorOf(value, nil) != nil, else 0;
-//               returns 1 when writing fails.
-//   human mode: when app.ErrorOf(value, nil) != nil, prints its ERROR/WHY/FIX with termui to stderr
-//               and returns 2; otherwise calls render(termui.New(stdout)) and returns 0
-//               (1 if the printer recorded a write error).
+//
+//	JSON mode:  writeJSON(stdout, value); returns 2 when app.ErrorOf(value, nil) != nil, else 0;
+//	            returns 1 when writing fails.
+//	human mode: when app.ErrorOf(value, nil) != nil, prints its ERROR/WHY/FIX with termui to stderr
+//	            and returns 2; otherwise calls render(termui.New(stdout)) and returns 0
+//	            (1 if the printer recorded a write error).
 func writeResult(stdout, stderr io.Writer, jsonOutput bool, value any, render func(p *termui.Printer)) int {
 	appErr := app.ErrorOf(value, nil)
 	if jsonOutput {

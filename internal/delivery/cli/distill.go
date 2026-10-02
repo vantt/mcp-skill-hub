@@ -13,6 +13,7 @@ import (
 	"github.com/vantt/mcp-skill-hub/internal/app"
 	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
 )
+
 type distillFlags struct {
 	workspace, submission, sourceID, skillID, idempotencyKey string
 	jsonOutput, allChanged                                   bool

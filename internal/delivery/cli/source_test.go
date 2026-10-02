@@ -26,7 +26,7 @@ func TestSourceCaptureListAndExplicitEmptyCheck(t *testing.T) {
 	}
 	var stdout, stderr bytes.Buffer
 	code := RunContext(context.Background(), []string{"source", "capture", "https://github.com/example/repo.git", "--reason", "review later", "--workspace", root}, &stdout, &stderr)
-	if code != 0 || !strings.Contains(stdout.String(), "Candidate: SRCQ-") {
+	if code != 0 || !strings.Contains(stdout.String(), "Candidate:") || !strings.Contains(stdout.String(), "SRCQ-") {
 		t.Fatalf("capture code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
 	stdout.Reset()

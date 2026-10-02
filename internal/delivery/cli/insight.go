@@ -13,6 +13,7 @@ import (
 	"github.com/vantt/mcp-skill-hub/internal/app"
 	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
 )
+
 type insightFlags struct {
 	workspace, decision, reason, proposalFile, proposalID, proposalDigest, baseVersion string
 	state, note, supersedes, idempotencyKey, artifact, finding                         string
@@ -310,11 +311,7 @@ func writeInsightResult(stdout, stderr io.Writer, jsonOutput bool, value any, er
 			p.Line(fmt.Sprintf("Outcome: %s [%s]", result.Outcome.ID, result.Outcome.State))
 		case app.ProvenanceResult:
 			p.Line(result.Summary)
-			var bullets []string
-			for _, path := range result.AffectedArtifacts {
-				bullets = append(bullets, path)
-			}
-			p.Bullets(bullets...)
+			p.Bullets(result.AffectedArtifacts...)
 		case app.OperationDiffResult:
 			p.Line(result.Summary)
 			for _, change := range result.Changes {
@@ -328,11 +325,7 @@ func writeInsightResult(stdout, stderr io.Writer, jsonOutput bool, value any, er
 			if result.Warning != "" {
 				p.Warning(result.Warning)
 			}
-			var bullets []string
-			for _, line := range result.RestoreGuidance {
-				bullets = append(bullets, line)
-			}
-			p.Bullets(bullets...)
+			p.Bullets(result.RestoreGuidance...)
 		}
 	})
 }
