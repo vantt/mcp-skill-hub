@@ -6,6 +6,7 @@ import (
 	"io"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
 )
 
 // runSourceWatch executes the intent-first source watch workflow.
@@ -29,38 +30,26 @@ func runSourceWatch(ctx context.Context, service app.SourceService, flags source
 	if err != nil {
 		return writeSourceError(stdout, stderr, flags.jsonOutput, err)
 	}
-	if proposal.Error != nil {
-		if flags.jsonOutput {
-			_ = writeSourceJSON(stdout, stderr, proposal)
-			return 2
-		}
-		fmt.Fprintf(stderr, "ERROR: %s\nWHY: %s\nFIX: %s\n",
-			proposal.Error.Render.Error, proposal.Error.Render.Why, proposal.Error.Render.Fix)
-		return 2
-	}
-
 	if !flags.yes {
-		if flags.jsonOutput {
-			return writeSourceJSON(stdout, stderr, proposal)
-		}
-		pins := proposal.Confirmation.Confirmation.Pins
-		cadence := proposal.Source.Monitoring.Cadence
-		if cadence == "" {
-			cadence = flags.cadence
-		}
-		if cadence == "" {
-			cadence = "weekly"
-		}
-		sourceID := proposal.Source.ID
-		if sourceID == "" {
-			sourceID = flags.sourceID
-		}
-		fmt.Fprintf(stdout, "Watch source %s (%s).\n", sourceID, locator)
-		fmt.Fprintf(stdout, "Cadence: %s. Watching: on.\n", cadence)
-		fmt.Fprintln(stdout, "No collection files changed.")
-		fmt.Fprintf(stdout, "Next: skillhub source confirm --proposal %s --proposal-digest %s --base-version %s\n",
-			pins.ProposalID, pins.ProposalDigest, pins.BaseVersion)
-		return 0
+		return writeResult(stdout, stderr, flags.jsonOutput, proposal, func(p *termui.Printer) {
+			pins := proposal.Confirmation.Confirmation.Pins
+			cadence := proposal.Source.Monitoring.Cadence
+			if cadence == "" {
+				cadence = flags.cadence
+			}
+			if cadence == "" {
+				cadence = "weekly"
+			}
+			sourceID := proposal.Source.ID
+			if sourceID == "" {
+				sourceID = flags.sourceID
+			}
+			p.Line(fmt.Sprintf("Watch source %s (%s).", sourceID, locator))
+			p.Line(fmt.Sprintf("Cadence: %s. Watching: on.", cadence))
+			p.Line("No collection files changed.")
+			p.Line(fmt.Sprintf("Next: skillhub source confirm --proposal %s --proposal-digest %s --base-version %s",
+				pins.ProposalID, pins.ProposalDigest, pins.BaseVersion))
+		})
 	}
 
 	// Immediate confirmation with fresh preview pins
@@ -68,26 +57,14 @@ func runSourceWatch(ctx context.Context, service app.SourceService, flags source
 	if err != nil {
 		return writeSourceError(stdout, stderr, flags.jsonOutput, err)
 	}
-	if result.Error != nil {
-		if flags.jsonOutput {
-			_ = writeSourceJSON(stdout, stderr, result)
-			return 2
+
+	return writeResult(stdout, stderr, flags.jsonOutput, result, func(p *termui.Printer) {
+		cadence := flags.cadence
+		if cadence == "" {
+			cadence = "weekly"
 		}
-		fmt.Fprintf(stderr, "ERROR: %s\nWHY: %s\nFIX: %s\n",
-			result.Error.Render.Error, result.Error.Render.Why, result.Error.Render.Fix)
-		return 2
-	}
-
-	if flags.jsonOutput {
-		return writeSourceJSON(stdout, stderr, result)
-	}
-
-	cadence := flags.cadence
-	if cadence == "" {
-		cadence = "weekly"
-	}
-	fmt.Fprintf(stdout, "Watching source %s (%s). Cadence: %s. Changes are not committed.\n",
-		result.SourceID, locator, cadence)
-	fmt.Fprintf(stdout, "Next: skillhub source check %s\n", result.SourceID)
-	return 0
+		p.Line(fmt.Sprintf("Watching source %s (%s). Cadence: %s. Changes are not committed.",
+			result.SourceID, locator, cadence))
+		p.Line(fmt.Sprintf("Next: skillhub source check %s", result.SourceID))
+	})
 }
