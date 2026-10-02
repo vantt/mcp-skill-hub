@@ -11,8 +11,8 @@ import (
 	"strings"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
 )
-
 type insightFlags struct {
 	workspace, decision, reason, proposalFile, proposalID, proposalDigest, baseVersion string
 	state, note, supersedes, idempotencyKey, artifact, finding                         string
@@ -263,60 +263,76 @@ func writeInsightResult(stdout, stderr io.Writer, jsonOutput bool, value any, er
 		}
 		return writeInvalidRequest(stdout, stderr, jsonOutput, err.Error(), "Review the insight state, evidence, proposal pins, and workspace, then retry.")
 	}
-	if jsonOutput {
-		if err := writeJSON(stdout, value); err != nil {
-			fmt.Fprintln(stderr, err)
-			return 1
-		}
-		if result, ok := value.(app.InsightApplicationResult); ok && result.Status == app.StatusError {
-			return 2
-		}
-		return 0
-	}
-	switch result := value.(type) {
-	case app.InsightInboxResult:
-		fmt.Fprintln(stdout, result.Summary)
-		for _, group := range result.Groups {
-			fmt.Fprintf(stdout, "%s / %s\n", group.SkillID, group.Category)
-			for _, item := range group.Items {
-				fmt.Fprintf(stdout, "- %s score=%d evidence_sources=%d impact=%s stale=%t: %s\n", item.Insight.ID, item.Rank.Score, item.Rank.EvidenceSources, item.Rank.Impact, item.Rank.Stale, item.Insight.Recommendation)
+	return writeResult(stdout, stderr, jsonOutput, value, func(p *termui.Printer) {
+		switch result := value.(type) {
+		case app.InsightInboxResult:
+			p.Line(result.Summary)
+			for _, group := range result.Groups {
+				p.Line(fmt.Sprintf("%s / %s", group.SkillID, group.Category))
+				var bullets []string
+				for _, item := range group.Items {
+					bullets = append(bullets, fmt.Sprintf("%s score=%d evidence_sources=%d impact=%s stale=%t: %s", item.Insight.ID, item.Rank.Score, item.Rank.EvidenceSources, item.Rank.Impact, item.Rank.Stale, item.Insight.Recommendation))
+				}
+				p.Bullets(bullets...)
 			}
-		}
-	case app.InsightDetailResult:
-		fmt.Fprintf(stdout, "%s\n%s [%s]: %s\n", result.Summary, result.Insight.ID, result.Insight.Status, result.Insight.Recommendation)
-		for _, finding := range result.Findings {
-			fmt.Fprintf(stdout, "- %s @ %s: %s\n", finding.ID, finding.LastSeen.Value, finding.What)
-		}
-	case app.InsightDecisionResult:
-		fmt.Fprintf(stdout, "%s\n%s [%s]\nOperation: %s\n", result.Summary, result.Insight.ID, result.Insight.Status, result.OperationID)
-	case app.InsightApplicationPreview:
-		fmt.Fprintf(stdout, "%s\nProposal: %s\nDigest: %s\nBase version: %s\n%sConfirm with:\n  skillhub insight confirm --proposal %s --proposal-digest %s --base-version %s\n", result.Summary, result.ProposalID, result.ProposalDigest, result.BaseCatalogVersion, result.Diff, result.ProposalID, result.ProposalDigest, result.BaseCatalogVersion)
-	case app.InsightApplicationResult:
-		if result.Error != nil {
-			fmt.Fprintf(stderr, "ERROR: %s\nWHY: %s\nFIX: %s\n", result.Error.Render.Error, result.Error.Render.Why, result.Error.Render.Fix)
-			return 2
-		}
-		fmt.Fprintf(stdout, "%s\nOperation: %s\nIncorporation: %s\nGit dirty: %t\n", result.Summary, result.OperationID, result.IncorporationID, result.GitDirty)
-	case app.OutcomeResult:
-		fmt.Fprintf(stdout, "%s\nOutcome: %s [%s]\n", result.Summary, result.Outcome.ID, result.Outcome.State)
-	case app.ProvenanceResult:
-		fmt.Fprintln(stdout, result.Summary)
-		for _, path := range result.AffectedArtifacts {
-			fmt.Fprintf(stdout, "- %s\n", path)
-		}
-	case app.OperationDiffResult:
-		fmt.Fprintln(stdout, result.Summary)
-		for _, change := range result.Changes {
-			if change.DiffAvailable {
-				fmt.Fprint(stdout, change.Diff)
-			} else {
-				fmt.Fprintf(stdout, "%s: digest-only metadata before=%s after=%s\n", change.Path, change.BeforeDigest, change.AfterDigest)
+		case app.InsightDetailResult:
+			p.Line(result.Summary)
+			p.Line(fmt.Sprintf("%s [%s]: %s", result.Insight.ID, result.Insight.Status, result.Insight.Recommendation))
+			var bullets []string
+			for _, finding := range result.Findings {
+				bullets = append(bullets, fmt.Sprintf("%s @ %s: %s", finding.ID, finding.LastSeen.Value, finding.What))
 			}
+			p.Bullets(bullets...)
+		case app.InsightDecisionResult:
+			p.Line(result.Summary)
+			p.Line(fmt.Sprintf("%s [%s]", result.Insight.ID, result.Insight.Status))
+			p.Line(fmt.Sprintf("Operation: %s", result.OperationID))
+		case app.InsightApplicationPreview:
+			p.Line(result.Summary)
+			p.Fields(
+				termui.Field{Label: "Proposal", Value: result.ProposalID},
+				termui.Field{Label: "Digest", Value: result.ProposalDigest},
+				termui.Field{Label: "Base version", Value: result.BaseCatalogVersion},
+			)
+			if result.Diff != "" {
+				p.Raw(result.Diff)
+			}
+			p.Next("Confirm the reviewed proposal", fmt.Sprintf("skillhub insight confirm --proposal %s --proposal-digest %s --base-version %s", result.ProposalID, result.ProposalDigest, result.BaseCatalogVersion))
+		case app.InsightApplicationResult:
+			p.Line(result.Summary)
+			p.Fields(
+				termui.Field{Label: "Operation", Value: result.OperationID},
+				termui.Field{Label: "Incorporation", Value: result.IncorporationID},
+				termui.Field{Label: "Git dirty", Value: fmt.Sprintf("%t", result.GitDirty)},
+			)
+		case app.OutcomeResult:
+			p.Line(result.Summary)
+			p.Line(fmt.Sprintf("Outcome: %s [%s]", result.Outcome.ID, result.Outcome.State))
+		case app.ProvenanceResult:
+			p.Line(result.Summary)
+			var bullets []string
+			for _, path := range result.AffectedArtifacts {
+				bullets = append(bullets, path)
+			}
+			p.Bullets(bullets...)
+		case app.OperationDiffResult:
+			p.Line(result.Summary)
+			for _, change := range result.Changes {
+				if change.DiffAvailable {
+					p.Raw(change.Diff)
+				} else {
+					p.Line(fmt.Sprintf("%s: digest-only metadata before=%s after=%s", change.Path, change.BeforeDigest, change.AfterDigest))
+				}
+			}
+			p.Fields(termui.Field{Label: "Review", Value: result.ReviewCommand})
+			if result.Warning != "" {
+				p.Warning(result.Warning)
+			}
+			var bullets []string
+			for _, line := range result.RestoreGuidance {
+				bullets = append(bullets, line)
+			}
+			p.Bullets(bullets...)
 		}
-		fmt.Fprintf(stdout, "Review: %s\nWARNING: %s\n", result.ReviewCommand, result.Warning)
-		for _, line := range result.RestoreGuidance {
-			fmt.Fprintf(stdout, "- %s\n", line)
-		}
-	}
-	return 0
+	})
 }
