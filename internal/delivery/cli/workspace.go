@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
 )
 
 func runInit(args []string, stdout, stderr io.Writer) int {
@@ -34,6 +35,7 @@ func runInit(args []string, stdout, stderr io.Writer) int {
 // renderInitSummary prints the short first-run summary. Generation IDs, digests,
 // and row counts stay available through --verbose and --json.
 func renderInitSummary(stdout io.Writer, workspacePath string, result app.Result) {
+	p := termui.New(stdout)
 	created := false
 	var hosts []string
 	for _, item := range result.Items {
@@ -46,20 +48,21 @@ func renderInitSummary(stdout io.Writer, workspacePath string, result app.Result
 		}
 	}
 	if created {
-		fmt.Fprintf(stdout, "Workspace created at %s.\n", workspacePath)
+		p.Line(fmt.Sprintf("Workspace created at %s.", workspacePath))
 	} else {
-		fmt.Fprintf(stdout, "Workspace ready at %s.\n", workspacePath)
+		p.Line(fmt.Sprintf("Workspace ready at %s.", workspacePath))
 	}
 	if len(hosts) > 0 {
-		fmt.Fprintf(stdout, "Agent connection for this workspace written: %s.\n", strings.Join(hosts, ", "))
+		p.Line(fmt.Sprintf("Agent connection for this workspace written: %s.", strings.Join(hosts, ", ")))
 	} else {
-		fmt.Fprintln(stdout, "Agent connection for this workspace is already in place.")
+		p.Line("Agent connection for this workspace is already in place.")
 	}
-	fmt.Fprintf(stdout, "\nNext:\n")
-	fmt.Fprintf(stdout, "  1. Commit the workspace: git -C %s add -A && git -C %s commit -m \"Initialize Skill Hub workspace\"\n", workspacePath, workspacePath)
-	fmt.Fprintf(stdout, "  2. Connect another project: cd <project> && skillhub connect --workspace %s --yes\n", workspacePath)
-	fmt.Fprintf(stdout, "     (add -g instead to connect every project: skillhub connect -g --workspace %s --yes)\n", workspacePath)
-	fmt.Fprintln(stdout, "  3. Open your agent there and ask: \"curate my Skill Hub\"")
+	p.Blank()
+	p.Line("Next:")
+	p.Line(fmt.Sprintf("  1. Commit the workspace: git -C %s add -A && git -C %s commit -m \"Initialize Skill Hub workspace\"", workspacePath, workspacePath))
+	p.Line(fmt.Sprintf("  2. Connect another project: cd <project> && skillhub connect --workspace %s --yes", workspacePath))
+	p.Line(fmt.Sprintf("     (add -g instead to connect every project: skillhub connect -g --workspace %s --yes)", workspacePath))
+	p.Line("  3. Open your agent there and ask: \"curate my Skill Hub\"")
 }
 
 func runValidate(ctx context.Context, args []string, stdout, stderr io.Writer) int {
@@ -80,7 +83,8 @@ func runValidate(ctx context.Context, args []string, stdout, stderr io.Writer) i
 	}
 	if jsonOutput {
 		if writeErr := writeJSON(stdout, result); writeErr != nil {
-			fmt.Fprintln(stderr, writeErr)
+			p := termui.New(stderr)
+			p.Line(writeErr.Error())
 			return 1
 		}
 		if result.Status == app.StatusError {
@@ -89,17 +93,19 @@ func runValidate(ctx context.Context, args []string, stdout, stderr io.Writer) i
 		return 0
 	}
 	if result.Status == app.StatusError {
+		p := termui.New(stderr)
 		if result.Error != nil && len(result.Items) == 0 {
-			fmt.Fprintf(stderr, "ERROR: %s\nWHY: %s\nFIX: %s\n", result.Error.Render.Error, result.Error.Render.Why, result.Error.Render.Fix)
+			p.Error(result.Error.Render.Error, result.Error.Render.Why, result.Error.Render.Fix)
 			return 2
 		}
-		fmt.Fprintln(stderr, "Workspace validation failed:")
+		p.Line("Workspace validation failed:")
 		for _, item := range result.Items {
-			fmt.Fprintf(stderr, "- %s\n  FIX: %s\n", item.Summary, item.Impact)
+			p.Line(fmt.Sprintf("- %s\n  FIX: %s", item.Summary, item.Impact))
 		}
 		return 2
 	}
-	fmt.Fprintln(stdout, result.Summary)
+	p := termui.New(stdout)
+	p.Line(result.Summary)
 	return 0
 }
 
@@ -201,11 +207,13 @@ func writeWorkspaceResult(result app.Result, err error, stdout, stderr io.Writer
 		cancelled := app.ErrorResult(app.NewOperationCancelledError())
 		if jsonOutput {
 			if writeErr := writeJSON(stdout, cancelled); writeErr != nil {
-				fmt.Fprintln(stderr, writeErr)
+				p := termui.New(stderr)
+				p.Line(writeErr.Error())
 				return 1
 			}
 		} else {
-			fmt.Fprintf(stderr, "ERROR: %s\nWHY: %s\nFIX: %s\n", cancelled.Error.Render.Error, cancelled.Error.Render.Why, cancelled.Error.Render.Fix)
+			p := termui.New(stderr)
+			p.Error(cancelled.Error.Render.Error, cancelled.Error.Render.Why, cancelled.Error.Render.Fix)
 		}
 		return 130
 	}
@@ -213,8 +221,9 @@ func writeWorkspaceResult(result app.Result, err error, stdout, stderr io.Writer
 		return writeInvalidWorkspace(stdout, stderr, jsonOutput, err)
 	}
 	if jsonOutput {
-		if err := writeJSON(stdout, result); err != nil {
-			fmt.Fprintln(stderr, "ERROR: Unable to write the command result.\nWHY: Output destination failed.\nFIX: Check the output destination and retry.")
+		if writeErr := writeJSON(stdout, result); writeErr != nil {
+			p := termui.New(stderr)
+			p.Error("Unable to write the command result.", "Output destination failed.", "Check the output destination and retry.")
 			return 1
 		}
 		if result.Status == app.StatusError {
@@ -223,15 +232,19 @@ func writeWorkspaceResult(result app.Result, err error, stdout, stderr io.Writer
 		return 0
 	}
 	if result.Error != nil {
-		fmt.Fprintf(stderr, "ERROR: %s\nWHY: %s\nFIX: %s\n", result.Error.Render.Error, result.Error.Render.Why, result.Error.Render.Fix)
+		p := termui.New(stderr)
+		p.Error(result.Error.Render.Error, result.Error.Render.Why, result.Error.Render.Fix)
 		return 2
 	}
-	fmt.Fprintln(stdout, result.Summary)
+	p := termui.New(stdout)
+	p.Line(result.Summary)
+	var bullets []string
 	for _, item := range result.Items {
-		fmt.Fprintf(stdout, "- %s\n", item.Summary)
+		bullets = append(bullets, item.Summary)
 	}
+	p.Bullets(bullets...)
 	for _, warning := range result.Warnings {
-		fmt.Fprintf(stdout, "WARNING: %s\n", warning.Summary)
+		p.Warning(warning.Summary)
 	}
 	return 0
 }
@@ -256,11 +269,13 @@ func writeInvalidWorkspace(stdout, stderr io.Writer, jsonOutput bool, cause erro
 	})
 	if jsonOutput {
 		if err := writeJSON(stdout, result); err != nil {
-			fmt.Fprintln(stderr, err)
+			p := termui.New(stderr)
+			p.Line(err.Error())
 			return 1
 		}
 		return 2
 	}
-	fmt.Fprintf(stderr, "ERROR: %s\nWHY: %s\nFIX: %s\n", result.Error.Render.Error, result.Error.Render.Why, result.Error.Render.Fix)
+	p := termui.New(stderr)
+	p.Error(result.Error.Render.Error, result.Error.Render.Why, result.Error.Render.Fix)
 	return 2
 }
