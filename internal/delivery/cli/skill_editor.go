@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
 	"github.com/vantt/mcp-skill-hub/internal/skill"
 )
 
@@ -106,22 +107,29 @@ func openEditorSession(ctx context.Context, service app.SkillService, workspace,
 // writeEditorSkillPreview formats preview output for an interactive editor change.
 // It renders the actual diff and the exact short confirm command without advising --yes (BUG-12).
 func writeEditorSkillPreview(stdout io.Writer, preview app.SkillProposal) {
-	fmt.Fprintln(stdout, preview.Summary)
-	fmt.Fprintf(stdout, "- %d added, %d modified, %d deleted file(s).\n",
-		len(preview.Diff.Added), len(preview.Diff.Modified), len(preview.Diff.Deleted))
+	p := termui.New(stdout)
+	p.Line(preview.Summary)
+	p.Bullets(fmt.Sprintf("%d added, %d modified, %d deleted file(s).",
+		len(preview.Diff.Added), len(preview.Diff.Modified), len(preview.Diff.Deleted)))
 	pins := preview.Confirmation.Confirmation.Pins
-	fmt.Fprintf(stdout, "- Proposal: %s\n- Digest: %s\n- Base version: %s\n",
-		pins.ProposalID, pins.ProposalDigest, pins.BaseVersion)
+	p.Fields(
+		termui.Field{Label: "Proposal", Value: pins.ProposalID},
+		termui.Field{Label: "Digest", Value: pins.ProposalDigest},
+		termui.Field{Label: "Base version", Value: pins.BaseVersion},
+	)
 	if preview.RoutingImpact != nil {
-		fmt.Fprintf(stdout, "- Routing impact: %s\n", preview.RoutingImpact.Summary)
+		p.Fields(termui.Field{Label: "Routing impact", Value: preview.RoutingImpact.Summary})
 		for _, warning := range preview.RoutingImpact.Warnings {
-			fmt.Fprintf(stdout, "  WARNING: %s\n", warning)
+			p.Warning(warning)
 		}
 	}
 	if preview.FullDiff != "" {
-		fmt.Fprintln(stdout, preview.FullDiff)
+		p.Raw(preview.FullDiff)
+		if !strings.HasSuffix(preview.FullDiff, "\n") {
+			p.Raw("\n")
+		}
 	}
-	fmt.Fprintf(stdout, "No files changed. Confirm with:\n  skillhub skill confirm %s\n", pins.ProposalID)
+	p.Line(fmt.Sprintf("No files changed. Confirm with:\n  skillhub skill confirm %s", pins.ProposalID))
 }
 
 // cleanupProposalRecovery removes any recovery artifacts associated with proposalID.
