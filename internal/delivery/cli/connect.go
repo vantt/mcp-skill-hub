@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
 	"github.com/vantt/mcp-skill-hub/internal/hostintegration"
 )
 
@@ -57,7 +58,8 @@ func runConnect(ctx context.Context, args []string, stdout, stderr io.Writer) in
 // renderConnectResult prints one line per managed file. Full managed diffs stay
 // in the --json items so the preview remains readable.
 func renderConnectResult(stdout io.Writer, result app.Result) {
-	fmt.Fprintln(stdout, result.Summary)
+	p := termui.New(stdout)
+	p.Line(result.Summary)
 	hostFiles := make(map[string][]string)
 	var hostOrder []string
 	for _, item := range result.Items {
@@ -80,18 +82,21 @@ func renderConnectResult(stdout io.Writer, result app.Result) {
 	for _, hostKey := range hostOrder {
 		displayName := hostDisplayName(hostKey)
 		files := hostFiles[hostKey]
-		fmt.Fprintf(stdout, "- %s: %s (%s)\n", displayName, verb, strings.Join(files, ", "))
+		p.Bullets(fmt.Sprintf("%s: %s (%s)", displayName, verb, strings.Join(files, ", ")))
 	}
 	for _, warning := range result.Warnings {
-		fmt.Fprintf(stdout, "WARNING: %s\n", warning.Summary)
+		p.Warning(warning.Summary)
 	}
 	switch result.Status {
 	case app.StatusActionRequired:
 		for _, action := range result.SuggestedActions {
-			fmt.Fprintf(stdout, "\nTo write these files, run:\n  %s\n", action.Command)
+			p.Blank()
+			p.Line("To write these files, run:")
+			p.Command(action.Command)
 		}
 	case app.StatusApplied:
-		fmt.Fprintln(stdout, "\nNext: restart your agent so it loads the new MCP server, then ask it: \"curate my Skill Hub\"")
+		p.Blank()
+		p.Next("restart your agent so it loads the new MCP server, then ask it: \"curate my Skill Hub\"", "")
 	}
 }
 
