@@ -463,7 +463,7 @@ func (service DistillService) SubmitDistillRun(ctx context.Context, path, runID 
 	}
 	for _, issue := range issues {
 		if issue.Kind != "ambiguity" && issue.Kind != "coverage" || strings.TrimSpace(issue.Question) == "" {
-			return service.failSubmission(ctx, root, run, runBytes, errors.New("only explicit blocking ambiguity or coverage decisions may pause a run"))
+			return service.failSubmission(ctx, root, run, runBytes, NewInvalidRequestError("only explicit blocking ambiguity or coverage decisions may pause a run", "Only submit outstanding decisions of kind ambiguity or coverage with a question."))
 		}
 	}
 	if len(issues) > 0 {
@@ -503,7 +503,7 @@ func (service DistillService) SubmitDistillRun(ctx context.Context, path, runID 
 			return service.failSubmission(ctx, root, run, runBytes, err)
 		}
 		if _, duplicate := newObservations[observation.ID]; duplicate {
-			return service.failSubmission(ctx, root, run, runBytes, errors.New("duplicate submitted observation"))
+			return service.failSubmission(ctx, root, run, runBytes, NewInvalidRequestError("duplicate submitted observation", "Submit each finding stable key once."))
 		}
 		newObservations[observation.ID] = observation
 	}
@@ -586,7 +586,7 @@ func (service DistillService) SubmitDistillRun(ctx context.Context, path, runID 
 			return service.failSubmission(ctx, root, run, runBytes, errors.New("comparison stable identity cannot be reused for another subject"))
 		}
 		if _, duplicate := newComparisons[comparison.ID]; duplicate {
-			return service.failSubmission(ctx, root, run, runBytes, errors.New("duplicate comparison stable identity"))
+			return service.failSubmission(ctx, root, run, runBytes, NewInvalidRequestError("duplicate comparison stable identity", "Submit each comparison once."))
 		}
 		if err := validateComparison(comparison, allObservations); err != nil {
 			return service.failSubmission(ctx, root, run, runBytes, err)
@@ -695,7 +695,7 @@ func (service DistillService) SubmitDistillRun(ctx context.Context, path, runID 
 			return service.failSubmission(ctx, root, run, runBytes, err)
 		}
 		if _, duplicate := newInsights[insight.ID]; duplicate {
-			return service.failSubmission(ctx, root, run, runBytes, errors.New("duplicate insight stable identity"))
+			return service.failSubmission(ctx, root, run, runBytes, NewInvalidRequestError("duplicate insight stable identity", "Submit each insight stable key once."))
 		}
 		newInsights[insight.ID] = insight
 	}
@@ -771,9 +771,20 @@ func (service DistillService) SubmitDistillRun(ctx context.Context, path, runID 
 	return distillRunResult("Distill run finalized atomically; findings and insight proposals were recorded and the source cursor advanced. Active skills are unchanged.", run, receipt), nil
 }
 
+func failureText(cause error) string {
+	var appErr *Error
+	if errors.As(cause, &appErr) && appErr != nil && appErr.Render.Why != "" {
+		return appErr.Render.Why
+	}
+	if cause == nil {
+		return ""
+	}
+	return cause.Error()
+}
+
 func (service DistillService) failSubmission(ctx context.Context, root string, run distillpkg.Run, original []byte, cause error) (DistillRunResult, error) {
 	run.State = "failed"
-	run.Failure = boundedDistillMessage(cause.Error(), 2000)
+	run.Failure = boundedDistillMessage(failureText(cause), 2000)
 	_, writeErr := service.writeRun(ctx, root, run, original, "distill_failed", "Distill submission failed; the source cursor was not advanced.")
 	if writeErr != nil {
 		return DistillRunResult{}, fmt.Errorf("%v; additionally failed to persist failed run: %w", cause, writeErr)
@@ -941,7 +952,7 @@ func validateComparison(item distillpkg.Comparison, observations map[string]dist
 
 func readRun(root, id string) (distillpkg.Run, []byte, error) {
 	if !safeOpaqueRecordID(id) {
-		return distillpkg.Run{}, nil, errors.New("invalid run ID")
+		return distillpkg.Run{}, nil, NewInvalidRequestError("invalid run ID", "Pass a run ID returned by curation_run_start.")
 	}
 	matches, err := filepath.Glob(filepath.Join(root, "distill", "sources", "*", "runs", id+".yaml"))
 	if err != nil || len(matches) != 1 {
@@ -1262,7 +1273,7 @@ func sanitizeDistillErrorForSource(err error, sourceID string) string {
 		}
 		return "source exceeded configured limits; narrow scope with `skillhub source triage <source-id> --path <subdir>`"
 	default:
-		return err.Error()
+		return failureText(err)
 	}
 }
 func distillRunResult(summary string, run distillpkg.Run, receipt mutation.Receipt) DistillRunResult {

@@ -315,7 +315,7 @@ func (service InsightService) DecideInsight(ctx context.Context, path, id string
 	}
 	reason := strings.TrimSpace(input.Rationale)
 	if reason == "" {
-		return InsightDecisionResult{}, errors.New("insight decision requires a rationale")
+		return InsightDecisionResult{}, NewInvalidRequestError("insight decision requires a rationale", "Provide a non-empty rationale for the decision.")
 	}
 	comparisons, _, err := readComparisons(root)
 	if err != nil {
@@ -344,7 +344,7 @@ func (service InsightService) DecideInsight(ctx context.Context, path, id string
 	switch target {
 	case "plan":
 		if item.Status != "pending" {
-			return InsightDecisionResult{}, fmt.Errorf("only a pending insight can be planned")
+			return InsightDecisionResult{}, NewInvalidRequestError("only a pending insight can be planned", "Plan only pending insights; reload the insight state first.")
 		}
 		item.Status = "planned"
 	case "reject":
@@ -360,7 +360,7 @@ func (service InsightService) DecideInsight(ctx context.Context, path, id string
 		item.Status = "obsolete"
 	case "reopen":
 		if item.Status != "rejected" {
-			return InsightDecisionResult{}, errors.New("only a rejected insight can be reopened")
+			return InsightDecisionResult{}, NewInvalidRequestError("only a rejected insight can be reopened", "Reopen only rejected insights; reload the insight state first.")
 		}
 		if item.RejectedEvidenceDigest == "" || currentDigest == item.RejectedEvidenceDigest {
 			return InsightDecisionResult{}, errors.New("rejected insight cannot reopen without materially new evidence")
@@ -402,7 +402,7 @@ func (service InsightService) PreviewInsightApplication(ctx context.Context, pat
 		return InsightApplicationPreview{}, fmt.Errorf("insight in state %s cannot be applied", item.Status)
 	}
 	if len(input.Changes) == 0 {
-		return InsightApplicationPreview{}, errors.New("application preview requires at least one changed skill path")
+		return InsightApplicationPreview{}, NewInvalidRequestError("application preview requires at least one changed skill path", "Include at least one changed skill file in changes.")
 	}
 	skillPrefix, err := skillDirectoryForID(root, item.SkillID)
 	if err != nil {
@@ -427,7 +427,7 @@ func (service InsightService) PreviewInsightApplication(ctx context.Context, pat
 			contents = append(contents, '\n')
 		}
 		if sourcepkg.Digest(prior) == sourcepkg.Digest(contents) {
-			return InsightApplicationPreview{}, fmt.Errorf("application path %s is unchanged", path)
+			return InsightApplicationPreview{}, NewInvalidRequestError(fmt.Sprintf("application path %s is unchanged", path), "Change the file contents before previewing the application.")
 		}
 		before[path] = prior
 		targets = append(targets, path)
@@ -649,7 +649,7 @@ func (InsightService) QueryFindingImpact(ctx context.Context, path, observationI
 		return ProvenanceResult{}, err
 	}
 	if !distillpkg.ValidEntityID(observationID) {
-		return ProvenanceResult{}, errors.New("invalid observation ID")
+		return ProvenanceResult{}, NewInvalidRequestError("invalid observation ID", "Pass an observation ID returned by the workspace.")
 	}
 	return buildProvenance(root, "", observationID)
 }
@@ -663,7 +663,7 @@ func (InsightService) GetOperationDiff(ctx context.Context, path, operationID st
 		return OperationDiffResult{}, err
 	}
 	if !distillpkg.ValidEntityID(operationID) {
-		return OperationDiffResult{}, errors.New("invalid operation ID")
+		return OperationDiffResult{}, NewInvalidRequestError("invalid operation ID", "Pass an operation ID returned by the workspace.")
 	}
 	type receiptChange struct {
 		Path             string `yaml:"path"`

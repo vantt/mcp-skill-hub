@@ -181,6 +181,10 @@ func readDistillSubmission(path string) (app.DistillSubmission, error) {
 
 func writeDistill(stdout, stderr io.Writer, jsonOutput bool, value any, err error) int {
 	if err != nil {
+		var appErr *app.Error
+		if errors.As(err, &appErr) {
+			return writeStructuredError(stdout, stderr, jsonOutput, appErr)
+		}
 		return writeInvalidRequest(stdout, stderr, jsonOutput, err.Error(), "Inspect the pinned run/package or correct the structured submission, then retry.")
 	}
 	if jsonOutput {
