@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
 	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
 )
 
@@ -205,10 +206,13 @@ func runSource(ctx context.Context, args []string, stdout, stderr io.Writer) int
 				if flags.jsonOutput {
 					return writeSourceJSON(stdout, stderr, preview)
 				}
-				fmt.Fprintln(stdout, preview.Summary)
+				p := termui.New(stdout)
+				p.Line(preview.Summary)
+				var bullets []string
 				for _, sk := range preview.Skipped {
-					fmt.Fprintf(stdout, "- skipped %s: %s\n", sk.TargetID, sk.SkipReason)
+					bullets = append(bullets, fmt.Sprintf("skipped %s: %s", sk.TargetID, sk.SkipReason))
 				}
+				p.Bullets(bullets...)
 				return 0
 			}
 			result, err := importService.ConfirmSourceImport(ctx, flags.workspace, preview, preview.Confirmation.Confirmation.Pins)
@@ -337,30 +341,28 @@ func writeSourceValue(stdout, stderr io.Writer, jsonOutput bool, value any, err 
 	}
 	switch result := value.(type) {
 	case app.SourceCandidateResult:
-		if jsonOutput {
-			if err := writeJSON(stdout, value); err != nil {
-				fmt.Fprintln(stderr, err)
-				return 1
-			}
-			return 0
-		}
-		fmt.Fprintf(stdout, "%s\nCandidate: %s\n", result.Summary, result.Candidate.ID)
-		return 0
+		return writeResult(stdout, stderr, jsonOutput, result, func(p *termui.Printer) {
+			p.Line(result.Summary)
+			p.Fields(termui.Field{Label: "Candidate", Value: result.Candidate.ID})
+		})
 	case app.SourceCheckResult:
 		if result.Error != nil {
 			if jsonOutput {
 				if err := writeJSON(stdout, result); err != nil {
-					fmt.Fprintln(stderr, err)
+					p := termui.New(stderr)
+					p.Line(err.Error())
 					return 1
 				}
 				return 2
 			}
-			fmt.Fprintf(stderr, "ERROR: %s\nWHY: %s\nFIX: %s\n", result.Error.Render.Error, result.Error.Render.Why, result.Error.Render.Fix)
+			p := termui.New(stderr)
+			p.Error(result.Error.Render.Error, result.Error.Render.Why, result.Error.Render.Fix)
 			return 2
 		}
 		if jsonOutput {
 			if err := writeJSON(stdout, value); err != nil {
-				fmt.Fprintln(stderr, err)
+				p := termui.New(stderr)
+				p.Line(err.Error())
 				return 1
 			}
 			if result.Status == app.StatusError {
@@ -368,12 +370,15 @@ func writeSourceValue(stdout, stderr io.Writer, jsonOutput bool, value any, err 
 			}
 			return 0
 		}
-		fmt.Fprintln(stdout, result.Summary)
+		p := termui.New(stdout)
+		p.Line(result.Summary)
+		var bullets []string
 		for _, item := range result.Results {
-			fmt.Fprintf(stdout, "- %s: %s\n", item.SourceID, item.Status)
+			bullets = append(bullets, fmt.Sprintf("%s: %s", item.SourceID, item.Status))
 		}
+		p.Bullets(bullets...)
 		for _, warning := range result.Warnings {
-			fmt.Fprintf(stdout, "WARNING: %s\n", warning.Summary)
+			p.Warning(warning.Summary)
 		}
 		if result.Status == app.StatusError {
 			return 2
@@ -381,43 +386,47 @@ func writeSourceValue(stdout, stderr io.Writer, jsonOutput bool, value any, err 
 		return 0
 	}
 	if jsonOutput {
-		if err := writeJSON(stdout, value); err != nil {
-			fmt.Fprintln(stderr, err)
-			return 1
-		}
-		return 0
+		return writeSourceJSON(stdout, stderr, value)
 	}
 	return 0
 }
+
 func writeSourceList(stdout, stderr io.Writer, jsonOutput bool, result app.SourceListResult, err error) int {
 	if err != nil {
 		return writeSourceError(stdout, stderr, jsonOutput, err)
 	}
-	if jsonOutput {
-		if err := writeJSON(stdout, result); err != nil {
-			fmt.Fprintln(stderr, err)
-			return 1
+	return writeResult(stdout, stderr, jsonOutput, result, func(p *termui.Printer) {
+		p.Line(result.Summary)
+		var bullets []string
+		for _, item := range result.Candidates {
+			bullets = append(bullets, fmt.Sprintf("%s [%s] %s — %s", item.ID, item.Status, item.Locator, item.Reason))
 		}
-		return 0
-	}
-	fmt.Fprintln(stdout, result.Summary)
-	for _, item := range result.Candidates {
-		fmt.Fprintf(stdout, "- %s [%s] %s — %s\n", item.ID, item.Status, item.Locator, item.Reason)
-	}
-	for _, item := range result.Sources {
-		fmt.Fprintf(stdout, "- %s [%s] %s (%s)\n", item.ID, item.Status, item.Identity.Name, item.Adapter)
-	}
-	return 0
+		for _, item := range result.Sources {
+			bullets = append(bullets, fmt.Sprintf("%s [%s] %s (%s)", item.ID, item.Status, item.Identity.Name, item.Adapter))
+		}
+		p.Bullets(bullets...)
+	})
 }
+
 func writeSourceProposal(stdout, stderr io.Writer, jsonOutput bool, result app.SourceProposal) int {
 	if jsonOutput {
 		return writeSourceJSON(stdout, stderr, result)
 	}
+	p := termui.New(stdout)
 	for _, warning := range result.Warnings {
-		fmt.Fprintf(stdout, "WARNING: %s\n", warning.Summary)
+		p.Warning(warning.Summary)
 	}
 	pins := result.Confirmation.Confirmation.Pins
-	fmt.Fprintf(stdout, "%s\nDetected: %s; adapter %s; revision %s; license %s; trust %s; cadence %s.\nProposal: %s\nDigest: %s\nBase version: %s\nNo files changed. Confirm with:\n  skillhub source confirm --proposal %s --proposal-digest %s --base-version %s\n", result.Summary, result.Source.Identity.Name, result.Source.Adapter, result.Source.CurrentRevision.Value, firstText(result.Source.License, "unknown"), result.Source.Trust.Source, result.Source.Monitoring.Cadence, pins.ProposalID, pins.ProposalDigest, pins.BaseVersion, pins.ProposalID, pins.ProposalDigest, pins.BaseVersion)
+	p.Line(result.Summary)
+	p.Line(fmt.Sprintf("Detected: %s; adapter %s; revision %s; license %s; trust %s; cadence %s.",
+		result.Source.Identity.Name, result.Source.Adapter, result.Source.CurrentRevision.Value,
+		firstText(result.Source.License, "unknown"), result.Source.Trust.Source, result.Source.Monitoring.Cadence))
+	p.Fields(
+		termui.Field{Label: "Proposal", Value: pins.ProposalID},
+		termui.Field{Label: "Digest", Value: pins.ProposalDigest},
+		termui.Field{Label: "Base version", Value: pins.BaseVersion},
+	)
+	p.Line(fmt.Sprintf("No files changed. Confirm with:\n  skillhub source confirm --proposal %s --proposal-digest %s --base-version %s", pins.ProposalID, pins.ProposalDigest, pins.BaseVersion))
 	return 0
 }
 
@@ -425,7 +434,8 @@ func writeSingleCandidate(stdout, stderr io.Writer, jsonOutput bool, candidate s
 	if jsonOutput {
 		return writeSourceJSON(stdout, stderr, candidate)
 	}
-	fmt.Fprintf(stdout, "- %s [%s] %s — %s\n", candidate.ID, candidate.Status, candidate.Locator, candidate.Reason)
+	p := termui.New(stdout)
+	p.Bullets(fmt.Sprintf("%s [%s] %s — %s", candidate.ID, candidate.Status, candidate.Locator, candidate.Reason))
 	return 0
 }
 
@@ -433,7 +443,8 @@ func writeSingleSource(stdout, stderr io.Writer, jsonOutput bool, record sourcep
 	if jsonOutput {
 		return writeSourceJSON(stdout, stderr, record)
 	}
-	fmt.Fprintf(stdout, "- %s [%s] %s (%s)\n", record.ID, record.Status, record.Identity.Name, record.Adapter)
+	p := termui.New(stdout)
+	p.Bullets(fmt.Sprintf("%s [%s] %s (%s)", record.ID, record.Status, record.Identity.Name, record.Adapter))
 	return 0
 }
 
@@ -441,18 +452,27 @@ func writeSourceImportProposal(stdout, stderr io.Writer, jsonOutput bool, propos
 	if jsonOutput {
 		return writeSourceJSON(stdout, stderr, proposal)
 	}
-	pins := proposal.Confirmation.Confirmation.Pins
-	fmt.Fprintf(stdout, "%s\n", proposal.Summary)
+	p := termui.New(stdout)
+	p.Line(proposal.Summary)
+	var bullets []string
 	for _, item := range proposal.Importable {
-		fmt.Fprintf(stdout, "- %s -> %s [draft] (importable)\n", item.Name, item.TargetID)
+		bullets = append(bullets, fmt.Sprintf("%s -> %s [draft] (importable)", item.Name, item.TargetID))
 	}
 	for _, item := range proposal.Skipped {
-		fmt.Fprintf(stdout, "- %s -> %s [skipped: %s]\n", item.Name, item.TargetID, item.SkipReason)
+		bullets = append(bullets, fmt.Sprintf("%s -> %s [skipped: %s]", item.Name, item.TargetID, item.SkipReason))
 	}
+	p.Bullets(bullets...)
 	for _, warn := range proposal.Warnings {
-		fmt.Fprintf(stdout, "WARNING: %s\n", warn.Summary)
+		p.Warning(warn.Summary)
 	}
-	fmt.Fprintf(stdout, "\nProposal: %s\nDigest: %s\nBase version: %s\nConfirm with:\n  skillhub source import %s --proposal %s --proposal-digest %s --base-version %s\nor re-run with --yes to import directly.\n", pins.ProposalID, pins.ProposalDigest, pins.BaseVersion, sourceID, pins.ProposalID, pins.ProposalDigest, pins.BaseVersion)
+	p.Blank()
+	pins := proposal.Confirmation.Confirmation.Pins
+	p.Fields(
+		termui.Field{Label: "Proposal", Value: pins.ProposalID},
+		termui.Field{Label: "Digest", Value: pins.ProposalDigest},
+		termui.Field{Label: "Base version", Value: pins.BaseVersion},
+	)
+	p.Line(fmt.Sprintf("Confirm with:\n  skillhub source import %s --proposal %s --proposal-digest %s --base-version %s\nor re-run with --yes to import directly.", sourceID, pins.ProposalID, pins.ProposalDigest, pins.BaseVersion))
 	return 0
 }
 
@@ -460,39 +480,33 @@ func writeSourceImportResult(stdout, stderr io.Writer, jsonOutput bool, result a
 	if err != nil {
 		return writeSourceError(stdout, stderr, jsonOutput, err)
 	}
-	if jsonOutput {
-		return writeSourceJSON(stdout, stderr, result)
-	}
-	if result.Status == app.StatusError {
-		fmt.Fprintln(stderr, result.Summary)
-		return 2
-	}
-	fmt.Fprintln(stdout, result.Summary)
-	if len(result.SkippedIDs) > 0 {
-		fmt.Fprintf(stdout, "Skipped %d existing skill(s): %s\n", len(result.SkippedIDs), strings.Join(result.SkippedIDs, ", "))
-	}
-	return 0
+	return writeResult(stdout, stderr, jsonOutput, result, func(p *termui.Printer) {
+		p.Line(result.Summary)
+		if len(result.SkippedIDs) > 0 {
+			p.Line(fmt.Sprintf("Skipped %d existing skill(s): %s", len(result.SkippedIDs), strings.Join(result.SkippedIDs, ", ")))
+		}
+	})
 }
 
 func writeSourceMutation(stdout, stderr io.Writer, jsonOutput bool, result app.SourceMutationResult) int {
-	if jsonOutput {
-		return writeSourceJSON(stdout, stderr, result)
-	}
-	if result.Status == app.StatusError {
-		fmt.Fprintln(stderr, result.Summary)
-		return 2
-	}
-	if result.SourceID != "" {
-		fmt.Fprintf(stdout, "Watching %s. First analysis is ready: ask your agent 'distill new sources' or run `skillhub distill prepare %s`.\nWatching does not auto-import skills; accepted insights can create draft skills.\n", result.SourceID, result.SourceID)
-		return 0
-	}
-	fmt.Fprintf(stdout, "%s\nOperation: %s\nCatalog snapshot: %s\nGit dirty: %t\n", result.Summary, result.OperationID, result.CatalogSnapshot, result.GitDirty)
-	return 0
+	return writeResult(stdout, stderr, jsonOutput, result, func(p *termui.Printer) {
+		if result.SourceID != "" {
+			p.Line(fmt.Sprintf("Watching %s. First analysis is ready: ask your agent 'distill new sources' or run `skillhub distill prepare %s`.\nWatching does not auto-import skills; accepted insights can create draft skills.", result.SourceID, result.SourceID))
+			return
+		}
+		p.Line(result.Summary)
+		p.Fields(
+			termui.Field{Label: "Operation", Value: result.OperationID},
+			termui.Field{Label: "Catalog snapshot", Value: result.CatalogSnapshot},
+			termui.Field{Label: "Git dirty", Value: fmt.Sprintf("%t", result.GitDirty)},
+		)
+	})
 }
 
 func writeSourceJSON(stdout, stderr io.Writer, value any) int {
 	if err := writeJSON(stdout, value); err != nil {
-		fmt.Fprintln(stderr, err)
+		p := termui.New(stderr)
+		p.Line(err.Error())
 		return 1
 	}
 	return 0
