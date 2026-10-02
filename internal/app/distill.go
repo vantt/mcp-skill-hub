@@ -372,9 +372,7 @@ func (service DistillService) writeRunWithIntent(ctx context.Context, root strin
 
 // SubmitDistillRun validates real packaged bytes and auto-finalizes one canonical WriteSet when unblocked.
 func (service DistillService) SubmitDistillRun(ctx context.Context, path, runID string, input DistillSubmission) (result DistillRunResult, resultErr error) {
-	startedAt := time.Now()
-	telemetryEligible := false
-	artifactEvents := []telemetry.Event{}
+	startedAt, telemetryEligible, artifactEvents := time.Now(), false, []telemetry.Event{}
 	root, err := workspace.Discover(path)
 	if err != nil {
 		return DistillRunResult{}, err
@@ -387,135 +385,243 @@ func (service DistillService) SubmitDistillRun(ctx context.Context, path, runID 
 		return DistillRunResult{}, err
 	}
 	idempotencyKey := firstNonEmpty(input.IdempotencyKey, "distill:submit:"+runID)
+
+	if replayed, found, repErr := checkReplayedDistillRun(root, runID, idempotencyKey, intentDigest); repErr != nil {
+		return DistillRunResult{}, repErr
+	} else if found {
+		return *replayed, nil
+	}
+
+	run, runBytes, err := readRun(root, runID)
+	if err != nil {
+		return DistillRunResult{}, err
+	}
+	if err := gateDistillRunState(run, input); err != nil {
+		return DistillRunResult{}, err
+	}
+
+	telemetryEligible = true
+	defer func() {
+		if telemetryEligible {
+			ti := distillTelemetryInput{runID: runID, input: input, initialAttempt: run.Attempt, startedAt: startedAt}
+			service.recordDistillSubmissionTelemetry(ctx, root, ti, artifactEvents, result, resultErr)
+		}
+	}()
+
+	pkg, err := distillpkg.LoadRevisionPackage(root, run.ID)
+	if err != nil || pkg.Digest != run.PackageDigest || !distillpkg.SameRevision(pkg.ToRevision, run.ToRevision) {
+		return service.failSubmission(ctx, root, run, runBytes, errors.New("immutable target revision package is unavailable or invalid"))
+	}
+
+	sc := &distillSubmissionContext{
+		root: root, runID: runID, run: run, runBytes: runBytes,
+		pkg: pkg, input: input, intentInput: intentInput,
+		idempotencyKey: idempotencyKey, intentDigest: intentDigest,
+	}
+	if awaitingResult, handled, err := service.handleDistillBlockingDecisions(ctx, sc); err != nil {
+		return DistillRunResult{}, err
+	} else if handled {
+		return *awaitingResult, nil
+	}
+
+	obs, err := service.validateAndBuildObservations(ctx, sc)
+	if err != nil {
+		return DistillRunResult{}, err
+	}
+	cmps, err := service.validateAndBuildComparisons(ctx, sc, obs.all)
+	if err != nil {
+		return DistillRunResult{}, err
+	}
+	ins, err := service.validateAndBuildInsights(ctx, sc, obs.all, cmps.all)
+	if err != nil {
+		return DistillRunResult{}, err
+	}
+	res, events, err := service.finalizeDistillRun(ctx, sc, obs, cmps, ins)
+	if err != nil {
+		return DistillRunResult{}, err
+	}
+	artifactEvents = events
+	return res, nil
+}
+
+type distillSubmissionContext struct {
+	root           string
+	runID          string
+	run            distillpkg.Run
+	runBytes       []byte
+	pkg            distillpkg.RevisionPackage
+	input          DistillSubmission
+	intentInput    DistillSubmission
+	idempotencyKey string
+	intentDigest   string
+}
+
+type distillObservationsResult struct {
+	existingBytes map[string][]byte
+	existingByID  map[string]distillpkg.Observation
+	newByItem     map[string]distillpkg.Observation
+	all           map[string]distillpkg.Observation
+}
+
+type distillComparisonsResult struct {
+	existingBytes map[string][]byte
+	newByItem     map[string]distillpkg.Comparison
+	all           map[string]distillpkg.Comparison
+}
+
+type distillInsightsResult struct {
+	existingBytes map[string][]byte
+	newByItem     map[string]distillpkg.Insight
+}
+
+type distillTelemetryInput struct {
+	runID          string
+	input          DistillSubmission
+	initialAttempt int
+	startedAt      time.Time
+}
+
+func checkReplayedDistillRun(root, runID, idempotencyKey, intentDigest string) (*DistillRunResult, bool, error) {
 	for _, command := range []string{"distill_finalize", "distill_awaiting_decision"} {
 		lookup := mutation.WriteSet{Command: command, IdempotencyKey: idempotencyKey, RequestDigest: intentDigest}
 		if receipt, found, lookupErr := mutation.LookupOperation(root, lookup); lookupErr != nil {
-			return DistillRunResult{}, lookupErr
+			return nil, false, lookupErr
 		} else if found {
 			run, _, loadErr := readRun(root, runID)
 			if loadErr != nil {
-				return DistillRunResult{}, loadErr
+				return nil, false, loadErr
 			}
 			var pointer catalog.Pointer
 			if pointerBytes, readErr := os.ReadFile(filepath.Join(root, "runtime", "catalog", "current.json")); readErr == nil && json.Unmarshal(pointerBytes, &pointer) == nil && pointer.CatalogSnapshot == receipt.CatalogSnapshot {
 				receipt.Generation = pointer.Generation
 			}
-			return distillRunResult("Original distill submission result recovered idempotently.", run, receipt), nil
+			res := distillRunResult("Original distill submission result recovered idempotently.", run, receipt)
+			return &res, true, nil
 		}
 	}
-	run, runBytes, err := readRun(root, runID)
-	if err != nil {
-		return DistillRunResult{}, err
-	}
+	return nil, false, nil
+}
+
+func gateDistillRunState(run distillpkg.Run, input DistillSubmission) error {
 	if run.State != "in_progress" && run.State != "awaiting_decision" {
-		return DistillRunResult{}, fmt.Errorf("run in state %s cannot accept a submission", run.State)
+		return fmt.Errorf("run in state %s cannot accept a submission", run.State)
 	}
 	if run.State == "awaiting_decision" && strings.TrimSpace(input.Resolution) == "" {
-		return DistillRunResult{}, errors.New("correcting an awaiting-decision run requires an explicit resolution")
+		return errors.New("correcting an awaiting-decision run requires an explicit resolution")
 	}
-	telemetryEligible = true
-	defer func() {
-		if !telemetryEligible {
-			return
+	return nil
+}
+
+func (service DistillService) recordDistillSubmissionTelemetry(ctx context.Context, root string, ti distillTelemetryInput, artifactEvents []telemetry.Event, result DistillRunResult, resultErr error) {
+	persisted := result.Run
+	if resultErr != nil {
+		if loaded, _, loadErr := readRun(root, ti.runID); loadErr == nil {
+			persisted = loaded
 		}
-		persisted := result.Run
-		if resultErr != nil {
-			if loaded, _, loadErr := readRun(root, runID); loadErr == nil {
-				persisted = loaded
-			}
-		}
-		events := []telemetry.Event{curationTelemetryEvent(telemetry.EventDistillRunSubmitted, map[string]any{
-			"run_id": runID, "status": "submitted", "observation_count": len(input.Findings),
-			"coverage_gap_count": countCoverageGaps(input.Coverage), "resource_count": len(input.Coverage),
-			"retry_count": run.Attempt, "duration_ms": time.Since(startedAt).Milliseconds(),
-		})}
-		events = append(events, coverageGapTelemetry(input.Coverage, runID)...)
-		if resultErr != nil {
-			if persisted.State == "failed" {
-				events = append(events, curationTelemetryEvent(telemetry.EventDistillRunFailed, map[string]any{
-					"run_id": runID, "status": "failed", "cursor_advanced": false, "retry_count": persisted.Attempt,
-					"duration_ms": time.Since(startedAt).Milliseconds(), "error_code": "submission_failed",
-				}))
-			}
-		} else if result.Run.State == "finalized" {
-			events = append(events, artifactEvents...)
-			events = append(events, curationTelemetryEvent(telemetry.EventDistillRunFinalized, map[string]any{
-				"run_id": runID, "status": "finalized", "observation_count": len(result.Run.FindingIDs),
-				"coverage_gap_count": countCoverageGaps(input.Coverage), "resource_count": len(result.Run.ChangedResources),
-				"cursor_advanced": true, "auto_finalized": true, "retry_count": result.Run.Attempt,
-				"duration_ms": time.Since(startedAt).Milliseconds(),
+	}
+	events := []telemetry.Event{curationTelemetryEvent(telemetry.EventDistillRunSubmitted, map[string]any{
+		"run_id": ti.runID, "status": "submitted", "observation_count": len(ti.input.Findings),
+		"coverage_gap_count": countCoverageGaps(ti.input.Coverage), "resource_count": len(ti.input.Coverage),
+		"retry_count": ti.initialAttempt, "duration_ms": time.Since(ti.startedAt).Milliseconds(),
+	})}
+	events = append(events, coverageGapTelemetry(ti.input.Coverage, ti.runID)...)
+	if resultErr != nil {
+		if persisted.State == "failed" {
+			events = append(events, curationTelemetryEvent(telemetry.EventDistillRunFailed, map[string]any{
+				"run_id": ti.runID, "status": "failed", "cursor_advanced": false, "retry_count": persisted.Attempt,
+				"duration_ms": time.Since(ti.startedAt).Milliseconds(), "error_code": "submission_failed",
 			}))
 		}
-		recordCurationTelemetry(ctx, service.Telemetry, root, events...)
-	}()
-	pkg, err := distillpkg.LoadRevisionPackage(root, run.ID)
-	if err != nil || pkg.Digest != run.PackageDigest || !distillpkg.SameRevision(pkg.ToRevision, run.ToRevision) {
-		return service.failSubmission(ctx, root, run, runBytes, errors.New("immutable target revision package is unavailable or invalid"))
+	} else if result.Run.State == "finalized" {
+		events = append(events, artifactEvents...)
+		events = append(events, curationTelemetryEvent(telemetry.EventDistillRunFinalized, map[string]any{
+			"run_id": ti.runID, "status": "finalized", "observation_count": len(result.Run.FindingIDs),
+			"coverage_gap_count": countCoverageGaps(ti.input.Coverage), "resource_count": len(result.Run.ChangedResources),
+			"cursor_advanced": true, "auto_finalized": true, "retry_count": result.Run.Attempt,
+			"duration_ms": time.Since(ti.startedAt).Milliseconds(),
+		}))
 	}
-	if err := distillpkg.ValidateCoverage(run.ChangedResources, input.Coverage); err != nil {
-		return service.failSubmission(ctx, root, run, runBytes, err)
+	recordCurationTelemetry(ctx, service.Telemetry, root, events...)
+}
+
+func (service DistillService) handleDistillBlockingDecisions(ctx context.Context, sc *distillSubmissionContext) (*DistillRunResult, bool, error) {
+	if err := distillpkg.ValidateCoverage(sc.run.ChangedResources, sc.input.Coverage); err != nil {
+		_, failErr := service.failSubmission(ctx, sc.root, sc.run, sc.runBytes, err)
+		return nil, false, failErr
 	}
-	issues := append([]distillpkg.OutstandingIssue(nil), input.OutstandingDecisions...)
-	for _, coverage := range input.Coverage {
+	issues := append([]distillpkg.OutstandingIssue(nil), sc.input.OutstandingDecisions...)
+	for _, coverage := range sc.input.Coverage {
 		if coverage.Blocking {
 			issues = append(issues, distillpkg.OutstandingIssue{Kind: "coverage", Resource: coverage.Resource, Question: coverage.Reason})
 		}
 	}
 	for _, issue := range issues {
 		if issue.Kind != "ambiguity" && issue.Kind != "coverage" || strings.TrimSpace(issue.Question) == "" {
-			return service.failSubmission(ctx, root, run, runBytes, NewInvalidRequestError("only explicit blocking ambiguity or coverage decisions may pause a run", "Only submit outstanding decisions of kind ambiguity or coverage with a question."))
+			_, failErr := service.failSubmission(ctx, sc.root, sc.run, sc.runBytes, NewInvalidRequestError("only explicit blocking ambiguity or coverage decisions may pause a run", "Only submit outstanding decisions of kind ambiguity or coverage with a question."))
+			return nil, false, failErr
 		}
 	}
 	if len(issues) > 0 {
-		proposal, proposalErr := proposedArtifacts(run, intentInput)
+		proposal, proposalErr := proposedArtifacts(sc.run, sc.intentInput)
 		if proposalErr != nil {
-			return service.failSubmission(ctx, root, run, runBytes, proposalErr)
+			_, failErr := service.failSubmission(ctx, sc.root, sc.run, sc.runBytes, proposalErr)
+			return nil, false, failErr
 		}
-		run.State = "awaiting_decision"
-		run.Coverage = input.Coverage
-		run.OutstandingDecisions = issues
-		run.ProposedArtifacts = &proposal
-		distillpkg.SortRunCollections(&run)
-		return service.writeRunWithIntent(ctx, root, run, runBytes, "distill_awaiting_decision", idempotencyKey, intentDigest, "Distill run is awaiting a blocking ambiguity or coverage decision; its cursor was not advanced.")
+		sc.run.State = "awaiting_decision"
+		sc.run.Coverage = sc.input.Coverage
+		sc.run.OutstandingDecisions = issues
+		sc.run.ProposedArtifacts = &proposal
+		distillpkg.SortRunCollections(&sc.run)
+		res, writeErr := service.writeRunWithIntent(ctx, sc.root, sc.run, sc.runBytes, "distill_awaiting_decision", sc.idempotencyKey, sc.intentDigest, "Distill run is awaiting a blocking ambiguity or coverage decision; its cursor was not advanced.")
+		if writeErr != nil {
+			return nil, false, writeErr
+		}
+		return &res, true, nil
 	}
-	observations, existingObservationBytes, err := readObservations(root)
+	return nil, false, nil
+}
+
+func (service DistillService) validateAndBuildObservations(ctx context.Context, sc *distillSubmissionContext) (distillObservationsResult, error) {
+	observations, existingObservationBytes, err := readObservations(sc.root)
 	if err != nil {
-		return DistillRunResult{}, err
+		return distillObservationsResult{}, err
 	}
 	observationByID := map[string]distillpkg.Observation{}
 	for _, item := range observations {
 		observationByID[item.ID] = item
 	}
 	newObservations := map[string]distillpkg.Observation{}
-	for _, submitted := range input.Findings {
-		observation := distillpkg.Observation{SchemaVersion: 1, ID: distillpkg.ObservationID(run.SourceID, submitted.StableKey), SourceID: run.SourceID, RunID: run.ID, StableKey: submitted.StableKey, Status: submitted.Status, FirstSeen: distillpkg.IdentityOf(run.ToRevision), LastSeen: distillpkg.IdentityOf(run.ToRevision), What: submitted.What, Vocabulary: uniqueStrings(submitted.Vocabulary), Evidence: submitted.Evidence, SupersedesIDs: uniqueStrings(submitted.SupersedesIDs), SupersededByID: submitted.SupersededByID}
+	for _, submitted := range sc.input.Findings {
+		observation := distillpkg.Observation{SchemaVersion: 1, ID: distillpkg.ObservationID(sc.run.SourceID, submitted.StableKey), SourceID: sc.run.SourceID, RunID: sc.run.ID, StableKey: submitted.StableKey, Status: submitted.Status, FirstSeen: distillpkg.IdentityOf(sc.run.ToRevision), LastSeen: distillpkg.IdentityOf(sc.run.ToRevision), What: submitted.What, Vocabulary: uniqueStrings(submitted.Vocabulary), Evidence: submitted.Evidence, SupersedesIDs: uniqueStrings(submitted.SupersedesIDs), SupersededByID: submitted.SupersededByID}
 		if previous, ok := observationByID[observation.ID]; ok {
-			if previous.SourceID != run.SourceID || previous.StableKey != observation.StableKey {
-				return service.failSubmission(ctx, root, run, runBytes, errors.New("observation identity cannot be reused for another concept"))
+			if previous.SourceID != sc.run.SourceID || previous.StableKey != observation.StableKey {
+				_, failErr := service.failSubmission(ctx, sc.root, sc.run, sc.runBytes, errors.New("observation identity cannot be reused for another concept"))
+				return distillObservationsResult{}, failErr
 			}
 			observation.FirstSeen = previous.FirstSeen
 			observation.Evidence = mergeEvidence(previous.Evidence, submitted.Evidence)
 		}
 		if err := distillpkg.ValidateObservation(observation); err != nil {
-			return service.failSubmission(ctx, root, run, runBytes, err)
+			_, failErr := service.failSubmission(ctx, sc.root, sc.run, sc.runBytes, err)
+			return distillObservationsResult{}, failErr
 		}
-		if err := validateEvidence(root, pkg, run, submitted.Status, submitted.Evidence); err != nil {
-			return service.failSubmission(ctx, root, run, runBytes, err)
+		if err := validateEvidence(sc.root, sc.pkg, sc.run, submitted.Status, submitted.Evidence); err != nil {
+			_, failErr := service.failSubmission(ctx, sc.root, sc.run, sc.runBytes, err)
+			return distillObservationsResult{}, failErr
 		}
 		if _, duplicate := newObservations[observation.ID]; duplicate {
-			return service.failSubmission(ctx, root, run, runBytes, NewInvalidRequestError("duplicate submitted observation", "Submit each finding stable key once."))
+			_, failErr := service.failSubmission(ctx, sc.root, sc.run, sc.runBytes, NewInvalidRequestError("duplicate submitted observation", "Submit each finding stable key once."))
+			return distillObservationsResult{}, failErr
 		}
 		newObservations[observation.ID] = observation
 	}
-	// Every active observation touching a modified resource must be explicitly
-	// retained/superseded/removed. If omitted, conservatively tombstone it and
-	// append removal evidence instead of discarding its evidence history.
+
 	changed := map[string]string{}
-	for _, item := range run.ChangedResources {
+	for _, item := range sc.run.ChangedResources {
 		changed[item.Path] = item.Status
 	}
 	for _, previous := range observations {
-		if previous.SourceID != run.SourceID || previous.Status != "active" {
+		if previous.SourceID != sc.run.SourceID || previous.Status != "active" {
 			continue
 		}
 		if _, supplied := newObservations[previous.ID]; supplied {
@@ -530,12 +636,12 @@ func (service DistillService) SubmitDistillRun(ctx context.Context, path, runID 
 			if status == "deleted" {
 				side = "from"
 			}
-			for _, packaged := range pkg.Resources {
+			for _, packaged := range sc.pkg.Resources {
 				if packaged.Side == side && packaged.Path == priorEvidence.Path {
 					previous.Status = "removed"
-					previous.RunID = run.ID
-					previous.LastSeen = distillpkg.IdentityOf(run.ToRevision)
-					removal := distillpkg.Evidence{Revision: packaged.Revision, RunID: run.ID, PackageDigest: pkg.Digest, Path: priorEvidence.Path, Locator: priorEvidence.Path, Digest: packaged.Digest}
+					previous.RunID = sc.run.ID
+					previous.LastSeen = distillpkg.IdentityOf(sc.run.ToRevision)
+					removal := distillpkg.Evidence{Revision: packaged.Revision, RunID: sc.run.ID, PackageDigest: sc.pkg.Digest, Path: priorEvidence.Path, Locator: priorEvidence.Path, Digest: packaged.Digest}
 					previous.Evidence = mergeEvidence(previous.Evidence, []distillpkg.Evidence{removal})
 					newObservations[previous.ID] = previous
 					break
@@ -555,41 +661,56 @@ func (service DistillService) SubmitDistillRun(ctx context.Context, path, runID 
 		for _, prior := range item.SupersedesIDs {
 			previous, ok := allObservations[prior]
 			if !ok {
-				return service.failSubmission(ctx, root, run, runBytes, fmt.Errorf("superseded observation %s does not exist", prior))
+				_, failErr := service.failSubmission(ctx, sc.root, sc.run, sc.runBytes, fmt.Errorf("superseded observation %s does not exist", prior))
+				return distillObservationsResult{}, failErr
 			}
 			if prior == item.ID {
-				return service.failSubmission(ctx, root, run, runBytes, errors.New("observation cannot supersede itself"))
+				_, failErr := service.failSubmission(ctx, sc.root, sc.run, sc.runBytes, errors.New("observation cannot supersede itself"))
+				return distillObservationsResult{}, failErr
 			}
 			previous.Status = "superseded"
 			previous.SupersededByID = item.ID
-			previous.RunID = run.ID
-			previous.LastSeen = distillpkg.IdentityOf(run.ToRevision)
+			previous.RunID = sc.run.ID
+			previous.LastSeen = distillpkg.IdentityOf(sc.run.ToRevision)
 			newObservations[prior] = previous
 			allObservations[prior] = previous
 		}
 	}
-	comparisons, comparisonBytes, err := readComparisons(root)
+	return distillObservationsResult{
+		existingBytes: existingObservationBytes,
+		existingByID:  observationByID,
+		newByItem:     newObservations,
+		all:           allObservations,
+	}, nil
+}
+
+func (service DistillService) validateAndBuildComparisons(ctx context.Context, sc *distillSubmissionContext, allObservations map[string]distillpkg.Observation) (distillComparisonsResult, error) {
+	comparisons, comparisonBytes, err := readComparisons(sc.root)
 	if err != nil {
-		return DistillRunResult{}, err
+		return distillComparisonsResult{}, err
 	}
 	comparisonByID := map[string]distillpkg.Comparison{}
 	for _, item := range comparisons {
 		comparisonByID[item.ID] = item
 	}
 	newComparisons := map[string]distillpkg.Comparison{}
-	for _, submitted := range input.Comparisons {
+	for _, submitted := range sc.input.Comparisons {
 		if len(uniqueStrings(submitted.ObservationIDs)) != len(submitted.ObservationIDs) {
-			return service.failSubmission(ctx, root, run, runBytes, errors.New("comparison observation identities must not contain duplicates"))
+			_, failErr := service.failSubmission(ctx, sc.root, sc.run, sc.runBytes, errors.New("comparison observation identities must not contain duplicates"))
+			return distillComparisonsResult{}, failErr
 		}
-		comparison := distillpkg.Comparison{SchemaVersion: 1, ID: submitted.ID, RunID: run.ID, Subject: submitted.Subject, ObservationIDs: append([]string(nil), submitted.ObservationIDs...), Verdict: submitted.Verdict, Tradeoffs: submitted.Tradeoffs, BasedOn: submitted.BasedOn}
+		comparison := distillpkg.Comparison{SchemaVersion: 1, ID: submitted.ID, RunID: sc.run.ID, Subject: submitted.Subject, ObservationIDs: append([]string(nil), submitted.ObservationIDs...), Verdict: submitted.Verdict, Tradeoffs: submitted.Tradeoffs, BasedOn: submitted.BasedOn}
 		if previous, exists := comparisonByID[comparison.ID]; exists && previous.Subject != comparison.Subject {
-			return service.failSubmission(ctx, root, run, runBytes, errors.New("comparison stable identity cannot be reused for another subject"))
+			_, failErr := service.failSubmission(ctx, sc.root, sc.run, sc.runBytes, errors.New("comparison stable identity cannot be reused for another subject"))
+			return distillComparisonsResult{}, failErr
 		}
 		if _, duplicate := newComparisons[comparison.ID]; duplicate {
-			return service.failSubmission(ctx, root, run, runBytes, NewInvalidRequestError("duplicate comparison stable identity", "Submit each comparison once."))
+			_, failErr := service.failSubmission(ctx, sc.root, sc.run, sc.runBytes, NewInvalidRequestError("duplicate comparison stable identity", "Submit each comparison once."))
+			return distillComparisonsResult{}, failErr
 		}
 		if err := validateComparison(comparison, allObservations); err != nil {
-			return service.failSubmission(ctx, root, run, runBytes, err)
+			_, failErr := service.failSubmission(ctx, sc.root, sc.run, sc.runBytes, err)
+			return distillComparisonsResult{}, failErr
 		}
 		newComparisons[comparison.ID] = comparison
 	}
@@ -606,7 +727,7 @@ func (service DistillService) SubmitDistillRun(ctx context.Context, path, runID 
 		}
 		if stale != previous.Stale {
 			previous.Stale = stale
-			previous.RunID = run.ID
+			previous.RunID = sc.run.ID
 			newComparisons[previous.ID] = previous
 		}
 	}
@@ -617,9 +738,17 @@ func (service DistillService) SubmitDistillRun(ctx context.Context, path, runID 
 	for id, item := range newComparisons {
 		allComparisons[id] = item
 	}
-	existingInsights, existingInsightBytes, err := readInsightsWithBytes(root)
+	return distillComparisonsResult{
+		existingBytes: comparisonBytes,
+		newByItem:     newComparisons,
+		all:           allComparisons,
+	}, nil
+}
+
+func (service DistillService) validateAndBuildInsights(ctx context.Context, sc *distillSubmissionContext, allObservations map[string]distillpkg.Observation, allComparisons map[string]distillpkg.Comparison) (distillInsightsResult, error) {
+	existingInsights, existingInsightBytes, err := readInsightsWithBytes(sc.root)
 	if err != nil {
-		return DistillRunResult{}, err
+		return distillInsightsResult{}, err
 	}
 	existingInsightByID := make(map[string]distillpkg.Insight, len(existingInsights))
 	for _, existing := range existingInsights {
@@ -641,17 +770,18 @@ func (service DistillService) SubmitDistillRun(ctx context.Context, path, runID 
 		}
 		if !activeSupport || !validComparisons {
 			existing.Status = "withdrawn"
-			existing.RunID = run.ID
+			existing.RunID = sc.run.ID
 			newInsights[existing.ID] = existing
 		}
 	}
-	for _, submitted := range input.Insights {
-		insight := distillpkg.Insight{SchemaVersion: 1, ID: distillpkg.InsightID(submitted.SkillID, submitted.StableKey), RunID: run.ID, StableKey: submitted.StableKey, SkillID: submitted.SkillID, Status: "pending", Recommendation: submitted.Recommendation, ObservationIDs: uniqueStrings(submitted.ObservationIDs), ComparisonIDs: uniqueStrings(submitted.ComparisonIDs), Category: submitted.Category, Priority: submitted.Priority, Rationale: submitted.Rationale}
+	for _, submitted := range sc.input.Insights {
+		insight := distillpkg.Insight{SchemaVersion: 1, ID: distillpkg.InsightID(submitted.SkillID, submitted.StableKey), RunID: sc.run.ID, StableKey: submitted.StableKey, SkillID: submitted.SkillID, Status: "pending", Recommendation: submitted.Recommendation, ObservationIDs: uniqueStrings(submitted.ObservationIDs), ComparisonIDs: uniqueStrings(submitted.ComparisonIDs), Category: submitted.Category, Priority: submitted.Priority, Rationale: submitted.Rationale}
 		activeSupport := false
 		for _, id := range insight.ObservationIDs {
 			observation, ok := allObservations[id]
 			if !ok {
-				return service.failSubmission(ctx, root, run, runBytes, fmt.Errorf("insight observation %s does not exist", id))
+				_, failErr := service.failSubmission(ctx, sc.root, sc.run, sc.runBytes, fmt.Errorf("insight observation %s does not exist", id))
+				return distillInsightsResult{}, failErr
 			}
 			if observation.Status == "active" {
 				activeSupport = true
@@ -660,23 +790,25 @@ func (service DistillService) SubmitDistillRun(ctx context.Context, path, runID 
 		for _, id := range insight.ComparisonIDs {
 			comparison, ok := allComparisons[id]
 			if !ok {
-				return service.failSubmission(ctx, root, run, runBytes, fmt.Errorf("insight comparison %s does not exist", id))
+				_, failErr := service.failSubmission(ctx, sc.root, sc.run, sc.runBytes, fmt.Errorf("insight comparison %s does not exist", id))
+				return distillInsightsResult{}, failErr
 			}
 			if comparison.Stale {
-				return service.failSubmission(ctx, root, run, runBytes, fmt.Errorf("insight comparison %s is stale", id))
+				_, failErr := service.failSubmission(ctx, sc.root, sc.run, sc.runBytes, fmt.Errorf("insight comparison %s is stale", id))
+				return distillInsightsResult{}, failErr
 			}
 		}
 		if !activeSupport {
-			return service.failSubmission(ctx, root, run, runBytes, errors.New("insight requires at least one active observation and cannot rely solely on removed or superseded knowledge"))
+			_, failErr := service.failSubmission(ctx, sc.root, sc.run, sc.runBytes, errors.New("insight requires at least one active observation and cannot rely solely on removed or superseded knowledge"))
+			return distillInsightsResult{}, failErr
 		}
 		insight.EvidenceDigest = distillpkg.InsightEvidenceDigest(insight.ObservationIDs, insight.ComparisonIDs, allObservations, allComparisons)
 		if previous, exists := existingInsightByID[insight.ID]; exists {
 			if previous.SkillID != insight.SkillID || previous.StableKey != insight.StableKey {
-				return service.failSubmission(ctx, root, run, runBytes, errors.New("insight stable identity cannot be reused"))
+				_, failErr := service.failSubmission(ctx, sc.root, sc.run, sc.runBytes, errors.New("insight stable identity cannot be reused"))
+				return distillInsightsResult{}, failErr
 			}
 			if previous.Status == "rejected" {
-				// A distiller may refresh materially changed evidence, but it cannot
-				// reverse the explicit rejection. Reopen is a separate decision.
 				if previous.RejectedEvidenceDigest == insight.EvidenceDigest {
 					continue
 				}
@@ -692,83 +824,94 @@ func (service DistillService) SubmitDistillRun(ctx context.Context, path, runID 
 			}
 		}
 		if err := distillpkg.ValidateInsight(insight); err != nil {
-			return service.failSubmission(ctx, root, run, runBytes, err)
+			_, failErr := service.failSubmission(ctx, sc.root, sc.run, sc.runBytes, err)
+			return distillInsightsResult{}, failErr
 		}
 		if _, duplicate := newInsights[insight.ID]; duplicate {
-			return service.failSubmission(ctx, root, run, runBytes, NewInvalidRequestError("duplicate insight stable identity", "Submit each insight stable key once."))
+			_, failErr := service.failSubmission(ctx, sc.root, sc.run, sc.runBytes, NewInvalidRequestError("duplicate insight stable identity", "Submit each insight stable key once."))
+			return distillInsightsResult{}, failErr
 		}
 		newInsights[insight.ID] = insight
 	}
-	_, records, err := readSourceRecords(root)
+	return distillInsightsResult{
+		existingBytes: existingInsightBytes,
+		newByItem:     newInsights,
+	}, nil
+}
+
+func (service DistillService) finalizeDistillRun(ctx context.Context, sc *distillSubmissionContext, obs distillObservationsResult, cmps distillComparisonsResult, ins distillInsightsResult) (DistillRunResult, []telemetry.Event, error) {
+	_, records, err := readSourceRecords(sc.root)
 	if err != nil {
-		return DistillRunResult{}, err
+		return DistillRunResult{}, nil, err
 	}
 	var record sourcepkg.Record
 	found := false
 	for _, item := range records {
-		if item.ID == run.SourceID {
+		if item.ID == sc.run.SourceID {
 			record = item
 			found = true
 			break
 		}
 	}
-	if !found || record.CurrentRevision == nil || !distillpkg.SameRevision(*record.CurrentRevision, run.ToRevision) {
-		return service.failSubmission(ctx, root, run, runBytes, errors.New("source current revision no longer matches the pinned target"))
+	if !found || record.CurrentRevision == nil || !distillpkg.SameRevision(*record.CurrentRevision, sc.run.ToRevision) {
+		_, failErr := service.failSubmission(ctx, sc.root, sc.run, sc.runBytes, errors.New("source current revision no longer matches the pinned target"))
+		return DistillRunResult{}, nil, failErr
 	}
-	recordBytes, err := readWorkspaceFile(root, "sources/catalog/"+record.ID+".yaml")
+	recordBytes, err := readWorkspaceFile(sc.root, "sources/catalog/"+record.ID+".yaml")
 	if err != nil {
-		return DistillRunResult{}, err
+		return DistillRunResult{}, nil, err
 	}
-	record.DistilledRevision = &run.ToRevision
+	record.DistilledRevision = &sc.run.ToRevision
 	record.Status = "watching"
 	recordAfter, _ := sourcepkg.MarshalCanonical(record)
-	run.State = "finalized"
-	run.FinalizedAt = service.Clock.Now().UTC().Format(time.RFC3339Nano)
-	run.Coverage = input.Coverage
-	run.OutstandingDecisions = nil
-	run.ProposedArtifacts = nil
-	changes := []mutation.Change{{Path: runPath(run.SourceID, run.ID), BeforeDigest: sourcepkg.Digest(runBytes)}, {Path: "sources/catalog/" + record.ID + ".yaml", BeforeDigest: sourcepkg.Digest(recordBytes), Contents: recordAfter}}
-	for id, item := range newObservations {
+	sc.run.State = "finalized"
+	sc.run.FinalizedAt = service.Clock.Now().UTC().Format(time.RFC3339Nano)
+	sc.run.Coverage = sc.input.Coverage
+	sc.run.OutstandingDecisions = nil
+	sc.run.ProposedArtifacts = nil
+	changes := []mutation.Change{{Path: runPath(sc.run.SourceID, sc.run.ID), BeforeDigest: sourcepkg.Digest(sc.runBytes)}, {Path: "sources/catalog/" + record.ID + ".yaml", BeforeDigest: sourcepkg.Digest(recordBytes), Contents: recordAfter}}
+	for id, item := range obs.newByItem {
 		data, _ := distillpkg.Marshal(item)
 		change := mutation.Change{Path: observationPath(item.SourceID, id), Contents: data}
-		if before, ok := existingObservationBytes[id]; ok {
+		if before, ok := obs.existingBytes[id]; ok {
 			change.BeforeDigest = sourcepkg.Digest(before)
 		}
 		changes = append(changes, change)
-		run.FindingIDs = append(run.FindingIDs, id)
+		sc.run.FindingIDs = append(sc.run.FindingIDs, id)
 	}
-	for id, item := range newComparisons {
+	for id, item := range cmps.newByItem {
 		data, _ := distillpkg.Marshal(item)
 		change := mutation.Change{Path: comparisonPath(id), Contents: data}
-		if before, ok := comparisonBytes[id]; ok {
+		if before, ok := cmps.existingBytes[id]; ok {
 			change.BeforeDigest = sourcepkg.Digest(before)
 		}
 		changes = append(changes, change)
-		run.ComparisonIDs = append(run.ComparisonIDs, id)
+		sc.run.ComparisonIDs = append(sc.run.ComparisonIDs, id)
 	}
-	for id, item := range newInsights {
+	for id, item := range ins.newByItem {
 		data, _ := distillpkg.Marshal(item)
 		change := mutation.Change{Path: insightPath(item.SkillID, id), Contents: data}
-		if before, ok := existingInsightBytes[id]; ok {
+		if before, ok := ins.existingBytes[id]; ok {
 			change.BeforeDigest = sourcepkg.Digest(before)
 		}
 		changes = append(changes, change)
-		run.InsightIDs = append(run.InsightIDs, id)
+		sc.run.InsightIDs = append(sc.run.InsightIDs, id)
 	}
-	artifactEvents = distillArtifactTelemetry(run.ID, input, observationByID, newObservations, newComparisons, newInsights)
-	distillpkg.SortRunCollections(&run)
-	runAfter, _ := distillpkg.Marshal(run)
+	artifactEvents := distillArtifactTelemetry(sc.run.ID, sc.input, obs.existingByID, obs.newByItem, cmps.newByItem, ins.newByItem)
+	distillpkg.SortRunCollections(&sc.run)
+	runAfter, _ := distillpkg.Marshal(sc.run)
 	changes[0].Contents = runAfter
-	set := mutation.WriteSet{Command: "distill_finalize", IdempotencyKey: idempotencyKey, RequestDigest: intentDigest, Changes: changes}
-	planned, err := mutation.PlanMutation(root, set)
+	set := mutation.WriteSet{Command: "distill_finalize", IdempotencyKey: sc.idempotencyKey, RequestDigest: sc.intentDigest, Changes: changes}
+	planned, err := mutation.PlanMutation(sc.root, set)
 	if err != nil {
-		return service.failSubmission(ctx, root, run, runBytes, err)
+		_, failErr := service.failSubmission(ctx, sc.root, sc.run, sc.runBytes, err)
+		return DistillRunResult{}, nil, failErr
 	}
-	receipt, err := confirmAndPublishWithOptions(ctx, root, planned, service.MutationOptions)
+	receipt, err := confirmAndPublishWithOptions(ctx, sc.root, planned, service.MutationOptions)
 	if err != nil {
-		return DistillRunResult{}, err
+		return DistillRunResult{}, nil, err
 	}
-	return distillRunResult("Distill run finalized atomically; findings and insight proposals were recorded and the source cursor advanced. Active skills are unchanged.", run, receipt), nil
+	return distillRunResult("Distill run finalized atomically; findings and insight proposals were recorded and the source cursor advanced. Active skills are unchanged.", sc.run, receipt), artifactEvents, nil
 }
 
 func failureText(cause error) string {
