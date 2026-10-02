@@ -1,0 +1,13 @@
+exit=0
+--- stdout ---
+Workspace:  <TMP>/workspace
+Status:     Git has uncommitted canonical changes.
+
+Health:     Workspace valid; search index current; Git has uncommitted changes.
+Inventory:  No skills yet.
+            Next: ask your agent 'create a skill for ...' or run:
+              skillhub skill create my-skill --collection core --name "My Skill" --description "Skill description"
+
+Recommended next: Review uncommitted changes: git -C <TMP>/workspace add -A && git -C <TMP>/workspace commit -m "Update skills".
+--- stderr ---
+

@@ -1,0 +1,5 @@
+exit=2
+--- stdout ---
+{"schema_version":"1","status":"error","summary":"The request cannot be accepted.","items":[],"suggested_actions":[],"warnings":[],"error":{"code":"invalid_request","render":{"ERROR":"The request cannot be accepted.","WHY":"skill long-review requires: trigger, not_for or rationale (quality.routing_review_rationale), min_scope","FIX":"Run `skillhub skill edit long-review --trigger \"<when to use>\" --not-for \"<when not to use>\" --min-scope single_step --yes`, then retry `skillhub skill activate long-review --yes`."}}}
+--- stderr ---
+

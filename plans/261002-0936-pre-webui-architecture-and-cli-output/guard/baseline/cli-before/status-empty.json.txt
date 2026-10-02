@@ -1,0 +1,5 @@
+exit=0
+--- stdout ---
+{"schema_version":"1","status":"ok","summary":"Skill Hub is up to date.","items":[],"suggested_actions":[{"label":"Continue normal work","command":""}],"warnings":[],"error":null,"workspace":{"health":"valid","index":"current","git_dirty":false,"git_configured":true,"recovery_pending":false},"actions":[],"categories":[{"kind":"interrupted_runs","count":0,"availability":"available"},{"kind":"changed_sources","count":0,"availability":"available"},{"kind":"pending_insights","count":0,"availability":"available"},{"kind":"source_unavailable","count":0,"availability":"available"},{"kind":"sources_due","count":0,"availability":"available"},{"kind":"blocking_decisions","count":0,"availability":"not_configured"},{"kind":"routing_evaluations","count":0,"availability":"not_configured"}],"home_summary":{"active_skills":0,"watching_sources":0,"failed_or_interrupted_runs":0,"pending_insights":0,"pending_high_value_insights":0,"attention_items":0,"invalid_workspaces":0,"recovery_items":0,"optional_items":0,"sources_due":0,"unavailable_sources":0}}
+--- stderr ---
+

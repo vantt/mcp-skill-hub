@@ -1,0 +1,3 @@
+ctx context.Context, root string, run distillpkg.Run, original []byte, command, idempotencyKey, requestDigest, summary string
+id, relDir, status string, valid bool, canonicalIssues []string, readiness ActivationReadiness, isScaffold bool, missingFields []string, diverged bool, changed, missing []string, served catalog.ServedSkillFacts, git SkillGitSummary
+kind, folderDigest, contentDigest, targetID, selection, collection string, transformations []string

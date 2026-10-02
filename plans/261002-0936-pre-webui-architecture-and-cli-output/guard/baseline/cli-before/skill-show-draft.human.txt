@@ -1,0 +1,24 @@
+exit=0
+--- stdout ---
+Skill: Long Review (long-review)
+State: draft
+File: skills/core/long-review/SKILL.md
+Triggers: (none)
+Not for: (none)
+Min scope: (none)
+
+---
+name: long-review
+description: Review a multi-module change for correctness, regressions, security posture, documentation impact and rollout risk, recording evidence for every finding before recommending a fix, and never approving a change whose cross-module contracts were not traced to their callers.
+---
+
+# Long skill
+
+Use this skill when a change needs a careful, multi-step review that covers correctness, regressions, security posture, documentation impact, and rollout risk across several modules, because a single pass routinely misses cross-module contracts and the reviewer must record evidence for each finding before recommending a fix.
+
+## Steps
+
+1. Read the diff.
+2. Trace each changed contract to its callers.
+--- stderr ---
+

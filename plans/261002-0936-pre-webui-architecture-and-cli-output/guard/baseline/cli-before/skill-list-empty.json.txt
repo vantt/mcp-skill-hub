@@ -1,0 +1,5 @@
+exit=0
+--- stdout ---
+{"schema_version":"1","status":"ok","summary":"0 skill(s).","items":[],"suggested_actions":[],"warnings":[],"error":null,"skills":[]}
+--- stderr ---
+

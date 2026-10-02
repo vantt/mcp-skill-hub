@@ -1,0 +1,7 @@
+exit=2
+--- stdout ---
+
+--- stderr ---
+ERROR: The request cannot be accepted.
+WHY: skill not found: does-not-exist
+FIX: Run `skillhub skill list` to inspect available skills.
