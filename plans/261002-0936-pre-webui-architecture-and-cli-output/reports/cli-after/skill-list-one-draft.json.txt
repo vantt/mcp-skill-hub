@@ -1,0 +1,5 @@
+exit=0
+--- stdout ---
+{"schema_version":"1","status":"ok","summary":"1 skill(s).","items":[{"id":"long-review","summary":"Long Review","impact":"State: draft; collection: core."}],"suggested_actions":[],"warnings":[],"error":null,"skills":[{"id":"long-review","state":"draft","lifecycle_state":"draft","active_locally":false,"routing_eligible":false,"collection":"core","name":"Long Review"}]}
+--- stderr ---
+

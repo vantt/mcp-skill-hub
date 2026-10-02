@@ -1,0 +1,5 @@
+exit=0
+--- stdout ---
+{"schema_version":"1","status":"action_required","summary":"Draft skill creation is ready for review.","items":[{"id":"PROP-<ID>","summary":"2 added, 0 modified, 0 deleted canonical file(s).","impact":"No canonical files changed during preview."}],"suggested_actions":[{"label":"Confirm the reviewed proposal","command":"skill_create","requires_confirmation":true}],"warnings":[],"error":null,"skill_id":"long-review","command":"skill_create","diff":{"added":["skills/core/long-review/SKILL.md","skills/core/long-review/skill.meta.yaml"],"modified":null,"deleted":null},"confirmation":{"policy_revision":"policy_v1","action_class":"semantic","application_command":"skill_create","confirmation":{"required":true,"mode":"preview-and-approval","pins":{"proposal_id":"PROP-<ID>","proposal_digest":"<DIGEST>","base_version":"<DIGEST>"}}},"routing_impact":{"summary":"Direct routing fields for long-review were evaluated against <DIGEST>.","warnings":null}}
+--- stderr ---
+

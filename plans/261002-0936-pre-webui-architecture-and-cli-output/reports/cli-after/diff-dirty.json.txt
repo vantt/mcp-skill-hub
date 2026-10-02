@@ -1,0 +1,5 @@
+exit=0
+--- stdout ---
+{"schema_version":"1","status":"action_required","summary":"Git has 3 uncommitted file(s).","items":[{"id":"draft_skills","summary":"draft_skills: 2 file(s)","impact":"Review before committing or restoring these changes."},{"id":"operation_history","summary":"operation_history: 1 file(s)","impact":"Review before committing or restoring these changes."}],"suggested_actions":[{"label":"Review the grouped changes","command":"GetCurationDiff"}],"warnings":[],"error":null,"git_configured":true,"dirty":true,"groups":[{"kind":"draft_skills","count":2,"files":[{"path":"skills/core/long-review/SKILL.md","status":"??"},{"path":"skills/core/long-review/skill.meta.yaml","status":"??"}]},{"kind":"operation_history","count":1,"files":[{"path":"history/operations/<YYYY>/<MM>/OP-<ID>.yaml","status":"??"}]}]}
+--- stderr ---
+

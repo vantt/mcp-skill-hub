@@ -1,0 +1,6 @@
+exit=0
+--- stdout ---
+ID           STATE  COLLECTION  NAME
+long-review  draft  core        Long Review
+--- stderr ---
+

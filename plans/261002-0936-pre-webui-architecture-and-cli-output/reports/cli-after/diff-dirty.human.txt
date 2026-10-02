@@ -1,0 +1,13 @@
+exit=0
+--- stdout ---
+Git has 3 uncommitted file(s).
+draft skills (2):
+untracked skills/core/long-review/SKILL.md
+untracked skills/core/long-review/skill.meta.yaml
+operation history (1):
+untracked history/operations/<YYYY>/<MM>/OP-<ID>.yaml
+
+To commit these changes, run:
+  $ git -C <TMP>/workspace add -A && git -C <TMP>/workspace commit -m "..."
+--- stderr ---
+

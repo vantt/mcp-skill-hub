@@ -1,0 +1,5 @@
+exit=2
+--- stdout ---
+{"schema_version":"1","status":"error","summary":"The request cannot be accepted.","items":[],"suggested_actions":[],"warnings":[],"error":{"code":"invalid_request","render":{"ERROR":"The request cannot be accepted.","WHY":"skill not found: does-not-exist","FIX":"Run `skillhub skill list` to inspect available skills."}}}
+--- stderr ---
+
