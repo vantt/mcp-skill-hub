@@ -39,15 +39,32 @@ func runStatus(ctx context.Context, args []string, stdout, stderr io.Writer) int
 }
 
 func renderCurationHome(writer io.Writer, home app.CurationHome, workspacePath string) {
-	fmt.Fprintln(writer, home.Summary)
+	if workspacePath != "" {
+		fmt.Fprintf(writer, "Workspace:  %s\n", workspacePath)
+	}
+	fmt.Fprintf(writer, "Status:     %s\n\n", home.Summary)
+
+	gitState := "clean"
+	if !home.Workspace.GitConfigured {
+		gitState = "not configured"
+	} else if home.Workspace.GitDirty {
+		gitState = "has uncommitted changes"
+	}
+	fmt.Fprintf(writer, "Health:     Workspace %s; search index %s; Git %s.\n", home.Workspace.Health, home.Workspace.Index, gitState)
+
 	if home.Workspace.Health != "valid" {
-		for _, item := range home.Items {
-			fmt.Fprintf(writer, "- %s\n", item.Summary)
+		if len(home.Items) > 0 {
+			fmt.Fprintln(writer, "\nIssues:")
+			for _, item := range home.Items {
+				fmt.Fprintf(writer, "  - %s\n", item.Summary)
+			}
 		}
 	} else if home.Workspace.Index != "current" {
-		fmt.Fprintln(writer, "Skill and source counts are unavailable until the search index is rebuilt.")
+		fmt.Fprintln(writer, "Inventory:  Skill and source counts are unavailable until the search index is rebuilt.")
 	} else if home.CountsKnown && home.HomeSummary.ActiveSkills == 0 && home.HomeSummary.WatchingSources == 0 {
-		fmt.Fprintln(writer, "No skills yet. Next: ask your agent 'create a skill for ...' or run `skillhub skill create my-skill --collection core --name \"My Skill\" --description \"Skill description\"`")
+		fmt.Fprintln(writer, "Inventory:  No skills yet.")
+		fmt.Fprintln(writer, "            Next: ask your agent 'create a skill for ...' or run:")
+		fmt.Fprintln(writer, "              skillhub skill create my-skill --collection core --name \"My Skill\" --description \"Skill description\"")
 	} else if home.CountsKnown {
 		skillWord := "skills"
 		if home.HomeSummary.ActiveSkills == 1 {
@@ -57,24 +74,18 @@ func renderCurationHome(writer io.Writer, home app.CurationHome, workspacePath s
 		if home.HomeSummary.WatchingSources == 1 {
 			sourceWord = "source"
 		}
-		fmt.Fprintf(writer, "%d active %s; %d watched %s.\n", home.HomeSummary.ActiveSkills, skillWord, home.HomeSummary.WatchingSources, sourceWord)
+		fmt.Fprintf(writer, "Inventory:  %d active %s; %d watched %s.\n", home.HomeSummary.ActiveSkills, skillWord, home.HomeSummary.WatchingSources, sourceWord)
 	}
-	gitState := "clean"
-	if !home.Workspace.GitConfigured {
-		gitState = "not configured"
-	} else if home.Workspace.GitDirty {
-		gitState = "has uncommitted changes"
-	}
-	fmt.Fprintf(writer, "Workspace %s; search index %s; Git %s.\n", home.Workspace.Health, home.Workspace.Index, gitState)
+
 	if home.Error != nil {
-		fmt.Fprintf(writer, "ERROR: %s\nWHY: %s\nFIX: %s\n", home.Error.Render.Error, home.Error.Render.Why, home.Error.Render.Fix)
+		fmt.Fprintf(writer, "\nERROR: %s\nWHY: %s\nFIX: %s\n", home.Error.Render.Error, home.Error.Render.Why, home.Error.Render.Fix)
 	}
 	if len(home.SuggestedActions) > 0 && home.SuggestedActions[0].Label != "" {
 		label := home.SuggestedActions[0].Label
 		if label == "Review uncommitted changes" {
 			label = fmt.Sprintf("Review uncommitted changes: git -C %s add -A && git -C %s commit -m \"Update skills\"", workspacePath, workspacePath)
 		}
-		fmt.Fprintf(writer, "Recommended next: %s.\n", label)
+		fmt.Fprintf(writer, "\nRecommended next: %s.\n", label)
 	}
 }
 
