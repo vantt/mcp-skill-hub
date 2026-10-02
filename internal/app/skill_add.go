@@ -153,239 +153,315 @@ func (service SkillAddService) PreviewSkillAdd(ctx context.Context, path string,
 	}
 	service = service.defaults(root)
 
-	// Validate collection
-	collection := strings.TrimSpace(input.Collection)
-	if collection == "" {
-		collection = "default"
-	}
-	if !skillTargetIDPattern.MatchString(collection) {
-		return SkillAddProposal{
-			Result: ErrorResult(NewInvalidRequestError("invalid collection name", "Specify a valid lowercase collection name.")),
-		}, nil
+	collection, rawLocator, errProp := validateSkillAddInput(input)
+	if errProp != nil {
+		return *errProp, nil
 	}
 
-	// Validate locator
-	rawLocator := strings.TrimSpace(input.Locator)
-	if rawLocator == "" {
-		return SkillAddProposal{
-			Result: ErrorResult(NewInvalidRequestError("locator is required", "Provide a local directory path or repository URL pointing to a skill.")),
-		}, nil
+	captured, capProp, err := resolveSkillAddSource(ctx, service, root, rawLocator)
+	if err != nil {
+		return SkillAddProposal{}, err
+	}
+	if capProp != nil {
+		return *capProp, nil
 	}
 
-	// 1. Resolve locator and capture snapshot
-	type captureResult struct {
-		origin      SkillOrigin
-		reader      ResourceReader
-		resources   []sourcepkg.Resource
-		scopePrefix string
-	}
-
-	var captured captureResult
-	isRemote := strings.Contains(rawLocator, "://") || strings.HasPrefix(rawLocator, "git@") || strings.HasSuffix(rawLocator, ".git")
-
-	if !isRemote {
-		// Local folder resolution
-		localPath := rawLocator
-		if strings.HasPrefix(localPath, "~/") {
-			home, hErr := os.UserHomeDir()
-			if hErr == nil {
-				localPath = filepath.Join(home, localPath[2:])
-			}
-		}
-		if !filepath.IsAbs(localPath) {
-			abs, aErr := filepath.Abs(localPath)
-			if aErr == nil {
-				localPath = abs
-			}
-		}
-
-		authRoot, authErr := sourcepkg.NewAuthorizedLocalRoot(localPath)
-		if authErr != nil {
-			return SkillAddProposal{
-				Result: ErrorResult(NewInvalidRequestError(
-					fmt.Sprintf("cannot access local directory %q: %v", rawLocator, authErr),
-					"Verify the directory exists and has readable permissions.",
-				)),
-			}, nil
-		}
-
-		// Capture snapshot into workspace cache
-		cacheRoot := filepath.Join(root, "runtime", "cache", "snapshots")
-		fsAdapter := sourcepkg.FilesystemAdapter{CacheRoot: cacheRoot}
-		manifest, capErr := fsAdapter.CaptureAuthorizedRoot(ctx, authRoot, "")
-		if capErr != nil {
-			if errors.Is(capErr, sourcepkg.ErrUnsafeFile) {
-				return SkillAddProposal{
-					Result: ErrorResult(NewInvalidRequestError(capErr.Error(), "Ensure source folder does not contain unsafe symlinks or escape paths.")),
-				}, nil
-			}
-			return SkillAddProposal{}, fmt.Errorf("capture local snapshot: %w", capErr)
-		}
-
-		// authRoot is discarded here and never stored in canonical files!
-		baseName := filepath.Base(authRoot.Path())
-		captured = captureResult{
-			origin: SkillOrigin{
-				Kind:         "local",
-				Name:         sanitizeSkillID(baseName),
-				FolderDigest: manifest.Digest,
-			},
-			reader: AdapterResourceReader{
-				Adapter: fsAdapter,
-				Source:  sourcepkg.Source{Locator: sourcepkg.Locator{SnapshotDigest: manifest.Digest}},
-				Revision: sourcepkg.Revision{
-					Kind:          "filesystem-snapshot",
-					Value:         manifest.Digest,
-					ContentDigest: manifest.Digest,
-				},
-			},
-			resources: manifest.Resources,
-		}
-	} else {
-		// Remote Git / GitHub resolution
-		gitAdapter, ok := service.Adapters["git"]
-		if !ok {
-			return SkillAddProposal{}, errors.New("git source adapter is not configured")
-		}
-
-		allowFile := false
-		if ga, isGit := gitAdapter.(sourcepkg.GitRepositoryAdapter); isGit {
-			allowFile = ga.AllowFileProtocol
-		}
-
-		route, parseErr := sourcepkg.ParseGitHubLocatorWithOptions(rawLocator, "", "", sourcepkg.GitHubLocatorOptions{AllowFile: allowFile})
-		if parseErr != nil {
-			return SkillAddProposal{
-				Result: ErrorResult(NewInvalidRequestError(parseErr.Error(), "Provide a valid GitHub repository URL.")),
-			}, nil
-		}
-
-		inspectCtx, cancelInspect := context.WithTimeout(ctx, sourcepkg.DefaultTimeout)
-		defer cancelInspect()
-
-		var resolved *sourcepkg.ResolvedGitHubRoute
-		if ga, isGit := gitAdapter.(sourcepkg.GitRepositoryAdapter); isGit {
-			var resErr error
-			resolved, resErr = sourcepkg.ResolveGitHubRoute(inspectCtx, ga, route)
-			if resErr != nil {
-				var ambErr *sourcepkg.AmbiguousRefError
-				if errors.As(resErr, &ambErr) {
-					return SkillAddProposal{
-						Result: ErrorResult(NewAmbiguousRefError(ambErr.Error(), "Specify an unambiguous reference.")),
-					}, nil
-				}
-				return SkillAddProposal{
-					Result: ErrorResult(NewInvalidRequestError(resErr.Error(), "Verify repository exists and is accessible.")),
-				}, nil
-			}
-		} else {
-			ref := route.Ref
-			if ref == "" {
-				ref = "main"
-			}
-			resolved = &sourcepkg.ResolvedGitHubRoute{
-				Repository: route.Repository,
-				Ref:        ref,
-				Path:       route.Path,
-				Commit:     "0123456789abcdef0123456789abcdef01234567",
-			}
-		}
-
-		ref := resolved.Ref
-		if ref == "" {
-			ref = resolved.Commit
-		}
-		src := sourcepkg.Source{
-			Locator: sourcepkg.Locator{
-				Repository: resolved.Repository,
-				Ref:        ref,
-				Path:       resolved.Path,
-			},
-			Limits: sourcepkg.Limits{TimeoutSeconds: 180, MaxBytes: sourcepkg.DefaultMaxBytes, MaxFiles: sourcepkg.DefaultMaxFiles, MaxFileBytes: sourcepkg.DefaultMaxFileSize},
-		}
-
-		var rev sourcepkg.Revision
-		if _, isGit := gitAdapter.(sourcepkg.GitRepositoryAdapter); isGit {
-			var revErr error
-			rev, revErr = gitAdapter.CurrentRevision(ctx, src)
-			if revErr != nil {
-				return SkillAddProposal{
-					Result: ErrorResult(NewInvalidRequestError("failed to determine repository revision: "+revErr.Error(), "Verify repository and ref exist.")),
-				}, nil
-			}
-		} else {
-			rev = sourcepkg.Revision{
-				Kind:          "git-commit",
-				Value:         resolved.Commit,
-				ContentDigest: "sha256:" + resolved.Commit + strings.Repeat("0", 64-len(resolved.Commit)),
-			}
-			if r, err := gitAdapter.CurrentRevision(ctx, src); err == nil && r.Value != "" {
-				rev = r
-			}
-		}
-
-		resources, listErr := gitAdapter.List(ctx, src, rev, sourcepkg.Scope{})
-		if listErr != nil {
-			return SkillAddProposal{}, fmt.Errorf("list repository resources: %w", listErr)
-		}
-
-		name := filepath.Base(resolved.Repository)
-		name = strings.TrimSuffix(name, ".git")
-		if resolved.Path != "" {
-			name = filepath.Base(resolved.Path)
-		}
-
-		captured = captureResult{
-			origin: SkillOrigin{
-				Kind:         "github",
-				Repository:   resolved.Repository,
-				Ref:          resolved.Ref,
-				Commit:       resolved.Commit,
-				Path:         resolved.Path,
-				Name:         sanitizeSkillID(name),
-				FolderDigest: rev.ContentDigest,
-			},
-			reader: AdapterResourceReader{
-				Adapter:  gitAdapter,
-				Source:   src,
-				Revision: rev,
-			},
-			resources:   resources,
-			scopePrefix: "",
-		}
-	}
-
-	// 2. Discover skills and inventory companion files
 	discovered, discErr := DiscoverSkillsFromResources(ctx, captured.reader, captured.resources, captured.scopePrefix)
 	if discErr != nil {
 		return SkillAddProposal{}, discErr
 	}
 
-	// Zero skills found: return no_skills
+	selected, selProp := selectSkillAddCandidates(input, discovered)
+	if selProp != nil {
+		return *selProp, nil
+	}
+
+	now := service.Clock.Now().UTC()
+	changes, diffAdded, allTransforms, changeProp, err := buildSkillAddChanges(selected, collection, captured.origin, now.Format(time.RFC3339Nano))
+	if err != nil {
+		return SkillAddProposal{}, err
+	}
+	if changeProp != nil {
+		return *changeProp, nil
+	}
+
+	primaryTargetID := selected[0].TargetID
+	primaryContentDigest := "sha256:" + hex.EncodeToString(func() []byte { s := sha256.Sum256(selected[0].SkillMDBytes); return s[:] }())
+	requestDigest := skillAddRequestDigest(captured.origin.Kind, captured.origin.FolderDigest, primaryContentDigest, primaryTargetID, input.Selection, collection, allTransforms)
+
+	idempotencyKey := strings.TrimSpace(input.IdempotencyKey)
+	if idempotencyKey == "" {
+		idempotencyKey = fmt.Sprintf("skill_add:%s:%s", primaryTargetID, strings.TrimPrefix(requestDigest, "sha256:")[:32])
+	}
+
+	planCtx := skillAddPlanContext{
+		root:           root,
+		collection:     collection,
+		selected:       selected,
+		origin:         captured.origin,
+		changes:        changes,
+		diffAdded:      diffAdded,
+		transforms:     allTransforms,
+		idempotencyKey: idempotencyKey,
+		requestDigest:  requestDigest,
+		now:            now,
+		fullDiff:       input.FullDiff,
+	}
+
+	replayProp, found, err := lookupReplayedSkillAdd(ctx, planCtx)
+	if err != nil {
+		return SkillAddProposal{}, err
+	}
+	if found {
+		return *replayProp, nil
+	}
+
+	if conflictProp, err := checkSkillAddConflicts(root, selected); err != nil {
+		return SkillAddProposal{}, err
+	} else if conflictProp != nil {
+		return *conflictProp, nil
+	}
+
+	return planSkillAddProposal(ctx, planCtx)
+}
+
+func validateSkillAddInput(input SkillAddInput) (string, string, *SkillAddProposal) {
+	collection := strings.TrimSpace(input.Collection)
+	if collection == "" {
+		collection = "default"
+	}
+	if !skillTargetIDPattern.MatchString(collection) {
+		prop := SkillAddProposal{
+			Result: ErrorResult(NewInvalidRequestError("invalid collection name", "Specify a valid lowercase collection name.")),
+		}
+		return "", "", &prop
+	}
+	rawLocator := strings.TrimSpace(input.Locator)
+	if rawLocator == "" {
+		prop := SkillAddProposal{
+			Result: ErrorResult(NewInvalidRequestError("locator is required", "Provide a local directory path or repository URL pointing to a skill.")),
+		}
+		return "", "", &prop
+	}
+	return collection, rawLocator, nil
+}
+
+type skillAddCapture struct {
+	origin      SkillOrigin
+	reader      ResourceReader
+	resources   []sourcepkg.Resource
+	scopePrefix string
+}
+
+func resolveSkillAddSource(ctx context.Context, service SkillAddService, root, rawLocator string) (skillAddCapture, *SkillAddProposal, error) {
+	isRemote := strings.Contains(rawLocator, "://") || strings.HasPrefix(rawLocator, "git@") || strings.HasSuffix(rawLocator, ".git")
+	if !isRemote {
+		return captureLocalSkillAddSource(ctx, root, rawLocator)
+	}
+	return captureRemoteSkillAddSource(ctx, service, rawLocator)
+}
+
+func captureLocalSkillAddSource(ctx context.Context, root, rawLocator string) (skillAddCapture, *SkillAddProposal, error) {
+	localPath := rawLocator
+	if strings.HasPrefix(localPath, "~/") {
+		home, hErr := os.UserHomeDir()
+		if hErr == nil {
+			localPath = filepath.Join(home, localPath[2:])
+		}
+	}
+	if !filepath.IsAbs(localPath) {
+		abs, aErr := filepath.Abs(localPath)
+		if aErr == nil {
+			localPath = abs
+		}
+	}
+
+	authRoot, authErr := sourcepkg.NewAuthorizedLocalRoot(localPath)
+	if authErr != nil {
+		prop := SkillAddProposal{
+			Result: ErrorResult(NewInvalidRequestError(
+				fmt.Sprintf("cannot access local directory %q: %v", rawLocator, authErr),
+				"Verify the directory exists and has readable permissions.",
+			)),
+		}
+		return skillAddCapture{}, &prop, nil
+	}
+
+	cacheRoot := filepath.Join(root, "runtime", "cache", "snapshots")
+	fsAdapter := sourcepkg.FilesystemAdapter{CacheRoot: cacheRoot}
+	manifest, capErr := fsAdapter.CaptureAuthorizedRoot(ctx, authRoot, "")
+	if capErr != nil {
+		if errors.Is(capErr, sourcepkg.ErrUnsafeFile) {
+			prop := SkillAddProposal{
+				Result: ErrorResult(NewInvalidRequestError(capErr.Error(), "Ensure source folder does not contain unsafe symlinks or escape paths.")),
+			}
+			return skillAddCapture{}, &prop, nil
+		}
+		return skillAddCapture{}, nil, fmt.Errorf("capture local snapshot: %w", capErr)
+	}
+
+	baseName := filepath.Base(authRoot.Path())
+	return skillAddCapture{
+		origin: SkillOrigin{
+			Kind:         "local",
+			Name:         sanitizeSkillID(baseName),
+			FolderDigest: manifest.Digest,
+		},
+		reader: AdapterResourceReader{
+			Adapter: fsAdapter,
+			Source:  sourcepkg.Source{Locator: sourcepkg.Locator{SnapshotDigest: manifest.Digest}},
+			Revision: sourcepkg.Revision{
+				Kind:          "filesystem-snapshot",
+				Value:         manifest.Digest,
+				ContentDigest: manifest.Digest,
+			},
+		},
+		resources: manifest.Resources,
+	}, nil, nil
+}
+
+func captureRemoteSkillAddSource(ctx context.Context, service SkillAddService, rawLocator string) (skillAddCapture, *SkillAddProposal, error) {
+	gitAdapter, ok := service.Adapters["git"]
+	if !ok {
+		return skillAddCapture{}, nil, errors.New("git source adapter is not configured")
+	}
+
+	allowFile := false
+	if ga, isGit := gitAdapter.(sourcepkg.GitRepositoryAdapter); isGit {
+		allowFile = ga.AllowFileProtocol
+	}
+
+	route, parseErr := sourcepkg.ParseGitHubLocatorWithOptions(rawLocator, "", "", sourcepkg.GitHubLocatorOptions{AllowFile: allowFile})
+	if parseErr != nil {
+		prop := SkillAddProposal{
+			Result: ErrorResult(NewInvalidRequestError(parseErr.Error(), "Provide a valid GitHub repository URL.")),
+		}
+		return skillAddCapture{}, &prop, nil
+	}
+
+	inspectCtx, cancelInspect := context.WithTimeout(ctx, sourcepkg.DefaultTimeout)
+	defer cancelInspect()
+
+	var resolved *sourcepkg.ResolvedGitHubRoute
+	if ga, isGit := gitAdapter.(sourcepkg.GitRepositoryAdapter); isGit {
+		var resErr error
+		resolved, resErr = sourcepkg.ResolveGitHubRoute(inspectCtx, ga, route)
+		if resErr != nil {
+			var ambErr *sourcepkg.AmbiguousRefError
+			if errors.As(resErr, &ambErr) {
+				prop := SkillAddProposal{
+					Result: ErrorResult(NewAmbiguousRefError(ambErr.Error(), "Specify an unambiguous reference.")),
+				}
+				return skillAddCapture{}, &prop, nil
+			}
+			prop := SkillAddProposal{
+				Result: ErrorResult(NewInvalidRequestError(resErr.Error(), "Verify repository exists and is accessible.")),
+			}
+			return skillAddCapture{}, &prop, nil
+		}
+	} else {
+		ref := route.Ref
+		if ref == "" {
+			ref = "main"
+		}
+		resolved = &sourcepkg.ResolvedGitHubRoute{
+			Repository: route.Repository,
+			Ref:        ref,
+			Path:       route.Path,
+			Commit:     "0123456789abcdef0123456789abcdef01234567",
+		}
+	}
+
+	ref := resolved.Ref
+	if ref == "" {
+		ref = resolved.Commit
+	}
+	src := sourcepkg.Source{
+		Locator: sourcepkg.Locator{
+			Repository: resolved.Repository,
+			Ref:        ref,
+			Path:       resolved.Path,
+		},
+		Limits: sourcepkg.Limits{TimeoutSeconds: 180, MaxBytes: sourcepkg.DefaultMaxBytes, MaxFiles: sourcepkg.DefaultMaxFiles, MaxFileBytes: sourcepkg.DefaultMaxFileSize},
+	}
+
+	var rev sourcepkg.Revision
+	if _, isGit := gitAdapter.(sourcepkg.GitRepositoryAdapter); isGit {
+		var revErr error
+		rev, revErr = gitAdapter.CurrentRevision(ctx, src)
+		if revErr != nil {
+			prop := SkillAddProposal{
+				Result: ErrorResult(NewInvalidRequestError("failed to determine repository revision: "+revErr.Error(), "Verify repository and ref exist.")),
+			}
+			return skillAddCapture{}, &prop, nil
+		}
+	} else {
+		rev = sourcepkg.Revision{
+			Kind:          "git-commit",
+			Value:         resolved.Commit,
+			ContentDigest: "sha256:" + resolved.Commit + strings.Repeat("0", 64-len(resolved.Commit)),
+		}
+		if r, err := gitAdapter.CurrentRevision(ctx, src); err == nil && r.Value != "" {
+			rev = r
+		}
+	}
+
+	resources, listErr := gitAdapter.List(ctx, src, rev, sourcepkg.Scope{})
+	if listErr != nil {
+		return skillAddCapture{}, nil, fmt.Errorf("list repository resources: %w", listErr)
+	}
+
+	name := filepath.Base(resolved.Repository)
+	name = strings.TrimSuffix(name, ".git")
+	if resolved.Path != "" {
+		name = filepath.Base(resolved.Path)
+	}
+
+	return skillAddCapture{
+		origin: SkillOrigin{
+			Kind:         "github",
+			Repository:   resolved.Repository,
+			Ref:          resolved.Ref,
+			Commit:       resolved.Commit,
+			Path:         resolved.Path,
+			Name:         sanitizeSkillID(name),
+			FolderDigest: rev.ContentDigest,
+		},
+		reader: AdapterResourceReader{
+			Adapter:  gitAdapter,
+			Source:   src,
+			Revision: rev,
+		},
+		resources:   resources,
+		scopePrefix: "",
+	}, nil, nil
+}
+
+func selectSkillAddCandidates(input SkillAddInput, discovered []DiscoveredSkillItem) ([]DiscoveredSkillItem, *SkillAddProposal) {
 	if len(discovered) == 0 {
-		return SkillAddProposal{
+		prop := SkillAddProposal{
 			Result: ErrorResult(NewInvalidRequestError(
 				"no skills found at locator",
 				"Ensure the locator points to a skill directory containing SKILL.md.",
 			)),
-		}, nil
+		}
+		return nil, &prop
 	}
 
-	// Multiple skills found: selection required unless explicit
 	if len(discovered) > 1 && !input.All && strings.TrimSpace(input.Selection) == "" {
 		names := make([]string, 0, len(discovered))
 		for _, d := range discovered {
 			names = append(names, d.TargetID)
 		}
-		return SkillAddProposal{
+		prop := SkillAddProposal{
 			Result: ErrorResult(NewSkillSelectionRequiredError(
 				fmt.Sprintf("found %d skills at locator: %s; explicit selection is required", len(discovered), strings.Join(names, ", ")),
 				"Specify --skill <name> to select one, or --all to import all discovered skills.",
 			)),
-		}, nil
+		}
+		return nil, &prop
 	}
 
-	// Filter / select skills
 	var selected []DiscoveredSkillItem
 	if input.All {
 		selected = discovered
@@ -398,83 +474,78 @@ func (service SkillAddService) PreviewSkillAdd(ctx context.Context, path string,
 			}
 		}
 		if len(selected) == 0 {
-			return SkillAddProposal{
+			prop := SkillAddProposal{
 				Result: ErrorResult(NewInvalidRequestError(
 					fmt.Sprintf("skill %q not found among discovered skills", input.Selection),
 					"Run without --skill to inspect available skills.",
 				)),
-			}, nil
+			}
+			return nil, &prop
 		}
 	} else {
-		// Exactly 1 skill discovered
 		selected = []DiscoveredSkillItem{discovered[0]}
 	}
 
-	// Check explicit TargetID
 	if len(selected) > 1 && strings.TrimSpace(input.TargetID) != "" {
-		return SkillAddProposal{
+		prop := SkillAddProposal{
 			Result: ErrorResult(NewInvalidRequestError(
 				"cannot specify --id when adding multiple skills",
 				"Use --skill to add one skill with a custom ID, or omit --id when using --all.",
 			)),
-		}, nil
+		}
+		return nil, &prop
 	}
 
 	if len(selected) == 1 && strings.TrimSpace(input.TargetID) != "" {
 		customID := sanitizeSkillID(input.TargetID)
 		if customID == "" || !skillTargetIDPattern.MatchString(customID) {
-			return SkillAddProposal{
+			prop := SkillAddProposal{
 				Result: ErrorResult(NewInvalidRequestError(
 					fmt.Sprintf("invalid target ID %q", input.TargetID),
 					"Skill ID must contain only lowercase alphanumeric characters and hyphens.",
 				)),
-			}, nil
+			}
+			return nil, &prop
 		}
 		selected[0].TargetID = customID
 	}
 
-	// 3. Prepare planned changes and compute deterministic digests
-	now := service.Clock.Now().UTC()
-	nowISO := now.Format(time.RFC3339Nano)
+	return selected, nil
+}
 
+func buildSkillAddChanges(selected []DiscoveredSkillItem, collection string, capturedOrigin SkillOrigin, nowISO string) ([]mutation.Change, []string, []string, *SkillAddProposal, error) {
 	var changes []mutation.Change
 	diffAdded := []string{}
 	var allTransforms []string
-	var skillIDs []string
-	var primaryItem DiscoveredSkillItem
-	if len(selected) > 0 {
-		primaryItem = selected[0]
-	}
 
 	for _, item := range selected {
 		targetID := item.TargetID
-		skillIDs = append(skillIDs, targetID)
 
 		if item.Error != "" {
-			return SkillAddProposal{
+			prop := SkillAddProposal{
 				Result: ErrorResult(NewInvalidRequestError(
 					item.Error,
 					"Fix the resource error in the source before adding.",
 				)),
-			}, nil
+			}
+			return nil, nil, nil, &prop, nil
 		}
 
-		// 3a. Normalized SKILL.md
 		normMD, transforms, normErr := ensureImportedSkillFrontmatter(item.SkillMDBytes, targetID, item.Description)
 		if normErr != nil {
-			return SkillAddProposal{
+			prop := SkillAddProposal{
 				Result: ErrorResult(NewInvalidRequestError(normErr.Error(), "Ensure SKILL.md contains valid frontmatter.")),
-			}, nil
+			}
+			return nil, nil, nil, &prop, nil
 		}
 		allTransforms = append(allTransforms, transforms...)
 		skillMDTarget := fmt.Sprintf("skills/%s/%s/SKILL.md", collection, targetID)
 		changes = append(changes, mutation.Change{Path: skillMDTarget, Contents: normMD})
 		diffAdded = append(diffAdded, skillMDTarget)
 
-		// 3b. skill.meta.yaml with privacy-safe origin
 		contentDigest := "sha256:" + hex.EncodeToString(func() []byte { s := sha256.Sum256(normMD); return s[:] }())
 
-		skillOrigin := captured.origin
+		skillOrigin := capturedOrigin
 		skillOrigin.ContentDigest = contentDigest
 		if skillOrigin.Name == "" {
 			skillOrigin.Name = targetID
@@ -516,13 +587,12 @@ func (service SkillAddService) PreviewSkillAdd(ctx context.Context, path string,
 
 		metaBytes, yErr := yaml.Marshal(metaDoc)
 		if yErr != nil {
-			return SkillAddProposal{}, yErr
+			return nil, nil, nil, nil, yErr
 		}
 		metaTarget := fmt.Sprintf("skills/%s/%s/skill.meta.yaml", collection, targetID)
 		changes = append(changes, mutation.Change{Path: metaTarget, Contents: metaBytes})
 		diffAdded = append(diffAdded, metaTarget)
 
-		// 3c. Companion files (BUG-04: byte-for-byte, preserving empty and binary files)
 		for _, comp := range item.Companions {
 			compData := item.CompanionBytes[comp.Path]
 			compTarget := fmt.Sprintf("skills/%s/%s/%s", collection, targetID, comp.Path)
@@ -531,45 +601,58 @@ func (service SkillAddService) PreviewSkillAdd(ctx context.Context, path string,
 		}
 	}
 
-	// 4. Derive deterministic idempotency key and request digest
-	primaryTargetID := selected[0].TargetID
-	primaryContentDigest := "sha256:" + hex.EncodeToString(func() []byte { s := sha256.Sum256(selected[0].SkillMDBytes); return s[:] }())
-	requestDigest := skillAddRequestDigest(captured.origin.Kind, captured.origin.FolderDigest, primaryContentDigest, primaryTargetID, input.Selection, collection, allTransforms)
+	return changes, diffAdded, allTransforms, nil, nil
+}
 
-	idempotencyKey := strings.TrimSpace(input.IdempotencyKey)
-	if idempotencyKey == "" {
-		idempotencyKey = fmt.Sprintf("skill_add:%s:%s", primaryTargetID, strings.TrimPrefix(requestDigest, "sha256:")[:32])
-	}
+type skillAddPlanContext struct {
+	root           string
+	collection     string
+	selected       []DiscoveredSkillItem
+	origin         SkillOrigin
+	changes        []mutation.Change
+	diffAdded      []string
+	transforms     []string
+	idempotencyKey string
+	requestDigest  string
+	now            time.Time
+	fullDiff       bool
+}
 
-	// 5. Replay lookup precedes target ID conflict detection
-	priorReceipt, found, lookupErr := mutation.LookupOperation(root, mutation.WriteSet{
+func lookupReplayedSkillAdd(ctx context.Context, planCtx skillAddPlanContext) (*SkillAddProposal, bool, error) {
+	priorReceipt, found, lookupErr := mutation.LookupOperation(planCtx.root, mutation.WriteSet{
 		Command:        "skill_add",
-		IdempotencyKey: idempotencyKey,
-		RequestDigest:  requestDigest,
+		IdempotencyKey: planCtx.idempotencyKey,
+		RequestDigest:  planCtx.requestDigest,
 	})
 	if lookupErr != nil {
 		if errors.Is(lookupErr, mutation.ErrIdempotencyConflict) || errors.Is(lookupErr, mutation.ErrConflict) {
-			return SkillAddProposal{
+			prop := SkillAddProposal{
 				Result: ErrorResult(NewSkillConflictError(
 					"idempotency key reused with a different payload",
 					"Retry with the identical add request or specify a new --idempotency-key.",
 				)),
-			}, nil
+			}
+			return &prop, true, nil
 		}
-		return SkillAddProposal{}, lookupErr
+		return nil, false, lookupErr
 	}
 
 	if found {
-		// Replayed proposal: return prior receipt without checking ID conflicts
-		assessment, _ := catalog.AssessSkillState(ctx, root, primaryTargetID)
+		primaryItem := planCtx.selected[0]
+		primaryTargetID := primaryItem.TargetID
+		skillIDs := make([]string, 0, len(planCtx.selected))
+		for _, it := range planCtx.selected {
+			skillIDs = append(skillIDs, it.TargetID)
+		}
+		assessment, _ := catalog.AssessSkillState(ctx, planCtx.root, primaryTargetID)
 		proposal := SkillAddProposal{
 			Result:         NewResult(StatusOK, fmt.Sprintf("Skill %q was already added (replayed).", primaryTargetID)),
 			SkillID:        primaryTargetID,
 			SkillIDs:       skillIDs,
-			Collection:     collection,
+			Collection:     planCtx.collection,
 			Name:           primaryItem.Name,
 			Description:    primaryItem.Description,
-			Origin:         captured.origin,
+			Origin:         planCtx.origin,
 			License:        primaryItem.License,
 			Resources:      primaryItem.Companions,
 			TotalBytes:     primaryItem.TotalBytes,
@@ -577,57 +660,63 @@ func (service SkillAddService) PreviewSkillAdd(ctx context.Context, path string,
 			Assessment:     assessment,
 			Replayed:       true,
 			alreadyApplied: &priorReceipt,
-			expiresAt:      now.Add(24 * time.Hour),
+			expiresAt:      planCtx.now.Add(24 * time.Hour),
 		}
-		return proposal, nil
+		return &proposal, true, nil
 	}
+	return nil, false, nil
+}
 
-	// 6. Non-replay: Target ID conflict detection
+func checkSkillAddConflicts(root string, selected []DiscoveredSkillItem) (*SkillAddProposal, error) {
 	existingSkills, err := listWorkspaceSkillIDs(root)
 	if err != nil {
-		return SkillAddProposal{}, err
+		return nil, err
 	}
 	for _, item := range selected {
 		if existingSkills[item.TargetID] {
-			return SkillAddProposal{
+			prop := SkillAddProposal{
 				Result: ErrorResult(NewSkillConflictError(
 					fmt.Sprintf("skill %q already exists in workspace", item.TargetID),
 					fmt.Sprintf("Specify --id <new-id> to rename the skill, or edit the existing skill with `skillhub skill edit %s`.", item.TargetID),
 				)),
-			}, nil
+			}
+			return &prop, nil
 		}
 	}
+	return nil, nil
+}
 
-	// 7. Plan mutation
-	sort.Strings(diffAdded)
+func planSkillAddProposal(ctx context.Context, planCtx skillAddPlanContext) (SkillAddProposal, error) {
+	sort.Strings(planCtx.diffAdded)
 	writeSet := mutation.WriteSet{
 		Command:        "skill_add",
-		IdempotencyKey: idempotencyKey,
-		RequestDigest:  requestDigest,
-		Changes:        changes,
+		IdempotencyKey: planCtx.idempotencyKey,
+		RequestDigest:  planCtx.requestDigest,
+		Changes:        planCtx.changes,
 	}
 
-	planned, err := mutation.PlanMutation(root, writeSet)
+	planned, err := mutation.PlanMutation(planCtx.root, writeSet)
 	if err != nil {
 		return SkillAddProposal{}, err
 	}
 
-	// 8. Store in Phase 3 kind-tagged proposal store
-	expiresAt := now.Add(24 * time.Hour)
-	diffSummary := skill.DiffSummary{Added: diffAdded}
+	expiresAt := planCtx.now.Add(24 * time.Hour)
+	diffSummary := skill.DiffSummary{Added: planCtx.diffAdded}
 	fullDiffText := ""
-	if input.FullDiff {
+	if planCtx.fullDiff {
 		var diffBuf bytes.Buffer
-		for _, c := range changes {
+		for _, c := range planCtx.changes {
 			fmt.Fprintf(&diffBuf, "--- /dev/null\n+++ %s\n@@ -0,0 +1 @@\n+[added %d bytes]\n", c.Path, len(c.Contents))
 		}
 		fullDiffText = diffBuf.String()
 	}
 
-	if err := storeSkillAddProposal(root, storedProposalArtifact{
+	primaryItem := planCtx.selected[0]
+	primaryTargetID := primaryItem.TargetID
+	if err := storeSkillAddProposal(planCtx.root, storedProposalArtifact{
 		Version:      1,
 		Kind:         skill.ProposalKindAdd,
-		CreatedAt:    now,
+		CreatedAt:    planCtx.now,
 		ExpiresAt:    expiresAt,
 		ID:           planned.ID,
 		Digest:       planned.Digest,
@@ -646,20 +735,24 @@ func (service SkillAddService) PreviewSkillAdd(ctx context.Context, path string,
 		BaseVersion:    planned.BaseCatalogSnapshot,
 	}
 
-	assessment, _ := catalog.AssessSkillState(ctx, root, primaryTargetID)
+	assessment, _ := catalog.AssessSkillState(ctx, planCtx.root, primaryTargetID)
+	skillIDs := make([]string, 0, len(planCtx.selected))
+	for _, it := range planCtx.selected {
+		skillIDs = append(skillIDs, it.TargetID)
+	}
 
 	proposal := SkillAddProposal{
 		Result:          NewResult(StatusActionRequired, fmt.Sprintf("Draft skill %q ready to add. Next: confirm with `skillhub skill confirm %s --yes`.", primaryTargetID, planned.ID)),
 		SkillID:         primaryTargetID,
 		SkillIDs:        skillIDs,
-		Collection:      collection,
+		Collection:      planCtx.collection,
 		Name:            primaryItem.Name,
 		Description:     primaryItem.Description,
-		Origin:          captured.origin,
+		Origin:          planCtx.origin,
 		License:         primaryItem.License,
 		Resources:       primaryItem.Companions,
 		TotalBytes:      primaryItem.TotalBytes,
-		Transformations: allTransforms,
+		Transformations: planCtx.transforms,
 		Diff:            diffSummary,
 		FullDiff:        fullDiffText,
 		Confirmation: ConfirmationPolicy{
@@ -677,7 +770,6 @@ func (service SkillAddService) PreviewSkillAdd(ctx context.Context, path string,
 		expiresAt:  expiresAt,
 	}
 
-	// Add license warning if any (BUG-16)
 	if primaryItem.License.Warning != "" {
 		proposal.Warnings = append(proposal.Warnings, Warning{
 			Code:    "license_warning",
