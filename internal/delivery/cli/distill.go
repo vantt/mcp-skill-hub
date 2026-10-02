@@ -11,8 +11,8 @@ import (
 	"strings"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
 )
-
 type distillFlags struct {
 	workspace, submission, sourceID, skillID, idempotencyKey string
 	jsonOutput, allChanged                                   bool
@@ -189,7 +189,8 @@ func writeDistill(stdout, stderr io.Writer, jsonOutput bool, value any, err erro
 	}
 	if jsonOutput {
 		if err := writeJSON(stdout, value); err != nil {
-			fmt.Fprintln(stderr, err)
+			p := termui.New(stderr)
+			p.Line(err.Error())
 			return 1
 		}
 		if batch, ok := value.(app.DistillBatchResult); ok && batch.Prepared == 0 && batch.Failed > 0 {
@@ -197,33 +198,39 @@ func writeDistill(stdout, stderr io.Writer, jsonOutput bool, value any, err erro
 		}
 		return 0
 	}
+	p := termui.New(stdout)
 	switch result := value.(type) {
 	case app.DistillBatchResult:
-		fmt.Fprintln(stdout, result.Summary)
+		p.Line(result.Summary)
+		var bullets []string
 		for _, item := range result.Results {
 			state := "prepared"
 			if item.Error != "" {
 				state = "failed: " + item.Error
 			}
-			fmt.Fprintf(stdout, "- %s: %s\n", item.SourceID, state)
+			bullets = append(bullets, fmt.Sprintf("%s: %s", item.SourceID, state))
 		}
+		p.Bullets(bullets...)
 		if result.Prepared == 0 && result.Failed > 0 {
 			return 1
 		}
 		return 0
 	case app.DistillRunResult:
-		fmt.Fprintf(stdout, "%s\nRun: %s [%s]\n", result.Summary, result.Run.ID, result.Run.State)
+		p.Line(result.Summary)
+		p.Fields(termui.Field{Label: "Run", Value: fmt.Sprintf("%s [%s]", result.Run.ID, result.Run.State)})
 	case app.DistillQueryResult:
-		fmt.Fprintln(stdout, result.Summary)
+		p.Line(result.Summary)
+		var bullets []string
 		for _, item := range result.Findings {
-			fmt.Fprintf(stdout, "- %s [%s] %s\n", item.ID, item.Status, item.What)
+			bullets = append(bullets, fmt.Sprintf("%s [%s] %s", item.ID, item.Status, item.What))
 		}
 		for _, item := range result.Comparisons {
-			fmt.Fprintf(stdout, "- %s [%s] %s\n", item.ID, item.Verdict, item.Subject)
+			bullets = append(bullets, fmt.Sprintf("%s [%s] %s", item.ID, item.Verdict, item.Subject))
 		}
 		for _, item := range result.Insights {
-			fmt.Fprintf(stdout, "- %s [%s] %s\n", item.ID, item.Status, item.Recommendation)
+			bullets = append(bullets, fmt.Sprintf("%s [%s] %s", item.ID, item.Status, item.Recommendation))
 		}
+		p.Bullets(bullets...)
 	}
 	return 0
 }
