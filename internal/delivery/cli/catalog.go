@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
 )
 
 func runRebuild(ctx context.Context, args []string, stdout, stderr io.Writer) int {
@@ -22,7 +23,8 @@ func runRebuild(ctx context.Context, args []string, stdout, stderr io.Writer) in
 	var progress app.ProgressSink
 	if verbose && !jsonOutput {
 		progress = func(event app.ProgressEvent) {
-			fmt.Fprintf(stderr, "[%d/%d] %s\n", event.Completed, event.Total, event.Message)
+			p := termui.New(stderr)
+			p.Line(fmt.Sprintf("[%d/%d] %s", event.Completed, event.Total, event.Message))
 		}
 	}
 	result, err := (app.CatalogService{}).BuildCatalogGenerationWithProgress(ctx, path, progress)
@@ -30,7 +32,8 @@ func runRebuild(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		return writeWorkspaceResult(result, err, stdout, stderr, jsonOutput)
 	}
 	if !verbose {
-		fmt.Fprintln(stdout, "Search index rebuilt.")
+		p := termui.New(stdout)
+		p.Line("Search index rebuilt.")
 		return 0
 	}
 	return writeWorkspaceResult(result, err, stdout, stderr, jsonOutput)
