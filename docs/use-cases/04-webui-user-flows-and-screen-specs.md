@@ -3,7 +3,8 @@
 **Tài liệu:** `docs/use-cases/04-webui-user-flows-and-screen-specs.md`  
 **Phiên bản:** v1.2 — Đã đối chiếu contract runtime (2026-10-02)  
 **Phạm vi:** Kiến trúc thông tin, màn hình, trạng thái, luồng tương tác, xác nhận thay đổi, lỗi, responsive và accessibility cho WebUI của Skill Hub.  
-**Căn cứ:** `02-core-curation-use-cases.md`, `03-cli-and-curator-mcp-mapping.md`, `docs/contracts/error-codes.md` và các application service trong `internal/app`.
+**Căn cứ:** `02-core-curation-use-cases.md`, `03-cli-and-curator-mcp-mapping.md`, `docs/contracts/error-codes.md` và các application service trong `internal/app`.  
+**Design brief:** [`05-webui-design-brief.md`](05-webui-design-brief.md) — visual direction, theme light/dark, wireframe, English copy và sample data cho Claude Design.
 
 ---
 
