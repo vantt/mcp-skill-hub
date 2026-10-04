@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
@@ -43,8 +44,13 @@ type Server struct {
 	skills    app.SkillService
 	skillAdd  app.SkillAddService
 	sources   app.SourceService
-	distill   app.DistillService
-	insights  app.InsightService
+	distill     app.DistillService
+	insights    app.InsightService
+	throttle    *authThrottle
+	hostMu      sync.Mutex
+	hostCacheAt time.Time
+	cachedIPs   map[string]bool
+	cachedHost  string
 }
 
 var defaultAssets = func() fs.FS {
@@ -103,12 +109,10 @@ func New(opts Options) (*Server, error) {
 	return &Server{
 		workspace: root,
 		opts:      opts,
+		throttle:  newAuthThrottle(opts.Now),
 	}, nil
 }
 
-func (s *Server) withMiddleware(next http.Handler) http.Handler {
-	return next
-}
 
 // Handler builds a http.ServeMux and wraps it with the security middleware chain.
 func (s *Server) Handler() http.Handler {
