@@ -16,6 +16,7 @@ var closeQueueBlocked = func() {}
 const (
 	defaultBufferSize       = 256
 	defaultRetention        = 14 * 24 * time.Hour
+	defaultRollupRetention  = 180 * 24 * time.Hour
 	defaultMaxSize          = int64(100 << 20)
 	defaultOperationTimeout = 5 * time.Second
 )
@@ -26,6 +27,7 @@ type Config struct {
 	WorkspaceRoot    string
 	BufferSize       int
 	Retention        time.Duration
+	RollupRetention  time.Duration
 	MaxSizeBytes     int64
 	ContentMode      string
 	OperationTimeout time.Duration
@@ -57,6 +59,7 @@ const (
 	opPromotionDraft
 	opRecordFeedback
 	opRecordCurationSession
+	opRollups
 	opHealth
 	opClose
 )
@@ -67,6 +70,8 @@ type request struct {
 	ctx             context.Context
 	limit           int
 	path            string
+	from            string
+	to              string
 	feedback        Feedback
 	curationSession CurationSession
 	response        chan response
@@ -78,6 +83,7 @@ type response struct {
 	promotionDraft        PromotionDraft
 	feedbackResult        FeedbackResult
 	curationSessionResult CurationSessionResult
+	rollups               []RollupRow
 	err                   error
 }
 
@@ -121,6 +127,12 @@ func Open(config Config) (*Recorder, error) {
 	}
 	if config.Retention == 0 {
 		config.Retention = defaultRetention
+	}
+	if config.RollupRetention < 0 {
+		return nil, errors.New("rollup retention cannot be negative")
+	}
+	if config.RollupRetention == 0 {
+		config.RollupRetention = defaultRollupRetention
 	}
 	if config.MaxSizeBytes < 0 {
 		return nil, errors.New("max size cannot be negative")
@@ -204,6 +216,19 @@ func (r *Recorder) Preview(ctx context.Context, limit int) (Preview, error) {
 func (r *Recorder) Export(ctx context.Context, path string) (ExportResult, error) {
 	result := r.admin(ctx, request{op: opExport, path: path})
 	return result.export, result.err
+}
+
+// Rollups returns daily aggregates for the inclusive UTC day range [from, to]
+// (YYYY-MM-DD; an empty bound is open). Rollups are aggregates, not events, so
+// they never appear in Preview or Export.
+func (r *Recorder) Rollups(ctx context.Context, from, to string) ([]RollupRow, error) {
+	// Validate before queueing so a bad caller range never degrades health.
+	from, to, err := normalizeRollupRange(from, to)
+	if err != nil {
+		return nil, err
+	}
+	result := r.admin(ctx, request{op: opRollups, from: from, to: to})
+	return result.rollups, result.err
 }
 
 // PromotionDraft locates one exact resolution and returns a sanitized,
@@ -409,6 +434,8 @@ func (r *Recorder) handleOperation(item request) bool {
 		result.feedbackResult, result.err = recordFeedbackStore(item.ctx, r.config, item.feedback)
 	case opRecordCurationSession:
 		result.curationSessionResult, result.err = recordCurationSessionStore(item.ctx, r.config, item.curationSession)
+	case opRollups:
+		result.rollups, result.err = rollupsStore(item.ctx, r.config, item.from, item.to)
 	case opHealth:
 		result.err = maintainStore(item.ctx, r.config)
 		if result.err == nil {

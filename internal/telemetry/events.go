@@ -31,6 +31,8 @@ const (
 	EventTaskCompleted          = "task.completed"
 	EventTaskOutcomeReported    = "task.outcome_reported"
 	EventSkillUtilityReported   = "skill.utility_reported"
+	EventSkillDoctorChecked     = "skill.doctor_checked"
+	EventTranscriptToolObserved = "transcript.tool_observed"
 
 	EventSourceCandidateCaptured  = "source_candidate.captured"
 	EventSourceCandidateTriaged   = "source_candidate.triaged"
@@ -115,7 +117,26 @@ var commonRouting = fields(
 	"constraint_count", kindCount, "fact_keys", kindTokens, "candidate_count", kindCount,
 	"top_skill_id", kindToken, "skill_id", kindToken, "confidence_band", kindToken,
 	"reason_codes", kindTokens, "recommended_skill_ids", kindTokens, "channels", kindTokens, "stage_ms", kindStageMillis,
-	"duration_ms", kindMillis, "error_code", kindToken, "basis", kindToken,
+	"duration_ms", kindMillis, "error_code", kindToken, "basis", kindToken, "setup_state", kindToken,
+)
+
+// Closed vocabularies for fields that become rollup metric names. Enforcing
+// them keeps rollup cardinality bounded and the Go allowlist aligned with the
+// published event schema.
+var (
+	setupStates          = map[string]bool{"ready": true, "setup_required": true, "unsupported_platform": true, "review_required": true, "unknown": true}
+	skillResourceKinds   = map[string]bool{"entrypoint": true, "reference": true, "script": true, "asset": true, "resource": true}
+	skillLoadSurfaces    = map[string]bool{"skill_get": true, "skills_get": true, "resources_read": true}
+	activationAttributes = map[string]bool{"recommended": true, "supporting": true, "override": true, "after_no_skill": true, "after_needs_context": true, "unsolicited": true}
+	doctorStatuses       = map[string]bool{"ready": true, "setup_required": true, "unsupported_platform": true, "failed": true}
+)
+
+const (
+	// LoadBasisServerObserved marks a skill load the hub observed itself, as
+	// opposed to a host-reported feedback outcome.
+	LoadBasisServerObserved = "server-observed"
+	TranscriptSourceClaude  = "claude-code"
+	TranscriptBasis         = "transcript"
 )
 
 var eventPayloads = map[string]map[string]valueKind{
@@ -127,9 +148,11 @@ var eventPayloads = map[string]map[string]valueKind{
 	EventClarificationAnswered:  fields("field", kindToken, "answer_kind", kindToken, "duration_ms", kindMillis),
 	EventSkillActivated:         skillFields(), EventActivationApproved: skillFields(), EventActivationRejected: skillFields(),
 	EventSkillLoaded: skillFields(), EventSkillUsed: skillFields(), EventSkillCompleted: skillFields(), EventSkillAbandoned: skillFields(),
-	EventTaskCompleted:        fields("status", kindToken, "duration_ms", kindMillis, "skill_count", kindCount),
-	EventTaskOutcomeReported:  fields("status", kindToken, "skill_id", kindToken, "utility", kindToken, "basis", kindToken, "reason_codes", kindTokens, "duration_ms", kindMillis),
-	EventSkillUtilityReported: fields("skill_id", kindToken, "utility", kindToken, "basis", kindToken, "reason_codes", kindTokens),
+	EventTaskCompleted:          fields("status", kindToken, "duration_ms", kindMillis, "skill_count", kindCount),
+	EventTaskOutcomeReported:    fields("status", kindToken, "skill_id", kindToken, "utility", kindToken, "basis", kindToken, "reason_codes", kindTokens, "duration_ms", kindMillis, "after_load", kindBool),
+	EventSkillUtilityReported:   fields("skill_id", kindToken, "utility", kindToken, "basis", kindToken, "reason_codes", kindTokens, "after_load", kindBool),
+	EventSkillDoctorChecked:     fields("skill_id", kindToken, "status", kindToken, "reason_codes", kindTokens, "duration_ms", kindMillis),
+	EventTranscriptToolObserved: fields("tool", kindToken, "skill_id", kindToken, "source", kindToken, "basis", kindToken, "resolved_before", kindBool),
 
 	EventSourceCandidateCaptured: curationFields(), EventSourceCandidateTriaged: curationFields(), EventSourceChecked: curationFields(),
 	EventCurationSessionCompleted: fields("status", kindToken, "basis", kindToken, "turns_to_next_action", kindCount, "unnecessary_confirmations", kindCount, "prompts_per_batch", kindCount, "batch_size", kindCount, "auto_finalized", kindBool, "recovery_completed", kindBool, "routine_git_noise", kindCount, "duration_ms", kindMillis, "error_code", kindToken),
@@ -153,7 +176,8 @@ func fields(values ...any) map[string]valueKind {
 }
 
 func skillFields() map[string]valueKind {
-	return fields("skill_id", kindToken, "status", kindToken, "reason_codes", kindTokens, "basis", kindToken, "duration_ms", kindMillis, "error_code", kindToken)
+	return fields("skill_id", kindToken, "status", kindToken, "reason_codes", kindTokens, "basis", kindToken, "duration_ms", kindMillis, "error_code", kindToken,
+		"resource_kind", kindToken, "surface", kindToken, "attribution", kindToken, "first_activation", kindBool, "after_load", kindBool)
 }
 
 func curationFields() map[string]valueKind {
@@ -230,6 +254,41 @@ func validateAndBuild(event Event, contentMode string, now time.Time, id string)
 }
 
 func validateEventSemantics(eventType string, payload map[string]any) error {
+	if err := validateEnumFields(payload, map[string]map[string]bool{
+		"setup_state": setupStates, "resource_kind": skillResourceKinds, "surface": skillLoadSurfaces, "attribution": activationAttributes,
+	}); err != nil {
+		return err
+	}
+	if eventType == EventSkillLoaded && payload["basis"] == LoadBasisServerObserved {
+		if _, ok := payload["skill_id"].(string); !ok {
+			return errors.New("server-observed skill load requires skill_id")
+		}
+		if _, ok := payload["resource_kind"].(string); !ok {
+			return errors.New("server-observed skill load requires resource_kind")
+		}
+		if first, _ := payload["first_activation"].(bool); first {
+			if _, ok := payload["attribution"].(string); !ok {
+				return errors.New("first activation requires attribution")
+			}
+		}
+	}
+	if eventType == EventSkillDoctorChecked {
+		status, ok := payload["status"].(string)
+		if !ok || !doctorStatuses[status] {
+			return errors.New("doctor check requires a supported status")
+		}
+		if _, ok := payload["skill_id"].(string); !ok {
+			return errors.New("doctor check requires skill_id")
+		}
+	}
+	if eventType == EventTranscriptToolObserved {
+		if _, ok := payload["tool"].(string); !ok {
+			return errors.New("transcript observation requires tool")
+		}
+		if payload["source"] != TranscriptSourceClaude || payload["basis"] != TranscriptBasis {
+			return errors.New("transcript observation requires a supported source and transcript basis")
+		}
+	}
 	if eventType == EventResolutionRecommended || eventType == EventResolutionCompleted || eventType == EventResolutionFailed {
 		if rawRecommended, exists := payload["recommended_skill_ids"]; exists {
 			recommended, ok := stringTokens(rawRecommended)
@@ -317,6 +376,20 @@ func validateEventSemantics(eventType string, payload map[string]any) error {
 			basisValue, basisOK := basis.(string)
 			if !utilityOK || !basisOK || !feedbackUtilities[utilityValue] || !feedbackBases[basisValue] {
 				return errors.New("task outcome utility or basis is not supported")
+			}
+		}
+	}
+	return nil
+}
+
+// validateEnumFields checks closed-vocabulary fields when they are present.
+// Shape validation already guaranteed they are tokens.
+func validateEnumFields(payload map[string]any, enums map[string]map[string]bool) error {
+	for field, allowed := range enums {
+		if value, exists := payload[field]; exists {
+			text, _ := value.(string)
+			if !allowed[text] {
+				return fmt.Errorf("payload.%s is not a supported value", field)
 			}
 		}
 	}

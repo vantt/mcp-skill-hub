@@ -169,11 +169,7 @@ func recordCurationSessionStore(ctx context.Context, config Config, report Curat
 	if !errors.Is(err, sql.ErrNoRows) {
 		return CurationSessionResult{}, err
 	}
-	encoded, err := json.Marshal(event)
-	if err != nil {
-		return CurationSessionResult{}, err
-	}
-	if _, err := transaction.ExecContext(ctx, `INSERT INTO telemetry_events(id,occurred_at,kind,resolution_id,payload_json) VALUES(?,?,?,?,?)`, event.ID, event.OccurredAt, event.Type, nil, string(encoded)); err != nil {
+	if _, err := insertEvent(ctx, transaction, event, insertEventSQL); err != nil {
 		return CurationSessionResult{}, err
 	}
 	if err := trimLogicalSize(ctx, transaction, config.MaxSizeBytes); err != nil {

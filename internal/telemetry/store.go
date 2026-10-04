@@ -3,7 +3,6 @@ package telemetry
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -140,6 +139,9 @@ func openDatabase(ctx context.Context, config Config) (*sql.DB, error) {
 		return closeOnError(fmt.Errorf("quick_check returned %q", check))
 	}
 	if _, err := database.ExecContext(ctx, schema); err != nil {
+		return closeOnError(err)
+	}
+	if _, err := database.ExecContext(ctx, rollupSchema); err != nil {
 		return closeOnError(err)
 	}
 	if err := ensureResolutionColumn(ctx, database); err != nil {
@@ -456,16 +458,15 @@ func writeEvents(ctx context.Context, config Config, events []storedEnvelope) er
 		}
 	}()
 	for _, event := range events {
-		encoded, err := json.Marshal(event)
-		if err != nil {
-			return err
-		}
-		if _, err := transaction.ExecContext(ctx, `INSERT OR IGNORE INTO telemetry_events(id,occurred_at,kind,resolution_id,payload_json) VALUES(?,?,?,?,?)`, event.ID, event.OccurredAt, event.Type, nullIfEmpty(event.ResolutionID), string(encoded)); err != nil {
+		if _, err := insertEvent(ctx, transaction, event, insertEventOrIgnoreSQL); err != nil {
 			return err
 		}
 	}
 	cutoff := formatStoredTime(config.Clock().Add(-config.Retention))
 	if _, err := transaction.ExecContext(ctx, `DELETE FROM telemetry_events WHERE occurred_at < ?`, cutoff); err != nil {
+		return err
+	}
+	if err := pruneRollups(ctx, transaction, config); err != nil {
 		return err
 	}
 	if err := trimLogicalSize(ctx, transaction, config.MaxSizeBytes); err != nil {
@@ -582,6 +583,9 @@ func maintainStore(ctx context.Context, config Config) error {
 	}()
 	cutoff := formatStoredTime(config.Clock().Add(-config.Retention))
 	if _, err := transaction.ExecContext(ctx, `DELETE FROM telemetry_events WHERE occurred_at < ?`, cutoff); err != nil {
+		return err
+	}
+	if err := pruneRollups(ctx, transaction, config); err != nil {
 		return err
 	}
 	if err := trimLogicalSize(ctx, transaction, config.MaxSizeBytes); err != nil {

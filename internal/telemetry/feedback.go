@@ -25,6 +25,9 @@ const (
 	FeedbackReasonWorkflowFailed        = "workflow_failed"
 	FeedbackReasonAbandoned             = "abandoned"
 	FeedbackReasonHostReport            = "host_report"
+	// FeedbackReasonSetupFailed reports that a skill's script failed because a
+	// dependency it needs was missing on the host.
+	FeedbackReasonSetupFailed = "setup_failed"
 )
 
 var feedbackEventTypes = map[string]string{
@@ -43,7 +46,7 @@ var feedbackReasonCodes = map[string]bool{
 	FeedbackReasonUserRejected: true, FeedbackReasonScopeMismatch: true,
 	FeedbackReasonCapabilityUnavailable: true, FeedbackReasonConstraintConflict: true,
 	FeedbackReasonWorkflowCompleted: true, FeedbackReasonWorkflowFailed: true,
-	FeedbackReasonAbandoned: true, FeedbackReasonHostReport: true,
+	FeedbackReasonAbandoned: true, FeedbackReasonHostReport: true, FeedbackReasonSetupFailed: true,
 }
 
 // IsFeedbackReasonCode reports whether value is in the public, content-free
@@ -130,7 +133,11 @@ func recordFeedbackStore(ctx context.Context, config Config, feedback Feedback) 
 	if feedback.SkillID != "" && !containsString(recommendedSkillIDs, feedback.SkillID) {
 		return FeedbackResult{}, ErrFeedbackSkillNotRecommended
 	}
-	events, err := buildFeedbackEvents(config, feedback, source)
+	afterLoad, err := resolutionHasServerObservedLoad(ctx, transaction, feedback.ResolutionID)
+	if err != nil {
+		return FeedbackResult{}, err
+	}
+	events, err := buildFeedbackEvents(config, feedback, source, afterLoad)
 	if err != nil {
 		return FeedbackResult{}, err
 	}
@@ -218,10 +225,30 @@ func sameStrings(left, right []string) bool {
 	return true
 }
 
-func buildFeedbackEvents(config Config, feedback Feedback, source storedEnvelope) ([]storedEnvelope, error) {
+// resolutionHasServerObservedLoad reports whether the hub itself observed a
+// skill load for the resolution before this feedback arrived.
+func resolutionHasServerObservedLoad(ctx context.Context, transaction *sql.Tx, resolutionID string) (bool, error) {
+	var found int
+	err := transaction.QueryRowContext(ctx, `
+SELECT 1 FROM telemetry_events
+WHERE resolution_id = ?
+  AND kind = 'skill.loaded'
+  AND json_valid(payload_json)
+  AND json_extract(payload_json,'$.payload.basis') = 'server-observed'
+LIMIT 1`, resolutionID).Scan(&found)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+func buildFeedbackEvents(config Config, feedback Feedback, source storedEnvelope, afterLoad bool) ([]storedEnvelope, error) {
 	payload := map[string]any{"status": feedback.Outcome}
 	if feedback.SkillID != "" {
 		payload["skill_id"] = feedback.SkillID
+	}
+	if afterLoad {
+		payload["after_load"] = true
 	}
 	if feedback.ReasonCode != "" {
 		payload["reason_codes"] = []string{feedback.ReasonCode}
@@ -243,6 +270,9 @@ func buildFeedbackEvents(config Config, feedback Feedback, source storedEnvelope
 	utilityPayload := map[string]any{"utility": feedback.Utility, "basis": feedback.Basis}
 	if feedback.SkillID != "" {
 		utilityPayload["skill_id"] = feedback.SkillID
+	}
+	if afterLoad {
+		utilityPayload["after_load"] = true
 	}
 	if feedback.ReasonCode != "" {
 		utilityPayload["reason_codes"] = []string{feedback.ReasonCode}
@@ -297,11 +327,7 @@ func storeFeedbackEvents(ctx context.Context, transaction *sql.Tx, events []stor
 		return false, ErrFeedbackConflict
 	}
 	for _, event := range events {
-		encoded, err := json.Marshal(event)
-		if err != nil {
-			return false, err
-		}
-		if _, err := transaction.ExecContext(ctx, `INSERT INTO telemetry_events(id,occurred_at,kind,resolution_id,payload_json) VALUES(?,?,?,?,?)`, event.ID, event.OccurredAt, event.Type, event.ResolutionID, string(encoded)); err != nil {
+		if _, err := insertEvent(ctx, transaction, event, insertEventSQL); err != nil {
 			return false, err
 		}
 	}
@@ -333,10 +359,26 @@ func feedbackEventByID(ctx context.Context, transaction *sql.Tx, id string) (boo
 }
 
 func sameFeedbackEvent(actual, expected storedEnvelope) bool {
-	actualPayload, actualErr := json.Marshal(actual.Payload)
-	expectedPayload, expectedErr := json.Marshal(expected.Payload)
+	actualPayload, actualErr := json.Marshal(withoutServerDerivedFeedback(actual.Payload))
+	expectedPayload, expectedErr := json.Marshal(withoutServerDerivedFeedback(expected.Payload))
 	return actualErr == nil && expectedErr == nil && string(actualPayload) == string(expectedPayload) &&
 		actual.Version == expected.Version && actual.ID == expected.ID && actual.Type == expected.Type &&
 		actual.ResolutionID == expected.ResolutionID && actual.CatalogSnapshot == expected.CatalogSnapshot &&
 		actual.PolicyRevision == expected.PolicyRevision && actual.Client == expected.Client && actual.Privacy == expected.Privacy
+}
+
+// withoutServerDerivedFeedback drops fields the hub derives at write time, so
+// a host retry stays idempotent even when a server-observed load was recorded
+// between the original report and the retry.
+func withoutServerDerivedFeedback(payload map[string]any) map[string]any {
+	if _, exists := payload["after_load"]; !exists {
+		return payload
+	}
+	trimmed := make(map[string]any, len(payload))
+	for key, value := range payload {
+		if key != "after_load" {
+			trimmed[key] = value
+		}
+	}
+	return trimmed
 }
