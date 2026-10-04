@@ -1,0 +1,7 @@
+exit=2
+--- stdout ---
+
+--- stderr ---
+ERROR: The request cannot be accepted.
+WHY: create requires --id, --collection, --name, and --description
+FIX: Review `skillhub skill create` arguments and retry.

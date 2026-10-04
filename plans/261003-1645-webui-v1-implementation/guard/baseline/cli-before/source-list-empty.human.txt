@@ -1,0 +1,5 @@
+exit=0
+--- stdout ---
+0 candidate(s) and 0 monitored source(s).
+--- stderr ---
+

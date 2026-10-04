@@ -1,0 +1,22 @@
+exit=0
+--- stdout ---
+Review:       Long Review (long-review)
+Collection:   core
+Description:  Review a multi-module change for correctness, regressions, security posture,
+              documentation impact and rollout risk, recording evidence for every finding before
+              recommending a fix, and never approving a change whose cross-module contracts were not
+              traced to their callers.
+State:        draft (valid; routing: not eligible; servable)
+Files:        2 files, 1.4 KB (entrypoint: skills/core/long-review/SKILL.md)
+Origin:       local authoring (not watched)
+Git:          clean
+
+Activation readiness
+  - Missing required field: trigger
+  - Missing required field: not_for or rationale (quality.routing_review_rationale)
+  - Missing required field: min_scope
+
+Next: Complete required activation fields (trigger, not_for or rationale
+      (quality.routing_review_rationale), min_scope) with `skillhub skill edit long-review`.
+--- stderr ---
+

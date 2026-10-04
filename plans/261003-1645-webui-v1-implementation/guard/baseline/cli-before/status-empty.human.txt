@@ -1,0 +1,13 @@
+exit=0
+--- stdout ---
+Workspace:  <TMP>/workspace
+Status:     Skill Hub is up to date.
+Health:     Workspace valid; search index current; Git clean.
+Inventory:  No skills yet.
+            Next: ask your agent 'create a skill for ...' or run:
+            skillhub skill create my-skill --collection core --name "My Skill" --description "Skill
+            description"
+
+Next: Continue normal work
+--- stderr ---
+

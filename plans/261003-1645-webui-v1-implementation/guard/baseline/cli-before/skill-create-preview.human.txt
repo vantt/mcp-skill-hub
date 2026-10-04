@@ -1,0 +1,17 @@
+exit=0
+--- stdout ---
+Draft skill creation is ready for review.
+  - 2 added, 0 modified, 0 deleted file(s).
+Proposal:      PROP-<ID>
+Digest:        <DIGEST>
+Base version:  <DIGEST>
+Routing impact:  Direct routing fields for long-review were evaluated against
+                 <DIGEST>.
+No files changed. Confirm with:
+skillhub skill confirm --proposal PROP-<ID> --proposal-digest
+<DIGEST> --base-version
+<DIGEST>
+(or: skillhub skill confirm PROP-<ID>)
+or re-run with --yes to apply directly.
+--- stderr ---
+
