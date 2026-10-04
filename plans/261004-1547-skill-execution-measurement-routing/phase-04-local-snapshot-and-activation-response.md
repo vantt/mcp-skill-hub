@@ -9,6 +9,8 @@ dependencies: [1, 3]
 
 # Phase 4: Local snapshot export and activation response
 
+> **Superseded in part by [phase 5a](./phase-05a-runtime-revision.md).** This is a historical record. Per-file script trust (`scripts_reviewed_digest`, `--approve-scripts`, executable detection, withheld scripts, `.restricted` snapshots, hub-side bin/env live checks) was replaced by skill-level content trust (`quality.content_reviewed_digest`, `--approve-content`), a writable state directory, and platform-only hub checks. Treat the current code and `plan.md` as authoritative.
+
 ## Context
 
 - [plan.md](./plan.md) D2, D3, D4.

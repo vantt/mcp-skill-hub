@@ -1,8 +1,9 @@
 ---
 phase: 5b
 title: Runtime hardening (host permissions, unapproved content, review diff, supply-chain hint, small fixes)
-status: pending
+status: done
 depends_on: [5a]
+effort: 8h
 ---
 
 # Phase 5b — Runtime hardening

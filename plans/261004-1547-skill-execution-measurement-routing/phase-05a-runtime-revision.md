@@ -1,8 +1,9 @@
 ---
 phase: 5a
 title: Runtime revision (skill-level trust, writable state dir, platform-only hub checks, setup guidance)
-status: pending
+status: done
 depends_on: [1, 2, 3, 4, 5]
+effort: 10h
 ---
 
 # Phase 5a — Runtime revision
