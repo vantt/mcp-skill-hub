@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/fgdesign-system-3658085c-54db-48c0-9ea6-9159ec1d267e/contract/contract.css">
+<link rel="stylesheet" href="_ds/fgdesign-system-3658085c-54db-48c0-9ea6-9159ec1d267e/contract/components.css">
+<link rel="stylesheet" href="_ds/fgdesign-system-3658085c-54db-48c0-9ea6-9159ec1d267e/contract/patterns/editorial.css">
+<link rel="stylesheet" href="_ds/fgdesign-system-3658085c-54db-48c0-9ea6-9159ec1d267e/contract/patterns/task.css">
+<link rel="stylesheet" href="_ds/fgdesign-system-3658085c-54db-48c0-9ea6-9159ec1d267e/contract/patterns/crm.css">
+<link rel="stylesheet" href="_ds/fgdesign-system-3658085c-54db-48c0-9ea6-9159ec1d267e/contract/patterns/financial.css">
+<link rel="stylesheet" href="_ds/fgdesign-system-3658085c-54db-48c0-9ea6-9159ec1d267e/contract/patterns/media.css">
+<link rel="stylesheet" href="_ds/fgdesign-system-3658085c-54db-48c0-9ea6-9159ec1d267e/contract/patterns.css">
+<link rel="stylesheet" href="_ds/fgdesign-system-3658085c-54db-48c0-9ea6-9159ec1d267e/themes/precision.css">
+<link rel="stylesheet" href="_ds/fgdesign-system-3658085c-54db-48c0-9ea6-9159ec1d267e/themes/berich.css">
+<link rel="stylesheet" href="_ds/fgdesign-system-3658085c-54db-48c0-9ea6-9159ec1d267e/themes/clickup.css">
+<link rel="stylesheet" href="_ds/fgdesign-system-3658085c-54db-48c0-9ea6-9159ec1d267e/themes/terminal.css">
+<link rel="stylesheet" href="_ds/fgdesign-system-3658085c-54db-48c0-9ea6-9159ec1d267e/themes/atelier.css">
+<link rel="stylesheet" href="_ds/fgdesign-system-3658085c-54db-48c0-9ea6-9159ec1d267e/themes/moday.css">
+<link rel="stylesheet" href="_ds/fgdesign-system-3658085c-54db-48c0-9ea6-9159ec1d267e/styles.css">
+<script src="_ds/fgdesign-system-3658085c-54db-48c0-9ea6-9159ec1d267e/_ds_bundle.js"></script>
+<style>html,body{margin:0;height:100%}a{color:var(--color-link)}a:hover{color:var(--color-link-hover)}</style>
+</helmet>
+<div style="height:100vh;min-height:0">
+<a href="#main" style="position:absolute;left:-9999px;top:8px;z-index:100">Skip to main content</a>
+<div class="fg-shell" style="height:100%;--fg-shell-left-w:{{ railW }};--fg-shell-head-h:56px;--fg-shell-foot-h:0px;grid-template-rows:56px minmax(0,1fr)">
+
+<header class="fg-shell__header" style="gap:var(--space-3)">
+<sc-if value="{{ showRail }}" hint-placeholder-val="{{ true }}"><span class="t-heading-sm" style="width:calc({{ railW }} - 40px);min-width:0;white-space:nowrap;overflow:hidden;display:flex;align-items:center;gap:8px"><span style="color:var(--color-action)">◆</span><span>{{ brandLabel }}</span></span></sc-if>
+<div style="display:flex;flex-direction:column;min-width:0;flex:1">
+<sc-if value="{{ crumb.show }}"><div class="fg-breadcrumb"><a href="#" onClick="{{ crumb.go }}">{{ crumb.label }}</a><span class="fg-breadcrumb__sep">/</span><span class="fg-breadcrumb__here">{{ pageTitle }}</span></div></sc-if>
+<h1 class="t-heading" style="margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ pageTitle }}</h1>
+</div>
+<div style="display:flex;align-items:center;gap:var(--space-2);position:relative">
+<button class="fg-icon-btn {{ menuAppOn }}" onClick="{{ toggleApp }}" title="Appearance · {{ themeName }} · {{ schemeName }}" aria-label="Appearance settings" aria-haspopup="dialog" aria-expanded="{{ menuApp }}" style="width:auto;height:34px;padding:0 10px;display:inline-flex;align-items:center;gap:8px"><span aria-hidden="true" style="font-size:15px">◩</span><span style="display:block;width:12px;height:12px;border-radius:999px;background:var(--color-action)"></span><span aria-hidden="true" style="font-size:10px;color:var(--color-text-subtle)">▾</span></button>
+<button class="fg-icon-btn" title="Help" aria-label="Help" style="width:34px;height:34px">?</button>
+<sc-if value="{{ menuApp }}">
+<div class="fg-menu" role="dialog" aria-label="Appearance" style="position:absolute;top:calc(100% + 8px);right:0;width:min(560px,calc(100vw - 24px));max-height:calc(100vh - 72px);overflow-y:auto;box-sizing:border-box;z-index:60;padding:var(--space-4);display:flex;flex-direction:column;gap:var(--space-4)">
+<div style="display:flex;justify-content:space-between;align-items:center"><span class="t-heading-sm">Appearance</span><button class="fg-icon-btn" aria-label="Close" onClick="{{ closeMenu }}">✕</button></div>
+<div style="display:flex;flex-direction:column;gap:var(--space-2)">
+<span class="t-label" style="color:var(--color-text-subtle)">Scheme</span>
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-2)">
+<sc-for list="{{ schemes }}" as="c" hint-placeholder-count="3">
+<button onClick="{{ c.pick }}" role="radio" aria-checked="{{ c.on }}" style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:var(--space-2);padding:10px var(--space-3);border:1px solid {{ c.border }};border-radius:var(--input-radius);background:{{ c.bg }}" style-hover="border-color:var(--color-border-strong)"><span aria-hidden="true" style="font-size:15px;width:18px;text-align:center">{{ c.icon }}</span><span class="t-ui">{{ c.label }}</span></button>
+</sc-for>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:var(--space-2)">
+<span class="t-label" style="color:var(--color-text-subtle)">Theme</span>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:var(--space-2)">
+<sc-for list="{{ themes }}" as="t" hint-placeholder-count="6">
+<button onClick="{{ t.pick }}" role="radio" aria-checked="{{ t.on }}" style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-direction:column;gap:6px;padding:6px;border:1px solid {{ t.border }};border-radius:var(--card-radius);background:var(--color-surface-raised)" style-hover="border-color:var(--color-border-strong)">
+<span style="display:flex;align-items:flex-end;justify-content:space-between;height:52px;padding:8px 10px;box-sizing:border-box;border-radius:calc(var(--card-radius) - 2px);background:{{ t.bg }};color:{{ t.text }};font-family:{{ t.font }};border:1px solid var(--color-border)"><span style="font-size:20px;font-weight:600;line-height:1">Aa</span><span style="width:22px;height:10px;border-radius:3px;background:{{ t.action }}"></span></span>
+<span style="display:flex;justify-content:space-between;align-items:center;padding:0 4px"><span style="display:flex;flex-direction:column"><span class="t-ui">{{ t.name }}</span><span class="t-caption" style="color:var(--color-text-subtle)">{{ t.note }}</span></span><span style="color:var(--color-action)">{{ t.check }}</span></span>
+</button>
+</sc-for>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:var(--space-2)">
+<div style="display:flex;justify-content:space-between;align-items:baseline"><span class="t-label" style="color:var(--color-text-subtle)">Color set</span><span class="t-caption" style="color:var(--color-text-subtle)">for {{ themeName }}</span></div>
+<div style="display:flex;flex-wrap:wrap;gap:var(--space-2)">
+<sc-for list="{{ accents }}" as="a" hint-placeholder-count="3">
+<button onClick="{{ a.pick }}" role="radio" aria-checked="{{ a.on }}" style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:8px;padding:6px 12px 6px 6px;border:1px solid {{ a.border }};border-radius:999px" style-hover="border-color:var(--color-border-strong)"><span style="display:grid;place-items:center;width:22px;height:22px;border-radius:999px;background:{{ a.color }};color:var(--color-on-action);font-size:11px">{{ a.check }}</span><span class="t-ui">{{ a.name }}</span></button>
+</sc-for>
+</div>
+<span class="t-caption" style="color:var(--color-text-subtle)">Recolors actions, links and focus only. State colors keep their meaning.</span>
+</div>
+</div>
+</sc-if>
+</div>
+</header>
+
+<div class="fg-shell__body fg-shell__body--no-right" style="grid-template-columns:{{ bodyCols }}">
+<aside class="fg-shell__rail fg-shell__rail--left" style="display:{{ railDisplay }};flex-direction:column;justify-content:space-between;gap:var(--space-4);overflow-y:auto;overflow-x:hidden;padding:{{ railPad }}">
+<nav class="fg-nav" aria-label="Primary" style="width:100%;min-width:0;box-sizing:border-box">
+<sc-for list="{{ nav }}" as="n" hint-placeholder-count="4">
+<button class="fg-nav__item {{ n.on }}" onClick="{{ n.go }}" title="{{ n.label }}" aria-label="{{ n.label }}" aria-current="{{ n.current }}" style="justify-content:{{ navJustify }}"><span class="fg-nav__icon">{{ n.icon }}</span><sc-if value="{{ railFull }}"><span class="fg-nav__label">{{ n.label }}</span><sc-if value="{{ n.badge }}"><span class="fg-nav__badge">{{ n.badge }}</span></sc-if></sc-if></button>
+</sc-for>
+</nav>
+<sc-if value="{{ railFull }}" hint-placeholder-val="{{ true }}">
+<button onClick="{{ goHome }}" style="all:unset;cursor:pointer;display:flex;flex-direction:column;gap:var(--space-2);padding:var(--space-3);border-top:1px solid var(--color-border)">
+<span class="t-label" style="color:var(--color-text-subtle)">Workspace</span>
+<sc-for list="{{ healthMini }}" as="h" hint-placeholder-count="3"><span class="fg-status {{ h.cls }}"><span class="fg-status__dot"></span>{{ h.label }}</span></sc-for>
+</button>
+</sc-if>
+</aside>
+
+<main id="main" ref="{{ mainRef }}" class="fg-shell__main" tabindex="-1" style="grid-column:-2/-1;min-width:0;overflow-y:auto;padding:{{ mainPad }};padding-bottom:{{ mainPadBottom }};display:flex;flex-direction:column;gap:var(--space-5)">
+
+<sc-if value="{{ degraded }}">
+<div class="fg-banner fg-banner--danger" role="alert" style="flex-wrap:wrap"><span class="fg-banner__dot"></span><span class="fg-banner__body"><strong>Search index needs rebuild.</strong> Catalog is stale. Run <code style="font-family:var(--font-mono)">skillhub rebuild</code>, then reload.</span><button class="fg-btn fg-btn--secondary" onClick="{{ copyCmd }}">Copy command</button><button class="fg-btn fg-btn--ghost" onClick="{{ reload }}">Reload</button></div>
+</sc-if>
+
+<!-- HOME -->
+<sc-if value="{{ r.home }}" hint-placeholder-val="{{ true }}">
+<sc-if value="{{ loading }}">
+<div class="fg-card" style="display:flex;flex-direction:column;gap:12px"><div class="fg-skeleton" style="width:120px"></div><div class="fg-skeleton" style="width:60%"></div></div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:var(--space-4)"><div class="fg-card" style="display:flex;flex-direction:column;gap:12px"><div class="fg-skeleton" style="width:40%"></div><div class="fg-skeleton"></div><div class="fg-skeleton"></div><div class="fg-skeleton"></div></div><div class="fg-card" style="display:flex;flex-direction:column;gap:12px"><div class="fg-skeleton" style="width:40%"></div><div class="fg-skeleton"></div><div class="fg-skeleton"></div><div class="fg-skeleton"></div></div></div>
+</sc-if>
+<sc-if value="{{ notLoading }}" hint-placeholder-val="{{ true }}">
+<section class="fg-card fg-card--rule" aria-labelledby="na-h" style="display:flex;flex-direction:column;gap:var(--space-3)">
+<span id="na-h" class="t-label" style="color:var(--color-text-subtle)">Next action</span>
+<sc-if value="{{ home.hasAction }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-3) var(--space-4)">
+<span class="t-subheading" style="flex:1 1 280px;text-wrap:pretty">{{ home.summary }}</span>
+<sc-if value="{{ home.isCmd }}"><div style="display:flex;align-items:center;gap:8px;border:1px solid var(--color-border);background:var(--color-surface-sunken);border-radius:var(--input-radius);padding:4px 4px 4px 12px"><code style="font-family:var(--font-mono);font-size:13px">skillhub rebuild</code><button class="fg-btn fg-btn--secondary" onClick="{{ copyCmd }}">Copy command</button></div></sc-if>
+<sc-if value="{{ home.isNav }}"><button class="fg-btn fg-btn--primary" onClick="{{ goSourcesReady }}">Open sources →</button></sc-if>
+</div>
+</sc-if>
+<sc-if value="{{ home.noAction }}"><div class="t-body" style="color:var(--color-text-muted)">Nothing needs attention.</div></sc-if>
+</section>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:var(--space-4);align-items:start">
+<section class="fg-card" style="display:flex;flex-direction:column;gap:var(--space-3)">
+<div class="fg-card__title">Workspace health</div>
+<sc-for list="{{ healthRows }}" as="h" hint-placeholder-count="5">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:var(--space-3);padding:6px 0;border-bottom:1px solid var(--color-border)"><span class="t-body-sm" style="color:var(--color-text-muted)">{{ h.label }}</span><span class="fg-status {{ h.cls }}"><span class="fg-status__dot"></span>{{ h.value }}</span></div>
+</sc-for>
+</section>
+<section class="fg-card" style="display:flex;flex-direction:column;gap:var(--space-2)">
+<div class="fg-card__title">Summary</div>
+<sc-for list="{{ summary }}" as="s" hint-placeholder-count="7">
+<div style="display:flex;justify-content:space-between;align-items:baseline;gap:var(--space-3);padding:5px 0;border-bottom:1px solid var(--color-border)"><span class="t-body-sm" style="color:var(--color-text-muted)">{{ s.label }}</span><span style="display:flex;gap:8px;align-items:baseline"><sc-if value="{{ s.sub }}"><span class="t-caption" style="color:var(--color-text-subtle)">{{ s.sub }}</span></sc-if><span class="t-ui" style="font-family:var(--num-font,var(--font-mono));font-variant-numeric:tabular-nums;color:{{ s.color }}">{{ s.value }}</span></span></div>
+</sc-for>
+</section>
+</div>
+<section class="fg-card" style="display:flex;flex-direction:column;gap:var(--space-3)">
+<div class="fg-card__title">Action categories</div>
+<div style="display:flex;flex-wrap:wrap;gap:var(--space-2)">
+<sc-for list="{{ categories }}" as="c" hint-placeholder-count="7"><span class="fg-chip {{ c.cls }}" title="{{ c.title }}">{{ c.label }}<span style="font-family:var(--font-mono);margin-left:6px">{{ c.count }}</span></span></sc-for>
+</div>
+<span class="t-caption" style="color:var(--color-text-subtle)">{{ catNote }}</span>
+</section>
+</sc-if>
+</sc-if>
+
+<!-- SKILLS -->
+<sc-if value="{{ r.skills }}">
+<div style="display:flex;flex-wrap:wrap;gap:var(--space-3);align-items:center">
+<div class="fg-search" style="flex:1 1 220px;max-width:340px"><span class="fg-search__glyph"><svg width="13" height="13" viewBox="0 0 13 13" fill="none"><circle cx="5.5" cy="5.5" r="4" stroke="currentColor" stroke-width="1.3"></circle><path d="M8.5 8.5L12 12" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"></path></svg></span><input class="fg-input" placeholder="Search id or name" value="{{ q }}" onChange="{{ onQ }}" aria-label="Search skills"></div>
+<div class="fg-select" style="width:150px"><select aria-label="Lifecycle" value="{{ lcFilter }}" onChange="{{ onLc }}"><option value="all">Lifecycle: All</option><option value="draft">Draft</option><option value="active">Active</option><option value="deprecated">Deprecated</option><option value="archived">Archived</option></select><span class="fg-select__chev">▾</span></div>
+<div class="fg-select" style="width:170px"><select aria-label="Collection" value="{{ colFilter }}" onChange="{{ onCol }}"><option value="all">Collection: All</option><option value="engineering">engineering</option><option value="operations">operations</option><option value="docs">docs</option></select><span class="fg-select__chev">▾</span></div>
+<span style="flex:1"></span>
+<button class="fg-btn fg-btn--secondary" onClick="{{ goAdd }}">Add from GitHub</button>
+<button class="fg-btn fg-btn--primary" onClick="{{ goCreate }}">Create skill</button>
+</div>
+<sc-if value="{{ degraded }}"><div class="fg-banner fg-banner--info"><span class="fg-banner__dot"></span><span class="fg-banner__body">Served from fallback generation 417 because the current index is stale.</span></div></sc-if>
+<sc-if value="{{ loading }}"><div class="fg-card" style="display:flex;flex-direction:column;gap:14px"><div class="fg-skeleton"></div><div class="fg-skeleton"></div><div class="fg-skeleton"></div><div class="fg-skeleton"></div></div></sc-if>
+<sc-if value="{{ skillsEmptyAll }}"><div class="fg-card"><div class="fg-empty"><span style="font-size:20px">☰</span><span class="t-body">No skills yet.</span><button class="fg-btn fg-btn--primary" onClick="{{ goAdd }}">Add from GitHub</button></div></div></sc-if>
+<sc-if value="{{ skillsEmptyFiltered }}"><div class="fg-card"><div class="fg-empty"><span class="t-body">No skills match these filters.</span><button class="fg-btn fg-btn--secondary" onClick="{{ clearFilters }}">Clear filters</button></div></div></sc-if>
+<sc-if value="{{ skillsTable }}" hint-placeholder-val="{{ true }}">
+<div class="fg-card" style="padding:0;overflow:visible">
+<table class="fg-table fg-table--clickable" style="width:100%">
+<thead><tr><th>Skill</th><th>Collection</th><th>Lifecycle</th><th style="display:{{ cellDisp }}">Routing</th><th style="width:48px"><span style="position:absolute;left:-9999px">Actions</span></th></tr></thead>
+<tbody>
+<sc-for list="{{ skillRows }}" as="s" hint-placeholder-count="5">
+<tr onClick="{{ s.open }}">
+<td><div class="t-ui">{{ s.name }}</div><div style="font-family:var(--font-mono);font-size:12px;color:var(--color-text-subtle)">{{ s.id }}</div></td>
+<td class="t-body-sm">{{ s.col }}</td>
+<td><span class="fg-chip {{ s.lc.cls }}"><span aria-hidden="true">{{ s.lc.icon }}</span> {{ s.lc.label }}</span></td>
+<td class="t-body-sm" style="color:{{ s.routeColor }};display:{{ cellDisp }}">{{ s.routing }}</td>
+<td style="position:relative"><button class="fg-icon-btn" aria-label="Actions for {{ s.name }}" onClick="{{ s.menu }}">⋯</button>
+<sc-if value="{{ s.menuOpen }}"><div class="fg-menu" role="menu" style="position:absolute;right:8px;top:calc(100% - 4px);z-index:40"><button class="fg-menu__item" onClick="{{ s.open }}">Review</button><sc-if value="{{ s.canDeprecate }}"><button class="fg-menu__item" onClick="{{ s.deprecate }}">Deprecate</button></sc-if><sc-if value="{{ s.canArchive }}"><div class="fg-menu__sep"></div><button class="fg-menu__item fg-menu__item--danger" onClick="{{ s.archive }}">Archive</button></sc-if></div></sc-if>
+</td>
+</tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+<span class="t-caption" style="color:var(--color-text-subtle)">{{ skillCount }}</span>
+</sc-if>
+</sc-if>
+
+<!-- SKILL DETAIL -->
+<sc-if value="{{ r.skill }}">
+<section style="display:flex;flex-direction:column;gap:var(--space-3)">
+<div style="display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2) var(--space-3)">
+<span class="t-title">{{ sk.name }}</span>
+<button onClick="{{ copyId }}" title="Copy ID" style="all:unset;cursor:pointer;font-family:var(--font-mono);font-size:13px;color:var(--color-text-muted);padding:2px 6px;border:1px solid var(--color-border);border-radius:var(--radius-xs)">{{ sk.id }} ⧉</button>
+<span class="fg-chip fg-chip--neutral">{{ sk.col }}</span>
+<span class="fg-chip {{ sk.lc.cls }}"><span aria-hidden="true">{{ sk.lc.icon }}</span> {{ sk.lc.long }}</span>
+</div>
+<div style="display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-3)">
+<span class="t-body-sm" style="color:var(--color-text-muted);flex:1 1 260px">Next: {{ sk.next }}</span>
+<sc-if value="{{ sk.isDraft }}"><span class="t-caption" style="color:var(--color-warning)">Missing: trigger, min scope</span><button class="fg-btn fg-btn--primary" disabled="{{ true }}" aria-describedby="act-why">Activate skill</button></sc-if>
+<sc-if value="{{ sk.isActive }}"><button class="fg-btn fg-btn--secondary" onClick="{{ openDeprecate }}">Deprecate</button></sc-if>
+<sc-if value="{{ sk.isDeprecated }}"><button class="fg-btn fg-btn--danger" onClick="{{ openArchive }}">Archive</button></sc-if>
+<sc-if value="{{ sk.isArchived }}"><span class="t-caption" style="color:var(--color-text-subtle)">Read-only — no transitions from archived.</span></sc-if>
+</div>
+</section>
+<div class="fg-tabs" role="tablist" style="overflow-x:auto">
+<button class="fg-tab {{ tabs.review }}" role="tab" onClick="{{ tabReview }}">Review</button>
+<button class="fg-tab {{ tabs.editor }}" role="tab" onClick="{{ tabEditor }}">Editor</button>
+<button class="fg-tab {{ tabs.resources }}" role="tab" onClick="{{ tabResources }}">Resources</button>
+</div>
+
+<sc-if value="{{ tab.review }}" hint-placeholder-val="{{ true }}">
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:var(--space-4);align-items:start">
+<section class="fg-card" style="display:flex;flex-direction:column;gap:var(--space-2)"><div class="fg-card__title">Validity</div><span class="fg-status fg-status--ready"><span class="fg-status__dot"></span>Structurally valid</span><span class="t-body-sm" style="color:var(--color-text-muted)">0 canonical issues</span></section>
+<section class="fg-card" style="display:flex;flex-direction:column;gap:var(--space-2)"><div class="fg-card__title">Activation readiness</div>
+<sc-for list="{{ sk.readiness }}" as="x" hint-placeholder-count="4">
+<div style="display:flex;align-items:center;gap:var(--space-2);padding:5px 0;border-bottom:1px solid var(--color-border)"><span aria-hidden="true" style="width:16px;color:{{ x.color }}">{{ x.icon }}</span><span class="t-body-sm" style="flex:1">{{ x.label }}</span><sc-if value="{{ x.missing }}"><span class="t-caption" style="color:var(--color-warning)">Missing</span><button class="fg-btn fg-btn--ghost" onClick="{{ tabEditor }}">Go to field</button></sc-if></div>
+</sc-for>
+</section>
+<section class="fg-card" style="display:flex;flex-direction:column;gap:var(--space-2)"><div class="fg-card__title">Resources status</div><span class="t-body-sm">{{ sk.resSummary }}</span><sc-if value="{{ sk.hasChanged }}"><span class="fg-chip fg-chip--warning" style="align-self:flex-start">1 changed · references/checklist.md</span></sc-if></section>
+<section class="fg-card" style="display:flex;flex-direction:column;gap:var(--space-3)"><div class="fg-card__title">Canonical vs served</div>
+<sc-if value="{{ sk.hasChanged }}"><div class="fg-caveat fg-caveat--warn">Served catalog differs from canonical files. Rebuild to publish.</div></sc-if>
+<div class="fg-facts"><div class="fg-fact"><div class="fg-fact__label">Canonical</div><div class="fg-fact__value">{{ sk.lc.label }}</div></div><div class="fg-fact"><div class="fg-fact__label">Served</div><div class="fg-fact__value">{{ sk.served }}</div></div></div>
+</section>
+<section class="fg-card" style="display:flex;flex-direction:column;gap:var(--space-2)"><div class="fg-card__title">Provenance</div>
+<div class="fg-facts"><div class="fg-fact"><div class="fg-fact__label">Origin</div><div class="fg-fact__value" style="font-family:var(--font-mono);font-size:13px">github.com/acme/agent-skills</div></div><div class="fg-fact"><div class="fg-fact__label">Ref · commit</div><div class="fg-fact__value" style="font-family:var(--font-mono);font-size:13px">main · 3f9c2a1</div></div><div class="fg-fact"><div class="fg-fact__label">License</div><div class="fg-fact__value">MIT</div></div></div>
+</section>
+<section class="fg-card" style="display:flex;flex-direction:column;gap:var(--space-3)"><div class="fg-card__title">Git</div><span class="fg-status fg-status--warn"><span class="fg-status__dot"></span>Uncommitted canonical changes</span>
+<div style="display:flex;align-items:center;gap:8px;border:1px solid var(--color-border);background:var(--color-surface-sunken);border-radius:var(--input-radius);padding:4px 4px 4px 12px"><code style="font-family:var(--font-mono);font-size:13px;flex:1">git status</code><button class="fg-btn fg-btn--secondary" onClick="{{ copyCmd }}">Copy command</button></div>
+<span class="t-caption" style="color:var(--color-text-subtle)">The WebUI never commits or pushes.</span>
+</section>
+</div>
+</sc-if>
+
+<sc-if value="{{ tab.editor }}">
+<div style="display:grid;grid-template-columns:{{ editorCols }};gap:var(--space-4);align-items:start">
+<section class="fg-card" style="display:flex;flex-direction:column;gap:var(--space-3);min-width:0">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:var(--space-3);flex-wrap:wrap"><span class="fg-card__title" style="font-family:var(--font-mono);font-size:13px">skills/engineering/{{ sk.id }}/SKILL.md</span>
+<sc-if value="{{ notSplit }}"><div class="fg-seg"><button class="fg-seg__btn {{ em.edit }}" onClick="{{ emEdit }}">Edit</button><button class="fg-seg__btn {{ em.preview }}" onClick="{{ emPreview }}">Preview</button></div></sc-if></div>
+<div style="display:grid;grid-template-columns:{{ mdCols }};gap:var(--space-3)">
+<sc-if value="{{ showMdEdit }}" hint-placeholder-val="{{ true }}"><textarea class="fg-input fg-input--area" aria-label="SKILL.md content" spellcheck="false" style="min-height:380px;font-family:var(--font-mono);font-size:13px;line-height:1.55;resize:vertical" defaultValue="{{ sk.md }}"></textarea></sc-if>
+<sc-if value="{{ showMdPreview }}"><div class="fg-prose" style="min-height:380px;padding:var(--space-3) var(--space-4);border:1px solid var(--color-border);border-radius:var(--input-radius);background:var(--color-surface-sunken);overflow:auto"><h2 style="margin-top:0">{{ sk.name }}</h2><p>{{ sk.desc }}</p><h3>When reviewing</h3><ul><li>Check error handling on every external call.</li><li>Flag missing tests for changed branches.</li><li>Prefer small, named helpers over inline logic.</li></ul></div></sc-if>
+</div>
+</section>
+<section class="fg-card" style="display:flex;flex-direction:column;gap:var(--space-4)">
+<div class="fg-card__title">Routing &amp; metadata</div>
+<div class="fg-field"><label class="fg-field__label t-label">Name</label><input class="fg-input" defaultValue="{{ sk.name }}"></div>
+<div class="fg-field"><label class="fg-field__label t-label">Description</label><textarea class="fg-input fg-input--area" style="min-height:64px" defaultValue="{{ sk.desc }}"></textarea></div>
+<div class="fg-field"><label class="fg-field__label t-label">Operations</label><div style="display:flex;flex-wrap:wrap;gap:6px"><span class="fg-chip fg-chip--accent">write</span><span class="fg-chip fg-chip--accent">summarize</span><button class="fg-chip fg-chip--toggle">+ Add</button></div></div>
+<div class="fg-field"><label class="fg-field__label t-label">Triggers <span class="fg-field__req">*</span></label>
+<sc-if value="{{ sk.isDraft }}"><input class="fg-input" placeholder="e.g. write a PR description" aria-invalid="true" style="border-color:var(--color-danger)"><span class="fg-field__hint" style="color:var(--color-danger)">Required before activation.</span></sc-if>
+<sc-if value="{{ sk.notDraft }}"><div style="display:flex;flex-wrap:wrap;gap:6px"><span class="fg-chip fg-chip--neutral">review this PR</span><span class="fg-chip fg-chip--neutral">code review</span><button class="fg-chip fg-chip--toggle">+ Add</button></div></sc-if>
+</div>
+<div class="fg-field"><label class="fg-field__label t-label">Not for / Rationale</label><input class="fg-input" defaultValue="Not for release notes or changelogs."></div>
+<div class="fg-field"><label class="fg-field__label t-label">Min scope <span class="fg-field__req">*</span></label><div class="fg-select"><select defaultValue="{{ sk.scope }}"><option value="">Select scope</option><option value="file">file</option><option value="change">change</option><option value="repository">repository</option></select><span class="fg-select__chev">▾</span></div></div>
+</section>
+</div>
+<div style="position:sticky;bottom:0;display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-3);padding:var(--space-3) var(--space-4);background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--card-radius)">
+<span class="t-caption" style="color:var(--color-text-subtle);flex:1">Draft saved in this browser · 2 min ago</span>
+<button class="fg-btn fg-btn--primary" onClick="{{ previewUpdate }}">Preview changes</button>
+</div>
+</sc-if>
+
+<sc-if value="{{ tab.resources }}">
+<sc-if value="{{ sk.hasRes }}">
+<div class="fg-card" style="padding:0;overflow:auto">
+<table class="fg-table" style="width:100%"><thead><tr><th>Path</th><th>Kind</th><th class="fg-table__num">Size</th><th>Digest</th><th>State</th></tr></thead>
+<tbody><sc-for list="{{ sk.resources }}" as="f" hint-placeholder-count="3"><tr><td style="font-family:var(--font-mono);font-size:13px;padding-left:{{ f.indent }}">{{ f.path }}</td><td class="t-body-sm">{{ f.kind }}</td><td class="fg-table__num">{{ f.size }}</td><td style="font-family:var(--font-mono);font-size:12px;color:var(--color-text-subtle)">{{ f.digest }}</td><td><sc-if value="{{ f.tag }}"><span class="fg-chip {{ f.tagCls }}">{{ f.tag }}</span></sc-if></td></tr></sc-for></tbody></table>
+</div>
+<div class="fg-caveat fg-caveat--info">Changed resource: if only the catalog is out of date, run <code style="font-family:var(--font-mono)">skillhub rebuild</code>. If a file is missing, restore it or re-add the skill. Resource content is not viewable in v1.</div>
+</sc-if>
+<sc-if value="{{ sk.noRes }}"><div class="fg-card"><div class="fg-empty"><span class="t-body">No companion resources. Only SKILL.md.</span></div></div></sc-if>
+</sc-if>
+</sc-if>
+
+<!-- ADD SKILL -->
+<sc-if value="{{ r.add }}">
+<div class="fg-stepper"><span class="fg-step {{ step.one }}"><span class="fg-step__dot">{{ step.oneDot }}</span>Discover</span><span class="fg-stepper__rule"></span><span class="fg-step {{ step.two }}"><span class="fg-step__dot">2</span>Review</span></div>
+<sc-if value="{{ addStep1 }}" hint-placeholder-val="{{ true }}">
+<section class="fg-card" style="display:flex;flex-direction:column;gap:var(--space-4);max-width:760px">
+<div class="fg-field"><label class="fg-field__label t-label" for="gh">GitHub URL <span class="fg-field__req">*</span></label><input id="gh" class="fg-input" style="font-family:var(--font-mono);font-size:13px" defaultValue="https://github.com/acme/agent-skills/tree/main/skills"><span class="fg-field__hint">Public repository, subfolder or file URL.</span></div>
+<details class="fg-acc"><summary>Advanced</summary><div class="fg-acc__body" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:var(--space-4)"><div class="fg-field"><label class="fg-field__label t-label">Collection</label><input class="fg-input" defaultValue="default"></div><div class="fg-field"><label class="fg-field__label t-label">Target ID</label><input class="fg-input" placeholder="Only when importing one skill"></div></div></details>
+<sc-if value="{{ addSelection }}">
+<div class="fg-caveat fg-caveat--info" role="status" style="display:flex;flex-direction:column;gap:var(--space-3)">
+<span class="t-body-sm" style="font-family:var(--font-mono)">Found 3 skills under skills/: code-review, pr-description, release-notes. Pass a selection or import all.</span>
+<div style="display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:flex-end"><div class="fg-field" style="flex:1 1 220px"><label class="fg-field__label t-label">Skill name or path</label><input class="fg-input" defaultValue="pr-description"></div><button class="fg-btn fg-btn--primary" onClick="{{ addToReview }}">Preview</button><button class="fg-btn fg-btn--secondary" onClick="{{ addToReview }}">Import all</button></div>
+</div>
+</sc-if>
+<sc-if value="{{ addDiscovering }}"><div style="display:flex;align-items:center;gap:var(--space-3)" role="status"><div class="fg-spinner"></div><span class="t-body-sm" style="color:var(--color-text-muted)">Cloning and inspecting the pinned revision…</span><button class="fg-btn fg-btn--ghost" onClick="{{ cancelDiscover }}">Cancel</button></div></sc-if>
+<div style="display:flex;justify-content:flex-end;gap:var(--space-2)"><button class="fg-btn fg-btn--ghost" onClick="{{ goSkills }}">Cancel</button><button class="fg-btn fg-btn--primary" onClick="{{ discover }}" disabled="{{ addDiscovering }}">Discover skills</button></div>
+</section>
+</sc-if>
+<sc-if value="{{ addStep2 }}">
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:var(--space-4);align-items:start">
+<section class="fg-card" style="display:flex;flex-direction:column;gap:var(--space-3)"><div class="fg-card__title">Identity</div><div class="fg-facts"><div class="fg-fact"><div class="fg-fact__label">Skill ID</div><div class="fg-fact__value" style="font-family:var(--font-mono);font-size:13px">pr-description</div></div><div class="fg-fact"><div class="fg-fact__label">Name</div><div class="fg-fact__value">PR Description</div></div><div class="fg-fact"><div class="fg-fact__label">Collection</div><div class="fg-fact__value">engineering</div></div><div class="fg-fact"><div class="fg-fact__label">Target state</div><div class="fg-fact__value"><span class="fg-chip fg-chip--warning">✎ Draft</span></div></div></div><span class="t-body-sm" style="color:var(--color-text-muted)">Writes a reviewer-friendly pull request description from a diff.</span></section>
+<section class="fg-card" style="display:flex;flex-direction:column;gap:var(--space-3)"><div class="fg-card__title">Origin</div><div class="fg-facts" style="font-family:var(--font-mono);font-size:13px"><div class="fg-fact"><div class="fg-fact__label">Repository</div><div class="fg-fact__value">github.com/acme/agent-skills</div></div><div class="fg-fact"><div class="fg-fact__label">Ref</div><div class="fg-fact__value">main</div></div><div class="fg-fact"><div class="fg-fact__label">Commit</div><div class="fg-fact__value">3f9c2a1</div></div><div class="fg-fact"><div class="fg-fact__label">Path</div><div class="fg-fact__value">skills/pr-description</div></div></div><div style="display:flex;justify-content:space-between;padding-top:var(--space-2);border-top:1px solid var(--color-border)"><span class="t-body-sm" style="color:var(--color-text-muted)">License</span><span class="fg-chip fg-chip--success">MIT</span></div></section>
+<section class="fg-card" style="display:flex;flex-direction:column;gap:var(--space-2)"><div class="fg-card__title">Resources · 2 files · 3.4 KB</div><div class="fg-file"><span style="font-family:var(--font-mono);font-size:13px">SKILL.md</span><span class="fg-file__size">2.6 KB</span></div><div class="fg-file"><span style="font-family:var(--font-mono);font-size:13px">references/template.md</span><span class="fg-file__size">812 B</span></div><span class="t-caption" style="color:var(--color-text-subtle)">Assessment: no scripts, no binary assets.</span></section>
+</div>
+<section class="fg-card" style="display:flex;flex-direction:column;gap:var(--space-3);padding:var(--space-4)">
+<div class="fg-card__title">Diff · 2 added</div>
+<div style="border:1px solid var(--color-border);border-radius:var(--radius-sm);overflow:auto;font-family:var(--font-mono);font-size:12.5px;line-height:1.6;background:var(--color-surface-sunken)">
+<div style="display:flex;background:var(--color-success-tint);color:var(--color-text)"><span style="width:28px;text-align:center;color:var(--color-success)" aria-label="Added">+</span><span>skills/engineering/pr-description/SKILL.md</span></div>
+<div style="display:flex;background:var(--color-success-tint);color:var(--color-text)"><span style="width:28px;text-align:center;color:var(--color-success)" aria-label="Added">+</span><span>skills/engineering/pr-description/references/template.md</span></div>
+</div>
+</section>
+<details class="fg-acc"><summary>Technical details</summary><div class="fg-acc__body" style="font-family:var(--font-mono);font-size:12.5px;display:grid;gap:4px"><span>proposal_id  PRP-01J9X4K2M7QF</span><span>proposal_digest  sha256:9c2e…41fd</span><span>base_catalog_version  418</span></div></details>
+<div style="position:sticky;bottom:0;display:flex;flex-wrap:wrap;gap:var(--space-2);justify-content:flex-end;padding:var(--space-3) var(--space-4);background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--card-radius)"><button class="fg-btn fg-btn--ghost" onClick="{{ addBack }}">Back</button><button class="fg-btn fg-btn--ghost" onClick="{{ goSkills }}">Cancel</button><button class="fg-btn fg-btn--primary" onClick="{{ confirmImport }}">Confirm import</button></div>
+</sc-if>
+</sc-if>
+
+<!-- CREATE SKILL -->
+<sc-if value="{{ r.create }}">
+<div style="display:flex;flex-direction:column;gap:var(--space-4);max-width:760px;width:100%">
+<section class="fg-card" style="display:flex;flex-direction:column;gap:var(--space-4)"><div class="fg-card__title">Identity</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:var(--space-4)"><div class="fg-field"><label class="fg-field__label t-label">Skill ID <span class="fg-field__req">*</span></label><input class="fg-input" style="font-family:var(--font-mono)" placeholder="e.g. release-checklist"><span class="fg-field__hint">Lowercase, hyphenated. Final ID comes from the preview.</span></div><div class="fg-field"><label class="fg-field__label t-label">Display name <span class="fg-field__req">*</span></label><input class="fg-input" placeholder="Release Checklist"></div></div>
+<div class="fg-field"><label class="fg-field__label t-label">Description</label><textarea class="fg-input fg-input--area" style="min-height:64px"></textarea></div>
+<div class="fg-field" style="max-width:240px"><label class="fg-field__label t-label">Collection</label><div class="fg-select"><select><option>default</option><option>engineering</option><option>operations</option><option>docs</option></select><span class="fg-select__chev">▾</span></div></div>
+</section>
+<section class="fg-card" style="display:flex;flex-direction:column;gap:var(--space-4)"><div class="fg-card__title">Routing</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:var(--space-4)"><div class="fg-field"><label class="fg-field__label t-label">Operations</label><input class="fg-input" placeholder="write, review"></div><div class="fg-field"><label class="fg-field__label t-label">Triggers</label><input class="fg-input" placeholder="prepare a release"></div><div class="fg-field"><label class="fg-field__label t-label">Not for / Rationale</label><input class="fg-input"></div><div class="fg-field"><label class="fg-field__label t-label">Min scope</label><div class="fg-select"><select><option>Select scope</option><option>file</option><option>change</option><option>repository</option></select><span class="fg-select__chev">▾</span></div></div></div>
+</section>
+<section class="fg-card" style="display:flex;flex-direction:column;gap:var(--space-4)"><div class="fg-card__title">Instructions</div>
+<div class="fg-seg" style="align-self:flex-start"><button class="fg-seg__btn {{ ins.scaffold }}" onClick="{{ insScaffold }}">Default scaffold</button><button class="fg-seg__btn {{ ins.upload }}" onClick="{{ insUpload }}">Upload Markdown</button><button class="fg-seg__btn {{ ins.write }}" onClick="{{ insWrite }}">Write</button></div>
+<sc-if value="{{ insIsScaffold }}" hint-placeholder-val="{{ true }}"><div class="fg-caveat fg-caveat--info">A default scaffold will be used. An untouched scaffold cannot be activated.</div></sc-if>
+<sc-if value="{{ insIsUpload }}"><div class="fg-upload"><span class="t-body-sm">Drop a .md file or <span class="fg-upload__browse">browse</span></span><span class="fg-upload__hint">Content is read into the form; nothing is uploaded.</span></div></sc-if>
+<sc-if value="{{ insIsWrite }}"><textarea class="fg-input fg-input--area" style="min-height:200px;font-family:var(--font-mono);font-size:13px" placeholder="# Release Checklist"></textarea></sc-if>
+</section>
+<div style="position:sticky;bottom:0;display:flex;justify-content:flex-end;gap:var(--space-2);padding:var(--space-3) var(--space-4);background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--card-radius)"><button class="fg-btn fg-btn--ghost" onClick="{{ goSkills }}">Cancel</button><button class="fg-btn fg-btn--primary" onClick="{{ previewCreate }}">Preview draft</button></div>
+</div>
+</sc-if>
+
+<!-- SOURCES -->
+<sc-if value="{{ r.sources }}">
+<div style="display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:center">
+<div class="fg-seg"><button class="fg-seg__btn {{ sf.all }}" onClick="{{ sfAll }}">All</button><button class="fg-seg__btn {{ sf.ready }}" onClick="{{ sfReady }}">Ready to distill</button></div>
+<span style="flex:1"></span>
+<button class="fg-btn fg-btn--ghost" onClick="{{ goWatch }}">Watch new source</button>
+<button class="fg-btn fg-btn--secondary" onClick="{{ checkDue }}" disabled="{{ checking }}">Check due sources</button>
+<button class="fg-btn fg-btn--secondary" onClick="{{ checkDue }}" disabled="{{ checking }}">Check all sources</button>
+<button class="fg-btn fg-btn--primary" onClick="{{ goDistill }}" disabled="{{ noSelection }}">Distill with Curator Agent ({{ selCount }})</button>
+</div>
+<sc-if value="{{ checking }}"><div class="fg-banner fg-banner--info" role="status"><div class="fg-spinner"></div><span class="fg-banner__body">Checking 2 sources… Updates source revision and status only; skills are not changed.</span></div></sc-if>
+<sc-if value="{{ checked }}"><div class="fg-banner fg-banner--warning" role="status"><span class="fg-banner__dot"></span><span class="fg-banner__body">Last check (this session): 2 checked · 1 changed · 0 unchanged · 1 unreachable</span></div></sc-if>
+<sc-if value="{{ loading }}"><div class="fg-card" style="display:flex;flex-direction:column;gap:14px"><div class="fg-skeleton"></div><div class="fg-skeleton"></div></div></sc-if>
+<sc-if value="{{ srcEmpty }}"><div class="fg-card"><div class="fg-empty"><span class="t-body">No sources are being watched.</span><button class="fg-btn fg-btn--primary" onClick="{{ goWatch }}">Watch new source</button></div></div></sc-if>
+<sc-if value="{{ srcTable }}" hint-placeholder-val="{{ true }}">
+<div class="fg-card" style="padding:0;overflow:auto">
+<table class="fg-table" style="width:100%;min-width:640px">
+<thead><tr><th style="width:36px"></th><th>Source</th><th>Monitor</th><th>Trust · License</th><th>Revision</th><th>Status</th><th></th></tr></thead>
+<tbody>
+<sc-for list="{{ srcRows }}" as="s" hint-placeholder-count="2">
+<tr class="{{ s.rowCls }}">
+<td><button class="fg-check" onClick="{{ s.toggle }}" disabled="{{ s.noSelect }}" aria-label="Select {{ s.id }}" style="border:0;background:none;padding:0;opacity:{{ s.selOpacity }}"><span class="fg-check__box {{ s.checkCls }}">{{ s.checkMark }}</span></button></td>
+<td><div class="t-ui" style="font-family:var(--font-mono);font-size:13px">{{ s.id }}</div><div class="t-caption" style="color:var(--color-text-subtle);font-family:var(--font-mono)">{{ s.locator }}</div></td>
+<td class="t-body-sm">{{ s.monitor }}</td>
+<td><div class="t-body-sm">{{ s.trust }}</div><div class="t-caption" style="color:{{ s.licColor }}">{{ s.license }}</div></td>
+<td style="font-family:var(--font-mono);font-size:12.5px"><div>{{ s.cur }}</div><div style="color:var(--color-text-subtle)">{{ s.dist }}</div></td>
+<td><span class="fg-chip {{ s.stCls }}">{{ s.stIcon }} {{ s.status }}</span><sc-if value="{{ s.err }}"><div class="t-caption" style="color:var(--color-danger);margin-top:4px;max-width:200px">{{ s.err }}</div></sc-if></td>
+<td><button class="fg-btn fg-btn--ghost" onClick="{{ checkDue }}">Check now</button></td>
+</tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+</sc-if>
+<section class="fg-card" style="display:flex;flex-direction:column;gap:var(--space-3)">
+<div class="fg-card__title">Open a run</div>
+<div style="display:flex;gap:var(--space-2);flex-wrap:wrap"><input class="fg-input" style="flex:1 1 240px;max-width:420px;font-family:var(--font-mono)" placeholder="RUN-…" aria-label="Run ID"><button class="fg-btn fg-btn--secondary" onClick="{{ goRun }}">Open</button></div>
+<div style="display:flex;align-items:baseline;gap:var(--space-2);flex-wrap:wrap;margin-top:var(--space-2)"><span class="t-label" style="color:var(--color-text-subtle)">Recent runs on this browser</span><span class="t-caption" style="color:var(--color-text-subtle)">Not a full workspace history.</span></div>
+<sc-if value="{{ hasRecent }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2) var(--space-4);padding:var(--space-2) 0;border-top:1px solid var(--color-border)"><a href="#" onClick="{{ goRun }}" style="font-family:var(--font-mono);font-size:13px">RUN-7K2M9QX4B1D8F3A6</a><span class="t-body-sm" style="color:var(--color-text-muted)">acme-agent-skills</span><span class="fg-chip {{ run.cls }}">{{ run.label }}</span><span style="flex:1"></span><button class="fg-btn fg-btn--ghost" onClick="{{ removeRecent }}">Remove from this browser</button></div>
+</sc-if>
+<sc-if value="{{ noRecent }}"><div class="fg-empty" style="padding:var(--space-4)"><span class="t-body-sm">No runs opened on this browser yet.</span><button class="fg-btn fg-btn--secondary" onClick="{{ goDistill }}">Distill with Curator Agent</button></div></sc-if>
+</section>
+</sc-if>
+
+<!-- WATCH -->
+<sc-if value="{{ r.watch }}">
+<section class="fg-card" style="display:flex;flex-direction:column;gap:var(--space-4);max-width:760px">
+<div class="fg-field"><label class="fg-field__label t-label">GitHub URL <span class="fg-field__req">*</span></label><input class="fg-input" style="font-family:var(--font-mono);font-size:13px" placeholder="https://github.com/owner/repo"><span class="fg-field__hint">Public repositories only. Local paths are not supported.</span></div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:var(--space-4)">
+<div class="fg-field"><label class="fg-field__label t-label">Source ID</label><input class="fg-input" style="font-family:var(--font-mono)"></div>
+<div class="fg-field"><label class="fg-field__label t-label">Ref</label><input class="fg-input" style="font-family:var(--font-mono)" placeholder="main"></div>
+<div class="fg-field"><label class="fg-field__label t-label">Repository path</label><input class="fg-input" style="font-family:var(--font-mono)" placeholder="skills/"></div>
+<div class="fg-field"><label class="fg-field__label t-label">License</label><input class="fg-input" placeholder="MIT"></div>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:var(--space-5);align-items:center">
+<button class="fg-switch {{ monCls }}" onClick="{{ toggleMon }}" style="border:0;background:none;padding:0" role="switch" aria-checked="{{ monitoring }}"><span class="fg-switch__track"><span class="fg-switch__dot"></span></span><span class="fg-switch__label">Monitoring</span></button>
+<div class="fg-field"><label class="fg-field__label t-label">Cadence</label><div class="fg-seg"><button class="fg-seg__btn" disabled="{{ notMonitoring }}">Daily</button><button class="fg-seg__btn {{ cad.weekly }}" disabled="{{ notMonitoring }}">Weekly</button><button class="fg-seg__btn {{ cad.manual }}">Manual</button></div><sc-if value="{{ notMonitoring }}"><span class="fg-field__hint">Locked to Manual while monitoring is off.</span></sc-if></div>
+<div class="fg-field"><label class="fg-field__label t-label">Trust</label><div class="fg-select" style="width:160px"><select><option>community</option><option>official</option><option>internal</option></select><span class="fg-select__chev">▾</span></div></div>
+</div>
+<div style="display:flex;justify-content:flex-end;gap:var(--space-2)"><button class="fg-btn fg-btn--ghost" onClick="{{ goSources }}">Cancel</button><button class="fg-btn fg-btn--primary" onClick="{{ previewWatch }}">Preview</button></div>
+</section>
+</sc-if>
+
+<!-- DISTILL -->
+<sc-if value="{{ r.distill }}">
+<section class="fg-card" style="display:flex;flex-direction:column;gap:var(--space-2)">
+<div class="fg-card__title">Selected sources (1)</div>
+<div style="display:flex;flex-wrap:wrap;gap:var(--space-3);align-items:center"><span style="font-family:var(--font-mono);font-size:13px">acme-agent-skills</span><span style="font-family:var(--font-mono);font-size:12.5px;color:var(--color-text-muted)">3f9c2a1 ← 81d04be</span><span class="fg-chip fg-chip--info">◆ Changed</span></div>
+</section>
+<section class="fg-codeblock">
+<div class="fg-codeblock__bar"><span class="t-label">Handoff for your Curator Agent</span><button class="fg-btn fg-btn--secondary" onClick="{{ copyHandoff }}">Copy handoff</button></div>
+<pre style="margin:0;padding:var(--space-4);max-height:300px;overflow:auto;font-family:var(--font-mono);font-size:12.5px;line-height:1.6;background:var(--color-surface-sunken);white-space:pre-wrap">idempotency_key: hnd-5e1a8c3f2b
+source_ids: [acme-agent-skills]
+
+1. Call curation_run_start with source_ids=[acme-agent-skills] and idempotency_key=hnd-5e1a8c3f2b.
+2. Read items[].prepared.revision_package and the target-revision resources within the bounded scope.
+3. Produce coverage, findings, comparisons, insights and outstanding_decisions.
+4. Call curation_run_submit for each run.
+5. Return every run ID and its final state. Report any source whose start failed.</pre>
+</section>
+<section class="fg-card" style="display:flex;flex-direction:column;gap:var(--space-3)">
+<div class="fg-field"><label class="fg-field__label t-label">Paste run IDs returned by the agent</label><textarea class="fg-input fg-input--area" style="font-family:var(--font-mono);font-size:13px;min-height:80px" placeholder="RUN-…  one per line" defaultValue="RUN-7K2M9QX4B1D8F3A6"></textarea></div>
+<div style="display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-3)"><span class="t-caption" style="color:var(--color-text-subtle);flex:1">ⓘ The WebUI never starts a run. Your agent does.</span><button class="fg-btn fg-btn--primary" onClick="{{ goRun }}">Open runs</button></div>
+</section>
+</sc-if>
+
+<!-- RUN -->
+<sc-if value="{{ r.run }}">
+<section style="display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2) var(--space-3)">
+<button onClick="{{ copyId }}" style="all:unset;cursor:pointer;font-family:var(--font-mono);font-size:15px">RUN-7K2M9QX4B1D8F3A6 ⧉</button>
+<span class="fg-chip {{ run.cls }}" aria-live="polite">{{ run.label }}</span>
+<span class="t-body-sm" style="color:var(--color-text-muted)">acme-agent-skills · Attempt 1</span>
+</section>
+<section class="fg-card">
+<div class="fg-facts">
+<div class="fg-fact"><div class="fg-fact__label">Revision</div><div class="fg-fact__value" style="font-family:var(--font-mono);font-size:13px">81d04be → 3f9c2a1</div></div>
+<div class="fg-fact"><div class="fg-fact__label">Package digest</div><div class="fg-fact__value" style="font-family:var(--font-mono);font-size:13px">sha256:4b1e…9a0c</div></div>
+<div class="fg-fact"><div class="fg-fact__label">Changed resources</div><div class="fg-fact__value">2</div></div>
+</div>
+<details class="fg-acc" style="margin-top:var(--space-3)"><summary>Changed resources</summary><div class="fg-acc__body" style="display:grid;gap:6px;font-family:var(--font-mono);font-size:12.5px"><span>skills/code-review/SKILL.md · modified</span><span>skills/code-review/references/checklist.md · added</span></div></details>
+</section>
+<sc-if value="{{ run.awaiting }}" hint-placeholder-val="{{ true }}">
+<section class="fg-card fg-card--rule" style="display:flex;flex-direction:column;gap:var(--space-3)">
+<div class="fg-card__title">Outstanding decision</div>
+<div style="display:flex;flex-wrap:wrap;gap:var(--space-2)"><span class="fg-chip fg-chip--warning">ambiguity</span><span style="font-family:var(--font-mono);font-size:12.5px;color:var(--color-text-muted)">skills/code-review/SKILL.md</span></div>
+<p class="t-body" style="margin:0;text-wrap:pretty">Upstream removed the 'nitpicks' section. Treat as intentional removal or as a pending rewrite?</p>
+<div class="fg-field"><label class="fg-field__label t-label">Decision <span class="fg-field__req">*</span></label><textarea class="fg-input fg-input--area" style="min-height:80px" value="{{ decision }}" onChange="{{ onDecision }}" placeholder="e.g. Intentional removal. Drop nitpicks guidance."></textarea><span class="fg-field__hint">Required before copying the resume handoff.</span></div>
+</section>
+</sc-if>
+<sc-if value="{{ run.finalized }}">
+<section class="fg-card" style="display:flex;flex-direction:column;gap:var(--space-3)"><div class="fg-card__title">Finalized</div>
+<div class="fg-facts"><div class="fg-fact"><div class="fg-fact__label">Coverage</div><div class="fg-fact__value">2 resources analyzed</div></div><div class="fg-fact"><div class="fg-fact__label">Findings</div><div class="fg-fact__value">3</div></div><div class="fg-fact"><div class="fg-fact__label">Comparisons</div><div class="fg-fact__value">1</div></div><div class="fg-fact"><div class="fg-fact__label">Insights</div><div class="fg-fact__value">2</div></div></div>
+<button class="fg-btn fg-btn--primary" style="align-self:flex-start" onClick="{{ goInbox }}">Open Inbox →</button></section>
+</sc-if>
+<sc-if value="{{ run.failed }}"><div class="fg-banner fg-banner--danger"><span class="fg-banner__dot"></span><span class="fg-banner__body">Submission rejected: coverage missing for skills/code-review/references/checklist.md.</span></div></sc-if>
+<sc-if value="{{ run.noKey }}"><div class="fg-caveat fg-caveat--info">This browser does not have the run's handoff key, so resume is unavailable. Cancel the run, then create a new handoff.</div></sc-if>
+<div style="display:flex;flex-wrap:wrap;gap:var(--space-2)">
+<button class="fg-btn fg-btn--secondary" onClick="{{ refreshRun }}">Refresh status</button>
+<sc-if value="{{ run.canResume }}"><button class="fg-btn fg-btn--primary" onClick="{{ copyResume }}" disabled="{{ resumeDisabled }}">Copy resume handoff</button></sc-if>
+<span style="flex:1"></span>
+<sc-if value="{{ run.canCancel }}"><button class="fg-btn fg-btn--danger" onClick="{{ openCancelRun }}">Cancel run</button></sc-if>
+</div>
+</sc-if>
+
+<!-- INBOX -->
+<sc-if value="{{ r.inbox }}">
+<div style="display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:center">
+<div class="fg-select" style="width:150px"><select aria-label="Status"><option>Status: All</option><option>Pending</option><option>Planned</option></select><span class="fg-select__chev">▾</span></div>
+<div class="fg-select" style="width:170px"><select aria-label="Category"><option>Category: All</option><option>reliability</option><option>clarity</option></select><span class="fg-select__chev">▾</span></div>
+<div class="fg-select" style="width:150px"><select aria-label="Priority"><option>Priority: All</option><option>Critical</option><option>High</option><option>Medium</option><option>Low</option></select><span class="fg-select__chev">▾</span></div>
+<span class="t-caption" style="color:var(--color-text-subtle)">Filtering 2 loaded groups</span>
+</div>
+<sc-if value="{{ loading }}"><div class="fg-card" style="display:flex;flex-direction:column;gap:14px"><div class="fg-skeleton" style="width:30%"></div><div class="fg-skeleton"></div><div class="fg-skeleton"></div></div></sc-if>
+<sc-if value="{{ inboxEmpty }}"><div class="fg-card"><div class="fg-empty"><span style="font-size:20px">✉</span><span class="t-body">No pending or planned insights.</span></div></div></sc-if>
+<sc-if value="{{ degraded }}"><div class="fg-banner fg-banner--info"><span class="fg-banner__dot"></span><span class="fg-banner__body">Data changed since this page loaded. Reloading from the first page.</span><button class="fg-btn fg-btn--ghost" onClick="{{ reload }}">Reload</button></div></sc-if>
+<sc-if value="{{ inboxList }}" hint-placeholder-val="{{ true }}">
+<sc-for list="{{ groups }}" as="g" hint-placeholder-count="2">
+<section style="display:flex;flex-direction:column;gap:var(--space-2)">
+<div class="fg-group-head" style="cursor:default"><span class="fg-group-head__caret"></span><span class="fg-group-head__label"><span style="font-family:var(--font-mono)">{{ g.skill }}</span> · {{ g.category }}</span><span class="fg-group-head__count">{{ g.count }}</span></div>
+<sc-for list="{{ g.items }}" as="i" hint-placeholder-count="1">
+<button class="fg-card" onClick="{{ i.open }}" style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-wrap:wrap;gap:var(--space-2) var(--space-4);align-items:center;padding:var(--space-4);border:1px solid var(--color-border);border-radius:var(--card-radius);background:var(--color-surface)" style-hover="border-color:var(--color-border-strong);background:var(--color-surface-hover)">
+<span class="fg-priority {{ i.prCls }}">{{ i.priority }}</span>
+<span style="display:flex;flex-direction:column;gap:4px;flex:1 1 280px;min-width:0"><span class="t-ui" style="text-wrap:pretty">{{ i.rec }}</span><span class="t-caption" style="color:var(--color-text-subtle);font-family:var(--num-font,var(--font-mono))">Score {{ i.score }} · Impact {{ i.impact }} · {{ i.sources }} sources · {{ i.findings }} findings</span><sc-if value="{{ i.stale }}"><span class="t-caption" style="color:var(--color-warning)">⚠ Stale evidence</span></sc-if></span>
+<span class="fg-chip {{ i.stCls }}">{{ i.status }}</span>
+<span class="t-ui" style="color:var(--color-link)">Open →</span>
+</button>
+</sc-for>
+</section>
+</sc-for>
+<button class="fg-btn fg-btn--secondary" style="align-self:center">Load more</button>
+</sc-if>
+</sc-if>
+
+<!-- INSIGHT -->
+<sc-if value="{{ r.insight }}">
+<div style="display:grid;grid-template-columns:{{ insightCols }};gap:var(--space-4);align-items:start">
+<div style="display:flex;flex-direction:column;gap:var(--space-4);min-width:0">
+<section class="fg-card" style="display:flex;flex-direction:column;gap:var(--space-3)">
+<span style="font-family:var(--font-mono);font-size:12.5px;color:var(--color-text-subtle)">INS-code-review--flag-unbounded-retries</span>
+<span class="t-title" style="text-wrap:pretty">Flag unbounded retry loops in reviewed code</span>
+<p class="t-body" style="margin:0;color:var(--color-text-muted);text-wrap:pretty">Two upstream sources now ask reviewers to reject retry loops without an attempt limit or backoff. Code Review does not mention retries today.</p>
+<div style="display:flex;flex-wrap:wrap;gap:var(--space-2)"><span class="fg-priority fg-priority--high">High</span><span class="fg-chip fg-chip--neutral">reliability</span><span class="fg-chip fg-chip--neutral" style="font-family:var(--font-mono)">code-review</span></div>
+</section>
+<section class="fg-card" style="display:flex;flex-direction:column;gap:var(--space-2)"><div class="fg-card__title">Findings · 2 direct</div>
+<sc-for list="{{ observations.direct }}" as="o" hint-placeholder-count="2"><div style="display:flex;flex-direction:column;gap:2px;padding:8px 0;border-bottom:1px solid var(--color-border)"><span style="font-family:var(--font-mono);font-size:12px;color:var(--color-text-subtle)">{{ o.id }}</span><span class="t-body-sm">{{ o.text }}</span></div></sc-for>
+</section>
+<section class="fg-card" style="display:flex;flex-direction:column;gap:var(--space-2)"><div class="fg-card__title">Comparisons · 1</div>
+<div class="fg-facts"><div class="fg-fact"><div class="fg-fact__label">Subject</div><div class="fg-fact__value">Retry guidance across sources</div></div><div class="fg-fact"><div class="fg-fact__label">Verdict</div><div class="fg-fact__value">Adopt with explicit limit</div></div><div class="fg-fact"><div class="fg-fact__label">Trade-offs</div><div class="fg-fact__value">Adds one checklist item; low noise risk</div></div></div>
+</section>
+<section class="fg-card" style="display:flex;flex-direction:column;gap:var(--space-2)"><div class="fg-card__title">Decision history</div>
+<div class="fg-activity"><sc-for list="{{ decisions }}" as="d" hint-placeholder-count="1"><div class="fg-activity__item"><div class="fg-activity__dot {{ d.dot }}"></div><div><div class="fg-activity__body"><span class="fg-activity__kind">{{ d.kind }}</span>{{ d.text }}</div><div class="fg-activity__time">{{ d.time }}</div></div></div></sc-for></div>
+</section>
+</div>
+<aside class="fg-card" style="display:flex;flex-direction:column;gap:var(--space-3);position:sticky;top:0">
+<div style="display:flex;justify-content:space-between;align-items:center"><span class="t-label" style="color:var(--color-text-subtle)">Status</span><span class="fg-chip {{ ins.stCls }}">{{ ins.status }}</span></div>
+<div class="fg-divider"></div>
+<sc-if value="{{ ins.canCompose }}" hint-placeholder-val="{{ true }}"><button class="fg-btn fg-btn--primary" onClick="{{ goComposer }}">Compose patch</button></sc-if>
+<sc-if value="{{ ins.canPlan }}"><button class="fg-btn fg-btn--secondary" onClick="{{ openPlan }}">Plan</button></sc-if>
+<sc-if value="{{ ins.canReject }}"><button class="fg-btn fg-btn--secondary" onClick="{{ openReject }}">Reject</button></sc-if>
+<sc-if value="{{ ins.canReopen }}"><button class="fg-btn fg-btn--secondary" onClick="{{ openReopen }}">Reopen</button></sc-if>
+<sc-if value="{{ ins.canObsolete }}"><button class="fg-btn fg-btn--ghost" style="color:var(--color-danger)" onClick="{{ openObsolete }}">Obsolete</button></sc-if>
+<sc-if value="{{ ins.readOnly }}"><span class="t-caption" style="color:var(--color-text-subtle)">Read-only.</span></sc-if>
+<span class="t-caption" style="color:var(--color-text-subtle)">Evidence is current. Decisions apply immediately; rationale is required.</span>
+</aside>
+</div>
+</sc-if>
+
+<!-- COMPOSER -->
+<sc-if value="{{ r.composer }}">
+<div style="display:grid;grid-template-columns:{{ composerCols }};gap:var(--space-4);align-items:start">
+<section class="fg-card" style="display:flex;flex-direction:column;gap:var(--space-3);min-width:0">
+<div class="fg-card__title" style="font-family:var(--font-mono);font-size:13px">skills/engineering/code-review/SKILL.md</div>
+<textarea class="fg-input fg-input--area" aria-label="SKILL.md replacement content" spellcheck="false" style="min-height:440px;font-family:var(--font-mono);font-size:13px;line-height:1.55" defaultValue="{{ composerMd }}"></textarea>
+</section>
+<section class="fg-card" style="display:flex;flex-direction:column;gap:var(--space-3)">
+<div style="display:flex;justify-content:space-between;align-items:baseline"><span class="fg-card__title">Evidence mapping</span><span aria-live="polite" style="font-family:var(--font-mono);color:{{ cov.color }}">{{ cov.mapped }}/{{ cov.required }}</span></div>
+<sc-for list="{{ mapRows }}" as="m" hint-placeholder-count="4">
+<div style="display:flex;flex-direction:column;gap:6px;padding:var(--space-3) 0;border-top:1px solid var(--color-border)">
+<div style="display:flex;justify-content:space-between;gap:var(--space-2);align-items:flex-start"><span style="font-family:var(--font-mono);font-size:12px;word-break:break-all">{{ m.id }}</span><span class="fg-chip {{ m.cls }}" style="flex:none">{{ m.state }}</span></div>
+<span class="t-caption" style="color:var(--color-text-subtle)">{{ m.source }}</span>
+<input class="fg-input" placeholder="Concept, e.g. retry limits" value="{{ m.value }}" onChange="{{ m.onChange }}" aria-label="Concept for {{ m.id }}">
+<button class="fg-btn fg-btn--ghost" style="align-self:flex-start;padding:2px 8px">+ Add concept</button>
+</div>
+</sc-for>
+</section>
+</div>
+<div style="position:sticky;bottom:0;display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-3);padding:var(--space-3) var(--space-4);background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--card-radius)">
+<button class="fg-btn fg-btn--ghost" onClick="{{ saveDraft }}">Save local draft</button>
+<span class="t-caption" style="color:{{ cov.color }};flex:1">Mapped {{ cov.mapped }} of {{ cov.required }} required{{ cov.why }}</span>
+<button class="fg-btn fg-btn--ghost" onClick="{{ goInsight }}">Cancel</button>
+<button class="fg-btn fg-btn--primary" onClick="{{ previewApply }}" disabled="{{ cov.incomplete }}">Preview apply</button>
+</div>
+</sc-if>
+
+</main>
+</div>
+</div>
+
+<sc-if value="{{ showBottomBar }}">
+<nav aria-label="Primary" style="position:fixed;left:0;right:0;bottom:0;z-index:30;display:grid;grid-template-columns:repeat(4,1fr);background:var(--color-surface);border-top:1px solid var(--color-border);padding-bottom:env(safe-area-inset-bottom)">
+<sc-for list="{{ nav }}" as="n" hint-placeholder-count="4"><button onClick="{{ n.go }}" style="all:unset;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 0;min-height:48px;color:{{ n.color }}"><span style="font-size:16px">{{ n.icon }}</span><span class="t-caption">{{ n.label }}</span></button></sc-for>
+</nav>
+</sc-if>
+
+<!-- MENU DISMISS LAYER -->
+<sc-if value="{{ anyMenu }}"><div onClick="{{ closeMenu }}" style="position:fixed;inset:0;z-index:20"></div></sc-if>
+
+<!-- PROPOSAL PREVIEW -->
+<sc-if value="{{ pp.open }}">
+<div class="fg-scrim" style="padding:{{ scrimPad }}" onClick="{{ closeModal }}">
+<div class="fg-modal" role="dialog" aria-modal="true" aria-labelledby="pp-t" onClick="{{ stop }}" style="width:960px;max-width:100%;max-height:{{ modalMaxH }};height:{{ modalH }};display:flex;flex-direction:column">
+<div class="fg-modal__head"><div style="display:flex;flex-direction:column;gap:6px;min-width:0"><div id="pp-t" class="fg-modal__title">{{ pp.title }}</div><div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><span style="font-family:var(--font-mono);font-size:12.5px;color:var(--color-text-muted)">{{ pp.target }}</span><span class="fg-chip {{ pp.fromCls }}">{{ pp.from }}</span><span aria-hidden="true">→</span><span class="fg-chip {{ pp.toCls }}">{{ pp.to }}</span></div></div><button class="fg-icon-btn" aria-label="Close" onClick="{{ closeModal }}">✕</button></div>
+<div class="fg-modal__body" style="overflow-y:auto;flex:1">
+<sc-if value="{{ pp.stale }}"><div class="fg-banner fg-banner--danger" role="alert"><span class="fg-banner__dot"></span><span class="fg-banner__body">This proposal is no longer current. The base changed after it was created.</span><button class="fg-btn fg-btn--secondary" onClick="{{ newPreview }}">Create new preview</button></div></sc-if>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:var(--space-4)">
+<div style="display:flex;flex-direction:column;gap:6px"><span class="t-label" style="color:var(--color-text-subtle)">Affected paths</span><sc-for list="{{ pp.paths }}" as="p" hint-placeholder-count="1"><span style="font-family:var(--font-mono);font-size:12.5px;word-break:break-all">{{ p }}</span></sc-for></div>
+<div style="display:flex;flex-direction:column;gap:6px"><span class="t-label" style="color:var(--color-text-subtle)">Routing impact</span><span class="t-body-sm" style="text-wrap:pretty">{{ pp.impact }}</span></div>
+</div>
+<sc-if value="{{ pp.warning }}"><div class="fg-caveat fg-caveat--warn">{{ pp.warning }}</div></sc-if>
+<div style="display:flex;justify-content:space-between;align-items:center;gap:var(--space-3)"><span class="t-label" style="color:var(--color-text-subtle)">Diff · {{ pp.stat }}</span><sc-if value="{{ wide }}"><div class="fg-seg"><button class="fg-seg__btn {{ dm.unified }}" onClick="{{ dmUnified }}">Unified</button><button class="fg-seg__btn {{ dm.split }}" onClick="{{ dmSplit }}">Split</button></div></sc-if></div>
+<div style="border:1px solid var(--color-border);border-radius:var(--radius-sm);overflow:auto;font-family:var(--font-mono);font-size:12.5px;line-height:1.65;background:var(--color-surface-sunken)">
+<sc-if value="{{ dmIsUnified }}" hint-placeholder-val="{{ true }}">
+<sc-for list="{{ pp.diff }}" as="l" hint-placeholder-count="8"><div style="display:grid;grid-template-columns:40px 24px 1fr;background:{{ l.bg }}"><span style="text-align:right;padding-right:8px;color:var(--color-text-subtle)">{{ l.n }}</span><span aria-label="{{ l.aria }}" style="text-align:center;color:{{ l.fg }}">{{ l.p }}</span><span style="white-space:pre-wrap;padding-right:12px">{{ l.text }}</span></div></sc-for>
+</sc-if>
+<sc-if value="{{ dmIsSplit }}">
+<div style="display:grid;grid-template-columns:1fr 1fr">
+<div style="border-right:1px solid var(--color-border)"><sc-for list="{{ pp.left }}" as="l" hint-placeholder-count="6"><div style="display:grid;grid-template-columns:24px 1fr;background:{{ l.bg }}"><span style="text-align:center;color:{{ l.fg }}">{{ l.p }}</span><span style="white-space:pre-wrap;padding-right:8px">{{ l.text }}</span></div></sc-for></div>
+<div><sc-for list="{{ pp.right }}" as="l" hint-placeholder-count="6"><div style="display:grid;grid-template-columns:24px 1fr;background:{{ l.bg }}"><span style="text-align:center;color:{{ l.fg }}">{{ l.p }}</span><span style="white-space:pre-wrap;padding-right:8px">{{ l.text }}</span></div></sc-for></div>
+</div>
+</sc-if>
+</div>
+<details class="fg-acc"><summary>Technical details</summary><div class="fg-acc__body" style="font-family:var(--font-mono);font-size:12.5px;display:grid;gap:4px"><span>proposal_id  {{ pp.pid }}</span><span>proposal_digest  sha256:9c2e…41fd</span><span>base_catalog_version  418</span><button class="fg-btn fg-btn--ghost" style="justify-self:start;padding:2px 8px" onClick="{{ copyId }}">⧉ Copy pins</button></div></details>
+</div>
+<div class="fg-modal__actions"><button class="fg-btn fg-btn--ghost" onClick="{{ closeModal }}">Cancel</button><button class="fg-btn {{ pp.confirmCls }}" onClick="{{ confirmProposal }}" disabled="{{ pp.confirmDisabled }}">{{ pp.confirm }}</button></div>
+</div>
+</div>
+</sc-if>
+
+<!-- DESTRUCTIVE / DECISION -->
+<sc-if value="{{ dc.open }}">
+<div class="fg-scrim" onClick="{{ closeModal }}">
+<div class="fg-modal" role="alertdialog" aria-modal="true" aria-labelledby="dc-t" onClick="{{ stop }}">
+<div class="fg-modal__head"><div id="dc-t" class="fg-modal__title">{{ dc.title }}</div><button class="fg-icon-btn" aria-label="Close" onClick="{{ closeModal }}">✕</button></div>
+<div class="fg-modal__body"><p class="t-body" style="margin:0;color:var(--color-text-muted);text-wrap:pretty">{{ dc.body }}</p>
+<sc-if value="{{ dc.needsRationale }}"><div class="fg-field"><label class="fg-field__label t-label">Rationale <span class="fg-field__req">*</span></label><textarea class="fg-input fg-input--area" style="min-height:72px" value="{{ rationale }}" onChange="{{ onRationale }}"></textarea></div></sc-if>
+</div>
+<div class="fg-modal__actions"><button class="fg-btn fg-btn--ghost" onClick="{{ closeModal }}">Cancel</button><button class="fg-btn {{ dc.btnCls }}" onClick="{{ dc.go }}" disabled="{{ dc.disabled }}">{{ dc.confirm }}</button></div>
+</div>
+</div>
+</sc-if>
+
+<!-- CONFLICT DRAWER -->
+<sc-if value="{{ drawer }}">
+<div class="fg-scrim" style="z-index:70" onClick="{{ closeDrawer }}"></div>
+<aside class="fg-drawer" role="dialog" aria-modal="true" aria-labelledby="cd-t" style="width:640px;display:flex;flex-direction:column;z-index:80">
+<div class="fg-drawer__head"><span id="cd-t" class="t-heading-sm">SKILL.md changed since you opened it</span><button class="fg-icon-btn" aria-label="Close" onClick="{{ closeDrawer }}">✕</button></div>
+<div class="fg-drawer__body">
+<div class="fg-banner fg-banner--warning"><span class="fg-banner__dot"></span><span class="fg-banner__body">Another edit was applied (digest differs). Merge your draft onto the latest content and preview again. Your draft is kept.</span></div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:var(--space-3)">
+<div style="display:flex;flex-direction:column;gap:6px;min-width:0"><span class="t-label" style="color:var(--color-text-subtle)">Your draft</span><pre style="margin:0;padding:var(--space-3);background:var(--color-surface-sunken);border:1px solid var(--color-border);border-radius:var(--radius-sm);font-family:var(--font-mono);font-size:12px;white-space:pre-wrap;max-height:260px;overflow:auto">{{ draftExcerpt }}</pre></div>
+<div style="display:flex;flex-direction:column;gap:6px;min-width:0"><span class="t-label" style="color:var(--color-text-subtle)">Latest canonical</span><pre style="margin:0;padding:var(--space-3);background:var(--color-surface-sunken);border:1px solid var(--color-border);border-radius:var(--radius-sm);font-family:var(--font-mono);font-size:12px;white-space:pre-wrap;max-height:260px;overflow:auto">{{ latestExcerpt }}</pre></div>
+</div>
+<details class="fg-acc"><summary>Technical details</summary><div class="fg-acc__body" style="font-family:var(--font-mono);font-size:12.5px;display:grid;gap:4px"><span>expected  sha256:2d81…c4a7</span><span>latest    sha256:e03f…7b19</span></div></details>
+</div>
+<div class="fg-drawer__foot" style="flex-wrap:wrap"><button class="fg-btn fg-btn--ghost" onClick="{{ copyId }}">Download draft (.md)</button><button class="fg-btn fg-btn--ghost" onClick="{{ copyId }}">Copy draft</button><button class="fg-btn fg-btn--danger" onClick="{{ closeDrawer }}">Discard draft and reload</button><button class="fg-btn fg-btn--primary" onClick="{{ useLatest }}">Use latest as base</button></div>
+</aside>
+</sc-if>
+
+<sc-if value="{{ toast }}">
+<div class="fg-toast-stack" role="status" aria-live="polite" style="bottom:{{ toastBottom }}"><div class="fg-toast fg-toast--success"><span class="fg-toast__dot"></span>{{ toast }}<span class="fg-toast__act"><button class="fg-btn fg-btn--ghost" style="padding:2px 8px" onClick="{{ copyId }}">⧉</button></span></div></div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;screenState&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;live&quot;,&quot;loading&quot;,&quot;empty&quot;,&quot;degraded&quot;],&quot;default&quot;:&quot;live&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;States&quot;},&quot;runState&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;prepared&quot;,&quot;in_progress&quot;,&quot;awaiting_decision&quot;,&quot;failed&quot;,&quot;finalized&quot;,&quot;cancelled&quot;],&quot;default&quot;:&quot;awaiting_decision&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;States&quot;},&quot;runHasKey&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;States&quot;},&quot;simulateConflict&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;States&quot;},&quot;proposalStale&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;States&quot;},&quot;density&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;default&quot;,&quot;compact&quot;],&quot;default&quot;:&quot;default&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Theme&quot;}}">
+const THEMES=[
+ {id:'precision',name:'Precision',note:'Sharp, border-first'},
+ {id:'berich',name:'beRich',note:'Warm, gemstone accents'},
+ {id:'clickup',name:'ClickUp',note:'Rounded, violet brand'},
+ {id:'terminal',name:'Terminal',note:'Mono, square corners'},
+ {id:'atelier',name:'Atelier',note:'Soft, pill radius'},
+ {id:'moday',name:'Moday',note:'Friendly, open'}];
+const ACCENTS={precision:['moss','honey'],berich:['gold','sapphire','topaz','amethyst','garnet'],clickup:['violet','blue'],terminal:['amber'],atelier:['clay','honey'],moday:['purple','green']};
+const LC={draft:{cls:'fg-chip--warning',icon:'✎',label:'Draft',long:'Draft — Not yet usable by agents'},active:{cls:'fg-chip--success',icon:'●',label:'Active',long:'Active — Routable'},deprecated:{cls:'fg-chip--danger',icon:'▲',label:'Deprecated',long:'Deprecated — Not preferred for new work'},archived:{cls:'fg-chip--neutral',icon:'▪',label:'Archived',long:'Archived — Removed from routing'}};
+const SKILLS=[
+ {id:'code-review',name:'Code Review',col:'engineering',lc:'active',r:true,desc:'Reviews a change for correctness, safety and clarity.'},
+ {id:'incident-postmortem',name:'Incident Postmortem',col:'operations',lc:'active',r:true,desc:'Drafts a blameless postmortem from an incident timeline.'},
+ {id:'pr-description',name:'PR Description',col:'engineering',lc:'draft',r:false,desc:'Writes a reviewer-friendly pull request description from a diff.'},
+ {id:'release-notes',name:'Release Notes',col:'docs',lc:'deprecated',r:false,desc:'Summarizes merged changes into user-facing release notes.'},
+ {id:'legacy-changelog',name:'Legacy Changelog',col:'docs',lc:'archived',r:false,desc:'Formats a changelog in the legacy Keep-a-Changelog style.'}];
+const OBS=[
+ {id:'OBS-acme-agent-skills--retry-loop-guidance',text:'Upstream checklist requires an explicit attempt limit on every retry loop.',src:'Direct finding'},
+ {id:'OBS-acme-agent-skills--backoff-jitter',text:'Upstream recommends exponential backoff with jitter for network retries.',src:'Direct finding'},
+ {id:'OBS-acme-agent-skills--retry-budget',src:'Comparison · Retry guidance across sources · Adopt with explicit limit'},
+ {id:'OBS-acme-agent-skills--idempotent-retries',src:'Comparison · Retry guidance across sources · Adopt with explicit limit'}];
+const MD=`---
+name: Code Review
+lifecycle: active
+---
+# Code Review
+
+Review the change for correctness, safety and clarity.
+
+## When reviewing
+- Check error handling on every external call.
+- Flag missing tests for changed branches.
+- Prefer small, named helpers over inline logic.
+`;
+const L=(t,n,text)=>({t,n,text});
+const DIFFS={
+ deprecate:[L('c','1','---'),L('c','2','name: Code Review'),L('d','3','lifecycle: active'),L('a','3','lifecycle: deprecated'),L('c','4','---')],
+ archive:[L('c','1','---'),L('c','2','name: Release Notes'),L('d','3','lifecycle: deprecated'),L('a','3','lifecycle: archived'),L('c','4','---')],
+ update:[L('c','4','routing:'),L('d','5','  triggers: []'),L('a','5','  triggers:'),L('a','6','    - write a PR description'),L('a','7','    - summarize this diff for reviewers'),L('d','6','  min_scope: null'),L('a','8','  min_scope: change'),L('c','9','---')],
+ create:[L('a','1','---'),L('a','2','name: Release Checklist'),L('a','3','lifecycle: draft'),L('a','4','---'),L('a','5','# Release Checklist'),L('a','6',''),L('a','7','<!-- scaffold: replace with instructions -->')],
+ apply:[L('c','9','## When reviewing'),L('c','10','- Check error handling on every external call.'),L('a','11','- Reject retry loops without an explicit attempt limit.'),L('a','12','- Require exponential backoff with jitter for network retries.'),L('c','13','- Flag missing tests for changed branches.')],
+ watch:[L('a','1','id: contoso-prompts'),L('a','2','locator: github.com/contoso/prompts@main'),L('a','3','monitoring: { enabled: true, cadence: weekly }'),L('a','4','trust: { source: community, reviewed: false }')]};
+const PROPS={
+ deprecate:{title:'Deprecate skill',target:'code-review',from:'active',to:'deprecated',paths:['skills/engineering/code-review/SKILL.md'],impact:'Code Review stops being preferred for new work. Existing routes still resolve until it is archived.',confirm:'Confirm deprecate',receipt:'Deprecated · OP-01J9X5A1RB'},
+ archive:{title:'Archive skill',target:'release-notes',from:'deprecated',to:'archived',paths:['skills/docs/release-notes/SKILL.md'],impact:'Release Notes is removed from routing. Agents can no longer select it.',confirm:'Archive skill',danger:true,receipt:'Archived · OP-01J9X5C7TQ'},
+ update:{title:'Update skill',target:'pr-description',from:'draft',to:'draft',paths:['skills/engineering/pr-description/SKILL.md'],impact:'No routing change while draft. Triggers and min scope now satisfy activation requirements.',confirm:'Confirm update',receipt:'Applied · OP-01J9X5F2KD'},
+ create:{title:'Create skill',target:'release-checklist',from:'none',to:'draft',paths:['skills/default/release-checklist/SKILL.md'],impact:'Created as draft. Not routable until activated.',warning:'Default scaffold is untouched. This skill cannot be activated until the instructions are edited.',confirm:'Confirm create',receipt:'Created · OP-01J9X5H8WE'},
+ apply:{title:'Apply insight',target:'INS-code-review--flag-unbounded-retries',from:'pending',to:'incorporated',paths:['skills/engineering/code-review/SKILL.md'],impact:'Code Review stays active and routable. Content changes only.',warning:'Read the diff as the final check: apply always diffs against the current file.',confirm:'Confirm apply',receipt:'Incorporated · OP-01J9X5M3ZP'},
+ watch:{title:'Watch source',target:'contoso-prompts',from:'none',to:'watching',paths:['sources/contoso-prompts.yaml'],impact:'No skill routing changes. Source checks start on the weekly cadence.',confirm:'Confirm watch',receipt:'Watching · OP-01J9X5P6NS'}};
+const CHIP={none:'fg-chip--neutral',draft:'fg-chip--warning',active:'fg-chip--success',deprecated:'fg-chip--danger',archived:'fg-chip--neutral',pending:'fg-chip--info',incorporated:'fg-chip--success',watching:'fg-chip--success'};
+const TITLES={home:'Home',skills:'Skills',skill:'Skill',add:'Add skill from GitHub',create:'Create skill',sources:'Sources',watch:'Watch source',distill:'Distill with Curator Agent',run:'Run',inbox:'Inbox',insight:'Insight',composer:'Compose patch'};
+const PARENT={skill:'skills',add:'skills',create:'skills',watch:'sources',distill:'sources',run:'sources',insight:'inbox',composer:'insight'};
+const KEY='skillhub.ui.v1';
+
+class Component extends DCLogic {
+  constructor(p){super(p);
+    let ui={theme:'precision',scheme:'system',accent:'default'};
+    try{ui=Object.assign(ui,JSON.parse(localStorage.getItem(KEY)||'{}'));}catch(e){}
+    this.state={ui,pal:{},route:'home',skillId:'pr-description',tab:'review',addStep:1,addPhase:'idle',editMode:'edit',modal:null,drawer:false,toast:null,menu:null,q:'',lcFilter:'all',colFilter:'all',srcFilter:'all',selected:{'acme-agent-skills':true},checking:false,checked:false,concepts:{[OBS[0].id]:'retry limits',[OBS[2].id]:'retry budget',[OBS[3].id]:'idempotent retries'},diffMode:'unified',instr:'scaffold',monitoring:true,decision:'',rationale:'',insStatus:'pending',history:[{kind:'Created',text:'Insight created by run RUN-7K2M9QX4B1D8F3A6',time:'Oct 2'}],recent:true,w:typeof window!=='undefined'?window.innerWidth:1440,dark:false};
+    this.mainRef=React.createRef();
+  }
+  componentDidMount(){
+    this.mq=window.matchMedia('(prefers-color-scheme: dark)');
+    this.onMq=()=>this.setState({dark:this.mq.matches},()=>this.apply(true));
+    this.mq.addEventListener('change',this.onMq);
+    this.onResize=()=>this.setState({w:window.innerWidth});
+    window.addEventListener('resize',this.onResize);this.ro=new ResizeObserver(this.onResize);this.ro.observe(document.documentElement);this.onResize();
+    this.onKey=e=>{if(e.key==='Escape'){if(this.state.drawer)this.setState({drawer:false});else if(this.state.modal)this.setState({modal:null});else if(this.state.menu)this.setState({menu:null});}};
+    window.addEventListener('keydown',this.onKey);
+    this.setState({dark:this.mq.matches},()=>this.apply(true));
+    [300,900,2000].forEach(t=>setTimeout(()=>this.measure(),t));
+  }
+  componentWillUnmount(){this.ro&&this.ro.disconnect();window.removeEventListener('resize',this.onResize);window.removeEventListener('keydown',this.onKey);this.mq&&this.mq.removeEventListener('change',this.onMq);}
+  componentDidUpdate(pp){if(pp.density!==this.props.density)this.apply(false);}
+  schemeVal(){const s=this.state.ui.scheme;return s==='system'?(this.state.dark?'dark':'light'):s;}
+  apply(remeasure){
+    const h=document.documentElement,{theme,accent}=this.state.ui;
+    h.setAttribute('data-theme',theme);h.setAttribute('data-scheme',this.schemeVal());
+    accent&&accent!=='default'?h.setAttribute('data-accent',accent):h.removeAttribute('data-accent');
+    (this.props.density??'default')==='compact'?h.setAttribute('data-density','compact'):h.removeAttribute('data-density');
+    document.body.classList.add('fg-root');
+    try{localStorage.setItem(KEY,JSON.stringify(this.state.ui));}catch(e){}
+    if(remeasure)this.measure();
+  }
+  measure(){
+    const h=document.documentElement,pt=h.getAttribute('data-theme'),pa=h.getAttribute('data-accent');
+    const g=n=>getComputedStyle(h).getPropertyValue(n).trim();
+    const pal={};
+    for(const t of THEMES){h.setAttribute('data-theme',t.id);h.removeAttribute('data-accent');
+      const a={default:g('--color-action')};
+      pal[t.id]={bg:g('--color-bg'),text:g('--color-text'),font:g('--font-display')||g('--font-body'),action:a.default,accents:a};
+      for(const x of ACCENTS[t.id]){h.setAttribute('data-accent',x);a[x]=g('--color-action');}
+    }
+    h.setAttribute('data-theme',pt);pa?h.setAttribute('data-accent',pa):h.removeAttribute('data-accent');
+    this.setState({pal});
+  }
+  setUi(p){const ui=Object.assign({},this.state.ui,p);if(p.theme&&!(ACCENTS[p.theme]||[]).includes(ui.accent))ui.accent='default';this.setState({ui,menu:'app'},()=>this.apply(!!p.scheme));}
+  go(route,extra){this.setState(Object.assign({route,menu:null,modal:null},extra||{}),()=>{const m=this.mainRef.current;if(m){m.scrollTop=0;m.focus({preventScroll:true});}document.title=TITLES[route]+' · Skill Hub';});}
+  toast(msg){clearTimeout(this.tt);this.setState({toast:msg});this.tt=setTimeout(()=>this.setState({toast:null}),4500);}
+  openProposal(kind){this.setState({modal:{kind:'proposal',p:kind},menu:null});}
+  diffLines(kind){const C={a:{bg:'var(--color-success-tint)',fg:'var(--color-success)',p:'+',aria:'Added'},d:{bg:'var(--color-danger-tint)',fg:'var(--color-danger)',p:'−',aria:'Removed'},c:{bg:'transparent',fg:'var(--color-text-subtle)',p:' ',aria:'Unchanged'}};
+    return DIFFS[kind].map(l=>Object.assign({n:l.n,text:l.text},C[l.t],{t:l.t}));}
+  confirmProposal(){const k=this.state.modal.p,P=PROPS[k];this.setState({modal:null});this.toast(P.receipt);
+    if(k==='create')this.go('skill',{skillId:'pr-description',tab:'review'});
+    if(k==='watch')this.go('sources');
+    if(k==='apply'){this.setState({insStatus:'incorporated',history:this.state.history.concat([{kind:'Incorporated',text:'Applied to code-review SKILL.md',time:'Just now',dot:'fg-activity__dot--success'}])});this.go('insight');}
+  }
+  renderVals(){
+    const s=this.state,{ui,pal,route,w}=s,props=this.props;
+    const mode=w<768?'mobile':w<1280?'tablet':'desktop';
+    const st=props.screenState??'live',loading=st==='loading',empty=st==='empty',degraded=st==='degraded';
+    const known=!degraded&&!loading;
+    const r={};Object.keys(TITLES).forEach(k=>r[k]=route===k);
+    const sk0=SKILLS.find(x=>x.id===s.skillId)||SKILLS[0];
+    const runState=props.runState??'awaiting_decision';
+    const RUN={prepared:['fg-chip--neutral','Prepared'],in_progress:['fg-chip--info','In progress'],awaiting_decision:['fg-chip--warning','Awaiting decision'],failed:['fg-chip--danger','Failed'],finalized:['fg-chip--success','Finalized'],cancelled:['fg-chip--neutral','Cancelled']}[runState]||['fg-chip--neutral',runState];
+    const hasKey=props.runHasKey??true;
+    const curTheme=THEMES.find(t=>t.id===ui.theme)||THEMES[0];
+    const p=pal[ui.theme]||{accents:{}};
+    const navDefs=[['home','◧','Home'],['skills','☰','Skills'],['sources','⇄','Sources'],['inbox','✉','Inbox']];
+    const navActive={home:'home',skills:'skills',skill:'skills',add:'skills',create:'skills',sources:'sources',watch:'sources',distill:'sources',run:'sources',inbox:'inbox',insight:'inbox',composer:'inbox'}[route];
+    const nav=navDefs.map(([id,icon,label])=>({icon,label,on:navActive===id?'fg-nav__item--on':'',current:navActive===id?'page':undefined,color:navActive===id?'var(--color-action)':'var(--color-text-muted)',badge:id==='inbox'&&known?'7':null,go:()=>this.go(id)}));
+    // skills
+    let rows=empty?[]:SKILLS.filter(x=>(s.lcFilter==='all'||x.lc===s.lcFilter)&&(s.colFilter==='all'||x.col===s.colFilter)&&(!s.q||(x.id+x.name).toLowerCase().includes(s.q.toLowerCase())));
+    const skillRows=rows.map(x=>({id:x.id,name:x.name,col:x.col,lc:LC[x.lc],routing:x.r?'Routable':'Not routed',routeColor:x.r?'var(--color-text)':'var(--color-text-subtle)',
+      open:()=>this.go('skill',{skillId:x.id,tab:'review'}),menuOpen:s.menu==='row:'+x.id,
+      menu:e=>{e.stopPropagation();this.setState({menu:s.menu==='row:'+x.id?null:'row:'+x.id});},
+      canDeprecate:x.lc==='active',canArchive:x.lc==='deprecated',
+      deprecate:e=>{e.stopPropagation();this.openProposal('deprecate');},
+      archive:e=>{e.stopPropagation();this.setState({menu:null,modal:{kind:'destructive',d:'archive'}});}}));
+    // skill detail
+    const isDraft=sk0.lc==='draft';
+    const sk={id:sk0.id,name:sk0.name,col:sk0.col,desc:sk0.desc,lc:LC[sk0.lc],isDraft,notDraft:!isDraft,isActive:sk0.lc==='active',isDeprecated:sk0.lc==='deprecated',isArchived:sk0.lc==='archived',
+      next:isDraft?'Add triggers and min scope before activation':sk0.lc==='active'?'No action needed':sk0.lc==='deprecated'?'Archive when no longer referenced':'None',
+      served:sk0.lc==='draft'?'Not served':LC[sk0.lc].label,scope:isDraft?'':'change',
+      readiness:[['Instructions edited',true],['Triggers',!isDraft],['Not for or rationale',true],['Min scope',!isDraft]].map(([label,ok])=>({label,missing:!ok,icon:ok?'✓':'✕',color:ok?'var(--color-success)':'var(--color-danger)'})),
+      hasChanged:sk0.id==='code-review',hasRes:sk0.id==='code-review',noRes:sk0.id!=='code-review',
+      resSummary:sk0.id==='code-review'?'3 resources · 1 changed · 0 missing':'No companion resources',
+      md:MD.replace('Code Review',sk0.name).replace('Code Review',sk0.name).replace('lifecycle: active','lifecycle: '+sk0.lc),
+      resources:[{path:'references/',kind:'folder',size:'—',digest:'',indent:'12px'},{path:'references/checklist.md',kind:'reference',size:'2.1 KB',digest:'sha256:7a2c…e019',indent:'28px',tag:'Changed',tagCls:'fg-chip--warning'},{path:'scripts/',kind:'folder',size:'—',digest:'',indent:'12px'},{path:'scripts/lint-diff.sh',kind:'script',size:'840 B',digest:'sha256:b51d…03aa',indent:'28px'},{path:'assets/',kind:'folder',size:'—',digest:'',indent:'12px'},{path:'assets/severity-scale.json',kind:'asset',size:'412 B',digest:'sha256:1f6e…9b2c',indent:'28px'}]};
+    // sources
+    const SRC=[{id:'acme-agent-skills',locator:'github.com/acme/agent-skills@main · skills/',monitor:'Weekly',trust:'Community · not reviewed',license:'MIT',cur:'3f9c2a1',dist:'← 81d04be',status:'Changed',stCls:'fg-chip--info',stIcon:'◆',ready:true},
+      {id:'contoso-prompts',locator:'github.com/contoso/prompts@main',monitor:'Manual',trust:'Community · not reviewed',license:'License unknown',cur:'a07e5d3',dist:'Never distilled',status:'Never distilled',stCls:'fg-chip--warning',stIcon:'○',ready:true}];
+    if(s.checked){SRC[1]=Object.assign({},SRC[1],{status:'Unreachable (last check)',stCls:'fg-chip--danger',stIcon:'✕',ready:false,err:'Repository not reachable: HTTP 404'});}
+    const srcRows=SRC.filter(x=>s.srcFilter==='all'||x.ready).map(x=>{const on=!!s.selected[x.id]&&x.ready;return Object.assign({},x,{noSelect:!x.ready,selOpacity:x.ready?1:.4,checkCls:on?'fg-check__box--on':'',checkMark:on?'✓':'',rowCls:on?'fg-row--selected':'',licColor:x.license==='License unknown'?'var(--color-warning)':'var(--color-text-subtle)',toggle:()=>this.setState({selected:Object.assign({},s.selected,{[x.id]:!s.selected[x.id]})})});});
+    const selCount=SRC.filter(x=>x.ready&&s.selected[x.id]).length;
+    // composer
+    const mapRows=OBS.map(o=>{const v=s.concepts[o.id]||'';return {id:o.id,source:o.src,value:v,state:v.trim()?'Mapped':'Unmapped',cls:v.trim()?'fg-chip--success':'fg-chip--warning',onChange:e=>this.setState({concepts:Object.assign({},s.concepts,{[o.id]:e.target.value})})};});
+    const mapped=mapRows.filter(m=>m.state==='Mapped').length,req=OBS.length,incomplete=mapped<req;
+    // proposal
+    const m=s.modal;let pp={open:false},dc={open:false};
+    if(m&&m.kind==='proposal'){const P=PROPS[m.p],diff=this.diffLines(m.p),stale=!!props.proposalStale;
+      pp={open:true,title:P.title,target:P.target,from:P.from,to:P.to,fromCls:CHIP[P.from],toCls:CHIP[P.to],paths:P.paths,impact:P.impact,warning:P.warning||null,stale,
+        confirm:P.confirm,confirmCls:P.danger?'fg-btn--danger':'fg-btn--primary',confirmDisabled:stale,pid:'PRP-01J9X4K2M7QF',
+        stat:diff.filter(l=>l.t==='a').length+' added · '+diff.filter(l=>l.t==='d').length+' removed',diff,left:diff.filter(l=>l.t!=='a'),right:diff.filter(l=>l.t!=='d')};}
+    if(m&&(m.kind==='destructive'||m.kind==='decision')){const D={
+      archive:{title:'Archive Release Notes?',body:'Release Notes will be removed from routing and agents can no longer select it. Archived skills have no transitions back in v1.',confirm:'Continue to preview',btnCls:'fg-btn--danger',go:()=>this.openProposal('archive')},
+      cancelRun:{title:'Cancel run RUN-7K2M9QX4B1D8F3A6?',body:'The source cursor will not advance, and any agent still working on this run will fail to submit. This cannot be undone.',confirm:'Cancel run',btnCls:'fg-btn--danger',go:()=>{this.setState({modal:null});this.toast('Cancelled · RUN-7K2M9QX4B1D8F3A6');}},
+      obsolete:{title:'Mark insight obsolete?',body:'This insight leaves the Inbox permanently. There is no transition back from obsolete.',confirm:'Mark obsolete',btnCls:'fg-btn--danger',rat:true,next:'obsolete'},
+      plan:{title:'Plan insight',body:'Moves this insight to Planned. It stays in the Inbox.',confirm:'Plan insight',btnCls:'fg-btn--primary',rat:true,next:'planned'},
+      reject:{title:'Reject insight',body:'Removes this insight from the Inbox. It can be reopened later if new evidence arrives.',confirm:'Reject insight',btnCls:'fg-btn--primary',rat:true,next:'rejected'},
+      reopen:{title:'Reopen insight',body:'Returns this insight to Pending. The server may refuse without new evidence.',confirm:'Reopen insight',btnCls:'fg-btn--primary',rat:true,next:'pending'}}[m.d];
+      dc=Object.assign({open:true,needsRationale:!!D.rat,disabled:!!D.rat&&!s.rationale.trim()},D);
+      if(D.rat)dc.go=()=>{const lab={obsolete:'Obsolete',planned:'Planned',rejected:'Rejected',pending:'Reopened'}[D.next];this.setState({modal:null,insStatus:D.next,rationale:'',history:s.history.concat([{kind:lab,text:s.rationale,time:'Just now',dot:D.next==='obsolete'||D.next==='rejected'?'fg-activity__dot--neutral':''}])});this.toast(lab+' · OP-01J9X5R4VA');};}
+    const IS={pending:['fg-chip--info','Pending'],planned:['fg-chip--accent','Planned'],rejected:['fg-chip--neutral','Rejected'],obsolete:['fg-chip--neutral','Obsolete'],incorporated:['fg-chip--success','Incorporated']}[s.insStatus];
+    const isS=s.insStatus;
+    const railW=mode==='desktop'?'232px':'64px';
+    return {
+      mainRef:this.mainRef,railW,bodyCols:mode==='mobile'?'minmax(0,1fr)':railW+' minmax(0,1fr)',railPad:mode==='desktop'?'':'var(--space-3) var(--space-2)',navJustify:mode==='desktop'?'flex-start':'center',showRail:mode!=='mobile',railFull:mode==='desktop',railDisplay:mode==='mobile'?'none':'flex',showBottomBar:mode==='mobile',brandLabel:mode==='desktop'?'Skill Hub':'',
+      mainPad:mode==='mobile'?'var(--space-4)':'var(--space-5) var(--space-6)',mainPadBottom:mode==='mobile'?'88px':'var(--space-6)',toastBottom:mode==='mobile'?'84px':'var(--space-5)',
+      wide:mode!=='mobile',cellDisp:mode==='mobile'?'none':'table-cell',scrimPad:mode==='mobile'?'0':'var(--space-5)',modalMaxH:mode==='mobile'?'100vh':'88vh',modalH:mode==='mobile'?'100vh':'auto',
+      pageTitle:route==='skill'?sk0.name:TITLES[route],
+      crumb:{show:!!PARENT[route]&&mode!=='mobile',label:TITLES[PARENT[route]]||'',go:e=>{e.preventDefault();this.go(PARENT[route]);}},
+      sch:{light:ui.scheme==='light'?'fg-seg__btn--on':'',dark:ui.scheme==='dark'?'fg-seg__btn--on':'',system:ui.scheme==='system'?'fg-seg__btn--on':''},
+      setLight:()=>this.setUi({scheme:'light'}),setDark:()=>this.setUi({scheme:'dark'}),setSystem:()=>this.setUi({scheme:'system'}),
+      themeName:curTheme.name,accentName:ui.accent==='default'?'Default':ui.accent,
+      menuApp:s.menu==='app',menuAppOn:s.menu==='app'?'fg-icon-btn--on':'',toggleApp:()=>this.setState({menu:s.menu==='app'?null:'app'}),schemeName:{light:'Light',dark:'Dark',system:'System'}[ui.scheme],schemes:[['light','☀︎','Light'],['dark','☾','Dark'],['system','◐','System']].map(([id,icon,label])=>({icon,label,on:ui.scheme===id,border:ui.scheme===id?'var(--color-action)':'var(--color-border)',bg:ui.scheme===id?'color-mix(in srgb, var(--color-action) 8%, transparent)':'transparent',pick:()=>this.setUi({scheme:id})})),
+      anyMenu:!!s.menu,closeMenu:()=>this.setState({menu:null}),
+      toggleThemeMenu:()=>this.setState({menu:s.menu==='theme'?null:'theme'}),toggleAccentMenu:()=>this.setState({menu:s.menu==='accent'?null:'accent'}),
+      themes:THEMES.map(t=>{const q=pal[t.id]||{};return {name:t.name,note:t.note,bg:q.bg||'var(--color-bg)',text:q.text||'var(--color-text)',font:q.font||'inherit',action:q.action||'var(--color-action)',on:t.id===ui.theme,check:t.id===ui.theme?'✓':'',border:t.id===ui.theme?'var(--color-action)':'var(--color-border)',pick:()=>this.setUi({theme:t.id})};}),
+      accents:['default'].concat(ACCENTS[ui.theme]||[]).map(a=>({name:a==='default'?'Default':a[0].toUpperCase()+a.slice(1),color:p.accents[a]||'var(--color-action)',on:a===ui.accent,check:a===ui.accent?'✓':'',border:a===ui.accent?'var(--color-action)':'var(--color-border)',pick:()=>this.setUi({accent:a})})),
+      nav,goHome:()=>this.go('home'),
+      healthMini:[{label:'Valid',cls:'fg-status--ready'},{label:degraded?'Index stale':'Index current',cls:degraded?'fg-status--blocked':'fg-status--ready'},{label:'Git dirty',cls:'fg-status--warn'}],
+      degraded,loading,notLoading:!loading,
+      copyCmd:()=>this.toast('Command copied'),copyId:()=>this.toast('Copied to clipboard'),reload:()=>this.toast('Reloaded'),
+      r,
+      home:{hasAction:!empty,noAction:empty,isCmd:degraded,isNav:!degraded,summary:degraded?'Search index needs rebuild before counts are available':'2 source(s) are ready to distill'},
+      goSourcesReady:()=>this.go('sources',{srcFilter:'ready'}),
+      healthRows:[['Health','Valid','fg-status--ready'],['Index',degraded?'Stale':'Current',degraded?'fg-status--blocked':'fg-status--ready'],['Git','Configured','fg-status--ready'],['Uncommitted','Yes','fg-status--warn'],['Recovery','None pending','fg-status--ready']].map(([label,value,cls])=>({label,value,cls})),
+      summary:[['Active skills','12'],['Watching sources','5'],['Sources due','1'],['Pending insights',empty?'0':'7',empty?'':'2 high'],['Failed/interrupted runs','0'],['Unavailable sources','0'],['Recovery items','0']].map(([label,v,sub])=>({label,value:known?v:'Unavailable',sub:known?sub:'',color:known?'var(--color-text)':'var(--color-text-subtle)'})),
+      categories:[['Interrupted runs','0'],['Changed sources','2'],['Pending insights','7'],['Source unavailable','0'],['Sources due','1'],['Blocking decisions','—','na'],['Routing evaluations','—','na']].map(([label,count,na])=>({label,count:na?'Not configured in v1':(known?count:'Unavailable'),cls:na||!known?'fg-chip--neutral':(count!=='0'?'fg-chip--accent':'fg-chip--neutral'),title:na?'Not configured in v1':''})),
+      catNote:known?'Blocking decisions and routing evaluations are not configured in v1.':'Unavailable until the workspace and index are ready.',
+      q:s.q,onQ:e=>this.setState({q:e.target.value}),lcFilter:s.lcFilter,colFilter:s.colFilter,onLc:e=>this.setState({lcFilter:e.target.value}),onCol:e=>this.setState({colFilter:e.target.value}),
+      clearFilters:()=>this.setState({q:'',lcFilter:'all',colFilter:'all'}),
+      skillsEmptyAll:!loading&&empty,skillsEmptyFiltered:!loading&&!empty&&rows.length===0,skillsTable:!loading&&rows.length>0,skillRows,skillCount:rows.length+' of 5 skills',
+      goAdd:()=>this.go('add',{addStep:1,addPhase:'idle'}),goCreate:()=>this.go('create'),goSkills:()=>this.go('skills'),
+      sk,tabs:{review:s.tab==='review'?'fg-tab--on':'',editor:s.tab==='editor'?'fg-tab--on':'',resources:s.tab==='resources'?'fg-tab--on':''},
+      tab:{review:s.tab==='review',editor:s.tab==='editor',resources:s.tab==='resources'},
+      tabReview:()=>this.setState({tab:'review'}),tabEditor:()=>this.setState({tab:'editor'}),tabResources:()=>this.setState({tab:'resources'}),
+      openDeprecate:()=>this.openProposal('deprecate'),openArchive:()=>this.setState({modal:{kind:'destructive',d:'archive'}}),
+      editorCols:mode==='desktop'?'minmax(0,1fr) 340px':'minmax(0,1fr)',notSplit:mode!=='desktop',mdCols:mode==='desktop'?'1fr 1fr':'1fr',
+      showMdEdit:mode==='desktop'||s.editMode==='edit',showMdPreview:mode==='desktop'||s.editMode==='preview',
+      em:{edit:s.editMode==='edit'?'fg-seg__btn--on':'',preview:s.editMode==='preview'?'fg-seg__btn--on':''},emEdit:()=>this.setState({editMode:'edit'}),emPreview:()=>this.setState({editMode:'preview'}),
+      previewUpdate:()=>props.simulateConflict?this.setState({drawer:true}):this.openProposal('update'),
+      step:{one:s.addStep===1?'fg-step--on':'fg-step--done',oneDot:s.addStep===1?'1':'✓',two:s.addStep===2?'fg-step--on':''},
+      addStep1:s.addStep===1,addStep2:s.addStep===2,addSelection:s.addPhase==='selection',addDiscovering:s.addPhase==='discovering',
+      discover:()=>{this.setState({addPhase:'discovering'});clearTimeout(this.dt);this.dt=setTimeout(()=>this.setState({addPhase:'selection'}),1200);},
+      cancelDiscover:()=>{clearTimeout(this.dt);this.setState({addPhase:'idle'});},
+      addToReview:()=>this.setState({addStep:2}),addBack:()=>this.setState({addStep:1}),
+      confirmImport:()=>{this.toast('Imported as draft · OP-01J9X5B3LM');this.go('skill',{skillId:'pr-description',tab:'review'});},
+      ins:Object.assign({scaffold:s.instr==='scaffold'?'fg-seg__btn--on':'',upload:s.instr==='upload'?'fg-seg__btn--on':'',write:s.instr==='write'?'fg-seg__btn--on':''},{stCls:IS[0],status:IS[1],canCompose:isS==='pending'||isS==='planned',canPlan:isS==='pending',canReject:isS==='pending'||isS==='planned',canReopen:isS==='rejected',canObsolete:['pending','planned','rejected'].includes(isS),readOnly:isS==='obsolete'||isS==='incorporated'}),
+      insScaffold:()=>this.setState({instr:'scaffold'}),insUpload:()=>this.setState({instr:'upload'}),insWrite:()=>this.setState({instr:'write'}),
+      insIsScaffold:s.instr==='scaffold',insIsUpload:s.instr==='upload',insIsWrite:s.instr==='write',
+      previewCreate:()=>this.openProposal('create'),
+      sf:{all:s.srcFilter==='all'?'fg-seg__btn--on':'',ready:s.srcFilter==='ready'?'fg-seg__btn--on':''},sfAll:()=>this.setState({srcFilter:'all'}),sfReady:()=>this.setState({srcFilter:'ready'}),
+      goWatch:()=>this.go('watch'),goSources:()=>this.go('sources'),goDistill:()=>this.go('distill'),goRun:e=>{e&&e.preventDefault&&e.preventDefault();this.go('run');},goInbox:()=>this.go('inbox'),
+      checking:s.checking,checked:s.checked&&!s.checking,
+      checkDue:()=>{this.setState({checking:true});setTimeout(()=>this.setState({checking:false,checked:true}),1400);},
+      srcEmpty:!loading&&empty,srcTable:!loading&&!empty,srcRows,selCount,noSelection:selCount===0,
+      hasRecent:s.recent&&!empty,noRecent:!s.recent||empty,removeRecent:()=>this.setState({recent:false}),
+      monitoring:s.monitoring,notMonitoring:!s.monitoring,monCls:s.monitoring?'fg-switch--on':'',toggleMon:()=>this.setState({monitoring:!s.monitoring}),
+      cad:{weekly:s.monitoring?'fg-seg__btn--on':'',manual:s.monitoring?'':'fg-seg__btn--on'},
+      previewWatch:()=>this.openProposal('watch'),copyHandoff:()=>this.toast('Handoff copied · hnd-5e1a8c3f2b'),
+      run:{cls:RUN[0],label:RUN[1],awaiting:runState==='awaiting_decision',finalized:runState==='finalized',failed:runState==='failed',canResume:hasKey&&['prepared','in_progress','awaiting_decision','failed'].includes(runState),noKey:!hasKey&&!['finalized','cancelled'].includes(runState),canCancel:!['finalized','cancelled'].includes(runState)},
+      decision:s.decision,onDecision:e=>this.setState({decision:e.target.value}),resumeDisabled:runState==='awaiting_decision'&&!s.decision.trim(),
+      refreshRun:()=>this.toast('Status refreshed · no change'),copyResume:()=>this.toast('Resume handoff copied'),openCancelRun:()=>this.setState({modal:{kind:'destructive',d:'cancelRun'}}),
+      inboxEmpty:!loading&&empty,inboxList:!loading&&!empty,
+      groups:[{skill:'code-review',category:'reliability',count:1,items:[{rec:'Flag unbounded retry loops in reviewed code',priority:'High',prCls:'fg-priority--high',score:82,impact:'high',sources:2,findings:3,stale:false,status:isS==='planned'?'Planned':'Pending',stCls:'fg-chip--info',open:()=>this.go('insight')}]},
+        {skill:'incident-postmortem',category:'clarity',count:1,items:[{rec:'Ask for a customer-impact window in the summary',priority:'Medium',prCls:'fg-priority--normal',score:57,impact:'medium',sources:1,findings:1,stale:true,status:'Pending',stCls:'fg-chip--info',open:()=>this.go('insight')}]}],
+      insightCols:mode==='desktop'?'minmax(0,1fr) 300px':'minmax(0,1fr)',
+      observations:{direct:OBS.slice(0,2).map(o=>({id:o.id,text:o.text}))},
+      decisions:s.history.map(d=>({kind:d.kind,text:d.text,time:d.time,dot:d.dot||'fg-activity__dot--hollow'})),
+      goComposer:()=>this.go('composer'),goInsight:()=>this.go('insight'),
+      openPlan:()=>this.setState({modal:{kind:'decision',d:'plan'}}),openReject:()=>this.setState({modal:{kind:'decision',d:'reject'}}),openReopen:()=>this.setState({modal:{kind:'decision',d:'reopen'}}),openObsolete:()=>this.setState({modal:{kind:'destructive',d:'obsolete'}}),
+      rationale:s.rationale,onRationale:e=>this.setState({rationale:e.target.value}),
+      composerCols:mode==='desktop'?'minmax(0,1fr) 380px':'minmax(0,1fr)',
+      composerMd:MD+'- Reject retry loops without an explicit attempt limit.\n- Require exponential backoff with jitter for network retries.\n',
+      mapRows,cov:{mapped,required:req,incomplete,color:incomplete?'var(--color-warning)':'var(--color-success)',why:incomplete?' · map every observation to enable preview':''},
+      saveDraft:()=>this.toast('Draft saved in this browser'),
+      previewApply:()=>props.simulateConflict?this.setState({drawer:true}):this.openProposal('apply'),
+      pp,dc,dm:{unified:s.diffMode==='unified'?'fg-seg__btn--on':'',split:s.diffMode==='split'?'fg-seg__btn--on':''},
+      dmIsUnified:s.diffMode==='unified'||mode==='mobile',dmIsSplit:s.diffMode==='split'&&mode!=='mobile',
+      dmUnified:()=>this.setState({diffMode:'unified'}),dmSplit:()=>this.setState({diffMode:'split'}),
+      closeModal:()=>this.setState({modal:null}),stop:e=>e.stopPropagation(),
+      confirmProposal:()=>this.confirmProposal(),newPreview:()=>this.toast('New preview requested · PRP-01J9X5T0HC'),
+      drawer:s.drawer,closeDrawer:()=>this.setState({drawer:false}),useLatest:()=>{this.setState({drawer:false});this.toast('Latest content loaded as base · draft kept');},
+      draftExcerpt:'routing:\n  triggers:\n    - write a PR description\n  min_scope: change',
+      latestExcerpt:'routing:\n  triggers:\n    - draft PR summary\n  min_scope: null',
+      toast:s.toast
+    };
+  }
+}
+</script>
+</body>
+</html>

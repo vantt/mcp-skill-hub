@@ -1,0 +1,163 @@
+/* ============================================================
+   ADAPTER · ClickUp  →  html[data-theme="clickup"]
+   White marble. action = ink-black (NOT the brand). brand = violet
+   (identity only). link = blue. Pill 9999 everywhere. Heavy sans
+   display. Conic-gradient signature border. Flat, border-first.
+   ============================================================ */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Sometype+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');   /* for typeface-set "editorial-pop" */
+
+html[data-theme="clickup"] {
+  /* ── Tier 1 · PRIMITIVE (private) ── */
+  --_ink:#202020; --_onyx:#090c1d; --_carbon:#2a2a2a; --_slate:#646464; --_ash:#838383;
+  --_cloud:#d4d4d4; --_bone:#e8e8e8; --_mist:#f8f9fa; --_plaster:#e9ebf0; --_mercury:#eeeeee;
+  --_violet:#6647f0; --_blue:#0091ff; --_mint:#6ee7b7; --_emerald:#00c07a; --_teal:#16c0a4;
+  --_success:#30A46C; --_warning:#FFC53D; --_error:#E5484D;
+  --_pale-purple:#efedfd;
+
+  /* ── Tier 2 · SEMANTIC ── */
+  --color-bg: #ffffff;
+  --color-surface: var(--_mist);
+  --color-surface-raised: #ffffff;
+  --color-surface-sunken: var(--_plaster);
+  --color-scrim: rgba(9,12,29,0.45);
+
+  --color-text: var(--_ink);
+  --color-text-muted: var(--_slate);
+  --color-text-subtle: var(--_ash);
+  --color-text-disabled: #b3b3b3;
+  --color-on-action: #ffffff;
+  --color-on-brand: #ffffff;
+  --color-on-dark: #ffffff;
+
+  --color-border: var(--_bone);
+  --color-border-strong: var(--_cloud);
+  --color-border-interactive: var(--_blue);
+
+  /* The signature split: action ≠ brand ≠ link */
+  --color-action: var(--_ink);
+  --color-action-hover: #1e1e1e;
+  --color-action-press: #000000;
+  --color-brand: var(--_violet);
+  --color-brand-tint: var(--_pale-purple);
+  --color-link: var(--_blue);
+
+  --color-success: var(--_success); --color-success-tint:#e4f4ec;
+  /* warning darkened from #B27E00 (≈3.1:1 on tint) to pass AA for chip text */
+  --color-warning: #8A6200;         --color-warning-tint:#fbf1d6;
+  --color-danger: var(--_error);    --color-danger-tint:#fbe3e4;
+  --color-info: var(--_blue);       --color-info-tint:#e2f0ff;
+
+  --color-positive: var(--_success); --color-positive-tint:#e4f4ec;
+  --color-negative: var(--_error);   --color-negative-tint:#fbe3e4;
+
+  --color-accent-alt-1:var(--_violet); --color-accent-alt-2:var(--_blue);
+  --color-accent-alt-3:#FF02F0; --color-accent-alt-4:#F76808; --color-accent-alt-5:var(--_teal);
+
+  /* Type — heavy geometric sans display */
+  --font-display: 'Plus Jakarta Sans', Inter, sans-serif;
+  --font-body: 'Inter', 'Plus Jakarta Sans', sans-serif;
+  --font-mono: 'Sometype Mono', ui-monospace, monospace;
+  --font-accent: 'Plus Jakarta Sans', Inter, sans-serif;   /* no serif voice — accent = display (3 faces used) */
+
+  --type-display-size: 60px; --type-display-weight: 800; --type-display-tracking: -0.04em; --type-display-leading: 1.05;
+  --type-title-size: 40px;   --type-title-weight: 700;   --type-title-tracking: -0.035em;
+  --type-heading-weight: 700; --type-heading-tracking: -0.02em;
+  --type-subheading-weight: 700;
+  --type-heading-sm-weight: 700; --type-heading-sm-tracking: -0.01em;
+  --type-body-tracking: -0.01em;
+  --type-label-tracking: 0.06em; --type-label-weight: 500;
+
+  /* ── Tier 3 · CHARACTER — pill, heavy, flat/border-first ── */
+  --btn-radius: var(--radius-pill);
+  --btn-weight: 800;
+  --btn-pad-y: 12px; --btn-pad-x: 24px;
+  --card-radius: var(--radius-lg);
+  --card-elevation: var(--elevation-sm);
+  --chip-radius: var(--radius-pill);
+  --input-radius: 9px;
+  --nav-item-radius: var(--radius-pill);
+  --status-glow: none; /* @kind shadow */            /* ClickUp is flat — no glowing dots */
+  /* Solid status pills (hero screenshot: filled DONE / IN PROGRESS lanes).
+     ASSUMPTION: on-dark text on ALL lane colors (source shows dark text on
+     mint; single-token strategy keeps the contract simple — clickup's
+     accent-alt set is dark enough for AA at tag size). */
+  --status-lane-fill: 100%; /* @kind other */
+  --status-lane-text: var(--color-on-dark);
+  --media-radius: var(--radius-lg);
+
+  /* Signature: rotating conic border, cyan→magenta premium text, dark-fade panel */
+  --signature-gradient: conic-gradient(from 90deg,
+    #7d5be7 19%, #bc3fda 28%, #fa24ce 37%, #fb49a5 45%, #fc6d7b 52%,
+    #fd8461 55%, #fd9a46 58%, #f687c6 65%, #a3a0e0 80%, #4fb9fa 95%, #0091ff 100%); /* @kind other */
+  --signature-gradient-text: linear-gradient(83deg, #40ddff -5%, #7612fa 51%, #fa18e3 125%);
+  --signature-dark-bg: linear-gradient(#111111 24%, #000000);
+  --signature-dark-text: #ffffff;
+  --signature-band-tint: #efedfd;
+}
+
+/* ── Scheme · DARK (opposite of the native white marble) — charcoal marble,
+   brighter violet identity, the neutral 'ink' action inverted to a light key.
+   Colors only; pill/heavy/flat character unchanged. ── */
+html[data-theme="clickup"][data-scheme="dark"] {
+  --color-bg:#131318;
+  --color-surface:#1b1b22;
+  --color-surface-raised:#23232c;
+  --color-surface-sunken:#0e0e12;
+  --color-scrim:rgba(4,6,16,0.62);
+  --color-text:#f4f4f7;
+  --color-text-muted:#a6a7b4;
+  --color-text-subtle:#72737f;
+  --color-text-disabled:#4a4b55;
+  --color-border:#2a2a33;
+  --color-border-strong:#3a3a45;
+  --color-border-interactive:#3aa0ff;
+  /* action stays the neutral 'ink' role — inverted to a light key on dark */
+  --color-action:#f0f0f4; --color-action-hover:#ffffff; --color-action-press:#d5d5db;
+  --color-on-action:#15151b;
+  --color-brand:#8b73f5; --color-brand-tint:#241f3d;
+  --color-link:#3aa0ff;
+  --color-success:#35c98a; --color-success-tint:#0f2a1e;
+  --color-warning:#e6b03c; --color-warning-tint:#2c2410;
+  --color-danger:#ff5c60;  --color-danger-tint:#2e1314;
+  --color-info:#3aa0ff;    --color-info-tint:#0f2537;
+  --color-positive:#35c98a; --color-positive-tint:#0f2a1e;
+  --color-negative:#ff5c60; --color-negative-tint:#2e1314;
+  --color-accent-alt-1:#8b73f5; --color-accent-alt-2:#3aa0ff; --color-accent-alt-3:#ff5fe6; --color-accent-alt-4:#ff9a4d; --color-accent-alt-5:#2fd3b6;
+  --color-surface-hover:#23232c;
+  --color-selection-bg:color-mix(in srgb, #8b73f5 34%, transparent); --color-selection-text:#f4f4f7;
+  --scrollbar-thumb:#3a3a45;
+  --signature-band-tint:#201b36;
+  --signature-dark-bg:linear-gradient(#0c0c10 24%, #000000);
+}
+
+/* Secondary button = pale lavender + brand text (ClickUp pattern) */
+html[data-theme="clickup"] .fg-btn--secondary { background: var(--color-brand-tint); color: var(--color-brand); border-color: transparent; }
+html[data-theme="clickup"] .fg-btn--secondary:hover { background: color-mix(in srgb, var(--color-brand) 14%, #fff); }
+
+/* Accent overrides — recolor ACTION only (brand stays violet) */
+html[data-theme="clickup"][data-accent="violet"] { --color-action: var(--_violet); --color-action-hover:#7612fa; --color-action-press:#4A2FFF; --color-on-action:#ffffff; }
+html[data-theme="clickup"][data-accent="blue"]   { --color-action: var(--_blue);   --color-action-hover:#2ba6ff; --color-action-press:#007ad6; --color-on-action:#ffffff; }
+
+/* ── Typeface-set overrides (data-typeface-set) ──────────────────────────
+   Unset = default ("geometric": Plus Jakarta Sans · Inter · Sometype Mono). */
+
+/* "grotesk-tight" — Inter carries display too: flatter, tighter, less rounded
+   than Jakarta. 0 extra download. */
+html[data-theme="clickup"][data-typeface-set="grotesk-tight"] {
+  --font-display: 'Inter', system-ui, sans-serif;
+  --font-body:    'Inter', system-ui, sans-serif;
+  --font-mono:    'Sometype Mono', ui-monospace, monospace;
+  --font-accent:  'Inter', system-ui, sans-serif;
+  --type-display-weight: var(--weight-bold); --type-title-weight: var(--weight-bold);
+}
+
+/* "editorial-pop" — Space Grotesk (shared with Precision) for a quirkier
+   display over the Inter body. 1 extra face. */
+html[data-theme="clickup"][data-typeface-set="editorial-pop"] {
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-body:    'Inter', system-ui, sans-serif;
+  --font-mono:    'Sometype Mono', ui-monospace, monospace;
+  --font-accent:  'Space Grotesk', system-ui, sans-serif;
+  --type-display-weight: var(--weight-bold); --type-display-tracking: -0.03em;
+}

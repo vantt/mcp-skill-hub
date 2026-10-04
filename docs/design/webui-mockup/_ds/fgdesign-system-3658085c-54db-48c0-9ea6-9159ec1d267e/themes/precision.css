@@ -1,0 +1,149 @@
+/* ============================================================
+   ADAPTER · Precision  →  html[data-theme="precision"]
+   Dark editorial. Warm-gray ink, single amber accent, sharp 4px,
+   near-shadowless. action = brand = link (all amber).
+   Tier-1 primitives kept private (--_*).
+   ============================================================ */
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=Geist:wght@300..700&family=Geist+Mono:wght@300..600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');   /* for typeface-set "grotesk" */
+
+html[data-theme="precision"] {
+  /* ── Tier 1 · PRIMITIVE (private) ── */
+  --_ink-050:#0e0e10; --_ink-100:#15151a; --_ink-150:#1c1c22; --_ink-200:#232329;
+  --_ink-300:#2f2f36; --_ink-400:#44413c; --_ink-500:#6a655d; --_ink-600:#8a857a;
+  --_ink-700:#b4ad9f; --_ink-800:#d8d2c3; --_ink-900:#f0ece2;
+  --_amber:#e8a341; --_amber-hi:#f5b35a; --_amber-lo:#b97d23; --_amber-bg:#3a2a14;
+  --_moss:#84b577; --_moss-bg:#1d2818; --_coral:#e0746c; --_coral-bg:#2b1815; --_honey:#d4a548;
+
+  /* ── Tier 2 · SEMANTIC ── */
+  --color-bg: var(--_ink-050);
+  --color-surface: var(--_ink-100);
+  --color-surface-raised: var(--_ink-150);
+  --color-surface-sunken: var(--_ink-100);
+  --color-scrim: rgba(10,10,12,0.62);
+
+  --color-text: var(--_ink-900);
+  --color-text-muted: var(--_ink-700);
+  --color-text-subtle: var(--_ink-500);
+  --color-text-disabled: var(--_ink-400);
+  --color-on-action: #1a0f02;
+  --color-on-brand: #1a0f02;
+  --color-on-dark: var(--_ink-900);
+
+  --color-border: var(--_ink-200);
+  --color-border-strong: var(--_ink-300);
+  --color-border-interactive: var(--_amber);
+
+  --color-action: var(--_amber);
+  --color-action-hover: var(--_amber-hi);
+  --color-action-press: var(--_amber-lo);
+  --color-brand: var(--_amber);
+  --color-brand-tint: var(--_amber-bg);
+  --color-link: var(--_amber);
+  --color-link-hover: var(--_amber-hi);
+
+  --color-success: var(--_moss); --color-success-tint: var(--_moss-bg);
+  --color-warning: var(--_honey); --color-warning-tint: var(--_amber-bg);
+  --color-danger: var(--_coral); --color-danger-tint: var(--_coral-bg);
+  --color-info: var(--_amber); --color-info-tint: var(--_amber-bg);
+
+  --color-positive: var(--_moss); --color-positive-tint: var(--_moss-bg);
+  --color-negative: var(--_coral); --color-negative-tint: var(--_coral-bg);
+
+  --color-accent-alt-1: var(--_amber); --color-accent-alt-2: var(--_moss);
+  --color-accent-alt-3: var(--_honey); --color-accent-alt-4: var(--_coral); --color-accent-alt-5: var(--_ink-600);
+
+  /* Type */
+  --font-display: 'Newsreader', Georgia, serif;
+  --font-body: 'Geist', system-ui, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, monospace;
+  --font-accent: 'Fraunces', Georgia, serif;   /* the 4th slot, realized: Fraunces italic = system speaking as a person */
+
+  --type-display-weight: 400; --type-display-tracking: -0.03em;
+  --type-title-weight: 400;   --type-title-tracking: -0.02em;   --type-title-size: 28px;
+  --type-heading-weight: 400; --type-heading-tracking: -0.015em;
+  --type-heading-sm-weight: 400; --type-heading-sm-tracking: -0.01em;
+  --type-label-tracking: 0.2em; --type-label-weight: 500;
+
+  /* ── Tier 3 · CHARACTER — sharp, flat ── */
+  --btn-radius: var(--radius-sm);
+  --btn-weight: 500;
+  --card-radius: var(--radius-sm);
+  --card-elevation: var(--elevation-none);
+  --chip-radius: var(--radius-xs);
+  --input-radius: var(--radius-sm);
+  --nav-item-radius: var(--radius-sm);
+
+  /* Signature: faint amber vignette, gold-serif gradient text, deepest ink panel */
+  --signature-vignette: radial-gradient(ellipse at 85% -10%, rgba(232,163,65,0.05), transparent 55%); /* @kind other */
+  --signature-gradient-text: linear-gradient(92deg, #f5b35a, #e8a341);
+  --signature-dark-bg: #0a0a0c;
+  --signature-dark-text: var(--_ink-900);
+  --signature-band-tint: var(--_amber-bg);
+}
+
+/* ── Scheme · LIGHT (opposite of the native dark editorial) — warm bone
+   paper, warm near-black ink, amber accent kept. action/brand stay amber
+   (dark text button); --color-link darkens to a readable amber TEXT rung
+   (amber-on-paper as text would fail contrast) — a small, deliberate
+   relaxation of the theme's action=brand=link unify, scoped to light only.
+   Sharp/flat character unchanged. ── */
+html[data-theme="precision"][data-scheme="light"] {
+  --color-bg:#f4f1e9;
+  --color-surface:#faf8f2;
+  --color-surface-raised:#ffffff;
+  --color-surface-sunken:#ece7db;
+  --color-scrim:rgba(30,24,12,0.42);
+  --color-text:#1c1a15;
+  --color-text-muted:#4d4635;
+  --color-text-subtle:#847a63;
+  --color-text-disabled:#b3aa93;
+  --color-border:#e0d9c8;
+  --color-border-strong:#cec5ae;
+  --color-border-interactive:#9a6716;
+  --color-action:#d98e2f; --color-action-hover:#e8a341; --color-action-press:#b97d23; --color-on-action:#241703;
+  --color-brand:#b97d23; --color-brand-tint:#f3e6cb;
+  --color-link:#9a6716; --color-link-hover:#7d5314;
+  --color-success:#3f7a35; --color-success-tint:#e3efdc;
+  --color-warning:#8a6410; --color-warning-tint:#f4e9cf;
+  --color-danger:#b23b34;  --color-danger-tint:#f6e0dd;
+  --color-info:#9a6716;    --color-info-tint:#f3e6cb;
+  --color-positive:#3f7a35; --color-positive-tint:#e3efdc;
+  --color-negative:#b23b34; --color-negative-tint:#f6e0dd;
+  --color-accent-alt-1:#b97d23; --color-accent-alt-2:#3f7a35; --color-accent-alt-3:#8a6410; --color-accent-alt-4:#b23b34; --color-accent-alt-5:#847a63;
+  --color-surface-hover:#ece7db;
+  --color-selection-bg:color-mix(in srgb, var(--_amber) 30%, transparent); --color-selection-text:#1c1a15;
+  --scrollbar-thumb:#cec5ae;
+  --signature-band-tint:#f3e6cb;
+  --signature-vignette:radial-gradient(ellipse at 85% -10%, rgba(185,125,35,0.07), transparent 55%); /* @kind other */
+}
+html[data-theme="precision"] .fg-btn--primary:hover { box-shadow: 0 8px 24px rgba(232,163,65,0.20), 0 0 0 1px var(--_amber-hi); }
+
+/* Accent overrides (data-accent) */
+html[data-theme="precision"][data-accent="moss"]  { --color-action: var(--_moss);  --color-action-hover:#9bc78f; --color-action-press:#5f8f54; --color-on-action:#0e1609; }
+html[data-theme="precision"][data-accent="honey"] { --color-action: var(--_honey); --color-action-hover:#e2bd6a; --color-action-press:#a98430; --color-on-action:#1a1302; }
+
+/* ── Typeface-set overrides (data-typeface-set) ──────────────────────────
+   Unset = the theme default above ("editorial": Newsreader · Geist · Geist
+   Mono · Fraunces — 4 physical faces). Named sets re-point the family slots;
+   body/mono stay on Geist so numeric columns and UI density are unchanged. */
+
+/* "grotesk" — trade the editorial serif display for a neutral grotesk; keep
+   Fraunces as the human-voice accent. 3 faces. */
+html[data-theme="precision"][data-typeface-set="grotesk"] {
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-body:    'Geist', system-ui, sans-serif;
+  --font-mono:    'Geist Mono', ui-monospace, monospace;
+  --font-accent:  'Newsreader', Georgia, serif;
+  --type-display-weight: var(--weight-medium); --type-title-weight: var(--weight-medium); --type-heading-weight: var(--weight-medium);
+}
+
+/* "mono-lab" — technical: Geist Mono sets the headings too. Reuses only the
+   two Geist faces already loaded (0 extra download). */
+html[data-theme="precision"][data-typeface-set="mono-lab"] {
+  --font-display: 'Geist Mono', ui-monospace, monospace;
+  --font-body:    'Geist', system-ui, sans-serif;
+  --font-mono:    'Geist Mono', ui-monospace, monospace;
+  --font-accent:  'Fraunces', Georgia, serif;
+  --type-display-tracking: -0.01em; --type-title-tracking: -0.005em;
+}

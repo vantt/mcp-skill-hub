@@ -1,0 +1,167 @@
+/* ============================================================
+   ADAPTER · Terminal (THROWAWAY — new-theme drill)  →  html[data-theme="terminal"]
+   High-contrast monochrome CRT terminal. True black, phosphor
+   green, radius-none everywhere, no shadow, uppercase labels,
+   scanline vignette. Deliberately unlike Precision/beRich/ClickUp:
+   no serif, no pill, no color hierarchy beyond one hue + status reds/ambers.
+   action = brand = link (all phosphor green) — a 4th valid
+   configuration of the split, proving the token still holds.
+   ============================================================ */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300..600&family=Sometype+Mono:wght@400;500&display=swap');   /* for typeface-sets "plex" / "sometype" */
+
+html[data-theme="terminal"] {
+  /* ── Tier 1 · PRIMITIVE (private) ── */
+  --_black:#000000; --_panel:#060a06; --_raised:#0b110b; --_sunken:#020402;
+  --_line:#153015; --_line-strong:#1f4a1f;
+  --_green:#33ff66; --_green-hi:#7bffa0; --_green-lo:#1fa844; --_green-dim:#0d3818;
+  --_amber:#ffb000; --_red:#ff3b30; --_red-bg:#2a0805;
+
+  /* ── Tier 2 · SEMANTIC ── */
+  --color-bg: var(--_black);
+  --color-surface: var(--_panel);
+  --color-surface-raised: var(--_raised);
+  --color-surface-sunken: var(--_sunken);
+  --color-scrim: rgba(0,0,0,0.8);
+
+  --color-text: var(--_green);
+  --color-text-muted: var(--_green-lo);
+  --color-text-subtle: color-mix(in srgb, var(--_green-lo) 60%, transparent);
+  --color-text-disabled: var(--_green-dim);
+  --color-on-action: #000000;
+  --color-on-brand: #000000;
+  --color-on-dark: var(--_green);
+
+  --color-border: var(--_line);
+  --color-border-strong: var(--_line-strong);
+  --color-border-interactive: var(--_green);
+
+  /* action = brand = link — a 4th valid config of the split */
+  --color-action: var(--_green);
+  --color-action-hover: var(--_green-hi);
+  --color-action-press: var(--_green-lo);
+  --color-brand: var(--_green);
+  --color-brand-tint: var(--_green-dim);
+  --color-link: var(--_green-hi);
+
+  --color-success: var(--_green);   --color-success-tint: var(--_green-dim);
+  --color-warning: var(--_amber);   --color-warning-tint: #2a1c00;
+  --color-danger: var(--_red);      --color-danger-tint: var(--_red-bg);
+  --color-info: var(--_green-hi);   --color-info-tint: var(--_green-dim);
+
+  --color-positive: var(--_green);  --color-positive-tint: var(--_green-dim);
+  --color-negative: var(--_red);    --color-negative-tint: var(--_red-bg);
+
+  --color-accent-alt-1: var(--_green); --color-accent-alt-2: var(--_amber);
+  --color-accent-alt-3: var(--_red);   --color-accent-alt-4: var(--_green-lo); --color-accent-alt-5: var(--_green-hi);
+
+  --color-surface-hover: var(--_line);
+  --color-selection-bg: var(--_green);
+  --color-selection-text: #000000;
+
+  /* Type — one mono family for everything, no display serif */
+  --font-display: 'JetBrains Mono', ui-monospace, monospace;
+  --font-body:    'JetBrains Mono', ui-monospace, monospace;
+  --font-mono:    'JetBrains Mono', ui-monospace, monospace;
+
+  --type-display-weight: 700; --type-display-tracking: 0.01em;
+  --type-title-weight: 700;   --type-title-tracking: 0.01em;
+  --type-heading-weight: 700; --type-heading-tracking: 0.02em;
+  --type-heading-sm-weight: 700; --type-heading-sm-tracking: 0.02em;
+  --type-body-tracking: 0;
+  --type-label-tracking: 0.22em; --type-label-weight: 600;
+  --type-ui-weight: 600;
+
+  /* Code syntax reuses the same green hierarchy */
+  --code-keyword: var(--_green-hi);
+  --code-string:  var(--_green);
+  --code-fn:      var(--_green-hi);
+  --code-num:     var(--_amber);
+  --code-comment: var(--_green-lo);
+
+  /* ── Tier 3 · CHARACTER — sharp to the point of hostile ── */
+  --btn-radius: var(--radius-none);
+  --btn-weight: 600;
+  --card-radius: var(--radius-none);
+  --card-elevation: var(--elevation-none);
+  --card-border-width: 1px;
+  --chip-radius: var(--radius-none);
+  --input-radius: var(--radius-none);
+  --nav-item-radius: var(--radius-none);
+  --status-glow: 0 0 6px currentColor; /* @kind shadow */
+  --focus-color: var(--_green-hi);
+  --focus-width: 2px;
+  --num-font: var(--font-mono);
+
+  /* Signature: scanline vignette instead of a warm glow, green wordmark */
+  --signature-vignette: repeating-linear-gradient(0deg, rgba(51,255,102,0.025) 0px, rgba(51,255,102,0.025) 1px, transparent 1px, transparent 3px); /* @kind other */
+  --signature-gradient-text: linear-gradient(90deg, var(--_green-lo), var(--_green-hi));
+  --signature-dark-bg: #000000;
+  --signature-dark-text: var(--_green);
+  --signature-band-tint: var(--_green-dim);
+  --signature-gradient: repeating-linear-gradient(90deg, var(--_green) 0 8px, transparent 8px 16px); /* @kind other */
+  --signature-speed: 1.2s; /* @kind other */
+}
+
+/* ── Scheme · LIGHT (opposite of the native CRT black) — a "phosphor paper"
+   terminal: pale green-tinted paper, dark forest-green ink, faint scanlines.
+   Keeps the mono / radius-none / uppercase hostility, just on light. ── */
+html[data-theme="terminal"][data-scheme="light"] {
+  --color-bg:#e9ece4;
+  --color-surface:#f1f3ec;
+  --color-surface-raised:#ffffff;
+  --color-surface-sunken:#dfe3d8;
+  --color-scrim:rgba(10,20,10,0.5);
+  --color-text:#0d2a14;
+  --color-text-muted:#2f5a38;
+  --color-text-subtle:#5c7d60;
+  --color-text-disabled:#9db09e;
+  --color-border:#c3ceba;
+  --color-border-strong:#a6b69c;
+  --color-border-interactive:#0d7a30;
+  --color-action:#0d7a30; --color-action-hover:#0f9a3d; --color-action-press:#0a5c24; --color-on-action:#eafcef;
+  --color-brand:#0d7a30; --color-brand-tint:#d7ecdb;
+  --color-link:#0f7a30; --color-link-hover:#0a5c24;
+  --color-success:#0d7a30; --color-success-tint:#d7ecdb;
+  --color-warning:#9a6a00; --color-warning-tint:#f3e7c8;
+  --color-danger:#c0271d;  --color-danger-tint:#f6ddda;
+  --color-info:#0f7a30;    --color-info-tint:#d7ecdb;
+  --color-positive:#0d7a30; --color-positive-tint:#d7ecdb;
+  --color-negative:#c0271d; --color-negative-tint:#f6ddda;
+  --color-accent-alt-1:#0d7a30; --color-accent-alt-2:#9a6a00; --color-accent-alt-3:#c0271d; --color-accent-alt-4:#2f5a38; --color-accent-alt-5:#0f9a3d;
+  --color-surface-hover:#dfe3d8;
+  --color-selection-bg:#0d7a30; --color-selection-text:#eafcef;
+  --scrollbar-thumb:#a6b69c;
+  --status-glow:0 0 6px color-mix(in srgb, currentColor 40%, transparent); /* @kind shadow */
+  --signature-vignette:repeating-linear-gradient(0deg, rgba(13,122,48,0.045) 0px, rgba(13,122,48,0.045) 1px, transparent 1px, transparent 3px); /* @kind other */
+  --signature-gradient-text:linear-gradient(90deg, #0a5c24, #0f9a3d);
+  --signature-band-tint:#d7ecdb;
+}
+html[data-theme="terminal"] .fg-btn--primary:hover { box-shadow: 0 0 12px color-mix(in srgb, var(--_green) 55%, transparent); }
+html[data-theme="terminal"] .t-label { text-transform: uppercase; }
+
+/* Accent override */
+html[data-theme="terminal"][data-accent="amber"] { --color-action: var(--_amber); --color-action-hover:#ffc640; --color-action-press:#cc8c00; --color-on-action:#1a1200; }
+
+/* ── Typeface-set overrides (data-typeface-set) ──────────────────────────
+   A one-font theme still honors the axis: each set swaps the single mono face
+   across all 4 slots, proving components never assume a face. Unset = default
+   ("jetbrains": JetBrains Mono everywhere). */
+
+/* "plex" — IBM Plex Mono (shared with beRich): rounder terminal. */
+html[data-theme="terminal"][data-typeface-set="plex"] {
+  --font-display: 'IBM Plex Mono', ui-monospace, monospace;
+  --font-body:    'IBM Plex Mono', ui-monospace, monospace;
+  --font-mono:    'IBM Plex Mono', ui-monospace, monospace;
+  --font-accent:  'IBM Plex Mono', ui-monospace, monospace;
+}
+
+/* "sometype" — Sometype Mono (shared with ClickUp): softer, only 400/500 ships,
+   so cap the heavy steps to avoid faux-bold synthesis. */
+html[data-theme="terminal"][data-typeface-set="sometype"] {
+  --font-display: 'Sometype Mono', ui-monospace, monospace;
+  --font-body:    'Sometype Mono', ui-monospace, monospace;
+  --font-mono:    'Sometype Mono', ui-monospace, monospace;
+  --font-accent:  'Sometype Mono', ui-monospace, monospace;
+  --weight-semibold: 500; --weight-bold: 500;
+}

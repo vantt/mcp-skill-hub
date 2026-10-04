@@ -1,0 +1,148 @@
+/* ============================================================
+   ADAPTER · beRich  →  html[data-theme="berich"]
+   Ivory paper, jade action + gold seasoning, soft radii, warm
+   shadow. Gemstone alternate-accent set. action=brand=link=jade.
+   ============================================================ */
+@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700;800&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,500&family=IBM+Plex+Mono:wght@300..600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');   /* for typeface-set "grotesk-warm" */
+
+html[data-theme="berich"] {
+  /* ── Tier 1 · PRIMITIVE (private) ── */
+  --_paper:#F7F3EA; --_white:#FFFFFF; --_raised:#FCFAF4;
+  --_line:#E6DFD0; --_line-strong:#D6CCB8;
+  --_t1:#211C16; --_t2:#5E574C; --_t3:#8A8275; --_t4:#B9B1A4;
+  --_jade:#0E6F52; --_jade-hi:#13A06E; --_jade-lo:#0A3B2C; --_jade-bg:#E1F2EA;
+  --_gold:#C8A04D; --_coral:#C23B4B; --_coral-bg:#FAE3E5;
+
+  /* ── Tier 2 · SEMANTIC ── */
+  --color-bg: var(--_paper);
+  --color-surface: var(--_white);
+  --color-surface-raised: var(--_raised);
+  --color-surface-sunken: #F1EADB;
+  --color-scrim: rgba(20,17,14,0.45);
+
+  --color-text: var(--_t1);
+  --color-text-muted: var(--_t2);
+  --color-text-subtle: var(--_t3);
+  --color-text-disabled: var(--_t4);
+  --color-on-action: #FFFFFF;
+  --color-on-brand: #FFFFFF;
+  --color-on-dark: #F2EDE2;
+
+  --color-border: var(--_line);
+  --color-border-strong: var(--_line-strong);
+  --color-border-interactive: var(--_jade);
+
+  --color-action: var(--_jade);
+  --color-action-hover: var(--_jade-hi);
+  --color-action-press: var(--_jade-lo);
+  --color-brand: var(--_jade);
+  --color-brand-tint: var(--_jade-bg);
+  --color-link: var(--_jade);
+  --color-link-hover: var(--_jade-hi);
+
+  --color-success: var(--_jade-hi); --color-success-tint: var(--_jade-bg);
+  /* Warning TEXT darkened from --_gold (#C8A04D ≈ 2.1:1 on its tint — fails AA);
+     the gold primitive stays for decorative use via accent-alt-2. */
+  --color-warning: #7A5E17;         --color-warning-tint: #F6EAD1;
+  --color-danger: var(--_coral);    --color-danger-tint: var(--_coral-bg);
+  --color-info: #2563C9;            --color-info-tint: #E4ECFA;
+
+  --color-positive: var(--_jade-hi); --color-positive-tint: var(--_jade-bg);
+  --color-negative: var(--_coral);   --color-negative-tint: var(--_coral-bg);
+
+  /* Gemstone alternate accents */
+  --color-accent-alt-1:#13A06E; --color-accent-alt-2:#C8A04D; --color-accent-alt-3:#2563C9;
+  --color-accent-alt-4:#7C5CD6; --color-accent-alt-5:#C23B4B;
+
+  /* Type */
+  --font-display: 'Spectral', Georgia, serif;
+  --font-body: 'Be Vietnam Pro', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --font-accent: 'Spectral', Georgia, serif;   /* Spectral italic = the warm human aside */
+
+  --type-display-weight: 600; --type-display-tracking: -0.02em;
+  --type-title-weight: 600;   --type-heading-weight: 600; --type-heading-sm-weight: 600;
+  --type-label-tracking: 0.16em;
+
+  /* ── Tier 3 · CHARACTER — soft, warm ── */
+  --btn-radius: var(--radius-md);
+  --btn-weight: 600;
+  --card-radius: var(--radius-lg);
+  --card-elevation: 0 4px 16px rgba(90,70,20,0.08);
+  --chip-radius: var(--radius-sm);
+  --input-radius: var(--radius-md);
+  --nav-item-radius: var(--radius-md);
+
+  --signature-vignette: radial-gradient(ellipse at 70% -10%, rgba(200,160,77,0.10), transparent 60%); /* @kind other */
+  /* Signature: jade→gold prosperity gradient, warm-obsidian dark panel, ivory band */
+  --signature-gradient-text: linear-gradient(92deg, #0E6F52, #C8A04D);
+  --signature-dark-bg: #14110E;
+  --signature-dark-text: #F2EDE2;
+  --signature-band-tint: #F1EADB;
+}
+
+/* ── Scheme · DARK (opposite of the native ivory paper) — warm obsidian,
+   jade brightened to hold contrast on dark, gemstone accents preserved.
+   Soft/warm character unchanged. ── */
+html[data-theme="berich"][data-scheme="dark"] {
+  --color-bg:#14120e;
+  --color-surface:#1c1a15;
+  --color-surface-raised:#24211a;
+  --color-surface-sunken:#100e0a;
+  --color-scrim:rgba(10,8,5,0.6);
+  --color-text:#f2ede2;
+  --color-text-muted:#b7ae9c;
+  --color-text-subtle:#847c6c;
+  --color-text-disabled:#524b3f;
+  --color-border:#2c281f;
+  --color-border-strong:#3c372c;
+  --color-border-interactive:#16b378;
+  --color-action:#0f8a63; --color-action-hover:#16b378; --color-action-press:#0b6b4c; --color-on-action:#ffffff;
+  --color-brand:#16b378; --color-brand-tint:#0f2a1f;
+  --color-link:#3ed69a; --color-link-hover:#66e0b3;
+  --color-success:#2ecb90; --color-success-tint:#0f2a1f;
+  --color-warning:#d3a94e; --color-warning-tint:#2c2410;
+  --color-danger:#e5606d;  --color-danger-tint:#2e1417;
+  --color-info:#5b9be8;    --color-info-tint:#12243a;
+  --color-positive:#2ecb90; --color-positive-tint:#0f2a1f;
+  --color-negative:#e5606d; --color-negative-tint:#2e1417;
+  --color-accent-alt-1:#2ecb90; --color-accent-alt-2:#d3a94e; --color-accent-alt-3:#5b9be8; --color-accent-alt-4:#9d80e6; --color-accent-alt-5:#e5606d;
+  --color-surface-hover:#24211a;
+  --color-selection-bg:color-mix(in srgb, #16b378 30%, transparent); --color-selection-text:#f2ede2;
+  --scrollbar-thumb:#3c372c;
+  --signature-band-tint:#1a1712;
+  --signature-vignette:radial-gradient(ellipse at 70% -10%, rgba(200,160,77,0.10), transparent 60%); /* @kind other */
+}
+html[data-theme="berich"] .fg-btn--primary:hover { box-shadow: 0 8px 24px rgba(14,111,82,0.18); }
+
+/* Gemstone accent overrides */
+html[data-theme="berich"][data-accent="gold"]     { --color-action:#B88A2E; --color-action-hover:#C8A04D; --color-action-press:#9A7322; }
+html[data-theme="berich"][data-accent="sapphire"] { --color-action:#2563C9; --color-action-hover:#4A82E0; --color-action-press:#1B4DA0; }
+html[data-theme="berich"][data-accent="topaz"]    { --color-action:#C2691F; --color-action-hover:#D97A34; --color-action-press:#9E520F; }
+html[data-theme="berich"][data-accent="amethyst"] { --color-action:#7C5CD6; --color-action-hover:#9479E2; --color-action-press:#5E40B0; }
+html[data-theme="berich"][data-accent="garnet"]   { --color-action:#C23B4B; --color-action-hover:#D55A68; --color-action-press:#9E2B3A; }
+
+/* ── Typeface-set overrides (data-typeface-set) ──────────────────────────
+   Unset = default ("signature": Spectral · Be Vietnam Pro · IBM Plex Mono ·
+   Spectral — all already loaded). */
+
+/* "humanist" — sans-forward: Be Vietnam Pro carries the headings too, Spectral
+   italic kept only as the accent voice. 0 extra download. */
+html[data-theme="berich"][data-typeface-set="humanist"] {
+  --font-display: 'Be Vietnam Pro', system-ui, sans-serif;
+  --font-body:    'Be Vietnam Pro', system-ui, sans-serif;
+  --font-mono:    'IBM Plex Mono', ui-monospace, monospace;
+  --font-accent:  'Spectral', Georgia, serif;
+  --type-display-weight: var(--weight-bold); --type-title-weight: var(--weight-semibold); --type-heading-weight: var(--weight-semibold);
+}
+
+/* "grotesk-warm" — Plus Jakarta Sans display (shared with ClickUp) over the
+   warm Be Vietnam Pro body. 1 extra face. */
+html[data-theme="berich"][data-typeface-set="grotesk-warm"] {
+  --font-display: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-body:    'Be Vietnam Pro', system-ui, sans-serif;
+  --font-mono:    'IBM Plex Mono', ui-monospace, monospace;
+  --font-accent:  'Spectral', Georgia, serif;
+  --type-display-weight: var(--weight-bold); --type-display-tracking: -0.03em;
+}
