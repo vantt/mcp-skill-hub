@@ -1,7 +1,7 @@
 ---
 phase: 3
 title: "Add, Create, Skill Detail, proposals"
-status: pending
+status: complete
 priority: P1
 effort: 46h
 dependencies: [2]
@@ -124,14 +124,14 @@ The skill authoring and lifecycle screens (Add from GitHub, Create, Skill Detail
 
 ## Progress
 
-- [ ] Task 3.1 — GitHub-only locator validation
-- [ ] Task 3.2 — Skill write endpoints
-- [ ] Task 3.3 — Safe Markdown renderer
-- [ ] Task 3.4 — Shared proposal and recovery components
-- [ ] Task 3.5 — Editor drafts
-- [ ] Task 3.6 — Add, Create and Skill Detail screens
-- [ ] Task 3.7 — End-to-end lifecycle and conflict journeys
-- [ ] Task 3.8 — Phase close
+- [x] Task 3.1 — GitHub-only locator validation
+- [x] Task 3.2 — Skill write endpoints
+- [x] Task 3.3 — Safe Markdown renderer
+- [x] Task 3.4 — Shared proposal and recovery components
+- [x] Task 3.5 — Editor drafts
+- [x] Task 3.6 — Add, Create and Skill Detail screens
+- [x] Task 3.7 — End-to-end lifecycle and conflict journeys
+- [x] Task 3.8 — Phase close
 
 ## Failure Protocol
 If any Verify step does not meet its stated pass condition:
