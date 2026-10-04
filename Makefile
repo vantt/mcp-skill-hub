@@ -2,7 +2,7 @@ GOLANGCI_LINT ?= go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v
 # Lint only issues introduced after this revision; existing findings are tracked debt.
 LINT_BASE ?= origin/main
 
-.PHONY: test test-race test-perf lint lint-all fmt vet check
+.PHONY: test test-race test-perf lint lint-all fmt vet check web-install web-build web-test web-check web-e2e web-dev
 
 ## test: full suite, same as CI
 test:
@@ -32,3 +32,24 @@ vet:
 
 ## check: what to run before committing
 check: vet lint test
+
+web-install:
+	cd web && npm ci
+
+web-build: web-install
+	find internal/delivery/web/dist -mindepth 1 ! -name .gitkeep -exec rm -rf {} +
+	cd web && npm run build
+
+web-test:
+	cd web && npm run typecheck && npm run lint && npm test
+
+## web-check: frontend typecheck, lint, unit tests and build
+web-check: web-install web-test web-build
+
+## web-e2e: build the UI and binary, then run Playwright against the real server
+web-e2e: web-build
+	go build -o web/.e2e/skillhub ./cmd/skillhub
+	cd web && npx playwright install chromium && npm run e2e
+
+web-dev:
+	bash scripts/web-dev.sh
