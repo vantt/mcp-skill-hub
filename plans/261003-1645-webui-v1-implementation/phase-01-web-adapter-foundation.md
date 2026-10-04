@@ -1,7 +1,7 @@
 ---
 phase: 1
 title: "Web adapter foundation (Go)"
-status: pending
+status: complete
 priority: P1
 effort: 32h
 dependencies: []
@@ -158,15 +158,15 @@ dependencies: []
 
 ## Progress
 
-- [ ] Task 1.1 — Preflight
-- [ ] Task 1.2 — Package skeleton and server lifecycle
-- [ ] Task 1.3 — Error envelope and status table
-- [ ] Task 1.4 — Security middleware and auth throttle
-- [ ] Task 1.5 — Listen rule and startup output
-- [ ] Task 1.6 — Embedded assets and SPA fallback
-- [ ] Task 1.7 — Read endpoints with golden files
-- [ ] Task 1.8 — `skillhub serve web` command and `web` alias
-- [ ] Task 1.9 — Phase close
+- [x] Task 1.1 — Preflight
+- [x] Task 1.2 — Package skeleton and server lifecycle
+- [x] Task 1.3 — Error envelope and status table
+- [x] Task 1.4 — Security middleware and auth throttle
+- [x] Task 1.5 — Listen rule and startup output
+- [x] Task 1.6 — Embedded assets and SPA fallback
+- [x] Task 1.7 — Read endpoints with golden files
+- [x] Task 1.8 — `skillhub serve web` command and `web` alias
+- [x] Task 1.9 — Phase close
 
 ## Failure Protocol
 If any Verify step does not meet its stated pass condition:

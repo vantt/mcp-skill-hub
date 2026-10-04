@@ -159,9 +159,9 @@ func TestServeWebCommand(t *testing.T) {
 		cancel()
 
 		select {
-		case code := <-exitCh:
-			if code != 0 {
-				t.Errorf("exit code = %d, want 0", code)
+		case status := <-exitCh:
+			if status != 0 {
+				t.Errorf("exit code = %d, want 0", status)
 			}
 		case <-time.After(5 * time.Second):
 			t.Fatal("timed out waiting for server to shut down cleanly")
