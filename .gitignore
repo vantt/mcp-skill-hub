@@ -17,3 +17,11 @@ engineer/
 .mcp.json
 CLAUDE.md
 GEMINI.md
+
+# Web UI build artifacts and frontend directories
+internal/delivery/web/dist/*
+!internal/delivery/web/dist/.gitkeep
+web/node_modules/
+web/test-results/
+web/playwright-report/
+web/.e2e/
