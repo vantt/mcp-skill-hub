@@ -1,4 +1,5 @@
 export const en = {
+  'app.title': 'Skill Hub',
   // Navigation
   'nav.home': 'Home',
   'nav.skills': 'Skills',
@@ -72,12 +73,15 @@ export const en = {
   'action.cancel': 'Cancel',
   'action.back': 'Back',
   'action.close': 'Close',
+  'action.reload': 'Reload',
 
   // Home Screen
   'home.title': 'Home',
   'home.subtitle': 'Curate and monitor your Skill Hub workspace.',
   'home.next_action_title': 'Next action',
   'home.nothing_needs_attention': 'Nothing needs attention.',
+  'home.degraded_title': 'Search index needs rebuild.',
+  'home.degraded_body': 'Catalog is stale. Run skillhub rebuild, then reload.',
   'home.summary_title': 'Overview',
   'home.pending_insights.one': '{count} pending insight',
   'home.pending_insights.other': '{count} pending insights',
