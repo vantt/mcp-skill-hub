@@ -110,7 +110,7 @@ func validateSkillMetadata(path string, contents []byte) (skillMetadata, []Issue
 		return item, []Issue{{Path: path, Message: "skill metadata must be one YAML mapping"}}
 	}
 	root := document.Content[0]
-	allowed := stringSet("schema_version", "id", "name", "status", "description", "collection_id", "collection", "aliases", "domain", "topics", "technologies", "content", "routing", "quality", "provenance", "history", "created_at", "updated_at")
+	allowed := stringSet("schema_version", "id", "name", "status", "description", "collection_id", "collection", "aliases", "domain", "topics", "technologies", "content", "routing", "runtime", "quality", "provenance", "history", "created_at", "updated_at")
 	values, err := mappingValues(root, allowed)
 	if err != nil {
 		return item, []Issue{{Path: path, Message: "invalid skill metadata: " + err.Error()}}
@@ -222,6 +222,11 @@ func validateSkillMetadata(path string, contents []byte) (skillMetadata, []Issue
 			}
 		}
 	}
+	if runtimeNode := values["runtime"]; runtimeNode != nil {
+		if err := validateRuntime(runtimeNode); err != nil {
+			add("runtime "+err.Error(), runtimeNode)
+		}
+	}
 	if quality := values["quality"]; quality != nil {
 		if err := validateQuality(quality); err != nil {
 			add("quality " + err.Error())
@@ -244,7 +249,7 @@ func validateSkillMetadata(path string, contents []byte) (skillMetadata, []Issue
 		add("routing must be a mapping")
 		return item, issues
 	}
-	routingValues, err := mappingValues(routing, stringSet("operations", "triggers", "not_for", "min_scope", "requirements", "boosts", "distinguish_from", "supporting", "equivalent_to"))
+	routingValues, err := mappingValues(routing, stringSet("operations", "triggers", "not_for", "min_scope", "requirements", "boosts", "distinguish_from", "supporting", "equivalent_to", "examples", "counter_examples"))
 	if err != nil {
 		add("invalid routing metadata: " + err.Error())
 		return item, issues
@@ -259,6 +264,11 @@ func validateSkillMetadata(path string, contents []byte) (skillMetadata, []Issue
 	}
 	if _, err := stringSequence(routingValues["operations"]); err != nil {
 		add("routing.operations " + err.Error())
+	}
+	for _, field := range []string{"examples", "counter_examples"} {
+		if err := validateRoutingExamples(routingValues[field]); err != nil {
+			add("routing."+field+" "+err.Error(), routingValues[field])
+		}
 	}
 	if scope := scalar(routingValues["min_scope"]); scope != "" && !oneOf(scope, "single_step", "multi_step", "project") {
 		add("routing.min_scope must be single_step, multi_step, or project", routingValues["min_scope"])
@@ -563,7 +573,7 @@ func validateQuality(node *yaml.Node) error {
 	if node.Kind != yaml.MappingNode {
 		return fmt.Errorf("must be a mapping")
 	}
-	values, err := mappingValues(node, stringSet("reviewed", "curated", "reviewed_at", "routing_review_rationale"))
+	values, err := mappingValues(node, stringSet("reviewed", "curated", "reviewed_at", "routing_review_rationale", "content_reviewed_digest"))
 	if err != nil {
 		return err
 	}
@@ -580,7 +590,158 @@ func validateQuality(node *yaml.Node) error {
 	if value := values["routing_review_rationale"]; value != nil && strings.TrimSpace(scalar(value)) == "" {
 		return fmt.Errorf("routing_review_rationale must be a non-empty string")
 	}
+	if value := values["content_reviewed_digest"]; value != nil {
+		if digest := scalar(value); !strings.HasPrefix(digest, "sha256:") || !isValidDigest(digest) {
+			return fmt.Errorf("content_reviewed_digest must be a lowercase SHA-256 digest (sha256:<64 hex>)")
+		}
+	}
 	return nil
+}
+
+const (
+	maxRoutingExamples       = 10
+	maxRoutingExampleRunes   = 300
+	maxRuntimeCommandBytes   = 1024
+	runtimeBinNameExpression = `^[A-Za-z0-9._+-]{1,64}$`
+)
+
+var (
+	runtimeBinNamePattern    = regexp.MustCompile(runtimeBinNameExpression)
+	runtimeBinVersionPattern = regexp.MustCompile(`^(>=|>|<=|<|=)?\s*\d+(\.\d+){0,2}$`)
+	runtimeEnvNamePattern    = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,127}$`)
+)
+
+// validateRoutingExamples checks routing.examples and routing.counter_examples:
+// unique non-empty strings, bounded in count and length so they stay useful
+// as routing evidence rather than becoming free-form documentation.
+func validateRoutingExamples(node *yaml.Node) error {
+	examples, err := stringSequence(node)
+	if err != nil {
+		return err
+	}
+	if len(examples) > maxRoutingExamples {
+		return fmt.Errorf("must contain at most %d entries", maxRoutingExamples)
+	}
+	for _, example := range examples {
+		if utf8.RuneCountInString(example) > maxRoutingExampleRunes {
+			return fmt.Errorf("entries must be at most %d characters", maxRoutingExampleRunes)
+		}
+	}
+	return nil
+}
+
+// validateRuntime checks the optional runtime block. It declares what a skill
+// needs from the host machine; it never stores secret values, only names.
+func validateRuntime(node *yaml.Node) error {
+	if node.Kind != yaml.MappingNode {
+		return fmt.Errorf("must be a mapping")
+	}
+	values, err := mappingValues(node, stringSet("requires", "setup"))
+	if err != nil {
+		return err
+	}
+	if requires := values["requires"]; requires != nil {
+		if err := validateRuntimeRequires(requires); err != nil {
+			return fmt.Errorf("requires %w", err)
+		}
+	}
+	if setup := values["setup"]; setup != nil {
+		if setup.Kind != yaml.MappingNode {
+			return fmt.Errorf("setup must be a mapping")
+		}
+		setupValues, err := mappingValues(setup, stringSet("command", "check"))
+		if err != nil {
+			return fmt.Errorf("setup %w", err)
+		}
+		for _, field := range []string{"command", "check"} {
+			value := setupValues[field]
+			if value == nil {
+				continue
+			}
+			command := scalar(value)
+			if strings.TrimSpace(command) == "" || strings.ContainsAny(command, "\r\n") || len(command) > maxRuntimeCommandBytes {
+				return fmt.Errorf("setup.%s must be a non-empty single-line string of at most %d bytes", field, maxRuntimeCommandBytes)
+			}
+		}
+	}
+	return nil
+}
+
+func validateRuntimeRequires(node *yaml.Node) error {
+	if node.Kind != yaml.MappingNode {
+		return fmt.Errorf("must be a mapping")
+	}
+	values, err := mappingValues(node, stringSet("bins", "env", "platforms"))
+	if err != nil {
+		return err
+	}
+	if bins := values["bins"]; bins != nil {
+		if bins.Kind != yaml.SequenceNode {
+			return fmt.Errorf("bins must be a sequence")
+		}
+		seen := make(map[string]bool, len(bins.Content))
+		for _, entry := range bins.Content {
+			name, err := runtimeBinName(entry)
+			if err != nil {
+				return err
+			}
+			if seen[name] {
+				return fmt.Errorf("bins must not contain duplicate names")
+			}
+			seen[name] = true
+		}
+	}
+	if env := values["env"]; env != nil {
+		names, err := stringSequence(env)
+		if err != nil {
+			return fmt.Errorf("env %w", err)
+		}
+		for _, name := range names {
+			if !runtimeEnvNamePattern.MatchString(name) {
+				return fmt.Errorf("env entries must be variable names matching %s (values are never stored)", runtimeEnvNamePattern.String())
+			}
+		}
+	}
+	if platforms := values["platforms"]; platforms != nil {
+		names, err := stringSequence(platforms)
+		if err != nil {
+			return fmt.Errorf("platforms %w", err)
+		}
+		for _, name := range names {
+			if !oneOf(name, "linux", "darwin", "windows", "freebsd") {
+				return fmt.Errorf("platforms entries must be linux, darwin, windows, or freebsd")
+			}
+		}
+	}
+	return nil
+}
+
+// runtimeBinName validates one bins entry, either a bare executable name or a
+// {name, version} mapping, and returns the executable name.
+func runtimeBinName(entry *yaml.Node) (string, error) {
+	switch entry.Kind {
+	case yaml.ScalarNode:
+		name := scalar(entry)
+		if !runtimeBinNamePattern.MatchString(name) {
+			return "", fmt.Errorf("bins entries must match %s", runtimeBinNameExpression)
+		}
+		return name, nil
+	case yaml.MappingNode:
+		fields, err := mappingValues(entry, stringSet("name", "version"))
+		if err != nil {
+			return "", fmt.Errorf("bins entry %w", err)
+		}
+		name := scalar(fields["name"])
+		if !runtimeBinNamePattern.MatchString(name) {
+			return "", fmt.Errorf("bins entry name must match %s", runtimeBinNameExpression)
+		}
+		if version := fields["version"]; version != nil && !runtimeBinVersionPattern.MatchString(scalar(version)) {
+			return "", fmt.Errorf("bins entry version must be a quoted constraint string such as \">=18\" or \"3.11\"")
+		}
+		return name, nil
+	default:
+		return "", fmt.Errorf("bins entries must be a name string or a {name, version} mapping")
+	}
 }
 
 func validateHistory(node *yaml.Node) error {

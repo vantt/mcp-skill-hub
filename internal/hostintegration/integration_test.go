@@ -36,7 +36,7 @@ func TestPlanApplyAllHostsIsDependencyOrderedAndIdempotent(t *testing.T) {
 		t.Fatalf("host count = %d, want 3", len(inspection.Hosts))
 	}
 	for _, host := range inspection.Hosts {
-		if host.Level != LevelNativeSkillBestEffort || len(host.Files) != 3 {
+		if host.Level != LevelNativeSkillBestEffort || len(host.Files) != map[Host]int{HostClaude: 4, HostCodex: 3, HostGemini: 3}[host.Host] {
 			t.Fatalf("unexpected host inspection: %+v", host)
 		}
 	}
@@ -45,11 +45,11 @@ func TestPlanApplyAllHostsIsDependencyOrderedAndIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Plan: %v", err)
 	}
-	if len(plan.Changes) != 9 {
-		t.Fatalf("change count = %d, want 9", len(plan.Changes))
+	if len(plan.Changes) != 10 {
+		t.Fatalf("change count = %d, want 10", len(plan.Changes))
 	}
 	for index, change := range plan.Changes {
-		wantKind := []ChangeKind{ChangeMCP, ChangeNativeSkill, ChangeBootstrap}[index/3]
+		wantKind := []ChangeKind{ChangeMCP, ChangeMCP, ChangeMCP, ChangeHostPermissions, ChangeNativeSkill, ChangeNativeSkill, ChangeNativeSkill, ChangeBootstrap, ChangeBootstrap, ChangeBootstrap}[index]
 		if change.Kind != wantKind {
 			t.Fatalf("change %d kind = %s, want %s", index, change.Kind, wantKind)
 		}
@@ -65,8 +65,8 @@ func TestPlanApplyAllHostsIsDependencyOrderedAndIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
-	if len(applied.Changed) != 9 {
-		t.Fatalf("applied count = %d, want 9", len(applied.Changed))
+	if len(applied.Changed) != 10 {
+		t.Fatalf("applied count = %d, want 10", len(applied.Changed))
 	}
 
 	assertJSONRegistration(t, filepath.Join(workspace, ".mcp.json"), binary, workspace, false)
@@ -133,7 +133,7 @@ func TestManagedBlockConflictsAreReportedWithoutWrites(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Inspect: %v", err)
 			}
-			if inspection.Hosts[0].Files[2].Conflict == "" {
+			if inspection.Hosts[0].Files[3].Conflict == "" {
 				t.Fatal("expected bootstrap conflict")
 			}
 			if _, err := Plan(context.Background(), request); !errors.Is(err, ErrConflict) {
@@ -311,8 +311,8 @@ func TestPlanChangePreviewsAreBoundedAndExcludeUnmanagedValues(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Plan: %v", err)
 	}
-	if len(plan.Changes) != 3 {
-		t.Fatalf("changes = %d, want 3", len(plan.Changes))
+	if len(plan.Changes) != 4 {
+		t.Fatalf("changes = %d, want 4", len(plan.Changes))
 	}
 	for _, change := range plan.Changes {
 		if change.Preview == "" || len(change.Preview) > maxChangePreviewBytes {
@@ -474,5 +474,42 @@ func TestTOMLUpdaterRejectsAlternateSkillhubDefinitions(t *testing.T) {
 				t.Fatalf("expected conflict, got output %q", out)
 			}
 		})
+	}
+}
+
+func TestBootstrapBlockInstructsEnglishTasksAndLocalSnapshotUse(t *testing.T) {
+	block := string(bootstrapBlock("\n"))
+	for _, want := range []string{
+		"Send `task.description` in English; translate the user's request first if it is in another language.",
+		"When an activated skill response includes `local.path`, resolve the skill's relative file references",
+		"export the variables in `local.env` (`SKILLHUB_SKILL_DIR`, `SKILLHUB_STATE_DIR`, and `SKILLHUB_CONFIG_DIR`) whenever you run its `check`, `setup`, or scripts, using your shell's syntax",
+		"run its `check` command in `working_directory` under your own permissions before using the scripts, and ask the user before running `setup`.",
+		"If the skill describes installation only in prose, treat those steps as setup: ask the user first, install into `SKILLHUB_STATE_DIR`, and never install globally.",
+		"If `local.status` is `review_required`, the skill's content has not been approved: do not use the skill, and tell the user to run `skillhub skill review <id>`.",
+		"(POSIX `export NAME=value`, PowerShell `$env:NAME = \"value\"`)",
+		"If `local.path` no longer exists, for example in a long session, call `skill_get` again.",
+		"If `$SKILLHUB_CONFIG_DIR/env` exists, load it before running `check`, `setup`, or scripts",
+		"never print, echo, or log its values",
+		"`skillhub skill env set <id> <NAME>`; never ask for the value in chat.",
+		"Do not run `setup` for the same skill concurrently: if `$SKILLHUB_STATE_DIR/.setup.lock` exists and is recent, wait or ask the user.",
+		"call `skill_feedback` with `outcome: failed` and `reason_code: setup_failed`.",
+	} {
+		if !strings.Contains(block, want) {
+			t.Fatalf("bootstrap block is missing %q:\n%s", want, block)
+		}
+	}
+	if !strings.HasPrefix(block, bootstrapStart) || !strings.HasSuffix(block, bootstrapEnd) {
+		t.Fatal("bootstrap block must keep the v1 markers")
+	}
+
+	// An older v1 block is replaced in place, leaving surrounding prose intact.
+	previous := "# Mine\n\n" + bootstrapStart + "\n## Skill Hub\n\nold text\n" + bootstrapEnd + "\n\nTrailing prose.\n"
+	updated, conflict := updateBootstrap([]byte(previous))
+	if conflict != "" {
+		t.Fatalf("updateBootstrap conflict: %s", conflict)
+	}
+	want := "# Mine\n\n" + block + "\n\nTrailing prose.\n"
+	if string(updated) != want {
+		t.Fatalf("updated block:\n%s\nwant:\n%s", updated, want)
 	}
 }

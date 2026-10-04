@@ -233,7 +233,11 @@ func expectedDesired(change Change, raw []byte, plan PlanResult) ([]byte, error)
 		case HostGemini:
 			return desiredGeminiConfig(raw, plan.Binary, plan.Workspace)
 		case HostCodex:
-			return upsertCodexTOML(raw, plan.Binary, plan.Workspace)
+			return desiredCodexConfig(raw, plan.Binary, plan.Workspace)
+		}
+	case ChangeHostPermissions:
+		if change.Host == HostClaude {
+			return desiredClaudePermissions(raw, plan.Workspace)
 		}
 	}
 	return nil, fmt.Errorf("unsupported change %q for host %q", change.Kind, change.Host)
@@ -243,10 +247,12 @@ func changeOrder(kind ChangeKind) int {
 	switch kind {
 	case ChangeMCP:
 		return 0
-	case ChangeNativeSkill:
+	case ChangeHostPermissions:
 		return 1
-	case ChangeBootstrap:
+	case ChangeNativeSkill:
 		return 2
+	case ChangeBootstrap:
+		return 3
 	default:
 		return -1
 	}
@@ -268,6 +274,11 @@ func validateChangePath(root string, scope Scope, change Change) error {
 	switch change.Kind {
 	case ChangeMCP:
 		relative = configRel
+	case ChangeHostPermissions:
+		relative = adapter.permissionsPath(scope)
+		if relative == "" {
+			return fmt.Errorf("host %q has no separate permissions file", change.Host)
+		}
 	case ChangeNativeSkill:
 		if !adapter.NativeSkill {
 			return fmt.Errorf("host %q has no native skill path", change.Host)

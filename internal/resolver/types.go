@@ -130,19 +130,33 @@ type ValidFor struct {
 }
 
 type Recommendation struct {
-	ID            string `json:"id"`
-	Version       string `json:"version"`
-	URI           string `json:"uri"`
-	Applicability string `json:"applicability"`
-	Confidence    string `json:"confidence"`
+	ID            string       `json:"id"`
+	Version       string       `json:"version"`
+	URI           string       `json:"uri"`
+	Applicability string       `json:"applicability"`
+	Confidence    string       `json:"confidence"`
+	Setup         *SetupStatus `json:"setup,omitempty"`
 }
 
 type Supporting struct {
-	ID         string `json:"id"`
-	Version    string `json:"version"`
-	URI        string `json:"uri"`
-	Role       string `json:"role"`
-	Activation string `json:"activation"`
+	ID         string       `json:"id"`
+	Version    string       `json:"version"`
+	URI        string       `json:"uri"`
+	Role       string       `json:"role"`
+	Activation string       `json:"activation"`
+	Setup      *SetupStatus `json:"setup,omitempty"`
+}
+
+// SetupStatus is a post-ranking hint about whether a recommended skill can be
+// used here. It is attached to skills with a runtime block and to third-party
+// skills awaiting content review, and never influences ranking or status. The
+// hub verifies only trust and platform; a doctor-derived state is a hint whose
+// Basis names the terminal that produced it.
+type SetupStatus struct {
+	State       string   `json:"state"`
+	ReasonCodes []string `json:"reason_codes,omitempty"`
+	Basis       string   `json:"basis,omitempty"`
+	CheckedAt   string   `json:"checked_at,omitempty"`
 }
 
 type Question struct {

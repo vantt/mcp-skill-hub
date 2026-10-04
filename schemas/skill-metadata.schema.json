@@ -37,7 +37,32 @@
         "boosts": {"type": "object"},
         "distinguish_from": {"type": "array", "items": {"$ref": "#/$defs/distinguishRelationship"}},
         "supporting": {"type": "array", "items": {"$ref": "#/$defs/supportRelationship"}},
-        "equivalent_to": {"type": "array", "items": {"$ref": "#/$defs/equivalentRelationship"}, "uniqueItems": true}
+        "equivalent_to": {"type": "array", "items": {"$ref": "#/$defs/equivalentRelationship"}, "uniqueItems": true},
+        "examples": {"$ref": "#/$defs/routingExamples"},
+        "counter_examples": {"$ref": "#/$defs/routingExamples"}
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requires": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "bins": {"type": "array", "items": {"$ref": "#/$defs/runtimeBin"}},
+            "env": {"type": "array", "items": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,127}$"}, "uniqueItems": true},
+            "platforms": {"type": "array", "items": {"enum": ["linux", "darwin", "windows", "freebsd"]}, "uniqueItems": true}
+          }
+        },
+        "setup": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "command": {"$ref": "#/$defs/runtimeCommand"},
+            "check": {"$ref": "#/$defs/runtimeCommand"}
+          }
+        }
       }
     },
     "quality": {
@@ -47,7 +72,8 @@
         "reviewed": {"type": "boolean"},
         "curated": {"type": "boolean"},
         "reviewed_at": {"type": "string", "format": "date-time"},
-        "routing_review_rationale": {"type": "string", "minLength": 1}
+        "routing_review_rationale": {"type": "string", "minLength": 1},
+        "content_reviewed_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
       }
     },
     "provenance": {
@@ -78,6 +104,23 @@
     "updated_at": {"type": "string", "format": "date-time"}
   },
   "$defs": {
+    "routingExamples": {"type": "array", "maxItems": 10, "items": {"type": "string", "minLength": 1, "maxLength": 300, "pattern": "\\S"}, "uniqueItems": true},
+    "runtimeBinName": {"type": "string", "pattern": "^[A-Za-z0-9._+-]{1,64}$"},
+    "runtimeBin": {
+      "oneOf": [
+        {"$ref": "#/$defs/runtimeBinName"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name"],
+          "properties": {
+            "name": {"$ref": "#/$defs/runtimeBinName"},
+            "version": {"type": "string", "pattern": "^(>=|>|<=|<|=)?\\s*\\d+(\\.\\d+){0,2}$"}
+          }
+        }
+      ]
+    },
+    "runtimeCommand": {"type": "string", "minLength": 1, "maxLength": 1024, "pattern": "^[^\\r\\n]*\\S[^\\r\\n]*$"},
     "origin": {
       "type": "object",
       "additionalProperties": false,

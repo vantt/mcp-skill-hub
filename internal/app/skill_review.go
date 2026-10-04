@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -14,6 +16,7 @@ import (
 	"github.com/vantt/mcp-skill-hub/internal/canonical"
 	"github.com/vantt/mcp-skill-hub/internal/catalog"
 	"github.com/vantt/mcp-skill-hub/internal/skill"
+	"github.com/vantt/mcp-skill-hub/internal/skillruntime"
 	"gopkg.in/yaml.v3"
 )
 
@@ -82,7 +85,28 @@ type SkillReviewResult struct {
 	MissingResources    []string                    `json:"missing_resources,omitempty"`
 	Provenance          *SkillProvenance            `json:"provenance,omitempty"`
 	Git                 SkillGitSummary             `json:"git"`
+	ContentTrust        ContentTrust                `json:"content_trust"`
+	RuntimeHints        skillruntime.Hints          `json:"runtime_hints"`
 	NextAction          string                      `json:"next_action"`
+}
+
+// ContentTrust tells a human whether a skill's content may be served and run
+// and, when review is required, which content digest to approve and how.
+type ContentTrust struct {
+	ThirdParty     bool     `json:"third_party"`
+	Approved       bool     `json:"approved"`
+	ContentDigest  string   `json:"content_digest"`
+	ReasonCodes    []string `json:"reason_codes,omitempty"`
+	ApproveCommand string   `json:"approve_command,omitempty"`
+	// ChangesSinceApproval is present when a previous approval is recorded and
+	// the content no longer matches it. It is absent for a skill never approved.
+	ChangesSinceApproval *ChangesSinceApproval `json:"changes_since_approval,omitempty"`
+}
+
+// RequiresReview reports whether the content is withheld from agents until a
+// human approves the content digest.
+func (trust ContentTrust) RequiresReview() bool {
+	return len(trust.ReasonCodes) > 0
 }
 
 // ReviewSkill executes a read-only, offline review of one skill directly from canonical files
@@ -121,6 +145,10 @@ func (SkillService) ReviewSkill(ctx context.Context, path, id string) (SkillRevi
 	servedFacts, diverged, changedResources, missingResources := assessServedSkillFacts(ctx, root, id, &canonicalFacts)
 	prov := extractSkillProvenance(metaDoc)
 	gitSummary := getSkillGitSummary(ctx, root, skillRelDir+"/")
+	contentTrust := reviewContentTrust(id, skillRelDir, resources, skillMetaBytes)
+	contentTrust.ChangesSinceApproval = reviewChangesSinceApproval(ctx, approvalDiffInput{Root: root, SkillRelDir: skillRelDir, SkillMetaBytes: skillMetaBytes, Resources: resources, Trust: contentTrust, HistoryLimit: approvalHistoryLimit})
+	_, hasRuntimeBlock := reviewRuntimeSpec(skillMetaBytes)
+	runtimeHints := reviewRuntimeHints(root, skillRelDir, resources, hasRuntimeBlock)
 
 	nextAction := computeNextAction(id, skillRelDir, metaDoc.Status, valid, canonicalIssues, readiness, isScaffold, missingFields, diverged, changedResources, missingResources, servedFacts, gitSummary)
 
@@ -147,6 +175,8 @@ func (SkillService) ReviewSkill(ctx context.Context, path, id string) (SkillRevi
 		MissingResources:    missingResources,
 		Provenance:          prov,
 		Git:                 gitSummary,
+		ContentTrust:        contentTrust,
+		RuntimeHints:        runtimeHints,
 		NextAction:          nextAction,
 	}
 
@@ -159,14 +189,17 @@ type skillReviewMeta struct {
 	Status      string `yaml:"status"`
 	Description string `yaml:"description"`
 	Routing     struct {
-		Operations []string `yaml:"operations"`
-		Triggers   []string `yaml:"triggers"`
-		NotFor     []string `yaml:"not_for"`
-		MinScope   string   `yaml:"min_scope"`
+		Operations      []string `yaml:"operations"`
+		Triggers        []string `yaml:"triggers"`
+		NotFor          []string `yaml:"not_for"`
+		MinScope        string   `yaml:"min_scope"`
+		Examples        []string `yaml:"examples"`
+		CounterExamples []string `yaml:"counter_examples"`
 	} `yaml:"routing"`
 	Quality struct {
 		Reviewed               bool   `yaml:"reviewed"`
 		RoutingReviewRationale string `yaml:"routing_review_rationale"`
+		ContentReviewedDigest  string `yaml:"content_reviewed_digest"`
 	} `yaml:"quality"`
 	Provenance struct {
 		CreatedBy      string `yaml:"created_by"`
@@ -311,6 +344,82 @@ func inventorySkillResources(root, fullSkillDir, entrypointRelPath, entrypointDi
 		Resources:        resources,
 	}
 	return resourceStatus, resources, totalBytes
+}
+
+// reviewContentTrust evaluates content trust from the canonical files with the
+// same rules activation applies to the catalog, so the digest shown here is the
+// one a human approves with `skill edit --approve-content`.
+func reviewContentTrust(skillID, skillRelDir string, resources []ResourceItem, skillMetaBytes []byte) ContentTrust {
+	var document contentTrustDocument
+	_ = yaml.Unmarshal(skillMetaBytes, &document)
+	spec, hasSpec := reviewRuntimeSpec(skillMetaBytes)
+	prefix := skillRelDir + "/"
+	files := make([]skillruntime.ResourceDigest, 0, len(resources))
+	for _, resource := range resources {
+		if relative := strings.TrimPrefix(resource.Path, prefix); relative != resource.Path {
+			files = append(files, skillruntime.ResourceDigest{Path: relative, Digest: resource.Digest})
+		}
+	}
+	verdict := document.verdict(files, spec, hasSpec)
+	result := ContentTrust{
+		ThirdParty:    skillruntime.IsThirdParty(document.provenance()),
+		ContentDigest: verdict.ContentDigest,
+		Approved:      document.Quality.ContentReviewedDigest != "" && document.Quality.ContentReviewedDigest == verdict.ContentDigest,
+		ReasonCodes:   verdict.ReasonCodes,
+	}
+	if verdict.RequiresReview {
+		result.ApproveCommand = fmt.Sprintf("skillhub skill edit %s --approve-content %s", skillID, verdict.ContentDigest)
+	}
+	return result
+}
+
+// hintReadLimit bounds how much of each file the runtime hints inspect.
+const hintReadLimit = 256 << 10
+
+// reviewRuntimeHints derives static runtime hints from the canonical skill
+// files. Unreadable files are skipped: the hints are advisory.
+func reviewRuntimeHints(root, skillRelDir string, resources []ResourceItem, hasRuntimeBlock bool) skillruntime.Hints {
+	prefix := skillRelDir + "/"
+	files := make([]skillruntime.HintFile, 0, len(resources))
+	for _, resource := range resources {
+		relative := strings.TrimPrefix(resource.Path, prefix)
+		if relative == resource.Path {
+			continue
+		}
+		files = append(files, skillruntime.HintFile{Path: relative, Content: readLeadingBytes(filepath.Join(root, filepath.FromSlash(resource.Path)), hintReadLimit)})
+	}
+	return skillruntime.AnalyzeHints(files, hasRuntimeBlock)
+}
+
+func readLeadingBytes(path string, limit int64) []byte {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer file.Close()
+	content, err := io.ReadAll(io.LimitReader(file, limit))
+	if err != nil {
+		return nil
+	}
+	return content
+}
+
+// reviewRuntimeSpec parses the runtime block from skill.meta.yaml. An invalid
+// block is already reported as a canonical issue, so it is treated as absent.
+func reviewRuntimeSpec(skillMetaBytes []byte) (skillruntime.Spec, bool) {
+	var document map[string]any
+	if err := yaml.Unmarshal(skillMetaBytes, &document); err != nil {
+		return skillruntime.Spec{}, false
+	}
+	encoded, err := json.Marshal(map[string]any{"runtime": document["runtime"]})
+	if err != nil {
+		return skillruntime.Spec{}, false
+	}
+	spec, hasSpec, err := skillruntime.ParseSpec(encoded)
+	if err != nil {
+		return skillruntime.Spec{}, false
+	}
+	return spec, hasSpec
 }
 
 func assessServedSkillFacts(ctx context.Context, root, id string, canonicalFacts *catalog.CanonicalSkillFacts) (catalog.ServedSkillFacts, bool, []string, []string) {

@@ -6,24 +6,26 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
 	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
 	"github.com/vantt/mcp-skill-hub/internal/skill"
+	"gopkg.in/yaml.v3"
 )
 
 type skillFlags struct {
 	workspace, id, collection, name, description, contentFile, minScope, rationale string
 	proposalID, proposalDigest, baseVersion, idempotencyKey, state                 string
-	locator, ref, subPath                                                          string
-	operations, triggers, notFor, skills, positionals                              []string
+	locator, ref, subPath, approveContent, runtimeFile                             string
+	operations, triggers, notFor, examples, counterExamples, skills, positionals   []string
 	jsonOutput, yes, fullDiff, editor, verbose, all                                bool
 }
 
 func runSkill(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), "skill requires a subcommand", "Run `skillhub skill list|show|create|edit|review|add|confirm|activate|deprecate|archive`.")
+		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), "skill requires a subcommand", "Run `skillhub skill list|show|create|edit|review|doctor|env|add|confirm|activate|deprecate|archive`.")
 	}
 	subcommand := args[0]
 	flags, err := parseSkillFlags(subcommand, args[1:])
@@ -33,6 +35,12 @@ func runSkill(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 			return writeWorkspaceResolutionError(stdout, stderr, hasJSONFlag(args), resErr)
 		}
 		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Review `skillhub skill "+subcommand+"` arguments and retry.")
+	}
+	if subcommand == "doctor" {
+		return runSkillDoctor(ctx, flags, stdout, stderr)
+	}
+	if subcommand == "env" {
+		return runSkillEnv(ctx, flags, stdout, stderr)
 	}
 	service := app.SkillService{}
 	if subcommand == "add" {
@@ -152,7 +160,7 @@ func runSkill(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 		}
 		preview, err = service.PreviewCreate(ctx, flags.workspace, skill.CreateInput{
 			ID: flags.id, IdempotencyKey: flags.idempotencyKey, Collection: flags.collection, Name: flags.name, Description: flags.description, Content: content,
-			Routing:   skill.RoutingInput{Operations: flags.operations, Triggers: flags.triggers, NotFor: flags.notFor, MinScope: flags.minScope},
+			Routing:   skill.RoutingInput{Operations: flags.operations, Triggers: flags.triggers, NotFor: flags.notFor, MinScope: flags.minScope, Examples: flags.examples, CounterExamples: flags.counterExamples},
 			Rationale: flags.rationale,
 		}, flags.fullDiff)
 		if err != nil {
@@ -198,7 +206,17 @@ func runSkill(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 		if flags.rationale != "" {
 			update.Rationale = &flags.rationale
 		}
-		if len(flags.operations)+len(flags.triggers)+len(flags.notFor) > 0 || flags.minScope != "" {
+		if flags.approveContent != "" {
+			update.ContentReviewedDigest = &flags.approveContent
+		}
+		if flags.runtimeFile != "" {
+			block, readErr := readRuntimeFile(flags.runtimeFile)
+			if readErr != nil {
+				return writeSkillErrorFor(flags.id, stdout, stderr, flags.jsonOutput, readErr)
+			}
+			update.Runtime = block
+		}
+		if flags.hasRoutingFlags() {
 			current, err := service.ReadSkillRouting(ctx, flags.workspace, flags.id)
 			if err != nil {
 				return writeSkillErrorFor(flags.id, stdout, stderr, flags.jsonOutput, err)
@@ -233,7 +251,7 @@ func runSkill(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 	case "activate", "deprecate", "archive":
 		preview, err = service.PreviewTransitionWithKey(ctx, flags.workspace, flags.id, subcommandTarget(subcommand), flags.fullDiff, flags.idempotencyKey)
 	default:
-		return writeInvalidRequest(stdout, stderr, flags.jsonOutput, fmt.Sprintf("unsupported skill subcommand %q", subcommand), "Run `skillhub skill list|show|create|edit|review|add|confirm|activate|deprecate|archive`.")
+		return writeInvalidRequest(stdout, stderr, flags.jsonOutput, fmt.Sprintf("unsupported skill subcommand %q", subcommand), "Run `skillhub skill list|show|create|edit|review|doctor|env|add|confirm|activate|deprecate|archive`.")
 	}
 	if err != nil {
 		return writeSkillErrorFor(flags.id, stdout, stderr, flags.jsonOutput, err)
@@ -282,7 +300,7 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 			return args[index], nil
 		}
 		switch value {
-		case "--workspace", "--id", "--collection", "--name", "--description", "--content-file", "--min-scope", "--rationale", "--operation", "--trigger", "--not-for", "--proposal", "--proposal-digest", "--base-version", "--idempotency-key", "--state", "--ref", "--path", "--skill":
+		case "--workspace", "--id", "--collection", "--name", "--description", "--content-file", "--min-scope", "--rationale", "--operation", "--trigger", "--not-for", "--example", "--counter-example", "--approve-content", "--runtime-file", "--proposal", "--proposal-digest", "--base-version", "--idempotency-key", "--state", "--ref", "--path", "--skill":
 			item, err := next()
 			if err != nil {
 				return flags, err
@@ -310,6 +328,14 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 				flags.triggers = append(flags.triggers, item)
 			case "--not-for":
 				flags.notFor = append(flags.notFor, item)
+			case "--example":
+				flags.examples = append(flags.examples, item)
+			case "--counter-example":
+				flags.counterExamples = append(flags.counterExamples, item)
+			case "--approve-content":
+				flags.approveContent = item
+			case "--runtime-file":
+				flags.runtimeFile = item
 			case "--proposal":
 				flags.proposalID = item
 			case "--proposal-digest":
@@ -350,6 +376,9 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 	if flags.state != "" && subcommand != "list" {
 		return flags, errors.New("--state is available only for skill list")
 	}
+	if flags.runtimeFile != "" && subcommand != "edit" {
+		return flags, errors.New("--runtime-file is available only for skill edit")
+	}
 	switch subcommand {
 	case "add":
 		if len(positionals) != 1 {
@@ -376,11 +405,27 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 		if flags.yes || flags.fullDiff || flags.idempotencyKey != "" || flags.editor || flags.contentFile != "" || flags.proposalID != "" {
 			return flags, errors.New("review does not accept mutation flags")
 		}
+	case "doctor":
+		if len(positionals) == 1 {
+			if flags.id != "" && flags.id != positionals[0] {
+				return flags, fmt.Errorf("positional skill ID %q conflicts with --id %q", positionals[0], flags.id)
+			}
+			flags.id = positionals[0]
+		} else if len(positionals) != 0 || flags.id == "" {
+			return flags, errors.New("doctor requires exactly one skill ID")
+		}
+		if flags.collection != "" || flags.name != "" || flags.description != "" || flags.contentFile != "" || flags.minScope != "" || flags.rationale != "" || flags.hasRoutingFlags() || flags.approveContent != "" || flags.editor || flags.yes || flags.fullDiff || flags.idempotencyKey != "" || flags.proposalID != "" || flags.proposalDigest != "" || flags.baseVersion != "" || flags.all || len(flags.skills) != 0 || flags.ref != "" || flags.subPath != "" {
+			return flags, errors.New("doctor accepts only its skill ID, --workspace, and --json")
+		}
+	case "env":
+		if err := parseSkillEnvArgs(&flags, positionals); err != nil {
+			return flags, err
+		}
 	case "list":
 		if len(positionals) != 0 {
 			return flags, errors.New("list accepts no positional arguments")
 		}
-		if flags.id != "" || flags.collection != "" || flags.name != "" || flags.description != "" || flags.contentFile != "" || flags.minScope != "" || flags.rationale != "" || len(flags.operations)+len(flags.triggers)+len(flags.notFor) != 0 || flags.editor || flags.yes || flags.fullDiff || flags.idempotencyKey != "" || flags.proposalID != "" || flags.proposalDigest != "" || flags.baseVersion != "" {
+		if flags.id != "" || flags.collection != "" || flags.name != "" || flags.description != "" || flags.contentFile != "" || flags.minScope != "" || flags.rationale != "" || flags.hasRoutingFlags() || flags.approveContent != "" || flags.editor || flags.yes || flags.fullDiff || flags.idempotencyKey != "" || flags.proposalID != "" || flags.proposalDigest != "" || flags.baseVersion != "" {
 			return flags, errors.New("list accepts only --state, --workspace, and --json")
 		}
 	case "create":
@@ -401,6 +446,9 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 		if flags.editor {
 			return flags, errors.New("--editor is available only for skill edit")
 		}
+		if flags.approveContent != "" {
+			return flags, errors.New("--approve-content is available only for skill edit")
+		}
 	case "edit":
 		if len(positionals) == 1 {
 			if flags.id != "" && flags.id != positionals[0] {
@@ -418,8 +466,11 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 		if flags.editor && flags.contentFile != "" {
 			return flags, errors.New("--editor and --content-file cannot be combined")
 		}
-		if !flags.editor && flags.contentFile == "" && flags.name == "" && flags.description == "" && flags.rationale == "" && len(flags.operations)+len(flags.triggers)+len(flags.notFor) == 0 && flags.minScope == "" {
-			return flags, errors.New("edit requires changed fields, --content-file, or --editor")
+		if !flags.editor && flags.contentFile == "" && flags.name == "" && flags.description == "" && flags.rationale == "" && !flags.hasRoutingFlags() && flags.approveContent == "" && flags.runtimeFile == "" {
+			return flags, errors.New("edit requires changed fields, --content-file, --runtime-file, or --editor")
+		}
+		if flags.approveContent != "" && !contentDigestPattern.MatchString(flags.approveContent) {
+			return flags, errors.New("--approve-content requires a digest of the form sha256:<64 lowercase hex characters>")
 		}
 	case "activate", "deprecate", "archive", "show":
 		if len(positionals) == 1 {
@@ -432,7 +483,7 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 		} else {
 			return flags, fmt.Errorf("%s requires exactly one skill ID", subcommand)
 		}
-		if flags.collection != "" || flags.name != "" || flags.description != "" || flags.contentFile != "" || flags.minScope != "" || flags.rationale != "" || len(flags.operations)+len(flags.triggers)+len(flags.notFor) != 0 || flags.editor || flags.proposalID != "" || flags.proposalDigest != "" || flags.baseVersion != "" {
+		if flags.collection != "" || flags.name != "" || flags.description != "" || flags.contentFile != "" || flags.minScope != "" || flags.rationale != "" || flags.hasRoutingFlags() || flags.approveContent != "" || flags.editor || flags.proposalID != "" || flags.proposalDigest != "" || flags.baseVersion != "" {
 			return flags, fmt.Errorf("%s accepts only its skill ID and output, workspace, diff, or confirmation flags", subcommand)
 		}
 		if subcommand == "show" && (flags.yes || flags.fullDiff || flags.idempotencyKey != "") {
@@ -450,7 +501,7 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 		if flags.proposalID == "" {
 			return flags, errors.New("confirm requires a proposal ID")
 		}
-		if flags.id != "" || flags.collection != "" || flags.name != "" || flags.description != "" || flags.contentFile != "" || flags.minScope != "" || flags.rationale != "" || len(flags.operations)+len(flags.triggers)+len(flags.notFor) != 0 || flags.editor || flags.yes || flags.fullDiff || flags.idempotencyKey != "" {
+		if flags.id != "" || flags.collection != "" || flags.name != "" || flags.description != "" || flags.contentFile != "" || flags.minScope != "" || flags.rationale != "" || flags.hasRoutingFlags() || flags.approveContent != "" || flags.editor || flags.yes || flags.fullDiff || flags.idempotencyKey != "" {
 			return flags, errors.New("confirm accepts only workspace, proposal pins, and output flags")
 		}
 	default:
@@ -462,6 +513,23 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 	}
 	flags.workspace = resolved
 	return flags, nil
+}
+
+// readRuntimeFile reads a YAML runtime block. An empty mapping ({}) is returned
+// as an empty non-nil map, which removes the block on edit.
+func readRuntimeFile(path string) (map[string]any, error) {
+	contents, err := readContentFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var block map[string]any
+	if err := yaml.Unmarshal(contents, &block); err != nil {
+		return nil, fmt.Errorf("runtime file is not valid YAML: %w", err)
+	}
+	if block == nil {
+		return nil, errors.New("runtime file must contain a YAML mapping; use {} to remove the runtime block")
+	}
+	return block, nil
 }
 
 // maxContentFileBytes bounds an input content file; it matches the largest
@@ -505,6 +573,15 @@ func readContentFile(path string) ([]byte, error) {
 	return contents, nil
 }
 
+// contentDigestPattern matches the content digest a human approves with
+// --approve-content; it mirrors quality.content_reviewed_digest validation.
+var contentDigestPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+
+// hasRoutingFlags reports whether any routing field flag was supplied.
+func (flags skillFlags) hasRoutingFlags() bool {
+	return len(flags.operations)+len(flags.triggers)+len(flags.notFor)+len(flags.examples)+len(flags.counterExamples) > 0 || flags.minScope != ""
+}
+
 // mergeRouting overlays the routing flags the user passed onto the stored routing.
 func mergeRouting(current skill.RoutingInput, flags skillFlags) *skill.RoutingInput {
 	if len(flags.operations) > 0 {
@@ -518,6 +595,12 @@ func mergeRouting(current skill.RoutingInput, flags skillFlags) *skill.RoutingIn
 	}
 	if flags.minScope != "" {
 		current.MinScope = flags.minScope
+	}
+	if len(flags.examples) > 0 {
+		current.Examples = flags.examples
+	}
+	if len(flags.counterExamples) > 0 {
+		current.CounterExamples = flags.counterExamples
 	}
 	return &current
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"path/filepath"
 	"strings"
 
 	"github.com/vantt/mcp-skill-hub/internal/catalog"
@@ -29,6 +30,27 @@ type SkillDetail struct {
 	Routing          skill.RoutingInput `json:"routing"`
 	Rationale        string             `json:"rationale,omitempty"`
 	Resources        []skill.Resource   `json:"resources"`
+}
+
+// ContentTrustFor evaluates the content trust of a skill in any lifecycle
+// state from its canonical files: a third-party skill is trusted only when the
+// recorded approval matches the current content digest. Callers that hand
+// skill content to an agent use it to withhold unreviewed third-party content.
+func (SkillService) ContentTrustFor(ctx context.Context, path, id string) (ContentTrust, error) {
+	if err := ctx.Err(); err != nil {
+		return ContentTrust{}, err
+	}
+	root, err := skill.ResolveWorkspace(path)
+	if err != nil {
+		return ContentTrust{}, err
+	}
+	_, skillRelDir, skillMetaBytes, err := locateSkillDir(root, id)
+	if err != nil {
+		return ContentTrust{}, err
+	}
+	entrypointRelPath, entrypointDigest, _ := inspectCanonicalEntrypoint(root, skillRelDir)
+	_, resources, _ := inventorySkillResources(root, filepath.Join(root, filepath.FromSlash(skillRelDir)), entrypointRelPath, entrypointDigest)
+	return reviewContentTrust(id, skillRelDir, resources, skillMetaBytes), nil
 }
 
 // GetSkillDetail returns the full detail and read model for a single skill.

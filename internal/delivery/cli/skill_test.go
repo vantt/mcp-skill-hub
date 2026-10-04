@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
+	"gopkg.in/yaml.v3"
 )
 
 func TestSkillCLIEndToEndPreviewConfirmActivateShowAndArchive(t *testing.T) {
@@ -202,5 +204,183 @@ func TestSkillCLIStoredEditorProposalDoesNotReopenEditorAtConfirm(t *testing.T) 
 	calls, err := os.ReadFile(counter)
 	if err != nil || string(calls) != "x" {
 		t.Fatalf("editor calls = %q, %v", calls, err)
+	}
+}
+
+func TestSkillCLIRoutingExamplesAndScriptsApproval(t *testing.T) {
+	t.Parallel()
+	root := filepath.Join(t.TempDir(), "workspace")
+	var stdout, stderr bytes.Buffer
+	run := func(args ...string) int {
+		stdout.Reset()
+		stderr.Reset()
+		return Run(args, &stdout, &stderr)
+	}
+	if code := run("init", root, "--yes"); code != 0 {
+		t.Fatalf("init = %d: %s", code, stderr.String())
+	}
+	metadataPath := filepath.Join(root, "skills", "software", "pr-review", "skill.meta.yaml")
+	readMetadata := func() map[string]any {
+		t.Helper()
+		contents, err := os.ReadFile(metadataPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var document map[string]any
+		if err := yaml.Unmarshal(contents, &document); err != nil {
+			t.Fatal(err)
+		}
+		return document
+	}
+	section := func(document map[string]any, key string) map[string]any {
+		value, _ := document[key].(map[string]any)
+		return value
+	}
+
+	if code := run("skill", "create", "pr-review", "--workspace", root, "--collection", "software", "--name", "PR Review", "--description", "Review pull requests",
+		"--trigger", "review pull request", "--min-scope", "single_step",
+		"--example", "review my pull request", "--example", "check this diff before merge",
+		"--counter-example", "write release notes", "--yes", "--json"); code != 0 {
+		t.Fatalf("create = %d: stdout=%s stderr=%s", code, stdout.String(), stderr.String())
+	}
+	routing := section(readMetadata(), "routing")
+	if !reflect.DeepEqual(routing["examples"], []any{"review my pull request", "check this diff before merge"}) || !reflect.DeepEqual(routing["counter_examples"], []any{"write release notes"}) {
+		t.Fatalf("created routing = %#v", routing)
+	}
+
+	if code := run("skill", "edit", "pr-review", "--workspace", root, "--trigger", "review a pull request", "--yes", "--json"); code != 0 {
+		t.Fatalf("edit triggers = %d: stdout=%s stderr=%s", code, stdout.String(), stderr.String())
+	}
+	routing = section(readMetadata(), "routing")
+	if !reflect.DeepEqual(routing["triggers"], []any{"review a pull request"}) || !reflect.DeepEqual(routing["examples"], []any{"review my pull request", "check this diff before merge"}) {
+		t.Fatalf("trigger edit must keep examples: %#v", routing)
+	}
+
+	if code := run("skill", "edit", "pr-review", "--workspace", root, "--counter-example", "draft a changelog", "--yes", "--json"); code != 0 {
+		t.Fatalf("edit counter examples = %d: stdout=%s stderr=%s", code, stdout.String(), stderr.String())
+	}
+	routing = section(readMetadata(), "routing")
+	if !reflect.DeepEqual(routing["counter_examples"], []any{"draft a changelog"}) || !reflect.DeepEqual(routing["triggers"], []any{"review a pull request"}) || len(routing["examples"].([]any)) != 2 {
+		t.Fatalf("counter-example edit = %#v", routing)
+	}
+
+	digest := "sha256:" + strings.Repeat("c", 64)
+	if code := run("skill", "edit", "pr-review", "--workspace", root, "--approve-content", digest, "--yes", "--json"); code != 0 {
+		t.Fatalf("approve scripts = %d: stdout=%s stderr=%s", code, stdout.String(), stderr.String())
+	}
+	document := readMetadata()
+	if got := section(document, "quality")["content_reviewed_digest"]; got != digest {
+		t.Fatalf("quality.content_reviewed_digest = %#v", got)
+	}
+	if routing := section(document, "routing"); !reflect.DeepEqual(routing["counter_examples"], []any{"draft a changelog"}) {
+		t.Fatalf("scripts approval must not touch routing: %#v", routing)
+	}
+}
+
+func TestParseSkillFlagsValidatesExamplesAndScriptsApproval(t *testing.T) {
+	t.Parallel()
+	root := filepath.Join(t.TempDir(), "workspace")
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("init = %d: %s", code, stderr.String())
+	}
+	valid := "sha256:" + strings.Repeat("a", 64)
+	accepted, err := parseSkillFlags("edit", []string{"pr-review", "--workspace", root, "--example", "a", "--example", "b", "--counter-example", "c"})
+	if err != nil {
+		t.Fatalf("example-only edit rejected: %v", err)
+	}
+	if !reflect.DeepEqual(accepted.examples, []string{"a", "b"}) || !reflect.DeepEqual(accepted.counterExamples, []string{"c"}) {
+		t.Fatalf("parsed examples = %#v / %#v", accepted.examples, accepted.counterExamples)
+	}
+	if _, err := parseSkillFlags("edit", []string{"pr-review", "--workspace", root, "--approve-content", valid}); err != nil {
+		t.Fatalf("approval-only edit rejected: %v", err)
+	}
+	for name, tc := range map[string]struct {
+		subcommand string
+		args       []string
+		want       string
+	}{
+		"malformed digest":     {"edit", []string{"pr-review", "--approve-content", "sha256:ABC"}, "--approve-content requires a digest"},
+		"digest without value": {"edit", []string{"pr-review", "--approve-content"}, "--approve-content requires a value"},
+		"create approval":      {"create", []string{"pr-review", "--collection", "software", "--name", "n", "--description", "d", "--approve-content", valid}, "--approve-content is available only for skill edit"},
+		"activate example":     {"activate", []string{"pr-review", "--example", "a"}, "activate accepts only"},
+		"activate approval":    {"activate", []string{"pr-review", "--approve-content", valid}, "activate accepts only"},
+		"list counter example": {"list", []string{"--counter-example", "a"}, "list accepts only"},
+		"confirm example":      {"confirm", []string{"PROP-1", "--example", "a"}, "confirm accepts only"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := parseSkillFlags(tc.subcommand, append(tc.args, "--workspace", root))
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("err = %v, want %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestSkillEditRuntimeFileSetsAndRemovesRuntimeBlock(t *testing.T) {
+	t.Parallel()
+	root := filepath.Join(t.TempDir(), "workspace")
+	var stdout, stderr bytes.Buffer
+	run := func(args ...string) int {
+		stdout.Reset()
+		stderr.Reset()
+		return Run(args, &stdout, &stderr)
+	}
+	if code := run("init", root, "--yes"); code != 0 {
+		t.Fatalf("init = %d: %s", code, stderr.String())
+	}
+	if code := run("skill", "create", "rt-edit", "--workspace", root, "--collection", "software", "--name", "RT Edit", "--description", "Runtime edit fixture", "--yes", "--json"); code != 0 {
+		t.Fatalf("create = %d: %s %s", code, stdout.String(), stderr.String())
+	}
+	metadataPath := filepath.Join(root, "skills", "software", "rt-edit", "skill.meta.yaml")
+	runtimeBlock := func() any {
+		t.Helper()
+		contents, err := os.ReadFile(metadataPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var document map[string]any
+		if err := yaml.Unmarshal(contents, &document); err != nil {
+			t.Fatal(err)
+		}
+		return document["runtime"]
+	}
+	writeRuntimeFile := func(contents string) string {
+		path := filepath.Join(t.TempDir(), "runtime.yaml")
+		if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+
+	set := writeRuntimeFile("requires:\n  bins: [python3]\n  env: [API_TOKEN]\nsetup:\n  check: python3 --version\n")
+	if code := run("skill", "edit", "rt-edit", "--workspace", root, "--runtime-file", set, "--yes", "--json"); code != 0 {
+		t.Fatalf("set runtime = %d: %s %s", code, stdout.String(), stderr.String())
+	}
+	block, _ := runtimeBlock().(map[string]any)
+	if setup, _ := block["setup"].(map[string]any); setup["check"] != "python3 --version" {
+		t.Fatalf("runtime block = %#v", block)
+	}
+
+	invalid := writeRuntimeFile("requires:\n  bins: [\"not a bin\"]\n")
+	if code := run("skill", "edit", "rt-edit", "--workspace", root, "--runtime-file", invalid, "--yes", "--json"); code == 0 {
+		t.Fatal("an invalid runtime block must be rejected")
+	}
+	if block, _ := runtimeBlock().(map[string]any); block["setup"] == nil {
+		t.Fatalf("a rejected edit must keep the block: %#v", block)
+	}
+
+	if code := run("skill", "edit", "rt-edit", "--workspace", root, "--runtime-file", writeRuntimeFile("{}\n"), "--yes", "--json"); code != 0 {
+		t.Fatalf("remove runtime = %d: %s %s", code, stdout.String(), stderr.String())
+	}
+	if got := runtimeBlock(); got != nil {
+		t.Fatalf("runtime block must be removed: %#v", got)
+	}
+
+	if _, err := parseSkillFlags("show", []string{"rt-edit", "--workspace", root, "--runtime-file", set}); err == nil || !strings.Contains(err.Error(), "--runtime-file is available only for skill edit") {
+		t.Fatalf("err = %v", err)
+	}
+	if code := run("skill", "edit", "rt-edit", "--workspace", root, "--runtime-file", writeRuntimeFile("# nothing\n"), "--yes"); code == 0 {
+		t.Fatal("an empty runtime file must be rejected")
 	}
 }

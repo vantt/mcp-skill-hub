@@ -56,7 +56,7 @@ func (adapter *Server) registerInsightTools(server *mcp.Server) {
 			return appResult((app.InsightService{}).ConfirmInsightApplication(ctx, adapter.workspace, input.ProposalID, input.ProposalDigest, input.BaseVersion))
 		})
 
-	addTool(server, &mcp.Tool{Name: "skill_update_preview", Title: "Preview skill update", Description: "Persist a validated skill update preview and return exact confirmation pins. No canonical skill files change during preview.", Annotations: annotations(false, false, false, false)},
+	addTool(server, &mcp.Tool{Name: "skill_update_preview", Title: "Preview skill update", Description: "Persist a validated skill update preview and return exact confirmation pins. No canonical skill files change during preview. runtime replaces the skill's runtime block (requires.bins/env/platforms, setup.check/command; an empty object removes it); changing it requires the user to review the skill again before its files are served to agents.", Annotations: annotations(false, false, false, false)},
 		func(ctx context.Context, _ *mcp.CallToolRequest, input skillUpdatePreviewInput) (*mcp.CallToolResult, toolOutcome[app.SkillProposal], error) {
 			update := skill.UpdateInput{
 				IdempotencyKey:        input.IdempotencyKey,
@@ -65,12 +65,13 @@ func (adapter *Server) registerInsightTools(server *mcp.Server) {
 				ExpectedContentDigest: strings.TrimSpace(input.ExpectedContentDigest),
 				Routing:               input.Routing,
 				Rationale:             input.Rationale,
+				Runtime:               input.Runtime,
 			}
 			if input.Content != nil {
 				update.SetContent = true
 				update.Content = []byte(*input.Content)
 			}
-			if input.Name == nil && input.Description == nil && input.Content == nil && input.Routing == nil && input.Rationale == nil && input.ExpectedContentDigest == "" {
+			if input.Name == nil && input.Description == nil && input.Content == nil && input.Routing == nil && input.Rationale == nil && input.Runtime == nil && input.ExpectedContentDigest == "" {
 				return failure[app.SkillProposal](fmt.Errorf("at least one update field is required"))
 			}
 			proposal, err := (app.SkillService{}).PreviewSkillUpdate(ctx, adapter.workspace, input.SkillID, update, input.FullDiff)

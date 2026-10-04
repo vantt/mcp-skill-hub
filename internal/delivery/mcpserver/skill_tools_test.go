@@ -4,13 +4,16 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/skill"
 )
 
 func newEmptyMCPWorkspace(t *testing.T) string {
@@ -561,5 +564,106 @@ func TestSkillUpdatePreviewWithExpectedContentDigest(t *testing.T) {
 	})
 	if err != nil || blindRes.IsError {
 		t.Fatalf("blind replacement update preview failed: %#v, %v", blindRes, err)
+	}
+}
+
+func TestSkillGetReturnsLocalSnapshotForActiveSkillOnly(t *testing.T) {
+	t.Parallel()
+	root := newMCPWorkspace(t)
+	service := app.SkillService{}
+	draft, err := service.PreviewCreate(t.Context(), root, skill.CreateInput{
+		ID: "draft-skill", Collection: "core", Name: "Draft Skill", Description: "Draft fixture.",
+		Content: []byte("---\nname: draft-skill\ndescription: Draft fixture.\n---\n\n# Draft\n"),
+	}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result, err := service.ConfirmSkillMutation(t.Context(), root, draft, draft.Confirmation.Confirmation.Pins); err != nil || result.Error != nil {
+		t.Fatalf("create draft = %#v, %v", result, err)
+	}
+	session := connectInMemoryServer(t, root)
+
+	getActive := func(id string) skillGetResult {
+		t.Helper()
+		res, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "skill_get", Arguments: map[string]any{"skill_id": id}})
+		if err != nil || res.IsError {
+			t.Fatalf("skill_get %s = %#v, %v", id, res, err)
+		}
+		var outcome toolOutcome[skillGetResult]
+		decodeStructuredContent(t, res, &outcome)
+		if outcome.Result == nil {
+			t.Fatalf("skill_get %s result is nil", id)
+		}
+		return *outcome.Result
+	}
+
+	active := getActive("review-skill")
+	local := active.Local
+	snapshotRoot := filepath.Join(root, "runtime", "cache", "skills") + string(filepath.Separator)
+	if local == nil || local.Status != app.LocalStatusReady || !filepath.IsAbs(local.Path) || !strings.HasPrefix(local.Path, snapshotRoot) {
+		t.Fatalf("active local = %#v", local)
+	}
+	if active.SkillID != "review-skill" || active.Content == "" {
+		t.Fatalf("shared skill detail fields missing: %#v", active.SkillDetail)
+	}
+	for _, resource := range local.Resources {
+		contents, err := os.ReadFile(resource.LocalPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resource.Path == "SKILL.md" && string(contents) != active.Content {
+			t.Fatalf("snapshot SKILL.md differs from the served content")
+		}
+	}
+
+	drafted := getActive("draft-skill")
+	if drafted.Local == nil || drafted.Local.Status != app.LocalStatusUnavailable || drafted.Local.Path != "" || len(drafted.Local.ReasonCodes) != 1 || drafted.Local.ReasonCodes[0] != app.LocalReasonNotServable {
+		t.Fatalf("draft local = %#v", drafted.Local)
+	}
+}
+
+func TestSkillUpdatePreviewAcceptsRuntimeBlockOnly(t *testing.T) {
+	t.Parallel()
+	root := newEmptyMCPWorkspace(t)
+	service := app.SkillService{}
+	created, err := service.PreviewCreate(t.Context(), root, skill.CreateInput{
+		ID: "runtime-mcp", Collection: "core", Name: "Runtime MCP", Description: "Runtime fixture.",
+		Content: []byte("---\nname: runtime-mcp\ndescription: Runtime fixture.\n---\n\n# Runtime\n"),
+	}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result, err := service.ConfirmSkillMutation(t.Context(), root, created, created.Confirmation.Confirmation.Pins); err != nil || result.Error != nil {
+		t.Fatalf("create confirm: %#v, %v", result, err)
+	}
+	session := connectInMemoryServer(t, root)
+
+	preview := func(runtime map[string]any) (*mcp.CallToolResult, toolOutcome[app.SkillProposal]) {
+		t.Helper()
+		result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+			Name:      "skill_update_preview",
+			Arguments: map[string]any{"skill_id": "runtime-mcp", "runtime": runtime},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var outcome toolOutcome[app.SkillProposal]
+		decodeStructuredContent(t, result, &outcome)
+		return result, outcome
+	}
+
+	result, outcome := preview(map[string]any{
+		"requires": map[string]any{"bins": []any{"node"}},
+		"setup":    map[string]any{"check": "node --version"},
+	})
+	if result.IsError || outcome.Result == nil || !slices.ContainsFunc(outcome.Result.Diff.Modified, func(path string) bool { return strings.HasSuffix(path, "skill.meta.yaml") }) {
+		t.Fatalf("runtime-only preview = %#v", outcome)
+	}
+	result, outcome = preview(map[string]any{"requires": map[string]any{"bins": []any{"not a bin"}}})
+	if !result.IsError || outcome.Error == nil || outcome.Error.Code != "invalid_request" || !strings.Contains(outcome.Error.SuggestedAction, "invalid runtime block") {
+		t.Fatalf("invalid runtime preview = %#v, error = %#v", outcome, outcome.Error)
+	}
+	if result, _ = preview(map[string]any{}); result.IsError {
+		t.Fatal("an empty runtime object must be accepted as a removal request")
 	}
 }

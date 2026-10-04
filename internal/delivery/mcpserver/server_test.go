@@ -246,20 +246,32 @@ func TestModernAndLegacySDKContracts(t *testing.T) {
 			if resolution.Result == nil || resolution.Result.Resolution.Primary == nil || resolution.Result.Resolution.Primary.URI != entry.URI || resolution.Result.Resolution.Primary.Version == "" {
 				t.Fatalf("resolved distribution pins = %#v", resolution)
 			}
+			for _, listedEntry := range listed.Skills {
+				if listedEntry.Local != nil {
+					t.Fatalf("skills/list must not export local snapshots: %#v", listedEntry)
+				}
+			}
 			got, err := mcp.CallCustomMethod[*getSkillParams, *getSkillResult](t.Context(), session, "skills/get", &getSkillParams{URI: entry.URI})
 			if err != nil || got.Skill.URI != entry.URI {
 				t.Fatalf("skills/get = %#v, %v", got, err)
+			}
+			snapshotRoot := filepath.Join(root, "runtime", "cache", "skills") + string(filepath.Separator)
+			if got.Skill.Local == nil || got.Skill.Local.Status != app.LocalStatusReady || !filepath.IsAbs(got.Skill.Local.Path) || !strings.HasPrefix(got.Skill.Local.Path, snapshotRoot) {
+				t.Fatalf("skills/get local = %#v", got.Skill.Local)
 			}
 			resource, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: entry.URI})
 			if err != nil || len(resource.Contents) != 1 || !strings.Contains(resource.Contents[0].Text, "Review carefully") {
 				t.Fatalf("workspace resources/read = %#v, %v", resource, err)
 			}
+			if localPath, _ := resource.Contents[0].Meta["io.skillhub/local_path"].(string); localPath != filepath.Join(got.Skill.Local.Path, "SKILL.md") {
+				t.Fatalf("resources/read _meta = %#v", resource.Contents[0].Meta)
+			}
 			gotCurator, err := mcp.CallCustomMethod[*getSkillParams, *getSkillResult](t.Context(), session, "skills/get", &getSkillParams{URI: curator.URI})
-			if err != nil || gotCurator.Skill.URI != curator.URI || gotCurator.Skill.Frontmatter["name"] != systemskills.CuratorSkillID {
+			if err != nil || gotCurator.Skill.URI != curator.URI || gotCurator.Skill.Frontmatter["name"] != systemskills.CuratorSkillID || gotCurator.Skill.Local != nil {
 				t.Fatalf("bundled curator skills/get = %#v, %v", gotCurator, err)
 			}
 			curatorResource, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: curator.URI})
-			if err != nil || len(curatorResource.Contents) != 1 || curatorResource.Contents[0].Text != systemskills.CuratorSkill {
+			if err != nil || len(curatorResource.Contents) != 1 || curatorResource.Contents[0].Text != systemskills.CuratorSkill || curatorResource.Contents[0].Meta != nil {
 				t.Fatalf("bundled curator resources/read = %#v, %v", curatorResource, err)
 			}
 		})

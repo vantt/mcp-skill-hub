@@ -32,9 +32,13 @@ const (
 type ChangeKind string
 
 const (
-	ChangeMCP         ChangeKind = "mcp-registration"
-	ChangeNativeSkill ChangeKind = "native-skill"
-	ChangeBootstrap   ChangeKind = "bootstrap-instructions"
+	ChangeMCP ChangeKind = "mcp-registration"
+	// ChangeHostPermissions is a separate host settings file that allows the
+	// runtime directories. Hosts whose MCP config file also carries the
+	// allowance (Codex, Gemini CLI) fold it into ChangeMCP instead.
+	ChangeHostPermissions ChangeKind = "host-permissions"
+	ChangeNativeSkill     ChangeKind = "native-skill"
+	ChangeBootstrap       ChangeKind = "bootstrap-instructions"
 )
 
 // Scope selects where a host integration is written relative to Request.Root.
@@ -68,6 +72,21 @@ type Adapter struct {
 	UserSkillRelativePath       string
 	UserInstructionRelativePath string
 	NativeSkill                 bool
+	// PermissionsRelativePath and UserPermissionsRelativePath name a settings
+	// file separate from the MCP config; empty when the config file is shared.
+	PermissionsRelativePath string
+	// SharedPermissionsRelativePath is a project file that also satisfies the
+	// check when it already holds the entries; it is never written.
+	SharedPermissionsRelativePath string
+	UserPermissionsRelativePath   string
+}
+
+// permissionsPath returns the separate permissions settings path for a scope.
+func (a Adapter) permissionsPath(scope Scope) string {
+	if scope == ScopeUser {
+		return a.UserPermissionsRelativePath
+	}
+	return a.PermissionsRelativePath
 }
 
 // relativePaths returns the config, skill, and instruction paths for a scope.

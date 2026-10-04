@@ -43,11 +43,11 @@ func TestDoctorHostIntegrationPreviewIsReadOnlyAndDependencyOrdered(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Status != StatusActionRequired || len(result.Items) != 9 {
+	if result.Status != StatusActionRequired || len(result.Items) != 10 {
 		t.Fatalf("host integration preview = %#v", result)
 	}
 	for index, item := range result.Items {
-		wantKind := []string{"mcp-registration", "native-skill", "bootstrap-instructions"}[index/3]
+		wantKind := []string{"mcp-registration", "mcp-registration", "mcp-registration", "host-permissions", "native-skill", "native-skill", "native-skill", "bootstrap-instructions", "bootstrap-instructions", "bootstrap-instructions"}[index]
 		if !strings.Contains(item.ID, wantKind) || !strings.Contains(item.Summary, root) || !strings.Contains(item.Summary, "native-skill-instruction-coordination") || !strings.Contains(item.Summary, "Managed diff preview:") {
 			t.Fatalf("preview item %d = %#v, want kind %s with path, level, and managed diff", index, item, wantKind)
 		}
@@ -330,6 +330,7 @@ func hostArtifactPaths() []string {
 		".mcp.json",
 		".codex/config.toml",
 		".gemini/settings.json",
+		".claude/settings.local.json",
 		".claude/skills/system-curator/SKILL.md",
 		".agents/skills/system-curator/SKILL.md",
 		".gemini/skills/system-curator/SKILL.md",

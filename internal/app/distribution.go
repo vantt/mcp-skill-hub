@@ -17,6 +17,7 @@ import (
 
 	"github.com/vantt/mcp-skill-hub/internal/catalog"
 	"github.com/vantt/mcp-skill-hub/internal/skill"
+	"github.com/vantt/mcp-skill-hub/internal/skillruntime"
 	"github.com/vantt/mcp-skill-hub/internal/systemskills"
 	"github.com/vantt/mcp-skill-hub/internal/workspace"
 )
@@ -42,6 +43,9 @@ type DistributedSkill struct {
 	Snapshot      string                `json:"-"`
 	SkillID       string                `json:"-"`
 	resourcePaths map[string]string
+	// digests lists every distributed file by relative path and digest, taken
+	// from catalog rows, so content trust never needs the file bytes.
+	digests []skillruntime.ResourceDigest
 }
 
 // DistributedContent is a verified resource payload.
@@ -49,6 +53,8 @@ type DistributedContent struct {
 	URI      string
 	MIMEType string
 	Bytes    []byte
+	SkillID  string
+	Path     string // relative to the skill folder
 }
 
 // IsText reports whether the payload may be sent as JSON text without changing
@@ -244,7 +250,7 @@ func (DistributionService) ReadResource(ctx context.Context, path, uri string) (
 		// Bytes that are not UTF-8 cannot travel as text without being altered.
 		mimeType = "application/octet-stream"
 	}
-	return DistributedContent{URI: uri, MIMEType: mimeType, Bytes: contents}, nil
+	return DistributedContent{URI: uri, MIMEType: mimeType, Bytes: contents, SkillID: id, Path: relative}, nil
 }
 
 func openDistributionGeneration(ctx context.Context, path string) (string, *catalog.Handle, error) {
@@ -298,25 +304,20 @@ func buildDistributedSkill(ctx context.Context, root string, handle *catalog.Han
 	if err := rows.Close(); err != nil {
 		return DistributedSkill{}, err
 	}
-	type digestResource struct {
-		Path   string `json:"path"`
-		Digest string `json:"digest"`
-		Size   int64  `json:"size"`
-	}
-	digestInput := make([]digestResource, 0, len(manifest.Resources))
+	digestInput := make([]manifestDigestEntry, 0, len(manifest.Resources))
 	var total int64
 	var entrypoint *skill.Resource
 	for index := range manifest.Resources {
 		resource := &manifest.Resources[index]
-		relative, ok := relativeSkillPath(resource.Path, id)
-		if !ok || relative == "skill.meta.yaml" {
+		relative, ok := distributedRelativePath(resource.Path, id)
+		if !ok {
 			continue
 		}
 		if relative == "SKILL.md" {
 			entrypoint = resource
 		}
 		total += resource.SizeBytes
-		digestInput = append(digestInput, digestResource{Path: relative, Digest: resource.Digest, Size: resource.SizeBytes})
+		digestInput = append(digestInput, manifestDigestEntry{Path: relative, Digest: resource.Digest, Size: resource.SizeBytes})
 	}
 	if entrypoint == nil {
 		if len(digestInput) == 0 || len(digestInput) > MaxDistributedSkillResources {
@@ -352,16 +353,16 @@ func buildDistributedSkill(ctx context.Context, root string, handle *catalog.Han
 	}
 
 	sort.Slice(digestInput, func(i, j int) bool { return digestInput[i].Path < digestInput[j].Path })
-	encoded, err := json.Marshal(digestInput)
+	hexDigest, err := hashDistributedManifest(digestInput)
 	if err != nil {
 		return DistributedSkill{}, err
 	}
-	sum := sha256.Sum256(encoded)
-	hexDigest := hex.EncodeToString(sum[:])
 	base := "skill://skillhub/" + hexDigest + "/" + id + "/"
 	resources := make([]DistributedResource, 0, len(digestInput))
 	resourcePaths := make(map[string]string, len(digestInput))
+	digests := make([]skillruntime.ResourceDigest, 0, len(digestInput))
 	for _, resource := range digestInput {
+		digests = append(digests, skillruntime.ResourceDigest{Path: resource.Path, Digest: resource.Digest})
 		uri := base + escapeURIPath(resource.Path)
 		resources = append(resources, DistributedResource{URI: uri, Digest: resource.Digest, Size: resource.Size})
 		for _, internal := range manifest.Resources {
@@ -371,7 +372,125 @@ func buildDistributedSkill(ctx context.Context, root string, handle *catalog.Han
 			}
 		}
 	}
-	return DistributedSkill{URI: base + "SKILL.md", Frontmatter: frontmatter, Resources: resources, Version: "sha256:" + hexDigest, Snapshot: manifest.CatalogSnapshot, SkillID: id, resourcePaths: resourcePaths}, nil
+	return DistributedSkill{URI: base + "SKILL.md", Frontmatter: frontmatter, Resources: resources, Version: "sha256:" + hexDigest, Snapshot: manifest.CatalogSnapshot, SkillID: id, resourcePaths: resourcePaths, digests: digests}, nil
+}
+
+// manifestDigestEntry is one file in the distributed manifest digest input.
+type manifestDigestEntry struct {
+	Path   string `json:"path"`
+	Digest string `json:"digest"`
+	Size   int64  `json:"size"`
+}
+
+// hashDistributedManifest returns the lowercase hex manifest digest over
+// entries already sorted by path.
+func hashDistributedManifest(entries []manifestDigestEntry) (string, error) {
+	encoded, err := json.Marshal(entries)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(encoded)
+	return hex.EncodeToString(sum[:]), nil
+}
+
+// distributedRelativePath maps a catalog resource path to its path inside the
+// distributed skill folder. skill.meta.yaml is hub metadata and never
+// distributed.
+func distributedRelativePath(internal, id string) (string, bool) {
+	relative, ok := relativeSkillPath(internal, id)
+	if !ok || relative == "skill.meta.yaml" {
+		return "", false
+	}
+	return relative, true
+}
+
+// distributedSkillFile is one digest-verified file of a distributed skill.
+type distributedSkillFile struct {
+	Path   string // relative to the skill folder, slash separated
+	Kind   string
+	Digest string
+	Size   int64
+	Bytes  []byte
+}
+
+// distributedSkillSource is a distributed skill together with its manifest
+// document (content_json) and the verified bytes of every distributed file,
+// all read from one pinned catalog generation.
+type distributedSkillSource struct {
+	Skill       DistributedSkill
+	ContentJSON []byte
+	Files       []distributedSkillFile
+}
+
+// loadDistributedSkillSource builds an active, servable skill and reads every
+// distributed file, verifying each against its pinned digest and size. The
+// catalog handle is released before returning, so callers may write files
+// without holding the shared catalog lock. When admit returns false, the file
+// bytes are not read and Files stays empty; admit sees the skill entry and its
+// manifest document, which is enough to decide trust.
+func loadDistributedSkillSource(ctx context.Context, path, id string, admit func(DistributedSkill, []byte) (bool, error)) (root string, source distributedSkillSource, resultErr error) {
+	root, handle, err := openDistributionGeneration(ctx, path)
+	if err != nil {
+		return "", source, err
+	}
+	defer closeDistributionHandle(handle, &resultErr)
+	entry, err := buildDistributedSkill(ctx, root, handle, id)
+	if err != nil {
+		return "", source, err
+	}
+	var contentJSON string
+	if err := handle.DB.QueryRowContext(ctx, `SELECT content_json FROM canonical_entities WHERE id=?`, id).Scan(&contentJSON); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", source, skill.ErrNotFound
+		}
+		return "", source, err
+	}
+	if admit != nil {
+		proceed, err := admit(entry, []byte(contentJSON))
+		if err != nil {
+			return "", source, err
+		}
+		if !proceed {
+			return root, distributedSkillSource{Skill: entry, ContentJSON: []byte(contentJSON)}, nil
+		}
+	}
+	kinds := make(map[string]string, len(entry.Resources))
+	rows, err := handle.DB.QueryContext(ctx, `SELECT path,kind FROM resources WHERE skill_id=?`, id)
+	if err != nil {
+		return "", source, err
+	}
+	for rows.Next() {
+		var internal, kind string
+		if err := rows.Scan(&internal, &kind); err != nil {
+			_ = rows.Close()
+			return "", source, err
+		}
+		kinds[internal] = kind
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return "", source, err
+	}
+	if err := rows.Close(); err != nil {
+		return "", source, err
+	}
+	files := make([]distributedSkillFile, 0, len(entry.Resources))
+	for _, resource := range entry.Resources {
+		internal := entry.resourcePaths[resource.URI]
+		relative, ok := distributedRelativePath(internal, id)
+		if internal == "" || !ok {
+			return "", source, fmt.Errorf("%w: resource %s has no verified workspace path", skill.ErrSnapshotExpired, resource.URI)
+		}
+		contents, err := readPinnedResource(root, internal, resource.Digest)
+		if err != nil {
+			return "", source, err
+		}
+		if int64(len(contents)) != resource.Size {
+			return "", source, fmt.Errorf("%w: resource %s size changed", ErrResourceContentUnavailable, relative)
+		}
+		files = append(files, distributedSkillFile{Path: relative, Kind: kinds[internal], Digest: resource.Digest, Size: resource.Size, Bytes: contents})
+	}
+	return root, distributedSkillSource{Skill: entry, ContentJSON: []byte(contentJSON), Files: files}, nil
 }
 
 func buildBundledCuratorSkill() (DistributedSkill, error) {

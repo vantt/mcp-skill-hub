@@ -9,6 +9,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/vantt/mcp-skill-hub/internal/app"
 	"github.com/vantt/mcp-skill-hub/internal/skill"
+	"github.com/vantt/mcp-skill-hub/internal/systemskills"
 )
 
 func (adapter *Server) registerSkillTools(server *mcp.Server) {
@@ -134,7 +135,7 @@ func (adapter *Server) registerSkillTools(server *mcp.Server) {
 	addTool(server, &mcp.Tool{
 		Name:        "skill_get",
 		Title:       "Get skill",
-		Description: "Get a single skill by ID in any lifecycle state, returning its routing fields, entrypoint path, content, and metadata.",
+		Description: "Get a single skill by ID in any lifecycle state, returning its routing fields, entrypoint path, content, and metadata. For an active skill, local.path is a read-only copy of the skill folder: resolve relative file references such as scripts/ against it. Every trusted skill also gets a writable local.state_directory and local.env (SKILLHUB_SKILL_DIR, SKILLHUB_STATE_DIR, SKILLHUB_CONFIG_DIR): export them when you run its check, setup, or scripts, and install dependencies only into the state directory, never globally. If $SKILLHUB_CONFIG_DIR/env exists, load it too (for example `set -a; . \"$SKILLHUB_CONFIG_DIR/env\"; set +a`) and never print its values; if a required variable is missing, tell the user to run `skillhub skill env set <id> <NAME>` instead of asking for the value. When local.preflight is present, run its check command in working_directory under your own permissions before using the scripts, and ask the user before running setup. If local.status is review_required, the skill's content has not been approved: content is omitted, resources/read refuses every file, so do not use the skill and tell the user to run local.review_command.",
 		Annotations: annotations(true, false, false, false),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input skillGetInput) (*mcp.CallToolResult, toolOutcome[skillGetResult], error) {
 		id := strings.TrimSpace(input.SkillID)
@@ -154,6 +155,23 @@ func (adapter *Server) registerSkillTools(server *mcp.Server) {
 			}
 			return failure[skillGetResult](err)
 		}
-		return success(detail)
+		local := adapter.localSkill(ctx, detail.SkillID, detail.LifecycleState)
+		result := skillGetResult{SkillDetail: detail, Content: detail.Content, Local: local}
+		if detail.SkillID != systemskills.CuratorSkillID && detail.LifecycleState != "active" {
+			// Snapshots exist only for active skills, so a draft or archived
+			// third-party skill is gated here from its canonical files.
+			trust, trustErr := (app.SkillService{}).ContentTrustFor(ctx, adapter.workspace, detail.SkillID)
+			if trustErr != nil {
+				return failure[skillGetResult](trustErr)
+			}
+			if trust.RequiresReview() {
+				local = &app.LocalSkill{Status: app.LocalStatusReviewRequired, ReasonCodes: trust.ReasonCodes, ReviewCommand: "skillhub skill review " + detail.SkillID}
+				result.Local = local
+			}
+		}
+		if local != nil && local.Status == app.LocalStatusReviewRequired {
+			result.Content = ""
+		}
+		return success(result)
 	})
 }

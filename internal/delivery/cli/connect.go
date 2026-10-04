@@ -126,6 +126,11 @@ func formatChangeKind(kind, summary string) string {
 			return ".gemini/settings.json"
 		}
 		return ".mcp.json"
+	case "host-permissions":
+		if strings.Contains(summary, "settings.local.json") {
+			return ".claude/settings.local.json"
+		}
+		return ".claude/settings.json"
 	case "native-skill":
 		return "curator skill"
 	case "bootstrap-instructions", "bootstrap":

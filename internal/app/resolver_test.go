@@ -13,8 +13,10 @@ import (
 
 	"github.com/vantt/mcp-skill-hub/internal/catalog"
 	resolverpkg "github.com/vantt/mcp-skill-hub/internal/resolver"
+	"github.com/vantt/mcp-skill-hub/internal/skillruntime"
 	"github.com/vantt/mcp-skill-hub/internal/telemetry"
 	"github.com/vantt/mcp-skill-hub/internal/workspace"
+	"github.com/vantt/mcp-skill-hub/schemas"
 )
 
 type panickingTelemetrySink struct{}
@@ -278,4 +280,184 @@ func errorText(err error) string {
 		return ""
 	}
 	return err.Error()
+}
+
+func setupResolverRequest() resolverpkg.Request {
+	return resolverpkg.Request{
+		SchemaVersion: resolverpkg.SchemaVersion,
+		RequestID:     "req-setup-annotation",
+		Task:          resolverpkg.Task{Description: "review the mutable workspace fixture", Scope: "multi_step"},
+		Operation:     "review",
+	}
+}
+
+func withoutSetup(response resolverpkg.Response) resolverpkg.Response {
+	if response.Primary != nil {
+		primary := *response.Primary
+		primary.Setup = nil
+		response.Primary = &primary
+	}
+	supporting := make([]resolverpkg.Supporting, len(response.Supporting))
+	for index, entry := range response.Supporting {
+		entry.Setup = nil
+		supporting[index] = entry
+	}
+	response.Supporting = supporting
+	return response
+}
+
+func validateResolveResponse(t *testing.T, response resolverpkg.Response) {
+	t.Helper()
+	schema, err := schemas.ResolverResponse()
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := schema.Resolve(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(response)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var value any
+	if err := json.Unmarshal(encoded, &value); err != nil {
+		t.Fatal(err)
+	}
+	if err := resolved.Validate(value); err != nil {
+		t.Fatalf("response does not match the committed schema: %v\n%s", err, encoded)
+	}
+}
+
+func TestResolverOmitsSetupForSkillsWithoutRuntime(t *testing.T) {
+	t.Parallel()
+	root := newSkillWorkspace(t)
+	createActiveDistributionSkill(t, root, "setup-plain", "Setup Plain")
+	response, err := (ResolverService{Cache: resolverpkg.NewCache(8)}).Resolve(t.Context(), root, setupResolverRequest())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.Primary == nil || response.Primary.ID != "setup-plain" {
+		t.Fatalf("expected setup-plain as primary, got %#v", response)
+	}
+	if response.Primary.Setup != nil {
+		t.Fatalf("setup must be absent without a runtime block: %#v", response.Primary.Setup)
+	}
+	encoded, err := json.Marshal(response)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), `"setup"`) {
+		t.Fatalf("serialized response contains setup: %s", encoded)
+	}
+}
+
+func TestResolverSetupAnnotationFollowsPlatformAndDoctorHintWithoutChangingRanking(t *testing.T) {
+	t.Parallel()
+	root := newSkillWorkspace(t)
+	createActiveDistributionSkill(t, root, "setup-runtime", "Setup Runtime")
+	writeSkillFile(t, root, "setup-runtime", "scripts/check.py", "print('ok')\n")
+	updateSkillMeta(t, root, "setup-runtime", func(document map[string]any) {
+		withRuntime(document)
+		document["runtime"].(map[string]any)["requires"].(map[string]any)["platforms"] = []any{"linux"}
+	})
+	request := setupResolverRequest()
+	linux := runtimeProbe{goos: "linux"}
+	windows := runtimeProbe{goos: "windows"}
+
+	resolve := func(probe runtimeProbe, sink TelemetrySink) resolverpkg.Response {
+		t.Helper()
+		response, err := (ResolverService{Cache: resolverpkg.NewCache(8), Telemetry: sink, probe: probe}).Resolve(t.Context(), root, request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if response.Primary == nil || response.Primary.ID != "setup-runtime" || response.Primary.Setup == nil {
+			t.Fatalf("expected an annotated setup-runtime primary, got %#v", response)
+		}
+		validateResolveResponse(t, response)
+		return response
+	}
+
+	sink := &captureTelemetrySink{}
+	unknown := resolve(linux, sink)
+	if unknown.Primary.Setup.State != "unknown" || unknown.Primary.Setup.CheckedAt != "" || unknown.Primary.Setup.Basis != "" || !reflect.DeepEqual(unknown.Primary.Setup.ReasonCodes, []string{"doctor_not_run"}) {
+		t.Fatalf("no doctor cache setup = %#v", unknown.Primary.Setup)
+	}
+	completed := sink.events[len(sink.events)-1]
+	if completed.Type != telemetry.EventResolutionCompleted || completed.Payload["setup_state"] != "unknown" {
+		t.Fatalf("resolution telemetry lacks setup_state: %#v", completed)
+	}
+
+	unsupported := resolve(windows, nil)
+	if unsupported.Primary.Setup.State != "unsupported_platform" || !reflect.DeepEqual(unsupported.Primary.Setup.ReasonCodes, []string{"platform_unsupported"}) {
+		t.Fatalf("wrong platform setup = %#v", unsupported.Primary.Setup)
+	}
+
+	spec, _, err := skillruntime.ParseSpec(readCatalogContentJSON(t, root, "setup-runtime"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fingerprint := doctorFingerprint(unknown.Primary.Version, spec)
+	checkedAt := time.Date(2026, 10, 4, 10, 0, 0, 0, time.UTC)
+	if err := skillruntime.WriteCache(root, "setup-runtime", fingerprint, skillruntime.Result{State: skillruntime.StateReady, Basis: skillruntime.BasisTerminal, CheckedAt: checkedAt}); err != nil {
+		t.Fatal(err)
+	}
+	ready := resolve(linux, nil)
+	if ready.Primary.Setup.State != "ready" || ready.Primary.Setup.Basis != "terminal" || ready.Primary.Setup.CheckedAt != "2026-10-04T10:00:00Z" || len(ready.Primary.Setup.ReasonCodes) != 0 {
+		t.Fatalf("passing doctor cache setup = %#v", ready.Primary.Setup)
+	}
+
+	if err := skillruntime.WriteCache(root, "setup-runtime", fingerprint, skillruntime.Result{State: skillruntime.StateSetupRequired, Basis: skillruntime.BasisTerminal, CheckedAt: checkedAt}); err != nil {
+		t.Fatal(err)
+	}
+	failing := resolve(linux, nil)
+	if failing.Primary.Setup.State != "setup_required" || failing.Primary.Setup.Basis != "terminal" || !reflect.DeepEqual(failing.Primary.Setup.ReasonCodes, []string{"doctor_setup_required"}) {
+		t.Fatalf("failing doctor cache setup = %#v", failing.Primary.Setup)
+	}
+
+	baseline := withoutSetup(unknown)
+	for name, response := range map[string]resolverpkg.Response{"unsupported": unsupported, "ready": ready, "failing": failing} {
+		if !reflect.DeepEqual(withoutSetup(response), baseline) {
+			t.Fatalf("%s setup changed the resolution:\nbaseline=%#v\nactual=%#v", name, baseline, withoutSetup(response))
+		}
+	}
+}
+
+func TestResolverAnnotatesUnapprovedThirdPartySkillAsReviewRequired(t *testing.T) {
+	t.Parallel()
+	root := newSkillWorkspace(t)
+	createActiveDistributionSkill(t, root, "setup-third", "Setup Third")
+	updateSkillMeta(t, root, "setup-third", markThirdParty)
+	request := setupResolverRequest()
+
+	response, err := (ResolverService{Cache: resolverpkg.NewCache(8)}).Resolve(t.Context(), root, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.Primary == nil || response.Primary.ID != "setup-third" || response.Primary.Setup == nil {
+		t.Fatalf("an unapproved third-party skill must still be recommended with setup: %#v", response)
+	}
+	if setup := response.Primary.Setup; setup.State != "review_required" || !reflect.DeepEqual(setup.ReasonCodes, []string{skillruntime.ReasonContentReviewRequired}) {
+		t.Fatalf("setup = %#v", setup)
+	}
+	validateResolveResponse(t, response)
+
+	// Approving the exact content digest clears the annotation without
+	// changing the recommendation.
+	review, err := (SkillService{}).ReviewSkill(t.Context(), root, "setup-third")
+	if err != nil {
+		t.Fatal(err)
+	}
+	updateSkillMeta(t, root, "setup-third", setReviewedDigest(review.ContentTrust.ContentDigest))
+	approved, err := (ResolverService{Cache: resolverpkg.NewCache(8)}).Resolve(t.Context(), root, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if approved.Primary == nil || approved.Primary.Setup != nil {
+		t.Fatalf("approved skill without a runtime block must have no setup: %#v", approved.Primary)
+	}
+	before, after := withoutSetup(response).Primary, withoutSetup(approved).Primary
+	if before.ID != after.ID || before.Version != after.Version || before.URI != after.URI || before.Applicability != after.Applicability || before.Confidence != after.Confidence {
+		t.Fatalf("approval changed the recommendation:\n%#v\n%#v", before, after)
+	}
 }

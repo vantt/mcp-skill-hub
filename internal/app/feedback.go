@@ -109,7 +109,7 @@ func validateFeedback(input FeedbackInput) error {
 		return errors.New("selected_skill exceeds 128 characters")
 	}
 	if input.ReasonCode != nil && !telemetry.IsFeedbackReasonCode(*input.ReasonCode) {
-		return errors.New("reason_code must be user_rejected, scope_mismatch, capability_unavailable, constraint_conflict, workflow_completed, workflow_failed, abandoned, or host_report")
+		return errors.New("reason_code must be user_rejected, scope_mismatch, capability_unavailable, constraint_conflict, workflow_completed, workflow_failed, abandoned, host_report, or setup_failed")
 	}
 	if (input.Utility == nil) != (input.Basis == nil) {
 		return errors.New("utility and basis must be supplied together")

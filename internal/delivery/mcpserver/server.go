@@ -24,6 +24,7 @@ import (
 	"github.com/vantt/mcp-skill-hub/internal/app"
 	"github.com/vantt/mcp-skill-hub/internal/catalog"
 	"github.com/vantt/mcp-skill-hub/internal/skill"
+	"github.com/vantt/mcp-skill-hub/internal/systemskills"
 	"github.com/vantt/mcp-skill-hub/internal/telemetry"
 	"github.com/vantt/mcp-skill-hub/internal/workspace"
 	contractschemas "github.com/vantt/mcp-skill-hub/schemas"
@@ -42,6 +43,7 @@ type Server struct {
 	source       app.SourceService
 	distill      app.DistillService
 	curationUX   app.CurationTelemetryService
+	snapshots    app.SnapshotService
 	logger       *slog.Logger
 }
 
@@ -67,7 +69,7 @@ func New(workspacePath string, diagnostics io.Writer) (*Server, *mcp.Server, err
 	}
 	logger := slog.New(slog.NewTextHandler(diagnostics, &slog.HandlerOptions{Level: slog.LevelWarn}))
 	activeDiagnostics.Store(logger)
-	adapter := &Server{workspace: root, logger: logger}
+	adapter := &Server{workspace: root, snapshots: app.NewSnapshotService(), logger: logger}
 	capabilities := &mcp.ServerCapabilities{
 		Resources: &mcp.ResourceCapabilities{},
 		Tools:     &mcp.ToolCapabilities{},
@@ -100,6 +102,9 @@ func Serve(ctx context.Context, workspacePath string, diagnostics io.Writer) err
 	adapter, server, err := New(workspacePath, diagnostics)
 	if err != nil {
 		return err
+	}
+	if gcErr := adapter.snapshots.CollectGarbage(ctx, adapter.workspace, app.SnapshotGCMinAge); gcErr != nil {
+		adapter.logger.Warn("local skill snapshot garbage collection failed", "error", gcErr)
 	}
 	if recorder, telemetryErr := (app.TelemetryService{}).Open(adapter.workspace); telemetryErr != nil {
 		adapter.logger.Warn("MCP telemetry recorder could not be opened")
@@ -192,7 +197,29 @@ func (adapter *Server) getSkill(ctx context.Context, _ *mcp.ServerSession, param
 	if err != nil {
 		return nil, adapter.distributionRPCError(err)
 	}
-	return &getSkillResult{ResultType: "complete", Skill: toSkillEntry(entry), TTLMS: cacheTTLMS, CacheScope: "private"}, nil
+	result := toSkillEntry(entry)
+	result.Local = adapter.localSkill(ctx, entry.SkillID, "active")
+	return &getSkillResult{ResultType: "complete", Skill: result, TTLMS: cacheTTLMS, CacheScope: "private"}, nil
+}
+
+// localSkill exports or reuses the local snapshot for an activated skill. The
+// bundled curator is instruction-only and gets none; non-active skills report
+// unavailable; an export failure degrades to unavailable instead of failing
+// the request.
+func (adapter *Server) localSkill(ctx context.Context, skillID, lifecycleState string) *app.LocalSkill {
+	if skillID == systemskills.CuratorSkillID {
+		return nil
+	}
+	if lifecycleState != "active" {
+		local := app.LocalSkill{Status: app.LocalStatusUnavailable, ReasonCodes: []string{app.LocalReasonNotServable}}
+		return &local
+	}
+	local, err := adapter.snapshots.Ensure(ctx, adapter.workspace, skillID)
+	if err != nil {
+		adapter.logger.Warn("local skill snapshot could not be exported", "skill_id", skillID, "error", err)
+		local = app.LocalSkill{Status: app.LocalStatusUnavailable, ReasonCodes: []string{app.LocalReasonExportFailed}}
+	}
+	return &local
 }
 
 func (adapter *Server) readResource(ctx context.Context, request *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
@@ -203,13 +230,43 @@ func (adapter *Server) readResource(ctx context.Context, request *mcp.ReadResour
 	if err != nil {
 		return nil, adapter.distributionRPCError(err)
 	}
+	meta, refused := adapter.localResourceMeta(ctx, content.SkillID, content.Path)
+	if refused {
+		return nil, invalidParams("content_review_required", fmt.Sprintf("This skill's content has not been approved, so none of it is readable; do not use the skill and ask the user to run `skillhub skill review %s`.", content.SkillID))
+	}
 	resource := &mcp.ResourceContents{URI: content.URI, MIMEType: content.MIMEType}
+	if meta != nil {
+		resource.Meta = meta
+	}
 	if content.IsText() {
 		resource.Text = string(content.Bytes)
 	} else {
 		resource.Blob = content.Bytes
 	}
 	return &mcp.ReadResourceResult{Cacheable: mcp.Cacheable{TTLMs: cacheTTLMS, CacheScope: "private"}, Contents: []*mcp.ResourceContents{resource}}, nil
+}
+
+// localResourceMeta maps a verified resource URI to its file in the local
+// snapshot. refused is true when the skill awaits content review, in which
+// case no resource, SKILL.md included, may be served.
+func (adapter *Server) localResourceMeta(ctx context.Context, skillID, relative string) (meta mcp.Meta, refused bool) {
+	if skillID == "" || skillID == systemskills.CuratorSkillID {
+		return nil, false
+	}
+	local, err := adapter.snapshots.Ensure(ctx, adapter.workspace, skillID)
+	if err != nil {
+		adapter.logger.Warn("local skill snapshot could not be exported", "skill_id", skillID, "error", err)
+		return nil, false
+	}
+	if local.Status == app.LocalStatusReviewRequired {
+		return nil, true
+	}
+	for _, resource := range local.Resources {
+		if resource.Path == relative {
+			return mcp.Meta{"io.skillhub/local_path": resource.LocalPath}, false
+		}
+	}
+	return nil, false
 }
 
 func toSkillEntry(entry app.DistributedSkill) skillEntry {
@@ -303,7 +360,7 @@ func applyToolInputEnums(toolName string, schema *jsonschema.Schema) {
 	case "skill_feedback":
 		enums := map[string][]any{
 			"outcome":     {"activated", "loaded", "used", "abandoned", "rejected", "completed", "failed"},
-			"reason_code": {"user_rejected", "scope_mismatch", "capability_unavailable", "constraint_conflict", "workflow_completed", "workflow_failed", "abandoned", "host_report"},
+			"reason_code": {"user_rejected", "scope_mismatch", "capability_unavailable", "constraint_conflict", "workflow_completed", "workflow_failed", "abandoned", "host_report", "setup_failed"},
 			"utility":     {"helpful", "harmful", "neutral"},
 			"basis":       {"user", "evaluator", "controlled-benchmark"},
 		}

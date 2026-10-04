@@ -15,7 +15,6 @@ type tomlStatement struct {
 
 func upsertCodexTOML(raw []byte, binary, workspace string) ([]byte, error) {
 	newline := detectNewline(raw)
-	finalNewline := len(raw) > 0 && (raw[len(raw)-1] == '\n' || raw[len(raw)-1] == '\r')
 	statements, err := scanTOMLStatements(raw)
 	if err != nil {
 		return nil, fmt.Errorf("cannot safely update Codex TOML: %w", err)
@@ -61,22 +60,7 @@ func upsertCodexTOML(raw []byte, binary, workspace string) ([]byte, error) {
 		"enabled = true",
 	}
 	if sectionStart < 0 {
-		block := "[mcp_servers.skillhub]" + newline + strings.Join(managed, newline)
-		if len(raw) == 0 {
-			return []byte(block + newline), nil
-		}
-		separator := newline
-		if finalNewline {
-			separator = ""
-		}
-		if len(bytes.TrimSpace(raw)) > 0 {
-			separator += newline
-		}
-		result := append(append([]byte(nil), raw...), []byte(separator+block)...)
-		if finalNewline {
-			result = append(result, []byte(newline)...)
-		}
-		return result, nil
+		return appendTOMLBlock(raw, newline, "[mcp_servers.skillhub]"+newline+strings.Join(managed, newline)), nil
 	}
 
 	section := append([]byte(nil), raw[sectionStart:sectionEnd]...)
@@ -91,15 +75,7 @@ func upsertCodexTOML(raw []byte, binary, workspace string) ([]byte, error) {
 		}
 		section = updated
 		if count == 0 {
-			insertAt := len(section)
-			for insertAt > 0 && (section[insertAt-1] == '\n' || section[insertAt-1] == '\r') {
-				insertAt--
-			}
-			prefix := newline
-			if insertAt == 0 || section[insertAt-1] == '\n' || section[insertAt-1] == '\r' {
-				prefix = ""
-			}
-			section = splice(section, insertAt, insertAt, []byte(prefix+line))
+			section = insertTOMLLine(section, newline, line)
 		}
 	}
 	return splice(raw, sectionStart, sectionEnd, section), nil

@@ -1,6 +1,7 @@
 package canonical
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -382,5 +383,91 @@ provenance:
 	}
 	if !strings.Contains(issueMessages(issues), "provenance.origin.repository is not allowed for local origin") {
 		t.Fatalf("expected rejection of repository in local origin, got:\n%s", issueMessages(issues))
+	}
+}
+
+const runtimeAndExamplesMetadata = `schema_version: 1
+id: owner
+name: Owner
+status: active
+description: Route work.
+runtime:
+  requires:
+    bins:
+      - python3
+      - {name: node, version: ">=18"}
+    env: [OPENAI_API_KEY]
+    platforms: [linux, darwin]
+  setup:
+    command: "pip install -r requirements.txt"
+    check: "python3 scripts/check_env.py"
+routing:
+  triggers: [route work]
+  not_for: [write prose]
+  min_scope: multi_step
+  examples: [route this request to the owner skill, pick an owner for the task]
+  counter_examples: [write a poem]
+quality:
+  content_reviewed_digest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+`
+
+func TestValidateAcceptsRuntimeExamplesAndContentReviewedDigest(t *testing.T) {
+	if _, issues := validateSkillMetadata("skills/core/owner/skill.meta.yaml", []byte(runtimeAndExamplesMetadata)); len(issues) != 0 {
+		t.Fatalf("valid runtime and example metadata rejected: %s", issueMessages(issues))
+	}
+}
+
+func TestValidateRejectsInvalidRuntimeExamplesAndContentReviewedDigest(t *testing.T) {
+	tooMany := make([]string, 11)
+	for index := range tooMany {
+		tooMany[index] = fmt.Sprintf("example request %d", index)
+	}
+	cases := []struct {
+		name, old, replacement, want string
+	}{
+		{"bad bin name", "      - python3\n", "      - python 3\n", "runtime requires bins entries must match"},
+		{"bad bin name in mapping", "{name: node,", "{name: \"no/de\",", "bins entry name must match"},
+		{"bad version constraint", `version: ">=18"`, `version: "~18"`, "bins entry version"},
+		{"unquoted version", `version: ">=18"`, `version: 18`, "bins entry version"},
+		{"unknown bin field", `version: ">=18"}`, `version: ">=18", path: /usr/bin/node}`, `unknown field "path"`},
+		{"duplicate bin", "      - python3\n", "      - node\n", "duplicate names"},
+		{"env with value", "env: [OPENAI_API_KEY]", "env: [OPENAI_API_KEY=secret]", "env entries must be variable names"},
+		{"env with leading digit", "env: [OPENAI_API_KEY]", "env: [1KEY]", "env entries must be variable names"},
+		{"unknown platform", "platforms: [linux, darwin]", "platforms: [linux, plan9]", "platforms entries must be"},
+		{"multi-line command", `command: "pip install -r requirements.txt"`, `command: "pip install\nrm -rf /"`, "setup.command must be a non-empty single-line string"},
+		{"empty check", `check: "python3 scripts/check_env.py"`, `check: "  "`, "setup.check must be a non-empty single-line string"},
+		{"oversized command", `command: "pip install -r requirements.txt"`, `command: "` + strings.Repeat("a", 1025) + `"`, "at most 1024 bytes"},
+		{"unknown runtime key", "  setup:\n", "  network: true\n  setup:\n", `unknown field "network"`},
+		{"unknown requires key", "    platforms: [linux, darwin]\n", "    platforms: [linux, darwin]\n    memory: 4G\n", `unknown field "memory"`},
+		{"unknown setup key", `    check: "python3 scripts/check_env.py"`, "    check: \"python3 scripts/check_env.py\"\n    cleanup: \"rm -rf .venv\"", `unknown field "cleanup"`},
+		{"too many examples", "examples: [route this request to the owner skill, pick an owner for the task]", "examples: [" + strings.Join(tooMany, ", ") + "]", "routing.examples must contain at most 10 entries"},
+		{"duplicate examples", "examples: [route this request to the owner skill, pick an owner for the task]", "examples: [same request, same request]", "routing.examples must not contain duplicate values"},
+		{"empty counter example", "counter_examples: [write a poem]", `counter_examples: [""]`, "routing.counter_examples must be a sequence of non-empty strings"},
+		{"long counter example", "counter_examples: [write a poem]", "counter_examples: [" + strings.Repeat("x", 301) + "]", "routing.counter_examples entries must be at most 300 characters"},
+		{"malformed reviewed digest", "content_reviewed_digest: sha256:0123", "content_reviewed_digest: sha256:XYZ", "content_reviewed_digest must be a lowercase SHA-256 digest"},
+		{"reviewed digest without prefix", "content_reviewed_digest: sha256:", "content_reviewed_digest: ", "content_reviewed_digest must be a lowercase SHA-256 digest"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if !strings.Contains(runtimeAndExamplesMetadata, tc.old) {
+				t.Fatalf("fixture does not contain %q", tc.old)
+			}
+			metadata := strings.Replace(runtimeAndExamplesMetadata, tc.old, tc.replacement, 1)
+			_, issues := validateSkillMetadata("skills/core/owner/skill.meta.yaml", []byte(metadata))
+			if joined := issueMessages(issues); !strings.Contains(joined, tc.want) {
+				t.Fatalf("want issue containing %q, got: %s", tc.want, joined)
+			}
+		})
+	}
+}
+
+func TestValidateAcceptsExactlyTenRoutingExamplesOfMaximumLength(t *testing.T) {
+	examples := make([]string, 10)
+	for index := range examples {
+		examples[index] = fmt.Sprintf("%03d", index) + strings.Repeat("é", 297)
+	}
+	metadata := strings.Replace(runtimeAndExamplesMetadata, "examples: [route this request to the owner skill, pick an owner for the task]", "examples: ["+strings.Join(examples, ", ")+"]", 1)
+	if _, issues := validateSkillMetadata("skills/core/owner/skill.meta.yaml", []byte(metadata)); len(issues) != 0 {
+		t.Fatalf("boundary examples rejected: %s", issueMessages(issues))
 	}
 }

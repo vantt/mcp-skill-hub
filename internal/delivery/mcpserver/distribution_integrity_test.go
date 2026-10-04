@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
@@ -139,4 +140,122 @@ func TestSkillsListOmitsUnservableSkillInsteadOfFailing(t *testing.T) {
 			t.Fatalf("unservable skill was listed: %#v", entry)
 		}
 	}
+}
+
+func TestResourceReadRefusesUnapprovedThirdPartyContent(t *testing.T) {
+	t.Parallel()
+	root := newMCPWorkspace(t)
+	skillDir := filepath.Join(root, "skills", "core", "review-skill")
+	if err := os.MkdirAll(filepath.Join(skillDir, "scripts"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "scripts", "run.sh"), []byte("#!/bin/sh\necho run\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "notes.md"), []byte("# Notes\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	metaPath := filepath.Join(skillDir, "skill.meta.yaml")
+	meta, err := os.ReadFile(metaPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	thirdParty := strings.Replace(string(meta), "provenance:\n    created_by: skillhub\n", "provenance:\n    created_by: skillhub\n    origin:\n        kind: github\n        repository: https://github.com/example/skills\n", 1)
+	if thirdParty == string(meta) {
+		t.Fatalf("fixture metadata has an unexpected provenance block:\n%s", meta)
+	}
+	if err := os.WriteFile(metaPath, []byte(thirdParty), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (app.CatalogService{}).BuildCatalogGeneration(t.Context(), root); err != nil {
+		t.Fatal(err)
+	}
+	session := connectDistributionSession(t, root)
+	listed, err := mcp.CallCustomMethod[*listSkillsParams, *listSkillsResult](t.Context(), session, "skills/list", &listSkillsParams{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry := findSkillEntryByName(t, listed.Skills, "review-skill")
+	var scriptURI, notesURI, entrypointURI string
+	for _, resource := range entry.Resources {
+		switch {
+		case strings.HasSuffix(resource.URI, "/scripts/run.sh"):
+			scriptURI = resource.URI
+		case strings.HasSuffix(resource.URI, "/notes.md"):
+			notesURI = resource.URI
+		case strings.HasSuffix(resource.URI, "/SKILL.md"):
+			entrypointURI = resource.URI
+		}
+	}
+	if scriptURI == "" || notesURI == "" || entrypointURI == "" {
+		t.Fatalf("resources = %#v", entry.Resources)
+	}
+	for _, uri := range []string{scriptURI, notesURI, entrypointURI} {
+		_, err = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: uri})
+		var rpcErr *jsonrpc.Error
+		if !errors.As(err, &rpcErr) || !strings.Contains(string(rpcErr.Data), "content_review_required") || !strings.Contains(rpcErr.Message, "skillhub skill review review-skill") {
+			t.Fatalf("unapproved resource %s read error = %v", uri, err)
+		}
+	}
+	withheld := callSkillGet(t, session, "review-skill")
+	if withheld.Content != "" || withheld.Local == nil || withheld.Local.Status != app.LocalStatusReviewRequired || withheld.Local.ReviewCommand != "skillhub skill review review-skill" {
+		t.Fatalf("skill_get must withhold content of an unapproved skill: %#v", withheld)
+	}
+	if withheld.SkillID != "review-skill" || withheld.Name == "" || withheld.Description == "" || withheld.LifecycleState != "active" {
+		t.Fatalf("skill_get must keep identity and lifecycle metadata: %#v", withheld.SkillDetail)
+	}
+	if _, err := os.Lstat(filepath.Join(root, "runtime", "cache", "skills")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("a snapshot directory was created for an unapproved skill: %v", err)
+	}
+
+	// Approving the exact content digest releases every resource.
+	review, err := (app.SkillService{}).ReviewSkill(t.Context(), root, "review-skill")
+	if err != nil {
+		t.Fatal(err)
+	}
+	approved, err := os.ReadFile(metaPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	approvedMeta := strings.Replace(string(approved), "quality:\n", "quality:\n    content_reviewed_digest: "+review.ContentTrust.ContentDigest+"\n", 1)
+	if approvedMeta == string(approved) {
+		t.Fatalf("fixture metadata has no quality block:\n%s", approved)
+	}
+	if err := os.WriteFile(metaPath, []byte(approvedMeta), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (app.CatalogService{}).BuildCatalogGeneration(t.Context(), root); err != nil {
+		t.Fatal(err)
+	}
+	if released := callSkillGet(t, session, "review-skill"); !strings.Contains(released.Content, "#") || released.Local == nil || released.Local.Status != app.LocalStatusReady {
+		t.Fatalf("approved skill_get = %#v", released)
+	}
+	if entrypoint, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: entrypointURI}); err != nil || len(entrypoint.Contents) != 1 {
+		t.Fatalf("approved SKILL.md read = %#v, %v", entrypoint, err)
+	}
+	releasedNotes, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: notesURI})
+	if err != nil || len(releasedNotes.Contents) != 1 || !strings.Contains(releasedNotes.Contents[0].Text, "# Notes") {
+		t.Fatalf("approved notes read = %#v, %v", releasedNotes, err)
+	}
+	released, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: scriptURI})
+	if err != nil || len(released.Contents) != 1 || !strings.Contains(released.Contents[0].Text, "echo run") {
+		t.Fatalf("approved script read = %#v, %v", released, err)
+	}
+	if _, ok := released.Contents[0].Meta["io.skillhub/local_path"]; !ok {
+		t.Fatalf("approved script _meta = %#v", released.Contents[0].Meta)
+	}
+}
+
+func callSkillGet(t *testing.T, session *mcp.ClientSession, id string) skillGetResult {
+	t.Helper()
+	response, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "skill_get", Arguments: map[string]any{"skill_id": id}})
+	if err != nil || response.IsError {
+		t.Fatalf("skill_get(%s) = %#v, %v", id, response, err)
+	}
+	var outcome toolOutcome[skillGetResult]
+	decodeStructuredContent(t, response, &outcome)
+	if outcome.Result == nil {
+		t.Fatalf("skill_get(%s) has no result", id)
+	}
+	return *outcome.Result
 }

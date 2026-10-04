@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/google/jsonschema-go/jsonschema"
+	"gopkg.in/yaml.v3"
 )
 
 func TestCommittedSchemasResolve(t *testing.T) {
@@ -75,6 +76,7 @@ func TestTelemetryFeedbackFunnelRequiresExplicitUtilityBasis(t *testing.T) {
 	outcome = replaceJSON(outcome, `"payload":{"skill_id":"code-review","utility":"helpful","basis":"user","reason_codes":["host_report"]}`, `"payload":{"status":"failed","skill_id":"code-review","reason_codes":["host_report"]}`)
 	validateJSON(t, TelemetryEvent, outcome, true)
 	validateJSON(t, TelemetryEvent, replaceJSON(outcome, `"status":"failed",`, ``), false)
+	validateJSON(t, TelemetryEvent, replaceJSON(outcome, `"host_report"`, `"setup_failed"`), true)
 }
 
 func TestTelemetryResolutionSchemaRequiresContentFreeRecommendationIDs(t *testing.T) {
@@ -345,4 +347,133 @@ func replaceJSON(document, old, replacement string) string {
 		}
 	}
 	return document
+}
+
+const skillMetadataWithRuntimeYAML = `schema_version: 1
+id: owner
+name: Owner
+status: active
+description: Route work.
+runtime:
+  requires:
+    bins:
+      - python3
+      - {name: node, version: ">=18"}
+    env: [OPENAI_API_KEY]
+    platforms: [linux, darwin]
+  setup:
+    command: "pip install -r requirements.txt"
+    check: "python3 scripts/check_env.py"
+routing:
+  triggers: [route work]
+  not_for: [write prose]
+  min_scope: multi_step
+  examples: [route this request to the owner skill]
+  counter_examples: [write a poem]
+quality:
+  content_reviewed_digest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+`
+
+// skillMetadataJSON converts a skill.meta.yaml document to the JSON form the
+// committed schema validates.
+func skillMetadataJSON(t *testing.T, document string) string {
+	t.Helper()
+	var value any
+	if err := yaml.Unmarshal([]byte(document), &value); err != nil {
+		t.Fatalf("parse yaml fixture: %v", err)
+	}
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		t.Fatalf("encode fixture: %v", err)
+	}
+	return string(encoded)
+}
+
+func TestSkillMetadataSchemaAcceptsRuntimeExamplesAndScriptsReview(t *testing.T) {
+	validateJSON(t, loadSkillMetadataSchema, skillMetadataJSON(t, skillMetadataWithRuntimeYAML), true)
+
+	tooMany := make([]string, 11)
+	for index := range tooMany {
+		tooMany[index] = "example " + strings.Repeat("x", index+1)
+	}
+	invalid := map[string][2]string{
+		"bad bin name":         {"      - python3\n", "      - python 3\n"},
+		"bad version":          {`version: ">=18"`, `version: "~18"`},
+		"unknown bin field":    {`version: ">=18"}`, `version: ">=18", path: /bin/node}`},
+		"env with value":       {"env: [OPENAI_API_KEY]", "env: [OPENAI_API_KEY=secret]"},
+		"unknown platform":     {"platforms: [linux, darwin]", "platforms: [plan9]"},
+		"multi-line command":   {`command: "pip install -r requirements.txt"`, `command: "pip install\nrm -rf /"`},
+		"unknown runtime key":  {"  setup:\n", "  network: true\n  setup:\n"},
+		"too many examples":    {"examples: [route this request to the owner skill]", "examples: [" + strings.Join(tooMany, ", ") + "]"},
+		"duplicate examples":   {"examples: [route this request to the owner skill]", "examples: [same, same]"},
+		"long counter example": {"counter_examples: [write a poem]", "counter_examples: [" + strings.Repeat("x", 301) + "]"},
+		"malformed digest":     {"content_reviewed_digest: sha256:0123", "content_reviewed_digest: md5:0123"},
+	}
+	for name, edit := range invalid {
+		t.Run(name, func(t *testing.T) {
+			if !strings.Contains(skillMetadataWithRuntimeYAML, edit[0]) {
+				t.Fatalf("fixture does not contain %q", edit[0])
+			}
+			document := strings.Replace(skillMetadataWithRuntimeYAML, edit[0], edit[1], 1)
+			validateJSON(t, loadSkillMetadataSchema, skillMetadataJSON(t, document), false)
+		})
+	}
+}
+
+func TestTelemetryMeasurementEventsSchema(t *testing.T) {
+	envelope := func(eventType, payload string) string {
+		return `{
+		"event_version":"1","event_id":"evt_measure","event_type":"` + eventType + `",
+		"occurred_at":"2026-10-04T10:00:00Z","resolution_id":"res_measure",
+		"catalog_snapshot":"sha256:catalog","policy_revision":"sha256:policy",
+		"client":{"name":"skillhub"},"privacy":{"content_mode":"none","redaction_version":"redact-v1"},
+		"payload":` + payload + `}`
+	}
+
+	load := envelope("skill.loaded", `{"skill_id":"code-review","basis":"server-observed","resource_kind":"entrypoint","surface":"skill_get","attribution":"recommended","first_activation":true}`)
+	validateJSON(t, TelemetryEvent, load, true)
+	validateJSON(t, TelemetryEvent, replaceJSON(load, `"resource_kind":"entrypoint"`, `"resource_kind":"binary"`), false)
+	validateJSON(t, TelemetryEvent, replaceJSON(load, `"surface":"skill_get"`, `"surface":"shell"`), false)
+	validateJSON(t, TelemetryEvent, replaceJSON(load, `"attribution":"recommended"`, `"attribution":"guessed"`), false)
+	validateJSON(t, TelemetryEvent, replaceJSON(load, `"resource_kind":"entrypoint",`, ``), false)
+	validateJSON(t, TelemetryEvent, replaceJSON(load, `"attribution":"recommended",`, ``), false)
+	validateJSON(t, TelemetryEvent, replaceJSON(load, `"first_activation":true`, `"first_activation":true,"path":"/home/user"`), false)
+
+	setup := envelope("resolution.completed", `{"status":"resolved","top_skill_id":"code-review","recommended_skill_ids":["code-review"],"setup_state":"setup_required"}`)
+	validateJSON(t, TelemetryEvent, setup, true)
+	validateJSON(t, TelemetryEvent, replaceJSON(setup, `"setup_required"`, `"review_required"`), true)
+	validateJSON(t, TelemetryEvent, replaceJSON(setup, `"setup_required"`, `"broken"`), false)
+
+	doctor := envelope("skill.doctor_checked", `{"skill_id":"code-review","status":"setup_required","reason_codes":["missing_bin"],"duration_ms":12}`)
+	validateJSON(t, TelemetryEvent, doctor, true)
+	validateJSON(t, TelemetryEvent, replaceJSON(doctor, `"status":"setup_required"`, `"status":"maybe"`), false)
+	validateJSON(t, TelemetryEvent, replaceJSON(doctor, `"duration_ms":12`, `"duration_ms":12,"output":"raw"`), false)
+
+	transcript := envelope("transcript.tool_observed", `{"tool":"Skill","skill_id":"code-review","source":"claude-code","basis":"transcript","resolved_before":false}`)
+	validateJSON(t, TelemetryEvent, transcript, true)
+	validateJSON(t, TelemetryEvent, replaceJSON(transcript, `"source":"claude-code"`, `"source":"other"`), false)
+	validateJSON(t, TelemetryEvent, replaceJSON(transcript, `"basis":"transcript"`, `"basis":"user"`), false)
+	validateJSON(t, TelemetryEvent, replaceJSON(transcript, `"resolved_before":false`, `"resolved_before":false,"prompt":"raw"`), false)
+
+	utility := envelope("skill.utility_reported", `{"skill_id":"code-review","utility":"harmful","basis":"user","after_load":true}`)
+	validateJSON(t, TelemetryEvent, utility, true)
+	validateJSON(t, TelemetryEvent, replaceJSON(utility, `"after_load":true`, `"after_load":"yes"`), false)
+}
+
+func TestResolverResponseAcceptsOptionalSetupOnRecommendations(t *testing.T) {
+	digest := "sha256:" + strings.Repeat("a", 64)
+	uri := "skill://skillhub/" + strings.Repeat("b", 64) + "/demo/SKILL.md"
+	response := func(primarySetup, supportingSetup string) string {
+		primary := `{"id":"demo","version":"` + digest + `","uri":"` + uri + `","applicability":"Demo.","confidence":"high"` + primarySetup + `}`
+		supporting := `{"id":"demo","version":"` + digest + `","uri":"` + uri + `","role":"review","activation":"on-demand"` + supportingSetup + `}`
+		return `{"schema_version":"1","resolution_id":"res-1","request_id":"req-1","context_revision":1,"status":"resolved","catalog_snapshot":"` + digest + `","policy_revision":"` + digest + `","reason_codes":[],"valid_for":{"scope_fingerprint":"` + digest + `"},"primary":` + primary + `,"supporting":[` + supporting + `]}`
+	}
+	validateJSON(t, ResolverResponse, response("", ""), true)
+	validateJSON(t, ResolverResponse, response(`,"setup":{"state":"setup_required","reason_codes":["bin_not_found"],"checked_at":"2026-10-04T10:00:00Z"}`, `,"setup":{"state":"unknown"}`), true)
+	validateJSON(t, ResolverResponse, response(`,"setup":{"state":"review_required","reason_codes":["content_review_required"]}`, ""), true)
+	validateJSON(t, ResolverResponse, response(`,"setup":{"state":"ready","basis":"terminal","checked_at":"2026-10-04T10:00:00Z"}`, ""), true)
+	validateJSON(t, ResolverResponse, response(`,"setup":{"state":"ready","basis":"shell"}`, ""), false)
+	validateJSON(t, ResolverResponse, response(`,"setup":{"state":"broken"}`, ""), false)
+	validateJSON(t, ResolverResponse, response(`,"setup":{"state":"ready","extra":true}`, ""), false)
+	validateJSON(t, ResolverResponse, response("", `,"setup":{"reason_codes":[]}`), false)
 }

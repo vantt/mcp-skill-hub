@@ -468,7 +468,7 @@ func currentBinary() (string, error) {
 }
 
 func appendHostInspectionItems(result *Result, inspection hostintegration.Inspection) {
-	for _, kind := range []hostintegration.ChangeKind{hostintegration.ChangeMCP, hostintegration.ChangeNativeSkill, hostintegration.ChangeBootstrap} {
+	for _, kind := range []hostintegration.ChangeKind{hostintegration.ChangeMCP, hostintegration.ChangeHostPermissions, hostintegration.ChangeNativeSkill, hostintegration.ChangeBootstrap} {
 		for _, host := range inspection.Hosts {
 			for _, file := range host.Files {
 				if file.Kind != kind || file.Current {

@@ -30,7 +30,7 @@ type geminiMCPServer struct {
 }
 
 var adapters = []Adapter{
-	{Host: HostClaude, Level: LevelNativeSkillBestEffort, ConfigRelativePath: ".mcp.json", SkillRelativePath: ".claude/skills/system-curator/SKILL.md", InstructionFileName: "CLAUDE.md", UserConfigRelativePath: ".claude.json", UserSkillRelativePath: ".claude/skills/system-curator/SKILL.md", UserInstructionRelativePath: ".claude/CLAUDE.md", NativeSkill: true},
+	{Host: HostClaude, Level: LevelNativeSkillBestEffort, ConfigRelativePath: ".mcp.json", SkillRelativePath: ".claude/skills/system-curator/SKILL.md", InstructionFileName: "CLAUDE.md", UserConfigRelativePath: ".claude.json", UserSkillRelativePath: ".claude/skills/system-curator/SKILL.md", UserInstructionRelativePath: ".claude/CLAUDE.md", NativeSkill: true, PermissionsRelativePath: ".claude/settings.local.json", SharedPermissionsRelativePath: ".claude/settings.json", UserPermissionsRelativePath: ".claude/settings.json"},
 	{Host: HostCodex, Level: LevelNativeSkillBestEffort, ConfigRelativePath: ".codex/config.toml", SkillRelativePath: ".agents/skills/system-curator/SKILL.md", InstructionFileName: "AGENTS.md", UserConfigRelativePath: ".codex/config.toml", UserSkillRelativePath: ".agents/skills/system-curator/SKILL.md", UserInstructionRelativePath: ".codex/AGENTS.md", NativeSkill: true},
 	{Host: HostGemini, Level: LevelNativeSkillBestEffort, ConfigRelativePath: ".gemini/settings.json", SkillRelativePath: ".gemini/skills/system-curator/SKILL.md", InstructionFileName: "GEMINI.md", UserConfigRelativePath: ".gemini/settings.json", UserSkillRelativePath: ".gemini/skills/system-curator/SKILL.md", UserInstructionRelativePath: ".gemini/GEMINI.md", NativeSkill: true},
 }
@@ -80,7 +80,7 @@ func buildPlan(ctx context.Context, request Request) (PlanResult, error) {
 		return PlanResult{}, err
 	}
 	plan := PlanResult{Workspace: prepared.workspace, Root: prepared.root, Scope: prepared.scope, Binary: prepared.binary}
-	for _, kind := range []ChangeKind{ChangeMCP, ChangeNativeSkill, ChangeBootstrap} {
+	for _, kind := range []ChangeKind{ChangeMCP, ChangeHostPermissions, ChangeNativeSkill, ChangeBootstrap} {
 		for _, host := range prepared.hosts {
 			for _, file := range host.files {
 				if file.state.Conflict != "" {
@@ -123,6 +123,13 @@ func prepare(ctx context.Context, request Request) (preparedInspection, error) {
 			return preparedInspection{}, err
 		}
 		host.files = append(host.files, config)
+		if permissionsRel := adapter.permissionsPath(scope); permissionsRel != "" {
+			permissions, err := preparePermissions(adapter, scope, filepath.Join(root, filepath.FromSlash(permissionsRel)), root, workspace)
+			if err != nil {
+				return preparedInspection{}, err
+			}
+			host.files = append(host.files, permissions)
+		}
 		if adapter.NativeSkill {
 			skillPath := filepath.Join(root, filepath.FromSlash(skillRel))
 			skill, err := prepareExactFile(ChangeNativeSkill, skillPath, root, []byte(bundle.Instructions))
@@ -224,14 +231,45 @@ func prepareConfig(host Host, path, root, workspace, binary string) (preparedFil
 	case HostGemini:
 		desired, err = desiredGeminiConfig(raw, binary, workspace)
 	case HostCodex:
-		desired, err = upsertCodexTOML(raw, binary, workspace)
+		desired, err = desiredCodexConfig(raw, binary, workspace)
 	default:
 		err = fmt.Errorf("unsupported host %q", host)
 	}
 	if err != nil {
 		return newPreparedFile(host, ChangeMCP, path, raw, raw, mode, exists, err.Error()), nil
 	}
-	return newPreparedFile(host, ChangeMCP, path, raw, desired, mode, exists, ""), nil
+	file := newPreparedFile(host, ChangeMCP, path, raw, desired, mode, exists, "")
+	if note := allowedDirsPreview(host, raw, workspace); note != "" {
+		file.preview = boundPreview(file.preview + "\n" + note)
+	}
+	return file, nil
+}
+
+func preparePermissions(adapter Adapter, scope Scope, path, root, workspace string) (preparedFile, error) {
+	host := adapter.Host
+	raw, mode, exists, err := readManagedFile(path, root)
+	if err != nil {
+		return preparedFile{}, err
+	}
+	if scope == ScopeProject && adapter.SharedPermissionsRelativePath != "" {
+		sharedPath := filepath.Join(root, filepath.FromSlash(adapter.SharedPermissionsRelativePath))
+		shared, _, sharedExists, err := readManagedFile(sharedPath, root)
+		if err != nil {
+			return preparedFile{}, err
+		}
+		if sharedExists {
+			if desired, derr := desiredClaudePermissions(shared, workspace); derr == nil && bytes.Equal(desired, shared) {
+				return newPreparedFile(host, ChangeHostPermissions, path, raw, raw, mode, exists, ""), nil
+			}
+		}
+	}
+	desired, err := desiredClaudePermissions(raw, workspace)
+	if err != nil {
+		return newPreparedFile(host, ChangeHostPermissions, path, raw, raw, mode, exists, err.Error()), nil
+	}
+	file := newPreparedFile(host, ChangeHostPermissions, path, raw, desired, mode, exists, "")
+	file.preview = boundPreview("managed allowed directories only: " + allowedDirsPreview(host, raw, workspace))
+	return file, nil
 }
 
 func desiredClaudeConfig(raw []byte, binary, workspace string) ([]byte, error) {
@@ -247,7 +285,11 @@ func desiredGeminiConfig(raw []byte, binary, workspace string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("encode Gemini MCP registration: %w", err)
 	}
-	return upsertJSONPath(raw, []string{"mcpServers", "skillhub"}, encoded)
+	registered, err := upsertJSONPath(raw, []string{"mcpServers", "skillhub"}, encoded)
+	if err != nil {
+		return nil, err
+	}
+	return desiredGeminiAllowedDirs(registered, workspace)
 }
 
 func prepareExactFile(kind ChangeKind, path, root string, desired []byte) (preparedFile, error) {

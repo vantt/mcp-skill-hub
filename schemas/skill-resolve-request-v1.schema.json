@@ -11,7 +11,7 @@
     "task": {
       "type": "object", "additionalProperties": false, "required": ["description"],
       "properties": {
-        "description": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "description": {"type": "string", "minLength": 1, "maxLength": 4096, "description": "Task summary in English (translate non-English requests first)."},
         "constraints": {"type": "array", "maxItems": 16, "items": {"type": "string", "minLength": 1, "maxLength": 512}, "uniqueItems": true},
         "exclusions": {"type": "object", "additionalProperties": false, "properties": {"skill_ids": {"type": "array", "maxItems": 16, "items": {"type": "string", "minLength": 1, "maxLength": 128}, "uniqueItems": true}, "terms": {"type": "array", "maxItems": 16, "items": {"type": "string", "minLength": 1, "maxLength": 512}, "uniqueItems": true}}},
         "scope": {"enum": ["single_step", "multi_step", "project"]}

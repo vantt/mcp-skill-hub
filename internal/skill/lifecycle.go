@@ -19,6 +19,7 @@ import (
 
 	"github.com/vantt/mcp-skill-hub/internal/catalog"
 	"github.com/vantt/mcp-skill-hub/internal/mutation"
+	"github.com/vantt/mcp-skill-hub/internal/skillruntime"
 	"github.com/vantt/mcp-skill-hub/internal/workspace"
 	"gopkg.in/yaml.v3"
 )
@@ -32,6 +33,7 @@ var (
 	ErrResourceContentUnavailable = errors.New("resource_content_unavailable")
 	ErrEditConflict               = errors.New("edit_conflict")
 	ErrUntouchedScaffold          = errors.New("untouched_scaffold")
+	ErrInvalidRuntime             = errors.New("invalid runtime block")
 )
 
 // EditConflictError indicates an optimistic concurrency check failed.
@@ -71,11 +73,19 @@ var collectionPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 var idPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
 // RoutingInput is the curated routing subset needed to activate a skill.
+//
+// When an update supplies RoutingInput, Operations, Triggers, NotFor, and
+// MinScope are always written. Examples and CounterExamples are optional: a nil
+// slice keeps the stored value and an explicit empty slice clears it. Routing
+// keys this type does not name (requirements, relationships, boosts) are
+// always preserved.
 type RoutingInput struct {
-	Operations []string `yaml:"operations,omitempty" json:"operations,omitempty"`
-	Triggers   []string `yaml:"triggers,omitempty" json:"triggers,omitempty"`
-	NotFor     []string `yaml:"not_for,omitempty" json:"not_for,omitempty"`
-	MinScope   string   `yaml:"min_scope,omitempty" json:"min_scope,omitempty"`
+	Operations      []string `yaml:"operations,omitempty" json:"operations,omitempty"`
+	Triggers        []string `yaml:"triggers,omitempty" json:"triggers,omitempty"`
+	NotFor          []string `yaml:"not_for,omitempty" json:"not_for,omitempty"`
+	MinScope        string   `yaml:"min_scope,omitempty" json:"min_scope,omitempty"`
+	Examples        []string `yaml:"examples,omitempty" json:"examples,omitempty"`
+	CounterExamples []string `yaml:"counter_examples,omitempty" json:"counter_examples,omitempty"`
 }
 
 // CreateInput contains explicit draft fields. Content may be agent-authored,
@@ -101,6 +111,13 @@ type UpdateInput struct {
 	ExpectedContentDigest string
 	Routing               *RoutingInput
 	Rationale             *string
+	// Runtime replaces the manifest's runtime block. Nil keeps the current
+	// block; an empty non-nil map removes it. A non-empty block must satisfy
+	// skillruntime.ParseSpec.
+	Runtime map[string]any
+	// ContentReviewedDigest records a human approval of a skill's whole
+	// content. Only the CLI sets it; agent-facing inputs never expose it.
+	ContentReviewedDigest *string
 }
 
 // DiffSummary gives progressive disclosure without requiring the full patch.
@@ -215,7 +232,7 @@ func (manager Manager) PreviewCreate(ctx context.Context, root string, input Cre
 		"name":           strings.TrimSpace(input.Name),
 		"status":         "draft",
 		"description":    strings.TrimSpace(input.Description),
-		"routing":        routingDocument(input.Routing),
+		"routing":        mergeRouting(nil, input.Routing),
 		"quality":        map[string]any{"reviewed": false},
 		"provenance":     map[string]any{"created_by": "skillhub"},
 		"history":        []any{map[string]any{"state": "draft", "occurred_at": now}},
@@ -252,11 +269,21 @@ func (manager Manager) PreviewUpdate(ctx context.Context, root, id string, input
 		document["description"] = strings.TrimSpace(*input.Description)
 	}
 	if input.Routing != nil {
-		document["routing"] = routingDocument(*input.Routing)
+		document["routing"] = mergeRouting(mapValue(document, "routing"), *input.Routing)
 	}
 	if input.Rationale != nil {
 		quality := mapValue(document, "quality")
 		quality["routing_review_rationale"] = strings.TrimSpace(*input.Rationale)
+		document["quality"] = quality
+	}
+	if input.Runtime != nil {
+		if err := applyRuntimeBlock(document, input.Runtime); err != nil {
+			return Proposal{}, err
+		}
+	}
+	if input.ContentReviewedDigest != nil {
+		quality := mapValue(document, "quality")
+		quality["content_reviewed_digest"] = strings.TrimSpace(*input.ContentReviewedDigest)
 		document["quality"] = quality
 	}
 	document["updated_at"] = manager.now().Format(time.RFC3339Nano)
@@ -529,7 +556,7 @@ func normalizedDigest(value any) string {
 func createRequestDigest(input CreateInput) string {
 	return normalizedDigest(struct {
 		ID, Collection, Name, Description, Content, Rationale string
-		Routing                                               RoutingInput
+		Routing                                               routingDigestInput
 	}{input.ID, input.Collection, strings.TrimSpace(input.Name), strings.TrimSpace(input.Description), string(normalizeText(input.Content)), strings.TrimSpace(input.Rationale), normalizeRouting(input.Routing)})
 }
 
@@ -541,7 +568,7 @@ func updateRequestDigest(id string, input UpdateInput) string {
 		normalized := strings.TrimSpace(*value)
 		return &normalized
 	}
-	var routing *RoutingInput
+	var routing *routingDigestInput
 	if input.Routing != nil {
 		normalized := normalizeRouting(*input.Routing)
 		routing = &normalized
@@ -550,6 +577,11 @@ func updateRequestDigest(id string, input UpdateInput) string {
 	if input.SetContent {
 		content = string(normalizeText(input.Content))
 	}
+	// A pointer keeps an empty map (remove the block) distinct from nil (keep).
+	var runtimeBlock *map[string]any
+	if input.Runtime != nil {
+		runtimeBlock = &input.Runtime
+	}
 	return normalizedDigest(struct {
 		ID                    string
 		Name                  *string
@@ -557,13 +589,59 @@ func updateRequestDigest(id string, input UpdateInput) string {
 		Content               string
 		SetContent            bool
 		ExpectedContentDigest string
-		Routing               *RoutingInput
+		Routing               *routingDigestInput
 		Rationale             *string
-	}{id, normalizeOptional(input.Name), normalizeOptional(input.Description), content, input.SetContent, strings.TrimSpace(input.ExpectedContentDigest), routing, normalizeOptional(input.Rationale)})
+		ContentReviewedDigest *string         `json:",omitempty"`
+		Runtime               *map[string]any `json:",omitempty"`
+	}{id, normalizeOptional(input.Name), normalizeOptional(input.Description), content, input.SetContent, strings.TrimSpace(input.ExpectedContentDigest), routing, normalizeOptional(input.Rationale), normalizeOptional(input.ContentReviewedDigest), runtimeBlock})
 }
 
-func normalizeRouting(input RoutingInput) RoutingInput {
-	return RoutingInput{Operations: cleanStrings(input.Operations), Triggers: cleanStrings(input.Triggers), NotFor: cleanStrings(input.NotFor), MinScope: strings.TrimSpace(input.MinScope)}
+// applyRuntimeBlock validates block with the same rules the catalog applies and
+// sets it on the manifest document; an empty block removes the runtime key.
+func applyRuntimeBlock(document map[string]any, block map[string]any) error {
+	if len(block) == 0 {
+		delete(document, "runtime")
+		return nil
+	}
+	encoded, err := json.Marshal(map[string]any{"runtime": block})
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidRuntime, err)
+	}
+	if _, _, err := skillruntime.ParseSpec(encoded); err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidRuntime, err)
+	}
+	document["runtime"] = block
+	return nil
+}
+
+// routingDigestInput is the request-digest form of RoutingInput. The optional
+// lists are pointers so "keep" (nil) and "clear" (empty) produce different
+// digests, while requests without them keep their historical digest.
+type routingDigestInput struct {
+	Operations      []string  `json:"operations,omitempty"`
+	Triggers        []string  `json:"triggers,omitempty"`
+	NotFor          []string  `json:"not_for,omitempty"`
+	MinScope        string    `json:"min_scope,omitempty"`
+	Examples        *[]string `json:"examples,omitempty"`
+	CounterExamples *[]string `json:"counter_examples,omitempty"`
+}
+
+func normalizeRouting(input RoutingInput) routingDigestInput {
+	optional := func(values []string) *[]string {
+		if values == nil {
+			return nil
+		}
+		cleaned := cleanStrings(values)
+		return &cleaned
+	}
+	return routingDigestInput{
+		Operations:      cleanStrings(input.Operations),
+		Triggers:        cleanStrings(input.Triggers),
+		NotFor:          cleanStrings(input.NotFor),
+		MinScope:        strings.TrimSpace(input.MinScope),
+		Examples:        optional(input.Examples),
+		CounterExamples: optional(input.CounterExamples),
+	}
 }
 
 func transitionRequestDigest(id, target string) string {
@@ -627,13 +705,30 @@ func validateIdentity(collection, id string) error {
 
 func skillDirectory(collection, id string) string { return "skills/" + collection + "/" + id }
 
-func routingDocument(input RoutingInput) map[string]any {
-	return map[string]any{
-		"operations": cleanStrings(input.Operations),
-		"triggers":   cleanStrings(input.Triggers),
-		"not_for":    cleanStrings(input.NotFor),
-		"min_scope":  strings.TrimSpace(input.MinScope),
+// mergeRouting overlays input onto a copy of the stored routing map. Keys the
+// input does not name are preserved, so editing triggers never drops
+// requirements, relationships, boosts, or examples. The four core fields are
+// always written; the optional example lists follow the nil-keeps /
+// empty-clears contract documented on RoutingInput.
+func mergeRouting(existing map[string]any, input RoutingInput) map[string]any {
+	merged := make(map[string]any, len(existing)+6)
+	for key, value := range existing {
+		merged[key] = value
 	}
+	merged["operations"] = cleanStrings(input.Operations)
+	merged["triggers"] = cleanStrings(input.Triggers)
+	merged["not_for"] = cleanStrings(input.NotFor)
+	merged["min_scope"] = strings.TrimSpace(input.MinScope)
+	for key, values := range map[string][]string{"examples": input.Examples, "counter_examples": input.CounterExamples} {
+		switch cleaned := cleanStrings(values); {
+		case values == nil:
+		case len(cleaned) == 0:
+			delete(merged, key)
+		default:
+			merged[key] = cleaned
+		}
+	}
+	return merged
 }
 
 func cleanStrings(values []string) []string {
@@ -938,8 +1033,17 @@ func ReadRouting(root, id string) (RoutingInput, error) {
 		}
 		return values
 	}
+	optionalList := func(key string) []string {
+		if _, present := routing[key]; !present {
+			return nil
+		}
+		return list(key)
+	}
 	minScope, _ := routing["min_scope"].(string)
-	return RoutingInput{Operations: list("operations"), Triggers: list("triggers"), NotFor: list("not_for"), MinScope: minScope}, nil
+	return RoutingInput{
+		Operations: list("operations"), Triggers: list("triggers"), NotFor: list("not_for"), MinScope: minScope,
+		Examples: optionalList("examples"), CounterExamples: optionalList("counter_examples"),
+	}, nil
 }
 
 // ReadRationale returns the routing_review_rationale currently stored in a

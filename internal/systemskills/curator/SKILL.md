@@ -1,6 +1,6 @@
 ---
 name: system-curator
-version: 1.3.0
+version: 1.4.0
 contract-version: "1"
 description: Guide Skill Hub maintenance through the bundled, application-service-backed curation tools.
 ---
@@ -60,7 +60,7 @@ states, cursors, or IDs unless an ID is needed to disambiguate a selected item.
 | Add a skill from GitHub | Call `skill_add_preview`; show proposal diff, resource inventory, and license warnings, and require explicit approval before `skill_add_confirm`. |
 | Add a skill from a local folder | MCP tools reject local filesystem paths because MCP lacks host-granted filesystem capability. Guide the user to run `skillhub skill add <path> [--yes]` via the CLI. |
 | Watch a repository for updates | Call `source_watch_preview`; show proposed monitoring cadence and require explicit approval before `source_watch_confirm`. |
-| Review a skill | Call `skill_review` to inspect comprehensive diagnostic facts (validation, readiness, resources, and git status). |
+| Review a skill | Call `skill_review` to inspect comprehensive diagnostic facts (validation, readiness, resources, git status, and runtime hints). When it reports `install_prose_detected` or `missing_runtime_block`, follow "Propose a runtime block" below. |
 | Save this source for later | Call `source_intake_add` with minimal locator and reason; do not fetch it. |
 | Show saved sources | Call `source_intake_list`; summarize actionable candidates. |
 | Start learning from a source | Use `source_triage`; infer defaults and present one consolidated onboarding proposal. |
@@ -84,6 +84,38 @@ states, cursors, or IDs unless an ID is needed to disambiguate a selected item.
 
 For an unknown intent, ask one small clarifying question instead of dumping a
 command or tool list.
+
+## Propose a runtime block
+
+A skill that runs scripts or installs dependencies should declare a `runtime`
+block so agents check and set it up the same way every time. When a skill
+review reports `install_prose_detected` or `missing_runtime_block`:
+
+1. Read the skill's SKILL.md and README with `skill_get` and find its install
+   prose and the interpreters and dependency files the review lists.
+2. Draft a `runtime` block: `requires.bins` (executable names, with a version
+   constraint such as `>=3.10` when the prose states one), `requires.env`
+   (variable names only, never values), `requires.platforms`, `setup.check` (a
+   single-line command that exits non-zero when something is missing) and
+   `setup.command` (a single-line command that installs into
+   `$SKILLHUB_STATE_DIR`, never globally). Prefer pinned versions and
+   lockfile-based installs (`npm ci`, `uv sync --locked`, `pip install -r` on a
+   file of `==` pins, `cargo build --locked`, `bundle install --frozen`). When
+   the review lists `missing_lockfiles`, say so in your explanation and do not
+   propose an unpinned install.
+3. Call `skill_update_preview` with `runtime` set to that block. Before asking
+   for confirmation, explain the block in plain words: what it requires, what
+   `setup.command` will install and where, and that agents run it only after
+   asking the user.
+4. Apply it only through `skill_update_confirm` after explicit approval. For a
+   skill from a third-party source, changing the runtime block makes any earlier
+   content approval stale; tell the user to re-review it with
+   `skillhub skill review <id>`. Approving content is a CLI-only human step
+   (`skillhub skill edit <id> --approve-content <digest>`): never attempt it
+   yourself. An empty `runtime` object removes the block.
+
+Do not invent requirements the skill never states, and do not edit
+`skill.meta.yaml` directly.
 
 ## Ask one primary question
 

@@ -2,9 +2,11 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -255,5 +257,57 @@ func TestReviewSkillDeprecatedAndArchived(t *testing.T) {
 	}
 	if !strings.Contains(archReview.NextAction, "archived") {
 		t.Fatalf("archived next action should report archived: %s", archReview.NextAction)
+	}
+}
+
+func TestParseSkillReviewMetaReadsExamplesAndContentReviewedDigest(t *testing.T) {
+	t.Parallel()
+	digest := "sha256:" + strings.Repeat("d", 64)
+	meta := parseSkillReviewMeta([]byte("name: Owner\nrouting:\n  examples: [route work]\n  counter_examples: [write prose]\nquality:\n  content_reviewed_digest: " + digest + "\n"))
+	if len(meta.Routing.Examples) != 1 || meta.Routing.Examples[0] != "route work" {
+		t.Fatalf("examples = %#v", meta.Routing.Examples)
+	}
+	if len(meta.Routing.CounterExamples) != 1 || meta.Routing.CounterExamples[0] != "write prose" {
+		t.Fatalf("counter examples = %#v", meta.Routing.CounterExamples)
+	}
+	if meta.Quality.ContentReviewedDigest != digest {
+		t.Fatalf("scripts reviewed digest = %q", meta.Quality.ContentReviewedDigest)
+	}
+}
+
+func TestReviewSkillReportsRuntimeHints(t *testing.T) {
+	t.Parallel()
+	root := newSkillWorkspace(t)
+	createActiveDistributionSkill(t, root, "hints-skill", "Hints Skill")
+	writeSkillFile(t, root, "hints-skill", "scripts/run.py", "#!/usr/bin/env python3\nprint('x')\n")
+	writeSkillFile(t, root, "hints-skill", "requirements.txt", "requests\n")
+	writeSkillFile(t, root, "hints-skill", "SKILL.md", "---\nname: hints-skill\ndescription: Hints skill.\n---\n\n# Hints\n\n## Setup\n\nRun pip install SECRET-DEP and see ~/.claude/skills/hints-skill/scripts/run.py\n")
+
+	review, err := (SkillService{}).ReviewSkill(context.Background(), root, "hints-skill")
+	if err != nil {
+		t.Fatal(err)
+	}
+	hints := review.RuntimeHints
+	if !slices.Equal(hints.Interpreters, []string{"python3"}) || !slices.Equal(hints.DependencyManifests, []string{"requirements.txt"}) {
+		t.Fatalf("hints = %#v", hints)
+	}
+	if !hints.MissingRuntimeBlock || !hints.InstallProseDetected || !slices.Equal(hints.InstallCues, []string{"heading: setup", "pip install"}) {
+		t.Fatalf("hints = %#v", hints)
+	}
+	if !slices.Equal(hints.AbsoluteInstallPaths, []string{"SKILL.md"}) {
+		t.Fatalf("absolute paths = %v", hints.AbsoluteInstallPaths)
+	}
+	encoded, _ := json.Marshal(hints)
+	if strings.Contains(string(encoded), "SECRET-DEP") {
+		t.Fatalf("hints leak skill text: %s", encoded)
+	}
+
+	updateSkillMeta(t, root, "hints-skill", withRuntime)
+	declared, err := (SkillService{}).ReviewSkill(context.Background(), root, "hints-skill")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if declared.RuntimeHints.MissingRuntimeBlock {
+		t.Fatalf("a declared runtime block must clear the missing flag: %#v", declared.RuntimeHints)
 	}
 }

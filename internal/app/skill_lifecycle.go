@@ -119,6 +119,9 @@ func (service SkillService) PreviewSkillUpdate(ctx context.Context, path, id str
 		if errors.Is(err, skill.ErrNotFound) {
 			return SkillProposal{}, fmt.Errorf("%w: Skill %s does not exist; use skill_create_preview", skill.ErrNotFound, id)
 		}
+		if errors.Is(err, skill.ErrInvalidRuntime) {
+			return SkillProposal{}, NewInvalidRequestError(err.Error(), err.Error()+". Supply a runtime block of the form {requires: {bins, env, platforms}, setup: {check, command}}.")
+		}
 		return SkillProposal{}, err
 	}
 	if err := skill.StoreProposal(root, proposal, time.Now()); err != nil {

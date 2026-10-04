@@ -146,6 +146,7 @@ type skillUpdatePreviewInput struct {
 	ExpectedContentDigest string              `json:"expected_content_digest,omitempty"`
 	Routing               *skill.RoutingInput `json:"routing,omitempty"`
 	Rationale             *string             `json:"rationale,omitempty"`
+	Runtime               map[string]any      `json:"runtime,omitempty" jsonschema:"replacement runtime block {requires:{bins,env,platforms},setup:{check,command}}; an empty object removes the block; omit to keep it"`
 	IdempotencyKey        string              `json:"idempotency_key,omitempty"`
 	FullDiff              bool                `json:"full_diff,omitempty"`
 }
@@ -177,7 +178,14 @@ type skillGetInput struct {
 	SkillID string `json:"skill_id"`
 }
 
-type skillGetResult = app.SkillDetail
+// skillGetResult adds the MCP-only local snapshot to the shared skill detail.
+// Content shadows the embedded field so it is omitted when the skill awaits
+// content review.
+type skillGetResult struct {
+	app.SkillDetail
+	Content string          `json:"content,omitempty"`
+	Local   *app.LocalSkill `json:"local,omitempty"`
+}
 
 type errorEnvelope struct {
 	Error *app.Error `json:"error"`
@@ -307,6 +315,7 @@ type skillEntry struct {
 	URI         string                    `json:"uri"`
 	Frontmatter map[string]any            `json:"frontmatter"`
 	Resources   []app.DistributedResource `json:"resources"`
+	Local       *app.LocalSkill           `json:"local,omitempty"`
 }
 
 type listSkillsResult struct {

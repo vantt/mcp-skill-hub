@@ -90,12 +90,16 @@ Subcommands:
   add <locator> [--skill <name> | --all] [--id <id>] [--collection <c>] [--ref <r>] [--path <p>] [--yes]
                                                     Add draft skills from local or remote locator
   create <id> --collection <c> --name <n> --description <d> [--content-file <f>]
-         [--operation <o>]... [--trigger <t>]... [--not-for <n>]... [--min-scope <s>] [--yes]
+         [--operation <o>]... [--trigger <t>]... [--not-for <n>]... [--min-scope <s>]
+         [--example <e>]... [--counter-example <e>]... [--yes]
                                                     Create a new draft skill (--id <id> remains valid)
   show <id> [--verbose]                             Show a skill in any state
   review <id> [--verbose]                           Comprehensive diagnostic review of a skill
+  doctor <id> [--json]                              Check this machine against a skill's runtime block
+  env set|unset <id> <KEY> | env list <id>          Store secrets for a skill's scripts (values never shown)
   edit <id> [--name <n>] [--description <d>] [--rationale <r>] [--content-file <f>|--editor]
-       [--operation <o>]... [--trigger <t>]... [--not-for <n>]... [--min-scope <s>] [--yes]
+       [--operation <o>]... [--trigger <t>]... [--not-for <n>]... [--min-scope <s>]
+       [--example <e>]... [--counter-example <e>]... [--runtime-file <yaml>] [--approve-content <digest>] [--yes]
   activate <id> | deprecate <id> | archive <id> [--yes]
   confirm <proposal-id> | --proposal <id> --proposal-digest <d> --base-version <v>
                                                     Apply a skill add or mutation proposal
@@ -106,13 +110,27 @@ or absolute). Frontmatter is optional; if present, its "name" field must match t
 Allowed --operation values: explore, design, implement, review, debug, test, refactor, migrate, document, operate, research, other.
 Allowed --min-scope values: single_step, multi_step, project.
 On edit, routing flags you pass replace that field; the others keep their values.
+--example and --counter-example record requests that should (or should not) route to the
+skill: at most 10 each, up to 300 characters.
+--runtime-file replaces the skill's runtime block with the YAML mapping in the file (requires.bins/env/platforms,
+setup.check/command); a file containing {} removes the block. Changing it makes an earlier --approve-content stale.
+--approve-content records your review of a skill's whole content (files and runtime block); pass the
+exact content digest. Only this command can approve content; agents cannot.
 An active skill needs a trigger, a --not-for entry (or a --rationale), and --min-scope.
+doctor probes declared binaries and versions, checks that required environment
+variables are set (values are never shown), and runs the skill's setup check in its
+state directory only when the skill's content is trusted. It never runs setup.
+A variable also counts as present when stored with "skill env set" (read without echo, or from stdin
+when piped); the value goes to runtime/config/<id>/env (mode 0600), never to Git, and "env list" shows names only.
+Results describe this terminal (basis: terminal) and are cached as a hint for agents. Exit codes: 0 ready, 1 setup required or unsupported platform,
+2 invalid request or unknown skill.
 
 Examples:
   skillhub skill add https://github.com/anthropics/skills --skill pdf --yes
   skillhub skill create my-skill --collection core --name "My Skill" --description "Review changes" --trigger "review code" --not-for "write prose" --min-scope single_step --yes
   skillhub skill review my-skill
   skillhub skill edit my-skill --editor
+  skillhub skill edit my-skill --example "review my pull request" --counter-example "write release notes" --yes
   skillhub skill confirm PROP-123
   skillhub skill activate my-skill --yes
 `,

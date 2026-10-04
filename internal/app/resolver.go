@@ -18,6 +18,10 @@ type ResolverService struct {
 	Policy    resolverpkg.Policy
 	Cache     *resolverpkg.Cache
 	Telemetry TelemetrySink
+
+	// probe performs the non-executing setup checks for the post-ranking
+	// setup annotation; the zero value uses the host.
+	probe runtimeProbe
 }
 
 // TelemetrySink accepts already-minimized events. Implementations must return
@@ -127,6 +131,7 @@ func (service ResolverService) Resolve(ctx context.Context, path string, request
 		}
 		response.Primary.URI = primary.URI
 		response.Primary.Version = primary.Version
+		response.Primary.Setup = service.setupStatus(ctx, root, handle, primary)
 		stage = "supporting_manifest"
 		served := response.Supporting[:0]
 		for _, supporting := range response.Supporting {
@@ -139,12 +144,29 @@ func (service ResolverService) Resolve(ctx context.Context, path string, request
 			}
 			supporting.URI = entry.URI
 			supporting.Version = entry.Version
+			supporting.Setup = service.setupStatus(ctx, root, handle, entry)
 			served = append(served, supporting)
 		}
 		response.Supporting = served
 		stage = "completed"
 		return response, nil
 	}
+}
+
+// setupStatus annotates a recommended skill after ranking. It is nil for
+// trusted skills without a runtime block. The annotation is advisory: a manifest that cannot
+// be read here yields no annotation rather than failing or reordering the
+// resolution, and activation reports the full preflight anyway.
+func (service ResolverService) setupStatus(ctx context.Context, root string, handle *catalog.Handle, entry DistributedSkill) *resolverpkg.SetupStatus {
+	var contentJSON string
+	if err := handle.DB.QueryRowContext(ctx, `SELECT content_json FROM canonical_entities WHERE id=?`, entry.SkillID).Scan(&contentJSON); err != nil {
+		return nil
+	}
+	status, err := setupAnnotation(root, entry, []byte(contentJSON), service.probe)
+	if err != nil {
+		return nil
+	}
+	return status
 }
 
 // excludingCatalog hides skills that were found unservable during this request.
@@ -203,6 +225,9 @@ func resolutionTelemetryPayload(request resolverpkg.Request, response resolverpk
 		payload["top_skill_id"] = response.Primary.ID
 		payload["skill_id"] = response.Primary.ID
 		payload["confidence_band"] = response.Primary.Confidence
+		if response.Primary.Setup != nil {
+			payload["setup_state"] = response.Primary.Setup.State
+		}
 	}
 	addRequestTelemetry(payload, request)
 	return payload
