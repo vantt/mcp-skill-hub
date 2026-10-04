@@ -74,6 +74,10 @@ func RunContext(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		return runTelemetry(ctx, args[1:], stdout, stderr)
 	case "mcp":
 		return runMCP(ctx, args[1:], stdout, stderr)
+	case "serve":
+		return runServe(ctx, args[1:], stdout, stderr)
+	case "web":
+		return runServe(ctx, append([]string{"web"}, args[1:]...), stdout, stderr)
 	case "update":
 		return runUpdate(ctx, args[1:], stdout, stderr)
 	default:

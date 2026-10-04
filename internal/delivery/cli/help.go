@@ -35,6 +35,7 @@ Sources & learning:
 Agent:
   resolve   Pick the best skill for a request
   mcp serve Run the MCP server for an agent host
+  serve web Run the local web UI
 
 Maintenance:
   validate  Validate canonical workspace files
@@ -293,6 +294,23 @@ Update skillhub to the latest release or a specified version.
   --version <v>   Target version (e.g. 0.2.0 or v0.2.0)
   --check         Check for updates without modifying the binary
   --json          Machine-readable result
+`,
+	"serve": `Usage: skillhub serve web [--workspace <path>] [--addr <host:port>]
+                           [--loopback-only] [--allow-host <host[:port]>]...
+                           [--no-open] [--dev]
+
+Run the local web UI. Listens on 0.0.0.0 when this machine has two or more non-loopback IPv4 addresses, otherwise on 127.0.0.1; --addr or --loopback-only override.
+
+  --workspace <path>           Workspace to serve
+  --addr <host:port>           Explicit listen address and port
+  --loopback-only              Listen only on 127.0.0.1
+  --allow-host <host[:port]>   Allow an additional Host header (repeatable)
+  --no-open                    Do not open the browser on startup
+  --dev                        Development mode for Vite proxy
+`,
+	"web": `Usage: skillhub web [options]
+
+An alias of skillhub serve web. Run skillhub help serve for options.
 `,
 }
 

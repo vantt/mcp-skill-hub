@@ -88,6 +88,11 @@ func defaultInterfaces() ([]InterfaceInfo, error) {
 	return result, nil
 }
 
+// DefaultInterfaces returns system network interfaces with their flags and IPs.
+func DefaultInterfaces() ([]InterfaceInfo, error) {
+	return defaultInterfaces()
+}
+
 // New constructs a Server for the configured workspace and options.
 func New(opts Options) (*Server, error) {
 	root, err := workspace.Discover(opts.Workspace)
