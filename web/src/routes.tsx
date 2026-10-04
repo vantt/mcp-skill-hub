@@ -3,6 +3,9 @@ import { LaterPhasePage } from './components/LaterPhasePage';
 import { NotFoundPage } from './components/NotFoundPage';
 import { HomeScreen } from './screens/home/HomeScreen';
 import { SkillsScreen } from './screens/skills/SkillsScreen';
+import { AddSkillScreen } from './screens/skill-add/AddSkillScreen';
+import { CreateSkillScreen } from './screens/skill-create/CreateSkillScreen';
+import { SkillDetailScreen } from './screens/skill-detail/SkillDetailScreen';
 
 export const routes: RouteObject[] = [
   {
@@ -15,15 +18,15 @@ export const routes: RouteObject[] = [
   },
   {
     path: '/skills/add',
-    Component: LaterPhasePage,
+    Component: AddSkillScreen,
   },
   {
     path: '/skills/create',
-    Component: LaterPhasePage,
+    Component: CreateSkillScreen,
   },
   {
     path: '/skills/:id',
-    Component: LaterPhasePage,
+    Component: SkillDetailScreen,
   },
   {
     path: '/sources',

@@ -114,3 +114,65 @@ export interface SkillReviewResult {
   diverged: boolean;
   next_action: string;
 }
+
+export interface ConfirmationPins {
+  proposal_id: string;
+  proposal_digest: string;
+  base_version: string;
+}
+
+export interface SkillProposal {
+  schema_version: string;
+  status: string;
+  summary: string;
+  skill_id?: string;
+  from_state?: string;
+  to_state?: string;
+  paths?: string[];
+  impact?: string;
+  warning?: string;
+  diff?: string;
+  stat?: string;
+  confirmation: {
+    policy_revision?: string;
+    action_class?: string;
+    application_command?: string;
+    confirmation?: {
+      required: boolean;
+      mode?: string;
+      pins: ConfirmationPins;
+    };
+    required?: boolean;
+    pins?: ConfirmationPins;
+  };
+}
+
+export interface SkillMutationResult {
+  schema_version: string;
+  status: string;
+  summary: string;
+  operation_id: string;
+  skill_id?: string;
+}
+
+export interface SkillAddProposal {
+  schema_version: string;
+  status: string;
+  summary: string;
+  candidate_id?: string;
+  confirmation: {
+    confirmation?: {
+      pins: ConfirmationPins;
+    };
+    pins?: ConfirmationPins;
+  };
+  diff?: string;
+}
+
+export interface SkillAddResult {
+  schema_version: string;
+  status: string;
+  summary: string;
+  operation_id: string;
+  added_skills?: string[];
+}
