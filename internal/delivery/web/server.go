@@ -38,12 +38,12 @@ type Options struct {
 
 // Server delivers the WebUI over local HTTP.
 type Server struct {
-	workspace string
-	opts      Options
-	curation  app.CurationService
-	skills    app.SkillService
-	skillAdd  app.SkillAddService
-	sources   app.SourceService
+	workspace   string
+	opts        Options
+	curation    app.CurationService
+	skills      app.SkillService
+	skillAdd    app.SkillAddService
+	sources     app.SourceService
 	distill     app.DistillService
 	insights    app.InsightService
 	throttle    *authThrottle
@@ -111,13 +111,17 @@ func New(opts Options) (*Server, error) {
 	if opts.Assets == nil {
 		opts.Assets = defaultAssets()
 	}
-	return &Server{
+	srv := &Server{
 		workspace: root,
 		opts:      opts,
 		throttle:  newAuthThrottle(opts.Now),
-	}, nil
+	}
+	_ = srv.skillAdd
+	_ = srv.sources
+	_ = srv.distill
+	_ = srv.insights
+	return srv, nil
 }
-
 
 // Handler builds a http.ServeMux and wraps it with the security middleware chain.
 func (s *Server) Handler() http.Handler {

@@ -23,11 +23,11 @@ func newWebWorkspace(t *testing.T) string {
 	service := app.SkillService{}
 	content := []byte("---\nname: review-skill\ndescription: Review changed code safely.\nlicense: Apache-2.0\n---\n\n# Review\n\nReview carefully.\n")
 	created, err := service.PreviewCreate(context.Background(), root, skill.CreateInput{
-		ID:         "review-skill",
-		Collection: "core",
-		Name:       "Review Skill",
+		ID:          "review-skill",
+		Collection:  "core",
+		Name:        "Review Skill",
 		Description: "Review changed code safely.",
-		Content:    content,
+		Content:     content,
 		Routing: skill.RoutingInput{
 			Operations: []string{"review"},
 			Triggers:   []string{"review changed code"},

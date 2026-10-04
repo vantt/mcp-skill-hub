@@ -66,7 +66,7 @@ func WriteStartup(w io.Writer, boundHost string, port int, token string, ifaces 
 	const warning = "WARNING: The web UI is reachable from other devices over plain HTTP. Anyone who can observe this traffic can read the session token. Use --loopback-only to keep it on this machine.\n"
 
 	if boundHost == "0.0.0.0" {
-		io.WriteString(w, warning)
+		_, _ = io.WriteString(w, warning)
 		fmt.Fprintf(w, "Skill Hub web UI: http://127.0.0.1:%d/#token=%s\n", port, token)
 		for _, iface := range ifaces {
 			if !iface.Up || iface.Loopback {
@@ -88,6 +88,6 @@ func WriteStartup(w io.Writer, boundHost string, port int, token string, ifaces 
 		return
 	}
 
-	io.WriteString(w, warning)
+	_, _ = io.WriteString(w, warning)
 	fmt.Fprintf(w, "Skill Hub web UI: http://%s:%d/#token=%s\n", boundHost, port, token)
 }

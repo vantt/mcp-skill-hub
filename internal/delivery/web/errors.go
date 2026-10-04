@@ -8,13 +8,13 @@ import (
 )
 
 var statusByCode = map[app.ErrorCode]int{
-	app.ErrorInvalidRequest:             http.StatusBadRequest,          // 400
-	app.ErrorValidationFailed:           http.StatusBadRequest,          // 400
-	app.ErrorAmbiguousLocator:           http.StatusBadRequest,          // 400
-	app.ErrorAmbiguousRef:               http.StatusBadRequest,          // 400
-	app.ErrorLocalWatchUnsupported:      http.StatusBadRequest,          // 400
-	app.ErrorUnsupportedSchema:          http.StatusBadRequest,          // 400
-	app.ErrorResourceLimitsExceeded:      http.StatusBadRequest,          // 400
+	app.ErrorInvalidRequest:               http.StatusBadRequest,          // 400
+	app.ErrorValidationFailed:             http.StatusBadRequest,          // 400
+	app.ErrorAmbiguousLocator:             http.StatusBadRequest,          // 400
+	app.ErrorAmbiguousRef:                 http.StatusBadRequest,          // 400
+	app.ErrorLocalWatchUnsupported:        http.StatusBadRequest,          // 400
+	app.ErrorUnsupportedSchema:            http.StatusBadRequest,          // 400
+	app.ErrorResourceLimitsExceeded:       http.StatusBadRequest,          // 400
 	app.ErrorSkillSelectionRequired:       http.StatusUnprocessableEntity, // 422
 	app.ErrorUnknownResolution:            http.StatusUnprocessableEntity, // 422
 	app.ErrorClarificationBudgetExhausted: http.StatusUnprocessableEntity, // 422
