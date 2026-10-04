@@ -26,7 +26,7 @@ Supporting records: [decisions.md](./decisions.md) (all architecture decisions a
 | # | Phase | Depends on | Effort | Status |
 |---|---|---|---|---|
 | 1 | [Web adapter foundation (Go)](./phase-01-web-adapter-foundation.md) | — | 32h | Complete |
-| 2 | [Frontend foundation, Home, Skills catalog](./phase-02-frontend-foundation-home-skills.md) | 1 | 38h | Pending |
+| 2 | [Frontend foundation, Home, Skills catalog](./phase-02-frontend-foundation-home-skills.md) | 1 | 38h | Complete |
 | 3 | [Add, Create, Skill Detail, proposals](./phase-03-skill-add-create-detail-proposals.md) | 2 | 46h | Pending |
 | 4 | [Sources, Handoff, Runs](./phase-04-sources-handoff-runs.md) | 3 | 34h | Pending |
 | 5 | [Inbox, Insight, Patch Composer](./phase-05-inbox-insight-patch-composer.md) | 3, 4 | 40h | Pending |

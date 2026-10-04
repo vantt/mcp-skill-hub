@@ -1,7 +1,7 @@
 ---
 phase: 2
 title: "Frontend foundation, Home, Skills catalog"
-status: pending
+status: complete
 priority: P1
 effort: 38h
 dependencies: [1]
@@ -195,19 +195,19 @@ web-dev:
 
 ## Progress
 
-- [ ] Task 2.1 — Pin dependency versions
-- [ ] Task 2.2 — Scaffold `web/` and the Go guard
-- [ ] Task 2.3 — Dev workflow script
-- [ ] Task 2.4 — Vendor the design system and self-host fonts
-- [ ] Task 2.5 — Local storage layer
-- [ ] Task 2.6 — i18n catalog
-- [ ] Task 2.7 — Session and API client
-- [ ] Task 2.8 — App shell, navigation, Appearance menu, routes
-- [ ] Task 2.9 — Home screen
-- [ ] Task 2.10 — Skills catalog screen
-- [ ] Task 2.11 — Playwright smoke and accessibility
-- [ ] Task 2.12 — CI and release workflows
-- [ ] Task 2.13 — Phase close
+- [x] Task 2.1 — Pin dependency versions
+- [x] Task 2.2 — Scaffold `web/` and the Go guard
+- [x] Task 2.3 — Dev workflow script
+- [x] Task 2.4 — Vendor the design system and self-host fonts
+- [x] Task 2.5 — Local storage layer
+- [x] Task 2.6 — i18n catalog
+- [x] Task 2.7 — Session and API client
+- [x] Task 2.8 — App shell, navigation, Appearance menu, routes
+- [x] Task 2.9 — Home screen
+- [x] Task 2.10 — Skills catalog screen
+- [x] Task 2.11 — Playwright smoke and accessibility
+- [x] Task 2.12 — CI and release workflows
+- [x] Task 2.13 — Phase close
 
 ## Failure Protocol
 If any Verify step does not meet its stated pass condition:
