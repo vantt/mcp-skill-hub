@@ -50,7 +50,8 @@ export function DiffView({ diff, stat }: DiffViewProps) {
     return () => window.removeEventListener('resize', checkWidth);
   }, []);
 
-  const parsedLines: DiffLine[] = typeof diff === 'string' ? parseDiff(diff) : diff;
+  const parsedLines: DiffLine[] =
+    typeof diff === 'string' ? parseDiff(diff) : Array.isArray(diff) ? diff : [];
 
   const leftLines: DiffLine[] = [];
   const rightLines: DiffLine[] = [];

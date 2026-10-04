@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { confirmSkillMutation, previewSkillUpdate } from '../../api/queries';
 import type { SkillDetail, SkillProposal } from '../../api/types';
-import { ApiError } from '../../api/client';
+import { ApiError, apiFetch } from '../../api/client';
 import { ConflictDrawer } from '../../components/ConflictDrawer';
 import { Markdown } from '../../components/Markdown';
 import { ProposalPreview } from '../../components/ProposalPreview';
@@ -24,9 +24,9 @@ const LABEL_REQUIRED_TRIGGER = 'Required before activation.';
 const REQ_STAR = '*';
 const SCOPES = [
   { value: '', label: 'Select scope' },
-  { value: 'file', label: 'file' },
-  { value: 'change', label: 'change' },
-  { value: 'repository', label: 'repository' },
+  { value: 'single_step', label: 'single_step' },
+  { value: 'multi_step', label: 'multi_step' },
+  { value: 'project', label: 'project' },
 ];
 const MSG_DRAFT_SAVED = 'Draft saved in this browser';
 
@@ -161,21 +161,54 @@ export function EditorTab({ skill, workspaceId }: EditorTabProps) {
     queryClient.invalidateQueries({ queryKey: ['skill', skill.skill_id] });
   };
 
-  const handleUseLatestAsBase = () => {
-    saveDraft(workspaceId, 'skill', skill.skill_id, skill.content_digest, {
-      content,
-      name,
-      description,
-      operations,
-      triggers,
-      notFor,
-      minScope,
-    });
-    setConflictDrawerOpen(false);
-    handlePreviewChanges();
+  const handleUseLatestAsBase = async () => {
+    try {
+      setLoading(true);
+      const refreshed = await queryClient.fetchQuery({
+        queryKey: ['skill', skill.skill_id],
+        queryFn: () => apiFetch<SkillDetail>(`/skills/${encodeURIComponent(skill.skill_id)}`),
+      });
+      saveDraft(workspaceId, 'skill', skill.skill_id, refreshed.content_digest, {
+        content,
+        name,
+        description,
+        operations,
+        triggers,
+        notFor,
+        minScope,
+      });
+      setConflictDrawerOpen(false);
+
+      const ops = operations.split(',').map((s) => s.trim()).filter(Boolean);
+      const trigs = triggers.split(',').map((s) => s.trim()).filter(Boolean);
+      const nots = notFor.split(',').map((s) => s.trim()).filter(Boolean);
+
+      const prop = await previewSkillUpdate(skill.skill_id, {
+        expected_content_digest: refreshed.content_digest,
+        name: name !== refreshed.name ? name : undefined,
+        description: description !== refreshed.description ? description : undefined,
+        content: content !== refreshed.content ? content : undefined,
+        routing: {
+          operations: ops,
+          triggers: trigs,
+          not_for: nots,
+          min_scope: minScope,
+        },
+      });
+      setProposal(prop);
+      setPreviewOpen(true);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setErrorMessage(err.render.WHY || err.render.ERROR || err.message);
+      } else if (err instanceof Error) {
+        setErrorMessage(err.message);
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const pins = proposal ? (proposal.confirmation.confirmation?.pins ?? proposal.confirmation.pins) : null;
+  const pins = proposal?.confirmation?.confirmation?.pins ?? proposal?.confirmation?.pins ?? null;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
@@ -410,7 +443,7 @@ export function EditorTab({ skill, workspaceId }: EditorTabProps) {
       </div>
 
       {/* Proposal Preview Modal */}
-      {previewOpen && proposal && pins && (
+      {previewOpen && proposal && (
         <ProposalPreview
           open={previewOpen}
           title={proposal.summary || 'Update skill'}
@@ -422,9 +455,9 @@ export function EditorTab({ skill, workspaceId }: EditorTabProps) {
           warning={proposal.warning}
           diff={proposal.diff}
           stat={proposal.stat}
-          proposalId={pins.proposal_id}
-          proposalDigest={pins.proposal_digest}
-          baseVersion={pins.base_version}
+          proposalId={pins?.proposal_id || ''}
+          proposalDigest={pins?.proposal_digest || ''}
+          baseVersion={pins?.base_version || ''}
           confirmLabel={t('action.review')}
           onConfirm={handleConfirm}
           onCancel={() => setPreviewOpen(false)}

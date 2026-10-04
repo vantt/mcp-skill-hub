@@ -62,8 +62,25 @@ export function AddSkillScreen() {
   const handleDiscover = async (importAll = false, customSelection?: string) => {
     setErrorMessage(null);
     setSelectionRequiredWhy(null);
-    setDiscovering(true);
 
+    const trimmedLoc = locator.trim();
+    if (!trimmedLoc.startsWith('https://github.com/') && !trimmedLoc.startsWith('https://GitHub.com/')) {
+      setErrorMessage('The web UI accepts only public GitHub URLs.');
+      return;
+    }
+    try {
+      const parsed = new URL(trimmedLoc);
+      const parts = parsed.pathname.split('/').filter(Boolean);
+      if (parts.length < 2) {
+        setErrorMessage('The web UI accepts only public GitHub URLs.');
+        return;
+      }
+    } catch {
+      setErrorMessage('The web UI accepts only public GitHub URLs.');
+      return;
+    }
+
+    setDiscovering(true);
     abortControllerRef.current = new AbortController();
 
     try {

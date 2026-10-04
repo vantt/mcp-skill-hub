@@ -27,6 +27,7 @@ const LABEL_TAB_RESOURCES = 'Resources';
 const LABEL_ACTIVATE = 'Activate skill';
 const LABEL_DEPRECATE = 'Deprecate';
 const LABEL_ARCHIVE = 'Archive';
+const LABEL_ARCHIVE_SKILL = 'Archive skill';
 const LABEL_COPIED = 'Copied';
 const LABEL_ARCHIVED_READONLY = 'Read-only — no transitions from archived.';
 const TITLE_ARCHIVE_CONFIRM = 'Archive skill?';
@@ -51,6 +52,7 @@ export function SkillDetailScreen() {
 
   const [copiedId, setCopiedId] = useState(false);
   const [transitionProposal, setTransitionProposal] = useState<SkillProposal | null>(null);
+  const [transitionTarget, setTransitionTarget] = useState<'active' | 'deprecated' | 'archived' | ''>('');
   const [proposalOpen, setProposalOpen] = useState(false);
   const [confirmArchiveOpen, setConfirmArchiveOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -88,6 +90,7 @@ export function SkillDetailScreen() {
 
   const handleTransition = async (target: 'active' | 'deprecated' | 'archived') => {
     setErrorMessage(null);
+    setTransitionTarget(target);
     try {
       const prop = await previewSkillTransition(skill.skill_id, target);
       setTransitionProposal(prop);
@@ -135,9 +138,8 @@ export function SkillDetailScreen() {
           ? 'danger'
           : 'neutral';
 
-  const pins = transitionProposal
-    ? (transitionProposal.confirmation.confirmation?.pins ?? transitionProposal.confirmation.pins)
-    : null;
+  const pins =
+    transitionProposal?.confirmation?.confirmation?.pins ?? transitionProposal?.confirmation?.pins ?? null;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
@@ -284,23 +286,22 @@ export function SkillDetailScreen() {
       {activeTab === 'resources' && <ResourcesTab skill={skill} />}
 
       {/* Transition Proposal Preview */}
-      {proposalOpen && transitionProposal && pins && (
+      {proposalOpen && transitionProposal && (
         <ProposalPreview
           open={proposalOpen}
           title={transitionProposal.summary || 'Skill Transition'}
           target={skill.skill_id}
           fromState={transitionProposal.from_state || skill.lifecycle_state}
-          toState={transitionProposal.to_state}
-          paths={transitionProposal.paths}
+          toState={transitionTarget || undefined}
           impact={transitionProposal.impact}
           warning={transitionProposal.warning}
           diff={transitionProposal.diff}
           stat={transitionProposal.stat}
-          proposalId={pins.proposal_id}
-          proposalDigest={pins.proposal_digest}
-          baseVersion={pins.base_version}
-          confirmLabel={`Confirm ${transitionProposal.to_state || 'transition'}`}
-          dangerConfirm={transitionProposal.to_state === 'archived'}
+          proposalId={pins?.proposal_id || ''}
+          proposalDigest={pins?.proposal_digest || ''}
+          baseVersion={pins?.base_version || ''}
+          confirmLabel={`Confirm ${transitionTarget || 'transition'}`}
+          dangerConfirm={transitionTarget === 'archived'}
           onConfirm={handleConfirmTransition}
           onCancel={() => setProposalOpen(false)}
         />
@@ -311,7 +312,7 @@ export function SkillDetailScreen() {
         open={confirmArchiveOpen}
         title={TITLE_ARCHIVE_CONFIRM}
         body={BODY_ARCHIVE_CONFIRM}
-        confirmLabel={LABEL_ARCHIVE}
+        confirmLabel={LABEL_ARCHIVE_SKILL}
         danger
         onConfirm={() => {
           setConfirmArchiveOpen(false);

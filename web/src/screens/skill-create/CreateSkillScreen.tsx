@@ -27,9 +27,9 @@ const REQ_STAR = '*';
 const COLLECTIONS = ['core', 'default', 'engineering', 'operations', 'docs'];
 const SCOPES = [
   { value: '', label: 'Select scope' },
-  { value: 'file', label: 'file' },
-  { value: 'change', label: 'change' },
-  { value: 'repository', label: 'repository' },
+  { value: 'single_step', label: 'single_step' },
+  { value: 'multi_step', label: 'multi_step' },
+  { value: 'project', label: 'project' },
 ];
 const MSG_FILE_LOADED = 'File loaded successfully.';
 
@@ -102,13 +102,10 @@ export function CreateSkillScreen() {
   };
 
   const getContent = () => {
-    if (instructionMode === 'write') {
+    if (instructionMode === 'write' || instructionMode === 'upload') {
       return customContent;
     }
-    if (instructionMode === 'upload') {
-      return customContent;
-    }
-    return `---\nname: ${name || id || 'New Skill'}\ndescription: ${description}\n---\n\n# ${name || id || 'New Skill'}\n\n<!-- scaffold: replace with instructions -->\n`;
+    return '';
   };
 
   const handlePreview = async () => {
@@ -177,7 +174,7 @@ export function CreateSkillScreen() {
     }
   };
 
-  const pins = proposal ? (proposal.confirmation.confirmation?.pins ?? proposal.confirmation.pins) : null;
+  const pins = proposal?.confirmation?.confirmation?.pins ?? proposal?.confirmation?.pins ?? null;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', maxWidth: '760px', width: '100%' }}>
@@ -461,7 +458,7 @@ export function CreateSkillScreen() {
         </button>
       </div>
 
-      {previewOpen && proposal && pins && (
+      {previewOpen && proposal && (
         <ProposalPreview
           open={previewOpen}
           title={proposal.summary || 'Create draft skill'}
@@ -473,9 +470,9 @@ export function CreateSkillScreen() {
           warning={proposal.warning}
           diff={proposal.diff}
           stat={proposal.stat}
-          proposalId={pins.proposal_id}
-          proposalDigest={pins.proposal_digest}
-          baseVersion={pins.base_version}
+          proposalId={pins?.proposal_id || ''}
+          proposalDigest={pins?.proposal_digest || ''}
+          baseVersion={pins?.base_version || ''}
           confirmLabel={t('action.create_skill')}
           onConfirm={handleConfirm}
           onCancel={() => setPreviewOpen(false)}

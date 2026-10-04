@@ -9,6 +9,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export interface RunningServer {
   url: string;
   origin: string;
+  ws: string;
   stop: () => Promise<void>;
 }
 
@@ -120,6 +121,7 @@ export async function startServer(): Promise<RunningServer> {
   return {
     url: serverInfo.url,
     origin: serverInfo.origin,
+    ws,
     stop,
   };
 }

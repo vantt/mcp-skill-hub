@@ -233,7 +233,7 @@ export function ProposalPreview({
           )}
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--space-4)' }}>
-            {paths.length > 0 && (
+            {Array.isArray(paths) && paths.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <span className="t-label" style={{ color: 'var(--color-text-muted)' }}>
                   <span>{LABEL_AFFECTED_PATHS}</span>
