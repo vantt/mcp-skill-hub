@@ -79,7 +79,7 @@ export function HomeScreen() {
         aria-labelledby="na-h"
         style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}
       >
-        <span id="na-h" className="t-label" style={{ color: 'var(--color-text-subtle)' }}>
+        <span id="na-h" className="t-label" style={{ color: 'var(--color-text-muted)' }}>
           <span>{t('home.next_action_title')}</span>
         </span>
 

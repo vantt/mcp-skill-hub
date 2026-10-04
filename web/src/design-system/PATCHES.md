@@ -34,3 +34,8 @@ The following font packages in `@fontsource` do not publish a `vietnamese` subse
 - `@fontsource/figtree` (lacks `vietnamese-400.css`, `vietnamese-500.css`, `vietnamese-600.css`, `vietnamese-700.css`)
 - `@fontsource/poppins` (lacks `vietnamese-400.css`, `vietnamese-500.css`, `vietnamese-600.css`, `vietnamese-700.css`)
 These fonts fall back to system fonts or next font family in the theme stack for Vietnamese text.
+
+## Accessibility Patches
+
+- `contract/components.css`: `.fg-table thead th` changed from `color: var(--color-text-subtle)` to `color: var(--color-text-muted)` to satisfy WCAG AA 4.5:1 minimum color contrast ratio for small text on light backgrounds.
+- `themes/precision.css`: adjusted light scheme `--color-warning` from `#8a6410` to `#805c08` to achieve 5.08:1 contrast ratio against `--color-warning-tint` (`#f4e9cf`) for `.fg-chip--warning`.

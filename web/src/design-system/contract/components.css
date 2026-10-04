@@ -177,7 +177,7 @@
 .fg-table thead th {
   text-align: left; padding: 10px var(--space-3);
   font-family: var(--type-label-font); font-size: var(--type-micro-size); letter-spacing: var(--type-label-tracking); text-transform: var(--type-label-case);
-  color: var(--color-text-subtle); border-bottom: var(--border-width-hairline) solid var(--color-border-strong);
+  color: var(--color-text-muted); border-bottom: var(--border-width-hairline) solid var(--color-border-strong);
 }
 .fg-table tbody td { padding: var(--density-row-pad-y) var(--space-3); color: var(--color-text); border-bottom: var(--border-width-hairline) solid var(--color-border); }
 .fg-table--clickable tbody tr { cursor: pointer; transition: background var(--motion-fast) var(--ease-standard); }

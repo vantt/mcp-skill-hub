@@ -278,7 +278,7 @@ export function SkillsScreen() {
                       <div className="t-ui">
                         <span>{s.name}</span>
                       </div>
-                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--color-text-subtle)' }}>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--color-text-muted)' }}>
                         <span>{s.id}</span>
                       </div>
                     </td>

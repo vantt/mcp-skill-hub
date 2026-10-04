@@ -56,19 +56,12 @@ export function NavRail() {
             <Link
               key={item.id}
               to={item.path}
-              className={`fg-nav__item ${isActive ? 'fg-nav__item--active' : ''}`}
+              className={`fg-nav__item ${isActive ? 'fg-nav__item--on' : ''}`}
               title={label}
               aria-label={label}
               aria-current={isActive ? 'page' : undefined}
               style={{
                 textDecoration: 'none',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 'var(--space-3)',
-                padding: 'var(--space-2) var(--space-3)',
-                borderRadius: 'var(--input-radius)',
-                color: isActive ? 'var(--color-action)' : 'var(--color-text)',
-                background: isActive ? 'var(--color-surface-raised)' : 'transparent',
               }}
             >
               <span className="fg-nav__icon" aria-hidden="true" style={{ fontSize: '16px', width: '20px', textAlign: 'center' }}>
@@ -107,7 +100,7 @@ export function NavRail() {
             gap: 'var(--space-2)',
           }}
         >
-          <span className="t-label" style={{ color: 'var(--color-text-subtle)' }}>
+          <span className="t-label" style={{ color: 'var(--color-text-muted)' }}>
             <span>{t('workspace.title')}</span>
           </span>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
