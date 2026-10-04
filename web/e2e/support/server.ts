@@ -53,7 +53,9 @@ export async function startServer(): Promise<RunningServer> {
   );
   try {
     fs.unlinkSync(contentFile);
-  } catch {}
+  } catch {
+    // Ignore error if file was already removed.
+  }
 
   // 3. Spawn serve web
   const proc = spawn(
