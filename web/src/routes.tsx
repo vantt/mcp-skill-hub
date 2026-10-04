@@ -1,12 +1,9 @@
 import type { RouteObject } from 'react-router';
 import { LaterPhasePage } from './components/LaterPhasePage';
 import { NotFoundPage } from './components/NotFoundPage';
+import { HomeScreen } from './screens/home/HomeScreen';
 
-// Placeholders for screens implemented in Tasks 2.9 and 2.10
-export function HomeScreenPlaceholder() {
-  return <div className="home-screen" />;
-}
-
+// Placeholder for screen implemented in Task 2.10
 export function SkillsScreenPlaceholder() {
   return <div className="skills-screen" />;
 }
@@ -14,7 +11,7 @@ export function SkillsScreenPlaceholder() {
 export const routes: RouteObject[] = [
   {
     path: '/',
-    Component: HomeScreenPlaceholder,
+    Component: HomeScreen,
   },
   {
     path: '/skills',

@@ -18,6 +18,9 @@ export const en = {
 
   // Workspace
   'workspace.title': 'Workspace',
+  'workspace.row_health': 'Health',
+  'workspace.row_index': 'Index',
+  'workspace.row_git': 'Git',
   'workspace.status_valid': 'Healthy',
   'workspace.status_invalid': 'Invalid',
   'workspace.status_recovering': 'Recovery required',
@@ -83,6 +86,7 @@ export const en = {
   'home.degraded_title': 'Search index needs rebuild.',
   'home.degraded_body': 'Catalog is stale. Run skillhub rebuild, then reload.',
   'home.summary_title': 'Overview',
+  'home.action_categories': 'Action categories',
   'home.pending_insights.one': '{count} pending insight',
   'home.pending_insights.other': '{count} pending insights',
   'home.changed_sources.one': '{count} changed source',
