@@ -36,12 +36,12 @@ func decodeJSON(r *http.Request, v any) *app.Error {
 }
 
 type skillAddPreviewRequest struct {
-	Locator        string   `json:"locator"`
+	Locator        string `json:"locator"`
 	Selection      string `json:"selection,omitempty"`
-	All            bool     `json:"all,omitempty"`
-	TargetID       string   `json:"target_id,omitempty"`
-	Collection     string   `json:"collection,omitempty"`
-	IdempotencyKey string   `json:"idempotency_key,omitempty"`
+	All            bool   `json:"all,omitempty"`
+	TargetID       string `json:"target_id,omitempty"`
+	Collection     string `json:"collection,omitempty"`
+	IdempotencyKey string `json:"idempotency_key,omitempty"`
 }
 
 func (s *Server) handleSkillAddPreview(w http.ResponseWriter, r *http.Request) {
