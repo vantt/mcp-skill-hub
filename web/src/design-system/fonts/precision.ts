@@ -1,0 +1,55 @@
+import '@fontsource/fraunces/latin-400.css';
+import '@fontsource/fraunces/latin-ext-400.css';
+import '@fontsource/fraunces/vietnamese-400.css';
+import '@fontsource/fraunces/latin-500.css';
+import '@fontsource/fraunces/latin-ext-500.css';
+import '@fontsource/fraunces/vietnamese-500.css';
+
+import '@fontsource/newsreader/latin-400.css';
+import '@fontsource/newsreader/latin-ext-400.css';
+import '@fontsource/newsreader/vietnamese-400.css';
+import '@fontsource/newsreader/latin-500.css';
+import '@fontsource/newsreader/latin-ext-500.css';
+import '@fontsource/newsreader/vietnamese-500.css';
+
+import '@fontsource/geist/latin-300.css';
+import '@fontsource/geist/latin-ext-300.css';
+import '@fontsource/geist/vietnamese-300.css';
+import '@fontsource/geist/latin-400.css';
+import '@fontsource/geist/latin-ext-400.css';
+import '@fontsource/geist/vietnamese-400.css';
+import '@fontsource/geist/latin-500.css';
+import '@fontsource/geist/latin-ext-500.css';
+import '@fontsource/geist/vietnamese-500.css';
+import '@fontsource/geist/latin-600.css';
+import '@fontsource/geist/latin-ext-600.css';
+import '@fontsource/geist/vietnamese-600.css';
+import '@fontsource/geist/latin-700.css';
+import '@fontsource/geist/latin-ext-700.css';
+import '@fontsource/geist/vietnamese-700.css';
+
+import '@fontsource/geist-mono/latin-300.css';
+import '@fontsource/geist-mono/latin-ext-300.css';
+import '@fontsource/geist-mono/vietnamese-300.css';
+import '@fontsource/geist-mono/latin-400.css';
+import '@fontsource/geist-mono/latin-ext-400.css';
+import '@fontsource/geist-mono/vietnamese-400.css';
+import '@fontsource/geist-mono/latin-500.css';
+import '@fontsource/geist-mono/latin-ext-500.css';
+import '@fontsource/geist-mono/vietnamese-500.css';
+import '@fontsource/geist-mono/latin-600.css';
+import '@fontsource/geist-mono/latin-ext-600.css';
+import '@fontsource/geist-mono/vietnamese-600.css';
+
+import '@fontsource/space-grotesk/latin-400.css';
+import '@fontsource/space-grotesk/latin-ext-400.css';
+import '@fontsource/space-grotesk/vietnamese-400.css';
+import '@fontsource/space-grotesk/latin-500.css';
+import '@fontsource/space-grotesk/latin-ext-500.css';
+import '@fontsource/space-grotesk/vietnamese-500.css';
+import '@fontsource/space-grotesk/latin-600.css';
+import '@fontsource/space-grotesk/latin-ext-600.css';
+import '@fontsource/space-grotesk/vietnamese-600.css';
+import '@fontsource/space-grotesk/latin-700.css';
+import '@fontsource/space-grotesk/latin-ext-700.css';
+import '@fontsource/space-grotesk/vietnamese-700.css';

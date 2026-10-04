@@ -1,0 +1,247 @@
+/* ============================================================
+   ADAPTER · Moday (from monday.com's Vibe — "The Colorful Work OS")
+      →  html[data-theme="moday"]
+   Inducted from the open-source Vibe design system (MIT,
+   github.com/mondaycom/vibe — packages/style light-theme.scss,
+   typography.scss, border-radius.scss, motion.scss). Bright
+   working blue (#0073ea) on white, cool gray neutrals, Figtree
+   body + Poppins titles, crisp 4px controls / 8px cards, and the
+   signature SOLID content-color status lanes (done-green /
+   working-orange / stuck-red) with white text.
+
+   action = brand (#0073ea, Vibe's --primary-color = --brand-color)
+   but link SPLITS to #1f76c2 (Vibe's --link-color) — a third valid
+   config alongside full-unify (Precision) and full-split (ClickUp).
+
+   AA note (same remedy as P2.6 / Atelier): Vibe's raw status hues
+   (#00854d, #ffcb00, #d83a52) fail 4.5:1 as TEXT on their selected
+   tints, so text roles ride darkened rungs (success → hover rung
+   #007038, warning → a darkened egg-yolk #8a6100, danger → hover
+   rung #b63546, info → primary-hover #0060b9) while the tints keep
+   Vibe's published selected/highlight values. The bright originals
+   live on in the accent-alt lane set, where they belong.
+
+   Tier-1 primitives kept private (--_*). No new contract token
+   was required — Vibe maps onto existing Tier 2/3 slots.
+   ============================================================ */
+
+html[data-theme="moday"] {
+  /* ── Tier 1 · PRIMITIVE (private, from Vibe light-theme.scss) ── */
+  --_primary:        #0073ea;  /* --primary-color / --brand-color */
+  --_primary-hover:  #0060b9;  /* --primary-hover-color */
+  --_primary-press:  #004f96;  /* one rung past hover (Vibe has no press token) */
+  --_primary-sel:    #cce5ff;  /* --primary-selected-color */
+  --_primary-hi:     #f0f7ff;  /* --primary-highlighted-color */
+  --_primary-surf:   #eceff8;  /* --primary-surface-color */
+
+  --_ink:            #323338;  /* --primary-text-color (mud_black) */
+  --_ink-2:          #676879;  /* --secondary-text-color (asphalt) */
+  --_wolf:           #c3c6d4;  /* --ui-border-color (wolf_gray) */
+  --_layout-border:  #d0d4e4;  /* --layout-border-color */
+  --_ui-bg:          #e7e9ef;  /* --ui-background-color */
+  --_allgrey:        #f6f7fb;  /* --allgrey-background-color (riverstone) */
+  --_disabled-bg:    #ecedf5;
+  --_navy:           #292f4c;  /* --color-surface — Vibe's dark navy */
+
+  --_link:           #1f76c2;  /* --link-color */
+
+  /* status — text rungs darkened for AA; tints are Vibe's published values */
+  --_success:#007038;  --_success-bg:#d8efe3;   /* text = positive-color-hover; tint softened from selected #bbdbc9 */
+  --_danger: #b63546;  --_danger-bg:#f4c3cb;    /* negative-color-hover on negative-color-selected */
+  --_warning:#8a6100;  --_warning-bg:#fceba1;   /* darkened egg-yolk on warning-color-selected */
+  --_info:   #0060b9;  --_info-bg:#cce5ff;      /* primary-hover on primary-selected */
+
+  /* the iconic monday content colors — lanes / tags / chart keys */
+  --_done-green:     #00c875;
+  --_working-orange: #fdab3d;
+  --_stuck-red:      #df2f4a;
+  --_dark-purple:    #784bd1;
+  --_bright-blue:    #579bfc;
+
+  /* data-accent primitives */
+  --_grass-green:    #037f4c;  /* --color-grass_green */
+
+  /* ── Tier 2 · SEMANTIC ── */
+  /* Surfaces — white canvas, allgrey sunken bands (the board look) */
+  --color-bg: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-raised: #ffffff;
+  --color-surface-sunken: var(--_allgrey);
+  --color-scrim: rgba(41, 47, 76, 0.7);   /* --backdrop-color */
+
+  /* Text */
+  --color-text: var(--_ink);
+  --color-text-muted: var(--_ink-2);
+  --color-text-subtle: #9699a6;           /* jaco_gray */
+  --color-text-disabled: rgba(50, 51, 56, 0.38);
+  --color-on-action: #ffffff;
+  --color-on-brand: #ffffff;
+  --color-on-dark: #ffffff;
+
+  /* Lines */
+  --color-border: var(--_layout-border);
+  --color-border-strong: var(--_wolf);
+  --color-border-interactive: var(--_primary);
+
+  /* action = brand (primary blue) · link splits to Vibe's own link color */
+  --color-action: var(--_primary);
+  --color-action-hover: var(--_primary-hover);
+  --color-action-press: var(--_primary-press);
+  --color-brand: var(--_primary);
+  --color-brand-tint: var(--_primary-hi);
+  --color-link: var(--_link);
+  --color-link-hover: var(--_primary-hover);
+  --color-link-visited: var(--_link);
+
+  /* Status */
+  --color-success: var(--_success); --color-success-tint: var(--_success-bg);
+  --color-warning: var(--_warning); --color-warning-tint: var(--_warning-bg);
+  --color-danger:  var(--_danger);  --color-danger-tint:  var(--_danger-bg);
+  --color-info:    var(--_info);    --color-info-tint:    var(--_info-bg);
+
+  /* Value direction */
+  --color-positive: var(--_success); --color-positive-tint: var(--_success-bg);
+  --color-negative: var(--_danger);  --color-negative-tint: var(--_danger-bg);
+
+  /* Alternate accent set — the monday board palette (solid lanes, tags, charts) */
+  --color-accent-alt-1: var(--_done-green);
+  --color-accent-alt-2: var(--_working-orange);
+  --color-accent-alt-3: var(--_stuck-red);
+  --color-accent-alt-4: var(--_dark-purple);
+  --color-accent-alt-5: var(--_bright-blue);
+
+  /* Derived interaction states */
+  --color-surface-hover: var(--_allgrey);
+  --color-selection-bg: var(--_primary-sel);
+  --color-selection-text: var(--_ink);
+  --scrollbar-thumb: var(--_wolf);
+  --scrollbar-track: transparent;
+
+  /* ── Typography — Figtree workhorse, Poppins titles (Vibe's pairing) ── */
+  --font-display: 'Poppins', 'Figtree', system-ui, sans-serif;
+  --font-body:    'Figtree', system-ui, -apple-system, sans-serif;
+  --font-mono:    ui-monospace, 'SF Mono', Menlo, monospace;   /* Vibe ships no mono; system stack */
+  --font-accent:  'Poppins', system-ui, sans-serif;            /* no distinct voice face → = display */
+
+  /* Role character — Vibe headings are calm medium/semibold, tight -0.5px ≈ -0.015em */
+  --type-display-weight: var(--weight-semibold); --type-display-tracking: -0.015em;
+  --type-title-weight: var(--weight-semibold);   --type-title-tracking: -0.015em;
+  --type-heading-weight: var(--weight-semibold); --type-heading-tracking: -0.005em;
+  --type-subheading-weight: var(--weight-medium);
+  --type-heading-sm-weight: var(--weight-semibold);
+  --type-ui-weight: var(--weight-medium);
+  --weight-emphasis: var(--weight-medium);   /* Vibe's "bold" is 500 */
+  --weight-strong: var(--weight-bold);
+
+  /* Motion — Vibe productive/expressive tiers (motion.scss) */
+  --motion-fast: 70ms; /* @kind other */
+  --motion-settle: 150ms; /* @kind other */
+  --motion-open: 250ms; /* @kind other */
+  --motion-expressive: 400ms; /* @kind other */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1); /* @kind other */    /* --motion-timing-transition */
+  --ease-decelerate: cubic-bezier(0, 0, 0.35, 1); /* @kind other */   /* --motion-timing-enter */
+  --ease-expressive: cubic-bezier(0, 0, 0.2, 1.4); /* @kind other */  /* --motion-timing-emphasize */
+
+  /* ── Tier 3 · CHARACTER — crisp 4px controls, 8px cards, xs shadows ── */
+  --btn-radius: var(--radius-sm);          /* --border-radius-small: 4px */
+  --btn-weight: var(--weight-medium);
+  --btn-pad-y: 9px;
+  --btn-pad-x: 16px;
+
+  --card-radius: var(--radius-md);         /* --border-radius-medium: 8px */
+  --card-elevation: 0px 4px 6px -4px rgba(0, 0, 0, 0.1);   /* --box-shadow-xs */
+  --card-border-width: 1px;
+
+  --chip-radius: var(--radius-pill);       /* Vibe chips render pill at control height */
+  --input-radius: var(--radius-sm);
+  --input-height: 40px;                    /* Vibe medium control */
+  --nav-item-radius: var(--radius-sm);
+
+  /* Status: flat — no glow (product UI); lanes render SOLID with white text,
+     the monday board signature */
+  --status-glow: none; /* @kind shadow */
+  --status-lane-fill: 100%; /* @kind other */
+  --status-lane-text: var(--color-on-dark);
+
+  --focus-color: var(--_primary);
+  --focus-width: 2px;
+
+  --num-font: var(--font-mono);
+
+  /* Signature — the multicolor work-OS ribbon; navy dark panel; blue band */
+  --signature-gradient: conic-gradient(from 90deg,
+    var(--_stuck-red), var(--_working-orange), var(--_done-green),
+    var(--_bright-blue), var(--_dark-purple), var(--_stuck-red)); /* @kind other */
+  --signature-gradient-text: linear-gradient(92deg, var(--_primary), var(--_dark-purple));
+  --signature-band-tint: var(--_primary-hi);
+  --signature-dark-bg: var(--_navy);
+  --signature-dark-text: #ffffff;
+  --signature-vignette: none; /* @kind other */
+  --signature-speed: 4s; /* @kind other */
+
+  /* Code syntax on the navy dark panel — cool-leaning */
+  --code-keyword: #bda8f9;   /* lavender */
+  --code-string:  #80e3ba;   /* done-green-selected */
+  --code-fn:      #66ccff;   /* chili-blue */
+  --code-num:     #ffe580;   /* egg-yolk-selected */
+}
+
+/* ── Scheme · DARK (opposite of the native white board) — deep navy-slate
+   canvas (the work-OS night mode), working blue brightened, board palette
+   preserved on the accent-alt lane set. Crisp/flat character unchanged. ── */
+html[data-theme="moday"][data-scheme="dark"] {
+  --color-bg:#15171f;
+  --color-surface:#1c1f2b;
+  --color-surface-raised:#252938;
+  --color-surface-sunken:#111219;
+  --color-scrim:rgba(9,11,20,0.7);
+  --color-text:#f5f6f8;
+  --color-text-muted:#aeb1c2;
+  --color-text-subtle:#7e8296;
+  --color-text-disabled:#565a6e;
+  --color-border:#2c3040;
+  --color-border-strong:#3c4155;
+  --color-border-interactive:#4c9aff;
+  --color-action:#4c9aff; --color-action-hover:#6fb0ff; --color-action-press:#2e82f0; --color-on-action:#0a0f1a;
+  --color-brand:#4c9aff; --color-brand-tint:#152438;
+  --color-link:#6fb0ff; --color-link-hover:#8fc2ff; --color-link-visited:#6fb0ff;
+  --color-success:#33ce88; --color-success-tint:#102a1e;
+  --color-warning:#f2b24d; --color-warning-tint:#2c2310;
+  --color-danger:#ff5f70;  --color-danger-tint:#2e1417;
+  --color-info:#4c9aff;    --color-info-tint:#152438;
+  --color-positive:#33ce88; --color-positive-tint:#102a1e;
+  --color-negative:#ff5f70; --color-negative-tint:#2e1417;
+  --color-accent-alt-1:#00c875; --color-accent-alt-2:#fdab3d; --color-accent-alt-3:#ff5f70; --color-accent-alt-4:#9d7be8; --color-accent-alt-5:#66abfc;
+  --color-surface-hover:#252938;
+  --color-selection-bg:color-mix(in srgb, #4c9aff 32%, transparent); --color-selection-text:#f5f6f8;
+  --scrollbar-thumb:#3c4155;
+  --signature-band-tint:#152438;
+}
+
+/* Theme-scoped component tweaks (established pattern): Vibe's blue
+   selected-state focus ring on text controls, and the hover-lift on cards
+   is deliberately NOT applied — Vibe product surfaces stay flat. */
+html[data-theme="moday"] .fg-input:focus,
+html[data-theme="moday"] .fg-select select:focus {
+  box-shadow: 0 0 0 3px var(--_primary-sel);
+}
+
+/* ── Accent overrides (data-accent) — re-point --color-action only ── */
+html[data-theme="moday"][data-accent="purple"] {
+  --color-action: var(--_dark-purple); --color-action-hover: #6344a3; --color-action-press: #533a87; --color-on-action: #ffffff;
+}
+html[data-theme="moday"][data-accent="green"] {
+  --color-action: var(--_grass-green); --color-action-hover: #116846; --color-action-press: #0d523a; --color-on-action: #ffffff;
+}
+
+/* ── Typeface-set overrides (data-typeface-set) ──────────────────────────
+   Unset = the theme default ("vibe": Figtree body + Poppins titles).
+   "figtree" runs Figtree across all four slots (the denser in-product look);
+   "system" is inherited from contract.css. */
+html[data-theme="moday"][data-typeface-set="figtree"] {
+  --font-display: 'Figtree', system-ui, sans-serif;
+  --font-body:    'Figtree', system-ui, sans-serif;
+  --font-mono:    ui-monospace, 'SF Mono', Menlo, monospace;
+  --font-accent:  'Figtree', system-ui, sans-serif;
+  --type-display-tracking: -0.02em; --type-title-tracking: -0.02em;
+}

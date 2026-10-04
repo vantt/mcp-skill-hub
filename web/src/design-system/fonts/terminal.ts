@@ -1,0 +1,30 @@
+import '@fontsource/jetbrains-mono/latin-400.css';
+import '@fontsource/jetbrains-mono/latin-ext-400.css';
+import '@fontsource/jetbrains-mono/vietnamese-400.css';
+import '@fontsource/jetbrains-mono/latin-500.css';
+import '@fontsource/jetbrains-mono/latin-ext-500.css';
+import '@fontsource/jetbrains-mono/vietnamese-500.css';
+import '@fontsource/jetbrains-mono/latin-600.css';
+import '@fontsource/jetbrains-mono/latin-ext-600.css';
+import '@fontsource/jetbrains-mono/vietnamese-600.css';
+import '@fontsource/jetbrains-mono/latin-700.css';
+import '@fontsource/jetbrains-mono/latin-ext-700.css';
+import '@fontsource/jetbrains-mono/vietnamese-700.css';
+
+import '@fontsource/ibm-plex-mono/latin-300.css';
+import '@fontsource/ibm-plex-mono/latin-ext-300.css';
+import '@fontsource/ibm-plex-mono/vietnamese-300.css';
+import '@fontsource/ibm-plex-mono/latin-400.css';
+import '@fontsource/ibm-plex-mono/latin-ext-400.css';
+import '@fontsource/ibm-plex-mono/vietnamese-400.css';
+import '@fontsource/ibm-plex-mono/latin-500.css';
+import '@fontsource/ibm-plex-mono/latin-ext-500.css';
+import '@fontsource/ibm-plex-mono/vietnamese-500.css';
+import '@fontsource/ibm-plex-mono/latin-600.css';
+import '@fontsource/ibm-plex-mono/latin-ext-600.css';
+import '@fontsource/ibm-plex-mono/vietnamese-600.css';
+
+import '@fontsource/sometype-mono/latin-400.css';
+import '@fontsource/sometype-mono/latin-ext-400.css';
+import '@fontsource/sometype-mono/latin-500.css';
+import '@fontsource/sometype-mono/latin-ext-500.css';
