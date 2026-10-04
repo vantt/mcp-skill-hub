@@ -1,0 +1,41 @@
+{
+  "skill_id": "review-skill",
+  "name": "Review Skill",
+  "description": "Review changed code safely.",
+  "status": "active",
+  "path": "skills/core/review-skill/SKILL.md",
+  "catalog_snapshot": "<DIGEST>",
+  "content": "---\nname: review-skill\ndescription: Review changed code safely.\nlicense: Apache-2.0\n---\n\n# Review\n\nReview carefully.\n",
+  "content_digest": "<DIGEST>",
+  "state_basis": "canonical",
+  "lifecycle_state": "active",
+  "routing_eligible": true,
+  "diverged": false,
+  "routing": {
+    "operations": [
+      "review"
+    ],
+    "triggers": [
+      "review changed code"
+    ],
+    "not_for": [
+      "write prose"
+    ],
+    "min_scope": "multi_step"
+  },
+  "resources": [
+    {
+      "path": "skills/core/review-skill/SKILL.md",
+      "kind": "instructions",
+      "digest": "<DIGEST>",
+      "size_bytes": 117
+    },
+    {
+      "path": "skills/core/review-skill/references/checks.md",
+      "kind": "reference",
+      "digest": "<DIGEST>",
+      "size_bytes": 21
+    }
+  ]
+}
+

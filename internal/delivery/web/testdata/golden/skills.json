@@ -1,0 +1,27 @@
+{
+  "schema_version": "1",
+  "status": "ok",
+  "summary": "1 skill(s).",
+  "items": [
+    {
+      "id": "review-skill",
+      "summary": "Review Skill",
+      "impact": "State: active; collection: core."
+    }
+  ],
+  "suggested_actions": [],
+  "warnings": [],
+  "error": null,
+  "skills": [
+    {
+      "id": "review-skill",
+      "state": "active",
+      "lifecycle_state": "active",
+      "active_locally": true,
+      "routing_eligible": true,
+      "collection": "core",
+      "name": "Review Skill"
+    }
+  ]
+}
+

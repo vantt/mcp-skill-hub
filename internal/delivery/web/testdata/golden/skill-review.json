@@ -1,0 +1,105 @@
+{
+  "schema_version": "1",
+  "status": "ok",
+  "summary": "Review for skill review-skill: Skill is active and available for agent routing.",
+  "items": [
+    {
+      "id": "status",
+      "summary": "active",
+      "impact": "Lifecycle: active. Served generation: gen-<ID>."
+    },
+    {
+      "id": "validity",
+      "summary": "Canonical files valid.",
+      "impact": "Validated offline against canonical schema."
+    },
+    {
+      "id": "readiness",
+      "summary": "Ready for activation.",
+      "impact": "Activation requirements check."
+    },
+    {
+      "id": "resources",
+      "summary": "3 canonical file(s), 720 bytes.",
+      "impact": "Disk resource inventory."
+    },
+    {
+      "id": "git",
+      "summary": "Git clean.",
+      "impact": "Repository change tracking."
+    },
+    {
+      "id": "next_action",
+      "summary": "Skill is active and available for agent routing.",
+      "impact": "Recommended next step."
+    }
+  ],
+  "suggested_actions": [],
+  "warnings": [],
+  "error": null,
+  "skill_id": "review-skill",
+  "collection": "core",
+  "name": "Review Skill",
+  "description": "Review changed code safely.",
+  "lifecycle_state": "active",
+  "active_locally": true,
+  "routing_eligible": true,
+  "valid": true,
+  "activation_readiness": {
+    "ready": true,
+    "untouched_scaffold": false
+  },
+  "resource_status": {
+    "entrypoint_path": "skills/core/review-skill/SKILL.md",
+    "entrypoint_digest": "<DIGEST>",
+    "resource_count": 3,
+    "total_bytes": 720,
+    "resources": [
+      {
+        "path": "skills/core/review-skill/SKILL.md",
+        "digest": "<DIGEST>",
+        "size_bytes": 117
+      },
+      {
+        "path": "skills/core/review-skill/references/checks.md",
+        "digest": "<DIGEST>",
+        "size_bytes": 21
+      },
+      {
+        "path": "skills/core/review-skill/skill.meta.yaml",
+        "digest": "<DIGEST>",
+        "size_bytes": 582
+      }
+    ]
+  },
+  "canonical_facts": {
+    "known": true,
+    "collection": "core",
+    "path": "skills/core/review-skill",
+    "status": "active",
+    "valid": true,
+    "entrypoint_path": "skills/core/review-skill/SKILL.md"
+  },
+  "served_facts": {
+    "known": true,
+    "indexed": true,
+    "generation": "gen-<ID>",
+    "catalog_snapshot": "<DIGEST>",
+    "name": "Review Skill",
+    "description": "Review changed code safely.",
+    "status": "active",
+    "servable": true,
+    "resource_count": 2,
+    "total_bytes": 138
+  },
+  "diverged": false,
+  "provenance": {
+    "created_by": "skillhub"
+  },
+  "git": {
+    "configured": true,
+    "dirty": false
+  },
+  "next_action": "Skill is active and available for agent routing."
+}
+
