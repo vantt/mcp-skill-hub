@@ -89,7 +89,7 @@ func (adapter *Server) registerSourceTools(server *mcp.Server) {
 			CandidateID: input.CandidateID, Decision: input.Decision, DecisionReason: input.DecisionReason,
 			SourceID: input.SourceID, Adapter: input.Adapter, Ref: input.Ref, SourcePath: input.SourcePath,
 			License: input.License, Trust: input.Trust, Cadence: input.Cadence, SkillID: input.SkillID,
-			NewSkillID: input.NewSkillID,
+			NewSkillID:        input.NewSkillID,
 			MonitoringEnabled: monitor, IdempotencyKey: input.IdempotencyKey,
 		})
 		if err != nil {

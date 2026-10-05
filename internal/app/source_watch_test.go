@@ -374,9 +374,9 @@ func TestSourceWatchDotGitReuseDoesNotDuplicate(t *testing.T) {
 
 	// 2. Watch without .git - must reuse the existing source
 	prev2, err := service.PreviewSourceWatch(ctx, root, SourceWatchInput{
-		Locator:  "https://github.com/example/skills",
-		SkillID:  "consumer-review",
-		Cadence:  "weekly",
+		Locator: "https://github.com/example/skills",
+		SkillID: "consumer-review",
+		Cadence: "weekly",
 	})
 	if err != nil || prev2.Error != nil {
 		t.Fatalf("prev2 failed: %v, %#v", err, prev2.Error)

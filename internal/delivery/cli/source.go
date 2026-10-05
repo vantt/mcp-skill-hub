@@ -13,7 +13,7 @@ import (
 )
 
 type sourceFlags struct {
-	workspace, locator, reason, status, decision, sourceID, adapter, ref, sourcePath, license, trust, cadence, skillID, newSkillID string
+	workspace, reason, status, decision, sourceID, adapter, ref, sourcePath, license, trust, cadence, skillID, newSkillID string
 	proposalID, proposalDigest, baseVersion, idempotencyKey                                                            string
 	jsonOutput, monitoring, yes                                                                                        bool
 	skills                                                                                                              []string

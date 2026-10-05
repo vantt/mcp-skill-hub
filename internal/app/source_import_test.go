@@ -619,8 +619,8 @@ func TestSourceImportMoreDiscoversNewAndSkipsImported(t *testing.T) {
 	if len(prop2.Importable) != 0 {
 		t.Fatalf("expected 0 importable on re-preview, got %d", len(prop2.Importable))
 	}
-	if prop2.Result.Status != StatusOK {
-		t.Fatalf("expected StatusOK on zero importable, got %v", prop2.Result.Status)
+	if prop2.Status != StatusOK {
+		t.Fatalf("expected StatusOK on zero importable, got %v", prop2.Status)
 	}
 	if len(prop2.Diff.Added) != 0 {
 		t.Fatalf("expected zero diff added, got %v", prop2.Diff.Added)

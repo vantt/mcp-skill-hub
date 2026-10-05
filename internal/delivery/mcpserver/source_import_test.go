@@ -150,7 +150,6 @@ func TestSourceImportMCPPreviewAndConfirm(t *testing.T) {
 		t.Fatalf("status = %q, want draft", getResult.Result.Status)
 	}
 
-
 	// Verify no learning link file was created for the imported skill
 	linkFiles, _ := filepath.Glob(filepath.Join(root, "sources", "skills", "LINK-mcp-agent-skill--*.yaml"))
 	if len(linkFiles) > 0 {

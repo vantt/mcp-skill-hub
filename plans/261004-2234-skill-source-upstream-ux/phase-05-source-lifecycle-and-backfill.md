@@ -79,7 +79,7 @@ Do not modify any other file.
 - [x] Task 5.3 grouped list + import-more
 - [x] Task 5.4 backfill
 - [x] Task 5.5 status actions
-- [ ] Task 5.6 `make check`
+- [x] Task 5.6 `make check`
 
 ## Success criteria
 

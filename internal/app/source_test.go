@@ -484,7 +484,7 @@ func TestSourceListRolesAndReferencingSkills(t *testing.T) {
 	}{
 		{"skill-a", "src-upstream"},
 		{"skill-c", "src-both"},
-	}{
+	} {
 		prev, err := skillService.PreviewCreate(context.Background(), root, skill.CreateInput{
 			ID:          sk.id,
 			Collection:  "default",
@@ -517,7 +517,7 @@ func TestSourceListRolesAndReferencingSkills(t *testing.T) {
 	}{
 		{"LINK-skill-b--src-learning", "skill-b", "src-learning"},
 		{"LINK-skill-c--src-both", "skill-c", "src-both"},
-	}{
+	} {
 		linkDoc := sourcepkg.Link{
 			SchemaVersion: 1,
 			ID:            lnk.id,

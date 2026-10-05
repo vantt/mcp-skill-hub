@@ -151,61 +151,12 @@ func (service SourceService) PreviewAttach(ctx context.Context, path string, inp
 		return SourceProposal{}, err
 	}
 
-	var sourceRecord sourcepkg.Record
-	var newSource bool
-
-	if hasLocator {
-		if prop := validateSourceWatchLocator(input.Locator); prop != nil {
-			return *prop, nil
-		}
-		adapter, ok := service.Adapters["git"]
-		if !ok {
-			return SourceProposal{}, fmt.Errorf("git adapter is not configured")
-		}
-		route, rProp := resolveSourceWatchRoute(ctx, adapter, input.Locator, input.Ref, input.Path)
-		if rProp != nil {
-			return *rProp, nil
-		}
-		watchInput := SourceWatchInput{
-			Locator:           input.Locator,
-			SourceID:          input.SourceID,
-			Ref:               input.Ref,
-			Path:              input.Path,
-			Cadence:           input.Cadence,
-			MonitoringEnabled: input.MonitoringEnabled,
-			Trust:             input.Trust,
-			License:           input.License,
-		}
-		cfg, cProp := deriveSourceWatchConfig(watchInput, route)
-		if cProp != nil {
-			return *cProp, nil
-		}
-		if collisionProp := checkExistingSourceCollisions(records, cfg); collisionProp != nil {
-			if collisionProp.Error != nil {
-				return *collisionProp, nil
-			}
-			sourceRecord = collisionProp.Source
-		} else {
-			record, _, recProp, bErr := buildSourceWatchRecord(ctx, adapter, cfg, "")
-			if bErr != nil {
-				return SourceProposal{}, bErr
-			}
-			if recProp != nil {
-				return *recProp, nil
-			}
-			sourceRecord = record
-			newSource = true
-		}
-	} else {
-		for i := range records {
-			if records[i].ID == input.SourceID {
-				sourceRecord = records[i]
-				break
-			}
-		}
-		if sourceRecord.ID == "" {
-			return SourceProposal{Result: ErrorResult(NewInvalidRequestError(fmt.Sprintf("source %q not found", input.SourceID), "Check configured sources with skillhub source list."))}, nil
-		}
+	sourceRecord, newSource, prop, err := service.resolveAttachSource(ctx, input, records)
+	if err != nil {
+		return SourceProposal{}, err
+	}
+	if prop != nil {
+		return *prop, nil
 	}
 
 	linkID := fmt.Sprintf("LINK-%s--%s", skillID, sourceRecord.ID)
@@ -279,6 +230,58 @@ func (service SourceService) PreviewAttach(ctx context.Context, path string, inp
 		return SourceProposal{}, err
 	}
 	return proposal, nil
+}
+
+func (service SourceService) resolveAttachSource(ctx context.Context, input SourceAttachInput, records []sourcepkg.Record) (sourcepkg.Record, bool, *SourceProposal, error) {
+	if strings.TrimSpace(input.Locator) != "" {
+		if prop := validateSourceWatchLocator(input.Locator); prop != nil {
+			return sourcepkg.Record{}, false, prop, nil
+		}
+		adapter, ok := service.Adapters["git"]
+		if !ok {
+			return sourcepkg.Record{}, false, nil, fmt.Errorf("git adapter is not configured")
+		}
+		route, rProp := resolveSourceWatchRoute(ctx, adapter, input.Locator, input.Ref, input.Path)
+		if rProp != nil {
+			return sourcepkg.Record{}, false, rProp, nil
+		}
+		watchInput := SourceWatchInput{
+			Locator:           input.Locator,
+			SourceID:          input.SourceID,
+			Ref:               input.Ref,
+			Path:              input.Path,
+			Cadence:           input.Cadence,
+			MonitoringEnabled: input.MonitoringEnabled,
+			Trust:             input.Trust,
+			License:           input.License,
+		}
+		cfg, cProp := deriveSourceWatchConfig(watchInput, route)
+		if cProp != nil {
+			return sourcepkg.Record{}, false, cProp, nil
+		}
+		if collisionProp := checkExistingSourceCollisions(records, cfg); collisionProp != nil {
+			if collisionProp.Error != nil {
+				return sourcepkg.Record{}, false, collisionProp, nil
+			}
+			return collisionProp.Source, false, nil, nil
+		}
+		record, _, recProp, bErr := buildSourceWatchRecord(ctx, adapter, cfg, "")
+		if bErr != nil {
+			return sourcepkg.Record{}, false, nil, bErr
+		}
+		if recProp != nil {
+			return sourcepkg.Record{}, false, recProp, nil
+		}
+		return record, true, nil, nil
+	}
+
+	for i := range records {
+		if records[i].ID == input.SourceID {
+			return records[i], false, nil, nil
+		}
+	}
+	prop := SourceProposal{Result: ErrorResult(NewInvalidRequestError(fmt.Sprintf("source %q not found", input.SourceID), "Check configured sources with skillhub source list."))}
+	return sourcepkg.Record{}, false, &prop, nil
 }
 
 func (service SourceService) PreviewDetach(ctx context.Context, path, skillID, sourceID string) (SourceProposal, error) {
