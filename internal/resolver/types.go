@@ -222,6 +222,10 @@ type Skill struct {
 	EquivalentTo    []string              `json:"equivalent_to,omitempty"`
 	Equivalence     []EquivalenceRelation `json:"equivalence,omitempty"`
 	Reviewed        bool                  `json:"reviewed"`
+	Examples        []string              `json:"examples,omitempty"`
+	CounterExamples []string              `json:"counter_examples,omitempty"`
+	Topics          []string              `json:"topics,omitempty"`
+	Technologies    []string              `json:"technologies,omitempty"`
 }
 
 type SearchHit struct {

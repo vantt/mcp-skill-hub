@@ -6,7 +6,7 @@
   "policy_revision": "sha256:3cf55442eebcc50c65e730dfa22ad4783b3befe2bae5e5123e2268f035f2830b",
   "protocol_schema": "1",
   "normalization_version": "fts-rules-v1",
-  "index_version": "sqlite-fts5-v2",
+  "index_version": "sqlite-fts5-v3",
   "fact_provider_fixture": "request-fixture",
   "fact_provider_version": "v1",
   "seed": 260929,

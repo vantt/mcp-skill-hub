@@ -534,3 +534,62 @@ func TestCatalogBuildAndValidateParityOnFrontmatterMismatch(t *testing.T) {
 		t.Fatalf("expected error mentioning WRONG_NAME, got: %v", err)
 	}
 }
+
+func TestSkillFTSIndexesExamplesAndKeywords(t *testing.T) {
+	t.Parallel()
+	root := newWorkspace(t)
+	writeCanonical(t, root, "skills/core/routed/skill.meta.yaml", `schema_version: 1
+id: routed
+name: Routed Skill
+status: active
+description: Routed skill for tests.
+topics: [testing, quality]
+technologies: [go, sqlite]
+routing:
+  triggers: [run test]
+  not_for: [build web]
+  min_scope: single_step
+  examples: [run unit tests with coverage, check performance metrics]
+  counter_examples: [deploy to production]
+`)
+	writeCanonical(t, root, "skills/core/routed/SKILL.md", "# Routed Skill\n")
+	build(t, root, BuildOptions{})
+
+	handle, err := OpenCurrent(context.Background(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer handle.Close()
+
+	var examples, keywords string
+	err = handle.DB.QueryRow(`SELECT examples, keywords FROM skill_fts WHERE skill_id='routed'`).Scan(&examples, &keywords)
+	if err != nil {
+		t.Fatalf("query skill_fts examples and keywords: %v", err)
+	}
+	expectedExamples := "run unit tests with coverage check performance metrics"
+	if examples != expectedExamples {
+		t.Fatalf("examples = %q, want %q", examples, expectedExamples)
+	}
+	expectedKeywords := "testing quality go sqlite"
+	if keywords != expectedKeywords {
+		t.Fatalf("keywords = %q, want %q", keywords, expectedKeywords)
+	}
+
+	var metadataCategories []string
+	rows, err := handle.DB.Query(`SELECT DISTINCT category FROM routing_metadata WHERE skill_id='routed' ORDER BY category`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cat string
+		if err := rows.Scan(&cat); err != nil {
+			t.Fatal(err)
+		}
+		metadataCategories = append(metadataCategories, cat)
+	}
+	joinedCats := strings.Join(metadataCategories, ",")
+	if !strings.Contains(joinedCats, "example") || !strings.Contains(joinedCats, "counter_example") {
+		t.Fatalf("categories = %v, want both example and counter_example", metadataCategories)
+	}
+}

@@ -22,7 +22,7 @@ const (
 	EvaluationNormalizationVersion = "fts-rules-v1"
 	// EvaluationIndexVersion identifies the SQLite FTS projection consumed by the
 	// production resolver. It changes when behavior-affecting index semantics change.
-	EvaluationIndexVersion = "sqlite-fts5-v2"
+	EvaluationIndexVersion = "sqlite-fts5-v3"
 	// EvaluationFactProviderFixture identifies facts embedded in committed evaluation
 	// requests. No live fact provider is consulted during replay.
 	EvaluationFactProviderFixture = "request-fixture"
