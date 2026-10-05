@@ -1,7 +1,7 @@
 ---
 phase: 12
 title: "Calibration with recorded evidence"
-status: pending
+status: done
 priority: P2
 effort: 4h
 dependencies: [10]
@@ -43,13 +43,13 @@ Modify (only if a change is applied):
 
 ## Steps
 
-- [ ] **1. Grid runner.**
+- [x] **1. Grid runner.**
   Pass: `SKILLHUB_CALIBRATE=1 go test -count=1 -run RoutingCalibration -v ./internal/app/` prints the full table; `go test -count=1 -run RoutingCalibration ./internal/app/` (without the variable) reports the test as skipped.
-- [ ] **2. Report** with the full table and the decision.
+- [x] **2. Report** with the full table and the decision.
   Pass: `reports/routing-calibration-report.md` exists with the commit hash and every grid row.
-- [ ] **3. Apply or decline** per the rule.
+- [x] **3. Apply or decline** per the rule.
   Pass: `go test -count=1 ./internal/resolver/ ./internal/evaluation/ ./internal/app/` → `ok` (golden-v1 gates and routing gate pass).
-- [ ] **4. Gate.** Pass: `make check` exits 0.
+- [x] **4. Gate.** Pass: `make check` exits 0.
 
 ## Risks
 
@@ -65,3 +65,7 @@ Revert the constants commit; the report stays as a record.
 ## Failure protocol
 
 Follow `plan.md` → "Executor notes" → "Failure protocol". Never apply a change whose evidence is not in the report. Write `reports/<agent>-<YYMMDD-HHMM>-calibration.md` if blocked, set `status: blocked`, report the blocker.
+
+## Implementation Note
+
+Implemented policy calibration with recorded evidence: created the grid runner in `internal/app/routing_calibration_test.go` behind `SKILLHUB_CALIBRATE=1`; evaluated 162 parameter combinations over policy-file thresholds and weights along with one-off discount constant and FTS weight variants; selected the optimal policy (`applicability_floor: 0.16`, `minimum_margin: 0.04`, `weights.trigger: 0.44`, `weights.not_for_penalty: 0.36`) which improved Precision@1 to 0.6220 (+0.0244) and Recall to 0.6071 (+0.0238) while improving FPR to 0.1062 and passing all golden-v1 held-out gates; updated `DefaultPolicy`, regenerated `cli-manifest-v1.json`, updated `gate-v1.json` thresholds, and recorded full evidence in `reports/routing-calibration-report.md`.

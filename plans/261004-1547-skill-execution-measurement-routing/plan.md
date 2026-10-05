@@ -84,7 +84,7 @@ Three user-accepted workstreams, executed as sequential phases (1–5, 5a, 5b ar
 | 9 | [Resolver routing features](./phase-09-resolver-routing-features.md) | 1 | 8h | Done |
 | 10 | [Routing eval command, corpus, CI gate](./phase-10-routing-eval-and-gate.md) | 9 | 10h | Done |
 | 11 | [Metadata lint (routing and runtime hints)](./phase-11-metadata-lint.md) | 5b, 9 | 8h | Done |
-| 12 | [Calibration with recorded evidence](./phase-12-calibration.md) | 10 | 4h | Pending |
+| 12 | [Calibration with recorded evidence](./phase-12-calibration.md) | 10 | 4h | Done |
 | 12a | [WebUI runtime parity](./phase-12a-webui-runtime-parity.md) | 5b (functional); after 7 for file ownership | 8h | Pending |
 | 13 | [Documentation](./phase-13-documentation.md) | 1–12, 12a | 8h | Pending |
 
