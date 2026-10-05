@@ -23,7 +23,52 @@ import (
 	transportclient "github.com/go-git/go-git/v5/plumbing/transport/client"
 	githttp "github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/go-git/go-git/v5/storage/memory"
+	"github.com/gofrs/flock"
 )
+
+var (
+	ErrMirrorBusy   = errors.New("another Skill Hub process is using the repository cache; retry shortly")
+	ErrPathNotFound = errors.New("scoped path not found in commit tree")
+)
+
+const (
+	mirrorLockTimeout    = 30 * time.Second
+	mirrorLockRetryDelay = 25 * time.Millisecond
+)
+
+func withMirrorLock(ctx context.Context, mirror string, shared bool, fn func() error) error {
+	lockPath := mirror + ".lock"
+	if err := os.MkdirAll(filepath.Dir(lockPath), 0o755); err != nil {
+		return err
+	}
+	lock := flock.New(lockPath)
+	waitContext, cancel := context.WithTimeout(ctx, mirrorLockTimeout)
+	defer cancel()
+
+	var ok bool
+	var err error
+	if shared {
+		ok, err = lock.TryRLockContext(waitContext, mirrorLockRetryDelay)
+	} else {
+		ok, err = lock.TryLockContext(waitContext, mirrorLockRetryDelay)
+	}
+	if err != nil {
+		if errors.Is(waitContext.Err(), context.DeadlineExceeded) {
+			return ErrMirrorBusy
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return fmt.Errorf("acquire mirror lock: %w", err)
+	}
+	if !ok {
+		return ErrMirrorBusy
+	}
+	defer func() {
+		_ = lock.Unlock()
+	}()
+	return fn()
+}
 
 // go-git's transport registry is process-global. Serialize temporary transport
 // installation so unrelated Git operations can never inherit this source's
@@ -166,15 +211,24 @@ func (adapter GitRepositoryAdapter) Diff(ctx context.Context, source Source, fro
 	if !validGitObject(from.Value) || !validGitObject(to.Value) {
 		return ChangeSet{}, ErrInvalidLocator
 	}
-	repository, err := adapter.openMirror(source.Locator.Repository)
+	mirror, err := adapter.mirrorPath(source.Locator.Repository)
 	if err != nil {
 		return ChangeSet{}, err
 	}
-	fromFiles, err := adapter.revisionFiles(ctx, repository, source, from)
-	if err != nil {
-		return ChangeSet{}, err
-	}
-	toFiles, err := adapter.revisionFiles(ctx, repository, source, to)
+	var fromFiles, toFiles map[string]gitFile
+	err = withMirrorLock(ctx, mirror, true, func() error {
+		repository, err := adapter.openMirrorLocked(mirror)
+		if err != nil {
+			return err
+		}
+		var fromErr, toErr error
+		fromFiles, fromErr = adapter.revisionFiles(ctx, repository, source, from)
+		if fromErr != nil {
+			return fromErr
+		}
+		toFiles, toErr = adapter.revisionFiles(ctx, repository, source, to)
+		return toErr
+	})
 	if err != nil {
 		return ChangeSet{}, err
 	}
@@ -215,41 +269,53 @@ func (adapter GitRepositoryAdapter) Read(ctx context.Context, source Source, rev
 	if !validGitObject(revision.Value) || !safeResourcePath(resourcePath) {
 		return nil, ErrInvalidLocator
 	}
-	repository, err := adapter.openMirror(source.Locator.Repository)
+	mirror, err := adapter.mirrorPath(source.Locator.Repository)
 	if err != nil {
 		return nil, err
 	}
-	commit, err := adapter.verifiedCommit(repository, source, revision)
+	var data []byte
+	err = withMirrorLock(ctx, mirror, true, func() error {
+		repository, err := adapter.openMirrorLocked(mirror)
+		if err != nil {
+			return err
+		}
+		commit, err := adapter.verifiedCommit(repository, source, revision)
+		if err != nil {
+			return err
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		root, err := commit.Tree()
+		if err != nil {
+			return err
+		}
+		joined := resourcePath
+		if source.Locator.Path != "" {
+			joined = strings.TrimSuffix(source.Locator.Path, "/") + "/" + resourcePath
+		}
+		file, err := root.File(joined)
+		if err != nil {
+			return err
+		}
+		if file.Mode == filemode.Symlink || (file.Mode != filemode.Regular && file.Mode != filemode.Executable) {
+			return ErrInvalidLocator
+		}
+		if file.Size > adapter.MaxFileSize {
+			return &LimitExceededError{Limit: "file_size", Actual: file.Size, Max: adapter.MaxFileSize, Path: resourcePath}
+		}
+		reader, err := file.Reader()
+		if err != nil {
+			return err
+		}
+		defer reader.Close()
+		data, err = boundedRead(reader, min64(adapter.MaxBytes, adapter.MaxFileSize))
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	root, err := commit.Tree()
-	if err != nil {
-		return nil, err
-	}
-	joined := resourcePath
-	if source.Locator.Path != "" {
-		joined = strings.TrimSuffix(source.Locator.Path, "/") + "/" + resourcePath
-	}
-	file, err := root.File(joined)
-	if err != nil {
-		return nil, err
-	}
-	if file.Mode == filemode.Symlink || (file.Mode != filemode.Regular && file.Mode != filemode.Executable) {
-		return nil, ErrInvalidLocator
-	}
-	if file.Size > adapter.MaxFileSize {
-		return nil, &LimitExceededError{Limit: "file_size", Actual: file.Size, Max: adapter.MaxFileSize, Path: resourcePath}
-	}
-	reader, err := file.Reader()
-	if err != nil {
-		return nil, err
-	}
-	defer reader.Close()
-	return boundedRead(reader, min64(adapter.MaxBytes, adapter.MaxFileSize))
+	return data, nil
 }
 
 func (adapter GitRepositoryAdapter) List(ctx context.Context, source Source, revision Revision, scope Scope) ([]Resource, error) {
@@ -257,29 +323,41 @@ func (adapter GitRepositoryAdapter) List(ctx context.Context, source Source, rev
 	if scope.Prefix != "" && !safeResourcePath(scope.Prefix) {
 		return nil, ErrInvalidLocator
 	}
-	repository, err := adapter.openMirror(source.Locator.Repository)
+	mirror, err := adapter.mirrorPath(source.Locator.Repository)
 	if err != nil {
 		return nil, err
 	}
-	files, err := adapter.revisionFiles(ctx, repository, source, revision)
+	var resources []Resource
+	err = withMirrorLock(ctx, mirror, true, func() error {
+		repository, err := adapter.openMirrorLocked(mirror)
+		if err != nil {
+			return err
+		}
+		files, err := adapter.revisionFiles(ctx, repository, source, revision)
+		if err != nil {
+			return err
+		}
+		resources = make([]Resource, 0, len(files))
+		var total int64
+		for name, item := range files {
+			if scope.Prefix != "" && name != scope.Prefix && !strings.HasPrefix(name, strings.TrimSuffix(scope.Prefix, "/")+"/") {
+				continue
+			}
+			total += item.size
+			if total > adapter.MaxBytes {
+				return &LimitExceededError{Limit: "bytes", Actual: total, Max: adapter.MaxBytes}
+			}
+			resources = append(resources, Resource{Path: name, Size: item.size})
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, err
-	}
-	resources := make([]Resource, 0, len(files))
-	var total int64
-	for name, item := range files {
-		if scope.Prefix != "" && name != scope.Prefix && !strings.HasPrefix(name, strings.TrimSuffix(scope.Prefix, "/")+"/") {
-			continue
-		}
-		total += item.size
-		if total > adapter.MaxBytes {
-			return nil, &LimitExceededError{Limit: "bytes", Actual: total, Max: adapter.MaxBytes}
-		}
-		resources = append(resources, Resource{Path: name, Size: item.size})
 	}
 	sort.Slice(resources, func(i, j int) bool { return resources[i].Path < resources[j].Path })
 	return resources, nil
 }
+
 
 type gitFile struct {
 	hash plumbing.Hash
@@ -362,6 +440,9 @@ func scopedObjectHash(commit *object.Commit, scopedPath string) (plumbing.Hash, 
 	}
 	entry, err := tree.FindEntry(scopedPath)
 	if err != nil {
+		if errors.Is(err, object.ErrEntryNotFound) || errors.Is(err, object.ErrDirectoryNotFound) || errors.Is(err, object.ErrFileNotFound) {
+			return plumbing.ZeroHash, ErrPathNotFound
+		}
 		return plumbing.ZeroHash, err
 	}
 	return entry.Hash, nil
@@ -374,6 +455,9 @@ func resolveCommit(repository *git.Repository, ref string) (plumbing.Hash, error
 			return plumbing.ZeroHash, err
 		}
 		return head.Hash(), nil
+	}
+	if strings.HasPrefix(ref, "refs/skillhub/commits/") {
+		return plumbing.ZeroHash, fmt.Errorf("Git source ref %q was not found", ref)
 	}
 	clean := strings.TrimPrefix(strings.TrimPrefix(ref, "refs/heads/"), "refs/remotes/origin/")
 	clean = strings.TrimPrefix(clean, "refs/tags/")
@@ -445,11 +529,7 @@ func (adapter GitRepositoryAdapter) mirrorPath(repository string) (string, error
 	return filepath.Join(adapter.CacheRoot, hex.EncodeToString(sum[:16])+".git"), nil
 }
 
-func (adapter GitRepositoryAdapter) openMirror(repository string) (*git.Repository, error) {
-	mirror, err := adapter.mirrorPath(repository)
-	if err != nil {
-		return nil, err
-	}
+func (adapter GitRepositoryAdapter) openMirrorLocked(mirror string) (*git.Repository, error) {
 	info, err := os.Lstat(mirror)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, ErrHistoryUnavailable
@@ -466,12 +546,53 @@ func (adapter GitRepositoryAdapter) openMirror(repository string) (*git.Reposito
 	return git.PlainOpen(mirror)
 }
 
+func (adapter GitRepositoryAdapter) openMirror(repository string) (*git.Repository, error) {
+	mirror, err := adapter.mirrorPath(repository)
+	if err != nil {
+		return nil, err
+	}
+	var repo *git.Repository
+	err = withMirrorLock(context.Background(), mirror, true, func() error {
+		var openErr error
+		repo, openErr = adapter.openMirrorLocked(mirror)
+		return openErr
+	})
+	if err != nil {
+		return nil, err
+	}
+	return repo, nil
+}
+
+func (adapter GitRepositoryAdapter) openOrCloneLocked(ctx context.Context, mirror string, remoteURL string, ref string) (*git.Repository, error) {
+	repo, err := adapter.openMirrorLocked(mirror)
+	if err == nil {
+		return repo, nil
+	}
+	if !errors.Is(err, ErrHistoryUnavailable) {
+		return nil, err
+	}
+	return adapter.syncMirrorLocked(ctx, mirror, remoteURL, ref)
+}
+
 func (adapter GitRepositoryAdapter) syncMirror(ctx context.Context, remoteURL string, ref string) (*git.Repository, string, error) {
 	adapter = adapter.defaults()
 	mirror, err := adapter.mirrorPath(remoteURL)
 	if err != nil {
 		return nil, "", err
 	}
+	var repository *git.Repository
+	err = withMirrorLock(ctx, mirror, false, func() error {
+		var syncErr error
+		repository, syncErr = adapter.syncMirrorLocked(ctx, mirror, remoteURL, ref)
+		return syncErr
+	})
+	if err != nil {
+		return nil, "", err
+	}
+	return repository, mirror, nil
+}
+
+func (adapter GitRepositoryAdapter) syncMirrorLocked(ctx context.Context, mirror string, remoteURL string, ref string) (*git.Repository, error) {
 	timeout := adapter.MirrorTimeout
 	if timeout <= 0 {
 		timeout = DefaultMirrorTimeout
@@ -480,7 +601,7 @@ func (adapter GitRepositoryAdapter) syncMirror(ctx context.Context, remoteURL st
 	defer cancel()
 	var repository *git.Repository
 	created := false
-	err = adapter.withSafeTransport(func() error {
+	err := adapter.withSafeTransport(func() error {
 		info, statErr := os.Lstat(mirror)
 		switch {
 		case errors.Is(statErr, os.ErrNotExist):
@@ -556,13 +677,13 @@ func (adapter GitRepositoryAdapter) syncMirror(ctx context.Context, remoteURL st
 		if created || errors.Is(err, ErrLimitExceeded) {
 			_ = os.RemoveAll(mirror)
 		}
-		return nil, "", fmt.Errorf("Git HTTPS source operation failed: %w", err)
+		return nil, fmt.Errorf("Git HTTPS source operation failed: %w", err)
 	}
 	if err := adapter.checkMirrorSize(mirror); err != nil {
 		_ = os.RemoveAll(mirror)
-		return nil, "", err
+		return nil, err
 	}
-	return repository, mirror, nil
+	return repository, nil
 }
 
 func (adapter GitRepositoryAdapter) withSafeTransport(operation func() error) error {
@@ -749,6 +870,132 @@ func (adapter GitRepositoryAdapter) ListAdvertisedRefs(ctx context.Context, remo
 	return result, nil
 }
 
+// RemoteRefCommit resolves a ref name or branch/tag name to a commit hash from advertised refs without modifying the local mirror.
+func (adapter GitRepositoryAdapter) RemoteRefCommit(ctx context.Context, repository string, ref string) (string, error) {
+	adapter = adapter.defaults()
+	refs, err := adapter.ListAdvertisedRefs(ctx, repository)
+	if err != nil {
+		return "", err
+	}
+	if ref == "" || ref == "HEAD" {
+		for _, item := range refs {
+			if item.Name == "HEAD" {
+				return item.Hash, nil
+			}
+		}
+		return "", fmt.Errorf("Git source ref %q was not found", ref)
+	}
+
+	clean := strings.TrimPrefix(strings.TrimPrefix(ref, "refs/heads/"), "refs/tags/")
+	var candidates []string
+	switch {
+	case strings.HasPrefix(ref, "refs/heads/"):
+		candidates = []string{ref}
+	case strings.HasPrefix(ref, "refs/tags/"):
+		candidates = []string{ref}
+	default:
+		candidates = []string{
+			"refs/heads/" + clean,
+			"refs/tags/" + clean,
+			ref,
+		}
+	}
+
+	refMap := make(map[string]AdvertisedRef, len(refs))
+	for _, item := range refs {
+		refMap[item.Name] = item
+	}
+
+	for _, cand := range candidates {
+		if item, ok := refMap[cand]; ok {
+			if item.PeeledHash != "" {
+				return item.PeeledHash, nil
+			}
+			return item.Hash, nil
+		}
+	}
+	return "", fmt.Errorf("Git source ref %q was not found", ref)
+}
+
+// RevisionAt resolves the revision of a specific commit, fetching it into the mirror at depth 1 if not already present.
+func (adapter GitRepositoryAdapter) RevisionAt(ctx context.Context, source Source, commit string) (Revision, error) {
+	adapter = adapter.withLimits(source.Limits)
+	if !validGitObject(commit) {
+		return Revision{}, ErrInvalidLocator
+	}
+	if _, err := ValidateRemoteURLWithOptions(source.Locator.Repository, URLValidationOptions{AllowFile: adapter.AllowFileProtocol}); err != nil {
+		return Revision{}, err
+	}
+	mirror, err := adapter.mirrorPath(source.Locator.Repository)
+	if err != nil {
+		return Revision{}, err
+	}
+
+	var rev Revision
+	err = withMirrorLock(ctx, mirror, false, func() error {
+		repository, err := adapter.openOrCloneLocked(ctx, mirror, source.Locator.Repository, source.Locator.Ref)
+		if err != nil {
+			return err
+		}
+		hash := plumbing.NewHash(commit)
+		commitObj, err := repository.CommitObject(hash)
+		if err != nil {
+			refSpec := config.RefSpec(commit + ":refs/skillhub/commits/" + commit)
+			remoteConfig := &config.RemoteConfig{
+				Name:  "origin",
+				URLs:  []string{source.Locator.Repository},
+				Fetch: []config.RefSpec{refSpec},
+			}
+			remote := git.NewRemote(repository.Storer, remoteConfig)
+			fetchErr := adapter.withSafeTransport(func() error {
+				timeout := adapter.MirrorTimeout
+				if timeout <= 0 {
+					timeout = DefaultMirrorTimeout
+				}
+				fetchCtx, cancel := context.WithTimeout(ctx, timeout)
+				defer cancel()
+				return remote.FetchContext(fetchCtx, &git.FetchOptions{
+					Depth:    1,
+					Tags:     git.NoTags,
+					Force:    true,
+					RefSpecs: []config.RefSpec{refSpec},
+				})
+			})
+			if fetchErr != nil && !errors.Is(fetchErr, git.NoErrAlreadyUpToDate) {
+				if errors.Is(fetchErr, git.ErrExactSHA1NotSupported) ||
+					strings.Contains(strings.ToLower(fetchErr.Error()), "not our ref") ||
+					strings.Contains(strings.ToLower(fetchErr.Error()), "couldn't find remote ref") {
+					return ErrHistoryUnavailable
+				}
+				if errors.Is(fetchErr, ErrLimitExceeded) {
+					return fetchErr
+				}
+				return fmt.Errorf("fetch commit: %w", fetchErr)
+			}
+			commitObj, err = repository.CommitObject(hash)
+			if err != nil {
+				return ErrHistoryUnavailable
+			}
+		}
+
+		objectHash, err := scopedObjectHash(commitObj, source.Locator.Path)
+		if err != nil {
+			return err
+		}
+		rev = Revision{
+			Kind:          "git-commit",
+			Value:         commit,
+			ContentDigest: Digest([]byte(objectHash.String())),
+			ObservedAt:    adapter.Now().UTC(),
+		}
+		return nil
+	})
+	if err != nil {
+		return Revision{}, err
+	}
+	return rev, nil
+}
+
 // ResolveRefCommit resolves a ref name or SHA to a full commit hash in the local mirror.
 func (adapter GitRepositoryAdapter) ResolveRefCommit(ctx context.Context, remoteURL, ref string) (string, error) {
 	adapter = adapter.defaults()
@@ -766,8 +1013,17 @@ func (adapter GitRepositoryAdapter) ResolveRefCommit(ctx context.Context, remote
 // CommitHasSkill checks if the given commit hash at scopedPath contains a SKILL.md file.
 func (adapter GitRepositoryAdapter) CommitHasSkill(ctx context.Context, remoteURL, ref, commitHash, scopedPath string) (bool, error) {
 	adapter = adapter.defaults()
-	repository, err := adapter.openMirror(remoteURL)
+	mirror, err := adapter.mirrorPath(remoteURL)
 	if err != nil {
+		return false, err
+	}
+	var repository *git.Repository
+	_ = withMirrorLock(ctx, mirror, true, func() error {
+		var openErr error
+		repository, openErr = adapter.openMirrorLocked(mirror)
+		return openErr
+	})
+	if repository == nil {
 		var syncErr error
 		repository, _, syncErr = adapter.syncMirror(ctx, remoteURL, ref)
 		if syncErr != nil {

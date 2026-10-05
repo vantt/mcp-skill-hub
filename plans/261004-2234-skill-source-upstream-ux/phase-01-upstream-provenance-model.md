@@ -89,7 +89,7 @@ Do not modify any other file.
 
 - [x] Task 1.0 overlap check
 - [x] Task 1.1 canonical `files_digest`
-- [ ] Task 1.2 `RevisionAt`, `RemoteRefCommit`, mirror lock
+- [x] Task 1.2 `RevisionAt`, `RemoteRefCommit`, mirror lock
 - [ ] Task 1.3 origin helper + `skill add` fixes
 - [ ] Task 1.4 `make check`
 
