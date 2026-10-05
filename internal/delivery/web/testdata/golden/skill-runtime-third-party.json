@@ -1,0 +1,41 @@
+{
+  "schema_version": "1",
+  "status": "ok",
+  "summary": "Runtime status for skill vendor-skill.",
+  "items": [],
+  "suggested_actions": [],
+  "warnings": null,
+  "error": null,
+  "skill_id": "vendor-skill",
+  "runtime": {
+    "requires": {
+      "bins": [
+        {
+          "name": "python3",
+          "version": ""
+        }
+      ],
+      "env": [
+        "VENDOR_TOKEN"
+      ],
+      "platforms": null
+    },
+    "setup": {
+      "command": "",
+      "check": "python3 scripts/run.py"
+    }
+  },
+  "served": true,
+  "setup": {
+    "state": "review_required",
+    "reason_codes": [
+      "content_review_required"
+    ]
+  },
+  "doctor_command": "skillhub skill doctor vendor-skill",
+  "env_keys": [
+    "VENDOR_TOKEN"
+  ],
+  "env_set_command": "skillhub skill env set vendor-skill <KEY>"
+}
+

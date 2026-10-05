@@ -211,6 +211,24 @@ func doctorReasonCodes(reviewReasons []string, checks []skillruntime.Check) []st
 	return codes
 }
 
+// cachedDoctorResult reads the cached terminal doctor result for a skill
+// if the skill is trusted and declares a runtime spec. An untrusted skill
+// has no cached result by design.
+func cachedDoctorResult(root string, entry DistributedSkill, contentJSON []byte) (*skillruntime.Result, error) {
+	trust, err := evaluateSkillTrust(entry.SkillID, contentJSON, entry.digests)
+	if err != nil {
+		return nil, err
+	}
+	if !trust.Verdict.Trusted || !trust.HasSpec {
+		return nil, nil
+	}
+	result, ok, readErr := skillruntime.ReadCache(root, entry.SkillID, doctorFingerprint(entry.Version, trust.Spec))
+	if readErr != nil || !ok {
+		return nil, readErr
+	}
+	return &result, nil
+}
+
 // setupAnnotation computes the post-ranking setup hint for a recommended
 // skill from its manifest, the platform check, and the cached terminal doctor
 // result. The hub verifies only trust and platform; a doctor-derived state is a
@@ -231,8 +249,8 @@ func setupAnnotation(root string, entry DistributedSkill, contentJSON []byte, pr
 	platform := probe.platform(trust.Spec)
 	var cached *skillruntime.Result
 	// An unreadable doctor cache only means the state stays unknown.
-	if result, ok, readErr := skillruntime.ReadCache(root, entry.SkillID, doctorFingerprint(entry.Version, trust.Spec)); readErr == nil && ok {
-		cached = &result
+	if result, readErr := cachedDoctorResult(root, entry, contentJSON); readErr == nil && result != nil {
+		cached = result
 	}
 	annotation := &resolverpkg.SetupStatus{State: skillruntime.SetupState(false, true, platform, cached)}
 	if annotation.State == skillruntime.StateUnsupportedPlatform {

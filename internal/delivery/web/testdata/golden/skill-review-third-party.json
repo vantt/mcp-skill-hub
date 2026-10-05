@@ -1,0 +1,140 @@
+{
+  "schema_version": "1",
+  "status": "ok",
+  "summary": "Review for skill vendor-skill: Skill is active and available for agent routing.",
+  "items": [
+    {
+      "id": "status",
+      "summary": "active",
+      "impact": "Lifecycle: active. Served generation: gen-<ID>."
+    },
+    {
+      "id": "validity",
+      "summary": "Canonical files valid.",
+      "impact": "Validated offline against canonical schema."
+    },
+    {
+      "id": "readiness",
+      "summary": "Ready for activation.",
+      "impact": "Activation requirements check."
+    },
+    {
+      "id": "resources",
+      "summary": "4 canonical file(s), 1067 bytes.",
+      "impact": "Disk resource inventory."
+    },
+    {
+      "id": "git",
+      "summary": "Git clean.",
+      "impact": "Repository change tracking."
+    },
+    {
+      "id": "next_action",
+      "summary": "Skill is active and available for agent routing.",
+      "impact": "Recommended next step."
+    }
+  ],
+  "suggested_actions": [],
+  "warnings": [],
+  "error": null,
+  "skill_id": "vendor-skill",
+  "collection": "core",
+  "name": "Vendor Skill",
+  "description": "Vendor integration tool.",
+  "lifecycle_state": "active",
+  "active_locally": true,
+  "routing_eligible": true,
+  "valid": true,
+  "activation_readiness": {
+    "ready": true,
+    "untouched_scaffold": false
+  },
+  "resource_status": {
+    "entrypoint_path": "skills/core/vendor-skill/SKILL.md",
+    "entrypoint_digest": "<DIGEST>",
+    "resource_count": 4,
+    "total_bytes": 1067,
+    "resources": [
+      {
+        "path": "skills/core/vendor-skill/SKILL.md",
+        "digest": "<DIGEST>",
+        "size_bytes": 149
+      },
+      {
+        "path": "skills/core/vendor-skill/package.json",
+        "digest": "<DIGEST>",
+        "size_bytes": 19
+      },
+      {
+        "path": "skills/core/vendor-skill/scripts/run.py",
+        "digest": "<DIGEST>",
+        "size_bytes": 39
+      },
+      {
+        "path": "skills/core/vendor-skill/skill.meta.yaml",
+        "digest": "<DIGEST>",
+        "size_bytes": 860
+      }
+    ]
+  },
+  "canonical_facts": {
+    "known": true,
+    "collection": "core",
+    "path": "skills/core/vendor-skill",
+    "status": "active",
+    "valid": true,
+    "entrypoint_path": "skills/core/vendor-skill/SKILL.md"
+  },
+  "served_facts": {
+    "known": true,
+    "indexed": true,
+    "generation": "gen-<ID>",
+    "catalog_snapshot": "<DIGEST>",
+    "name": "Vendor Skill",
+    "description": "Vendor integration tool.",
+    "status": "active",
+    "servable": true,
+    "resource_count": 3,
+    "total_bytes": 207
+  },
+  "diverged": false,
+  "provenance": {
+    "created_by": "skillhub",
+    "source_locator": "https://github.com/vendor/skills",
+    "source_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "git": {
+    "configured": true,
+    "dirty": false
+  },
+  "content_trust": {
+    "third_party": true,
+    "approved": false,
+    "content_digest": "<DIGEST>",
+    "reason_codes": [
+      "content_review_required"
+    ],
+    "approve_command": "skillhub skill edit vendor-skill --approve-content <DIGEST>"
+  },
+  "runtime_hints": {
+    "interpreters": [
+      "python3"
+    ],
+    "dependency_manifests": [
+      "package.json"
+    ],
+    "missing_lockfiles": [
+      "npm: package.json"
+    ],
+    "absolute_install_paths": [
+      "SKILL.md"
+    ],
+    "missing_runtime_block": false,
+    "install_prose_detected": true,
+    "install_cues": [
+      "pip install"
+    ]
+  },
+  "next_action": "Skill is active and available for agent routing."
+}
+

@@ -1,0 +1,16 @@
+{
+  "schema_version": "1",
+  "status": "ok",
+  "summary": "Runtime status for skill review-skill.",
+  "items": [],
+  "suggested_actions": [],
+  "warnings": null,
+  "error": null,
+  "skill_id": "review-skill",
+  "runtime": null,
+  "served": true,
+  "doctor_command": "skillhub skill doctor review-skill",
+  "env_keys": [],
+  "env_set_command": "skillhub skill env set review-skill <KEY>"
+}
+

@@ -1,7 +1,7 @@
 import type { SkillDetail, SkillReviewResult } from '../../api/types';
 import { CopyButton } from '../../components/CopyButton';
 import { StatusBadge } from '../../components/StatusBadge';
-
+import { ContentTrustCard } from './ContentTrustCard';
 const TITLE_VALIDITY = 'Validity';
 const TITLE_READINESS = 'Activation readiness';
 const TITLE_RESOURCES = 'Resources status';
@@ -72,6 +72,11 @@ export function ReviewTab({ skill, review, onGoToEditor }: ReviewTabProps) {
         alignItems: 'start',
       }}
     >
+      {/* Content Trust Card (Third-party only) */}
+      {review?.content_trust?.third_party && (
+        <ContentTrustCard trust={review.content_trust} />
+      )}
+
       {/* Validity Card */}
       <section className="fg-card" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
         <div className="fg-card__title">

@@ -20,12 +20,14 @@ import { EditorTab } from './EditorTab';
 import { ResourcesTab } from './ResourcesTab';
 import { ReviewTab } from './ReviewTab';
 import { UsagePanel } from './UsagePanel';
+import { RuntimeTab } from './RuntimeTab';
 import { useT } from '../../i18n';
 
 const LABEL_TAB_REVIEW = 'Review';
 const LABEL_TAB_EDITOR = 'Editor';
 const LABEL_TAB_RESOURCES = 'Resources';
 const LABEL_TAB_USAGE = 'Usage';
+const LABEL_TAB_RUNTIME = 'Runtime';
 const LABEL_ACTIVATE = 'Activate skill';
 const LABEL_DEPRECATE = 'Deprecate';
 const LABEL_ARCHIVE = 'Archive';
@@ -277,6 +279,15 @@ export function SkillDetailScreen() {
         >
           <span>{LABEL_TAB_USAGE}</span>
         </button>
+        <button
+          type="button"
+          className={`fg-tab ${activeTab === 'runtime' ? 'fg-tab--active' : ''}`}
+          role="tab"
+          aria-selected={activeTab === 'runtime'}
+          onClick={() => setTab('runtime')}
+        >
+          <span>{LABEL_TAB_RUNTIME}</span>
+        </button>
       </div>
 
       {/* Tab Panels */}
@@ -297,6 +308,10 @@ export function SkillDetailScreen() {
       {activeTab === 'resources' && <ResourcesTab skill={skill} />}
 
       {activeTab === 'usage' && <UsagePanel skillId={skill.skill_id} />}
+
+      {activeTab === 'runtime' && (
+        <RuntimeTab skillId={skill.skill_id} runtimeHints={review?.runtime_hints} />
+      )}
       {/* Transition Proposal Preview */}
       {proposalOpen && transitionProposal && (
         <ProposalPreview
