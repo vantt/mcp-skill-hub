@@ -1,0 +1,1 @@
+{"type":"message","sessionId":"sess_sub","cwd":"/test/project","timestamp":"2026-10-04T10:15:00Z","message":{"id":"msg_sub","content":[{"type":"tool_use","id":"toolu_subagent_1","name":"Skill","input":{"skill":"sub-skill"}}]}}

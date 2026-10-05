@@ -1,7 +1,7 @@
 ---
 phase: 8
 title: "Claude Code transcript import"
-status: pending
+status: done
 priority: P2
 effort: 8h
 dependencies: [2, 7]
@@ -52,17 +52,17 @@ Modify:
 
 ## Steps
 
-- [ ] **1. Directory encoding and matching** tests (paths with `.`, `CLAUDE_CONFIG_DIR`, worktree suffix).
+- [x] **1. Directory encoding and matching** tests (paths with `.`, `CLAUDE_CONFIG_DIR`, worktree suffix).
   Pass: `go test -count=1 -run ProjectDirs ./internal/transcripts/` → `ok`.
-- [ ] **2. Scanner** with fixtures: both blocks sharing a `message.id` survive; repeated `tool_use.id` collapses; foreign `cwd` dropped; malformed line counted; subagent file read.
+- [x] **2. Scanner** with fixtures: both blocks sharing a `message.id` survive; repeated `tool_use.id` collapses; foreign `cwd` dropped; malformed line counted; subagent file read.
   Pass: `go test -count=1 ./internal/transcripts/` → `ok`.
-- [ ] **3. Import service:** second import inserts 0; events older than the clamp are not imported; per-tool counts.
+- [x] **3. Import service:** second import inserts 0; events older than the clamp are not imported; per-tool counts.
   Pass: `go test -count=1 -run Transcript ./internal/app/` → `ok`.
-- [ ] **4. Privacy test:** after import, the raw bytes of `telemetry.db` (and its `-wal` if present) do not contain `SENTINEL-TRANSCRIPT-SECRET`.
+- [x] **4. Privacy test:** after import, the raw bytes of `telemetry.db` (and its `-wal` if present) do not contain `SENTINEL-TRANSCRIPT-SECRET`.
   Pass: included in step 3 command → `ok`.
-- [ ] **5. CLI wiring and help.**
+- [x] **5. CLI wiring and help.**
   Pass: `go test -count=1 -run 'Transcript|Help' ./internal/delivery/cli/` → `ok`; `go run ./cmd/skillhub help telemetry` lists `import-transcripts` and `funnel`.
-- [ ] **6. Gate.** Pass: `make check` exits 0.
+- [x] **6. Gate.** Pass: `make check` exits 0.
 
 ## Risks
 
@@ -79,3 +79,6 @@ Revert; imported events age out (14 days raw, 180 days rollups) or `skillhub tel
 ## Failure protocol
 
 Follow `plan.md` → "Executor notes" → "Failure protocol": stop, write `reports/<agent>-<YYMMDD-HHMM>-transcript-import.md`, set `status: blocked`, report the blocker.
+
+## Implementation Note
+Implemented the `internal/transcripts` package to discover project and worktree transcript folders under Claude Code's config directory and scan JSONL tool-use blocks without leaking sensitive arguments or tasks. Added `TranscriptImportService` in `internal/app` with a 14-day retention clamp, sha256-based deterministic event IDs, pre-insertion duplicate checks, and privacy validations. Exposed the functionality through `skillhub telemetry import-transcripts --project <dir>`, returning formatted counts and privacy notices.
