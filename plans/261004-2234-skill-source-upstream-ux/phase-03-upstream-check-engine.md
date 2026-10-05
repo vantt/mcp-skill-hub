@@ -1,6 +1,6 @@
 ---
 title: "Phase 3: Upstream check engine"
-status: in-progress
+status: done
 ---
 
 # Phase 3: Upstream check engine
@@ -113,7 +113,7 @@ Do not modify any other file.
 - [x] Task 3.2 status derivation
 - [x] Task 3.3 check engine + `CheckSources`
 - [x] Task 3.4 status integration
-- [ ] Task 3.5 `make check`
+- [x] Task 3.5 `make check`
 
 ## Success criteria
 
