@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
 	"github.com/vantt/mcp-skill-hub/internal/skill"
 	"github.com/vantt/mcp-skill-hub/internal/skillruntime"
 	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
@@ -301,6 +302,162 @@ func TestSkillUpstream(t *testing.T) {
 		code := Run([]string{"skill", "upstream", "local-skill", "--workspace", root}, &stdout, &stderr)
 		if code != 2 {
 			t.Fatalf("expected exit 2 for non-repository skill, got %d, stdout: %s, stderr: %s", code, stdout.String(), stderr.String())
+		}
+	})
+}
+
+func TestSkillUpdate(t *testing.T) {
+	t.Parallel()
+
+	// 1. Flag parsing tests
+	t.Run("flag parsing", func(t *testing.T) {
+		root := initTestWorkspace(t)
+
+		// --accept with invalid value -> exit 2 naming allowed values
+		var stdout, stderr bytes.Buffer
+		code := Run([]string{"skill", "update", "foo", "--accept", "SKILL.md=theirs", "--workspace", root}, &stdout, &stderr)
+		if code != 2 {
+			t.Fatalf("expected exit 2 on invalid --accept, got %d", code)
+		}
+		errStr := stderr.String()
+		if !strings.Contains(errStr, "upstream") || !strings.Contains(errStr, "local") || !strings.Contains(errStr, "merged") {
+			t.Fatalf("expected allowed values in error, got: %s", errStr)
+		}
+
+		// --manual with missing file -> exit 2
+		stdout.Reset()
+		stderr.Reset()
+		code = Run([]string{"skill", "update", "foo", "--manual", "SKILL.md=/nonexistent/path/file.txt", "--workspace", root}, &stdout, &stderr)
+		if code != 2 {
+			t.Fatalf("expected exit 2 on missing manual file, got %d", code)
+		}
+		if !strings.Contains(stderr.String(), "does not exist") {
+			t.Fatalf("expected missing file error, got: %s", stderr.String())
+		}
+	})
+
+	// 2. Rendering tests
+	t.Run("rendering unresolved with hints", func(t *testing.T) {
+		preview := app.UpstreamUpdatePreview{
+			SkillID:           "docx",
+			SourceID:          "anthropics-skills",
+			BaseCommit:        "3f9c2a1b4d5e",
+			TargetCommit:      "81d04be7c2aa",
+			TargetCommittedAt: "2026-10-03T12:00:00Z",
+			UnchangedCount:    4,
+			Unresolved:        []string{"SKILL.md"},
+			Files: []app.UpstreamFile{
+				{
+					Path:              "SKILL.md",
+					Status:            "both_changed",
+					Conflicts:         1,
+					MergedWithMarkers: "<<<<<<< local\nlocal\n=======\nupstream\n>>>>>>> upstream\n",
+				},
+				{
+					Path:   "scripts/run.sh",
+					Status: "upstream_only",
+					Action: "upstream",
+				},
+				{
+					Path:   "notes.txt",
+					Status: "unchanged",
+				},
+			},
+		}
+
+		var outBuf bytes.Buffer
+		p := termui.New(&outBuf)
+		renderUpstreamUpdatePreview(p, "docx", "https://github.com/anthropics/skills", preview, false)
+		out := outBuf.String()
+
+		// Verify table rows
+		if !strings.Contains(out, "SKILL.md") || !strings.Contains(out, "changed here and upstream") || !strings.Contains(out, "needs decision (1 conflict)") {
+			t.Fatalf("missing SKILL.md row in output:\n%s", out)
+		}
+		if !strings.Contains(out, "scripts/run.sh") || !strings.Contains(out, "changed upstream") || !strings.Contains(out, "take upstream") {
+			t.Fatalf("missing scripts/run.sh row in output:\n%s", out)
+		}
+		if !strings.Contains(out, "4 file(s) unchanged.") {
+			t.Fatalf("missing unchanged count in output:\n%s", out)
+		}
+
+		// Verify three resolution hint lines
+		if !strings.Contains(out, "--accept SKILL.md=upstream   take the upstream file (drops your edits in it)") {
+			t.Fatalf("missing upstream hint in output:\n%s", out)
+		}
+		if !strings.Contains(out, "--accept SKILL.md=local      keep your file") {
+			t.Fatalf("missing local hint in output:\n%s", out)
+		}
+		if !strings.Contains(out, "--manual SKILL.md=<file>     use a file you resolved yourself (no conflict markers)") {
+			t.Fatalf("missing manual hint in output:\n%s", out)
+		}
+	})
+
+	t.Run("rendering clean with pins and trust notice", func(t *testing.T) {
+		preview := app.UpstreamUpdatePreview{
+			SkillID:           "pdf",
+			SourceID:          "anthropics-skills",
+			BaseCommit:        "3f9c2a1b4d5e",
+			TargetCommit:      "81d04be7c2aa",
+			TargetCommittedAt: "2026-10-03T12:00:00Z",
+			UnchangedCount:    2,
+			Files: []app.UpstreamFile{
+				{
+					Path:       "SKILL.md",
+					Status:     "upstream_only",
+					Action:     "upstream",
+					ResultDiff: "--- a/SKILL.md\n+++ b/SKILL.md\n@@ -1 +1 @@\n-old\n+new\n",
+				},
+			},
+			TrustImpact: app.TrustImpact{
+				ReviewRequiredAfterApply: true,
+			},
+			Confirmation: app.ConfirmationPolicy{
+				Confirmation: app.ConfirmationRequirement{
+					Pins: app.ConfirmationPins{
+						ProposalID:     "PROP-12345",
+						ProposalDigest: "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+						BaseVersion:    "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+					},
+				},
+			},
+		}
+
+		var outBuf bytes.Buffer
+		p := termui.New(&outBuf)
+		renderUpstreamUpdatePreview(p, "pdf", "https://github.com/anthropics/skills", preview, false)
+		out := outBuf.String()
+
+		if !strings.Contains(out, "After applying, agents cannot use pdf until you approve the new content:") {
+			t.Fatalf("missing trust notice in output:\n%s", out)
+		}
+		if !strings.Contains(out, "skillhub skill review pdf") {
+			t.Fatalf("missing review command in output:\n%s", out)
+		}
+		if !strings.Contains(out, "No collection files changed.") {
+			t.Fatalf("missing no collection files changed line in output:\n%s", out)
+		}
+		if !strings.Contains(out, "Next: skillhub skill confirm PROP-12345") {
+			t.Fatalf("missing confirm next hint in output:\n%s", out)
+		}
+	})
+
+	// 3. --write-conflicts with an existing target file -> exit 2
+	t.Run("write-conflicts with existing file exits 2", func(t *testing.T) {
+		conflictsDir := t.TempDir()
+		targetFile := filepath.Join(conflictsDir, "SKILL.md")
+		_ = os.WriteFile(targetFile, []byte("existing content"), 0o644)
+
+		files := []app.UpstreamFile{
+			{
+				Path:              "SKILL.md",
+				Conflicts:         1,
+				MergedWithMarkers: "conflict markers",
+			},
+		}
+		err := writeConflictsFiles(conflictsDir, files)
+		if err == nil {
+			t.Fatalf("expected error when conflict file already exists in write-conflicts dir")
 		}
 	})
 }

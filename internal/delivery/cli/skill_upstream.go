@@ -343,6 +343,15 @@ func runSkillUpdate(ctx context.Context, flags skillFlags, stdout, stderr io.Wri
 	}
 
 	p := termui.New(stdout)
+	repoStr := ""
+	if info, err := app.GetSkillUpstream(ctx, flags.workspace, skillID); err == nil {
+		repoStr = info.Repository
+	}
+	renderUpstreamUpdatePreview(p, skillID, repoStr, preview, flags.verbose)
+	return 0
+}
+
+func renderUpstreamUpdatePreview(p *termui.Printer, skillID string, repoURL string, preview app.UpstreamUpdatePreview, verbose bool) {
 	commitDate := dateStr(preview.TargetCommittedAt)
 	b7 := shortSHA(preview.BaseCommit)
 	u7 := shortSHA(preview.TargetCommit)
@@ -351,8 +360,14 @@ func runSkillUpdate(ctx context.Context, flags skillFlags, stdout, stderr io.Wri
 	if commitDate != "-" {
 		dateClause = fmt.Sprintf(", upstream commit of %s", commitDate)
 	}
-	p.Line(fmt.Sprintf("Update %s from %s to %s (source %s)%s.",
-		printableText(skillID), b7, u7, printableText(preview.SourceID), dateClause))
+	repoPart := ""
+	if repoURL != "" {
+		repoPart = fmt.Sprintf("%s, source %s", printableText(repoURL), printableText(preview.SourceID))
+	} else {
+		repoPart = fmt.Sprintf("source %s", printableText(preview.SourceID))
+	}
+	p.Line(fmt.Sprintf("Update %s from %s to %s (%s)%s.",
+		printableText(skillID), b7, u7, repoPart, dateClause))
 	p.Blank()
 
 	headers := []string{"FILE", "CHANGE", "ACTION"}
@@ -377,39 +392,38 @@ func runSkillUpdate(ctx context.Context, flags skillFlags, stdout, stderr io.Wri
 	if len(preview.Unresolved) > 0 {
 		p.Line(fmt.Sprintf("%d file(s) need a decision before this update can be applied. For each, pass one of:", len(preview.Unresolved)))
 		for _, unres := range preview.Unresolved {
-			p.Line(fmt.Sprintf("  --accept %s=upstream   take the upstream file (drops your edits in it)", unres))
-			p.Line(fmt.Sprintf("  --accept %s=local      keep your file", unres))
-			p.Line(fmt.Sprintf("  --manual %s=<file>     use a file you resolved yourself (no conflict markers)", unres))
+			p.Raw(fmt.Sprintf("  --accept %s=upstream   take the upstream file (drops your edits in it)\n", unres))
+			p.Raw(fmt.Sprintf("  --accept %s=local      keep your file\n", unres))
+			p.Raw(fmt.Sprintf("  --manual %s=<file>     use a file you resolved yourself (no conflict markers)\n", unres))
 		}
 		p.Line(fmt.Sprintf("To edit the conflict: skillhub skill update %s --write-conflicts ./%s-conflicts", skillID, skillID))
-		return 0
+		return
 	}
 
 	// Clean preview diffs
 	for _, f := range preview.Files {
 		if f.ResultDiff != "" {
-			p.Line(f.ResultDiff)
+			p.Raw(f.ResultDiff + "\n")
 		}
-		if flags.verbose {
+		if verbose {
 			if f.UpstreamDiff != "" {
 				p.Line("Upstream Diff:")
-				p.Line(f.UpstreamDiff)
+				p.Raw(f.UpstreamDiff + "\n")
 			}
 			if f.LocalDiff != "" {
 				p.Line("Local Diff:")
-				p.Line(f.LocalDiff)
+				p.Raw(f.LocalDiff + "\n")
 			}
 		}
 	}
 
 	if preview.TrustImpact.ReviewRequiredAfterApply {
 		p.Line(fmt.Sprintf("After applying, agents cannot use %s until you approve the new content:", skillID))
-		p.Line(fmt.Sprintf("  skillhub skill review %s", skillID))
+		p.Raw(fmt.Sprintf("  skillhub skill review %s\n", skillID))
 	}
 	p.Line("No collection files changed.")
 	pins := preview.Confirmation.Confirmation.Pins
 	p.Line(fmt.Sprintf("Next: skillhub skill confirm %s", pins.ProposalID))
-	return 0
 }
 
 func writeConflictsFiles(dir string, files []app.UpstreamFile) error {
