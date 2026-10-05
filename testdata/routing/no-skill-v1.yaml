@@ -1,0 +1,412 @@
+schema_version: 1
+id: no-skill-v1
+cases:
+- schema_version: 1
+  id: no-skill-01
+  partition: development
+  request:
+    schema_version: '1'
+    request_id: req-no-skill-01
+    task:
+      description: hello how are you today
+      scope: single_step
+  expected:
+    status: no_skill
+    no_skill: true
+- schema_version: 1
+  id: no-skill-02
+  partition: development
+  request:
+    schema_version: '1'
+    request_id: req-no-skill-02
+    task:
+      description: tell me a funny joke about programming
+      scope: single_step
+  expected:
+    status: no_skill
+    no_skill: true
+- schema_version: 1
+  id: no-skill-03
+  partition: development
+  request:
+    schema_version: '1'
+    request_id: req-no-skill-03
+    task:
+      description: what is the meaning of life
+      scope: single_step
+  expected:
+    status: no_skill
+    no_skill: true
+- schema_version: 1
+  id: no-skill-04
+  partition: development
+  request:
+    schema_version: '1'
+    request_id: req-no-skill-04
+    task:
+      description: good morning what can you help me with
+      scope: single_step
+  expected:
+    status: no_skill
+    no_skill: true
+- schema_version: 1
+  id: no-skill-05
+  partition: development
+  request:
+    schema_version: '1'
+    request_id: req-no-skill-05
+    task:
+      description: who wrote the play Romeo and Juliet
+      scope: single_step
+  expected:
+    status: no_skill
+    no_skill: true
+- schema_version: 1
+  id: no-skill-06
+  partition: development
+  request:
+    schema_version: '1'
+    request_id: req-no-skill-06
+    task:
+      description: write a haiku about autumn leaves
+      scope: single_step
+  expected:
+    status: no_skill
+    no_skill: true
+- schema_version: 1
+  id: no-skill-07
+  partition: development
+  request:
+    schema_version: '1'
+    request_id: req-no-skill-07
+    task:
+      description: can you recommend a good Italian restaurant in New York
+      scope: single_step
+  expected:
+    status: no_skill
+    no_skill: true
+- schema_version: 1
+  id: no-skill-08
+  partition: development
+  request:
+    schema_version: '1'
+    request_id: req-no-skill-08
+    task:
+      description: how do I bake sourdough bread from scratch
+      scope: single_step
+  expected:
+    status: no_skill
+    no_skill: true
+- schema_version: 1
+  id: no-skill-09
+  partition: development
+  request:
+    schema_version: '1'
+    request_id: req-no-skill-09
+    task:
+      description: what is the recommended watering schedule for indoor fiddle leaf
+        figs
+      scope: single_step
+  expected:
+    status: no_skill
+    no_skill: true
+- schema_version: 1
+  id: no-skill-10
+  partition: development
+  request:
+    schema_version: '1'
+    request_id: req-no-skill-10
+    task:
+      description: explain the rules of cricket and how runs are scored
+      scope: single_step
+  expected:
+    status: no_skill
+    no_skill: true
+- schema_version: 1
+  id: no-skill-11
+  partition: development
+  request:
+    schema_version: '1'
+    request_id: req-no-skill-11
+    task:
+      description: what are the symptoms of seasonal allergies and common treatments
+      scope: single_step
+  expected:
+    status: no_skill
+    no_skill: true
+- schema_version: 1
+  id: no-skill-12
+  partition: development
+  request:
+    schema_version: '1'
+    request_id: req-no-skill-12
+    task:
+      description: how to change motor oil in a 2018 Honda Civic
+      scope: single_step
+  expected:
+    status: no_skill
+    no_skill: true
+- schema_version: 1
+  id: no-skill-13
+  partition: development
+  request:
+    schema_version: '1'
+    request_id: req-no-skill-13
+    task:
+      description: best practices for training a golden retriever puppy
+      scope: single_step
+  expected:
+    status: no_skill
+    no_skill: true
+- schema_version: 1
+  id: no-skill-14
+  partition: development
+  request:
+    schema_version: '1'
+    request_id: req-no-skill-14
+    task:
+      description: calculate mortgage payments for a thirty year fixed loan
+      scope: single_step
+  expected:
+    status: no_skill
+    no_skill: true
+- schema_version: 1
+  id: no-skill-15
+  partition: development
+  request:
+    schema_version: '1'
+    request_id: req-no-skill-15
+    task:
+      description: what is the history of the Roman empire during the Pax Romana
+      scope: single_step
+  expected:
+    status: no_skill
+    no_skill: true
+- schema_version: 1
+  id: no-skill-16
+  partition: development
+  request:
+    schema_version: '1'
+    request_id: req-no-skill-16
+    task:
+      description: how to knit a wool scarf for beginners
+      scope: single_step
+  expected:
+    status: no_skill
+    no_skill: true
+- schema_version: 1
+  id: no-skill-17
+  partition: development
+  request:
+    schema_version: '1'
+    request_id: req-no-skill-17
+    task:
+      description: recipe for traditional Vietnamese pho noodle soup
+      scope: single_step
+  expected:
+    status: no_skill
+    no_skill: true
+- schema_version: 1
+  id: no-skill-18
+  partition: development
+  request:
+    schema_version: '1'
+    request_id: req-no-skill-18
+    task:
+      description: tips for improving cardiovascular endurance for a half marathon
+      scope: single_step
+  expected:
+    status: no_skill
+    no_skill: true
+- schema_version: 1
+  id: no-skill-19
+  partition: development
+  request:
+    schema_version: '1'
+    request_id: req-no-skill-19
+    task:
+      description: what are the primary differences between acrylic and oil painting
+      scope: single_step
+  expected:
+    status: no_skill
+    no_skill: true
+- schema_version: 1
+  id: no-skill-20
+  partition: development
+  request:
+    schema_version: '1'
+    request_id: req-no-skill-20
+    task:
+      description: 'fix the typo in this single word: recieve -> receive'
+      scope: single_step
+  expected:
+    status: no_skill
+    no_skill: true
+- schema_version: 1
+  id: no-skill-21
+  partition: development
+  request:
+    schema_version: '1'
+    request_id: req-no-skill-21
+    task:
+      description: correct the misspelling of calendar in the readme header
+      scope: single_step
+  expected:
+    status: no_skill
+    no_skill: true
+- schema_version: 1
+  id: no-skill-22
+  partition: development
+  request:
+    schema_version: '1'
+    request_id: req-no-skill-22
+    task:
+      description: capitalize the first letter of this title string
+      scope: single_step
+  expected:
+    status: no_skill
+    no_skill: true
+- schema_version: 1
+  id: no-skill-23
+  partition: development
+  request:
+    schema_version: '1'
+    request_id: req-no-skill-23
+    task:
+      description: remove the trailing whitespace from this line of text
+      scope: single_step
+  expected:
+    status: no_skill
+    no_skill: true
+- schema_version: 1
+  id: no-skill-24
+  partition: development
+  request:
+    schema_version: '1'
+    request_id: req-no-skill-24
+    task:
+      description: 'fix spelling mistake in commit message: teh -> the'
+      scope: single_step
+  expected:
+    status: no_skill
+    no_skill: true
+- schema_version: 1
+  id: no-skill-25
+  partition: development
+  request:
+    schema_version: '1'
+    request_id: req-no-skill-25
+    task:
+      description: replace tabs with spaces in this markdown bullet point
+      scope: single_step
+  expected:
+    status: no_skill
+    no_skill: true
+- schema_version: 1
+  id: no-skill-26
+  partition: development
+  request:
+    schema_version: '1'
+    request_id: req-no-skill-26
+    task:
+      description: what time is it right now in UTC
+      scope: single_step
+  expected:
+    status: no_skill
+    no_skill: true
+- schema_version: 1
+  id: no-skill-27
+  partition: development
+  request:
+    schema_version: '1'
+    request_id: req-no-skill-27
+    task:
+      description: convert 50 miles per hour to kilometers per hour
+      scope: single_step
+  expected:
+    status: no_skill
+    no_skill: true
+- schema_version: 1
+  id: no-skill-28
+  partition: development
+  request:
+    schema_version: '1'
+    request_id: req-no-skill-28
+    task:
+      description: calculate the square root of 144
+      scope: single_step
+  expected:
+    status: no_skill
+    no_skill: true
+- schema_version: 1
+  id: no-skill-29
+  partition: development
+  request:
+    schema_version: '1'
+    request_id: req-no-skill-29
+    task:
+      description: generate a list of random names for a fantasy story
+      scope: single_step
+  expected:
+    status: no_skill
+    no_skill: true
+- schema_version: 1
+  id: no-skill-30
+  partition: development
+  request:
+    schema_version: '1'
+    request_id: req-no-skill-30
+    task:
+      description: what is the current price of gold per ounce
+      scope: single_step
+  expected:
+    status: no_skill
+    no_skill: true
+- schema_version: 1
+  id: no-skill-31
+  partition: development
+  request:
+    schema_version: '1'
+    request_id: req-no-skill-31
+    task:
+      description: summarize the plot of the movie Inception
+      scope: single_step
+  expected:
+    status: no_skill
+    no_skill: true
+- schema_version: 1
+  id: no-skill-32
+  partition: development
+  request:
+    schema_version: '1'
+    request_id: req-no-skill-32
+    task:
+      description: how many days are there between May 1st and September 15th
+      scope: single_step
+  expected:
+    status: no_skill
+    no_skill: true
+- schema_version: 1
+  id: no-skill-33
+  partition: development
+  request:
+    schema_version: '1'
+    request_id: req-no-skill-33
+    task:
+      description: translate the word thank you into ten languages
+      scope: single_step
+  expected:
+    status: no_skill
+    no_skill: true
+- schema_version: 1
+  id: no-skill-34
+  partition: development
+  request:
+    schema_version: '1'
+    request_id: req-no-skill-34
+    task:
+      description: what are the seven wonders of the ancient world
+      scope: single_step
+  expected:
+    status: no_skill
+    no_skill: true

@@ -26,16 +26,9 @@ var equivalenceVersionPolicies = setOf("exact", "compatible", "latest-reviewed")
 
 // LoadPolicy reads the optional Git-derived recommendation policy. Absence uses
 // the calibrated built-in baseline; malformed policy is an infrastructure error.
-func LoadPolicy(ctx context.Context, database *sql.DB) (Policy, error) {
+// ParsePolicy parses and validates recommendation policy JSON content.
+func ParsePolicy(digest string, contentJSON []byte) (Policy, error) {
 	policy := DefaultPolicy()
-	var digest, content string
-	err := database.QueryRowContext(ctx, `SELECT digest,content_json FROM routing_documents WHERE path='config/recommendation.yaml'`).Scan(&digest, &content)
-	if err == sql.ErrNoRows {
-		return policy, nil
-	}
-	if err != nil {
-		return Policy{}, err
-	}
 	type thresholds struct {
 		ApplicabilityFloor float64 `json:"applicability_floor"`
 		HighConfidence     float64 `json:"high_confidence"`
@@ -55,7 +48,7 @@ func LoadPolicy(ctx context.Context, database *sql.DB) (Policy, error) {
 		Thresholds           *thresholds `json:"thresholds"`
 		Extensions           *extensions `json:"extensions"`
 	}
-	decoder := json.NewDecoder(bytes.NewReader([]byte(content)))
+	decoder := json.NewDecoder(bytes.NewReader(contentJSON))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&document); err != nil {
 		return Policy{}, fmt.Errorf("decode recommendation policy: %w", err)
@@ -77,6 +70,20 @@ func LoadPolicy(ctx context.Context, database *sql.DB) (Policy, error) {
 		return Policy{}, err
 	}
 	return policy, nil
+}
+
+// LoadPolicy reads the optional Git-derived recommendation policy. Absence uses
+// the calibrated built-in baseline; malformed policy is an infrastructure error.
+func LoadPolicy(ctx context.Context, database *sql.DB) (Policy, error) {
+	var digest, content string
+	err := database.QueryRowContext(ctx, `SELECT digest,content_json FROM routing_documents WHERE path='config/recommendation.yaml'`).Scan(&digest, &content)
+	if err == sql.ErrNoRows {
+		return DefaultPolicy(), nil
+	}
+	if err != nil {
+		return Policy{}, err
+	}
+	return ParsePolicy(digest, []byte(content))
 }
 
 func NewSQLiteCatalog(database *sql.DB, snapshot string) (*SQLiteCatalog, error) {

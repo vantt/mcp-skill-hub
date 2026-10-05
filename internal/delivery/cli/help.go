@@ -279,7 +279,7 @@ Subcommands:
 
 Example: skillhub telemetry purge --workspace ~/skillhub --yes
 `,
-	"eval": `Usage: skillhub eval <manifest|run|promote> [--workspace <path>] [--json]
+	"eval": `Usage: skillhub eval <manifest|run|promote|routing> [--workspace <path>] [--json]
 
 Run routing evaluations. Developer tool; needs a pinned suite and manifest.
 
@@ -290,6 +290,8 @@ Subcommands:
       [--output <new-file>]                        Run a suite
   promote --resolution-id <id> [--output <new-file>] [--yes]
                                                    Draft an evaluation case from telemetry
+  routing [--no-skill <file>] [--policy <file>] [--min-precision F] [--min-recall F]
+          [--min-no-skill-recall F] [--max-fpr F]  Evaluate routing across skills' examples
 
 Example: skillhub eval run --suite suite.json --manifest manifest.json
 `,

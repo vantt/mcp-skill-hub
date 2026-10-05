@@ -2,7 +2,7 @@
   "schema_version": 1,
   "experiment_id": "cli-replay-v1",
   "suite_digest": "sha256:a9422e51f18b8e5e5ddcfc9a0ff88ccdbb5a417518d448dca6a19009ece5dead",
-  "catalog_snapshot": "sha256:f30f00957b51300ad45a220bf5719ca3f00d27e7d4c018a96f60d0fa88a4dc5b",
+  "catalog_snapshot": "sha256:ac53a33d24c56584af5a2a00b8f48aa776d416318321f8755c42155bc4babb4a",
   "policy_revision": "sha256:3cf55442eebcc50c65e730dfa22ad4783b3befe2bae5e5123e2268f035f2830b",
   "protocol_schema": "1",
   "normalization_version": "fts-rules-v1",

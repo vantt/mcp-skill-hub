@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "thresholds": {
+    "min_precision": 0.57,
+    "min_recall": 0.56,
+    "min_no_skill_recall": 0.98,
+    "max_fpr": 0.14
+  }
+}

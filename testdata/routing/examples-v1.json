@@ -1,0 +1,551 @@
+{
+  "schema_version": 1,
+  "skills": {
+    "code-review": {
+      "examples": [
+        "check this patch for unintended regressions and subtle bugs",
+        "inspect the modified files in this commit for potential null pointer errors",
+        "review the implementation of the checkout controller before merging",
+        "look over this code change to verify error handling is complete"
+      ],
+      "counter_examples": [
+        "conduct a full pull request review with approvals and summary comment",
+        "design a REST API contract schema for the user service",
+        "write automated unit tests with coverage for the payment helper"
+      ]
+    },
+    "api-design": {
+      "examples": [
+        "design an OpenAPI specification for our customer account service",
+        "define REST resource endpoints and error envelope schemas for billing",
+        "draft the JSON request and response payloads for the order processing API",
+        "create an API contract defining pagination and filtering conventions"
+      ],
+      "counter_examples": [
+        "design a GraphQL schema with queries mutations and resolvers",
+        "review a code patch for security vulnerabilities",
+        "optimize a slow SQL query with missing indexes"
+      ]
+    },
+    "database-migration": {
+      "examples": [
+        "plan a zero-downtime database migration to split user profiles into two tables",
+        "write a forward and backward schema migration for postgres with backfill steps",
+        "create a safe database migration script to rename a column in production",
+        "design rollback steps for a database migration that adds a foreign key constraint"
+      ],
+      "counter_examples": [
+        "optimize execution plan for a slow SELECT query",
+        "implement automated backup and recovery procedures for PostgreSQL",
+        "design the cache invalidation strategy for user session data"
+      ]
+    },
+    "security-audit": {
+      "examples": [
+        "audit authentication and authorization checks across all API endpoints",
+        "scan codebase for hardcoded secrets and vulnerable third-party dependencies",
+        "identify potential SQL injection and cross-site scripting vulnerabilities in the app",
+        "review application permissions model against the OWASP top ten risks"
+      ],
+      "counter_examples": [
+        "audit privacy data retention and PII redaction policies",
+        "implement oauth2 authentication flow with Google login",
+        "review git commit history for formatting style"
+      ]
+    },
+    "frontend-accessibility": {
+      "examples": [
+        "audit form inputs and modal dialogs for WCAG 2.1 AA keyboard navigation",
+        "verify screen reader announcements and aria attributes on the custom dropdown",
+        "check color contrast ratios and focus indicators across the checkout flow",
+        "ensure assistive technologies can navigate and interact with the data table"
+      ],
+      "counter_examples": [
+        "optimize react component re-renders and reduce bundle size",
+        "write playwright end-to-end browser tests for user checkout",
+        "localize application strings into French and Spanish"
+      ]
+    },
+    "browser-testing": {
+      "examples": [
+        "create end-to-end Playwright tests verifying the multi-step signup wizard",
+        "test browser user interactions and checkout flows across Chromium and Firefox",
+        "automate browser validation for shopping cart persistence across tab reloads",
+        "run headless browser smoke tests simulating user form submission"
+      ],
+      "counter_examples": [
+        "write focused unit tests for currency calculation helpers",
+        "audit web pages for accessibility and screen reader support",
+        "measure backend server response latency under high load"
+      ]
+    },
+    "incident-debugging": {
+      "examples": [
+        "investigate cause of HTTP 500 error spike occurring in production right now",
+        "diagnose why background worker queues are stalling after the recent deployment",
+        "triage outage caused by connection pool exhaustion during traffic surge",
+        "analyze root cause of intermittent memory leaks crashing the api pod"
+      ],
+      "counter_examples": [
+        "design structured JSON log schema for application tracing",
+        "profile cpu hotspots in an offline benchmark harness",
+        "write technical postmortem documentation guide for developers"
+      ]
+    },
+    "performance-profiling": {
+      "examples": [
+        "profile CPU usage and locate hot functions in the image processing loop",
+        "investigate high memory allocations and garbage collection pressure in Go service",
+        "measure CPU flamegraphs to find latency bottlenecks in JSON serialization",
+        "profile memory heap allocations to identify unbounded object retention"
+      ],
+      "counter_examples": [
+        "optimize SQL query indexes and query execution plans",
+        "diagnose live production outage during server incident",
+        "load test service throughput with concurrent simulated users"
+      ]
+    },
+    "documentation-writing": {
+      "examples": [
+        "write a technical guide explaining how to integrate our webhook APIs",
+        "author comprehensive developer onboarding documentation for the microservices architecture",
+        "draft architectural decision records documenting the transition to event sourcing",
+        "create clear API reference documentation and code snippets for SDK users"
+      ],
+      "counter_examples": [
+        "review a code pull request for syntax bugs and logic errors",
+        "generate release changelog notes from git commit tags",
+        "translate documentation into Japanese and German"
+      ]
+    },
+    "kubernetes-operations": {
+      "examples": [
+        "configure Kubernetes Deployment resource limits and horizontal pod autoscaler",
+        "roll out zero-downtime rolling update for the worker pod deployment in EKS",
+        "troubleshoot CrashLoopBackOff status on the ingestion pod in production cluster",
+        "set up Kubernetes ingress rules and TLS certificates for internal services"
+      ],
+      "counter_examples": [
+        "provision AWS VPC and subnet infrastructure using Terraform",
+        "build Docker container image for a CLI application",
+        "diagnose application level memory leak in NodeJS code"
+      ]
+    },
+    "terraform-infrastructure": {
+      "examples": [
+        "write Terraform modules to provision secure AWS S3 buckets and IAM policies",
+        "plan and apply Terraform infrastructure changes for multi-region VPC peering",
+        "refactor Terraform state to split database cluster into isolated module",
+        "provision GCP Cloud SQL and networking resources with Terraform HCL"
+      ],
+      "counter_examples": [
+        "configure Kubernetes pod autoscaling and ingress controllers",
+        "backup PostgreSQL database to cold storage",
+        "design microservices network topology in code"
+      ]
+    },
+    "payment-integration": {
+      "examples": [
+        "integrate Stripe checkout session for recurring subscription billing",
+        "handle PayPal webhook notifications for payment capture and dispute events",
+        "implement credit card processing flow with 3D Secure verification",
+        "add support for payment intent creation and idempotency keys"
+      ],
+      "counter_examples": [
+        "implement user login with OAuth2 and JWT session tokens",
+        "verify generic webhook HMAC signatures from third-party services",
+        "design database relational schema for invoice line items"
+      ]
+    },
+    "authentication": {
+      "examples": [
+        "implement OAuth2 authorization code flow with GitHub and Google providers",
+        "set up secure session management with HTTP-only cookies and CSRF tokens",
+        "add two-factor authentication with TOTP verification to the login flow",
+        "design JWT token refresh and revocation mechanisms for mobile clients"
+      ],
+      "counter_examples": [
+        "integrate Stripe subscription billing and checkout sessions",
+        "audit application security against OWASP top ten vulnerabilities",
+        "review privacy policies regarding user data retention"
+      ]
+    },
+    "react-performance": {
+      "examples": [
+        "optimize unnecessary re-renders in React tree using useMemo and useCallback",
+        "analyze and reduce Webpack JavaScript bundle size with code splitting",
+        "virtualize long list rendering in React table using windowing techniques",
+        "profile React component render lifecycle to eliminate rendering bottlenecks"
+      ],
+      "counter_examples": [
+        "audit accessibility and keyboard navigation in React form components",
+        "write browser end-to-end tests using Playwright",
+        "profile Go backend server CPU and memory allocations"
+      ]
+    },
+    "mobile-development": {
+      "examples": [
+        "implement biometric authentication with FaceID and TouchID on iOS and Android",
+        "configure deep linking and push notifications in React Native application",
+        "build offline data caching and synchronization for mobile mobile app",
+        "handle Android lifecycle events and screen rotation state in Flutter"
+      ],
+      "counter_examples": [
+        "optimize responsive web layout for mobile mobile browser viewport",
+        "write unit tests for backend API controllers",
+        "deploy Kubernetes pod workloads in cloud cluster"
+      ]
+    },
+    "data-analysis": {
+      "examples": [
+        "compute summary statistics and quantile distributions for customer churn data",
+        "analyze user engagement cohort retention patterns across quarterly cohorts",
+        "detect anomalies and outliers in daily transaction volume metrics",
+        "aggregate time-series data to measure monthly recurring revenue growth rates"
+      ],
+      "counter_examples": [
+        "train a random forest classifier model to predict user churn",
+        "optimize SQL queries and missing database indexes",
+        "instrument Prometheus application metrics and Grafana dashboards"
+      ]
+    },
+    "machine-learning": {
+      "examples": [
+        "train and evaluate a text classification model using scikit-learn and PyTorch",
+        "fine-tune hyperparameters and compute cross-validation F1 scores for model",
+        "prepare training and validation splits with feature scaling and encoding",
+        "evaluate precision-recall curves and confusion matrix for fraud detection model"
+      ],
+      "counter_examples": [
+        "compute basic descriptive statistics on tabular customer data",
+        "process and resize user image uploads before storing",
+        "tune full-text search BM25 ranking parameters"
+      ]
+    },
+    "image-processing": {
+      "examples": [
+        "batch resize and generate responsive thumbnail variants from uploaded images",
+        "convert PNG images to WebP format with controlled lossy compression",
+        "strip EXIF metadata and auto-orient JPEG photos uploaded by users",
+        "apply cropping and watermark overlay to product catalog images"
+      ],
+      "counter_examples": [
+        "transcode MP4 video files into HLS streaming segments",
+        "evaluate a computer vision model for object detection",
+        "test browser UI rendering with Playwright"
+      ]
+    },
+    "video-processing": {
+      "examples": [
+        "transcode uploaded video files into multiple bitrate streams with ffmpeg",
+        "generate HLS playlist segments and video thumbnails from master recording",
+        "extract audio track from video and re-encode to AAC format",
+        "stitch video clips together and normalize audio volume levels"
+      ],
+      "counter_examples": [
+        "generate responsive WebP thumbnails from static JPEG photos",
+        "measure backend video streaming server bandwidth under load",
+        "implement media player UI component in React"
+      ]
+    },
+    "git-workflow": {
+      "examples": [
+        "rebase feature branch onto latest main and resolve merge conflicts cleanly",
+        "split large messy commit into atomic commits with interactive rebase",
+        "set up Git hooks to prevent committing unformatted code or secrets",
+        "squash multiple temporary WIP commits before opening a pull request"
+      ],
+      "counter_examples": [
+        "prepare a version release changelog and tag semver release",
+        "review pull request changes for logic bugs and defects",
+        "upgrade npm dependencies in package.json"
+      ]
+    },
+    "release-management": {
+      "examples": [
+        "generate automated changelog from conventional commits for semantic release",
+        "prepare release notes and bump version tags from v1.2.0 to v1.3.0",
+        "coordinate multi-service release checklist and deployment artifact verification",
+        "create signed GitHub release with release notes and binary assets"
+      ],
+      "counter_examples": [
+        "rebase local git branch and resolve merge conflicts",
+        "roll out Kubernetes deployment pods in production",
+        "write technical guide explaining product architecture"
+      ]
+    },
+    "dependency-upgrade": {
+      "examples": [
+        "upgrade major version of Go module and adapt code to breaking API changes",
+        "update npm packages in package.json and audit for known security advisories",
+        "migrate deprecated library calls after upgrading database driver dependency",
+        "update transitive dependencies to resolve version conflicts in lockfile"
+      ],
+      "counter_examples": [
+        "refactor monolithic class into separate modular services",
+        "audit application security and threat model vulnerabilities",
+        "prepare semver release notes for our own application"
+      ]
+    },
+    "refactoring": {
+      "examples": [
+        "extract duplicated validation logic from controllers into shared service",
+        "refactor large monolithic handler function into smaller focused units",
+        "replace switch statement on types with polymorphic strategy pattern",
+        "restructure legacy module interfaces while preserving existing behavior"
+      ],
+      "counter_examples": [
+        "upgrade third-party library to next major version",
+        "write unit tests to verify existing behavior",
+        "review pull request for code formatting and typos"
+      ]
+    },
+    "unit-testing": {
+      "examples": [
+        "write comprehensive unit tests covering edge cases for the date parser",
+        "add unit test suite with table-driven test cases for token verification",
+        "test boundary conditions and error returns in calculation logic",
+        "increase branch coverage by writing unit tests for error pathways"
+      ],
+      "counter_examples": [
+        "design holistic test plan strategy covering unit integration and e2e",
+        "write end-to-end browser tests using Playwright automation",
+        "measure service latency under concurrent user load"
+      ]
+    },
+    "load-testing": {
+      "examples": [
+        "simulate 5000 concurrent virtual users executing search queries with k6",
+        "measure endpoint throughput p95 latency and error rate under high load",
+        "run stress test to identify database connection pool breaking point",
+        "benchmark API gateway requests per second capacity under sustained traffic"
+      ],
+      "counter_examples": [
+        "profile CPU and memory heap allocations on local server benchmark",
+        "diagnose active production outage during server degradation",
+        "write automated browser user flow tests"
+      ]
+    },
+    "observability": {
+      "examples": [
+        "instrument OpenTelemetry distributed tracing across HTTP service calls",
+        "add Prometheus metrics for request duration and status code counters",
+        "build Grafana dashboard panels visualizing service latency percentiles",
+        "configure alert thresholds on error budget burn rate and latency spikes"
+      ],
+      "counter_examples": [
+        "design structured JSON log formatting with correlation IDs",
+        "profile memory allocations and CPU flamegraphs in offline runner",
+        "simulate high traffic load with virtual users"
+      ]
+    },
+    "logging": {
+      "examples": [
+        "standardize structured JSON logging format across all backend services",
+        "inject trace and span IDs into log context for distributed request correlation",
+        "configure log levels and sensitive field masking to scrub customer PII",
+        "set up log rotation and retention policies for local application logs"
+      ],
+      "counter_examples": [
+        "instrument OpenTelemetry metrics and Grafana dashboards",
+        "diagnose active live production outage during system failure",
+        "review privacy policies for database storage retention"
+      ]
+    },
+    "caching": {
+      "examples": [
+        "design multi-tier Redis cache with TTL and stale-while-revalidate policy",
+        "implement cache invalidation strategy when catalog entities are updated",
+        "set up in-memory LRU cache with memory capacity limits and eviction callbacks",
+        "prevent cache stampede and thundering herd with singleflight locks"
+      ],
+      "counter_examples": [
+        "optimize slow SQL queries and add composite indexes",
+        "configure HTTP browser caching headers for static assets",
+        "design message queue retry and dead-letter handling"
+      ]
+    },
+    "message-consumer-review": {
+      "examples": [
+        "review message queue consumer for idempotent processing and deduplication",
+        "verify message consumer acknowledgement happens only after successful database commit",
+        "audit consumer retry policy backoff and dead-letter queue routing",
+        "check consumer logic for safe handling of poisoned or unparseable messages"
+      ],
+      "counter_examples": [
+        "design event stream topology and domain event boundaries",
+        "implement webhook signature delivery and retry logic",
+        "optimize database SQL migration for consumer table"
+      ]
+    },
+    "event-architecture-review": {
+      "examples": [
+        "review event-driven service topology and domain event schema boundaries",
+        "design event schema versioning strategy for backward-compatible evolution",
+        "evaluate event choreography versus orchestration for multi-step order workflow",
+        "assess event storming boundaries between order and fulfillment domains"
+      ],
+      "counter_examples": [
+        "review specific message consumer worker retry and acknowledgement logic",
+        "design REST API endpoints and OpenAPI schemas",
+        "set up Kafka cluster infrastructure in Kubernetes"
+      ]
+    },
+    "sql-optimization": {
+      "examples": [
+        "analyze EXPLAIN ANALYZE execution plan to optimize slow JOIN query",
+        "create composite index to eliminate sequential scans on large orders table",
+        "rewrite subquery into efficient CTE or window function to reduce disk I/O",
+        "tune database query parameters and resolve lock contention on row updates"
+      ],
+      "counter_examples": [
+        "plan zero-downtime database schema migration and column addition",
+        "design Redis caching layer to offload database reads",
+        "design normalized database relational schema"
+      ]
+    },
+    "graphql-api": {
+      "examples": [
+        "design GraphQL schema types queries and mutations for social feed feature",
+        "resolve N+1 database query issues in GraphQL resolvers using DataLoader",
+        "implement GraphQL input validation and custom scalar types for email and dates",
+        "design GraphQL subscription contract for real-time chat messages"
+      ],
+      "counter_examples": [
+        "design REST API endpoints with OpenAPI JSON schemas",
+        "optimize SQL queries and execution plans",
+        "implement OAuth2 authentication tokens for mobile apps"
+      ]
+    },
+    "cli-development": {
+      "examples": [
+        "build command-line tool with subcommands flags and positional arguments",
+        "implement bash and zsh shell tab autocompletion for CLI commands",
+        "add colored terminal output and interactive confirmation prompts to CLI",
+        "format command line output as human-readable table or structured JSON"
+      ],
+      "counter_examples": [
+        "build Model Context Protocol tool definitions and server",
+        "write technical guide for command line tool",
+        "create automated browser test for web application"
+      ]
+    },
+    "mcp-server": {
+      "examples": [
+        "implement Model Context Protocol server exposing database query tools",
+        "define MCP tool schemas and resource templates for agent host integration",
+        "handle MCP stdio transport protocol requests and JSON-RPC message framing",
+        "publish custom prompts and context resources via MCP server interface"
+      ],
+      "counter_examples": [
+        "build interactive CLI tool with subcommands and flags",
+        "design REST API endpoints and OpenAPI documentation",
+        "implement webhook endpoint for incoming HTTP POST callbacks"
+      ]
+    },
+    "webhooks": {
+      "examples": [
+        "implement secure webhook delivery engine with exponential backoff retries",
+        "verify incoming webhook request signatures using HMAC-SHA256 headers",
+        "design webhook subscription management and event delivery failure alerts",
+        "prevent webhook replay attacks by validating timestamps and nonces"
+      ],
+      "counter_examples": [
+        "integrate Stripe checkout and billing provider SDK",
+        "design event-driven architecture and domain event schemas",
+        "review message consumer acknowledgement and dead letter queue"
+      ]
+    },
+    "search-relevance": {
+      "examples": [
+        "tune BM25 scoring parameters and term weights to improve search ranking",
+        "implement search query stemming synonym expansion and typo tolerance",
+        "evaluate NDCG and mean reciprocal rank on search evaluation dataset",
+        "add field boosts for title matches and recency decay to search queries"
+      ],
+      "counter_examples": [
+        "optimize SQL queries with composite indexes and explain plans",
+        "train a deep neural network text classification model",
+        "design application caching layer with Redis"
+      ]
+    },
+    "privacy-review": {
+      "examples": [
+        "audit personal data collection against GDPR data minimization principles",
+        "design automated data retention schedules and user account deletion pipeline",
+        "verify masking and redaction of customer PII in analytics logs and storage",
+        "review consent management and third-party data tracking disclosure"
+      ],
+      "counter_examples": [
+        "audit application security against OWASP vulnerabilities",
+        "standardize application JSON logging format",
+        "implement OAuth2 user authentication and login"
+      ]
+    },
+    "backup-recovery": {
+      "examples": [
+        "design automated daily database backups with point-in-time recovery",
+        "test disaster recovery procedure by restoring production backup in staging",
+        "configure multi-region replication and snapshot retention for S3 data",
+        "verify database backup integrity and validate recovery time objective"
+      ],
+      "counter_examples": [
+        "plan zero-downtime database schema migration",
+        "provision cloud infrastructure using Terraform scripts",
+        "design caching strategy for database queries"
+      ]
+    },
+    "localization": {
+      "examples": [
+        "extract hardcoded user-facing strings into gettext translation catalogs",
+        "support pluralization rules and gender agreement across European languages",
+        "format currencies dates and numbers according to user locale preferences",
+        "configure right-to-left layout direction and bidirectionality for Arabic"
+      ],
+      "counter_examples": [
+        "audit frontend accessibility and keyboard navigation",
+        "write technical user documentation and guides",
+        "optimize frontend bundle size and component rendering"
+      ]
+    },
+    "email-delivery": {
+      "examples": [
+        "configure DKIM SPF and DMARC DNS records to prevent email spoofing",
+        "handle bounce notifications and complaint feedback loops to protect domain reputation",
+        "integrate transactional email delivery API with template rendering",
+        "monitor email deliverability inbox placement and spam filtering rates"
+      ],
+      "counter_examples": [
+        "implement webhook endpoint for incoming event payloads",
+        "design REST API schemas for user messaging",
+        "verify user email address with two-factor TOTP codes"
+      ]
+    },
+    "pull-request-review": {
+      "examples": [
+        "conduct a detailed pull request review providing actionable inline comments",
+        "review PR diff against architectural guidelines and approved design specs",
+        "check pull request test coverage and verify edge case assertions are added",
+        "provide constructive feedback on pull request structure before team approval"
+      ],
+      "counter_examples": [
+        "check an isolated code snippet for potential null pointer errors",
+        "rebase git branch and resolve merge conflicts interactively",
+        "generate release notes from conventional commit history"
+      ]
+    },
+    "test-design": {
+      "examples": [
+        "design comprehensive test matrix covering unit integration and boundary scenarios",
+        "structure test cases to thoroughly exercise complex state machine transitions",
+        "define equivalence partitions and boundary value test cases for order validator",
+        "plan test suites balancing fast unit tests with end-to-end user journeys"
+      ],
+      "counter_examples": [
+        "write specific table-driven unit test assertions for date formatting helper",
+        "run browser UI user flow automation with Playwright",
+        "measure endpoint throughput under concurrent load testing"
+      ]
+    }
+  }
+}

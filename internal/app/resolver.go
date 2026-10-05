@@ -74,14 +74,9 @@ func (service ResolverService) Resolve(ctx context.Context, path string, request
 			resultErr = fmt.Errorf("close catalog generation: %w", closeErr)
 		}
 	}()
-	stage = "catalog_view"
-	view, err := resolverpkg.NewSQLiteCatalog(handle.DB, catalogSnapshot)
-	if err != nil {
-		return response, err
-	}
+	stage = "policy_load"
 	policy := service.Policy
 	if policy.Revision == "" {
-		stage = "policy_load"
 		policy, err = resolverpkg.LoadPolicy(ctx, handle.DB)
 		if err != nil {
 			return response, fmt.Errorf("load recommendation policy: %w", err)
@@ -91,25 +86,43 @@ func (service ResolverService) Resolve(ctx context.Context, path string, request
 	telemetryStarted = true
 	safeRecordTelemetry(service.Telemetry, telemetryEvent(telemetry.EventResolutionStarted, request, response, catalogSnapshot, policyRevision, resolutionStartPayload(request)))
 
+	stage = "resolution"
+	response, resultErr = service.resolveWithin(ctx, root, handle, request, nil)
+	return response, resultErr
+}
+
+func (service ResolverService) resolveWithin(ctx context.Context, root string, handle *catalog.Handle, request resolverpkg.Request, decorate func(resolverpkg.Catalog) resolverpkg.Catalog) (resolverpkg.Response, error) {
+	catalogSnapshot := handle.Pointer.CatalogSnapshot
+	sqliteCatalog, err := resolverpkg.NewSQLiteCatalog(handle.DB, catalogSnapshot)
+	if err != nil {
+		return resolverpkg.Response{}, err
+	}
+	var view resolverpkg.Catalog = sqliteCatalog
+	if decorate != nil {
+		view = decorate(view)
+	}
+	policy := service.Policy
+	if policy.Revision == "" {
+		policy, err = resolverpkg.LoadPolicy(ctx, handle.DB)
+		if err != nil {
+			return resolverpkg.Response{}, fmt.Errorf("load recommendation policy: %w", err)
+		}
+	}
 	baseCache := service.Cache
 	if baseCache == nil {
 		baseCache = sharedResolverCache
 	}
-	// A skill whose files cannot be served is excluded and the request is
-	// resolved again, so one unservable skill never fails resolution for the rest.
 	excluded := map[string]struct{}{}
 	for {
 		cache := baseCache
 		if len(excluded) > 0 {
 			cache = resolverpkg.NewCache(1)
 		}
-		stage = "resolver_initialize"
 		engine, err := resolverpkg.New(excludingCatalog{Catalog: view, excluded: excluded}, policy, cache)
 		if err != nil {
-			return response, err
+			return resolverpkg.Response{}, err
 		}
-		stage = "resolution"
-		response, err = engine.Resolve(ctx, request)
+		response, err := engine.Resolve(ctx, request)
 		if response.Supporting == nil {
 			response.Supporting = []resolverpkg.Supporting{}
 		}
@@ -119,11 +132,9 @@ func (service ResolverService) Resolve(ctx context.Context, path string, request
 		if err != nil || response.Primary == nil {
 			return response, err
 		}
-		stage = "primary_manifest"
 		primary, err := buildDistributedSkill(ctx, root, handle, response.Primary.ID)
 		if errors.Is(err, catalog.ErrSkillNotServable) || errors.Is(err, ErrResourceContentUnavailable) {
 			excluded[response.Primary.ID] = struct{}{}
-			response = resolverpkg.Response{}
 			continue
 		}
 		if err != nil {
@@ -132,7 +143,6 @@ func (service ResolverService) Resolve(ctx context.Context, path string, request
 		response.Primary.URI = primary.URI
 		response.Primary.Version = primary.Version
 		response.Primary.Setup = service.setupStatus(ctx, root, handle, primary)
-		stage = "supporting_manifest"
 		served := response.Supporting[:0]
 		for _, supporting := range response.Supporting {
 			entry, entryErr := buildDistributedSkill(ctx, root, handle, supporting.ID)
@@ -148,7 +158,6 @@ func (service ResolverService) Resolve(ctx context.Context, path string, request
 			served = append(served, supporting)
 		}
 		response.Supporting = served
-		stage = "completed"
 		return response, nil
 	}
 }

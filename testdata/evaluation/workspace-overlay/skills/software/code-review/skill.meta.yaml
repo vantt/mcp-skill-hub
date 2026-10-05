@@ -8,6 +8,13 @@ routing:
   triggers: [review code changes pull requests]
   not_for: [unrelated tasks]
   min_scope: multi_step
+  examples:
+    - review pull request diff for bugs
+    - inspect recent commit for security regressions
+    - check pull request comments and suggestions
+  counter_examples:
+    - write database schema migration
+    - deploy container image to cluster
 quality:
   reviewed: true
 provenance:

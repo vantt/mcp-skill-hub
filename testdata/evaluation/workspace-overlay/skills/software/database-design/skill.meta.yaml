@@ -8,6 +8,13 @@ routing:
   triggers: [design database schema indexes migrations]
   not_for: [unrelated tasks]
   min_scope: multi_step
+  examples:
+    - design postgres relational schema with foreign keys
+    - plan database index optimization for slow queries
+    - create database schema migration script
+  counter_examples:
+    - review pull request for code styling
+    - deploy service to production cluster
 quality:
   reviewed: true
 provenance:
