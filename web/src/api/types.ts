@@ -330,6 +330,12 @@ export interface SkillUpstreamFile {
   status: string;
 }
 
+export interface UpstreamResolution {
+  path: string;
+  action: string;
+  content?: string;
+}
+
 export interface SkillUpstream {
   skill_id: string;
   source_id: string;

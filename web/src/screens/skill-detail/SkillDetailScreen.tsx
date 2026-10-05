@@ -7,6 +7,7 @@ import {
   useSession,
   useSkillDetail,
   useSkillReview,
+  useSkillSources,
 } from '../../api/queries';
 import type { SkillProposal } from '../../api/types';
 import { ApiError } from '../../api/client';
@@ -21,6 +22,7 @@ import { ResourcesTab } from './ResourcesTab';
 import { ReviewTab } from './ReviewTab';
 import { UsagePanel } from './UsagePanel';
 import { RuntimeTab } from './RuntimeTab';
+import { SourcesTab } from './SourcesTab';
 import { useT } from '../../i18n';
 
 const LABEL_TAB_REVIEW = 'Review';
@@ -28,6 +30,7 @@ const LABEL_TAB_EDITOR = 'Editor';
 const LABEL_TAB_RESOURCES = 'Resources';
 const LABEL_TAB_USAGE = 'Usage';
 const LABEL_TAB_RUNTIME = 'Runtime';
+const LABEL_TAB_SOURCES = 'Sources';
 const LABEL_ACTIVATE = 'Activate skill';
 const LABEL_DEPRECATE = 'Deprecate';
 const LABEL_ARCHIVE = 'Archive';
@@ -53,7 +56,10 @@ export function SkillDetailScreen() {
 
   const { data: skill, isLoading: skillLoading, error: skillError } = useSkillDetail(skillId);
   const { data: review, isLoading: reviewLoading } = useSkillReview(skillId);
-
+  const { data: sourcesData } = useSkillSources(skillId);
+  const hasSourcesUpdate =
+    sourcesData?.upstream?.status === 'update_available' ||
+    sourcesData?.upstream?.status === 'diverged';
   const [copiedId, setCopiedId] = useState(false);
   const [transitionProposal, setTransitionProposal] = useState<SkillProposal | null>(null);
   const [transitionTarget, setTransitionTarget] = useState<'active' | 'deprecated' | 'archived' | ''>('');
@@ -288,6 +294,30 @@ export function SkillDetailScreen() {
         >
           <span>{LABEL_TAB_RUNTIME}</span>
         </button>
+        <button
+          type="button"
+          className={`fg-tab ${activeTab === 'sources' ? 'fg-tab--active' : ''}`}
+          role="tab"
+          aria-selected={activeTab === 'sources'}
+          aria-label={hasSourcesUpdate ? 'Sources, update available' : LABEL_TAB_SOURCES}
+          onClick={() => setTab('sources')}
+        >
+          <span>{LABEL_TAB_SOURCES}</span>
+          {hasSourcesUpdate && (
+            <span
+              className="fg-tab__badge"
+              style={{
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                backgroundColor: 'var(--color-warning)',
+                display: 'inline-block',
+                marginLeft: 'var(--space-1)',
+              }}
+              aria-hidden="true"
+            />
+          )}
+        </button>
       </div>
 
       {/* Tab Panels */}
@@ -311,6 +341,9 @@ export function SkillDetailScreen() {
 
       {activeTab === 'runtime' && (
         <RuntimeTab skillId={skill.skill_id} runtimeHints={review?.runtime_hints} />
+      )}
+      {activeTab === 'sources' && (
+        <SourcesTab skillId={skill.skill_id} />
       )}
       {/* Transition Proposal Preview */}
       {proposalOpen && transitionProposal && (

@@ -68,7 +68,7 @@ Do not modify any other file.
 ## Todo
 
 - [x] Task 9.1 types + queries
-- [ ] Task 9.2 Sources tab + provenance
+- [x] Task 9.2 Sources tab + provenance
 - [ ] Task 9.3 Skills list + Home
 - [ ] Task 9.4 Sources screen
 - [ ] Task 9.5 e2e smoke
