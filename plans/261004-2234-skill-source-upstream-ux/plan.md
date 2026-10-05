@@ -65,7 +65,7 @@ Since 2026-10-05 this plan also owns the rest of the WebUI v1. The WebUI plan `p
 | 5 | [Source lifecycle and backfill](./phase-05-source-lifecycle-and-backfill.md) | 2, 3 | 10h | Done |
 | 6 | [CLI: upstream and sources](./phase-06-cli-upstream-and-sources.md) | 3, 4, 5 | 9h | Done |
 | 7 | [MCP tools and curator](./phase-07-mcp-tools-and-curator.md) | 3, 4, 5 | 6h | Done |
-| 8 | [Web API](./phase-08-web-api.md) | 3, 4, 5 | 6h | Pending |
+| 8 | [Web API](./phase-08-web-api.md) | 3, 4, 5 | 6h | In progress |
 | 9 | [Web UI](./phase-09-web-ui.md) | 8 | 8h | Pending |
 | 10 | [Distill handoff and runs](./phase-10-distill-handoff-and-runs.md) | 9 | 18h | Pending |
 | 11 | [Inbox, Insight, Patch Composer](./phase-11-inbox-insight-patch-composer.md) | 10 | 40h | Pending |
