@@ -245,6 +245,65 @@ func TestSourceImportCLI(t *testing.T) {
 	}
 }
 
+func TestSourceCommandsPhase6(t *testing.T) {
+	t.Parallel()
+
+	t.Run("source list grouped and json", func(t *testing.T) {
+		root := onboardCLIFilesystemSource(t)
+
+		// 1. source list --json contains "groups"
+		code, stdout, stderr := runCLIForTest([]string{"source", "list", "--workspace", root, "--json"})
+		if code != 0 {
+			t.Fatalf("list --json failed: %d, %s %s", code, stdout, stderr)
+		}
+		if !strings.Contains(stdout, `"groups"`) {
+			t.Fatalf("expected list --json to contain '\"groups\"', got:\n%s", stdout)
+		}
+
+		// 2. human list prints the repository heading and role
+		code, stdout, stderr = runCLIForTest([]string{"source", "list", "--workspace", root})
+		if code != 0 {
+			t.Fatalf("list human failed: %d, %s %s", code, stdout, stderr)
+		}
+		if !strings.Contains(stdout, "sources/upstream") {
+			t.Fatalf("expected repository heading in human output, got:\n%s", stdout)
+		}
+		if !strings.Contains(stdout, "learning-source") && !strings.Contains(stdout, "upstream") {
+			t.Fatalf("expected role in human output, got:\n%s", stdout)
+		}
+	})
+
+	t.Run("source watch without skill-id exits 2", func(t *testing.T) {
+		root := initTestWorkspace(t)
+		code, stdout, stderr := runCLIForTest([]string{"source", "watch", "https://github.com/example/skills.git", "--workspace", root})
+		if code != 2 {
+			t.Fatalf("expected exit 2, got %d, out=%s, err=%s", code, stdout, stderr)
+		}
+		if !strings.Contains(stderr, "A watched source must belong to a skill.") {
+			t.Fatalf("expected 'A watched source must belong to a skill.', got:\n%s", stderr)
+		}
+	})
+
+	t.Run("source backfill without candidates prints Nothing to backfill", func(t *testing.T) {
+		root := initTestWorkspace(t)
+		code, stdout, stderr := runCLIForTest([]string{"source", "backfill", "--workspace", root})
+		if code != 0 {
+			t.Fatalf("expected exit 0, got %d, out=%s, err=%s", code, stdout, stderr)
+		}
+		if !strings.Contains(stdout, "Nothing to backfill.") {
+			t.Fatalf("expected 'Nothing to backfill.', got:\n%s", stdout)
+		}
+	})
+
+	t.Run("source unwatch missing-id exits 2", func(t *testing.T) {
+		root := initTestWorkspace(t)
+		code, stdout, stderr := runCLIForTest([]string{"source", "unwatch", "missing-id", "--workspace", root})
+		if code != 2 {
+			t.Fatalf("expected exit 2, got %d, out=%s, err=%s", code, stdout, stderr)
+		}
+	})
+}
+
 func runCLIForTest(args []string) (int, string, string) {
 	var stdout, stderr bytes.Buffer
 	code := RunContext(context.Background(), args, &stdout, &stderr)
