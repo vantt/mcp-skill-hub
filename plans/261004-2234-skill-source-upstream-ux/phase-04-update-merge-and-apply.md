@@ -101,7 +101,7 @@ Do not modify any other file.
 
 - [x] Task 4.1 git-backed merge and diff
 - [x] Task 4.2 proposal kind
-- [ ] Task 4.3 preview / write set / confirm
+- [x] Task 4.3 preview / write set / confirm
 - [ ] Task 4.4 `make check`
 
 ## Success criteria
