@@ -11,9 +11,9 @@ const (
 	// CuratorSkillID is the stable identity used by host and distribution code.
 	CuratorSkillID = "system-curator"
 	// CuratorSkillVersion versions the bundled instructions independently of the binary.
-	CuratorSkillVersion = "1.4.0"
+	CuratorSkillVersion = "1.5.0"
 	// CuratorContractVersion versions the compatible tool and behavior contract.
-	CuratorContractVersion = "1"
+	CuratorContractVersion = "2"
 	// CuratorActivationPolicy prevents curation guidance from becoming an implicit
 	// primary procedure for ordinary substantive work.
 	CuratorActivationPolicy = "explicit-only"
@@ -33,6 +33,9 @@ var curatorCompatibleTools = []string{
 	"source_intake_list",
 	"source_triage",
 	"source_check",
+	"skill_upstream_status",
+	"source_link_preview",
+	"source_unwatch_preview",
 	"source_import_preview",
 	"source_import_confirm",
 	"curation_run_start",
