@@ -213,7 +213,7 @@ func readHomeCounts(ctx context.Context, root string, state *homeState) (resultE
 		{`SELECT count(*) FROM provenance WHERE kind='run' AND state IN ('failed','interrupted')`, &state.Summary.FailedOrInterruptedRuns},
 		{`SELECT count(*) FROM insights WHERE status='pending'`, &state.Summary.PendingInsights},
 		{`SELECT count(*) FROM insights WHERE status='pending' AND (json_extract(content_json,'$.high_value')=1 OR json_extract(content_json,'$.priority') IN ('high','critical'))`, &state.Summary.PendingHighValueInsights},
-		{`SELECT count(*) FROM canonical_entities s WHERE s.kind='source' AND (json_extract(s.content_json,'$.status') IN ('changed', 'distill_pending') OR json_extract(s.content_json,'$.distilled_revision') IS NULL) AND NOT (json_extract(s.content_json,'$.purpose') = 'upstream' AND NOT EXISTS (SELECT 1 FROM canonical_entities l WHERE l.kind='skill_source_link' AND json_extract(l.content_json,'$.source_id') = s.id AND json_extract(l.content_json,'$.role') IN ('learning-source','inspiration')))`, &state.ChangedSources},
+		{`SELECT count(*) FROM canonical_entities s WHERE s.kind='source' AND (json_extract(s.content_json,'$.status') IN ('changed', 'distill_pending') OR json_extract(s.content_json,'$.distilled_revision') IS NULL) AND NOT (COALESCE(json_extract(s.content_json,'$.purpose'), '') = 'upstream' AND NOT EXISTS (SELECT 1 FROM canonical_entities l WHERE l.kind='skill_source_link' AND json_extract(l.content_json,'$.source_id') = s.id AND json_extract(l.content_json,'$.role') IN ('learning-source','inspiration')))`, &state.ChangedSources},
 	}
 	for _, item := range queries {
 		if err := handle.DB.QueryRowContext(ctx, item.query).Scan(item.target); err != nil {
