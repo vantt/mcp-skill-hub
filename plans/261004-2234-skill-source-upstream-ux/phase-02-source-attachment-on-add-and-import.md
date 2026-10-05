@@ -75,7 +75,7 @@ Do not modify any other file.
 - [x] Task 2.1 matching helper
 - [x] Task 2.2 `skill add` attachment
 - [x] Task 2.3 `source import` origin
-- [ ] Task 2.4 CLI output
+- [x] Task 2.4 CLI output
 - [ ] Task 2.5 `make check`
 
 ## Success criteria
