@@ -6,7 +6,7 @@ import { SkillsScreen } from './screens/skills/SkillsScreen';
 import { AddSkillScreen } from './screens/skill-add/AddSkillScreen';
 import { CreateSkillScreen } from './screens/skill-create/CreateSkillScreen';
 import { SkillDetailScreen } from './screens/skill-detail/SkillDetailScreen';
-
+import { SourcesScreen } from './screens/sources/SourcesScreen';
 export const routes: RouteObject[] = [
   {
     path: '/',
@@ -30,7 +30,7 @@ export const routes: RouteObject[] = [
   },
   {
     path: '/sources',
-    Component: LaterPhasePage,
+    Component: SourcesScreen,
   },
   {
     path: '/sources/watch',
