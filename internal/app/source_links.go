@@ -139,8 +139,8 @@ func (service SourceService) PreviewAttach(ctx context.Context, path string, inp
 
 	hasSourceID := strings.TrimSpace(input.SourceID) != ""
 	hasLocator := strings.TrimSpace(input.Locator) != ""
-	if (hasSourceID && hasLocator) || (!hasSourceID && !hasLocator) {
-		return SourceProposal{Result: ErrorResult(NewInvalidRequestError("specify exactly one of source_id or locator", "Pass either source_id or locator."))}, nil
+	if !hasSourceID && !hasLocator {
+		return SourceProposal{Result: ErrorResult(NewInvalidRequestError("specify either source_id or locator", "Pass either source_id to link an existing source or locator to watch a new source."))}, nil
 	}
 
 	_, records, err := readSourceRecords(root)
@@ -155,37 +155,31 @@ func (service SourceService) PreviewAttach(ctx context.Context, path string, inp
 		if prop := validateSourceWatchLocator(input.Locator); prop != nil {
 			return *prop, nil
 		}
-		var matchedRecord *sourcepkg.Record
-		for i := range records {
-			r := &records[i]
-			if r.Adapter == "git" && sameRepository(r.Locator.Repository, input.Locator) &&
-				(input.Ref == "" || r.Locator.Ref == input.Ref) &&
-				r.Locator.Path == input.Path {
-				matchedRecord = r
-				break
-			}
+		adapter, ok := service.Adapters["git"]
+		if !ok {
+			return SourceProposal{}, fmt.Errorf("git adapter is not configured")
 		}
-		if matchedRecord != nil {
-			sourceRecord = *matchedRecord
+		route, rProp := resolveSourceWatchRoute(ctx, adapter, input.Locator, input.Ref, input.Path)
+		if rProp != nil {
+			return *rProp, nil
+		}
+		watchInput := SourceWatchInput{
+			Locator:  input.Locator,
+			SourceID: input.SourceID,
+			Ref:      input.Ref,
+			Path:     input.Path,
+			Cadence:  input.Cadence,
+		}
+		cfg, cProp := deriveSourceWatchConfig(watchInput, route)
+		if cProp != nil {
+			return *cProp, nil
+		}
+		if collisionProp := checkExistingSourceCollisions(records, cfg); collisionProp != nil {
+			if collisionProp.Error != nil {
+				return *collisionProp, nil
+			}
+			sourceRecord = collisionProp.Source
 		} else {
-			adapter, ok := service.Adapters["git"]
-			if !ok {
-				return SourceProposal{}, fmt.Errorf("git adapter is not configured")
-			}
-			route, rProp := resolveSourceWatchRoute(ctx, adapter, input.Locator, input.Ref, input.Path)
-			if rProp != nil {
-				return *rProp, nil
-			}
-			watchInput := SourceWatchInput{
-				Locator: input.Locator,
-				Ref:     input.Ref,
-				Path:    input.Path,
-				Cadence: input.Cadence,
-			}
-			cfg, cProp := deriveSourceWatchConfig(watchInput, route)
-			if cProp != nil {
-				return *cProp, nil
-			}
 			record, _, recProp, bErr := buildSourceWatchRecord(ctx, adapter, cfg, "")
 			if bErr != nil {
 				return SourceProposal{}, bErr

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/vantt/mcp-skill-hub/internal/catalog"
 	"github.com/vantt/mcp-skill-hub/internal/mutation"
+	"github.com/vantt/mcp-skill-hub/internal/skill"
 	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
 	"github.com/vantt/mcp-skill-hub/internal/telemetry"
 	"github.com/vantt/mcp-skill-hub/internal/workspace"
@@ -40,7 +41,7 @@ type SourceListResult struct {
 }
 
 type SourceTriageInput struct {
-	CandidateID, Decision, DecisionReason, SourceID, Adapter, Ref, SourcePath, License, Trust, Cadence, SkillID, IdempotencyKey string
+	CandidateID, Decision, DecisionReason, SourceID, Adapter, Ref, SourcePath, License, Trust, Cadence, SkillID, NewSkillID, IdempotencyKey string
 	MonitoringEnabled                                                                                                           bool
 }
 
@@ -247,8 +248,29 @@ func (service SourceService) TriageSourceCandidate(ctx context.Context, path str
 	case "accept":
 		proposal, previewErr := service.previewOnboarding(ctx, root, candidate, candidateBytes, input)
 		return proposal, SourceMutationResult{}, previewErr
+	case "import":
+		addService := SkillAddService{
+			Clock:    service.Clock,
+			Adapters: service.Adapters,
+		}
+		addProposal, addErr := addService.PreviewSkillAdd(ctx, root, SkillAddInput{
+			Locator:        candidate.Locator,
+			CandidateID:    candidate.ID,
+			IdempotencyKey: input.IdempotencyKey,
+		})
+		if addErr != nil {
+			return SourceProposal{}, SourceMutationResult{}, addErr
+		}
+		sourceProp := SourceProposal{
+			Result:       addProposal.Result,
+			CandidateID:  candidate.ID,
+			Confirmation: addProposal.Confirmation,
+			planned:      addProposal.planned,
+			expiresAt:    addProposal.expiresAt,
+		}
+		return sourceProp, SourceMutationResult{}, nil
 	default:
-		return SourceProposal{}, SourceMutationResult{}, errors.New("triage decision must be accept, defer, or reject")
+		return SourceProposal{}, SourceMutationResult{}, errors.New("triage decision must be accept, defer, reject, or import")
 	}
 }
 
@@ -342,18 +364,45 @@ func (service SourceService) previewOnboarding(ctx context.Context, root string,
 	sourceBytes, _ := sourcepkg.MarshalCanonical(record)
 	changes := []mutation.Change{{Path: "sources/intake/" + candidate.ID + ".yaml", BeforeDigest: sourcepkg.Digest(candidateBytes), Contents: candidateAfter}, {Path: "sources/catalog/" + record.ID + ".yaml", Contents: sourceBytes}}
 	diff := SourceDiff{Added: []string{"sources/catalog/" + record.ID + ".yaml"}, Modified: []string{"sources/intake/" + candidate.ID + ".yaml"}, Deleted: []string{}}
-	var link *sourcepkg.Link
-	if input.SkillID != "" {
-		linkID := "LINK-" + input.SkillID + "--" + record.ID
-		link = &sourcepkg.Link{SchemaVersion: 1, ID: linkID, SkillID: input.SkillID, SourceID: record.ID, Role: "learning-source"}
-		linkBytes, marshalErr := sourcepkg.MarshalCanonical(link)
-		if marshalErr != nil {
-			return SourceProposal{}, marshalErr
+	skillID := strings.TrimSpace(input.SkillID)
+	newSkillID := strings.TrimSpace(input.NewSkillID)
+	if (skillID == "" && newSkillID == "") || (skillID != "" && newSkillID != "") {
+		prop := SourceProposal{
+			Result: ErrorResult(NewInvalidRequestError(
+				"accept requires either --skill-id or --new-skill",
+				"Specify --skill-id <id> to link an existing skill, --new-skill <id> to scaffold a new skill, or use --decision import to vendor its skills.",
+			)),
 		}
-		linkPath := "sources/skills/" + linkID + ".yaml"
-		changes = append(changes, mutation.Change{Path: linkPath, Contents: linkBytes})
-		diff.Added = append(diff.Added, linkPath)
+		return prop, nil
 	}
+
+	targetSkillID := skillID
+	if newSkillID != "" {
+		targetSkillID = newSkillID
+		manager := skill.Manager{Clock: service.Clock.Now}
+		skillCreatePrev, err := manager.PreviewCreate(ctx, root, skill.CreateInput{
+			ID:          newSkillID,
+			Collection:  "default",
+			Name:        newSkillID,
+			Description: fmt.Sprintf("Skill that learns from %s.", identity.Name),
+		}, false)
+		if err != nil {
+			return SourceProposal{}, err
+		}
+		for _, c := range skillCreatePrev.WriteSet().Changes {
+			changes = append(changes, c)
+			diff.Added = append(diff.Added, c.Path)
+		}
+	}
+	linkID := "LINK-" + targetSkillID + "--" + record.ID
+	link := &sourcepkg.Link{SchemaVersion: 1, ID: linkID, SkillID: targetSkillID, SourceID: record.ID, Role: "learning-source"}
+	linkBytes, marshalErr := sourcepkg.MarshalCanonical(link)
+	if marshalErr != nil {
+		return SourceProposal{}, marshalErr
+	}
+	linkPath := "sources/skills/" + linkID + ".yaml"
+	changes = append(changes, mutation.Change{Path: linkPath, Contents: linkBytes})
+	diff.Added = append(diff.Added, linkPath)
 	set := mutation.WriteSet{Command: "source_onboard", IdempotencyKey: input.IdempotencyKey, Changes: changes}
 	planned, err := mutation.PlanMutation(root, set)
 	if err != nil {

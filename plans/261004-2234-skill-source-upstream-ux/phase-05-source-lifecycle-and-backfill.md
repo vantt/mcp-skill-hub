@@ -75,7 +75,7 @@ Do not modify any other file.
 ## Todo
 
 - [x] Task 5.1 attach / detach / unwatch
-- [ ] Task 5.2 watch + triage outcomes
+- [x] Task 5.2 watch + triage outcomes
 - [ ] Task 5.3 grouped list + import-more
 - [ ] Task 5.4 backfill
 - [ ] Task 5.5 status actions

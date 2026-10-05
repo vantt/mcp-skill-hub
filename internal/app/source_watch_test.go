@@ -44,6 +44,7 @@ func TestLocalWatchReturnsUnsupportedWithoutWrites(t *testing.T) {
 func TestSourceWatchPreviewAndConfirmPublicGitHub(t *testing.T) {
 	t.Parallel()
 	root := newSourceWorkspace(t)
+	createAndActivateSkill(t, SkillService{}, root)
 
 	adapter := &fakeSourceAdapter{
 		revisions: map[string]sourcepkg.Revision{
@@ -62,6 +63,7 @@ func TestSourceWatchPreviewAndConfirmPublicGitHub(t *testing.T) {
 	// 1. Preview source watch
 	preview, err := service.PreviewSourceWatch(ctx, root, SourceWatchInput{
 		Locator:  testGitHubURL,
+		SkillID:  "consumer-review",
 		SourceID: "custom-watch",
 	})
 	if err != nil {
@@ -79,8 +81,15 @@ func TestSourceWatchPreviewAndConfirmPublicGitHub(t *testing.T) {
 	if !preview.Source.Monitoring.Enabled || preview.Source.Monitoring.Cadence != "weekly" {
 		t.Fatalf("expected default weekly enabled monitoring, got %#v", preview.Source.Monitoring)
 	}
-	if len(preview.Diff.Added) != 1 || preview.Diff.Added[0] != "sources/catalog/custom-watch.yaml" {
-		t.Fatalf("unexpected diff added: %v", preview.Diff.Added)
+	hasCatalog := false
+	for _, p := range preview.Diff.Added {
+		if p == "sources/catalog/custom-watch.yaml" {
+			hasCatalog = true
+			break
+		}
+	}
+	if !hasCatalog {
+		t.Fatalf("diff added missing catalog record: %v", preview.Diff.Added)
 	}
 
 	// 2. Confirm source watch
@@ -106,16 +115,16 @@ func TestSourceWatchPreviewAndConfirmPublicGitHub(t *testing.T) {
 	skillsEntries, err := os.ReadDir(filepath.Join(root, "skills"))
 	if err == nil {
 		for _, entry := range skillsEntries {
-			if entry.Name() != ".gitkeep" {
+			if entry.Name() != ".gitkeep" && entry.Name() != "consumer-review" && entry.Name() != "software" {
 				t.Fatalf("source watch unexpectedly created skill file: %s", entry.Name())
 			}
 		}
 	}
 }
-
 func TestSourceWatchIdempotencyAndConflict(t *testing.T) {
 	t.Parallel()
 	root := newSourceWorkspace(t)
+	createAndActivateSkill(t, SkillService{}, root)
 
 	adapter := &fakeSourceAdapter{
 		revisions: map[string]sourcepkg.Revision{
@@ -135,6 +144,7 @@ func TestSourceWatchIdempotencyAndConflict(t *testing.T) {
 	// 1. Initial watch
 	preview, err := service.PreviewSourceWatch(ctx, root, SourceWatchInput{
 		Locator:  testGitHubURL,
+		SkillID:  "consumer-review",
 		SourceID: "shared-source",
 		Cadence:  "weekly",
 	})
@@ -149,6 +159,7 @@ func TestSourceWatchIdempotencyAndConflict(t *testing.T) {
 	// 2. Exact same configuration -> idempotent success
 	idempotentPreview, err := service.PreviewSourceWatch(ctx, root, SourceWatchInput{
 		Locator:  testGitHubURL,
+		SkillID:  "consumer-review",
 		SourceID: "shared-source",
 		Cadence:  "weekly",
 	})
@@ -165,6 +176,7 @@ func TestSourceWatchIdempotencyAndConflict(t *testing.T) {
 	// 3. Same ID with different policy -> conflict
 	conflictPreview, err := service.PreviewSourceWatch(ctx, root, SourceWatchInput{
 		Locator:  testGitHubURL,
+		SkillID:  "consumer-review",
 		SourceID: "shared-source",
 		Cadence:  "daily", // different cadence!
 	})
@@ -178,6 +190,7 @@ func TestSourceWatchIdempotencyAndConflict(t *testing.T) {
 	// 4. Same locator under different ID with different policy -> conflict
 	diffIDPreview, err := service.PreviewSourceWatch(ctx, root, SourceWatchInput{
 		Locator:  testGitHubURL,
+		SkillID:  "consumer-review",
 		SourceID: "different-id",
 		Cadence:  "daily",
 	})
@@ -192,6 +205,7 @@ func TestSourceWatchIdempotencyAndConflict(t *testing.T) {
 func TestMonitoringDisabledRemainsFalseBUG01(t *testing.T) {
 	t.Parallel()
 	root := newSourceWorkspace(t)
+	createAndActivateSkill(t, SkillService{}, root)
 
 	adapter := &fakeSourceAdapter{
 		revisions: map[string]sourcepkg.Revision{
@@ -211,6 +225,7 @@ func TestMonitoringDisabledRemainsFalseBUG01(t *testing.T) {
 	noMonitor := false
 	preview, err := service.PreviewSourceWatch(ctx, root, SourceWatchInput{
 		Locator:           testGitHubURL,
+		SkillID:           "consumer-review",
 		SourceID:          "unmonitored",
 		MonitoringEnabled: &noMonitor,
 	})
@@ -251,6 +266,7 @@ func TestMonitoringDisabledRemainsFalseBUG01(t *testing.T) {
 func TestSourceWatchStaleProposalFails(t *testing.T) {
 	t.Parallel()
 	root := newSourceWorkspace(t)
+	createAndActivateSkill(t, SkillService{}, root)
 
 	adapter := &fakeSourceAdapter{
 		revisions: map[string]sourcepkg.Revision{
@@ -268,6 +284,7 @@ func TestSourceWatchStaleProposalFails(t *testing.T) {
 
 	preview, err := service.PreviewSourceWatch(ctx, root, SourceWatchInput{
 		Locator:  testGitHubURL,
+		SkillID:  "consumer-review",
 		SourceID: "stale-watch",
 	})
 	if err != nil || preview.Error != nil {
@@ -294,5 +311,77 @@ func TestSourceWatchStaleProposalFails(t *testing.T) {
 	}
 	if resultExp.Status != StatusError || resultExp.Error == nil || resultExp.Error.Code != ErrorStaleProposal {
 		t.Fatalf("expected ErrorStaleProposal for expired preview, got %#v", resultExp)
+	}
+}
+
+func TestSourceWatchWithoutSkillReturnsInvalidRequest(t *testing.T) {
+	t.Parallel()
+	root := newSourceWorkspace(t)
+	service := SourceService{
+		Clock: sourceClock{now: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)},
+	}
+
+	proposal, err := service.PreviewSourceWatch(context.Background(), root, SourceWatchInput{
+		Locator:  testGitHubURL,
+		SourceID: "no-skill-watch",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if proposal.Error == nil {
+		t.Fatal("expected error for watch without skill, got nil")
+	}
+	if proposal.Error.Code != ErrorInvalidRequest {
+		t.Fatalf("expected ErrorInvalidRequest, got %s", proposal.Error.Code)
+	}
+	if proposal.Error.Render.Why != "A watched source must belong to a skill." {
+		t.Fatalf("expected 'A watched source must belong to a skill.', got %q", proposal.Error.Render.Why)
+	}
+}
+
+func TestSourceWatchDotGitReuseDoesNotDuplicate(t *testing.T) {
+	t.Parallel()
+	root := newSourceWorkspace(t)
+	createAndActivateSkill(t, SkillService{}, root)
+
+	adapter := &fakeSourceAdapter{
+		revisions: map[string]sourcepkg.Revision{
+			"source-shared": revision("one"),
+		},
+		errors: map[string]error{},
+	}
+
+	service := SourceService{
+		Clock:    sourceClock{now: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)},
+		Adapters: map[string]sourcepkg.Adapter{"git": adapter},
+	}
+	ctx := context.Background()
+
+	// 1. Watch with .git
+	prev1, err := service.PreviewSourceWatch(ctx, root, SourceWatchInput{
+		Locator:  "https://github.com/example/skills.git",
+		SkillID:  "consumer-review",
+		SourceID: "source-shared",
+		Cadence:  "weekly",
+	})
+	if err != nil || prev1.Error != nil {
+		t.Fatalf("prev1 failed: %v, %#v", err, prev1.Error)
+	}
+	res1, err := service.ConfirmSourceWatch(ctx, root, prev1, prev1.Confirmation.Confirmation.Pins)
+	if err != nil || res1.Error != nil {
+		t.Fatalf("confirm1 failed: %v, %#v", err, res1.Error)
+	}
+
+	// 2. Watch without .git - must reuse the existing source
+	prev2, err := service.PreviewSourceWatch(ctx, root, SourceWatchInput{
+		Locator:  "https://github.com/example/skills",
+		SkillID:  "consumer-review",
+		Cadence:  "weekly",
+	})
+	if err != nil || prev2.Error != nil {
+		t.Fatalf("prev2 failed: %v, %#v", err, prev2.Error)
+	}
+	if prev2.Source.ID != "source-shared" {
+		t.Fatalf("expected reused source ID source-shared, got %s", prev2.Source.ID)
 	}
 }

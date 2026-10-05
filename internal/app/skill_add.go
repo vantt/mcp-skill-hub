@@ -40,6 +40,7 @@ type SkillAddInput struct {
 	Collection     string `json:"collection,omitempty"`      // Target collection, defaults to "default"
 	IdempotencyKey string `json:"idempotency_key,omitempty"` // Optional idempotency key
 	FullDiff       bool   `json:"full_diff,omitempty"`       // Whether to include full diff
+	CandidateID    string `json:"-"`                         // Optional candidate ID when invoked from triage import
 }
 
 // SkillOrigin contains privacy-safe origin metadata matching the schema.
@@ -216,6 +217,21 @@ func (service SkillAddService) PreviewSkillAdd(ctx context.Context, path string,
 	idempotencyKey := strings.TrimSpace(input.IdempotencyKey)
 	if idempotencyKey == "" {
 		idempotencyKey = fmt.Sprintf("skill_add:%s:%s", primaryTargetID, strings.TrimPrefix(requestDigest, "sha256:")[:32])
+	}
+
+	if input.CandidateID != "" {
+		cand, candBytes, cErr := findCandidate(root, input.CandidateID)
+		if cErr == nil {
+			cand.Status = "accepted"
+			candAfter, _ := sourcepkg.MarshalCanonical(cand)
+			candPath := "sources/intake/" + cand.ID + ".yaml"
+			changes = append(changes, mutation.Change{
+				Path:         candPath,
+				BeforeDigest: sourcepkg.Digest(candBytes),
+				Contents:     candAfter,
+			})
+			diffAdded = append(diffAdded, candPath)
+		}
 	}
 
 	planCtx := skillAddPlanContext{

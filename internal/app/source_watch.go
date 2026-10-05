@@ -17,6 +17,7 @@ import (
 // SourceWatchInput specifies the desired watch policy for a public GitHub source.
 type SourceWatchInput struct {
 	Locator           string `json:"locator"`
+	SkillID           string `json:"skill_id,omitempty"`
 	SourceID          string `json:"source_id,omitempty"`
 	Ref               string `json:"ref,omitempty"`
 	Path              string `json:"path,omitempty"`
@@ -41,47 +42,26 @@ func (service SourceService) PreviewSourceWatch(ctx context.Context, path string
 		return *valProp, nil
 	}
 
-	adapter, ok := service.Adapters["git"]
-	if !ok {
-		return SourceProposal{}, errors.New("git source adapter is not configured")
+	skillID := strings.TrimSpace(input.SkillID)
+	if skillID == "" {
+		prop := SourceProposal{
+			Result: ErrorResult(NewInvalidRequestError(
+				"A watched source must belong to a skill.",
+				"Pass --skill-id <id> to use it as a learning reference, run `skillhub skill add <locator>` to vendor its skills, or `skillhub source capture <locator> --reason <text>` to save it for later.",
+			)),
+		}
+		return prop, nil
 	}
 
-	inspectionContext, cancelInspection := context.WithTimeout(ctx, sourcepkg.DefaultTimeout)
-	defer cancelInspection()
-
-	resolved, resProp := resolveSourceWatchRoute(inspectionContext, adapter, rawLocator, input.Ref, input.Path)
-	if resProp != nil {
-		return *resProp, nil
-	}
-
-	cfg, cfgProp := deriveSourceWatchConfig(input, resolved)
-	if cfgProp != nil {
-		return *cfgProp, nil
-	}
-
-	_, records, err := readSourceRecords(root)
-	if err != nil {
-		return SourceProposal{}, err
-	}
-	if collisionProp := checkExistingSourceCollisions(records, cfg); collisionProp != nil {
-		return *collisionProp, nil
-	}
-
-	record, revision, recProp, err := buildSourceWatchRecord(inspectionContext, adapter, cfg, input.License)
-	if err != nil {
-		return SourceProposal{}, err
-	}
-	if recProp != nil {
-		return *recProp, nil
-	}
-
-	proposal, err := buildAndStoreSourceWatchProposal(root, service.Clock, record, input.IdempotencyKey)
-	if err != nil {
-		return SourceProposal{}, err
-	}
-
-	appendSourceSizeWarnings(inspectionContext, adapter, record, revision, &proposal)
-	return proposal, nil
+	return service.PreviewAttach(ctx, path, SourceAttachInput{
+		SkillID:        skillID,
+		SourceID:       input.SourceID,
+		Locator:        input.Locator,
+		Ref:            input.Ref,
+		Path:           input.Path,
+		Cadence:        input.Cadence,
+		IdempotencyKey: input.IdempotencyKey,
+	})
 }
 
 func validateSourceWatchLocator(rawLocator string) *SourceProposal {
@@ -218,7 +198,7 @@ func deriveSourceWatchConfig(input SourceWatchInput, resolved *sourcepkg.Resolve
 func checkExistingSourceCollisions(records []sourcepkg.Record, cfg sourceWatchConfig) *SourceProposal {
 	for _, rec := range records {
 		sameID := (rec.ID == cfg.sourceID)
-		sameLocator := (rec.Locator.Repository == cfg.locator.Repository && rec.Locator.Ref == cfg.locator.Ref && rec.Locator.Path == cfg.locator.Path)
+		sameLocator := (sameRepository(rec.Locator.Repository, cfg.locator.Repository) && rec.Locator.Ref == cfg.locator.Ref && rec.Locator.Path == cfg.locator.Path)
 		exactPolicy := (rec.Monitoring.Enabled == cfg.monitoringEnabled && rec.Monitoring.Cadence == cfg.cadence)
 
 		if sameID {

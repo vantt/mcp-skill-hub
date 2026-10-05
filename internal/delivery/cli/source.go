@@ -13,10 +13,10 @@ import (
 )
 
 type sourceFlags struct {
-	workspace, locator, reason, status, decision, sourceID, adapter, ref, sourcePath, license, trust, cadence, skillID string
+	workspace, locator, reason, status, decision, sourceID, adapter, ref, sourcePath, license, trust, cadence, skillID, newSkillID string
 	proposalID, proposalDigest, baseVersion, idempotencyKey                                                            string
 	jsonOutput, monitoring, yes                                                                                        bool
-	skills                                                                                                             []string
+	skills                                                                                                              []string
 }
 
 func runSource(ctx context.Context, args []string, stdout, stderr io.Writer) int {
@@ -82,7 +82,7 @@ func runSource(ctx context.Context, args []string, stdout, stderr io.Writer) int
 			return writeInvalidRequest(stdout, stderr, flags.jsonOutput, `unknown argument "--skill"`, "triage does not take --skill.")
 		}
 		if len(positionals) != 1 || flags.decision == "" {
-			return writeInvalidRequest(stdout, stderr, flags.jsonOutput, "triage requires one candidate ID and --decision", "Use accept, defer, or reject.")
+			return writeInvalidRequest(stdout, stderr, flags.jsonOutput, "triage requires one candidate ID and --decision", "Use accept, defer, reject, or import.")
 		}
 	case "confirm":
 		if flags.yes {
@@ -151,7 +151,7 @@ func runSource(ctx context.Context, args []string, stdout, stderr io.Writer) int
 		}
 		finishTelemetry := startCommandTelemetry(flags.workspace, func(sink app.TelemetrySink) { service.Telemetry = sink })
 		defer finishTelemetry()
-		proposal, result, err := service.TriageSourceCandidate(ctx, flags.workspace, app.SourceTriageInput{CandidateID: positionals[0], Decision: flags.decision, DecisionReason: flags.reason, SourceID: flags.sourceID, Adapter: flags.adapter, Ref: flags.ref, SourcePath: flags.sourcePath, License: flags.license, Trust: flags.trust, Cadence: flags.cadence, SkillID: flags.skillID, MonitoringEnabled: flags.monitoring, IdempotencyKey: flags.idempotencyKey})
+		proposal, result, err := service.TriageSourceCandidate(ctx, flags.workspace, app.SourceTriageInput{CandidateID: positionals[0], Decision: flags.decision, DecisionReason: flags.reason, SourceID: flags.sourceID, Adapter: flags.adapter, Ref: flags.ref, SourcePath: flags.sourcePath, License: flags.license, Trust: flags.trust, Cadence: flags.cadence, SkillID: flags.skillID, NewSkillID: flags.newSkillID, MonitoringEnabled: flags.monitoring, IdempotencyKey: flags.idempotencyKey})
 		if err != nil {
 			return writeSourceError(stdout, stderr, flags.jsonOutput, err)
 		}
@@ -237,7 +237,7 @@ func parseSourceFlags(args []string) (sourceFlags, []string, error) {
 			return args[i], nil
 		}
 		switch value {
-		case "--workspace", "--reason", "--status", "--decision", "--source-id", "--id", "--adapter", "--ref", "--path", "--license", "--trust", "--cadence", "--skill-id", "--proposal", "--proposal-digest", "--base-version", "--idempotency-key":
+		case "--workspace", "--reason", "--status", "--decision", "--source-id", "--id", "--adapter", "--ref", "--path", "--license", "--trust", "--cadence", "--skill-id", "--new-skill", "--proposal", "--proposal-digest", "--base-version", "--idempotency-key":
 			item, err := next()
 			if err != nil {
 				return flags, nil, err
@@ -267,6 +267,8 @@ func parseSourceFlags(args []string) (sourceFlags, []string, error) {
 				flags.cadence = item
 			case "--skill-id":
 				flags.skillID = item
+			case "--new-skill":
+				flags.newSkillID = item
 			case "--proposal":
 				flags.proposalID = item
 			case "--proposal-digest":

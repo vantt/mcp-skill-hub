@@ -44,6 +44,7 @@ type sourceTriageInput struct {
 	Trust             string                `json:"trust,omitempty"`
 	Cadence           string                `json:"cadence,omitempty"`
 	SkillID           string                `json:"skill_id,omitempty"`
+	NewSkillID        string                `json:"new_skill,omitempty"`
 	MonitoringEnabled *bool                 `json:"monitoring_enabled,omitempty"`
 	IdempotencyKey    string                `json:"idempotency_key,omitempty"`
 	Confirmation      *app.ConfirmationPins `json:"confirmation,omitempty"`
@@ -117,6 +118,7 @@ type skillAddPreviewInput struct {
 
 type sourceWatchPreviewInput struct {
 	Locator           string `json:"locator" jsonschema:"Public GitHub repository URL (e.g. https://github.com/owner/repo). Local folders are rejected."`
+	SkillID           string `json:"skill_id,omitempty" jsonschema:"Skill identifier to attach this watched source to."`
 	SourceID          string `json:"source_id,omitempty" jsonschema:"Optional explicit source identifier. Derived from repo/path if omitted."`
 	Ref               string `json:"ref,omitempty" jsonschema:"Optional branch, tag, or commit ref to monitor. Defaults to default branch."`
 	Path              string `json:"path,omitempty" jsonschema:"Optional subdirectory path within the repository to scope watching."`

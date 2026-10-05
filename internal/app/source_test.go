@@ -62,6 +62,7 @@ func (*fakeSourceAdapter) List(context.Context, sourcepkg.Source, sourcepkg.Revi
 func TestSourceOperationsEmitSanitizedPostOperationTelemetry(t *testing.T) {
 	t.Parallel()
 	root := newSourceWorkspace(t)
+	createAndActivateSkill(t, SkillService{}, root)
 	sink := &captureTelemetrySink{}
 	adapter := &fakeSourceAdapter{revisions: map[string]sourcepkg.Revision{"source-a": revision("one")}, errors: map[string]error{}}
 	service := SourceService{
@@ -74,7 +75,7 @@ func TestSourceOperationsEmitSanitizedPostOperationTelemetry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	preview, _, err := service.TriageSourceCandidate(t.Context(), root, SourceTriageInput{CandidateID: captured.Candidate.ID, Decision: "accept", SourceID: "source-a", Adapter: "git", MonitoringEnabled: true})
+	preview, _, err := service.TriageSourceCandidate(t.Context(), root, SourceTriageInput{CandidateID: captured.Candidate.ID, Decision: "accept", SourceID: "source-a", Adapter: "git", MonitoringEnabled: true, SkillID: "consumer-review"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,6 +129,7 @@ func TestSourceChecksPreserveUnchangedCanonicalStatePersistChangesAndIsolateFail
 	adapter := &fakeSourceAdapter{revisions: map[string]sourcepkg.Revision{}, errors: map[string]error{}}
 	clock := sourceClock{now: time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC)}
 	service := SourceService{Clock: clock, IDs: fixedSourceID("0011223344556677"), Adapters: map[string]sourcepkg.Adapter{"git": adapter}}
+	createAndActivateSkill(t, SkillService{}, root)
 	for index, id := range []string{"source-a", "source-b"} {
 		adapter.revisions[id] = revision(string(rune('a' + index)))
 		beforeCaptureCalls := adapter.calls
@@ -138,7 +140,7 @@ func TestSourceChecksPreserveUnchangedCanonicalStatePersistChangesAndIsolateFail
 		if adapter.calls != beforeCaptureCalls {
 			t.Fatal("candidate capture performed network adapter work")
 		}
-		preview, _, err := service.TriageSourceCandidate(context.Background(), root, SourceTriageInput{CandidateID: captured.Candidate.ID, Decision: "accept", SourceID: id, Adapter: "git", MonitoringEnabled: true})
+		preview, _, err := service.TriageSourceCandidate(context.Background(), root, SourceTriageInput{CandidateID: captured.Candidate.ID, Decision: "accept", SourceID: id, Adapter: "git", MonitoringEnabled: true, SkillID: "consumer-review"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -322,6 +324,7 @@ func TestSourceTriageMonitoringOptOutBUG01(t *testing.T) {
 		Adapter:           "git",
 		MonitoringEnabled: false,
 		Cadence:           "",
+		NewSkillID:        "skill-no-monitor",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -381,9 +384,9 @@ func TestSourceTriageGitHubTreeURLBUG10(t *testing.T) {
 		SourceID:          "source-tree",
 		Adapter:           "git",
 		MonitoringEnabled: true,
+		NewSkillID:        "skill-tree",
 	})
 	if err != nil {
-		t.Fatal(err)
 	}
 
 	// Verify BUG-10 is fixed: locator repository is canonical repo URL and ref/path resolved

@@ -89,12 +89,13 @@ func (adapter *Server) registerSourceTools(server *mcp.Server) {
 			CandidateID: input.CandidateID, Decision: input.Decision, DecisionReason: input.DecisionReason,
 			SourceID: input.SourceID, Adapter: input.Adapter, Ref: input.Ref, SourcePath: input.SourcePath,
 			License: input.License, Trust: input.Trust, Cadence: input.Cadence, SkillID: input.SkillID,
+			NewSkillID: input.NewSkillID,
 			MonitoringEnabled: monitor, IdempotencyKey: input.IdempotencyKey,
 		})
 		if err != nil {
 			return failure[sourceTriageResult](err)
 		}
-		if input.Decision == "accept" {
+		if input.Decision == "accept" || input.Decision == "import" {
 			return success(sourceTriageResult{Preview: &preview})
 		}
 		return appResult(sourceTriageResult{Mutation: &mutation}, nil)

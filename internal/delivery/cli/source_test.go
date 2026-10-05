@@ -132,6 +132,9 @@ func onboardCLIFilesystemSource(t *testing.T) string {
 	if err := os.WriteFile(filepath.Join(fixture, "notes.md"), []byte("upstream content\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	if c, _, se := runCLIForTest([]string{"skill", "create", "--workspace", root, "--id", "cli-skill", "--collection", "default", "--name", "CLI Skill", "--description", "CLI test skill", "--yes"}); c != 0 {
+		t.Fatalf("skill create failed: %s", se)
+	}
 	code, stdout, stderr := runCLIForTest([]string{"source", "capture", "sources/upstream", "--reason", "private source rationale", "--workspace", root, "--json"})
 	if code != 0 {
 		t.Fatalf("capture=%d stdout=%s stderr=%s", code, stdout, stderr)
@@ -140,7 +143,7 @@ func onboardCLIFilesystemSource(t *testing.T) string {
 	if err := json.Unmarshal([]byte(stdout), &captured); err != nil {
 		t.Fatal(err)
 	}
-	code, stdout, stderr = runCLIForTest([]string{"source", "triage", captured.Candidate.ID, "--decision", "accept", "--source-id", "source-a", "--adapter", "filesystem", "--workspace", root, "--json"})
+	code, stdout, stderr = runCLIForTest([]string{"source", "triage", captured.Candidate.ID, "--decision", "accept", "--source-id", "source-a", "--skill-id", "cli-skill", "--adapter", "filesystem", "--workspace", root, "--json"})
 	if code != 0 {
 		t.Fatalf("triage=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -183,6 +186,9 @@ func TestSourceImportCLI(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(skillMD), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	if c, _, se := runCLIForTest([]string{"skill", "create", "--workspace", root, "--id", "calc-skill", "--collection", "default", "--name", "Calc Skill", "--description", "Calc test skill", "--yes"}); c != 0 {
+		t.Fatalf("skill create failed: %s", se)
+	}
 
 	// Capture, triage, confirm
 	code, stdout, stderr := runCLIForTest([]string{"source", "capture", "sources/upstream", "--reason", "has skills", "--workspace", root, "--json"})
@@ -192,7 +198,7 @@ func TestSourceImportCLI(t *testing.T) {
 	var captured app.SourceCandidateResult
 	_ = json.Unmarshal([]byte(stdout), &captured)
 
-	code, stdout, stderr = runCLIForTest([]string{"source", "triage", captured.Candidate.ID, "--decision", "accept", "--source-id", "calc-source", "--adapter", "filesystem", "--workspace", root, "--json"})
+	code, stdout, stderr = runCLIForTest([]string{"source", "triage", captured.Candidate.ID, "--decision", "accept", "--source-id", "calc-source", "--skill-id", "calc-skill", "--adapter", "filesystem", "--workspace", root, "--json"})
 	if code != 0 {
 		t.Fatalf("triage failed: %d, %s %s", code, stdout, stderr)
 	}

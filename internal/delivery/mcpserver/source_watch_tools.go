@@ -23,6 +23,7 @@ func (adapter *Server) registerSourceWatchTools(server *mcp.Server) {
 		service := app.SourceService{}
 		return appResult(service.PreviewSourceWatch(ctx, adapter.workspace, app.SourceWatchInput{
 			Locator:           locator,
+			SkillID:           strings.TrimSpace(input.SkillID),
 			SourceID:          strings.TrimSpace(input.SourceID),
 			Ref:               strings.TrimSpace(input.Ref),
 			Path:              strings.TrimSpace(input.Path),
