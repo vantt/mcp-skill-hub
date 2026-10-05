@@ -63,7 +63,7 @@ func is40Hex(s string) bool {
 	}
 	for i := range s {
 		c := s[i]
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
 			return false
 		}
 	}
@@ -330,7 +330,6 @@ func diffReconstructedFiles(baseFiles, headFiles map[string][]byte) []sourcepkg.
 
 func checkSourceUpstream(
 	ctx context.Context,
-	root string,
 	adapter sourcepkg.Adapter,
 	record sourcepkg.Record,
 	skills []TrackedSkill,
@@ -367,42 +366,12 @@ func checkSourceUpstream(
 	refCommitAdapter, okRef := adapter.(remoteRefCommitAdapter)
 	_, okRev := adapter.(revisionAtAdapter)
 	if !okRef || !okRev {
-		states := make([]sourcepkg.UpstreamState, 0, len(skills))
-		for _, sk := range skills {
-			states = append(states, sourcepkg.UpstreamState{
-				SkillID:       sk.SkillID,
-				SourceID:      record.ID,
-				Repository:    record.Locator.Repository,
-				Ref:           record.Locator.Ref,
-				Path:          sk.Origin.Path,
-				BaseCommit:    sk.Origin.Commit,
-				CheckedCommit: "",
-				Upstream:      "unavailable",
-				CheckedAt:     now,
-				LastError:     sanitizeOperationalError(errors.New("adapter does not support upstream check")),
-			})
-		}
-		return states, nil
+		return unavailableUpstreamStates(record, skills, now, errors.New("adapter does not support upstream check")), nil
 	}
 
 	head, err := refCommitAdapter.RemoteRefCommit(ctx, record.Locator.Repository, record.Locator.Ref)
 	if err != nil {
-		states := make([]sourcepkg.UpstreamState, 0, len(skills))
-		for _, sk := range skills {
-			states = append(states, sourcepkg.UpstreamState{
-				SkillID:       sk.SkillID,
-				SourceID:      record.ID,
-				Repository:    record.Locator.Repository,
-				Ref:           record.Locator.Ref,
-				Path:          sk.Origin.Path,
-				BaseCommit:    sk.Origin.Commit,
-				CheckedCommit: "",
-				Upstream:      "unavailable",
-				CheckedAt:     now,
-				LastError:     sanitizeOperationalError(err),
-			})
-		}
-		return states, nil
+		return unavailableUpstreamStates(record, skills, now, err), nil
 	}
 
 	allUpToDate := len(skills) > 0
@@ -429,22 +398,7 @@ func checkSourceUpstream(
 		Limits:  record.Limits,
 	})
 	if syncErr != nil {
-		states := make([]sourcepkg.UpstreamState, 0, len(skills))
-		for _, sk := range skills {
-			states = append(states, sourcepkg.UpstreamState{
-				SkillID:       sk.SkillID,
-				SourceID:      record.ID,
-				Repository:    record.Locator.Repository,
-				Ref:           record.Locator.Ref,
-				Path:          sk.Origin.Path,
-				BaseCommit:    sk.Origin.Commit,
-				CheckedCommit: "",
-				Upstream:      "unavailable",
-				CheckedAt:     now,
-				LastError:     sanitizeOperationalError(syncErr),
-			})
-		}
-		return states, nil
+		return unavailableUpstreamStates(record, skills, now, syncErr), nil
 	}
 
 	var commitTime time.Time
@@ -454,113 +408,146 @@ func checkSourceUpstream(
 		}
 	}
 
+	checkCtx := upstreamCheckContext{Head: head, CommitTime: commitTime, Now: now}
 	states := make([]sourcepkg.UpstreamState, 0, len(skills))
 	for _, sk := range skills {
-		if is40Hex(sk.Origin.Ref) {
-			states = append(states, sourcepkg.UpstreamState{
-				SkillID:         sk.SkillID,
-				SourceID:        record.ID,
-				Repository:      record.Locator.Repository,
-				Ref:             record.Locator.Ref,
-				Path:            sk.Origin.Path,
-				BaseCommit:      sk.Origin.Commit,
-				CheckedCommit:   sk.Origin.Commit,
-				CheckedCommitAt: commitTime,
-				Upstream:        "pinned",
-				UpstreamDigest:  sk.Origin.FilesDigest,
-				ChangedFiles:    nil,
-				CheckedAt:       now,
-			})
-			continue
-		}
+		states = append(states, checkSkillUpstreamState(ctx, adapter, record, sk, checkCtx))
+	}
+	return states, nil
+}
 
-		if head == sk.Origin.Commit {
-			states = append(states, sourcepkg.UpstreamState{
-				SkillID:         sk.SkillID,
-				SourceID:        record.ID,
-				Repository:      record.Locator.Repository,
-				Ref:             record.Locator.Ref,
-				Path:            sk.Origin.Path,
-				BaseCommit:      sk.Origin.Commit,
-				CheckedCommit:   head,
-				CheckedCommitAt: commitTime,
-				Upstream:        "same",
-				UpstreamDigest:  sk.Origin.FilesDigest,
-				ChangedFiles:    []sourcepkg.Change{},
-				CheckedAt:       now,
-			})
-			continue
-		}
+type upstreamCheckContext struct {
+	Head       string
+	CommitTime time.Time
+	Now        time.Time
+}
 
-		headFiles, headRev, err := reconstructSkillFilesAtCommit(ctx, adapter, record, sk.Origin.Path, head, sk.SkillID)
-		if err != nil {
-			if errors.Is(err, sourcepkg.ErrPathNotFound) || errors.Is(err, errSkillNotFoundInCommit) {
-				states = append(states, sourcepkg.UpstreamState{
-					SkillID:         sk.SkillID,
-					SourceID:        record.ID,
-					Repository:      record.Locator.Repository,
-					Ref:             record.Locator.Ref,
-					Path:            sk.Origin.Path,
-					BaseCommit:      sk.Origin.Commit,
-					CheckedCommit:   head,
-					CheckedCommitAt: commitTime,
-					Upstream:        "removed",
-					UpstreamDigest:  "",
-					ChangedFiles:    nil,
-					CheckedAt:       now,
-				})
-			} else {
-				states = append(states, sourcepkg.UpstreamState{
-					SkillID:         sk.SkillID,
-					SourceID:        record.ID,
-					Repository:      record.Locator.Repository,
-					Ref:             record.Locator.Ref,
-					Path:            sk.Origin.Path,
-					BaseCommit:      sk.Origin.Commit,
-					CheckedCommit:   head,
-					CheckedCommitAt: commitTime,
-					Upstream:        "unavailable",
-					CheckedAt:       now,
-					LastError:       sanitizeOperationalError(err),
-				})
-			}
-			continue
-		}
-
-		upstreamDigest := filesDigestOf(headFiles)
-		upstreamStatus := "changed"
-		if sk.Origin.FilesDigest != "" {
-			if upstreamDigest == sk.Origin.FilesDigest {
-				upstreamStatus = "same"
-			}
-		} else if sk.Origin.FolderDigest != "" && headRev.ContentDigest == sk.Origin.FolderDigest {
-			upstreamStatus = "same"
-		}
-
-		baseFiles, _, baseErr := reconstructSkillFilesAtCommit(ctx, adapter, record, sk.Origin.Path, sk.Origin.Commit, sk.SkillID)
-		var changedFiles []sourcepkg.Change
-		if baseErr == nil {
-			changedFiles = diffReconstructedFiles(baseFiles, headFiles)
-		} else {
-			changedFiles = nil
-		}
-
+func unavailableUpstreamStates(record sourcepkg.Record, skills []TrackedSkill, now time.Time, err error) []sourcepkg.UpstreamState {
+	states := make([]sourcepkg.UpstreamState, 0, len(skills))
+	msg := sanitizeOperationalError(err)
+	for _, sk := range skills {
 		states = append(states, sourcepkg.UpstreamState{
+			SkillID:       sk.SkillID,
+			SourceID:      record.ID,
+			Repository:    record.Locator.Repository,
+			Ref:           record.Locator.Ref,
+			Path:          sk.Origin.Path,
+			BaseCommit:    sk.Origin.Commit,
+			CheckedCommit: "",
+			Upstream:      "unavailable",
+			CheckedAt:     now,
+			LastError:     msg,
+		})
+	}
+	return states
+}
+
+func checkSkillUpstreamState(
+	ctx context.Context,
+	adapter sourcepkg.Adapter,
+	record sourcepkg.Record,
+	sk TrackedSkill,
+	checkCtx upstreamCheckContext,
+) sourcepkg.UpstreamState {
+	if is40Hex(sk.Origin.Ref) {
+		return sourcepkg.UpstreamState{
 			SkillID:         sk.SkillID,
 			SourceID:        record.ID,
 			Repository:      record.Locator.Repository,
 			Ref:             record.Locator.Ref,
 			Path:            sk.Origin.Path,
 			BaseCommit:      sk.Origin.Commit,
-			CheckedCommit:   head,
-			CheckedCommitAt: commitTime,
-			Upstream:        upstreamStatus,
-			UpstreamDigest:  upstreamDigest,
-			ChangedFiles:    changedFiles,
-			CheckedAt:       now,
-		})
+			CheckedCommit:   sk.Origin.Commit,
+			CheckedCommitAt: checkCtx.CommitTime,
+			Upstream:        "pinned",
+			UpstreamDigest:  sk.Origin.FilesDigest,
+			ChangedFiles:    nil,
+			CheckedAt:       checkCtx.Now,
+		}
 	}
-	return states, nil
+
+	if checkCtx.Head == sk.Origin.Commit {
+		return sourcepkg.UpstreamState{
+			SkillID:         sk.SkillID,
+			SourceID:        record.ID,
+			Repository:      record.Locator.Repository,
+			Ref:             record.Locator.Ref,
+			Path:            sk.Origin.Path,
+			BaseCommit:      sk.Origin.Commit,
+			CheckedCommit:   checkCtx.Head,
+			CheckedCommitAt: checkCtx.CommitTime,
+			Upstream:        "same",
+			UpstreamDigest:  sk.Origin.FilesDigest,
+			ChangedFiles:    []sourcepkg.Change{},
+			CheckedAt:       checkCtx.Now,
+		}
+	}
+
+	headFiles, headRev, err := reconstructSkillFilesAtCommit(ctx, adapter, record, sk.Origin.Path, checkCtx.Head, sk.SkillID)
+	if err != nil {
+		if errors.Is(err, sourcepkg.ErrPathNotFound) || errors.Is(err, errSkillNotFoundInCommit) {
+			return sourcepkg.UpstreamState{
+				SkillID:         sk.SkillID,
+				SourceID:        record.ID,
+				Repository:      record.Locator.Repository,
+				Ref:             record.Locator.Ref,
+				Path:            sk.Origin.Path,
+				BaseCommit:      sk.Origin.Commit,
+				CheckedCommit:   checkCtx.Head,
+				CheckedCommitAt: checkCtx.CommitTime,
+				Upstream:        "removed",
+				UpstreamDigest:  "",
+				ChangedFiles:    nil,
+				CheckedAt:       checkCtx.Now,
+			}
+		}
+		return sourcepkg.UpstreamState{
+			SkillID:         sk.SkillID,
+			SourceID:        record.ID,
+			Repository:      record.Locator.Repository,
+			Ref:             record.Locator.Ref,
+			Path:            sk.Origin.Path,
+			BaseCommit:      sk.Origin.Commit,
+			CheckedCommit:   checkCtx.Head,
+			CheckedCommitAt: checkCtx.CommitTime,
+			Upstream:        "unavailable",
+			CheckedAt:       checkCtx.Now,
+			LastError:       sanitizeOperationalError(err),
+		}
+	}
+
+	upstreamDigest := filesDigestOf(headFiles)
+	upstreamStatus := "changed"
+	if sk.Origin.FilesDigest != "" {
+		if upstreamDigest == sk.Origin.FilesDigest {
+			upstreamStatus = "same"
+		}
+	} else if sk.Origin.FolderDigest != "" && headRev.ContentDigest == sk.Origin.FolderDigest {
+		upstreamStatus = "same"
+	}
+
+	baseFiles, _, baseErr := reconstructSkillFilesAtCommit(ctx, adapter, record, sk.Origin.Path, sk.Origin.Commit, sk.SkillID)
+	var changedFiles []sourcepkg.Change
+	if baseErr == nil {
+		changedFiles = diffReconstructedFiles(baseFiles, headFiles)
+	} else {
+		changedFiles = nil
+	}
+
+	return sourcepkg.UpstreamState{
+		SkillID:         sk.SkillID,
+		SourceID:        record.ID,
+		Repository:      record.Locator.Repository,
+		Ref:             record.Locator.Ref,
+		Path:            sk.Origin.Path,
+		BaseCommit:      sk.Origin.Commit,
+		CheckedCommit:   checkCtx.Head,
+		CheckedCommitAt: checkCtx.CommitTime,
+		Upstream:        upstreamStatus,
+		UpstreamDigest:  upstreamDigest,
+		ChangedFiles:    changedFiles,
+		CheckedAt:       checkCtx.Now,
+	}
 }
 
 func buildSkillUpstreamModel(

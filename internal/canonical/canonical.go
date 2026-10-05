@@ -110,7 +110,7 @@ func ValidateWithOptions(root string, opts ValidationOptions) ([]Issue, error) {
 			return nil, fmt.Errorf("canonical files exceed V1 aggregate limit of %d bytes at %s", workspace.MaxCanonicalBytesV1, rel)
 		}
 		totalBytes += int64(len(contents))
-		if hasConflictMarker(string(contents)) {
+		if HasConflictMarker(string(contents)) {
 			issues = append(issues, Issue{Path: rel, Message: "unresolved Git conflict marker"})
 		}
 		if !entityPath(rel) {
@@ -331,7 +331,7 @@ func entityPath(path string) bool {
 	return (strings.HasPrefix(path, "sources/") || strings.HasPrefix(path, "distill/") || strings.HasPrefix(path, "history/operations/") || strings.HasPrefix(path, "registry/collections/") || strings.HasPrefix(path, "evals/routing/")) && (strings.HasSuffix(path, ".yaml") || strings.HasSuffix(path, ".yml"))
 }
 
-func hasConflictMarker(contents string) bool {
+func HasConflictMarker(contents string) bool {
 	for _, line := range strings.Split(contents, "\n") {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "<<<<<<<") || strings.HasPrefix(line, "=======") || strings.HasPrefix(line, ">>>>>>>") {
@@ -339,6 +339,10 @@ func hasConflictMarker(contents string) bool {
 		}
 	}
 	return false
+}
+
+func hasConflictMarker(contents string) bool {
+	return HasConflictMarker(contents)
 }
 
 // Scan computes deterministic SHA-256 digests without reading runtime or Git metadata.

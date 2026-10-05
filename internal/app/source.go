@@ -521,7 +521,7 @@ func (service SourceService) CheckSources(ctx context.Context, path string, ids 
 
 		attachSkills := func() {
 			if len(skillsForSource) > 0 {
-				upstreamStates, uErr := checkSourceUpstream(ctx, root, adapter, record, skillsForSource, existingStates, now)
+				upstreamStates, uErr := checkSourceUpstream(ctx, adapter, record, skillsForSource, existingStates, now)
 				if uErr == nil {
 					_ = store.RecordUpstream(ctx, upstreamStates)
 				}
@@ -693,7 +693,7 @@ func (service SourceService) checkUpstreamOnlySource(
 		return item, errors.New(item.Error)
 	}
 
-	upstreamStates, checkErr := checkSourceUpstream(ctx, root, adapter, record, skills, existingStates, now)
+	upstreamStates, checkErr := checkSourceUpstream(ctx, adapter, record, skills, existingStates, now)
 	store := sourcepkg.OperationalStore{Root: root}
 
 	if checkErr != nil {

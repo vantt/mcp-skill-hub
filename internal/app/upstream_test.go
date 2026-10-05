@@ -155,9 +155,9 @@ func TestDeriveUpstreamStatus(t *testing.T) {
 			expectedLocal:  "clean",
 		},
 		{
-			name:     "unknown state base commit mismatch",
-			origin:   baseOrigin,
-			sourceID: "example-skills",
+			name:      "unknown state base commit mismatch",
+			origin:    baseOrigin,
+			sourceID:  "example-skills",
 			sourceRec: baseRecord,
 			state: func() *sourcepkg.UpstreamState {
 				s := *baseState
@@ -169,9 +169,9 @@ func TestDeriveUpstreamStatus(t *testing.T) {
 			expectedLocal:  "clean",
 		},
 		{
-			name:     "unknown state repository mismatch",
-			origin:   baseOrigin,
-			sourceID: "example-skills",
+			name:      "unknown state repository mismatch",
+			origin:    baseOrigin,
+			sourceID:  "example-skills",
 			sourceRec: baseRecord,
 			state: func() *sourcepkg.UpstreamState {
 				s := *baseState
@@ -183,9 +183,9 @@ func TestDeriveUpstreamStatus(t *testing.T) {
 			expectedLocal:  "clean",
 		},
 		{
-			name:     "unknown state ref mismatch",
-			origin:   baseOrigin,
-			sourceID: "example-skills",
+			name:      "unknown state ref mismatch",
+			origin:    baseOrigin,
+			sourceID:  "example-skills",
 			sourceRec: baseRecord,
 			state: func() *sourcepkg.UpstreamState {
 				s := *baseState
@@ -197,9 +197,9 @@ func TestDeriveUpstreamStatus(t *testing.T) {
 			expectedLocal:  "clean",
 		},
 		{
-			name:     "unknown state path mismatch",
-			origin:   baseOrigin,
-			sourceID: "example-skills",
+			name:      "unknown state path mismatch",
+			origin:    baseOrigin,
+			sourceID:  "example-skills",
 			sourceRec: baseRecord,
 			state: func() *sourcepkg.UpstreamState {
 				s := *baseState
@@ -211,9 +211,9 @@ func TestDeriveUpstreamStatus(t *testing.T) {
 			expectedLocal:  "clean",
 		},
 		{
-			name:     "state unavailable",
-			origin:   baseOrigin,
-			sourceID: "example-skills",
+			name:      "state unavailable",
+			origin:    baseOrigin,
+			sourceID:  "example-skills",
 			sourceRec: baseRecord,
 			state: func() *sourcepkg.UpstreamState {
 				s := *baseState
@@ -227,9 +227,9 @@ func TestDeriveUpstreamStatus(t *testing.T) {
 			expectedErr:    "git remote unreachable",
 		},
 		{
-			name:     "state removed yields upstream_removed",
-			origin:   baseOrigin,
-			sourceID: "example-skills",
+			name:      "state removed yields upstream_removed",
+			origin:    baseOrigin,
+			sourceID:  "example-skills",
 			sourceRec: baseRecord,
 			state: func() *sourcepkg.UpstreamState {
 				s := *baseState
@@ -241,9 +241,9 @@ func TestDeriveUpstreamStatus(t *testing.T) {
 			expectedLocal:  "clean",
 		},
 		{
-			name:     "same + clean yields up_to_date",
-			origin:   baseOrigin,
-			sourceID: "example-skills",
+			name:      "same + clean yields up_to_date",
+			origin:    baseOrigin,
+			sourceID:  "example-skills",
 			sourceRec: baseRecord,
 			state: func() *sourcepkg.UpstreamState {
 				s := *baseState
@@ -273,9 +273,9 @@ func TestDeriveUpstreamStatus(t *testing.T) {
 			expectedLocal:  "unknown",
 		},
 		{
-			name:     "same + modified local yields modified",
-			origin:   baseOrigin,
-			sourceID: "example-skills",
+			name:      "same + modified local yields modified",
+			origin:    baseOrigin,
+			sourceID:  "example-skills",
 			sourceRec: baseRecord,
 			state: func() *sourcepkg.UpstreamState {
 				s := *baseState
@@ -287,9 +287,9 @@ func TestDeriveUpstreamStatus(t *testing.T) {
 			expectedLocal:  "modified",
 		},
 		{
-			name:     "changed + clean yields update_available",
-			origin:   baseOrigin,
-			sourceID: "example-skills",
+			name:      "changed + clean yields update_available",
+			origin:    baseOrigin,
+			sourceID:  "example-skills",
 			sourceRec: baseRecord,
 			state: func() *sourcepkg.UpstreamState {
 				s := *baseState
@@ -319,9 +319,9 @@ func TestDeriveUpstreamStatus(t *testing.T) {
 			expectedLocal:  "unknown",
 		},
 		{
-			name:     "changed + modified local yields diverged",
-			origin:   baseOrigin,
-			sourceID: "example-skills",
+			name:      "changed + modified local yields diverged",
+			origin:    baseOrigin,
+			sourceID:  "example-skills",
 			sourceRec: baseRecord,
 			state: func() *sourcepkg.UpstreamState {
 				s := *baseState
