@@ -60,7 +60,7 @@ func (s *Server) handleSkills(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	list, err := s.skills.ListSkills(r.Context(), s.workspace, state)
+	list, err := s.skills.ListSkillsWithUpstream(r.Context(), s.workspace, state)
 	if err != nil {
 		writeError(w, err, false)
 		return

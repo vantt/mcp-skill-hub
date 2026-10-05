@@ -45,8 +45,10 @@ type Server struct {
 	skillAdd    app.SkillAddService
 	sources     app.SourceService
 	distill     app.DistillService
-	insights    app.InsightService
-	throttle    *authThrottle
+	insights     app.InsightService
+	upstream     app.UpstreamService
+	sourceImport app.SourceImportService
+	throttle     *authThrottle
 	hostMu      sync.Mutex
 	hostCacheAt time.Time
 	cachedIPs   map[string]bool
