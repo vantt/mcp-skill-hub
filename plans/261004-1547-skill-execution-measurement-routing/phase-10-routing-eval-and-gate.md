@@ -1,7 +1,7 @@
 ---
 phase: 10
 title: "Routing eval command, corpus, CI gate"
-status: pending
+status: done
 priority: P1
 effort: 10h
 dependencies: [9]
@@ -59,19 +59,19 @@ Modify:
 
 ## Steps
 
-- [ ] **1. Extract `resolveWithin`.**
+- [x] **1. Extract `resolveWithin`.**
   Pass: `go test -count=1 -run 'Resolve|Continuity' ./internal/app/` → `ok` with no test edits.
-- [ ] **2. Case generation, leave-one-out decorator, metrics** with a tiny two-skill workspace and hand-checked expected metrics.
+- [x] **2. Case generation, leave-one-out decorator, metrics** with a tiny two-skill workspace and hand-checked expected metrics.
   Pass: `go test -count=1 -run RoutingEval ./internal/app/` → `ok`.
-- [ ] **3. CLI** with exit codes 0/1/2, tested on the backfilled overlay workspace.
+- [x] **3. CLI** with exit codes 0/1/2, tested on the backfilled overlay workspace.
   Pass: `go test -count=1 -run Routing ./internal/delivery/cli/` → `ok`; `go run ./cmd/skillhub help eval` lists `routing`.
-- [ ] **4. Corpus, baseline, thresholds.** Author the corpus files; run the eval on the materialized workspace; write the baseline report; write `gate-v1.json` from the margin rule.
+- [x] **4. Corpus, baseline, thresholds.** Author the corpus files; run the eval on the materialized workspace; write the baseline report; write `gate-v1.json` from the margin rule.
   Pass: `reports/routing-eval-baseline-report.md` exists with all five metrics and the commit hash.
-- [ ] **5. Gate test.**
+- [x] **5. Gate test.**
   Pass: `go test -count=1 -run RoutingEvalGate -v ./internal/app/` → `ok`; record its duration in the report. [UNVERIFIED: target under 10 s on CI; measure, and if it exceeds 10 s, note it in the report rather than raising the budget silently.]
-- [ ] **6. Telemetry isolation:** after a full eval run, `telemetry.db` has no new `resolution.*` events.
+- [x] **6. Telemetry isolation:** after a full eval run, `telemetry.db` has no new `resolution.*` events.
   Pass: covered by a test in step 2 → `ok`.
-- [ ] **7. Gate.** Pass: `make check` exits 0.
+- [x] **7. Gate.** Pass: `make check` exits 0.
 
 ## Risks
 
@@ -89,3 +89,6 @@ Revert; drop `testdata/routing`. No runtime state.
 ## Failure protocol
 
 Follow `plan.md` → "Executor notes" → "Failure protocol". Never set thresholds from a run that has not been recorded in the baseline report. Write `reports/<agent>-<YYMMDD-HHMM>-routing-eval.md`, set `status: blocked`, report the blocker.
+
+## Implementation Note
+Extracted `resolveWithin` in `internal/app/resolver.go` and `ParsePolicy` in `internal/resolver/sqlite_catalog.go`. Implemented `RoutingEvalService` supporting leave-one-out case generation from skill examples and counter-examples alongside external no-skill suites. Created `testdata/routing/` corpus files (`examples-v1.json`, `no-skill-v1.yaml`, `gate-v1.json`) and backfilled workspace-overlay skills. Added CLI subcommand `skillhub eval routing` with threshold evaluation and exit codes 0/1/2. Implemented `TestRoutingEvalGate` running in under 2.5s, verified baseline thresholds, and documented results in `reports/routing-eval-baseline-report.md`.

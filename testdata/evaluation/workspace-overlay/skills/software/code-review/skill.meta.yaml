@@ -7,6 +7,13 @@ routing:
   operations: [review]
   triggers: [review code changes pull requests]
   not_for: [unrelated tasks]
+  examples:
+    - "inspect recent commits on this branch for regressions"
+    - "check git diff against main for security issues"
+    - "perform peer code review on open PR"
+  counter_examples:
+    - "deploy backend service to staging cluster"
+    - "design postgres table schema for user accounts"
   min_scope: multi_step
 quality:
   reviewed: true

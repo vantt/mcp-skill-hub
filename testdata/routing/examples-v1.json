@@ -1,0 +1,467 @@
+{
+  "code-review": {
+    "examples": [
+      "inspect this pull request diff for logic errors and regressions",
+      "review recent commits on the feature branch before merge",
+      "check incoming patch for security flaws and error handling gaps",
+      "conduct peer review on the authentication refactor pull request"
+    ],
+    "counter_examples": [
+      "deploy container image to kubernetes cluster",
+      "run automated playwright test suite in headless browser"
+    ]
+  },
+  "api-design": {
+    "examples": [
+      "design restful resource endpoints for the customer billing service",
+      "draft openapi 3.0 specification for the public search endpoint",
+      "define request and response json schema contracts for inventory management"
+    ],
+    "counter_examples": [
+      "design relational database tables and foreign keys",
+      "implement oauth jwt token verification middleware"
+    ]
+  },
+  "database-migration": {
+    "examples": [
+      "write zero downtime postgres migration adding order status column",
+      "generate flyway schema migration script for user table changes",
+      "plan rollback strategy for splitting accounts table"
+    ],
+    "counter_examples": [
+      "optimize slow running analytical query with explain plan",
+      "configure automated nightly s3 backup snapshots"
+    ]
+  },
+  "security-audit": {
+    "examples": [
+      "perform threat modeling and vulnerability scan on api gateway",
+      "audit codebase for cross site scripting and sql injection vectors",
+      "review authentication endpoints for broken object level authorization",
+      "inspect dependency tree for known cve security advisories"
+    ],
+    "counter_examples": [
+      "write unit test cases for payment service",
+      "setup prometheus alert manager for error spikes"
+    ]
+  },
+  "frontend-accessibility": {
+    "examples": [
+      "audit checkout form for wcag 2.1 aa compliance and screen reader usability",
+      "fix keyboard navigation and focus trapping inside modal dialogs",
+      "ensure all custom buttons have proper aria labels and color contrast"
+    ],
+    "counter_examples": [
+      "optimize react component re-renders with useMemo",
+      "write end to end playwright browser regression suite"
+    ]
+  },
+  "browser-testing": {
+    "examples": [
+      "write automated playwright test suite covering user signup flow",
+      "verify multi-step checkout form behavior across chromium and firefox",
+      "automate end-to-end browser verification of shopping cart interactions"
+    ],
+    "counter_examples": [
+      "write mock unit tests for string utility functions",
+      "measure page bundle size and tree shaking efficiency"
+    ]
+  },
+  "incident-debugging": {
+    "examples": [
+      "investigate 502 bad gateway error spike following production deploy",
+      "triage root cause of high memory exhaustion and oom kill on worker pods",
+      "diagnose connection pool starvation causing database timeout cascade",
+      "find root cause of sudden latency degradation during flash sale"
+    ],
+    "counter_examples": [
+      "write technical user guide for onboarding",
+      "rebase feature branch onto latest main"
+    ]
+  },
+  "performance-profiling": {
+    "examples": [
+      "profile cpu pprof flamegraph to identify hot loop in packet parser",
+      "analyze heap memory profile to track down memory leak in websocket server",
+      "measure request latency distribution and identify synchronous io bottlenecks"
+    ],
+    "counter_examples": [
+      "diagnose live production outage and mitigation steps",
+      "tune postgres compound b-tree index"
+    ]
+  },
+  "documentation-writing": {
+    "examples": [
+      "write developer getting started guide and installation instructions",
+      "author architectural decision record explaining migration to gRPC",
+      "document sdk usage examples and parameter references in markdown"
+    ],
+    "counter_examples": [
+      "write unit test cases for repository layer",
+      "design openapi rest endpoint contract"
+    ]
+  },
+  "kubernetes-operations": {
+    "examples": [
+      "configure horizontal pod autoscaler and resource limits for api deployment",
+      "troubleshoot crashloopbackoff state on ingress controller pods",
+      "define helm values and ingress routing rules for staging namespace"
+    ],
+    "counter_examples": [
+      "provision aws vpc and rds instance with terraform",
+      "deploy container image directly to bare metal"
+    ]
+  },
+  "terraform-infrastructure": {
+    "examples": [
+      "provision multi-az aws vpc and private subnets with terraform modules",
+      "configure terraform state locking with s3 bucket and dynamodb",
+      "write terraform plan to create cloudfront cdn distribution"
+    ],
+    "counter_examples": [
+      "configure kubernetes deployment replica count",
+      "write automated load testing script with k6"
+    ]
+  },
+  "payment-integration": {
+    "examples": [
+      "integrate stripe checkout session for subscription billing",
+      "verify webhook cryptographic signature for recurring payment charges",
+      "handle refund event notification and update customer balance"
+    ],
+    "counter_examples": [
+      "implement user login with oauth2 provider",
+      "design relational database schema for product catalog"
+    ]
+  },
+  "authentication": {
+    "examples": [
+      "implement google and github oauth2 login flow with jwt refresh tokens",
+      "configure session cookie storage with csrf protection",
+      "setup role based access control middleware for administrative routes"
+    ],
+    "counter_examples": [
+      "handle stripe subscription renewal webhook",
+      "audit web application for wcag accessibility"
+    ]
+  },
+  "react-performance": {
+    "examples": [
+      "eliminate unnecessary component re-renders using react devtools profiler",
+      "split large vendor javascript bundle with dynamic import code splitting",
+      "virtualize long list rendering to improve scrolling frame rate"
+    ],
+    "counter_examples": [
+      "audit aria labels and keyboard focus on dialog",
+      "write playwright integration test for login modal"
+    ]
+  },
+  "mobile-development": {
+    "examples": [
+      "build native push notification handler for react native on ios and android",
+      "configure deep linking and splash screen for mobile application",
+      "debug gesture responder freeze on android navigation transitions"
+    ],
+    "counter_examples": [
+      "optimize desktop chrome rendering bundle size",
+      "provision aws cloudfront cdn distribution"
+    ]
+  },
+  "data-analysis": {
+    "examples": [
+      "calculate monthly customer cohort retention and churn rates in pandas",
+      "generate descriptive statistics and summary distributions for sales dataset",
+      "visualize correlation matrix and outlier anomalies across telemetry metrics"
+    ],
+    "counter_examples": [
+      "train random forest classifier model",
+      "optimize postgres compound b-tree index"
+    ]
+  },
+  "machine-learning": {
+    "examples": [
+      "train gradient boosted decision tree classifier on tabular customer data",
+      "evaluate precision recall curves and f1 score for anomaly detection model",
+      "fine-tune sentence transformer embedding model for text classification"
+    ],
+    "counter_examples": [
+      "calculate simple mean and standard deviation of revenue numbers",
+      "resize and crop uploaded jpeg images"
+    ]
+  },
+  "image-processing": {
+    "examples": [
+      "batch resize user avatar photos and convert to webp format",
+      "crop product images to square aspect ratio with smart padding",
+      "generate responsive thumbnail sizes for uploaded image gallery"
+    ],
+    "counter_examples": [
+      "transcode h264 video to av1 format",
+      "train computer vision object detection model"
+    ]
+  },
+  "video-processing": {
+    "examples": [
+      "transcode mp4 recording to multiple adaptive bitrate hls streams with ffmpeg",
+      "extract audio track to aac format and generate keyframe poster image",
+      "trim intro silence and normalize audio loudness for video clip"
+    ],
+    "counter_examples": [
+      "compress and resize png user avatar images",
+      "stream audio packets over websocket connection"
+    ]
+  },
+  "git-workflow": {
+    "examples": [
+      "interactive rebase to squash multiple feature branch commits before merge",
+      "resolve complex three way merge conflicts across git branches",
+      "clean up stale local tracking branches and restore detached head state"
+    ],
+    "counter_examples": [
+      "generate semantic release changelog notes",
+      "review pull request code diff for security bugs"
+    ]
+  },
+  "release-management": {
+    "examples": [
+      "generate release notes and automated changelog based on conventional commits",
+      "bump package version numbers and create signed git release tag",
+      "coordinate multi-service release train and draft release candidate checklist"
+    ],
+    "counter_examples": [
+      "squash feature branch commits with git rebase",
+      "upgrade outdated npm dependency packages"
+    ]
+  },
+  "dependency-upgrade": {
+    "examples": [
+      "upgrade major version of framework dependencies and resolve breaking api changes",
+      "audit package lockfile for deprecated library versions and update pins",
+      "bump vulnerable npm packages to remediate security advisories"
+    ],
+    "counter_examples": [
+      "tag release candidate and compile changelog",
+      "extract duplicate helper functions into shared module"
+    ]
+  },
+  "refactoring": {
+    "examples": [
+      "extract monolithic god class into cohesive single responsibility services",
+      "replace complex nested conditional logic with polymorphism or strategy pattern",
+      "clean up duplicated business calculation helpers across payment handlers"
+    ],
+    "counter_examples": [
+      "upgrade major version of react framework",
+      "write unit tests to increase branch coverage"
+    ]
+  },
+  "unit-testing": {
+    "examples": [
+      "write isolated unit tests with mocks for order calculation service",
+      "add boundary and negative test cases for money formatting utilities",
+      "achieve 90 percent branch test coverage on domain entity validation logic"
+    ],
+    "counter_examples": [
+      "run browser end to end user signup flow",
+      "simulate 5000 concurrent virtual users under peak load"
+    ]
+  },
+  "load-testing": {
+    "examples": [
+      "simulate 10000 concurrent virtual users with k6 load test script",
+      "benchmark server throughput and response latency under sustained stress",
+      "measure p99 latency degradation as request rate ramps up to peak"
+    ],
+    "counter_examples": [
+      "write unit test cases for single function",
+      "profile cpu flamegraph with pprof in dev environment"
+    ]
+  },
+  "observability": {
+    "examples": [
+      "instrument distributed tracing spans across microservices with opentelemetry",
+      "define custom prometheus gauge and counter metrics for background queue depth",
+      "create grafana dashboard showing http request duration percentiles"
+    ],
+    "counter_examples": [
+      "add json structured logging statements",
+      "investigate active production incident downtime"
+    ]
+  },
+  "logging": {
+    "examples": [
+      "standardize structured json log format with correlation ids and timestamp",
+      "configure log context propagation across asynchronous worker tasks",
+      "mask personal identifiable information in application log outputs"
+    ],
+    "counter_examples": [
+      "create grafana dashboard for server cpu metrics",
+      "audit openapi documentation schema"
+    ]
+  },
+  "caching": {
+    "examples": [
+      "design redis cache key strategy and ttl eviction for user sessions",
+      "implement stale-while-revalidate caching layer for expensive database queries",
+      "prevent cache stampede with distributed mutex locking"
+    ],
+    "counter_examples": [
+      "design relational database table schema",
+      "optimize react component re-render frequency"
+    ]
+  },
+  "message-consumer-review": {
+    "examples": [
+      "review rabbitmq message consumer for idempotent message processing and deduplication",
+      "audit sqs consumer worker retry backoff and dead letter queue routing",
+      "inspect kafka consumer group rebalance and manual offset commit semantics"
+    ],
+    "counter_examples": [
+      "design event schema topology and broker partitions",
+      "write unit tests for order calculation"
+    ]
+  },
+  "event-architecture-review": {
+    "examples": [
+      "review event driven microservices boundaries and topic domain partitioning",
+      "evaluate pub-sub event topology to avoid cyclic event dependencies",
+      "design schema evolution strategy for asynchronous domain events"
+    ],
+    "counter_examples": [
+      "review rabbitmq consumer idempotent message processing",
+      "configure horizontal pod autoscaler on kubernetes"
+    ]
+  },
+  "sql-optimization": {
+    "examples": [
+      "analyze explain analyze output to eliminate sequential scans on large table",
+      "design composite b-tree index covering frequent multi-column filter queries",
+      "rewrite inefficient correlated subquery into join to reduce execution time"
+    ],
+    "counter_examples": [
+      "write zero downtime database schema migration script",
+      "design redis key ttl caching strategy"
+    ]
+  },
+  "graphql-api": {
+    "examples": [
+      "design graphql schema types queries and mutations for social feed",
+      "resolve n+1 query performance problem in graphql resolvers using dataloader",
+      "define input object types and custom scalar types for graphql endpoint"
+    ],
+    "counter_examples": [
+      "design restful http openapi contract",
+      "optimize postgres b-tree query index"
+    ]
+  },
+  "cli-development": {
+    "examples": [
+      "build command line tool using cobra with subcommands flags and positional arguments",
+      "implement interactive terminal prompts and progress bar spinners",
+      "add shell auto-completion and help flag documentation for cli application"
+    ],
+    "counter_examples": [
+      "build react native mobile app for android",
+      "write bash script for automated server backup"
+    ]
+  },
+  "mcp-server": {
+    "examples": [
+      "build model context protocol server exposing tools and resources to agents",
+      "implement mcp protocol custom tool schema definition and json-rpc transport",
+      "expose sqlite database inspection via mcp resources protocol"
+    ],
+    "counter_examples": [
+      "build command line cobra application with flags",
+      "design rest openapi endpoint specification"
+    ]
+  },
+  "webhooks": {
+    "examples": [
+      "implement reliable outgoing webhook dispatcher with exponential backoff retries",
+      "verify incoming webhook hmac sha256 signature header against replay attacks",
+      "track webhook delivery attempt status and dead-letter failed notification events"
+    ],
+    "counter_examples": [
+      "implement google oauth2 login redirect",
+      "integrate stripe checkout session"
+    ]
+  },
+  "search-relevance": {
+    "examples": [
+      "tune bm25 lexical search weights across title description and tags fields",
+      "configure custom analyzer with stemming synonym expansion and stop words filter",
+      "improve search ranking precision with reciprocal rank fusion over hybrid retrieval"
+    ],
+    "counter_examples": [
+      "analyze explain plan of slow postgres query",
+      "fine tune deep learning classification model"
+    ]
+  },
+  "privacy-review": {
+    "examples": [
+      "audit database schema and api payloads for personal identifiable information pii",
+      "review user data retention policy and automated gdpr deletion workflows",
+      "ensure sensitive credentials and privacy data are masked in logs and telemetry"
+    ],
+    "counter_examples": [
+      "conduct general security audit for sql injection and xss",
+      "standardize structured json log fields"
+    ]
+  },
+  "backup-recovery": {
+    "examples": [
+      "design automated point-in-time recovery and snapshot replication strategy",
+      "test disaster recovery failover runbook to secondary geographic cloud region",
+      "verify database backup restore integrity and calculate recovery time objective"
+    ],
+    "counter_examples": [
+      "write zero downtime database schema migration",
+      "provision terraform s3 bucket module"
+    ]
+  },
+  "localization": {
+    "examples": [
+      "configure react i18next translation bundles and pluralization formatting rules",
+      "extract hardcoded user facing text strings into localized json resource catalogs",
+      "format currency numbers and dates according to user browser locale settings"
+    ],
+    "counter_examples": [
+      "audit web page for keyboard focus accessibility",
+      "translate dataset statistics into pandas charts"
+    ]
+  },
+  "email-delivery": {
+    "examples": [
+      "configure spf dkim and dmarc dns records to prevent email delivery spam tagging",
+      "handle smtp bounce and complaint notifications using webhook processor",
+      "design transactional email templates with proper unsubscribe headers"
+    ],
+    "counter_examples": [
+      "send outgoing webhook payload with hmac signature",
+      "implement sms two factor verification code"
+    ]
+  },
+  "pull-request-review": {
+    "examples": [
+      "examine pull request commits for architectural compliance and test adequacy",
+      "evaluate pull request diff for edge cases regression risks and code smells",
+      "provide constructive inline review comments on author's proposed pull request changes"
+    ],
+    "counter_examples": [
+      "rebase branch and resolve git merge conflict",
+      "deploy container image to staging server"
+    ]
+  },
+  "test-design": {
+    "examples": [
+      "design comprehensive test strategy and test matrix for complex billing engine",
+      "identify boundary edge cases equivalence partitions and error states for test cases",
+      "plan end to end integration test scenarios covering multi-party checkout flow"
+    ],
+    "counter_examples": [
+      "write mock unit tests for string utility function",
+      "run automated playwright test in headless browser"
+    ]
+  }
+}

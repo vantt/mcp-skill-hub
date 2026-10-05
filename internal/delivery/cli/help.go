@@ -283,7 +283,7 @@ Subcommands:
 
 Example: skillhub telemetry import-transcripts --project ~/projects/my-app
 `,
-	"eval": `Usage: skillhub eval <manifest|run|promote> [--workspace <path>] [--json]
+	"eval": `Usage: skillhub eval <manifest|run|promote|routing> [--workspace <path>] [--json]
 
 Run routing evaluations. Developer tool; needs a pinned suite and manifest.
 
@@ -294,8 +294,11 @@ Subcommands:
       [--output <new-file>]                        Run a suite
   promote --resolution-id <id> [--output <new-file>] [--yes]
                                                    Draft an evaluation case from telemetry
+  routing [--no-skill <file>] [--policy <file>]
+          [--min-precision <F>] [--min-recall <F>] [--min-no-skill-recall <F>]
+          [--max-fpr <F>]                          Run leave-one-out routing evaluation
 
-Example: skillhub eval run --suite suite.json --manifest manifest.json
+Example: skillhub eval routing --no-skill testdata/routing/no-skill-v1.yaml
 `,
 	"version": `Usage: skillhub version [--json]
 

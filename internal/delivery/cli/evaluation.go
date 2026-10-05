@@ -62,8 +62,10 @@ func runEvaluation(ctx context.Context, args []string, stdout, stderr io.Writer)
 		return runEvaluationSuite(ctx, args[1:], stdout, stderr)
 	case "promote":
 		return runEvaluationPromotion(ctx, args[1:], stdout, stderr)
+	case "routing":
+		return runEvaluationRouting(ctx, args[1:], stdout, stderr)
 	default:
-		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), fmt.Sprintf("unsupported eval subcommand %q", args[0]), "Run `skillhub eval manifest`, `skillhub eval run`, or `skillhub eval promote` with the required flags.")
+		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), fmt.Sprintf("unsupported eval subcommand %q", args[0]), "Run `skillhub eval manifest`, `skillhub eval run`, `skillhub eval promote`, or `skillhub eval routing` with the required flags.")
 	}
 }
 

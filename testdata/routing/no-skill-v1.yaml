@@ -1,0 +1,387 @@
+schema_version: 1
+id: no-skill-v1
+cases:
+- id: ns-01
+  partition: held_out
+  split: held_out
+  request:
+    schema_version: '1'
+    request_id: req-ns-01
+    task:
+      description: hello assistant how are you today
+      scope: single_step
+    operation: ''
+  expected:
+    status: no_skill
+- id: ns-02
+  partition: held_out
+  split: held_out
+  request:
+    schema_version: '1'
+    request_id: req-ns-02
+    task:
+      description: tell me a funny programming joke about recursion
+      scope: single_step
+    operation: ''
+  expected:
+    status: no_skill
+- id: ns-03
+  partition: held_out
+  split: held_out
+  request:
+    schema_version: '1'
+    request_id: req-ns-03
+    task:
+      description: what is the capital city of Australia
+      scope: single_step
+    operation: ''
+  expected:
+    status: no_skill
+- id: ns-04
+  partition: held_out
+  split: held_out
+  request:
+    schema_version: '1'
+    request_id: req-ns-04
+    task:
+      description: explain the rules of chess and how the knight moves
+      scope: single_step
+    operation: ''
+  expected:
+    status: no_skill
+- id: ns-05
+  partition: held_out
+  split: held_out
+  request:
+    schema_version: '1'
+    request_id: req-ns-05
+    task:
+      description: calculate the square root of 144 plus 37
+      scope: single_step
+    operation: ''
+  expected:
+    status: no_skill
+- id: ns-06
+  partition: held_out
+  split: held_out
+  request:
+    schema_version: '1'
+    request_id: req-ns-06
+    task:
+      description: write a short haiku poem about autumn leaves
+      scope: single_step
+    operation: ''
+  expected:
+    status: no_skill
+- id: ns-07
+  partition: held_out
+  split: held_out
+  request:
+    schema_version: '1'
+    request_id: req-ns-07
+    task:
+      description: recommend a good recipe for homemade sourdough bread
+      scope: single_step
+    operation: ''
+  expected:
+    status: no_skill
+- id: ns-08
+  partition: held_out
+  split: held_out
+  request:
+    schema_version: '1'
+    request_id: req-ns-08
+    task:
+      description: how do I change a flat tire on a bicycle
+      scope: single_step
+    operation: ''
+  expected:
+    status: no_skill
+- id: ns-09
+  partition: held_out
+  split: held_out
+  request:
+    schema_version: '1'
+    request_id: req-ns-09
+    task:
+      description: summarize the plot of the novel Pride and Prejudice
+      scope: single_step
+    operation: ''
+  expected:
+    status: no_skill
+- id: ns-10
+  partition: held_out
+  split: held_out
+  request:
+    schema_version: '1'
+    request_id: req-ns-10
+    task:
+      description: translate the sentence good morning into Spanish and French
+      scope: single_step
+    operation: ''
+  expected:
+    status: no_skill
+- id: ns-11
+  partition: held_out
+  split: held_out
+  request:
+    schema_version: '1'
+    request_id: req-ns-11
+    task:
+      description: what are the primary colors in subtractive color mixing
+      scope: single_step
+    operation: ''
+  expected:
+    status: no_skill
+- id: ns-12
+  partition: held_out
+  split: held_out
+  request:
+    schema_version: '1'
+    request_id: req-ns-12
+    task:
+      description: write a polite thank you note to my interviewer
+      scope: single_step
+    operation: ''
+  expected:
+    status: no_skill
+- id: ns-13
+  partition: held_out
+  split: held_out
+  request:
+    schema_version: '1'
+    request_id: req-ns-13
+    task:
+      description: how does photosynthesis work in green plants
+      scope: single_step
+    operation: ''
+  expected:
+    status: no_skill
+- id: ns-14
+  partition: held_out
+  split: held_out
+  request:
+    schema_version: '1'
+    request_id: req-ns-14
+    task:
+      description: who was the sixteenth president of the United States
+      scope: single_step
+    operation: ''
+  expected:
+    status: no_skill
+- id: ns-15
+  partition: held_out
+  split: held_out
+  request:
+    schema_version: '1'
+    request_id: req-ns-15
+    task:
+      description: draft a grocery shopping list for a vegan dinner party
+      scope: single_step
+    operation: ''
+  expected:
+    status: no_skill
+- id: ns-16
+  partition: held_out
+  split: held_out
+  request:
+    schema_version: '1'
+    request_id: req-ns-16
+    task:
+      description: suggest five names for my new puppy
+      scope: single_step
+    operation: ''
+  expected:
+    status: no_skill
+- id: ns-17
+  partition: held_out
+  split: held_out
+  request:
+    schema_version: '1'
+    request_id: req-ns-17
+    task:
+      description: what is the boiling temperature of water at high altitude
+      scope: single_step
+    operation: ''
+  expected:
+    status: no_skill
+- id: ns-18
+  partition: held_out
+  split: held_out
+  request:
+    schema_version: '1'
+    request_id: req-ns-18
+    task:
+      description: give me travel tips for a weekend trip to Tokyo
+      scope: single_step
+    operation: ''
+  expected:
+    status: no_skill
+- id: ns-19
+  partition: held_out
+  split: held_out
+  request:
+    schema_version: '1'
+    request_id: req-ns-19
+    task:
+      description: fix typo change recieve to receive in readme
+      scope: single_step
+    operation: other
+  expected:
+    status: no_skill
+- id: ns-20
+  partition: held_out
+  split: held_out
+  request:
+    schema_version: '1'
+    request_id: req-ns-20
+    task:
+      description: update copyright year from 2025 to 2026 in license file
+      scope: single_step
+    operation: other
+  expected:
+    status: no_skill
+- id: ns-21
+  partition: held_out
+  split: held_out
+  request:
+    schema_version: '1'
+    request_id: req-ns-21
+    task:
+      description: rename variable x to count in simple loop
+      scope: single_step
+    operation: other
+  expected:
+    status: no_skill
+- id: ns-22
+  partition: held_out
+  split: held_out
+  request:
+    schema_version: '1'
+    request_id: req-ns-22
+    task:
+      description: format markdown table alignment in notes file
+      scope: single_step
+    operation: other
+  expected:
+    status: no_skill
+- id: ns-23
+  partition: held_out
+  split: held_out
+  request:
+    schema_version: '1'
+    request_id: req-ns-23
+    task:
+      description: convert temperature from 72 fahrenheit to celsius
+      scope: single_step
+    operation: ''
+  expected:
+    status: no_skill
+- id: ns-24
+  partition: held_out
+  split: held_out
+  request:
+    schema_version: '1'
+    request_id: req-ns-24
+    task:
+      description: help me choose a color palette for home interior design
+      scope: single_step
+    operation: ''
+  expected:
+    status: no_skill
+- id: ns-25
+  partition: held_out
+  split: held_out
+  request:
+    schema_version: '1'
+    request_id: req-ns-25
+    task:
+      description: what are the health benefits of green tea
+      scope: single_step
+    operation: ''
+  expected:
+    status: no_skill
+- id: ns-26
+  partition: held_out
+  split: held_out
+  request:
+    schema_version: '1'
+    request_id: req-ns-26
+    task:
+      description: how many ounces are in three liquid quarts
+      scope: single_step
+    operation: ''
+  expected:
+    status: no_skill
+- id: ns-27
+  partition: held_out
+  split: held_out
+  request:
+    schema_version: '1'
+    request_id: req-ns-27
+    task:
+      description: design plumbing layout for residential bathroom remodeling
+      scope: multi_step
+    operation: design
+  expected:
+    status: no_skill
+- id: ns-28
+  partition: held_out
+  split: held_out
+  request:
+    schema_version: '1'
+    request_id: req-ns-28
+    task:
+      description: calculate solar panel wattage needed for off grid cabin
+      scope: multi_step
+    operation: explore
+  expected:
+    status: no_skill
+- id: ns-29
+  partition: held_out
+  split: held_out
+  request:
+    schema_version: '1'
+    request_id: req-ns-29
+    task:
+      description: solder copper pipe joint with propane torch
+      scope: multi_step
+    operation: operate
+  expected:
+    status: no_skill
+- id: ns-30
+  partition: held_out
+  split: held_out
+  request:
+    schema_version: '1'
+    request_id: req-ns-30
+    task:
+      description: sew a button onto a woolen winter coat
+      scope: multi_step
+    operation: operate
+  expected:
+    status: no_skill
+- id: ns-31
+  partition: held_out
+  split: held_out
+  request:
+    schema_version: '1'
+    request_id: req-ns-31
+    task:
+      description: tune carburetor idle mixture on motorcycle engine
+      scope: multi_step
+    operation: debug
+  expected:
+    status: no_skill
+- id: ns-32
+  partition: held_out
+  split: held_out
+  request:
+    schema_version: '1'
+    request_id: req-ns-32
+    task:
+      description: prune apple tree branches during late winter dormancy
+      scope: multi_step
+    operation: operate
+  expected:
+    status: no_skill

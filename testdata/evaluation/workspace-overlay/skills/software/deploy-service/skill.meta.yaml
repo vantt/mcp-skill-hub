@@ -7,6 +7,13 @@ routing:
   operations: [operate]
   triggers: [deploy application service production]
   not_for: [unrelated tasks]
+  examples:
+    - "deploy new container image to staging server"
+    - "roll out production release of web service"
+    - "publish updated container to kubernetes cluster"
+  counter_examples:
+    - "review patch for code style and bugs"
+    - "design database tables and migrations"
   min_scope: multi_step
 quality:
   reviewed: true
