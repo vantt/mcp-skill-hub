@@ -63,7 +63,7 @@ func (adapter *Server) registerSourceTools(server *mcp.Server) {
 
 	addTool(server, &mcp.Tool{
 		Name: "source_triage", Title: "Triage source candidate",
-		Description: "Accept, defer, or reject a source candidate. Acceptance returns a persisted preview unless confirmation contains the exact proposal_id, proposal_digest, and base_version from an earlier preview.",
+		Description: "Triage a source candidate. Outcomes: accept with skill_id (link existing skill) or new_skill_id (scaffold draft skill), import (vendor skills), defer (keep in queue), or reject (with reason). Acceptance or import returns a preview proposal.",
 		Annotations: annotations(false, false, false, true),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input sourceTriageInput) (*mcp.CallToolResult, toolOutcome[sourceTriageResult], error) {
 		service := adapter.source
@@ -85,11 +85,15 @@ func (adapter *Server) registerSourceTools(server *mcp.Server) {
 		if input.MonitoringEnabled != nil {
 			monitor = *input.MonitoringEnabled
 		}
+		newSkillID := strings.TrimSpace(input.NewSkillID)
+		if newSkillID == "" {
+			newSkillID = strings.TrimSpace(input.NewSkill)
+		}
 		preview, mutation, err := service.TriageSourceCandidate(ctx, adapter.workspace, app.SourceTriageInput{
 			CandidateID: input.CandidateID, Decision: input.Decision, DecisionReason: input.DecisionReason,
 			SourceID: input.SourceID, Adapter: input.Adapter, Ref: input.Ref, SourcePath: input.SourcePath,
 			License: input.License, Trust: input.Trust, Cadence: input.Cadence, SkillID: input.SkillID,
-			NewSkillID:        input.NewSkillID,
+			NewSkillID:        newSkillID,
 			MonitoringEnabled: monitor, IdempotencyKey: input.IdempotencyKey,
 		})
 		if err != nil {
@@ -103,7 +107,7 @@ func (adapter *Server) registerSourceTools(server *mcp.Server) {
 
 	addTool(server, &mcp.Tool{
 		Name: "source_check", Title: "Check sources",
-		Description: "Check selected or due source revisions through configured adapters. This may access external sources and records revision changes, but does not edit curated skills.",
+		Description: "Check selected or due source revisions through configured adapters. This records revision changes and per-skill upstream results in results[].skills without editing curated skills.",
 		Annotations: annotations(false, false, false, true),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input sourceCheckInput) (*mcp.CallToolResult, toolOutcome[app.SourceCheckResult], error) {
 		if len(input.SourceIDs) == 0 && !input.AllDue {
