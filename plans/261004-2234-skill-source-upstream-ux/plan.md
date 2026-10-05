@@ -58,7 +58,7 @@ Since 2026-10-05 this plan also owns the rest of the WebUI v1. The WebUI plan `p
 
 | # | Phase | Depends on | Effort | Status |
 |---|---|---|---|---|
-| 1 | [Upstream provenance model](./phase-01-upstream-provenance-model.md) | runtime plan | 8h | Pending |
+| 1 | [Upstream provenance model](./phase-01-upstream-provenance-model.md) | runtime plan | 8h | In progress |
 | 2 | [Source attachment on add and import](./phase-02-source-attachment-on-add-and-import.md) | 1 | 7h | Pending |
 | 3 | [Upstream check engine](./phase-03-upstream-check-engine.md) | 2 | 10h | Pending |
 | 4 | [Update merge and apply](./phase-04-update-merge-and-apply.md) | 3 | 14h | Pending |
