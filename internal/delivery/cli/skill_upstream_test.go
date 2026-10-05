@@ -461,3 +461,88 @@ func TestSkillUpdate(t *testing.T) {
 		}
 	})
 }
+
+func TestHelpUpstreamAndSources(t *testing.T) {
+	t.Parallel()
+
+	// 1. skill help contains skill update <id>, skill outdated, and distinction line
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{"skill", "--help"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("skill --help failed: %d, %s", code, stderr.String())
+	}
+	skillHelp := stdout.String()
+	if !strings.Contains(skillHelp, "update <id>") {
+		t.Fatalf("expected 'update <id>' in skill help, got:\n%s", skillHelp)
+	}
+	if !strings.Contains(skillHelp, "outdated") {
+		t.Fatalf("expected 'outdated' in skill help, got:\n%s", skillHelp)
+	}
+	if !strings.Contains(skillHelp, "skillhub update") {
+		t.Fatalf("expected skillhub update distinction in skill help, got:\n%s", skillHelp)
+	}
+
+	// 2. source help contains source backfill
+	stdout.Reset()
+	stderr.Reset()
+	code = Run([]string{"source", "--help"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("source --help failed: %d, %s", code, stderr.String())
+	}
+	sourceHelp := stdout.String()
+	if !strings.Contains(sourceHelp, "backfill") {
+		t.Fatalf("expected 'backfill' in source help, got:\n%s", sourceHelp)
+	}
+}
+
+func TestPrintableTextEscapesTerminalControlSequences(t *testing.T) {
+	t.Parallel()
+
+	maliciousPath := "scripts/\x1b[31mmalicious\nfile.sh"
+	escaped := printableText(maliciousPath)
+
+	if strings.Contains(escaped, "\x1b") {
+		t.Fatalf("escaped text still contains raw ESC byte: %q", escaped)
+	}
+	if strings.Contains(escaped, "\n") {
+		t.Fatalf("escaped text still contains raw newline byte: %q", escaped)
+	}
+	if !strings.Contains(escaped, "\\x1b") {
+		t.Fatalf("expected \\x1b escape in text, got: %q", escaped)
+	}
+	if !strings.Contains(escaped, "\\x0a") {
+		t.Fatalf("expected \\x0a escape in text, got: %q", escaped)
+	}
+
+	// Verify rendering test with malicious path
+	preview := app.UpstreamUpdatePreview{
+		SkillID:        "sec-skill",
+		SourceID:       "src-sec",
+		BaseCommit:     "111122223333",
+		TargetCommit:   "444455556666",
+		UnchangedCount: 0,
+		Files: []app.UpstreamFile{
+			{
+				Path:   maliciousPath,
+				Status: "upstream_only",
+				Action: "upstream",
+			},
+		},
+		Confirmation: app.ConfirmationPolicy{
+			Confirmation: app.ConfirmationRequirement{
+				Pins: app.ConfirmationPins{ProposalID: "PROP-SEC"},
+			},
+		},
+	}
+	var outBuf bytes.Buffer
+	p := termui.New(&outBuf)
+	renderUpstreamUpdatePreview(p, "sec-skill", "https://github.com/example/repo", preview, false)
+	out := outBuf.String()
+
+	if strings.Contains(out, "\x1b[31m") {
+		t.Fatalf("rendered output contains raw ANSI escape sequence: %q", out)
+	}
+	if !strings.Contains(out, "\\x1b") {
+		t.Fatalf("rendered output missing escaped \\x1b text: %q", out)
+	}
+}

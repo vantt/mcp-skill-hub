@@ -23,10 +23,10 @@ Setup:
   status    Show what needs attention next
 
 Skills:
-  skill     List, show, create, edit, review, add, and change the state of skills
+  skill     List, show, create, edit, review, add, update from upstream, and change the state of skills
 
 Sources & learning:
-  source    Register and inspect skill sources
+  source    Repositories and documents your skills come from or learn from
   check     Check sources for updates
   distill   Turn changed sources into skill proposals
   inbox     List insights waiting for review
@@ -100,10 +100,19 @@ Subcommands:
   edit <id> [--name <n>] [--description <d>] [--rationale <r>] [--content-file <f>|--editor]
        [--operation <o>]... [--trigger <t>]... [--not-for <n>]... [--min-scope <s>]
        [--example <e>]... [--counter-example <e>]... [--runtime-file <yaml>] [--approve-content <digest>] [--yes]
+  outdated [--check] [--all] [--exit-code] [--json]
+                                                    Show repository skills that differ from upstream
+  upstream <id> [--check] [--json]                  Show upstream repository details and drift for a skill
+  update <id> [--no-check] [--target <commit>] [--accept <p>=upstream|local|merged]...
+         [--manual <p>=<f>]... [--write-conflicts <dir>] [--yes] [--verbose] [--json]
+                                                    Apply upstream changes to a skill with 3-way merge
   activate <id> | deprecate <id> | archive <id> [--yes]
   confirm <proposal-id> | --proposal <id> --proposal-digest <d> --base-version <v>
                                                     Apply a skill add or mutation proposal
   list [--state draft|active|deprecated|archived]   List skills
+
+Note: skillhub skill update <id> updates a skill from its upstream repository; skillhub update updates the skillhub binary itself.
+outdated exit codes: 0 normally; with --exit-code, 1 when any skill needs attention (update available, diverged, removed upstream), 2 on invalid flags.
 
 --content-file takes any readable markdown file (relative to the current directory
 or absolute). Frontmatter is optional; if present, its "name" field must match the skill id.
@@ -131,23 +140,33 @@ Examples:
   skillhub skill review my-skill
   skillhub skill edit my-skill --editor
   skillhub skill edit my-skill --example "review my pull request" --counter-example "write release notes" --yes
+  skillhub skill outdated --check
+  skillhub skill upstream pdf
+  skillhub skill update pdf --yes
   skillhub skill confirm PROP-123
   skillhub skill activate my-skill --yes
 `,
 	"source": `Usage: skillhub source <subcommand> [--workspace <path>] [flags]
 
 Subcommands:
-  watch <locator> [--id <id>] [--ref <r>] [--path <p>] [--cadence daily|weekly|manual] [--yes]
-                                      Watch a remote source for updates
+  watch <locator> --skill-id <id> [--id <id>] [--ref <r>] [--path <p>] [--cadence daily|weekly|manual] [--yes]
+                                      Watch a remote source for updates and attach as a learning reference
+  attach <source-id|locator> --skill-id <id> [--ref <r>] [--path <p>] [--cadence <c>] [--yes]
+                                      Attach a source to a skill as a learning reference
+  detach <source-id> --skill-id <id> [--yes]
+                                      Detach a learning reference from a skill
+  unwatch <source-id> [--yes]         Stop watching a source and remove it if unreferenced
+  backfill [--skill <id> [--path <p>]] [--yes]
+                                      Backfill source records and provenance for legacy skills
   check SELECTOR... | --all-due | --all
                                       Check watched sources for updates (alias of skillhub check)
   capture <locator> --reason <text>   Record a candidate source (applies immediately; no --yes)
   list [--status <s>]                 List candidates and sources
   show <id>                           Show one candidate or source
-  triage <candidate-id> --decision accept|defer|reject [--reason <t>] [--source-id <id>]
+  triage <candidate-id> --decision accept|defer|reject|import [--reason <t>] [--source-id <id>]
          [--adapter git] [--ref <r>] [--path <p>] [--license <l>] [--trust <t>]
-         [--cadence <c>] [--skill-id <id>] [--no-monitor]
-                                      accept previews a proposal; defer and reject apply
+         [--cadence <c>] [--skill-id <id>] [--new-skill <id>] [--no-monitor]
+                                      accept requires --skill-id or --new-skill; import vendors skills
                                       --trust: community, curated, internal (default: community)
                                       --cadence: daily, weekly, manual (default: weekly)
   confirm --proposal <id> --proposal-digest <d> --base-version <v>
@@ -162,7 +181,8 @@ Use --json for machine-readable output.
 	"check": `Usage: skillhub check [--workspace <path>] [--all-due | --all | <source-id>...] [--json]
 
 Check sources for updates. Contacts each watched source and records whether it
-changed; it never edits your skills.
+changed; it never edits your skills. When skills track an upstream repository,
+check also reports per-skill drift.
 
   --all-due         Check only sources whose check interval has passed
   --all             Check every watched source

@@ -76,7 +76,7 @@ Do not modify any other file.
 - [x] Task 6.1 outdated + upstream
 - [x] Task 6.2 update + confirm
 - [x] Task 6.3 source commands
-- [ ] Task 6.4 help + width
+- [x] Task 6.4 help + width
 - [ ] Task 6.5 `make check`
 
 ## Success criteria
