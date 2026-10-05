@@ -111,7 +111,7 @@ Do not modify any other file.
 
 - [x] Task 3.1 operational table
 - [x] Task 3.2 status derivation
-- [ ] Task 3.3 check engine + `CheckSources`
+- [x] Task 3.3 check engine + `CheckSources`
 - [ ] Task 3.4 status integration
 - [ ] Task 3.5 `make check`
 

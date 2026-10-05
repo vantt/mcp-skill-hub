@@ -1,7 +1,15 @@
 package app
 
 import (
+	"bytes"
+	"context"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
 )
@@ -339,5 +347,220 @@ func TestDeriveUpstreamStatus(t *testing.T) {
 				t.Fatalf("expected errStr %q, got %q", tc.expectedErr, errStr)
 			}
 		})
+	}
+}
+
+func TestUpstreamCheck(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found in PATH")
+	}
+
+	root := newSourceWorkspace(t)
+	repoDir := t.TempDir()
+
+	runGit := func(dir string, args ...string) string {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v failed: %v: %s", args, err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+
+	runGit(repoDir, "init", "-b", "main")
+	runGit(repoDir, "config", "user.name", "Test")
+	runGit(repoDir, "config", "user.email", "test@example.com")
+	runGit(repoDir, "config", "uploadpack.allowReachableSHA1InWant", "true")
+
+	// Create skills/a and skills/b
+	skillADir := filepath.Join(repoDir, "skills", "a")
+	if err := os.MkdirAll(skillADir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillADir, "SKILL.md"), []byte("---\nname: a\ndescription: Skill A\n---\nBody A\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	skillBDir := filepath.Join(repoDir, "skills", "b")
+	if err := os.MkdirAll(skillBDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillBDir, "SKILL.md"), []byte("---\nname: b\ndescription: Skill B\n---\nBody B\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	runGit(repoDir, "add", ".")
+	runGit(repoDir, "commit", "-m", "initial commit")
+
+	adapter := sourcepkg.GitRepositoryAdapter{
+		CacheRoot:         filepath.Join(root, "runtime", "sources", "git"),
+		AllowFileProtocol: true,
+	}
+	clock := sourceClock{now: time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)}
+	addService := SkillAddService{
+		Clock:    clock,
+		Adapters: map[string]sourcepkg.Adapter{"git": adapter},
+	}
+
+	fileURL := "file://" + filepath.ToSlash(repoDir)
+
+	// Step 1: add skills/a (phases 1-2 path)
+	previewA, err := addService.PreviewSkillAdd(context.Background(), root, SkillAddInput{
+		Locator:   fileURL,
+		Selection: "a",
+	})
+	if err != nil || previewA.Error != nil {
+		t.Fatalf("preview a failed: %v, %#v", err, previewA.Error)
+	}
+	pinsA := previewA.Confirmation.Confirmation.Pins
+	resultA, err := addService.ConfirmSkillAdd(context.Background(), root, previewA, pinsA)
+	if err != nil || resultA.Error != nil {
+		t.Fatalf("confirm a failed: %v, %#v", err, resultA.Error)
+	}
+
+	sourceID := resultA.UpstreamSource.SourceID
+	catalogRecordPath := filepath.Join(root, "sources", "catalog", sourceID+".yaml")
+	catalogBytesBefore, err := os.ReadFile(catalogRecordPath)
+	if err != nil {
+		t.Fatalf("read catalog record failed: %v", err)
+	}
+
+	sourceService := SourceService{
+		Clock:    clock,
+		Adapters: map[string]sourcepkg.Adapter{"git": adapter},
+	}
+
+	// Initial check: head == origin.commit -> up_to_date
+	initCheck, err := sourceService.CheckSources(context.Background(), root, []string{sourceID}, false)
+	if err != nil {
+		t.Fatalf("initial check failed: %v", err)
+	}
+	if len(initCheck.Results) != 1 || initCheck.Results[0].Status != "up_to_date" {
+		t.Fatalf("expected initial check up_to_date, got %#v", initCheck.Results)
+	}
+
+	// Step 2: commit an upstream change to skills/a/SKILL.md
+	time.Sleep(10 * time.Millisecond)
+	if err := os.WriteFile(filepath.Join(skillADir, "SKILL.md"), []byte("---\nname: a\ndescription: Skill A Updated\n---\nBody A Updated\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(repoDir, "add", "skills/a/SKILL.md")
+	runGit(repoDir, "commit", "-m", "update skill a")
+	shaUpdate := runGit(repoDir, "rev-parse", "HEAD")
+	commitUnixStr := runGit(repoDir, "show", "-s", "--format=%ct", shaUpdate)
+	var commitUnix int64
+	_, _ = fmt.Sscanf(commitUnixStr, "%d", &commitUnix)
+	expectedCommitterTime := time.Unix(commitUnix, 0).UTC()
+
+	// Call CheckSources(ctx, root, []string{sourceID}, false)
+	checkRes, err := sourceService.CheckSources(context.Background(), root, []string{sourceID}, false)
+	if err != nil {
+		t.Fatalf("CheckSources failed: %v", err)
+	}
+	if len(checkRes.Results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(checkRes.Results))
+	}
+	if checkRes.Results[0].Status != "updates_available" {
+		t.Fatalf("expected status updates_available, got %q", checkRes.Results[0].Status)
+	}
+	if len(checkRes.Results[0].Skills) != 1 || checkRes.Results[0].Skills[0].Status != "update_available" {
+		t.Fatalf("expected skill status update_available, got %#v", checkRes.Results[0].Skills)
+	}
+	if checkRes.Results[0].Skills[0].ChangedFiles != 1 {
+		t.Fatalf("expected ChangedFiles == 1, got %d", checkRes.Results[0].Skills[0].ChangedFiles)
+	}
+	expectedTimeStr := expectedCommitterTime.Format(time.RFC3339)
+	if checkRes.Results[0].Skills[0].LatestCommittedAt != expectedTimeStr {
+		t.Fatalf("expected LatestCommittedAt %q, got %q", expectedTimeStr, checkRes.Results[0].Skills[0].LatestCommittedAt)
+	}
+
+	// Assert sources/catalog/<id>.yaml bytes unchanged
+	catalogBytesAfter, err := os.ReadFile(catalogRecordPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(catalogBytesBefore, catalogBytesAfter) {
+		t.Fatalf("expected catalog record bytes to be unchanged, but they changed")
+	}
+
+	// Step 3: write a local edit to skills/default/a/SKILL.md and assert GetSkillUpstream returns diverged / modified
+	localSkillMD := filepath.Join(root, "skills", "default", "a", "SKILL.md")
+	if err := os.WriteFile(localSkillMD, []byte("---\nname: a\ndescription: Local edit\n---\nBody A Local\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	skillUpstream, err := GetSkillUpstream(context.Background(), root, "a")
+	if err != nil {
+		t.Fatalf("GetSkillUpstream failed: %v", err)
+	}
+	if skillUpstream.Status != "diverged" {
+		t.Fatalf("expected status diverged, got %q", skillUpstream.Status)
+	}
+	if skillUpstream.Local != "modified" {
+		t.Fatalf("expected local modified, got %q", skillUpstream.Local)
+	}
+
+	// Step 4: delete skills/a upstream, check again, assert upstream_removed
+	runGit(repoDir, "rm", "-r", "skills/a")
+	runGit(repoDir, "commit", "-m", "delete skill a")
+
+	checkResRemoved, err := sourceService.CheckSources(context.Background(), root, []string{sourceID}, false)
+	if err != nil {
+		t.Fatalf("CheckSources after delete failed: %v", err)
+	}
+	if len(checkResRemoved.Results) != 1 || len(checkResRemoved.Results[0].Skills) != 1 {
+		t.Fatalf("expected 1 result with 1 skill, got %#v", checkResRemoved.Results)
+	}
+	if checkResRemoved.Results[0].Skills[0].Status != "upstream_removed" {
+		t.Fatalf("expected status upstream_removed, got %q", checkResRemoved.Results[0].Skills[0].Status)
+	}
+
+	// Step 5: Separately, a commit that touches a file outside skills/a (e.g. skills/b or root) does not change skills/a's status (up_to_date)
+	if err := os.WriteFile(filepath.Join(repoDir, "root_file.txt"), []byte("root file\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.MkdirAll(skillADir, 0o700)
+	_ = os.WriteFile(filepath.Join(skillADir, "SKILL.md"), []byte("---\nname: a\ndescription: Skill A Restored\n---\nBody A Restored\n"), 0o644)
+	runGit(repoDir, "add", ".")
+	runGit(repoDir, "commit", "-m", "restore skill a and add root file")
+
+	root2 := newSourceWorkspace(t)
+	addService2 := SkillAddService{
+		Clock:    clock,
+		Adapters: map[string]sourcepkg.Adapter{"git": adapter},
+	}
+	prevA2, err := addService2.PreviewSkillAdd(context.Background(), root2, SkillAddInput{Locator: fileURL, Selection: "a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = addService2.ConfirmSkillAdd(context.Background(), root2, prevA2, prevA2.Confirmation.Confirmation.Pins)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sourceService2 := SourceService{
+		Clock:    clock,
+		Adapters: map[string]sourcepkg.Adapter{"git": adapter},
+	}
+	chk2Init, err := sourceService2.CheckSources(context.Background(), root2, []string{sourceID}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if chk2Init.Results[0].Skills[0].Status != "up_to_date" {
+		t.Fatalf("expected up_to_date, got %q", chk2Init.Results[0].Skills[0].Status)
+	}
+
+	// Commit touching only root_file.txt outside skills/a
+	if err := os.WriteFile(filepath.Join(repoDir, "root_file.txt"), []byte("root file modified\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(repoDir, "add", "root_file.txt")
+	runGit(repoDir, "commit", "-m", "modify outside file only")
+
+	chk2Outside, err := sourceService2.CheckSources(context.Background(), root2, []string{sourceID}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if chk2Outside.Results[0].Skills[0].Status != "up_to_date" {
+		t.Fatalf("expected skills/a status to remain up_to_date after outside commit, got %q", chk2Outside.Results[0].Skills[0].Status)
 	}
 }

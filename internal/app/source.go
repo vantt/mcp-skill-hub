@@ -77,6 +77,7 @@ type SourceCheckItem struct {
 	Revision  *sourcepkg.Revision `json:"revision,omitempty"`
 	LatencyMS int64               `json:"latency_ms"`
 	Error     string              `json:"error,omitempty"`
+	Skills    []SkillUpstream     `json:"skills,omitempty"`
 }
 
 type SourceCheckResult struct {
@@ -456,6 +457,15 @@ func (service SourceService) CheckSources(ctx context.Context, path string, ids 
 	}
 	store := sourcepkg.OperationalStore{Root: root}
 	now := service.Clock.Now().UTC()
+	trackedBySource, _ := loadTrackedSkillsBySource(root)
+	links, _ := readSkillSourceLinks(root)
+	learningSources := learningSourceIDs(links)
+	allTrackedSkills, _ := loadTrackedSkills(root)
+	existingStatesList, _ := store.ListUpstream(ctx)
+	existingStates := make(map[string]sourcepkg.UpstreamState, len(existingStatesList))
+	for _, st := range existingStatesList {
+		existingStates[st.SkillID] = st
+	}
 	result := SourceCheckResult{Result: NewResult(StatusOK, "Source checks completed; curated skills are unchanged."), Results: []SourceCheckItem{}}
 	operationalWarning := false
 	warnOperational := func() {
@@ -491,6 +501,43 @@ func (service SourceService) CheckSources(ctx context.Context, path string, ids 
 			result.Results = append(result.Results, item)
 			continue
 		}
+		isUpstreamOnly := record.Purpose == "upstream" && !learningSources[record.ID]
+		skillsForSource := trackedBySource[record.ID]
+		if isUpstreamOnly {
+			item, checkErr := service.checkUpstreamOnlySource(ctx, root, record, skillsForSource, existingStates, now)
+			item.LatencyMS = time.Since(started).Milliseconds()
+			if checkErr != nil {
+				result.Unavailable++
+			} else if item.Status == "updates_available" {
+				result.Changed++
+			} else if item.Status == "unavailable" {
+				result.Unavailable++
+			} else {
+				result.Unchanged++
+			}
+			result.Results = append(result.Results, item)
+			continue
+		}
+
+		attachSkills := func() {
+			if len(skillsForSource) > 0 {
+				upstreamStates, uErr := checkSourceUpstream(ctx, root, adapter, record, skillsForSource, existingStates, now)
+				if uErr == nil {
+					_ = store.RecordUpstream(ctx, upstreamStates)
+				}
+				for _, sk := range skillsForSource {
+					var matchingState *sourcepkg.UpstreamState
+					for i := range upstreamStates {
+						if upstreamStates[i].SkillID == sk.SkillID {
+							matchingState = &upstreamStates[i]
+							break
+						}
+					}
+					localDigest := workingTreeSkillFilesDigest(root, sk.SkillRelDir)
+					item.Skills = append(item.Skills, buildSkillUpstreamModel(sk, &record, matchingState, localDigest))
+				}
+			}
+		}
 		checkContext, cancel := context.WithTimeout(ctx, time.Duration(record.Limits.TimeoutSeconds)*time.Second)
 		revision, checkErr := adapter.CurrentRevision(checkContext, sourcepkg.Source{ID: record.ID, Locator: record.Locator, Limits: record.Limits})
 		cancel()
@@ -523,6 +570,7 @@ func (service SourceService) CheckSources(ctx context.Context, path string, ids 
 					warnOperational()
 				}
 				item.Status = "up_to_date"
+				attachSkills()
 				result.Unchanged++
 				result.Results = append(result.Results, item)
 				continue
@@ -531,6 +579,7 @@ func (service SourceService) CheckSources(ctx context.Context, path string, ids 
 				warnOperational()
 			}
 			item.Status = "needs_analysis"
+			attachSkills()
 			result.Changed++
 			result.Results = append(result.Results, item)
 			continue
@@ -568,6 +617,7 @@ func (service SourceService) CheckSources(ctx context.Context, path string, ids 
 		if record.DistilledRevision == nil {
 			item.Status = "needs_analysis"
 		}
+		attachSkills()
 		result.Changed++
 		result.Results = append(result.Results, item)
 	}
@@ -601,6 +651,12 @@ func (service SourceService) CheckSources(ctx context.Context, path string, ids 
 		result.Status = StatusPartialFailure
 		result.Summary = fmt.Sprintf("Checked %d source(s); %d changed, %d unchanged, %d unavailable. Curated skills are unchanged.", result.Checked, result.Changed, result.Unchanged, result.Unavailable)
 	}
+	keepSkillIDs := make([]string, 0, len(allTrackedSkills))
+	for _, sk := range allTrackedSkills {
+		keepSkillIDs = append(keepSkillIDs, sk.SkillID)
+	}
+	_ = store.DeleteUpstreamExcept(ctx, keepSkillIDs)
+
 	events := make([]telemetry.Event, 0, len(result.Results))
 	for _, item := range result.Results {
 		result.Items = append(result.Items, Item{ID: item.SourceID, Summary: "Source check: " + item.Status, Impact: "Curated skills remain unchanged."})
@@ -620,6 +676,87 @@ func confirmAndPublish(ctx context.Context, root string, proposal mutation.Propo
 		}
 		return mutation.Publication{CatalogSnapshot: built.Pointer.CatalogSnapshot, Generation: built.Pointer.Generation}, nil
 	}})
+}
+
+func (service SourceService) checkUpstreamOnlySource(
+	ctx context.Context,
+	root string,
+	record sourcepkg.Record,
+	skills []TrackedSkill,
+	existingStates map[string]sourcepkg.UpstreamState,
+	now time.Time,
+) (SourceCheckItem, error) {
+	adapter, adapterFound := service.Adapters[record.Adapter]
+	item := SourceCheckItem{SourceID: record.ID}
+	if !adapterFound {
+		item.Status, item.Error = "unavailable", "source adapter is not configured"
+		return item, errors.New(item.Error)
+	}
+
+	upstreamStates, checkErr := checkSourceUpstream(ctx, root, adapter, record, skills, existingStates, now)
+	store := sourcepkg.OperationalStore{Root: root}
+
+	if checkErr != nil {
+		previousState, found, _ := store.Get(ctx, record.ID)
+		retries := 1
+		if found {
+			retries = previousState.RetryCount + 1
+		}
+		operational := sourcepkg.CheckState{
+			SourceID:      record.ID,
+			LastCheckedAt: now,
+			Latency:       0,
+			RetryCount:    retries,
+			Availability:  "unavailable",
+			NextCheckAt:   now.Add(retryDelay(retries)),
+			LastError:     sanitizeOperationalError(checkErr),
+		}
+		_ = store.Record(ctx, operational)
+		item.Status, item.Error = "unavailable", operational.LastError
+		return item, checkErr
+	}
+
+	_ = store.RecordUpstream(ctx, upstreamStates)
+	_ = store.Record(ctx, sourcepkg.CheckState{
+		SourceID:      record.ID,
+		LastCheckedAt: now,
+		Latency:       0,
+		Availability:  "available",
+		NextCheckAt:   nextCheck(now, record.Monitoring.Cadence),
+	})
+
+	anyUpdates := false
+	allUnavailable := len(upstreamStates) > 0
+	for _, st := range upstreamStates {
+		if st.Upstream == "changed" || st.Upstream == "removed" {
+			anyUpdates = true
+		}
+		if st.Upstream != "unavailable" {
+			allUnavailable = false
+		}
+	}
+
+	if anyUpdates {
+		item.Status = "updates_available"
+	} else if allUnavailable {
+		item.Status = "unavailable"
+	} else {
+		item.Status = "up_to_date"
+	}
+
+	for _, sk := range skills {
+		var matchingState *sourcepkg.UpstreamState
+		for i := range upstreamStates {
+			if upstreamStates[i].SkillID == sk.SkillID {
+				matchingState = &upstreamStates[i]
+				break
+			}
+		}
+		localDigest := workingTreeSkillFilesDigest(root, sk.SkillRelDir)
+		item.Skills = append(item.Skills, buildSkillUpstreamModel(sk, &record, matchingState, localDigest))
+	}
+
+	return item, nil
 }
 
 func readSourceRecords(root string) ([]sourcepkg.Candidate, []sourcepkg.Record, error) {

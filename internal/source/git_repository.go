@@ -995,6 +995,36 @@ func (adapter GitRepositoryAdapter) RevisionAt(ctx context.Context, source Sourc
 	return rev, nil
 }
 
+// CommitTime returns the committer time of the given commit from the local mirror.
+func (adapter GitRepositoryAdapter) CommitTime(ctx context.Context, repository, commit string) (time.Time, error) {
+	adapter = adapter.defaults()
+	if !validGitObject(commit) {
+		return time.Time{}, ErrInvalidLocator
+	}
+	mirror, err := adapter.mirrorPath(repository)
+	if err != nil {
+		return time.Time{}, err
+	}
+	var commitTime time.Time
+	err = withMirrorLock(ctx, mirror, true, func() error {
+		repo, openErr := adapter.openMirrorLocked(mirror)
+		if openErr != nil {
+			return openErr
+		}
+		hash := plumbing.NewHash(commit)
+		commitObj, cErr := repo.CommitObject(hash)
+		if cErr != nil {
+			return cErr
+		}
+		commitTime = commitObj.Committer.When.UTC()
+		return nil
+	})
+	if err != nil {
+		return time.Time{}, err
+	}
+	return commitTime, nil
+}
+
 // ResolveRefCommit resolves a ref name or SHA to a full commit hash in the local mirror.
 func (adapter GitRepositoryAdapter) ResolveRefCommit(ctx context.Context, remoteURL, ref string) (string, error) {
 	adapter = adapter.defaults()
