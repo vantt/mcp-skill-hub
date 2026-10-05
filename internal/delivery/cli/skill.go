@@ -435,7 +435,7 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 		} else if len(positionals) == 0 && flags.id != "" {
 			// flags.id provided via --id
 		} else {
-			return flags, errors.New("update requires a skill ID (e.g. `skillhub skill update <id>`). To update the skillhub binary itself, run `skillhub update`.")
+			return flags, errors.New("update requires a skill ID (e.g. `skillhub skill update <id>`). To update the skillhub binary itself, run `skillhub update`")
 		}
 		for _, acc := range flags.accepts {
 			parts := strings.SplitN(acc, "=", 2)

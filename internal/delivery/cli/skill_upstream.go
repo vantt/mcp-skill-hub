@@ -21,35 +21,8 @@ type UpstreamListResult struct {
 }
 
 func runSkillOutdated(ctx context.Context, flags skillFlags, stdout, stderr io.Writer) int {
-	service := app.SourceService{}
-
 	if flags.check {
-		initialSkills, err := app.ListSkillUpstream(ctx, flags.workspace)
-		if err == nil {
-			sourceSet := make(map[string]bool)
-			var sourceIDs []string
-			for _, sk := range initialSkills {
-				if sk.SourceID != "" && !sourceSet[sk.SourceID] {
-					sourceSet[sk.SourceID] = true
-					sourceIDs = append(sourceIDs, sk.SourceID)
-				}
-			}
-			sort.Strings(sourceIDs)
-			if len(sourceIDs) > 0 {
-				checkRes, chkErr := service.CheckSources(ctx, flags.workspace, sourceIDs, false)
-				if chkErr != nil && !flags.jsonOutput {
-					p := termui.New(stderr)
-					p.Warning(fmt.Sprintf("Failed to check sources: %s", chkErr.Error()))
-				} else if chkErr == nil && !flags.jsonOutput {
-					p := termui.New(stderr)
-					for _, item := range checkRes.Results {
-						if item.Status == "unavailable" || item.Error != "" {
-							p.Warning(fmt.Sprintf("Source %s is unavailable: %s", item.SourceID, item.Error))
-						}
-					}
-				}
-			}
-		}
+		checkTrackedSources(ctx, flags.workspace, stderr, flags.jsonOutput)
 	}
 
 	skills, err := app.ListSkillUpstream(ctx, flags.workspace)
@@ -140,49 +113,106 @@ func runSkillOutdated(ctx context.Context, flags skillFlags, stdout, stderr io.W
 	}
 
 	p := termui.New(stdout)
-	if len(skills) == 0 {
+	renderSkillOutdated(p, outdatedRenderContext{
+		skills:           skills,
+		rows:             rows,
+		attentionCount:   attentionCount,
+		allUnknown:       allUnknown,
+		allFlag:          flags.all,
+		latestChecked:    latestChecked,
+		now:              now,
+		firstAttentionID: firstAttentionID,
+	})
+	return exitCode
+}
+
+func checkTrackedSources(ctx context.Context, workspace string, stderr io.Writer, jsonOutput bool) {
+	service := app.SourceService{}
+	initialSkills, err := app.ListSkillUpstream(ctx, workspace)
+	if err != nil {
+		return
+	}
+	sourceSet := make(map[string]bool)
+	var sourceIDs []string
+	for _, sk := range initialSkills {
+		if sk.SourceID != "" && !sourceSet[sk.SourceID] {
+			sourceSet[sk.SourceID] = true
+			sourceIDs = append(sourceIDs, sk.SourceID)
+		}
+	}
+	sort.Strings(sourceIDs)
+	if len(sourceIDs) == 0 {
+		return
+	}
+	checkRes, chkErr := service.CheckSources(ctx, workspace, sourceIDs, false)
+	if chkErr != nil && !jsonOutput {
+		p := termui.New(stderr)
+		p.Warning(fmt.Sprintf("Failed to check sources: %s", chkErr.Error()))
+		return
+	}
+	if chkErr == nil && !jsonOutput {
+		p := termui.New(stderr)
+		for _, item := range checkRes.Results {
+			if item.Status == "unavailable" || item.Error != "" {
+				p.Warning(fmt.Sprintf("Source %s is unavailable: %s", item.SourceID, item.Error))
+			}
+		}
+	}
+}
+
+type outdatedRenderContext struct {
+	skills           []app.SkillUpstream
+	rows             [][]string
+	attentionCount   int
+	allUnknown       bool
+	allFlag          bool
+	latestChecked    time.Time
+	now              time.Time
+	firstAttentionID string
+}
+
+func renderSkillOutdated(p *termui.Printer, rc outdatedRenderContext) {
+	if len(rc.skills) == 0 {
 		p.Line("No skills track an upstream repository.")
 		p.Blank()
 		p.Line("Next: skillhub skill add <github-url>")
-		return exitCode
+		return
 	}
 
-	if len(rows) == 0 {
-		if !latestChecked.IsZero() {
-			p.Line(fmt.Sprintf("All %d repository skills are up to date. Checked %s.", len(skills), relativeTime(latestChecked, now)))
+	if len(rc.rows) == 0 {
+		if !rc.latestChecked.IsZero() {
+			p.Line(fmt.Sprintf("All %d repository skills are up to date. Checked %s.", len(rc.skills), relativeTime(rc.latestChecked, rc.now)))
 		} else {
-			p.Line(fmt.Sprintf("All %d repository skills are up to date.", len(skills)))
+			p.Line(fmt.Sprintf("All %d repository skills are up to date.", len(rc.skills)))
 		}
-		return exitCode
+		return
 	}
 
-	if allUnknown && !flags.all {
-		p.Line(fmt.Sprintf("%d repository skills have not been checked yet.", len(rows)))
+	if rc.allUnknown && !rc.allFlag {
+		p.Line(fmt.Sprintf("%d repository skills have not been checked yet.", len(rc.rows)))
 		p.Blank()
 		headers := []string{"SKILL", "SOURCE", "CURRENT", "LATEST", "UPDATED", "CHANGED", "LOCAL", "STATUS"}
-		p.Table(headers, rows)
+		p.Table(headers, rc.rows)
 		p.Blank()
 		p.Line("Next: skillhub skill outdated --check")
-		return exitCode
+		return
 	}
 
 	timeStr := ""
-	if !latestChecked.IsZero() {
-		timeStr = fmt.Sprintf(" Checked %s.", relativeTime(latestChecked, now))
+	if !rc.latestChecked.IsZero() {
+		timeStr = fmt.Sprintf(" Checked %s.", relativeTime(rc.latestChecked, rc.now))
 	}
-	p.Line(fmt.Sprintf("%d of %d repository skills need attention.%s", attentionCount, len(skills), timeStr))
+	p.Line(fmt.Sprintf("%d of %d repository skills need attention.%s", rc.attentionCount, len(rc.skills), timeStr))
 	p.Blank()
 	headers := []string{"SKILL", "SOURCE", "CURRENT", "LATEST", "UPDATED", "CHANGED", "LOCAL", "STATUS"}
-	p.Table(headers, rows)
+	p.Table(headers, rc.rows)
 	p.Blank()
 
-	if firstAttentionID != "" {
-		p.Line(fmt.Sprintf("Next: skillhub skill update %s", firstAttentionID))
+	if rc.firstAttentionID != "" {
+		p.Line(fmt.Sprintf("Next: skillhub skill update %s", rc.firstAttentionID))
 	} else {
 		p.Line("Next: skillhub skill outdated --check")
 	}
-
-	return exitCode
 }
 
 func runSkillUpstream(ctx context.Context, flags skillFlags, stdout, stderr io.Writer) int {
