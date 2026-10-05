@@ -1,6 +1,6 @@
 ---
 title: "Phase 7: MCP tools and curator"
-status: todo
+status: in-progress
 ---
 
 # Phase 7: MCP tools and curator
