@@ -42,6 +42,9 @@ func runTelemetry(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	if subcommand == "funnel" {
 		return runTelemetryFunnel(ctx, args[1:], stdout, stderr)
 	}
+	if subcommand == "import-transcripts" {
+		return runTelemetryImportTranscripts(ctx, args[1:], stdout, stderr)
+	}
 	workspacePath, outputPath, jsonOutput, yes, err := telemetryFlags(subcommand, args[1:])
 	if err != nil {
 		var resErr *WorkspaceResolutionError
@@ -114,9 +117,11 @@ func telemetryUsageFix(subcommand string) string {
 	if subcommand == "purge" {
 		return "Run `skillhub telemetry purge --workspace <path> --yes`."
 	}
+	if subcommand == "import-transcripts" {
+		return "Run `skillhub telemetry import-transcripts --project <dir> [--workspace <path>]`."
+	}
 	return "Run `skillhub telemetry " + subcommand + " --workspace <path>`."
 }
-
 func validateDeliveryArguments(args []string) error {
 	if len(args) > maxDeliveryArgs {
 		return errors.New("too many arguments")

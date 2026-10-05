@@ -266,7 +266,7 @@ Show uncommitted canonical changes in the workspace's Git repository.
 
 Example: skillhub diff
 `,
-	"telemetry": `Usage: skillhub telemetry <health|preview|export|purge|funnel> [--workspace <path>] [--json]
+	"telemetry": `Usage: skillhub telemetry <health|preview|export|purge|funnel|import-transcripts> [--workspace <path>] [--json]
 
 Inspect or export the local, disposable telemetry record. Nothing leaves your
 machine unless you export it.
@@ -278,8 +278,10 @@ Subcommands:
   purge --yes                         Discard and recreate the telemetry store
   funnel [--since <date|Nd>] [--until <date>] [--skill <id>]
                                       Show recommendation and activation funnel report
+  import-transcripts --project <dir> [--since <date|Nd>]
+                                      Import tool observations from Claude Code transcripts
 
-Example: skillhub telemetry funnel --since 30d
+Example: skillhub telemetry import-transcripts --project ~/projects/my-app
 `,
 	"eval": `Usage: skillhub eval <manifest|run|promote> [--workspace <path>] [--json]
 
