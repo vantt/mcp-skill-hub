@@ -17,6 +17,7 @@ import (
 	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
 	"github.com/vantt/mcp-skill-hub/internal/telemetry"
 	"github.com/vantt/mcp-skill-hub/internal/workspace"
+	"gopkg.in/yaml.v3"
 )
 
 type fixedSourceID string
@@ -283,7 +284,7 @@ func TestCloneRebuildRetainsRevisionLosesOperationalTimesAndStatusDoesNotFetch(t
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(listed.Sources) != 1 || listed.Sources[0].CurrentRevision == nil || listed.Sources[0].CurrentRevision.Value != revision("one").Value {
+	if len(listed.Sources) != 1 || listed.Sources[0].Record.CurrentRevision == nil || listed.Sources[0].Record.CurrentRevision.Value != revision("one").Value {
 		t.Fatalf("cloned source = %#v", listed.Sources)
 	}
 	cloneHome, err := (CurationService{}).GetCurationHome(context.Background(), clone)
@@ -434,6 +435,155 @@ func TestSourceCaptureAndTriageLocalFolderBUG11(t *testing.T) {
 	}
 	if captured.Candidate.Status != "pending" {
 		t.Fatalf("expected pending status, got %s", captured.Candidate.Status)
+	}
+}
+
+func TestSourceListRolesAndReferencingSkills(t *testing.T) {
+	t.Parallel()
+	root := newSourceWorkspace(t)
+	now := time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC)
+	service := SourceService{
+		Clock: sourceClock{now: now},
+	}
+
+	// 1. Write 4 source catalog records
+	sources := []struct {
+		id   string
+		repo string
+	}{
+		{"src-upstream", "https://github.com/example/repo-a.git"},
+		{"src-learning", "https://github.com/example/repo-b.git"},
+		{"src-both", "https://github.com/example/repo-c.git"},
+		{"src-unattached", "https://github.com/example/repo-d.git"},
+	}
+	for _, s := range sources {
+		rev := revision("rev-" + s.id)
+		rec := sourcepkg.Record{
+			SchemaVersion:   1,
+			ID:              s.id,
+			Adapter:         "git",
+			Locator:         sourcepkg.Locator{Repository: s.repo, Ref: "main"},
+			Status:          "watching",
+			Identity:        sourcepkg.Identity{Name: s.id, Canonical: s.repo, DefaultBranch: "main"},
+			Monitoring:      sourcepkg.Monitoring{Enabled: true, Cadence: "weekly"},
+			Limits:          sourcepkg.Limits{TimeoutSeconds: 30, MaxBytes: 1024 * 1024, MaxFiles: 100, MaxFileBytes: 1024 * 1024},
+			CurrentRevision: &rev,
+		}
+		data, err := sourcepkg.MarshalCanonical(rec)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = os.WriteFile(filepath.Join(root, "sources", "catalog", s.id+".yaml"), data, 0o644)
+	}
+
+	// 2. Create skills with provenance
+	skillService := SkillService{}
+	for _, sk := range []struct {
+		id       string
+		sourceID string
+	}{
+		{"skill-a", "src-upstream"},
+		{"skill-c", "src-both"},
+	}{
+		prev, err := skillService.PreviewCreate(context.Background(), root, skill.CreateInput{
+			ID:          sk.id,
+			Collection:  "default",
+			Name:        sk.id,
+			Description: "desc " + sk.id,
+		}, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := skillService.ConfirmSkillMutation(context.Background(), root, prev, prev.Confirmation.Confirmation.Pins); err != nil {
+			t.Fatal(err)
+		}
+		metaPath := filepath.Join(root, "skills", "default", sk.id, "skill.meta.yaml")
+		metaBytes, err := os.ReadFile(metaPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var doc map[string]any
+		_ = yaml.Unmarshal(metaBytes, &doc)
+		doc["provenance"] = map[string]any{"source_id": sk.sourceID}
+		newMeta, _ := yaml.Marshal(doc)
+		_ = os.WriteFile(metaPath, newMeta, 0o644)
+	}
+
+	// 3. Create links in sources/skills/
+	for _, lnk := range []struct {
+		id       string
+		skillID  string
+		sourceID string
+	}{
+		{"LINK-skill-b--src-learning", "skill-b", "src-learning"},
+		{"LINK-skill-c--src-both", "skill-c", "src-both"},
+	}{
+		linkDoc := sourcepkg.Link{
+			SchemaVersion: 1,
+			ID:            lnk.id,
+			SkillID:       lnk.skillID,
+			SourceID:      lnk.sourceID,
+			Role:          "learning-source",
+		}
+		linkBytes, err := sourcepkg.MarshalCanonical(linkDoc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = os.WriteFile(filepath.Join(root, "sources", "skills", lnk.id+".yaml"), linkBytes, 0o644)
+	}
+
+	commitWorkspace(t, root)
+
+	// 4. Test ListSources
+	res, err := service.ListSources(context.Background(), root, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Sources) != 4 {
+		t.Fatalf("expected 4 sources, got %d", len(res.Sources))
+	}
+	roles := make(map[string]string)
+	skillsMap := make(map[string][]string)
+	for _, s := range res.Sources {
+		roles[s.Record.ID] = s.Role
+		skillsMap[s.Record.ID] = s.Skills
+	}
+
+	if roles["src-upstream"] != "upstream" {
+		t.Fatalf("src-upstream role = %q, want 'upstream'", roles["src-upstream"])
+	}
+	if len(skillsMap["src-upstream"]) != 1 || skillsMap["src-upstream"][0] != "skill-a" {
+		t.Fatalf("src-upstream skills = %v, want ['skill-a']", skillsMap["src-upstream"])
+	}
+
+	if roles["src-learning"] != "learning-source" {
+		t.Fatalf("src-learning role = %q, want 'learning-source'", roles["src-learning"])
+	}
+	if len(skillsMap["src-learning"]) != 1 || skillsMap["src-learning"][0] != "skill-b" {
+		t.Fatalf("src-learning skills = %v, want ['skill-b']", skillsMap["src-learning"])
+	}
+
+	if roles["src-both"] != "both" {
+		t.Fatalf("src-both role = %q, want 'both'", roles["src-both"])
+	}
+	if len(skillsMap["src-both"]) != 1 || skillsMap["src-both"][0] != "skill-c" {
+		t.Fatalf("src-both skills = %v, want ['skill-c']", skillsMap["src-both"])
+	}
+
+	if roles["src-unattached"] != "unattached" {
+		t.Fatalf("src-unattached role = %q, want 'unattached'", roles["src-unattached"])
+	}
+	if len(skillsMap["src-unattached"]) != 0 {
+		t.Fatalf("src-unattached skills = %v, want empty", skillsMap["src-unattached"])
+	}
+
+	// 5. Test ListSourceGroups
+	groupRes, err := service.ListSourceGroups(context.Background(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(groupRes.Groups) != 4 {
+		t.Fatalf("expected 4 groups, got %d", len(groupRes.Groups))
 	}
 }
 

@@ -124,7 +124,7 @@ func runSource(ctx context.Context, args []string, stdout, stderr io.Writer) int
 		if len(positionals) != 0 {
 			return writeInvalidRequest(stdout, stderr, flags.jsonOutput, "list accepts no positional arguments", "Remove extra arguments.")
 		}
-		result, err := service.ListSources(ctx, flags.workspace, flags.status)
+		result, err := service.ListSourceGroups(ctx, flags.workspace)
 		return writeSourceList(stdout, stderr, flags.jsonOutput, result, err)
 	case "show":
 		if len(positionals) != 1 {
@@ -139,9 +139,9 @@ func runSource(ctx context.Context, args []string, stdout, stderr io.Writer) int
 				return writeSingleCandidate(stdout, stderr, flags.jsonOutput, candidate)
 			}
 		}
-		for _, record := range result.Sources {
-			if record.ID == positionals[0] {
-				return writeSingleSource(stdout, stderr, flags.jsonOutput, record)
+		for _, item := range result.Sources {
+			if item.Record.ID == positionals[0] {
+				return writeSingleSource(stdout, stderr, flags.jsonOutput, item.Record)
 			}
 		}
 		return writeSourceError(stdout, stderr, flags.jsonOutput, errors.New("source record not found"))
@@ -404,7 +404,7 @@ func writeSourceList(stdout, stderr io.Writer, jsonOutput bool, result app.Sourc
 			bullets = append(bullets, fmt.Sprintf("%s [%s] %s — %s", item.ID, item.Status, item.Locator, item.Reason))
 		}
 		for _, item := range result.Sources {
-			bullets = append(bullets, fmt.Sprintf("%s [%s] %s (%s)", item.ID, item.Status, item.Identity.Name, item.Adapter))
+			bullets = append(bullets, fmt.Sprintf("%s [%s] %s (%s)", item.Record.ID, item.Record.Status, item.Record.Identity.Name, item.Record.Adapter))
 		}
 		p.Bullets(bullets...)
 	})

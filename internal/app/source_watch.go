@@ -54,13 +54,16 @@ func (service SourceService) PreviewSourceWatch(ctx context.Context, path string
 	}
 
 	return service.PreviewAttach(ctx, path, SourceAttachInput{
-		SkillID:        skillID,
-		SourceID:       input.SourceID,
-		Locator:        input.Locator,
-		Ref:            input.Ref,
-		Path:           input.Path,
-		Cadence:        input.Cadence,
-		IdempotencyKey: input.IdempotencyKey,
+		SkillID:           skillID,
+		SourceID:          input.SourceID,
+		Locator:           input.Locator,
+		Ref:               input.Ref,
+		Path:              input.Path,
+		Cadence:           input.Cadence,
+		MonitoringEnabled: input.MonitoringEnabled,
+		Trust:             input.Trust,
+		License:           input.License,
+		IdempotencyKey:    input.IdempotencyKey,
 	})
 }
 

@@ -18,13 +18,16 @@ import (
 )
 
 type SourceAttachInput struct {
-	SkillID        string `json:"skill_id"`
-	SourceID       string `json:"source_id,omitempty"`
-	Locator        string `json:"locator,omitempty"`
-	Ref            string `json:"ref,omitempty"`
-	Path           string `json:"path,omitempty"`
-	Cadence        string `json:"cadence,omitempty"`
-	IdempotencyKey string `json:"idempotency_key,omitempty"`
+	SkillID           string `json:"skill_id"`
+	SourceID          string `json:"source_id,omitempty"`
+	Locator           string `json:"locator,omitempty"`
+	Ref               string `json:"ref,omitempty"`
+	Path              string `json:"path,omitempty"`
+	Cadence           string `json:"cadence,omitempty"`
+	MonitoringEnabled *bool  `json:"monitoring_enabled,omitempty"`
+	Trust             string `json:"trust,omitempty"`
+	License           string `json:"license,omitempty"`
+	IdempotencyKey    string `json:"idempotency_key,omitempty"`
 }
 
 func readSkillSourceLinks(root string) ([]sourcepkg.Link, error) {
@@ -164,11 +167,14 @@ func (service SourceService) PreviewAttach(ctx context.Context, path string, inp
 			return *rProp, nil
 		}
 		watchInput := SourceWatchInput{
-			Locator:  input.Locator,
-			SourceID: input.SourceID,
-			Ref:      input.Ref,
-			Path:     input.Path,
-			Cadence:  input.Cadence,
+			Locator:           input.Locator,
+			SourceID:          input.SourceID,
+			Ref:               input.Ref,
+			Path:              input.Path,
+			Cadence:           input.Cadence,
+			MonitoringEnabled: input.MonitoringEnabled,
+			Trust:             input.Trust,
+			License:           input.License,
 		}
 		cfg, cProp := deriveSourceWatchConfig(watchInput, route)
 		if cProp != nil {

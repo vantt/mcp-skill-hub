@@ -76,7 +76,7 @@ Do not modify any other file.
 
 - [x] Task 5.1 attach / detach / unwatch
 - [x] Task 5.2 watch + triage outcomes
-- [ ] Task 5.3 grouped list + import-more
+- [x] Task 5.3 grouped list + import-more
 - [ ] Task 5.4 backfill
 - [ ] Task 5.5 status actions
 - [ ] Task 5.6 `make check`

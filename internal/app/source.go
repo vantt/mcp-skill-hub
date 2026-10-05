@@ -18,6 +18,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 // SourceService is the shared boundary for source intake, onboarding, and explicit checks.
@@ -34,10 +36,33 @@ type SourceCandidateResult struct {
 	Candidate   sourcepkg.Candidate `json:"candidate"`
 	OperationID string              `json:"operation_id,omitempty"`
 }
+type SourceListItem struct {
+	Record          sourcepkg.Record `json:"record"`
+	Skills          []string         `json:"skills"`
+	Role            string           `json:"role"`
+	ImportableCount int              `json:"importable_count"`
+}
+
+type SourceSummary struct {
+	ID                  string     `json:"id"`
+	Status              string     `json:"status"`
+	Role                string     `json:"role"`
+	ReferencingSkills   []string   `json:"referencing_skills"`
+	SkillsVendoredCount int        `json:"skills_vendored_count"`
+	ImportableCount     int        `json:"importable_count"`
+	LastCheckedAt       *time.Time `json:"last_checked_at,omitempty"`
+}
+
+type SourceRepositoryGroup struct {
+	Repository string          `json:"repository"`
+	Sources    []SourceSummary `json:"sources"`
+}
+
 type SourceListResult struct {
 	Result
-	Candidates []sourcepkg.Candidate `json:"candidates"`
-	Sources    []sourcepkg.Record    `json:"sources"`
+	Candidates []sourcepkg.Candidate   `json:"candidates"`
+	Sources    []SourceListItem        `json:"sources"`
+	Groups     []SourceRepositoryGroup `json:"groups,omitempty"`
 }
 
 type SourceTriageInput struct {
@@ -173,7 +198,7 @@ func (service SourceService) CaptureSourceCandidate(ctx context.Context, path st
 	return result, nil
 }
 
-func (SourceService) ListSources(ctx context.Context, path, status string) (SourceListResult, error) {
+func (service SourceService) ListSources(ctx context.Context, path, status string) (SourceListResult, error) {
 	root, err := workspace.Discover(path)
 	if err != nil {
 		return SourceListResult{}, err
@@ -181,7 +206,8 @@ func (SourceService) ListSources(ctx context.Context, path, status string) (Sour
 	if err := ctx.Err(); err != nil {
 		return SourceListResult{}, err
 	}
-	candidates, sources, err := readSourceRecords(root)
+	service = service.defaults(root)
+	candidates, rawSources, err := readSourceRecords(root)
 	if err != nil {
 		return SourceListResult{}, err
 	}
@@ -194,14 +220,183 @@ func (SourceService) ListSources(ctx context.Context, path, status string) (Sour
 		}
 		candidates = filtered
 	}
-	result := SourceListResult{Result: NewResult(StatusOK, fmt.Sprintf("%d candidate(s) and %d monitored source(s).", len(candidates), len(sources))), Candidates: candidates, Sources: sources}
+
+	upstreamMap, linkMap := computeSourceRoleAndSkills(root)
+
+	var sources []SourceListItem
+	for _, rec := range rawSources {
+		upSkills := upstreamMap[rec.ID]
+		lnkSkills := linkMap[rec.ID]
+		isUpstream := len(upSkills) > 0
+		isLearning := len(lnkSkills) > 0
+
+		var role string
+		switch {
+		case isUpstream && isLearning:
+			role = "both"
+		case isUpstream:
+			role = "upstream"
+		case isLearning:
+			role = "learning-source"
+		default:
+			role = "unattached"
+		}
+
+		skillSet := make(map[string]bool)
+		for _, s := range upSkills {
+			skillSet[s] = true
+		}
+		for _, s := range lnkSkills {
+			skillSet[s] = true
+		}
+		var combinedSkills []string
+		for s := range skillSet {
+			combinedSkills = append(combinedSkills, s)
+		}
+		sort.Strings(combinedSkills)
+
+		importableCount := -1
+		if service.Adapters != nil && rec.CurrentRevision != nil {
+			if adapter, ok := service.Adapters[rec.Adapter]; ok {
+				src := sourcepkg.Source{ID: rec.ID, Locator: rec.Locator, Limits: rec.Limits}
+				scopePrefix := rec.Locator.Path
+				if scopePrefix == "" {
+					scopePrefix = commonParentDirForSource(root, rec.ID)
+				}
+				resources, err := adapter.List(ctx, src, *rec.CurrentRevision, sourcepkg.Scope{Prefix: scopePrefix})
+				if err == nil {
+					reader := AdapterResourceReader{Adapter: adapter, Source: src, Revision: *rec.CurrentRevision}
+					items, err := DiscoverSkillsFromResources(ctx, reader, resources, scopePrefix)
+					if err == nil {
+						existingSkills, _ := listWorkspaceSkillIDs(root)
+						count := 0
+						for _, it := range items {
+							if it.Error == "" && !existingSkills[it.TargetID] {
+								count++
+							}
+						}
+						importableCount = count
+					}
+				}
+			}
+		}
+
+		sources = append(sources, SourceListItem{
+			Record:          rec,
+			Skills:          combinedSkills,
+			Role:            role,
+			ImportableCount: importableCount,
+		})
+	}
+
+	result := SourceListResult{
+		Result:     NewResult(StatusOK, fmt.Sprintf("%d candidate(s) and %d monitored source(s).", len(candidates), len(sources))),
+		Candidates: candidates,
+		Sources:    sources,
+	}
 	for _, item := range candidates {
 		result.Items = append(result.Items, Item{ID: item.ID, Summary: item.Locator, Impact: "Intake status: " + item.Status})
 	}
 	for _, item := range sources {
-		result.Items = append(result.Items, Item{ID: item.ID, Summary: item.Identity.Name, Impact: "Source status: " + item.Status})
+		result.Items = append(result.Items, Item{ID: item.Record.ID, Summary: item.Record.Identity.Name, Impact: "Source status: " + item.Record.Status})
 	}
 	return result, nil
+}
+
+func (service SourceService) ListSourceGroups(ctx context.Context, path string) (SourceListResult, error) {
+	root, err := workspace.Discover(path)
+	if err != nil {
+		return SourceListResult{}, err
+	}
+	res, err := service.ListSources(ctx, root, "")
+	if err != nil {
+		return SourceListResult{}, err
+	}
+	upstreamMap, _ := computeSourceRoleAndSkills(root)
+	groupsMap := make(map[string][]SourceSummary)
+	for _, item := range res.Sources {
+		repo := item.Record.Locator.Repository
+		var lastChecked *time.Time
+		if item.Record.CurrentRevision != nil && !item.Record.CurrentRevision.ObservedAt.IsZero() {
+			t := item.Record.CurrentRevision.ObservedAt
+			lastChecked = &t
+		}
+		summary := SourceSummary{
+			ID:                  item.Record.ID,
+			Status:              item.Record.Status,
+			Role:                item.Role,
+			ReferencingSkills:   item.Skills,
+			SkillsVendoredCount: len(upstreamMap[item.Record.ID]),
+			ImportableCount:     item.ImportableCount,
+			LastCheckedAt:       lastChecked,
+		}
+		groupsMap[repo] = append(groupsMap[repo], summary)
+	}
+	var repoKeys []string
+	for k := range groupsMap {
+		repoKeys = append(repoKeys, k)
+	}
+	sort.Strings(repoKeys)
+	var groups []SourceRepositoryGroup
+	for _, k := range repoKeys {
+		groups = append(groups, SourceRepositoryGroup{
+			Repository: k,
+			Sources:    groupsMap[k],
+		})
+	}
+	res.Groups = groups
+	return res, nil
+}
+
+func computeSourceRoleAndSkills(root string) (map[string][]string, map[string][]string) {
+	upstreamMap := make(map[string][]string)
+	linkMap := make(map[string][]string)
+	skillIDs, _ := listAllSkillIDs(root)
+	for _, id := range skillIDs {
+		_, _, metaBytes, err := locateSkillDir(root, id)
+		if err != nil || len(metaBytes) == 0 {
+			continue
+		}
+		var meta struct {
+			Provenance struct {
+				SourceID string `yaml:"source_id"`
+			} `yaml:"provenance"`
+		}
+		if err := yaml.Unmarshal(metaBytes, &meta); err == nil && meta.Provenance.SourceID != "" {
+			upstreamMap[meta.Provenance.SourceID] = append(upstreamMap[meta.Provenance.SourceID], id)
+		}
+	}
+	links, _ := readSourceLinks(root)
+	for _, l := range links {
+		linkMap[l.SourceID] = append(linkMap[l.SourceID], l.SkillID)
+	}
+	return upstreamMap, linkMap
+}
+
+func readSourceLinks(root string) ([]sourcepkg.Link, error) {
+	skillsDir := filepath.Join(root, "sources", "skills")
+	entries, err := os.ReadDir(skillsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var links []sourcepkg.Link
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".yaml") || !strings.HasPrefix(entry.Name(), "LINK-") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(skillsDir, entry.Name()))
+		if err != nil {
+			continue
+		}
+		var link sourcepkg.Link
+		if err := yaml.Unmarshal(data, &link); err == nil && link.ID != "" {
+			links = append(links, link)
+		}
+	}
+	return links, nil
 }
 
 func (service SourceService) TriageSourceCandidate(ctx context.Context, path string, input SourceTriageInput) (SourceProposal, SourceMutationResult, error) {

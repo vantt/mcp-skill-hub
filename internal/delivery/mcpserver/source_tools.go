@@ -41,7 +41,7 @@ func (adapter *Server) registerSourceTools(server *mcp.Server) {
 			items = append(items, sourceListItem{Kind: "candidate", Candidate: &candidate})
 		}
 		for index := range result.Sources {
-			source := result.Sources[index]
+			source := result.Sources[index].Record
 			items = append(items, sourceListItem{Kind: "source", Source: &source})
 		}
 		owner := pageOwner(filter, items)

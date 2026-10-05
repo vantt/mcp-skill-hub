@@ -38,6 +38,7 @@ type DiscoveredSkill struct {
 	Description string `json:"description"`
 	Path        string `json:"path"`
 	Conflict    bool   `json:"conflict"`
+	Imported    bool   `json:"imported,omitempty"`
 	SkipReason  string `json:"skip_reason,omitempty"`
 }
 
@@ -131,7 +132,9 @@ func (service SourceImportService) PreviewSourceImport(ctx context.Context, path
 	}
 
 	scopePrefix := input.Path
-
+	if scopePrefix == "" && record.Locator.Path == "" {
+		scopePrefix = commonParentDirForSource(root, record.ID)
+	}
 	resources, err := adapter.List(opCtx, src, currentRev, sourcepkg.Scope{Prefix: scopePrefix})
 	if err != nil {
 		return SourceImportProposal{}, err
@@ -179,6 +182,7 @@ func (service SourceImportService) PreviewSourceImport(ctx context.Context, path
 			skipped = append(skipped, discItem)
 		} else if existingSkills[item.TargetID] {
 			discItem.Conflict = true
+			discItem.Imported = true
 			discItem.SkipReason = fmt.Sprintf("Skill %q already exists in workspace", item.TargetID)
 			skipped = append(skipped, discItem)
 		} else {
@@ -265,6 +269,48 @@ func (service SourceImportService) PreviewSourceImport(ctx context.Context, path
 	}
 
 	return proposal, nil
+}
+
+func commonParentDirForSource(root, sourceID string) string {
+	skillIDs, err := listAllSkillIDs(root)
+	if err != nil {
+		return ""
+	}
+	var paths []string
+	for _, id := range skillIDs {
+		_, _, metaBytes, err := locateSkillDir(root, id)
+		if err != nil || len(metaBytes) == 0 {
+			continue
+		}
+		var meta struct {
+			Provenance struct {
+				SourceID string      `yaml:"source_id"`
+				Origin   SkillOrigin `yaml:"origin"`
+			} `yaml:"provenance"`
+		}
+		if err := yaml.Unmarshal(metaBytes, &meta); err == nil {
+			if meta.Provenance.SourceID == sourceID && meta.Provenance.Origin.Path != "" {
+				paths = append(paths, meta.Provenance.Origin.Path)
+			}
+		}
+	}
+	if len(paths) == 0 {
+		return ""
+	}
+	common := filepath.ToSlash(filepath.Dir(paths[0]))
+	if common == "." || common == "/" {
+		common = ""
+	}
+	for _, p := range paths[1:] {
+		pDir := filepath.ToSlash(filepath.Dir(p))
+		for common != "" && !strings.HasPrefix(pDir+"/", common+"/") {
+			common = filepath.ToSlash(filepath.Dir(common))
+			if common == "." || common == "/" {
+				common = ""
+			}
+		}
+	}
+	return common
 }
 
 func (service SourceImportService) LoadSourceImportProposal(ctx context.Context, path, id string) (SourceImportProposal, error) {

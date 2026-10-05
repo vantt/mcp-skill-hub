@@ -512,3 +512,117 @@ func TestSourceImportFolderScopedPreservesCompanionsBUG04(t *testing.T) {
 		t.Errorf("binary content mismatch: got %v, want %v", binData, binaryBytes)
 	}
 }
+
+func TestSourceImportMoreDiscoversNewAndSkipsImported(t *testing.T) {
+	t.Parallel()
+	root := newSourceWorkspace(t)
+	now := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
+
+	// Create source record
+	currentRev := revision("rev-more")
+	sourceRec := sourcepkg.Record{
+		SchemaVersion:   1,
+		ID:              "src-more",
+		Adapter:         "git",
+		Locator:         sourcepkg.Locator{Repository: "https://github.com/example/more.git", Ref: "main"},
+		Status:          "watching",
+		Identity:        sourcepkg.Identity{Name: "more", Canonical: "https://github.com/example/more.git", DefaultBranch: "main"},
+		Monitoring:      sourcepkg.Monitoring{Enabled: true, Cadence: "weekly"},
+		CurrentRevision: &currentRev,
+		Limits:          sourcepkg.Limits{TimeoutSeconds: 30, MaxBytes: 1024 * 1024, MaxFiles: 100, MaxFileBytes: 1024 * 1024},
+	}
+	sourceData, _ := sourcepkg.MarshalCanonical(sourceRec)
+	_ = os.WriteFile(filepath.Join(root, "sources", "catalog", "src-more.yaml"), sourceData, 0o644)
+
+	// Pre-vendor skill-one with provenance pointing to src-more and origin.path: skills/skill-one
+	skillService := SkillService{}
+	prev, err := skillService.PreviewCreate(context.Background(), root, skill.CreateInput{
+		ID:          "skill-one",
+		Collection:  "default",
+		Name:        "skill-one",
+		Description: "Existing skill one",
+	}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := skillService.ConfirmSkillMutation(context.Background(), root, prev, prev.Confirmation.Confirmation.Pins); err != nil {
+		t.Fatal(err)
+	}
+	metaPath := filepath.Join(root, "skills", "default", "skill-one", "skill.meta.yaml")
+	metaBytes, _ := os.ReadFile(metaPath)
+	var doc map[string]any
+	_ = yaml.Unmarshal(metaBytes, &doc)
+	doc["provenance"] = map[string]any{
+		"source_id": "src-more",
+		"origin": map[string]any{
+			"kind":   "github",
+			"path":   "skills/skill-one",
+			"commit": currentRev.Value,
+		},
+	}
+	newMeta, _ := yaml.Marshal(doc)
+	_ = os.WriteFile(metaPath, newMeta, 0o644)
+	commitWorkspace(t, root)
+
+	// Fake adapter with two skills: skills/skill-one and skills/skill-two
+	skill1MD := "---\nname: skill-one\ndescription: Skill One\n---\n# Skill One\n"
+	skill2MD := "---\nname: skill-two\ndescription: Skill Two\n---\n# Skill Two\n"
+	adapter := &fakeImportAdapter{
+		resources: []sourcepkg.Resource{
+			{Path: "skills/skill-one/SKILL.md", Size: int64(len(skill1MD))},
+			{Path: "skills/skill-two/SKILL.md", Size: int64(len(skill2MD))},
+		},
+		files: map[string][]byte{
+			"skills/skill-one/SKILL.md": []byte(skill1MD),
+			"skills/skill-two/SKILL.md": []byte(skill2MD),
+		},
+	}
+	importService := SourceImportService{
+		Clock:    sourceClock{now: now},
+		Adapters: map[string]sourcepkg.Adapter{"git": adapter},
+	}
+
+	// 1. Preview import with empty Path -> should derive commonParentDir "skills",
+	// discover skill-one as imported/skipped, and skill-two as importable
+	prop, err := importService.PreviewSourceImport(context.Background(), root, SourceImportPreviewInput{
+		SourceID: "src-more",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(prop.Importable) != 1 || prop.Importable[0].TargetID != "skill-two" {
+		t.Fatalf("expected 1 importable (skill-two), got %#v", prop.Importable)
+	}
+	if len(prop.Skipped) != 1 || prop.Skipped[0].TargetID != "skill-one" {
+		t.Fatalf("expected 1 skipped (skill-one), got %#v", prop.Skipped)
+	}
+	if !prop.Skipped[0].Imported {
+		t.Fatalf("expected skill-one to have Imported: true, got %#v", prop.Skipped[0])
+	}
+
+	// 2. Confirm import of skill-two
+	res, err := importService.ConfirmSourceImport(context.Background(), root, prop, prop.Confirmation.Confirmation.Pins)
+	if err != nil || res.Error != nil {
+		t.Fatalf("confirm failed: %v, %#v", err, res.Error)
+	}
+	if res.ImportedCount != 1 || res.ImportedIDs[0] != "skill-two" {
+		t.Fatalf("imported count/ids mismatch: %#v", res)
+	}
+
+	// 3. Preview again -> both should now be skipped, zero importable, status OK
+	prop2, err := importService.PreviewSourceImport(context.Background(), root, SourceImportPreviewInput{
+		SourceID: "src-more",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(prop2.Importable) != 0 {
+		t.Fatalf("expected 0 importable on re-preview, got %d", len(prop2.Importable))
+	}
+	if prop2.Result.Status != StatusOK {
+		t.Fatalf("expected StatusOK on zero importable, got %v", prop2.Result.Status)
+	}
+	if len(prop2.Diff.Added) != 0 {
+		t.Fatalf("expected zero diff added, got %v", prop2.Diff.Added)
+	}
+}
