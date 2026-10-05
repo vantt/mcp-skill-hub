@@ -534,3 +534,37 @@ func TestCatalogBuildAndValidateParityOnFrontmatterMismatch(t *testing.T) {
 		t.Fatalf("expected error mentioning WRONG_NAME, got: %v", err)
 	}
 }
+
+func TestSkillFTSIncludesExamplesAndKeywords(t *testing.T) {
+	t.Parallel()
+	root := newWorkspace(t)
+	writeCanonical(t, root, "skills/core/review/skill.meta.yaml", "schema_version: 1\nid: review\nname: Review\nstatus: active\ndescription: Review code.\ntopics: [git, testing]\ntechnologies: [go, python]\nrouting:\n  triggers: [review code]\n  not_for: [write prose]\n  examples: [check my pull request, review diff]\n  counter_examples: [write documentation]\n  min_scope: multi_step\n")
+	writeCanonical(t, root, "skills/core/review/SKILL.md", "# Review\n")
+	build(t, root, BuildOptions{BuilderVersion: "test"})
+
+	handle, err := OpenCurrent(context.Background(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer handle.Close()
+
+	var examples, keywords string
+	if err := handle.DB.QueryRow(`SELECT examples, keywords FROM skill_fts WHERE skill_id=?`, "review").Scan(&examples, &keywords); err != nil {
+		t.Fatalf("SELECT examples, keywords: %v", err)
+	}
+	if examples != "check my pull request review diff" {
+		t.Errorf("examples = %q, want %q", examples, "check my pull request review diff")
+	}
+	if keywords != "git testing go python" {
+		t.Errorf("keywords = %q, want %q", keywords, "git testing go python")
+	}
+
+	// Counter-examples must NOT be indexed in FTS
+	var counterMatch int
+	if err := handle.DB.QueryRow(`SELECT count(*) FROM skill_fts WHERE skill_fts MATCH 'documentation'`).Scan(&counterMatch); err != nil {
+		t.Fatal(err)
+	}
+	if counterMatch != 0 {
+		t.Errorf("counter_examples must not match in FTS, got %d matches", counterMatch)
+	}
+}

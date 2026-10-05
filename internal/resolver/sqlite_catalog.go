@@ -96,7 +96,7 @@ func (catalog *SQLiteCatalog) Search(ctx context.Context, query string, limit in
 	for _, token := range tokens {
 		parts = append(parts, `"`+strings.ReplaceAll(token, `"`, `""`)+`"`)
 	}
-	rows, err := catalog.database.QueryContext(ctx, `SELECT skill_fts.skill_id,bm25(skill_fts,0.0,8.0,5.0,7.0) AS rank FROM skill_fts JOIN skills ON skills.id=skill_fts.skill_id WHERE skills.status='active' AND skills.id<>? AND skill_fts MATCH ? ORDER BY rank ASC, skill_fts.skill_id ASC LIMIT ?`, reservedSystemSkillID, strings.Join(parts, " OR "), limit)
+	rows, err := catalog.database.QueryContext(ctx, `SELECT skill_fts.skill_id,bm25(skill_fts,0.0,8.0,5.0,7.0,1.0,3.0,2.0) AS rank FROM skill_fts JOIN skills ON skills.id=skill_fts.skill_id WHERE skills.status='active' AND skills.id<>? AND skill_fts MATCH ? ORDER BY rank ASC, skill_fts.skill_id ASC LIMIT ?`, reservedSystemSkillID, strings.Join(parts, " OR "), limit)
 	if err != nil {
 		return nil, err
 	}
@@ -137,16 +137,20 @@ func (catalog *SQLiteCatalog) Skills(ctx context.Context) ([]Skill, error) {
 }
 
 type skillDocument struct {
-	Aliases []string `json:"aliases"`
-	Quality struct {
+	Aliases      []string `json:"aliases"`
+	Topics       []string `json:"topics"`
+	Technologies []string `json:"technologies"`
+	Quality      struct {
 		Reviewed bool `json:"reviewed"`
 	} `json:"quality"`
 	Routing struct {
-		Operations   []string `json:"operations"`
-		Triggers     []string `json:"triggers"`
-		NotFor       []string `json:"not_for"`
-		MinScope     string   `json:"min_scope"`
-		Requirements struct {
+		Operations      []string `json:"operations"`
+		Triggers        []string `json:"triggers"`
+		NotFor          []string `json:"not_for"`
+		Examples        []string `json:"examples"`
+		CounterExamples []string `json:"counter_examples"`
+		MinScope        string   `json:"min_scope"`
+		Requirements    struct {
 			Facts struct {
 				All []Requirement `json:"all"`
 				Any []Requirement `json:"any"`
@@ -185,6 +189,10 @@ func normalizeSkillRouting(skill *Skill) {
 	sort.Strings(skill.Operations)
 	sort.Strings(skill.Triggers)
 	sort.Strings(skill.NotFor)
+	sort.Strings(skill.Examples)
+	sort.Strings(skill.CounterExamples)
+	sort.Strings(skill.Topics)
+	sort.Strings(skill.Technologies)
 	sort.Strings(skill.Requirements.CapabilitiesAll)
 	sort.Strings(skill.Requirements.CapabilitiesAny)
 	sort.Slice(skill.Requirements.FactsAll, func(i, j int) bool {
@@ -212,6 +220,10 @@ func decodeRouting(content string, skill *Skill) error {
 	skill.Operations = document.Routing.Operations
 	skill.Triggers = document.Routing.Triggers
 	skill.NotFor = document.Routing.NotFor
+	skill.Examples = document.Routing.Examples
+	skill.CounterExamples = document.Routing.CounterExamples
+	skill.Topics = document.Topics
+	skill.Technologies = document.Technologies
 	skill.MinScope = document.Routing.MinScope
 	skill.Reviewed = document.Quality.Reviewed
 	skill.Requirements = Requirements{FactsAll: document.Routing.Requirements.Facts.All, FactsAny: document.Routing.Requirements.Facts.Any, CapabilitiesAll: document.Routing.Requirements.Capabilities.All, CapabilitiesAny: document.Routing.Requirements.Capabilities.Any}

@@ -1,7 +1,7 @@
 ---
 phase: 9
 title: "Resolver routing features"
-status: pending
+status: done
 priority: P1
 effort: 8h
 dependencies: [1]
@@ -48,17 +48,17 @@ Modify:
 
 ## Steps
 
-- [ ] **1. Catalog schema, projection, version bump.**
+- [x] **1. Catalog schema, projection, version bump.**
   Pass: `go test -count=1 ./internal/catalog/` → `ok`; a test asserts `SELECT examples, keywords FROM skill_fts WHERE skill_id=?` returns the joined values for a fixture skill.
-- [ ] **2. Projection and explicit bm25 weights.** Existing golden-v1 resolver and evaluation tests pass unchanged (behavior-preserving proof).
+- [x] **2. Projection and explicit bm25 weights.** Existing golden-v1 resolver and evaluation tests pass unchanged (behavior-preserving proof).
   Pass: `go test -count=1 ./internal/resolver/ ./internal/evaluation/` → `ok` with no edits to golden-v1 expectations.
-- [ ] **3. Scoring changes** with unit tests: an example phrase with no trigger overlap resolves to its skill (`example_match`); a counter-example phrase is penalized/excluded for that skill; `technologies: [go]` + `active_artifact.language: go` adds `technology_match` and lifts the score; for every golden-v1 skill (none has the new fields) the feature vector is identical before and after (compare `scoreSkill` output).
+- [x] **3. Scoring changes** with unit tests: an example phrase with no trigger overlap resolves to its skill (`example_match`); a counter-example phrase is penalized/excluded for that skill; `technologies: [go]` + `active_artifact.language: go` adds `technology_match` and lifts the score; for every golden-v1 skill (none has the new fields) the feature vector is identical before and after (compare `scoreSkill` output).
   Pass: `go test -count=1 -run 'Example|Counter|Technology|FeatureVector' ./internal/resolver/` → `ok`.
-- [ ] **4. Evaluation index version** bump and fixture update.
+- [x] **4. Evaluation index version** bump and fixture update.
   Pass: `go test -count=1 ./internal/app/ ./internal/delivery/cli/ -run 'Eval|Resolve|Catalog'` → `ok`.
-- [ ] **5. Performance budget.**
+- [x] **5. Performance budget.**
   Pass: `SKILLHUB_PERF=1 go test -p 1 -count=1 -run Performance ./internal/resolver/ ./internal/catalog/` → `ok`.
-- [ ] **6. Gate.** Pass: `make check` exits 0.
+- [x] **6. Gate.** Pass: `make check` exits 0.
 
 ## Risks
 
@@ -75,3 +75,6 @@ Revert; the catalog rebuilds at version 2.
 ## Failure protocol
 
 Follow `plan.md` → "Executor notes" → "Failure protocol". In particular, if a golden-v1 assertion changes in step 2, stop: that means the change is not behavior-preserving. Write `reports/<agent>-<YYMMDD-HHMM>-resolver-routing-features.md`, set `status: blocked`, report the blocker.
+
+## Implementation Note
+Updated catalog schema and projection with `DerivedSchemaVersion = 3`, adding `examples` and `keywords` columns to `skill_fts`. Configured explicit BM25 search weights for all 7 columns (`0.0, 8.0, 5.0, 7.0, 1.0, 3.0, 2.0`). Extended `resolver.Skill` projection with `Examples`, `CounterExamples`, `Topics`, and `Technologies`. Integrated examples and counter-examples into trigger and not-for scoring (with discount constant 0.9), expanded lexical metadata to include topics and technologies, and added artifact feature lift and reason code for technology matches. Bumped `EvaluationIndexVersion` to `sqlite-fts5-v3`.

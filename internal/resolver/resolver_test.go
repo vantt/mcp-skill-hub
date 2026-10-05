@@ -7,14 +7,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	_ "modernc.org/sqlite"
 	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 	"sync"
 	"testing"
-
-	_ "modernc.org/sqlite"
 )
 
 type memoryCatalog struct {
@@ -804,5 +804,160 @@ func TestClarificationPriorIsValidatedWithoutSharedState(t *testing.T) {
 	changed, _ := New(memoryCatalog{[]Skill{skill}, "sha256:" + repeat("4", 64)}, DefaultPolicy(), NewCache(4))
 	if _, err := changed.Resolve(context.Background(), request); err == nil {
 		t.Fatal("prior from a different catalog snapshot was accepted")
+	}
+}
+
+func TestExampleMatchResolvesWithoutTriggerOverlap(t *testing.T) {
+	t.Parallel()
+	skill := Skill{
+		ID:          "schema-linter",
+		Name:        "Schema Linter",
+		Description: "Validate JSON schemas",
+		Status:      "active",
+		Digest:      "v1",
+		Triggers:    []string{"format json document"},
+		Examples:    []string{"lint my schema definition"},
+		MinScope:    "multi_step",
+		Reviewed:    true,
+	}
+	catalog := memoryCatalog{[]Skill{skill}, "sha256:" + repeat("1", 64)}
+	r, _ := New(catalog, DefaultPolicy(), NewCache(4))
+
+	req := Request{
+		SchemaVersion: "1",
+		RequestID:     "req-ex",
+		Task:          Task{Description: "lint my schema definition", Scope: "multi_step"},
+		Operation:     "review",
+	}
+	res, err := r.Resolve(context.Background(), req)
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if res.Primary == nil || res.Primary.ID != "schema-linter" {
+		t.Fatalf("expected schema-linter primary, got %#v", res.Primary)
+	}
+	candidate := scoreSkill(skill, req, DefaultPolicy())
+	if !contains(candidate.Reasons, "example_match") {
+		t.Errorf("expected example_match in reasons: %v", candidate.Reasons)
+	}
+	if contains(candidate.Reasons, "trigger_match") {
+		t.Errorf("expected NO trigger_match in reasons: %v", candidate.Reasons)
+	}
+}
+
+func TestCounterExampleExcludesSkill(t *testing.T) {
+	t.Parallel()
+	skill := Skill{
+		ID:              "code-reviewer",
+		Name:            "Code Reviewer",
+		Description:     "Review code changes",
+		Status:          "active",
+		Digest:          "v1",
+		Triggers:        []string{"review code changes"},
+		CounterExamples: []string{"write creative marketing poetry"},
+		MinScope:        "multi_step",
+		Reviewed:        true,
+	}
+
+	req := Request{
+		SchemaVersion: "1",
+		RequestID:     "req-counter",
+		Task:          Task{Description: "write creative marketing poetry", Scope: "multi_step"},
+		Operation:     "create",
+	}
+
+	candidate := scoreSkill(skill, req, DefaultPolicy())
+	if candidate.Exclusion != Violated {
+		t.Fatalf("expected Violated exclusion for counter example, got %s", candidate.Exclusion)
+	}
+	if candidate.HardReason != "not_for_match" {
+		t.Fatalf("expected not_for_match hard reason, got %q", candidate.HardReason)
+	}
+}
+
+func TestTechnologyMatchLiftsArtifactScore(t *testing.T) {
+	t.Parallel()
+	skill := Skill{
+		ID:           "test-runner",
+		Name:         "Test Runner",
+		Description:  "Run test suites",
+		Status:       "active",
+		Digest:       "v1",
+		Triggers:     []string{"run tests"},
+		Technologies: []string{"golang", "postgres"},
+		MinScope:     "multi_step",
+		Reviewed:     true,
+	}
+
+	baseReq := Request{
+		SchemaVersion: "1",
+		RequestID:     "req-tech-1",
+		Task:          Task{Description: "run tests", Scope: "multi_step"},
+		Operation:     "test",
+	}
+	c1 := scoreSkill(skill, baseReq, DefaultPolicy())
+	if c1.Features.Artifact != 0 {
+		t.Errorf("expected 0 artifact feature without tech match, got %f", c1.Features.Artifact)
+	}
+	if contains(c1.Reasons, "technology_match") {
+		t.Errorf("expected no technology_match reason without tech match")
+	}
+
+	// Match via ActiveArtifact.Language
+	artReq := baseReq
+	artReq.Context.ActiveArtifact = &Artifact{Kind: "file", Language: "golang"}
+	c2 := scoreSkill(skill, artReq, DefaultPolicy())
+	if c2.Features.Artifact != 1.0 {
+		t.Errorf("expected 1.0 artifact feature with language match, got %f", c2.Features.Artifact)
+	}
+	if !contains(c2.Reasons, "technology_match") {
+		t.Errorf("expected technology_match in reasons: %v", c2.Reasons)
+	}
+	if c2.Score <= c1.Score {
+		t.Errorf("expected score to be lifted (c2=%f > c1=%f)", c2.Score, c1.Score)
+	}
+
+	// Match via Context.Facts
+	factReq := baseReq
+	factReq.Context.Facts = []Fact{{Key: "framework", Value: "postgres"}}
+	c3 := scoreSkill(skill, factReq, DefaultPolicy())
+	if c3.Features.Artifact != 1.0 {
+		t.Errorf("expected 1.0 artifact feature with fact match, got %f", c3.Features.Artifact)
+	}
+	if !contains(c3.Reasons, "technology_match") {
+		t.Errorf("expected technology_match in reasons: %v", c3.Reasons)
+	}
+}
+
+func TestGoldenV1FeatureVectorIdentical(t *testing.T) {
+	t.Parallel()
+	corpus := loadGolden(t)
+	policy := DefaultPolicy()
+
+	for _, c := range corpus.Cases {
+		req := c.Request
+		query := tokenize(positiveQuery(req))
+		for _, s := range corpus.Skills {
+			// Verify golden skills do not have the new fields
+			if len(s.Examples) != 0 || len(s.CounterExamples) != 0 || len(s.Topics) != 0 || len(s.Technologies) != 0 {
+				t.Fatalf("golden skill %s unexpectedly has new fields", s.ID)
+			}
+			scored := scoreSkill(s, req, policy)
+			oldLexical := overlap(query, tokenize(strings.Join(append([]string{s.Name, s.Description}, s.Aliases...), " ")))
+			oldTrigger := bestOverlap(query, s.Triggers)
+			oldNotFor := bestOverlap(query, s.NotFor)
+			if scored.Features.Lexical != oldLexical {
+				t.Errorf("skill %s case %s: lexical = %f, want %f", s.ID, c.ID, scored.Features.Lexical, oldLexical)
+			}
+			if scored.Features.Trigger != oldTrigger {
+				t.Errorf("skill %s case %s: trigger = %f, want %f", s.ID, c.ID, scored.Features.Trigger, oldTrigger)
+			}
+			if scored.Features.NotFor != oldNotFor {
+				t.Errorf("skill %s case %s: not_for = %f, want %f", s.ID, c.ID, scored.Features.NotFor, oldNotFor)
+			}
+			if contains(scored.Reasons, "example_match") || contains(scored.Reasons, "technology_match") {
+				t.Errorf("golden skill %s case %s unexpectedly had new reasons: %v", s.ID, c.ID, scored.Reasons)
+			}
+		}
 	}
 }

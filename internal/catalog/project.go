@@ -70,12 +70,15 @@ func populate(ctx context.Context, tx *sql.Tx, input buildInput, builderVersion 
 			return nil, err
 		}
 		skillByDirectory[filepath.ToSlash(filepath.Dir(item.Path))] = item.ID
-		triggers, err := projectRouting(ctx, tx, item)
+		triggers, examples, err := projectRouting(ctx, tx, item)
 		if err != nil {
 			return nil, err
 		}
 		aliases := strings.Join(stringValues(item.Document["aliases"]), " ")
-		if _, err := tx.ExecContext(ctx, `INSERT INTO skill_fts(skill_id,name,aliases,description,triggers) VALUES(?,?,?,?,?)`, item.ID, name, aliases, description, strings.Join(triggers, " ")); err != nil {
+		topics := stringValues(item.Document["topics"])
+		techs := stringValues(item.Document["technologies"])
+		keywords := strings.Join(append(topics, techs...), " ")
+		if _, err := tx.ExecContext(ctx, `INSERT INTO skill_fts(skill_id,name,aliases,description,triggers,examples,keywords) VALUES(?,?,?,?,?,?,?)`, item.ID, name, aliases, description, strings.Join(triggers, " "), strings.Join(examples, " "), keywords); err != nil {
 			return nil, err
 		}
 		if err := checkpoint("skills and routing"); err != nil {
@@ -251,26 +254,31 @@ func projectRevisions(ctx context.Context, tx *sql.Tx, item entity) error {
 	return nil
 }
 
-func projectRouting(ctx context.Context, tx *sql.Tx, item entity) ([]string, error) {
+func projectRouting(ctx context.Context, tx *sql.Tx, item entity) ([]string, []string, error) {
 	routing, _ := item.Document["routing"].(map[string]any)
 	categories := map[string]any{
 		"operation": routing["operations"], "trigger": routing["triggers"], "exclusion": routing["not_for"],
 		"requirement": routing["requirements"], "relationship": []any{routing["distinguish_from"], routing["supporting"], routing["equivalent_to"]},
+		"example": routing["examples"], "counter_example": routing["counter_examples"],
 	}
-	keys := []string{"operation", "trigger", "exclusion", "requirement", "relationship"}
+	keys := []string{"operation", "trigger", "exclusion", "requirement", "relationship", "example", "counter_example"}
 	var triggers []string
+	var examples []string
 	for _, category := range keys {
 		values := stringValues(categories[category])
 		for index, value := range values {
 			if _, err := tx.ExecContext(ctx, `INSERT INTO routing_metadata(skill_id,category,ordinal,value) VALUES(?,?,?,?)`, item.ID, category, index, value); err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 		}
 		if category == "trigger" {
 			triggers = values
 		}
+		if category == "example" {
+			examples = values
+		}
 	}
-	return triggers, nil
+	return triggers, examples, nil
 }
 
 func stringValues(value any) []string {
@@ -322,7 +330,7 @@ func expectedRowCounts(input buildInput) map[string]int64 {
 			counts["skills"]++
 			counts["skill_fts"]++
 			routing, _ := item.Document["routing"].(map[string]any)
-			for _, value := range []any{routing["operations"], routing["triggers"], routing["not_for"], routing["requirements"], []any{routing["distinguish_from"], routing["supporting"], routing["equivalent_to"]}} {
+			for _, value := range []any{routing["operations"], routing["triggers"], routing["not_for"], routing["requirements"], []any{routing["distinguish_from"], routing["supporting"], routing["equivalent_to"]}, routing["examples"], routing["counter_examples"]} {
 				counts["routing_metadata"] += int64(len(stringValues(value)))
 			}
 		case "source":

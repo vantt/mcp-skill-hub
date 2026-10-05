@@ -168,7 +168,7 @@ func (resolver *Resolver) Resolve(ctx context.Context, raw Request) (Response, e
 		if requirementRuleMatch(skill, request) && rank < 3 {
 			rank = 3
 		}
-		if trigger := bestOverlap(queryTokens, skill.Triggers); trigger > 0 && rank < 2+trigger {
+		if trigger, _ := triggerFeature(queryTokens, skill.Triggers, skill.Examples); trigger > 0 && rank < 2+trigger {
 			rank = 2 + trigger
 		}
 		if contains(skill.Operations, request.Operation) && rank < 1 {

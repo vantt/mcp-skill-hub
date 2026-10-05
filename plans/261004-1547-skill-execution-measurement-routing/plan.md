@@ -81,7 +81,7 @@ Three user-accepted workstreams, executed as sequential phases (1–5, 5a, 5b ar
 | 6 | [Server-side activation tracking](./phase-06-server-side-activation-tracking.md) | 2, 5b | 8h | Done |
 | 7 | [Funnel aggregation, CLI, WebUI Usage tab](./phase-07-funnel-cli-and-web-usage.md) | 2, 6 | 12h | Done |
 | 8 | [Claude Code transcript import](./phase-08-transcript-import.md) | 2, 7 | 8h | Done |
-| 9 | [Resolver routing features](./phase-09-resolver-routing-features.md) | 1 | 8h | Pending |
+| 9 | [Resolver routing features](./phase-09-resolver-routing-features.md) | 1 | 8h | Done |
 | 10 | [Routing eval command, corpus, CI gate](./phase-10-routing-eval-and-gate.md) | 9 | 10h | Pending |
 | 11 | [Metadata lint (routing and runtime hints)](./phase-11-metadata-lint.md) | 5b, 9 | 8h | Pending |
 | 12 | [Calibration with recorded evidence](./phase-12-calibration.md) | 10 | 4h | Pending |
