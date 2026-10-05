@@ -110,7 +110,7 @@ Do not modify any other file.
 ## Todo
 
 - [x] Task 3.1 operational table
-- [ ] Task 3.2 status derivation
+- [x] Task 3.2 status derivation
 - [ ] Task 3.3 check engine + `CheckSources`
 - [ ] Task 3.4 status integration
 - [ ] Task 3.5 `make check`
