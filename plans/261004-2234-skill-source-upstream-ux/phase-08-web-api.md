@@ -69,7 +69,7 @@ Do not modify any other file.
 
 - [x] Task 8.1 read model + list field
 - [x] Task 8.2 routes
-- [ ] Task 8.3 goldens
+- [x] Task 8.3 goldens
 - [ ] Task 8.4 `make check`
 
 ## Success criteria
