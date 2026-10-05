@@ -121,7 +121,7 @@ type skillAddPreviewInput struct {
 
 type sourceWatchPreviewInput struct {
 	Locator           string `json:"locator" jsonschema:"Public GitHub repository URL (e.g. https://github.com/owner/repo). Local folders are rejected."`
-	SkillID           string `json:"skill_id" jsonschema:"Skill identifier this watched source will attach to as a learning reference."`
+	SkillID           string `json:"skill_id,omitempty" jsonschema:"Skill identifier this watched source will attach to as a learning reference."`
 	SourceID          string `json:"source_id,omitempty" jsonschema:"Optional explicit source identifier. Derived from repo/path if omitted."`
 	Ref               string `json:"ref,omitempty" jsonschema:"Optional branch, tag, or commit ref to monitor. Defaults to default branch."`
 	Path              string `json:"path,omitempty" jsonschema:"Optional subdirectory path within the repository to scope watching."`
