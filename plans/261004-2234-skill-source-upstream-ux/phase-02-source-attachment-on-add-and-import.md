@@ -1,6 +1,6 @@
 ---
 title: "Phase 2: Source attachment on add and import"
-status: in-progress
+status: done
 ---
 
 # Phase 2: Source attachment on add and import
@@ -76,7 +76,7 @@ Do not modify any other file.
 - [x] Task 2.2 `skill add` attachment
 - [x] Task 2.3 `source import` origin
 - [x] Task 2.4 CLI output
-- [ ] Task 2.5 `make check`
+- [x] Task 2.5 `make check`
 
 ## Success criteria
 
