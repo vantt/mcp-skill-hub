@@ -127,6 +127,9 @@ func rollupKeys(ctx context.Context, envelope storedEnvelope, tx *sql.Tx) ([]rol
 
 	if envelope.Type == EventSkillLoaded && text("basis") == LoadBasisServerObserved {
 		skillID := text("skill_id")
+		if text("status") == "review_required" {
+			return []rollupKey{{skillID, "blocked:review_required"}}, nil
+		}
 		keys := []rollupKey{{skillID, "load:" + text("resource_kind")}}
 		if flag("first_activation") {
 			keys = append(keys, rollupKey{skillID, "activation:" + text("attribution")})

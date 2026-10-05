@@ -137,7 +137,7 @@ func (adapter *Server) registerSkillTools(server *mcp.Server) {
 		Title:       "Get skill",
 		Description: "Get a single skill by ID in any lifecycle state, returning its routing fields, entrypoint path, content, and metadata. For an active skill, local.path is a read-only copy of the skill folder: resolve relative file references such as scripts/ against it. Every trusted skill also gets a writable local.state_directory and local.env (SKILLHUB_SKILL_DIR, SKILLHUB_STATE_DIR, SKILLHUB_CONFIG_DIR): export them when you run its check, setup, or scripts, and install dependencies only into the state directory, never globally. If $SKILLHUB_CONFIG_DIR/env exists, load it too (for example `set -a; . \"$SKILLHUB_CONFIG_DIR/env\"; set +a`) and never print its values; if a required variable is missing, tell the user to run `skillhub skill env set <id> <NAME>` instead of asking for the value. When local.preflight is present, run its check command in working_directory under your own permissions before using the scripts, and ask the user before running setup. If local.status is review_required, the skill's content has not been approved: content is omitted, resources/read refuses every file, so do not use the skill and tell the user to run local.review_command.",
 		Annotations: annotations(true, false, false, false),
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, input skillGetInput) (*mcp.CallToolResult, toolOutcome[skillGetResult], error) {
+	}, func(ctx context.Context, req *mcp.CallToolRequest, input skillGetInput) (*mcp.CallToolResult, toolOutcome[skillGetResult], error) {
 		id := strings.TrimSpace(input.SkillID)
 		if id == "" {
 			return failure[skillGetResult](fmt.Errorf("skill_id is required"))
@@ -171,6 +171,24 @@ func (adapter *Server) registerSkillTools(server *mcp.Server) {
 		}
 		if local != nil && local.Status == app.LocalStatusReviewRequired {
 			result.Content = ""
+		}
+		if detail.LifecycleState == "active" && detail.SkillID != systemskills.CuratorSkillID {
+			blocked := local != nil && local.Status == app.LocalStatusReviewRequired
+			var reasons []string
+			if blocked && local != nil {
+				reasons = local.ReasonCodes
+			}
+			var session *mcp.ServerSession
+			if req != nil {
+				session = req.Session
+			}
+			adapter.recordLoad(ctx, session, app.SkillLoad{
+				SkillID:      detail.SkillID,
+				ResourceKind: "entrypoint",
+				Surface:      "skill_get",
+				Blocked:      blocked,
+				ReasonCodes:  reasons,
+			})
 		}
 		return success(result)
 	})

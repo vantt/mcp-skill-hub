@@ -124,11 +124,12 @@ var commonRouting = fields(
 // them keeps rollup cardinality bounded and the Go allowlist aligned with the
 // published event schema.
 var (
-	setupStates          = map[string]bool{"ready": true, "setup_required": true, "unsupported_platform": true, "review_required": true, "unknown": true}
-	skillResourceKinds   = map[string]bool{"entrypoint": true, "reference": true, "script": true, "asset": true, "resource": true}
-	skillLoadSurfaces    = map[string]bool{"skill_get": true, "skills_get": true, "resources_read": true}
-	activationAttributes = map[string]bool{"recommended": true, "supporting": true, "override": true, "after_no_skill": true, "after_needs_context": true, "unsolicited": true}
-	doctorStatuses       = map[string]bool{"ready": true, "setup_required": true, "unsupported_platform": true, "failed": true}
+	setupStates              = map[string]bool{"ready": true, "setup_required": true, "unsupported_platform": true, "review_required": true, "unknown": true}
+	skillResourceKinds       = map[string]bool{"entrypoint": true, "reference": true, "script": true, "asset": true, "resource": true}
+	skillLoadSurfaces        = map[string]bool{"skill_get": true, "skills_get": true, "resources_read": true}
+	activationAttributes     = map[string]bool{"recommended": true, "supporting": true, "override": true, "after_no_skill": true, "after_needs_context": true, "unsolicited": true}
+	doctorStatuses           = map[string]bool{"ready": true, "setup_required": true, "unsupported_platform": true, "failed": true}
+	contentReviewReasonCodes = map[string]bool{"content_review_required": true, "content_review_stale": true}
 )
 
 const (
@@ -266,6 +267,26 @@ func validateEventSemantics(eventType string, payload map[string]any) error {
 		if _, ok := payload["resource_kind"].(string); !ok {
 			return errors.New("server-observed skill load requires resource_kind")
 		}
+		if statusRaw, exists := payload["status"]; exists {
+			status, ok := statusRaw.(string)
+			if !ok || status != "review_required" {
+				return errors.New("server-observed skill load status must be review_required when present")
+			}
+			if first, _ := payload["first_activation"].(bool); first {
+				return errors.New("server-observed blocked load cannot have first_activation")
+			}
+		}
+		if values, exists := payload["reason_codes"]; exists {
+			reasons, ok := stringTokens(values)
+			if !ok {
+				return errors.New("server-observed skill load reason_codes must be an array")
+			}
+			for _, reason := range reasons {
+				if !contentReviewReasonCodes[reason] {
+					return errors.New("server-observed skill load reason_code is not supported")
+				}
+			}
+		}
 		if first, _ := payload["first_activation"].(bool); first {
 			if _, ok := payload["attribution"].(string); !ok {
 				return errors.New("first activation requires attribution")
@@ -315,7 +336,7 @@ func validateEventSemantics(eventType string, payload map[string]any) error {
 			}
 		}
 	}
-	if feedbackEventType(eventType) {
+	if feedbackEventType(eventType) && (eventType != EventSkillLoaded || payload["basis"] != LoadBasisServerObserved) {
 		if values, exists := payload["reason_codes"]; exists {
 			reasons, ok := stringTokens(values)
 			if !ok {

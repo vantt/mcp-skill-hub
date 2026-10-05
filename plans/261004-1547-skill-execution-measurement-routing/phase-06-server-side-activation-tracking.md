@@ -1,7 +1,7 @@
 ---
 phase: 6
 title: "Server-side activation tracking"
-status: pending
+status: done
 priority: P1
 effort: 8h
 dependencies: [2, 5b]
@@ -70,17 +70,17 @@ Modify:
 
 ## Steps
 
-- [ ] **1. Tracker with tests.** Implement the tracker with an injectable `now func() time.Time`. Table tests: every attribution class, TTL expiry at 2 h, LRU eviction at 257 sessions, 32-resolution cap, `markActivation` dedupe per (session, resolution, skill), nil-session handling.
+- [x] **1. Tracker with tests.** Implement the tracker with an injectable `now func() time.Time`. Table tests: every attribution class, TTL expiry at 2 h, LRU eviction at 257 sessions, 32-resolution cap, `markActivation` dedupe per (session, resolution, skill), nil-session handling.
   Pass: `go test -race -count=1 -run Tracker ./internal/delivery/mcpserver/` → `ok`.
-- [ ] **2. Telemetry semantics.** Add the `status: review_required` rule, the `blocked:review_required` rollup key, the `after_load` exclusion, and the schema `if/then`. Tests: blocked load stored and rolled up as `blocked:review_required` only; blocked load with `first_activation: true` rejected; a feedback after only a blocked load has no `after_load`; schema accepts the blocked payload and rejects `status: ready` on a server-observed load.
+- [x] **2. Telemetry semantics.** Add the `status: review_required` rule, the `blocked:review_required` rollup key, the `after_load` exclusion, and the schema `if/then`. Tests: blocked load stored and rolled up as `blocked:review_required` only; blocked load with `first_activation: true` rejected; a feedback after only a blocked load has no `after_load`; schema accepts the blocked payload and rejects `status: ready` on a server-observed load.
   Pass: `go test -count=1 ./internal/telemetry/ ./schemas/` → `ok`.
-- [ ] **3. App helper.** `RecordSkillLoad` with a fake sink: payload keys are exactly the allowed set; no value contains `/`, `skill://`, or the task description.
+- [x] **3. App helper.** `RecordSkillLoad` with a fake sink: payload keys are exactly the allowed set; no value contains `/`, `skill://`, or the task description.
   Pass: `go test -count=1 -run SkillLoad ./internal/app/` → `ok`.
-- [ ] **4. Wire emit points** behind one adapter method `recordLoad(ctx, session, skillID, kind, surface string, blocked bool, reasons []string)` that calls `attribute`, `markActivation` (only when not blocked and kind is `entrypoint`), and `app.RecordSkillLoad`. `skill_resolve` calls `noteResolution`.
+- [x] **4. Wire emit points** behind one adapter method `recordLoad(ctx, session, skillID, kind, surface string, blocked bool, reasons []string)` that calls `attribute`, `markActivation` (only when not blocked and kind is `entrypoint`), and `app.RecordSkillLoad`. `skill_resolve` calls `noteResolution`.
   Pass: `go test -race -count=1 ./internal/delivery/mcpserver/` → `ok` (including `TestNewDoesNotOpenTelemetry`).
-- [ ] **5. End-to-end test** (new file `internal/delivery/mcpserver/activation_telemetry_test.go`, or next to `TestMCPResolveTelemetryLifecycle` in `subprocess_test.go:210`) with a temp workspace and a real recorder opened via `app.TelemetryService{}.Open(root)` and assigned to the adapter's `telemetry` field (same package). `connectDistributionSession` (`distribution_integrity_test.go:18`) discards the `*Server` returned by `New`, so add a small variant that keeps it and sets its `telemetry` field before connecting. Reuse `callSkillGet` (`distribution_integrity_test.go:249`), and `setSkillMeta` (`skill_get_content_gate_test.go:17`, used to add a `provenance.origin` of kind `github` so the skill becomes an unapproved third-party skill). Sequence: `skill_resolve` → `skill_get` of the primary → `skill_get` of another active skill → `resources/read` of a reference → `skill_get` of the unapproved third-party skill. Flush the recorder and assert rollups `activation:recommended` (primary), `activation:override` (other skill), `load:reference`, `blocked:review_required` (third-party) and no `activation:*` row for the third-party skill.
+- [x] **5. End-to-end test** (new file `internal/delivery/mcpserver/activation_telemetry_test.go`, or next to `TestMCPResolveTelemetryLifecycle` in `subprocess_test.go:210`) with a temp workspace and a real recorder opened via `app.TelemetryService{}.Open(root)` and assigned to the adapter's `telemetry` field (same package). `connectDistributionSession` (`distribution_integrity_test.go:18`) discards the `*Server` returned by `New`, so add a small variant that keeps it and sets its `telemetry` field before connecting. Reuse `callSkillGet` (`distribution_integrity_test.go:249`), and `setSkillMeta` (`skill_get_content_gate_test.go:17`, used to add a `provenance.origin` of kind `github` so the skill becomes an unapproved third-party skill). Sequence: `skill_resolve` → `skill_get` of the primary → `skill_get` of another active skill → `resources/read` of a reference → `skill_get` of the unapproved third-party skill. Flush the recorder and assert rollups `activation:recommended` (primary), `activation:override` (other skill), `load:reference`, `blocked:review_required` (third-party) and no `activation:*` row for the third-party skill.
   Pass: `go test -race -count=1 -run 'Activation|Telemetry' ./internal/delivery/mcpserver/` → `ok`.
-- [ ] **6. Gate.** Pass: `make check` exits 0.
+- [x] **6. Gate.** Pass: `make check` exits 0.
 
 ## Acceptance tests
 
@@ -105,3 +105,6 @@ Revert the phase commits. Events already recorded age out (raw 14 days, rollups 
 ## Failure protocol
 
 Follow `plan.md` → "Executor notes" → "Failure protocol": stop, do not weaken tests or thresholds, write `reports/<agent>-<YYMMDD-HHMM>-activation-tracking.md` with the failing command, output, and diagnosis, set `status: blocked`, report the blocker.
+
+## Implementation Note
+Completed implementation of server-side activation tracking with per-session attribution caching and random session hashing in `activationTracker`. Integrated `skill.loaded` event recording across `skill_get`, `skills/get`, and `resources/read`, distinguishing active activations from blocked loads for unapproved third-party skills. Validated event schema and daily rollup aggregation updates, ensuring privacy boundaries prevent logging task descriptions, paths, or URLs.

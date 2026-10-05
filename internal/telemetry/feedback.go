@@ -235,6 +235,7 @@ WHERE resolution_id = ?
   AND kind = 'skill.loaded'
   AND json_valid(payload_json)
   AND json_extract(payload_json,'$.payload.basis') = 'server-observed'
+  AND COALESCE(json_extract(payload_json,'$.payload.status'), '') != 'review_required'
 LIMIT 1`, resolutionID).Scan(&found)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil

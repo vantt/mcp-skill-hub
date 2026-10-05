@@ -14,7 +14,7 @@ func (adapter *Server) registerResolverTools(server *mcp.Server) {
 		Name: "skill_resolve", Title: "Resolve a skill",
 		Description: "Recommend at most one primary skill from bounded task evidence. Send task.description in English; translate a non-English request first. primary.setup (and supporting[].setup), when present, is a hint: review_required means a human has not approved the skill's content yet, so do not use the skill and tell the user to run `skillhub skill review <id>`; unsupported_platform means this operating system is not supported; any other state is a hint from the user's terminal (basis), so confirm with the skill's own check in your shell via local.preflight. This does not load or activate skill content; use skills/get and resources/read only after host approval.",
 		Annotations: annotations(true, false, true, false),
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, input resolveInput) (*mcp.CallToolResult, toolOutcome[resolveResult], error) {
+	}, func(ctx context.Context, req *mcp.CallToolRequest, input resolveInput) (*mcp.CallToolResult, toolOutcome[resolveResult], error) {
 		request := resolverpkg.Request(input)
 		if _, err := resolverpkg.NormalizeRequest(request); err != nil {
 			return failure[resolveResult](err)
@@ -22,6 +22,13 @@ func (adapter *Server) registerResolverTools(server *mcp.Server) {
 		response, err := adapter.resolver.Resolve(ctx, adapter.workspace, request)
 		if err != nil {
 			return failure[resolveResult](err)
+		}
+		if adapter.tracker != nil {
+			var session *mcp.ServerSession
+			if req != nil {
+				session = req.Session
+			}
+			adapter.tracker.noteResolution(session, response)
 		}
 		trueValue := true
 		return success(resolveResult{

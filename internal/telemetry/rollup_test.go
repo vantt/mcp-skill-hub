@@ -362,3 +362,92 @@ func clonePayload(payload map[string]any) map[string]any {
 	}
 	return clone
 }
+func TestBlockedLoadRollupAndFeedbackExclusion(t *testing.T) {
+	now := time.Date(2026, 10, 4, 10, 0, 0, 0, time.UTC)
+	recorder := newTestRecorder(t, Config{Clock: func() time.Time { return now }})
+
+	resolution := validEvent(EventResolutionCompleted)
+	resolution.ID, resolution.OccurredAt, resolution.ResolutionID = "evt_res_blocked", now, "res_blocked"
+	resolution.Payload = map[string]any{"status": "resolved", "top_skill_id": "alpha", "recommended_skill_ids": []string{"alpha"}}
+	recorder.Record(resolution)
+
+	// Blocked load
+	blockedLoad := validEvent(EventSkillLoaded)
+	blockedLoad.ID, blockedLoad.OccurredAt, blockedLoad.ResolutionID = "evt_blocked_load", now, "res_blocked"
+	blockedLoad.Payload = map[string]any{
+		"skill_id":      "alpha",
+		"basis":         LoadBasisServerObserved,
+		"status":        "review_required",
+		"resource_kind": "entrypoint",
+		"surface":       "skill_get",
+		"attribution":   "recommended",
+		"reason_codes":  []string{"content_review_required"},
+	}
+	recorder.Record(blockedLoad)
+
+	// Feedback after blocked load only: must NOT have after_load
+	if _, err := recorder.RecordFeedback(t.Context(), Feedback{
+		EventID:      "evt_feedback_blocked",
+		ResolutionID: "res_blocked",
+		Outcome:      "rejected",
+		ReasonCode:   FeedbackReasonUserRejected,
+		SkillID:      "alpha",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	counts := rollupCounts(t, recorder, "", "")
+	assertCounts(t, counts, map[string]int64{
+		"2026-10-04||resolution:resolved":          1,
+		"2026-10-04|alpha|blocked:review_required": 1,
+		"2026-10-04|alpha|feedback:rejected":       1,
+		"2026-10-04|alpha|feedback:negative":       1,
+	})
+
+	// Check that feedback does NOT have after_load flag
+	preview, err := recorder.Preview(t.Context(), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range bytes.Split(bytes.TrimSpace(preview.JSONL), []byte{'\n'}) {
+		var event storedEnvelope
+		if err := json.Unmarshal(line, &event); err != nil {
+			t.Fatal(err)
+		}
+		if event.ID == "evt_feedback_blocked" {
+			flag, _ := event.Payload["after_load"].(bool)
+			if flag {
+				t.Fatalf("expected after_load=false after blocked load, got true")
+			}
+		}
+	}
+
+	// Semantic validation: blocked load with first_activation: true rejected
+	invalidFirst := validEvent(EventSkillLoaded)
+	invalidFirst.Payload = map[string]any{
+		"skill_id":         "alpha",
+		"basis":            LoadBasisServerObserved,
+		"status":           "review_required",
+		"resource_kind":    "entrypoint",
+		"surface":          "skill_get",
+		"attribution":      "recommended",
+		"first_activation": true,
+	}
+	recorder.Record(invalidFirst)
+
+	// Semantic validation: server-observed load with status != review_required rejected
+	invalidStatus := validEvent(EventSkillLoaded)
+	invalidStatus.Payload = map[string]any{
+		"skill_id":      "alpha",
+		"basis":         LoadBasisServerObserved,
+		"status":        "ready",
+		"resource_kind": "entrypoint",
+		"surface":       "skill_get",
+		"attribution":   "recommended",
+	}
+	recorder.Record(invalidStatus)
+
+	if health := recorder.Health(); health.Rejected != 2 {
+		t.Fatalf("expected 2 rejected events, got %d (%s)", health.Rejected, health.LastError)
+	}
+}

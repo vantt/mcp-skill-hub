@@ -92,6 +92,23 @@ func TestTelemetryResolutionSchemaRequiresContentFreeRecommendationIDs(t *testin
 	validateJSON(t, TelemetryEvent, replaceJSON(valid, `"code-review","test-runner"`, `"code-review","code-review"`), false)
 	validateJSON(t, TelemetryEvent, replaceJSON(valid, `"recommended_skill_ids":["code-review","test-runner"]`, `"recommended_skill_ids":["code-review"],"raw_recommendation":"private"`), false)
 }
+func TestTelemetryServerObservedBlockedLoadSchema(t *testing.T) {
+	blocked := `{
+		"event_version":"1","event_id":"evt_load:blocked","event_type":"skill.loaded",
+		"occurred_at":"2026-09-29T10:00:00Z","resolution_id":"res_1",
+		"catalog_snapshot":"sha256:catalog","policy_revision":"sha256:policy",
+		"client":{"name":"skillhub"},"privacy":{"content_mode":"none","redaction_version":"redact-v1"},
+		"payload":{"skill_id":"code-review","basis":"server-observed","status":"review_required","resource_kind":"entrypoint","surface":"skill_get","attribution":"recommended","reason_codes":["content_review_required"]}
+	}`
+	validateJSON(t, TelemetryEvent, blocked, true)
+	// Rejects status: ready on server-observed load
+	validateJSON(t, TelemetryEvent, replaceJSON(blocked, `"status":"review_required"`, `"status":"ready"`), false)
+	// Rejects first_activation: true on blocked load
+	validateJSON(t, TelemetryEvent, replaceJSON(blocked, `"attribution":"recommended"`, `"attribution":"recommended","first_activation":true`), false)
+	// Accepts first_activation: false on blocked load
+	validateJSON(t, TelemetryEvent, replaceJSON(blocked, `"attribution":"recommended"`, `"attribution":"recommended","first_activation":false`), true)
+}
+
 
 func TestEvaluationCaseSchemaSupportsMultipleOutcomesBranchesAndCounters(t *testing.T) {
 	valid := `{

@@ -14,6 +14,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -44,6 +45,8 @@ type Server struct {
 	distill      app.DistillService
 	curationUX   app.CurationTelemetryService
 	snapshots    app.SnapshotService
+	telemetry    app.TelemetrySink
+	tracker      *activationTracker
 	logger       *slog.Logger
 }
 
@@ -69,7 +72,12 @@ func New(workspacePath string, diagnostics io.Writer) (*Server, *mcp.Server, err
 	}
 	logger := slog.New(slog.NewTextHandler(diagnostics, &slog.HandlerOptions{Level: slog.LevelWarn}))
 	activeDiagnostics.Store(logger)
-	adapter := &Server{workspace: root, snapshots: app.NewSnapshotService(), logger: logger}
+	adapter := &Server{
+		workspace: root,
+		snapshots: app.NewSnapshotService(),
+		tracker:   newActivationTracker(nil),
+		logger:    logger,
+	}
 	capabilities := &mcp.ServerCapabilities{
 		Resources: &mcp.ResourceCapabilities{},
 		Tools:     &mcp.ToolCapabilities{},
@@ -109,6 +117,7 @@ func Serve(ctx context.Context, workspacePath string, diagnostics io.Writer) err
 	if recorder, telemetryErr := (app.TelemetryService{}).Open(adapter.workspace); telemetryErr != nil {
 		adapter.logger.Warn("MCP telemetry recorder could not be opened")
 	} else {
+		adapter.telemetry = recorder
 		adapter.resolver.Telemetry = recorder
 		adapter.feedback.Recorder = recorder
 		adapter.source.Telemetry = recorder
@@ -189,7 +198,7 @@ func (adapter *Server) listSkills(ctx context.Context, _ *mcp.ServerSession, par
 	return result, nil
 }
 
-func (adapter *Server) getSkill(ctx context.Context, _ *mcp.ServerSession, params *getSkillParams) (*getSkillResult, error) {
+func (adapter *Server) getSkill(ctx context.Context, session *mcp.ServerSession, params *getSkillParams) (*getSkillResult, error) {
 	if params == nil || params.URI == "" || len(params.URI) > 4096 {
 		return nil, invalidParams("snapshot_expired", "A bounded skill SKILL.md URI is required.")
 	}
@@ -199,6 +208,18 @@ func (adapter *Server) getSkill(ctx context.Context, _ *mcp.ServerSession, param
 	}
 	result := toSkillEntry(entry)
 	result.Local = adapter.localSkill(ctx, entry.SkillID, "active")
+	blocked := result.Local != nil && result.Local.Status == app.LocalStatusReviewRequired
+	var reasons []string
+	if blocked && result.Local != nil {
+		reasons = result.Local.ReasonCodes
+	}
+	adapter.recordLoad(ctx, session, app.SkillLoad{
+		SkillID:      entry.SkillID,
+		ResourceKind: "entrypoint",
+		Surface:      "skills_get",
+		Blocked:      blocked,
+		ReasonCodes:  reasons,
+	})
 	return &getSkillResult{ResultType: "complete", Skill: result, TTLMS: cacheTTLMS, CacheScope: "private"}, nil
 }
 
@@ -230,10 +251,31 @@ func (adapter *Server) readResource(ctx context.Context, request *mcp.ReadResour
 	if err != nil {
 		return nil, adapter.distributionRPCError(err)
 	}
-	meta, refused := adapter.localResourceMeta(ctx, content.SkillID, content.Path)
+	meta, refused, reasons := adapter.localResourceMeta(ctx, content.SkillID, content.Path)
+	kind := mapResourceKind(content.Path)
 	if refused {
+		var session *mcp.ServerSession
+		if request != nil {
+			session = request.Session
+		}
+		adapter.recordLoad(ctx, session, app.SkillLoad{
+			SkillID:      content.SkillID,
+			ResourceKind: kind,
+			Surface:      "resources_read",
+			Blocked:      true,
+			ReasonCodes:  reasons,
+		})
 		return nil, invalidParams("content_review_required", fmt.Sprintf("This skill's content has not been approved, so none of it is readable; do not use the skill and ask the user to run `skillhub skill review %s`.", content.SkillID))
 	}
+	var session *mcp.ServerSession
+	if request != nil {
+		session = request.Session
+	}
+	adapter.recordLoad(ctx, session, app.SkillLoad{
+		SkillID:      content.SkillID,
+		ResourceKind: kind,
+		Surface:      "resources_read",
+	})
 	resource := &mcp.ResourceContents{URI: content.URI, MIMEType: content.MIMEType}
 	if meta != nil {
 		resource.Meta = meta
@@ -246,27 +288,57 @@ func (adapter *Server) readResource(ctx context.Context, request *mcp.ReadResour
 	return &mcp.ReadResourceResult{Cacheable: mcp.Cacheable{TTLMs: cacheTTLMS, CacheScope: "private"}, Contents: []*mcp.ResourceContents{resource}}, nil
 }
 
+func mapResourceKind(path string) string {
+	if path == "SKILL.md" || filepath.Base(path) == "SKILL.md" {
+		return "entrypoint"
+	}
+	parts := strings.Split(path, "/")
+	for _, kind := range []string{"references", "scripts", "assets"} {
+		for _, part := range parts {
+			if part == kind {
+				return strings.TrimSuffix(kind, "s")
+			}
+		}
+	}
+	return "resource"
+}
+
+func (adapter *Server) recordLoad(ctx context.Context, session *mcp.ServerSession, load app.SkillLoad) {
+	if load.SkillID == "" || load.SkillID == systemskills.CuratorSkillID {
+		return
+	}
+	load.Attribution = "unsolicited"
+	if adapter.tracker != nil {
+		load.ResolutionID, load.Attribution = adapter.tracker.attribute(session, load.SkillID)
+		load.SessionIDHash = adapter.tracker.sessionHash(session)
+		if !load.Blocked && load.ResourceKind == "entrypoint" {
+			load.FirstActivation = adapter.tracker.markActivation(session, load.ResolutionID, load.SkillID)
+		}
+	}
+	app.RecordSkillLoad(ctx, adapter.telemetry, adapter.workspace, load)
+}
+
 // localResourceMeta maps a verified resource URI to its file in the local
 // snapshot. refused is true when the skill awaits content review, in which
 // case no resource, SKILL.md included, may be served.
-func (adapter *Server) localResourceMeta(ctx context.Context, skillID, relative string) (meta mcp.Meta, refused bool) {
+func (adapter *Server) localResourceMeta(ctx context.Context, skillID, relative string) (meta mcp.Meta, refused bool, reasons []string) {
 	if skillID == "" || skillID == systemskills.CuratorSkillID {
-		return nil, false
+		return nil, false, nil
 	}
 	local, err := adapter.snapshots.Ensure(ctx, adapter.workspace, skillID)
 	if err != nil {
 		adapter.logger.Warn("local skill snapshot could not be exported", "skill_id", skillID, "error", err)
-		return nil, false
+		return nil, false, nil
 	}
 	if local.Status == app.LocalStatusReviewRequired {
-		return nil, true
+		return nil, true, local.ReasonCodes
 	}
 	for _, resource := range local.Resources {
 		if resource.Path == relative {
-			return mcp.Meta{"io.skillhub/local_path": resource.LocalPath}, false
+			return mcp.Meta{"io.skillhub/local_path": resource.LocalPath}, false, nil
 		}
 	}
-	return nil, false
+	return nil, false, nil
 }
 
 func toSkillEntry(entry app.DistributedSkill) skillEntry {

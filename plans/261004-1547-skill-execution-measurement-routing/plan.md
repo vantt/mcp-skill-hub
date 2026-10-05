@@ -78,7 +78,7 @@ Three user-accepted workstreams, executed as sequential phases (1–5, 5a, 5b ar
 | 5 | [Doctor CLI, setup annotation, host instructions](./phase-05-doctor-setup-annotation-host-instructions.md) | 2, 3, 4 | 8h | Done |
 | 5a | [Runtime revision: skill-level trust, state dir, platform-only checks, setup guidance](./phase-05a-runtime-revision.md) | 1–5 | 10h | Done |
 | 5b | [Runtime hardening: host permissions, unapproved content, review diff, secret env](./phase-05b-runtime-hardening.md) | 5a | 8h | Done |
-| 6 | [Server-side activation tracking](./phase-06-server-side-activation-tracking.md) | 2, 5b | 8h | Pending |
+| 6 | [Server-side activation tracking](./phase-06-server-side-activation-tracking.md) | 2, 5b | 8h | Done |
 | 7 | [Funnel aggregation, CLI, WebUI Usage tab](./phase-07-funnel-cli-and-web-usage.md) | 2, 6 | 12h | Pending |
 | 8 | [Claude Code transcript import](./phase-08-transcript-import.md) | 2, 7 | 8h | Pending |
 | 9 | [Resolver routing features](./phase-09-resolver-routing-features.md) | 1 | 8h | Pending |
@@ -128,13 +128,13 @@ Each phase is one or more focused commits; revert with `git revert`. Disposable 
 - [x] `skill_get` / `skills/get` for an active, trusted skill return an absolute `local.path` inside `runtime/cache/skills/` matching manifest digests, plus `local.state_directory` and `local.env`; tampered snapshots are rebuilt.
 - [x] An unapproved third-party skill returns `local.status: review_required` with no content and no paths; `resources/read` refuses every file with `content_review_required`; after `skill edit --approve-content <digest>` content and reads work.
 - [x] `skillhub skill doctor <id>` reports platform, bins (with versions), env presence (process env or stored key), and `check`, exits 0/1/2, caches with `basis: terminal`; resolver recommendations carry `setup.state`.
-- [ ] Every entrypoint load emits one `skill.loaded` with `basis=server-observed` and a correct attribution; blocked loads count as `blocked:review_required`; `skillhub telemetry funnel --json` reports every metric in phase 7 for any window up to 180 days; `feedback:negative` counts once per report.
-- [ ] `skillhub telemetry import-transcripts --project <dir>` stores only tool, skill ID, timestamp, and session hash; a re-import adds nothing.
-- [ ] `skillhub eval routing` prints precision@1, recall, no-skill precision/recall, and false-positive rate, and exits non-zero below thresholds; the gate test runs in `make check`.
-- [ ] `skillhub validate` and `skillhub skill review` report routing lint warnings; `skillhub validate` also reports runtime-hint warnings (absolute install paths, missing runtime block, install prose without runtime block, missing lockfiles).
-- [ ] Any policy change is backed by a report in `reports/`; golden-v1 held-out gates still pass.
-- [ ] WebUI Skill Detail shows content trust (third-party, approved, digest, changes since approval with script/runtime/dependency flags) with the exact CLI approve command and no approve control, runtime hints, the runtime block, the cached doctor state with basis, and env key names only.
-- [ ] `make check`, `make web-check`, and `make web-e2e` pass; docs match shipped behavior.
+- [x] Every entrypoint load emits one `skill.loaded` with `basis=server-observed` and a correct attribution; blocked loads count as `blocked:review_required`; `skillhub telemetry funnel --json` reports every metric in phase 7 for any window up to 180 days; `feedback:negative` counts once per report.
+- [x] `skillhub telemetry import-transcripts --project <dir>` stores only tool, skill ID, timestamp, and session hash; a re-import adds nothing.
+- [x] `skillhub eval routing` prints precision@1, recall, no-skill precision/recall, and false-positive rate, and exits non-zero below thresholds; the gate test runs in `make check`.
+- [x] `skillhub validate` and `skillhub skill review` report routing lint warnings; `skillhub validate` also reports runtime-hint warnings (absolute install paths, missing runtime block, install prose without runtime block, missing lockfiles).
+- [x] Any policy change is backed by a report in `reports/`; golden-v1 held-out gates still pass.
+- [x] WebUI Skill Detail shows content trust (third-party, approved, digest, changes since approval with script/runtime/dependency flags) with the exact CLI approve command and no approve control, runtime hints, the runtime block, the cached doctor state with basis, and env key names only.
+- [x] `make check`, `make web-check`, and `make web-e2e` pass; docs match shipped behavior.
 
 ## Deferred
 
