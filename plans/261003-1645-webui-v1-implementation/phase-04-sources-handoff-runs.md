@@ -1,13 +1,15 @@
 ---
 phase: 4
 title: "Sources, Handoff, Runs"
-status: superseded
+status: moved
 priority: P1
 effort: 34h
 dependencies: [3]
 ---
 
 <!-- Updated: Validation Session 1 - rewritten as an executor handover; watch confirm checks ApplicationCommand; run-not-found sentinel; concrete test seeding recipes -->
+> **Moved 2026-10-05:** Handoff, Run Return, run API, run sentinel, route safety, and seeds now live in `plans/261004-2234-skill-source-upstream-ux/phase-10-distill-handoff-and-runs.md` (adapted to the skill-centric Sources screen). Do not execute this file.
+>
 > **Archived / Superseded:** This phase implemented standalone source monitoring and orphan watch flows (`/sources/watch`, `/sources/distill`). The architecture has transitioned to a **Skill-Centric Sources model** defined in `plans/261004-2234-skill-source-upstream-ux/` (where sources are strictly attached to skills as Upstream or Learning References, with drift checking and 3-way merge updates). The UI and API work for sources is now owned by Phases 8 & 9 of `plans/261004-2234-skill-source-upstream-ux/`.
 
 

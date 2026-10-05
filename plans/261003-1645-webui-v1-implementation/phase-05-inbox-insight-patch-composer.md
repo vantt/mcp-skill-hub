@@ -1,14 +1,14 @@
 ---
 phase: 5
 title: "Inbox, Insight, Patch Composer"
-status: pending
+status: moved
 priority: P1
 effort: 40h
 dependencies: [3]
 ---
 
 <!-- Updated: Validation Session 1 - rewritten as an executor handover; paging helpers move fully to internal/delivery/paging with MCP tests updated (user decision); decisions send no idempotency key; cursors compared by content, not bytes -->
-> **Status:** Pending. Decoupled from superseded Phase 4; Inbox, Insight Detail, and Patch Composer attach directly to skills and the insight distillation lifecycle.
+> **Moved 2026-10-05** to `plans/261004-2234-skill-source-upstream-ux/phase-11-inbox-insight-patch-composer.md`. Do not execute this file.
 
 
 # Phase 5: Inbox, Insight, Patch Composer

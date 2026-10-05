@@ -30,7 +30,7 @@ Expose the upstream and source services to the WebUI with the same envelopes, er
    | `POST /api/v1/skills/{id}/sources/attach/preview` | `PreviewAttach` | body `{source_id?, locator?, ref?, path?, cadence?}`; `locator` passes `validateGitHubLocator` |
    | `POST /api/v1/skills/{id}/sources/{source_id}/detach/preview` | `PreviewDetach` | |
    | `GET /api/v1/sources` | `ListSourceGroups(ctx, ws)` | returns `groups`, `candidates`, `sources` |
-   | `POST /api/v1/sources/check` | `CheckSources` | body `{source_ids?: [], all?: bool}`; exactly one of them |
+   | `POST /api/v1/sources/check` | `CheckSources` | body `{source_ids?: [], all?: bool, due?: bool}`; exactly one of them. `all: true` → the handler lists every source and passes all IDs (`CheckSources(ctx, ws, ids, false)`), because `allDue` skips manual and disabled sources; `due: true` → `CheckSources(ctx, ws, nil, true)` |
    | `POST /api/v1/sources/{id}/unwatch/preview` | `PreviewUnwatch` | |
    | `POST /api/v1/sources/proposals/{proposal_id}/confirm` | `LoadSourceProposal` + `ConfirmSourceProposal` | body `{proposal_digest, base_version}` |
    | `POST /api/v1/sources/{id}/import/preview` | `PreviewSourceImport` | body `{skills?: [], path?}` |
@@ -55,7 +55,7 @@ Do not modify any other file.
 - Verify: `go test ./internal/app/ -run 'TestSkillSources|TestSkillList' -count=1` exits 0 and prints `ok`.
 
 ### Task 8.2 — Routes
-- Steps: implement Requirements 1–2. Tests in `routes_sources_test.go` (authenticated requests as in existing route tests): `POST /api/v1/sources/check` with both or neither field → 400; unknown skill on `/sources` → 404; attach preview with a non-GitHub locator → 400; attach (by `source_id` of a seeded source) preview → confirm through `/api/v1/sources/proposals/{id}/confirm` → 200 and the link file exists; upstream review → confirm (`/api/v1/upstream/proposals/{id}/confirm`) with a file-protocol adapter injected into `srv.upstream` and `srv.sources` (repository and state prepared as in phase 4 tests) → 200 and summary contains `skillhub skill review`; the server constructs without panicking with all routes registered; upstream confirm with a wrong digest → 409 (`statusByCode[app.ErrorStaleProposal]`, `errors.go:25`).
+- Steps: implement Requirements 1–2. Tests in `routes_sources_test.go` (authenticated requests as in existing route tests): `POST /api/v1/sources/check` with two of the three fields or none → 400; `all: true` checks a source with manual cadence while `due: true` skips it; unknown skill on `/sources` → 404; attach preview with a non-GitHub locator → 400; attach (by `source_id` of a seeded source) preview → confirm through `/api/v1/sources/proposals/{id}/confirm` → 200 and the link file exists; upstream review → confirm (`/api/v1/upstream/proposals/{id}/confirm`) with a file-protocol adapter injected into `srv.upstream` and `srv.sources` (repository and state prepared as in phase 4 tests) → 200 and summary contains `skillhub skill review`; the server constructs without panicking with all routes registered; upstream confirm with a wrong digest → 409 (`statusByCode[app.ErrorStaleProposal]`, `errors.go:25`).
 - Verify: `go test ./internal/delivery/web/ -run 'TestSourceRoutes|TestUpstreamRoutes' -count=1` exits 0 and prints `ok`.
 
 ### Task 8.3 — Goldens

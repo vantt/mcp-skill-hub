@@ -1,17 +1,17 @@
 ---
-title: "Skill-centric sources: upstream tracking, updates, and learning references"
-description: "Tie every source to skills: track the upstream repo of each vendored skill, report drift, review and apply updates with a 3-way merge through preview/confirm, attach learning references to skills, and expose it consistently in CLI, MCP, and the WebUI."
+title: "Skill-centric sources and WebUI v1 completion"
+description: "Tie every source to skills: track the upstream repo of each vendored skill, report drift, review and apply updates with a 3-way merge through preview/confirm, attach learning references to skills, expose it consistently in CLI, MCP, and the WebUI, then finish the WebUI v1 (distill handoff and runs, Inbox, Patch Composer, hardening, release, docs)."
 status: pending
 priority: P1
-effort: 82h
+effort: 168h
 branch: feat/skill-source-upstream
-tags: [feature, backend, api, frontend, cli, mcp, docs]
-blockedBy: [261004-1547-skill-execution-measurement-routing]
+tags: [feature, backend, api, frontend, cli, mcp, docs, security, release]
+blockedBy: []
 blocks: []
 created: 2026-10-04
 ---
 
-# Skill-centric sources: upstream tracking, updates, and learning references
+# Skill-centric sources and WebUI v1 completion
 
 ## Overview
 
@@ -21,6 +21,8 @@ A source becomes an attribute of a skill, in one of two roles:
 - **Learning reference**: a repository or document used to improve one of your own skills. Distillation insights attach to that skill.
 
 `skill add` and `source import` from a repository attach the repository's source automatically (one repository and ref equals one source, many skills). Existing skills are attached by an explicit `skillhub source backfill`. Every new source has at least one linked skill or stays pending in the intake queue.
+
+Since 2026-10-05 this plan also owns the rest of the WebUI v1. The WebUI plan `plans/261003-1645-webui-v1-implementation/` is closed: its phases 1–3 shipped; its phase 4 Sources/Watch work is replaced by phases 8–9 here; its remaining Handoff/Runs, Inbox/Insight/Composer, hardening/release, and documentation work moved to phases 10–13 (see "Plan amendment 2026-10-05").
 
 ## Verified starting facts (2026-10-04)
 
@@ -65,9 +67,12 @@ A source becomes an attribute of a skill, in one of two roles:
 | 7 | [MCP tools and curator](./phase-07-mcp-tools-and-curator.md) | 3, 4, 5 | 6h | Pending |
 | 8 | [Web API](./phase-08-web-api.md) | 3, 4, 5 | 6h | Pending |
 | 9 | [Web UI](./phase-09-web-ui.md) | 8 | 8h | Pending |
-| 10 | [Documentation](./phase-10-documentation.md) | 1–9 | 4h | Pending |
+| 10 | [Distill handoff and runs](./phase-10-distill-handoff-and-runs.md) | 9 | 18h | Pending |
+| 11 | [Inbox, Insight, Patch Composer](./phase-11-inbox-insight-patch-composer.md) | 10 | 40h | Pending |
+| 12 | [WebUI hardening and release](./phase-12-webui-hardening-and-release.md) | 9–11 | 22h | Pending |
+| 13 | [Documentation and plan close](./phase-13-documentation.md) | 1–12 | 10h | Pending |
 
-Phases run strictly in order, one at a time. Each phase file lists the only files it may modify.
+Phases run strictly in order, one at a time (user decision 2026-10-05: phases 10–13 start only after phase 9). Each phase file lists the only files it may modify.
 
 ## Data flow (end state)
 
@@ -88,13 +93,14 @@ confirm ─► mutation (files + meta origin.commit/folder_digest/files_digest) 
 
 ## Cross-plan dependency
 
-- Starts after `plans/261004-1547-skill-execution-measurement-routing` is complete, including its phase 12a WebUI runtime parity (`phase-12a-webui-runtime-parity.md`). This plan does not edit that plan's files.
-- Overlapping files with that plan: `internal/app/skill_list.go` (runtime phase 7; this plan's phase 8), `internal/delivery/cli/help.go`, `internal/delivery/mcpserver/server.go`, `web/src/api/{types,queries}.ts`, `web/src/screens/skill-detail/SkillDetailScreen.tsx`, `internal/delivery/web/routes_read_test.go`, `internal/app/skill_review.go` (read only here). Phases 1–5 touch none of these; they may start before the runtime plan finishes only after the executor runs the overlap check in phase 1 Task 1.0 and it reports no overlap with pending runtime phases.
-- Ownership assumptions: the runtime plan owns `ContentTrustCard.tsx`, `RuntimeTab.tsx`, the `content_trust` and `SkillProvenance` web types, the resolver, telemetry, and the catalog schema version. This plan adds its own Upstream tab and Learning section components, reads trust impact only from its own upstream endpoints, and adds no telemetry event types.
+- The runtime plan `plans/261004-1547-skill-execution-measurement-routing` is complete and merged into `main` (`338eff5`). Its WebUI contracts must be kept: Skill Detail reads trust from `GET /api/v1/skills/{id}/review`, runtime from `/runtime`, usage from `/usage`; `ContentTrustCard.tsx`, `RuntimeTab.tsx`, and the Usage tab stay as they are. The one deliberate change is phase 9's correction of the TypeScript `SkillProvenance` type to the flat Go JSON.
+- Ownership kept from the runtime plan: resolver, telemetry, catalog schema version, `content_trust` types. This plan adds no telemetry event types and never edits `quality.content_reviewed_digest`.
+- The WebUI plan `plans/261003-1645-webui-v1-implementation/` is closed and absorbed (phases 10–13). Its earlier user decisions still apply where the moved phases cite them; its guard script is retired (user decision 2026-10-05) and replaced by this plan's gates and executor rules.
+- Evidence for the reconciliation: `plans/261003-1645-webui-v1-implementation/reports/261005-o-a-b-compatibility-review.md`.
 
 ## Backwards compatibility
 
-- Canonical: two new optional fields (`provenance.origin.files_digest` in skill metadata, `purpose` in source records). Older binaries reject unknown keys in both (`strictYAML` with `KnownFields`), so a workspace that runs `skill add`, `source import`, `skill update`, or `source backfill` with this binary needs this binary or newer (documented in phase 10).
+- Canonical: two new optional fields (`provenance.origin.files_digest` in skill metadata, `purpose` in source records). Older binaries reject unknown keys in both (`strictYAML` with `KnownFields`), so a workspace that runs `skill add`, `source import`, `skill update`, or `source backfill` with this binary needs this binary or newer (documented in phase 13).
 - `origin.path` semantics are corrected for new writes; backfill rewrites legacy paths after verifying them against the repository.
 - JSON contracts are additive: `source list` keeps `candidates` and `sources` and adds `groups`; `skill list` entries gain optional `upstream_status`; `source_check` results gain optional `skills`.
 - Behavior changes (accepted by the user's target UX): `skill add` from a repository creates or reuses a source; `source watch` without `--skill-id` is refused with guidance (vendor with `skill add`, link with `--skill-id`, or `source capture`); `source triage --decision accept` requires a skill target; `skillhub status` stops counting upstream-only sources as "ready to distill".
@@ -112,16 +118,22 @@ Each phase is one or more focused commits; revert with `git revert` in reverse o
 - [ ] `skillhub source list` groups by repository; `skillhub source backfill` attaches existing skills; no write path creates a source with zero linked skills.
 - [ ] MCP can report upstream status but has no way to preview or apply an update (no such tool; generic confirm tools refuse `upstream_update` proposals); MCP responses never carry upstream file content or diffs; the curator copies stay identical.
 - [ ] WebUI: Skills list badge and filter, one Skill Detail Sources tab (Upstream and Learning sections, indicator dot when an update is available), `/sources` grouped view, with loading, empty, and error states.
-- [ ] `make check` and `make web-check` pass; docs match shipped behavior.
+- [ ] WebUI provenance renders the flat Go fields, and an upstream update or Composer apply refreshes the Runtime tab and trust card.
+- [ ] WebUI distill loop: select learning sources on `/sources`, copy a handoff brief, open returned runs, cancel an active run; no web route can start, retry, or submit a run (`TestRoutesNeverMutateRuns`).
+- [ ] WebUI improvement loop: paged Inbox, Insight decisions, Patch Composer with full evidence mapping and conflict detection; MCP paging behavior unchanged.
+- [ ] No route left on `LaterPhasePage`; every route passes the axe and 360 px sweep; release smoke proves `skillhub serve web` serves the authenticated UI; notices ship with the release.
+- [ ] `make check`, `make web-check`, and `make web-e2e` pass; docs, including `docs/contracts/web-api.md`, match shipped behavior.
 
 ## Executor notes
 
-- Branch: `feat/skill-source-upstream`, created by the controller from `feat/skill-runtime-execution` after the runtime plan completes (this plan depends on content trust): `git checkout feat/skill-runtime-execution && git pull && git checkout -b feat/skill-source-upstream`. If the runtime branch has already merged to `main`, branch from `main` instead. The executor does not create the branch; it verifies `git branch --show-current` prints `feat/skill-source-upstream` before phase 1 and never commits to `main` or the runtime branch.
+- Branch: `feat/skill-source-upstream` already exists; on 2026-10-05 the controller rebased it onto `main` after the runtime plan merged. The executor does not create, rebase, or pull the branch; it verifies `git branch --show-current` prints `feat/skill-source-upstream` before phase 1 and never commits to `main`.
 - One phase at a time, in table order. Before starting a phase, set its file frontmatter `status: in-progress` and its row in this table to `In progress`; after its gates pass, set `status: done` and `Done`. If `ak plan --help` is available, use its status commands instead of hand edits.
 - Gates for every Go phase: `make check` exits 0. For web phases also: `cd web && npm run lint && npm run typecheck && npm test && npm run build` exit 0 (or `make web-check`).
 - Commits: conventional commit format (`feat(upstream): ...`, `fix(source): ...`, `docs: ...`), no AI references, and no plan IDs, phase numbers, or finding codes in code comments, test names, or commit messages.
 - Tests follow `AGENTS.md` "Testing": one owner test per contract at the strongest boundary; extend existing tables before adding near-duplicates.
 - Every phase file carries a Failure Protocol. A failed Verify step means stop and report; never weaken a test to pass.
+- Hard rules carried over from the closed WebUI plan (they replace its guard): never delete, rename, or skip a test, except the single move of `TestOpaqueCursorMultiPageAndIntegrity` from `internal/delivery/mcpserver/server_test.go` to `internal/delivery/paging/paging_test.go` in Task 11.1 (same name and assertions); never add `t.Skip`, `.skip`, `.only`, `xit`; never edit golden files by hand (regenerate with `-update` inside the owning task and read the diff); no `TODO`, `FIXME`, `XXX`, `HACK`, `nolint`, `@ts-ignore`, `@ts-expect-error`, `eslint-disable`, `testing.Testing()`, `TestMain`, or code that behaves differently under test; no exports, wrappers, or seams used only by tests; Go functions at most 120 lines and 6 parameters; never edit `.golangci.yml`; `make lint` reports no new issues; satisfy intent, not grep (renaming to dodge a check is a failure); start long-running processes only as a task says and stop them before the task ends.
+- After each of phases 8–12, the controller runs a code review of the phase diff before the next phase starts; confirmed findings are fixed in that phase.
 - Write a short completion report per phase to `reports/` named `executor-<YYMMDD-HHMM>-<phase-slug>.md` (what changed, commands run, deviations).
 
 ## Red Team Review
@@ -200,6 +212,28 @@ Kept from the red-team session: `source_watch_confirm` is still widened, because
 - Terms searched across all plan files: `diff3` (only the git flag `--diff3` remains), `go-udiff`/`udiff`, `epiclabs`, `merge3`, `MetadataOnly`, `skill_upstream_update_preview`, `skill_upstream_update_confirm`, `pins` in MCP context, `commit count`/`commits behind`, `default pending user decision`, `Q3`/`Q4`/`Q5`, `go.mod`, `Mergeable`, `latest_committed_at`.
 - Reconciled stale references: D6, D8, D10, D11, data flow, acceptance criteria, Verification Results, Open questions in plan.md; phases 2, 3, 4, 5, 6, 7, 8, 9, 10.
 - Unresolved contradictions: 0.
+
+## Plan amendment 2026-10-05
+
+Trigger: the runtime plan shipped, and the user decided to close the WebUI plan and move all of its remaining work here ("move everything from A into B so A closes").
+
+| Change | Where |
+|---|---|
+| Branch rebased onto `main` (two plan commits, no conflicts) | Executor notes |
+| `SourceSummary` gains `Status`, `CurrentRevision`, `DistilledRevision`, `ReadyToDistill` (shared upstream-only rule) | Phase 5 Requirement 5 and its test |
+| `SkillProvenance` TypeScript type corrected to the flat Go JSON; `ProvenanceCard` reads flat fields; test from the third-party golden | Phase 9 Requirements 1, 3; Task 9.2 |
+| Upstream confirm invalidates `['skill-runtime', id]` | Phase 9 Requirement 2; Task 9.2 |
+| New phase 10 from WebUI phase 4 (handoff, runs, run API, sentinel, route safety, seeds); the standalone Sources table, Watch screen, and `routes()` refactor are dropped (phase 9 owns `/sources`, D11 refuses skill-less watching, routes register per file) | phase-10 |
+| New phase 11 from WebUI phase 5; fixtures now come from phase 10; Composer invalidates Runtime/trust and never edits metadata | phase-11 |
+| New phase 12 from WebUI phase 6 tasks 6.1–6.4 and 6.6, adapted to shipped screens | phase-12 |
+| Documentation renumbered 10 → 13 and absorbs WebUI phase 6 task 6.5 (WebUI shipped docs, `web-api.md`) plus plan close | phase-13 |
+| WebUI guard retired; its hard rules move to Executor notes; code review after phases 8–12 | Executor notes |
+
+Red-team of this amendment (2026-10-05, `reports/red-team-261005-1513-webui-absorption-review.md`): 3 High, 10 Medium, 4 Low, all accepted and applied. Highlights: the seed adds a never-distilled `source-c` so the journeys select a distillable source; `startServer({workspace})` serves the seeded workspace; the run test uses `..%2Fetc`; the handoff key is scoped to the selection; `SourceSummary` gets JSON tags and `upstream_only` with one shared Go helper; phase 8 defines `all` versus `due`; decision and cancel invalidations widened; mockup-parity checklists, screenshots, golden-only fixtures, `Check due sources`, and Open-a-run recording restored; the route test rejects non-literal patterns; the Task 11.1 test move is an explicit exception to the hard rules; phase 13 checks `serve` and `distill` help and drops `/sources/watch` from spec 04 §1 and §3.5.
+
+Log entries above this section that say "phase 10" refer to the documentation phase, now phase 13.
+
+User decisions (2026-10-05): retire the guard; the distill handoff opens only from the Sources screen; phases 10–13 run strictly after phase 9.
 
 ## Open questions
 
