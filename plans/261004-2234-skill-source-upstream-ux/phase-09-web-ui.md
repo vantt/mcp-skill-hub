@@ -1,6 +1,6 @@
 ---
 title: "Phase 9: Web UI"
-status: in-progress
+status: done
 ---
 
 # Phase 9: Web UI
