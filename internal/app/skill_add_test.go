@@ -669,35 +669,98 @@ func TestSkillAddRemoteGitRealAdapter(t *testing.T) {
 		CacheRoot:         filepath.Join(root, "runtime", "sources", "git"),
 		AllowFileProtocol: true,
 	}
+	now := time.Now().UTC()
 	service := SkillAddService{
-		Clock:    sourceClock{now: time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC)},
+		Clock:    sourceClock{now: now},
 		Adapters: map[string]sourcepkg.Adapter{"git": adapter},
 	}
-
 	fileURL := "file://" + filepath.ToSlash(repoDir)
-	preview, err := service.PreviewSkillAdd(context.Background(), root, SkillAddInput{
-		Locator: fileURL,
-		All:     true,
+
+	// 1. Add skill a and confirm through stored proposal (DispatchConfirmProposal)
+	previewA, err := service.PreviewSkillAdd(context.Background(), root, SkillAddInput{
+		Locator:   fileURL,
+		Selection: "a",
 	})
-	if err != nil || preview.Error != nil {
-		t.Fatalf("preview failed: %v, %#v", err, preview.Error)
+	if err != nil || previewA.Error != nil {
+		t.Fatalf("preview a failed: %v, %#v", err, previewA.Error)
 	}
-	if len(preview.SkillIDs) != 2 {
-		t.Fatalf("expected 2 skills, got %v", preview.SkillIDs)
+	if previewA.SkillID != "a" {
+		t.Fatalf("expected skill ID 'a', got %q", previewA.SkillID)
 	}
-
-	pins := preview.Confirmation.Confirmation.Pins
-	result, err := service.ConfirmSkillAdd(context.Background(), root, preview, pins)
-	if err != nil || result.Error != nil {
-		t.Fatalf("confirm failed: %v, %#v", err, result.Error)
+	if previewA.UpstreamSource == nil || !previewA.UpstreamSource.Created {
+		t.Fatalf("expected previewA UpstreamSource.Created == true, got %#v", previewA.UpstreamSource)
 	}
 
+	skillService := SkillService{}
+	pinsA := previewA.Confirmation.Confirmation.Pins
+	dispatched, err := skillService.DispatchConfirmProposal(context.Background(), root, previewA.ProposalID(), &pinsA)
+	if err != nil {
+		t.Fatalf("dispatch confirm a failed: %v", err)
+	}
+	resultA, ok := dispatched.(SkillAddResult)
+	if !ok || resultA.Error != nil {
+		t.Fatalf("confirm a failed: %v, %#v", err, resultA.Error)
+	}
+	if resultA.UpstreamSource == nil || !resultA.UpstreamSource.Created {
+		t.Fatalf("expected resultA UpstreamSource.Created == true, got %#v", resultA.UpstreamSource)
+	}
+	sourceID := resultA.UpstreamSource.SourceID
+
+	// 2. Add skill b from the same repository and confirm in memory
+	previewB, err := service.PreviewSkillAdd(context.Background(), root, SkillAddInput{
+		Locator:   fileURL,
+		Selection: "b",
+	})
+	if err != nil || previewB.Error != nil {
+		t.Fatalf("preview b failed: %v, %#v", err, previewB.Error)
+	}
+	if previewB.UpstreamSource == nil || previewB.UpstreamSource.Created {
+		t.Fatalf("expected previewB UpstreamSource.Created == false (reused), got %#v", previewB.UpstreamSource)
+	}
+	if previewB.UpstreamSource.SourceID != sourceID {
+		t.Fatalf("expected previewB to reuse sourceID %q, got %q", sourceID, previewB.UpstreamSource.SourceID)
+	}
+
+	pinsB := previewB.Confirmation.Confirmation.Pins
+	resultB, err := service.ConfirmSkillAdd(context.Background(), root, previewB, pinsB)
+	if err != nil || resultB.Error != nil {
+		t.Fatalf("confirm b failed: %v, %#v", err, resultB.Error)
+	}
+	if resultB.UpstreamSource == nil || resultB.UpstreamSource.Created {
+		t.Fatalf("expected resultB UpstreamSource.Created == false, got %#v", resultB.UpstreamSource)
+	}
+	if resultB.UpstreamSource.SourceID != sourceID {
+		t.Fatalf("expected resultB sourceID %q, got %q", sourceID, resultB.UpstreamSource.SourceID)
+	}
+
+	// 3. Assert exactly one file in sources/catalog/ with purpose: upstream
+	catalogEntries, err := os.ReadDir(filepath.Join(root, "sources", "catalog"))
+	if err != nil {
+		t.Fatalf("read sources/catalog: %v", err)
+	}
+	if len(catalogEntries) != 1 {
+		t.Fatalf("expected exactly 1 catalog source record, got %d", len(catalogEntries))
+	}
+	sourceRecData, err := os.ReadFile(filepath.Join(root, "sources", "catalog", catalogEntries[0].Name()))
+	if err != nil {
+		t.Fatalf("read source file: %v", err)
+	}
+	sourceRec, err := sourcepkg.ParseRecord(sourceRecData)
+	if err != nil {
+		t.Fatalf("parse source record: %v", err)
+	}
+	if sourceRec.Purpose != "upstream" {
+		t.Fatalf("expected purpose: upstream, got %q", sourceRec.Purpose)
+	}
+
+	// 4. Load metadata for both skills
 	type metaRecord struct {
 		Provenance struct {
-			Origin SkillOrigin `yaml:"origin"`
+			SourceID string      `yaml:"source_id"`
+			Origin   SkillOrigin `yaml:"origin"`
 		} `yaml:"provenance"`
 	}
-	loadMeta := func(id string) SkillOrigin {
+	loadMeta := func(id string) metaRecord {
 		t.Helper()
 		metaPath := filepath.Join(root, "skills", "default", id, "skill.meta.yaml")
 		data, err := os.ReadFile(metaPath)
@@ -708,11 +771,21 @@ func TestSkillAddRemoteGitRealAdapter(t *testing.T) {
 		if err := yaml.Unmarshal(data, &m); err != nil {
 			t.Fatalf("unmarshal %s: %v", metaPath, err)
 		}
-		return m.Provenance.Origin
+		return m
 	}
 
-	originA := loadMeta("a")
-	originB := loadMeta("b")
+	metaA := loadMeta("a")
+	metaB := loadMeta("b")
+
+	if metaA.Provenance.SourceID != sourceID {
+		t.Fatalf("expected metaA source_id %q, got %q", sourceID, metaA.Provenance.SourceID)
+	}
+	if metaB.Provenance.SourceID != sourceID {
+		t.Fatalf("expected metaB source_id %q, got %q", sourceID, metaB.Provenance.SourceID)
+	}
+
+	originA := metaA.Provenance.Origin
+	originB := metaB.Provenance.Origin
 
 	if originA.Path != "skills/a" {
 		t.Fatalf("expected originA.Path 'skills/a', got %q", originA.Path)
@@ -735,8 +808,7 @@ func TestSkillAddRemoteGitRealAdapter(t *testing.T) {
 		t.Fatalf("expected folder digests to differ between a and b, both are %q", originA.FolderDigest)
 	}
 
-	reviewService := SkillService{}
-	trustA, err := reviewService.ContentTrustFor(context.Background(), root, "a")
+	trustA, err := skillService.ContentTrustFor(context.Background(), root, "a")
 	if err != nil {
 		t.Fatalf("ContentTrustFor a: %v", err)
 	}
@@ -744,7 +816,7 @@ func TestSkillAddRemoteGitRealAdapter(t *testing.T) {
 		t.Fatalf("expected originA.FilesDigest == trustA.ContentDigest (%s), got %s", trustA.ContentDigest, originA.FilesDigest)
 	}
 
-	trustB, err := reviewService.ContentTrustFor(context.Background(), root, "b")
+	trustB, err := skillService.ContentTrustFor(context.Background(), root, "b")
 	if err != nil {
 		t.Fatalf("ContentTrustFor b: %v", err)
 	}
@@ -752,7 +824,13 @@ func TestSkillAddRemoteGitRealAdapter(t *testing.T) {
 		t.Fatalf("expected originB.FilesDigest == trustB.ContentDigest (%s), got %s", trustB.ContentDigest, originB.FilesDigest)
 	}
 
-	reviewResult, err := reviewService.ReviewSkill(context.Background(), root, "a")
+	// 5. canonical.Validate returns no issues
+	issues, err := canonical.Validate(root)
+	if err != nil || len(issues) != 0 {
+		t.Fatalf("expected no canonical issues, err=%v issues=%v", err, issues)
+	}
+
+	reviewResult, err := skillService.ReviewSkill(context.Background(), root, "a")
 	if err != nil || reviewResult.Error != nil {
 		t.Fatalf("review failed: %v, %#v", err, reviewResult.Error)
 	}

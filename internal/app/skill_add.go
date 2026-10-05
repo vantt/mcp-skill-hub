@@ -67,6 +67,7 @@ type SkillAddProposal struct {
 	Description     string                       `json:"description"`
 	Origin          SkillOrigin                  `json:"origin"`
 	License         SkillLicenseInfo             `json:"license"`
+	UpstreamSource  *UpstreamSourceRef           `json:"upstream_source,omitempty"`
 	Resources       []DiscoveredCompanion        `json:"resources"`
 	TotalBytes      int64                        `json:"total_bytes"`
 	Transformations []string                     `json:"transformations,omitempty"`
@@ -117,6 +118,7 @@ type SkillAddResult struct {
 	Origin          SkillOrigin                  `json:"origin"`
 	License         SkillLicenseInfo             `json:"license"`
 	Resources       []DiscoveredCompanion        `json:"resources,omitempty"`
+	UpstreamSource  *UpstreamSourceRef           `json:"upstream_source,omitempty"`
 }
 
 // SkillAddService coordinates preview and confirmation for direct skill additions.
@@ -176,6 +178,27 @@ func (service SkillAddService) PreviewSkillAdd(ctx context.Context, path string,
 	if selProp != nil {
 		return *selProp, nil
 	}
+	var upstreamRef *UpstreamSourceRef
+	if captured.origin.Kind != "local" {
+		ref := captured.origin.Ref
+		if ref == "" {
+			ref = captured.origin.Commit
+		}
+		commit := captured.origin.Commit
+		gitAdapter := service.Adapters["git"]
+		sourceRec, sourceChange, sourceCreated, srcErr := ensureUpstreamSource(ctx, root, gitAdapter, captured.origin.Repository, ref, commit)
+		if srcErr != nil {
+			return SkillAddProposal{}, srcErr
+		}
+		if sourceRec != nil {
+			upstreamRef = &UpstreamSourceRef{
+				SourceID: sourceRec.ID,
+				Created:  sourceCreated,
+			}
+			captured.sourceID = sourceRec.ID
+			captured.sourceChange = sourceChange
+		}
+	}
 
 	now := service.Clock.Now().UTC()
 	changes, diffAdded, allTransforms, changeProp, err := buildSkillAddChanges(selected, collection, captured, now.Format(time.RFC3339Nano))
@@ -200,6 +223,7 @@ func (service SkillAddService) PreviewSkillAdd(ctx context.Context, path string,
 		collection:     collection,
 		selected:       selected,
 		origin:         captured.origin,
+		upstreamSource: upstreamRef,
 		changes:        changes,
 		diffAdded:      diffAdded,
 		transforms:     allTransforms,
@@ -248,12 +272,14 @@ func validateSkillAddInput(input SkillAddInput) (string, string, *SkillAddPropos
 }
 
 type skillAddCapture struct {
-	origin      SkillOrigin
-	reader      ResourceReader
-	resources   []sourcepkg.Resource
-	scopePrefix string
-	scopePath   string
-	revisionAt  func(path string) (sourcepkg.Revision, error)
+	origin       SkillOrigin
+	reader       ResourceReader
+	resources    []sourcepkg.Resource
+	scopePrefix  string
+	scopePath    string
+	revisionAt   func(path string) (sourcepkg.Revision, error)
+	sourceID     string
+	sourceChange *mutation.Change
 }
 
 func resolveSkillAddSource(ctx context.Context, service SkillAddService, root, rawLocator string) (skillAddCapture, *SkillAddProposal, error) {
@@ -522,6 +548,11 @@ func buildSkillAddChanges(selected []DiscoveredSkillItem, collection string, cap
 	diffAdded := []string{}
 	var allTransforms []string
 
+	if captured.sourceChange != nil {
+		changes = append(changes, *captured.sourceChange)
+		diffAdded = append(diffAdded, captured.sourceChange.Path)
+	}
+
 	for _, item := range selected {
 		targetID := item.TargetID
 
@@ -569,6 +600,15 @@ func buildSkillAddChanges(selected []DiscoveredSkillItem, collection string, cap
 				skillOrigin.Name = targetID
 			}
 		}
+
+		provDoc := map[string]any{
+			"created_by": "skill_add",
+			"origin":     skillOriginToMap(skillOrigin),
+		}
+		if captured.sourceID != "" {
+			provDoc["source_id"] = captured.sourceID
+		}
+
 		metaDoc := map[string]any{
 			"schema_version": 1,
 			"id":             targetID,
@@ -584,10 +624,7 @@ func buildSkillAddChanges(selected []DiscoveredSkillItem, collection string, cap
 			"quality": map[string]any{
 				"reviewed": false,
 			},
-			"provenance": map[string]any{
-				"created_by": "skill_add",
-				"origin":     skillOriginToMap(skillOrigin),
-			},
+			"provenance": provDoc,
 			"history": []any{
 				map[string]any{
 					"state":       "draft",
@@ -622,6 +659,7 @@ type skillAddPlanContext struct {
 	collection     string
 	selected       []DiscoveredSkillItem
 	origin         SkillOrigin
+	upstreamSource *UpstreamSourceRef
 	changes        []mutation.Change
 	diffAdded      []string
 	transforms     []string
@@ -667,6 +705,7 @@ func lookupReplayedSkillAdd(ctx context.Context, planCtx skillAddPlanContext) (*
 			Description:    primaryItem.Description,
 			Origin:         planCtx.origin,
 			License:        primaryItem.License,
+			UpstreamSource: planCtx.upstreamSource,
 			Resources:      primaryItem.Companions,
 			TotalBytes:     primaryItem.TotalBytes,
 			Diff:           skill.DiffSummary{},
@@ -763,6 +802,7 @@ func planSkillAddProposal(ctx context.Context, planCtx skillAddPlanContext) (Ski
 		Description:     primaryItem.Description,
 		Origin:          planCtx.origin,
 		License:         primaryItem.License,
+		UpstreamSource:  planCtx.upstreamSource,
 		Resources:       primaryItem.Companions,
 		TotalBytes:      primaryItem.TotalBytes,
 		Transformations: planCtx.transforms,
@@ -817,6 +857,11 @@ func (service SkillAddService) ConfirmSkillAdd(ctx context.Context, path string,
 		}, nil
 	}
 
+	upstreamSource := preview.UpstreamSource
+	if upstreamSource == nil {
+		upstreamSource = deriveUpstreamSourceFromChanges(preview.planned.WriteSet.Changes)
+	}
+
 	// Replayed proposal handling
 	if preview.alreadyApplied != nil {
 		assessment, _ := catalog.AssessSkillState(ctx, root, preview.SkillID)
@@ -837,6 +882,7 @@ func (service SkillAddService) ConfirmSkillAdd(ctx context.Context, path string,
 			Origin:          preview.Origin,
 			License:         preview.License,
 			Resources:       preview.Resources,
+			UpstreamSource:  upstreamSource,
 		}, nil
 	}
 
@@ -869,6 +915,7 @@ func (service SkillAddService) ConfirmSkillAdd(ctx context.Context, path string,
 		Origin:          preview.Origin,
 		License:         preview.License,
 		Resources:       preview.Resources,
+		UpstreamSource:  upstreamSource,
 	}, nil
 }
 
@@ -881,10 +928,11 @@ func (service SkillAddService) ConfirmSkillAddProposal(ctx context.Context, path
 	service = service.defaults(root)
 
 	preview := SkillAddProposal{
-		SkillID:    p.SkillID,
-		Collection: "default",
-		planned:    p.Planned(),
-		expiresAt:  p.ExpiresAt,
+		SkillID:        p.SkillID,
+		Collection:     "default",
+		UpstreamSource: deriveUpstreamSourceFromChanges(p.WriteSet().Changes),
+		planned:        p.Planned(),
+		expiresAt:      p.ExpiresAt,
 		Confirmation: ConfirmationPolicy{
 			PolicyRevision:     "policy_v1",
 			ActionClass:        "semantic",
@@ -927,6 +975,7 @@ func (service SkillAddService) LoadSkillAddProposal(ctx context.Context, path, p
 		Result:         NewResult(StatusActionRequired, "Stored add proposal ready for confirmation."),
 		SkillID:        stored.SkillID,
 		Collection:     "default",
+		UpstreamSource: deriveUpstreamSourceFromChanges(stored.WriteSet().Changes),
 		Diff:           stored.Summary,
 		FullDiff:       stored.FullDiff,
 		Assessment:     assessment,
@@ -949,6 +998,29 @@ func (service SkillAddService) LoadSkillAddProposal(ctx context.Context, path, p
 			},
 		},
 	}, nil
+}
+
+func deriveUpstreamSourceFromChanges(changes []mutation.Change) *UpstreamSourceRef {
+	for _, c := range changes {
+		if strings.HasSuffix(c.Path, "skill.meta.yaml") {
+			var m struct {
+				Provenance struct {
+					SourceID string `yaml:"source_id"`
+				} `yaml:"provenance"`
+			}
+			if yaml.Unmarshal(c.Contents, &m) == nil && m.Provenance.SourceID != "" {
+				created := false
+				for _, sc := range changes {
+					if sc.Path == "sources/catalog/"+m.Provenance.SourceID+".yaml" {
+						created = true
+						break
+					}
+				}
+				return &UpstreamSourceRef{SourceID: m.Provenance.SourceID, Created: created}
+			}
+		}
+	}
+	return nil
 }
 
 // Helper to convert SkillOrigin to schema-compliant map for yaml.Marshal.

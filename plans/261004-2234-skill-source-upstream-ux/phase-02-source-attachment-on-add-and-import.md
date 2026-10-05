@@ -39,7 +39,7 @@ Modify:
 - `internal/app/skill_add.go` — attach the source (preview builds the change; `buildSkillAddChanges` writes `source_id`); add the struct fields.
 - `internal/app/source_import.go` — fresh revision, origin block, no link (lines 109-260).
 - `internal/delivery/cli/skill_add.go` — preview/result lines.
-- `internal/source/records.go` (`Purpose` field and validation), `schemas/source-record.schema.json`, `schemas/embed_test.go` (one `purpose` case if the schema test enumerates record fields).
+- `internal/source/records.go` (`Purpose` field and validation), `internal/canonical/canonical.go` (allow file:// for git adapter in validateSourcePolicy), `schemas/source-record.schema.json`, `schemas/embed_test.go` (one `purpose` case if the schema test enumerates record fields).
 - Tests: `internal/app/skill_add_test.go` (extend `TestSkillAddRemoteGitRealAdapter`), `internal/app/source_import_test.go` (update link/revision assertions at lines 168-182, 400, 434), `internal/delivery/cli/skill_add_test.go` (render assertion).
 
 Do not modify any other file.
@@ -73,7 +73,7 @@ Do not modify any other file.
 ## Todo
 
 - [x] Task 2.1 matching helper
-- [ ] Task 2.2 `skill add` attachment
+- [x] Task 2.2 `skill add` attachment
 - [ ] Task 2.3 `source import` origin
 - [ ] Task 2.4 CLI output
 - [ ] Task 2.5 `make check`

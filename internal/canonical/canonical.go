@@ -298,7 +298,7 @@ func validateSourcePolicy(contents []byte) error {
 		}
 		value, _ := raw.(string)
 		if (key == "url" || key == "repository") && value != "" {
-			if _, err := sourcepkg.ValidateRemoteURL(value, false); err != nil {
+			if _, err := sourcepkg.ValidateRemoteURLWithOptions(value, sourcepkg.URLValidationOptions{AllowFile: adapter == "git"}); err != nil {
 				return err
 			}
 		}
