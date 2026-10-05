@@ -14,6 +14,27 @@ import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Skeleton } from '../../components/Skeleton';
 import { StatusBadge } from '../../components/StatusBadge';
 
+const TITLE_SOURCES = 'Sources';
+const BTN_CHECK_ALL = 'Check all';
+const BTN_CHECKING_ALL = 'Checking all…';
+const BTN_ADD_FROM_GITHUB = 'Add skills from GitHub';
+const LABEL_NO_SOURCES = 'No sources yet. Link a repository whose ideas should improve your skills.';
+const LABEL_SKILLS_PREFIX = 'Skills:';
+const LABEL_NO_SKILLS = 'no skills';
+const LABEL_LAST_CHECKED = 'Last checked: ';
+const LABEL_WATCH = 'Watch: ';
+const BTN_CHECK_NOW = 'Check now';
+const BTN_CHECKING = 'Checking…';
+const BTN_IMPORT_MORE = 'Import more';
+const BTN_UNWATCH = 'Unwatch';
+const BTN_UNWATCHING = 'Unwatching…';
+const TITLE_IMPORT_SKILLS_FROM = 'Import skills from ';
+const BTN_CLOSE = 'Close';
+const BTN_CANCEL = 'Cancel';
+const BTN_IMPORT = 'Import';
+const BTN_IMPORTING = 'Importing…';
+const LABEL_RETRY = 'Retry';
+
 export function SourcesScreen() {
   const queryClient = useQueryClient();
   const { data, isLoading, error, refetch } = useSources();
@@ -135,7 +156,7 @@ export function SourcesScreen() {
           style={{ width: 'fit-content' }}
           onClick={() => void refetch()}
         >
-          <span>Retry</span>
+          <span>{LABEL_RETRY}</span>
         </button>
       </div>
     );
@@ -149,13 +170,15 @@ export function SourcesScreen() {
   }
 
   const isEmpty = groups.length === 0 && allSources.length === 0;
-
+  const importModalTitle = `${TITLE_IMPORT_SKILLS_FROM}${importSourceId || ''}`;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
       {/* Toolbar */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: '20px', fontWeight: 600 }}>Sources</h1>
+          <h1 style={{ margin: 0, fontSize: '20px', fontWeight: 600 }}>
+            <span>{TITLE_SOURCES}</span>
+          </h1>
         </div>
         <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
           <button
@@ -164,10 +187,10 @@ export function SourcesScreen() {
             onClick={() => void handleCheckAll()}
             disabled={checkingAll || isEmpty}
           >
-            <span>{checkingAll ? 'Checking all…' : 'Check all'}</span>
+            <span>{checkingAll ? BTN_CHECKING_ALL : BTN_CHECK_ALL}</span>
           </button>
           <Link to="/skills/add" className="fg-btn fg-btn--primary" style={{ textDecoration: 'none' }}>
-            <span>Add skills from GitHub</span>
+            <span>{BTN_ADD_FROM_GITHUB}</span>
           </Link>
         </div>
       </div>
@@ -181,10 +204,10 @@ export function SourcesScreen() {
       {isEmpty ? (
         <div className="fg-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-6) var(--space-4)' }}>
           <span style={{ color: 'var(--color-text-muted)', fontSize: '14px', textAlign: 'center' }}>
-            No sources yet. Link a repository whose ideas should improve your skills.
+            {LABEL_NO_SOURCES}
           </span>
           <Link to="/skills/add" className="fg-btn fg-btn--primary" style={{ textDecoration: 'none' }}>
-            <span>Add skills from GitHub</span>
+            <span>{BTN_ADD_FROM_GITHUB}</span>
           </Link>
         </div>
       ) : (
@@ -201,6 +224,7 @@ export function SourcesScreen() {
                 const isOrphan = src.referencing_skills.length === 0;
                 const lastChecked = src.last_checked_at ? src.last_checked_at.slice(0, 10) : 'never';
                 const cadence = rec?.monitoring?.cadence || 'weekly';
+                const refText = rec?.locator?.ref ? `@${rec.locator.ref}` : '';
 
                 return (
                   <div
@@ -219,21 +243,20 @@ export function SourcesScreen() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)', flex: 1, minWidth: '260px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
                         <span style={{ fontWeight: 600, fontSize: '14px' }}>{src.id}</span>
-                        {rec?.locator?.ref && (
+                        {refText ? (
                           <span style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>
-                            @{rec.locator.ref}
+                            <span>{refText}</span>
                           </span>
-                        )}
-                        <StatusBadge variant="chip" tone="neutral" label={src.role} />
+                        ) : null}
                         {isOrphan && (
                           <StatusBadge variant="chip" tone="warning" label="No linked skills" />
                         )}
                       </div>
 
                       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap', fontSize: '13px' }}>
-                        <span style={{ color: 'var(--color-text-muted)' }}>Skills:</span>
+                        <span style={{ color: 'var(--color-text-muted)' }}>{LABEL_SKILLS_PREFIX}</span>
                         {isOrphan ? (
-                          <span style={{ color: 'var(--color-text-muted)', fontStyle: 'italic' }}>no skills</span>
+                          <span style={{ color: 'var(--color-text-muted)', fontStyle: 'italic' }}>{LABEL_NO_SKILLS}</span>
                         ) : (
                           src.referencing_skills.map((skillId) => (
                             <Link
@@ -248,8 +271,8 @@ export function SourcesScreen() {
                       </div>
 
                       <div style={{ display: 'flex', gap: 'var(--space-3)', fontSize: '12px', color: 'var(--color-text-muted)' }}>
-                        <span>Last checked: {lastChecked}</span>
-                        <span>Watch: {cadence}</span>
+                        <span>{LABEL_LAST_CHECKED}{lastChecked}</span>
+                        <span>{LABEL_WATCH}{cadence}</span>
                       </div>
                     </div>
 
@@ -260,21 +283,21 @@ export function SourcesScreen() {
                         onClick={() => void handleCheckSource(src.id)}
                         disabled={isChecking}
                       >
-                        <span>{isChecking ? 'Checking…' : 'Check now'}</span>
+                        <span>{isChecking ? BTN_CHECKING : BTN_CHECK_NOW}</span>
                       </button>
                       <button
                         type="button"
                         className="fg-btn fg-btn--secondary fg-btn--small"
                         onClick={() => void handleOpenImportMore(src.id)}
                       >
-                        <span>Import more</span>
+                        <span>{BTN_IMPORT_MORE}</span>
                       </button>
                       <button
                         type="button"
                         className="fg-btn fg-btn--secondary fg-btn--small"
                         onClick={() => setUnwatchSourceId(src.id)}
                       >
-                        <span>Unwatch</span>
+                        <span>{BTN_UNWATCH}</span>
                       </button>
                     </div>
                   </div>
@@ -291,7 +314,7 @@ export function SourcesScreen() {
           open={Boolean(unwatchSourceId)}
           title={`Unwatch ${unwatchSourceId}`}
           body={`Are you sure you want to stop watching ${unwatchSourceId}?`}
-          confirmLabel={unwatching ? 'Unwatching…' : 'Unwatch'}
+          confirmLabel={unwatching ? BTN_UNWATCHING : BTN_UNWATCH}
           danger
           onConfirm={() => void handleConfirmUnwatch()}
           onCancel={() => setUnwatchSourceId(null)}
@@ -327,13 +350,13 @@ export function SourcesScreen() {
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span className="fg-card__title">Import skills from {importSourceId}</span>
+              <span className="fg-card__title"><span>{importModalTitle}</span></span>
               <button
                 type="button"
                 className="fg-btn fg-btn--secondary fg-btn--small"
                 onClick={() => setImportSourceId(null)}
               >
-                <span>Close</span>
+                <span>{BTN_CLOSE}</span>
               </button>
             </div>
 
@@ -349,6 +372,8 @@ export function SourcesScreen() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
                   {importProposal.discovered.map((skill: DiscoveredImportSkill) => {
                     const isImported = skill.imported || skill.conflict;
+                    const skillTargetIdText = `(${skill.target_id})`;
+                    const skipReasonText = `— ${skill.skip_reason || 'already imported'}`;
                     return (
                       <label
                         key={skill.target_id}
@@ -373,10 +398,10 @@ export function SourcesScreen() {
                           }}
                         />
                         <span style={{ fontWeight: 600 }}>{skill.name}</span>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px' }}>({skill.target_id})</span>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px' }}><span>{skillTargetIdText}</span></span>
                         {isImported && (
                           <span style={{ fontStyle: 'italic', fontSize: '12px' }}>
-                            — {skill.skip_reason || 'already imported'}
+                            <span>{skipReasonText}</span>
                           </span>
                         )}
                       </label>
@@ -390,7 +415,7 @@ export function SourcesScreen() {
                     className="fg-btn fg-btn--secondary"
                     onClick={() => setImportSourceId(null)}
                   >
-                    <span>Cancel</span>
+                    <span>{BTN_CANCEL}</span>
                   </button>
                   <button
                     type="button"
@@ -398,7 +423,7 @@ export function SourcesScreen() {
                     disabled={confirmingImport || importProposal.importable.length === 0}
                     onClick={() => void handleConfirmImportMore()}
                   >
-                    <span>{confirmingImport ? 'Importing…' : 'Import'}</span>
+                    <span>{confirmingImport ? BTN_IMPORTING : BTN_IMPORT}</span>
                   </button>
                 </div>
               </div>

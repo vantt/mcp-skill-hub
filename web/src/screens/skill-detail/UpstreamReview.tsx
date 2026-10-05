@@ -6,6 +6,24 @@ import type { UpstreamFile, UpstreamResolution, UpstreamUpdatePreview } from '..
 import { DiffView } from '../../components/DiffView';
 import { Skeleton } from '../../components/Skeleton';
 
+const BTN_REVIEW_AGAIN = 'Review again';
+const BTN_CLOSE = 'Close';
+const TITLE_UNCHANGED = 'Upstream is unchanged.';
+const COL_FILE = 'FILE';
+const COL_CHANGE = 'CHANGE';
+const COL_ACTION = 'ACTION';
+const OPT_TAKE_UPSTREAM = 'Take upstream';
+const OPT_KEEP_MINE = 'Keep mine';
+const OPT_AUTO_MERGED = 'Auto-merged';
+const OPT_EDIT_MANUALLY = 'Edit manually';
+const BTN_APPLY_CHOICES = 'Apply choices';
+const BTN_APPLYING = 'Applying choices…';
+const BTN_RESULT_DIFF = 'Result diff';
+const BTN_UPSTREAM_DIFF = 'Upstream diff';
+const BTN_LOCAL_DIFF = 'Local diff';
+const BTN_CONFIRM_UPDATE = 'Confirm update';
+const BTN_CONFIRMING = 'Confirming…';
+
 interface UpstreamReviewProps {
   skillId: string;
   onClose: () => void;
@@ -26,7 +44,6 @@ export function UpstreamReview({ skillId, onClose, onConfirmed }: UpstreamReview
   const [confirming, setConfirming] = useState(false);
 
   const loadReview = async (customResolutions?: UpstreamResolution[]) => {
-    setLoading(true);
     setError(null);
     setIsConflict409(false);
     try {
@@ -38,7 +55,6 @@ export function UpstreamReview({ skillId, onClose, onConfirmed }: UpstreamReview
       if (!selectedFilePath && firstFile) {
         setSelectedFilePath(firstFile.path);
       }
-      // Populate default resolutions from preview
       const initial: Record<string, { action: string; content?: string }> = {};
       for (const f of data.files) {
         initial[f.path] = {
@@ -59,7 +75,41 @@ export function UpstreamReview({ skillId, onClose, onConfirmed }: UpstreamReview
   };
 
   useEffect(() => {
-    void loadReview();
+    let ignore = false;
+    async function initReview() {
+      try {
+        const data = await reviewSkillUpdate(skillId);
+        if (!ignore) {
+          setPreview(data);
+          const firstFile = data.files[0];
+          if (firstFile) {
+            setSelectedFilePath(firstFile.path);
+          }
+          const initial: Record<string, { action: string; content?: string }> = {};
+          for (const f of data.files) {
+            initial[f.path] = {
+              action: f.action || f.default_action || 'upstream',
+              content: f.merged_with_markers || '',
+            };
+          }
+          setResolutions(initial);
+          setLoading(false);
+        }
+      } catch (err: unknown) {
+        if (!ignore) {
+          const msg = err instanceof Error ? err.message : 'Failed to load update review';
+          setError(msg);
+          if (err instanceof ApiError && err.status === 409) {
+            setIsConflict409(true);
+          }
+          setLoading(false);
+        }
+      }
+    }
+    void initReview();
+    return () => {
+      ignore = true;
+    };
   }, [skillId]);
 
   const handleApplyChoices = async () => {
@@ -90,7 +140,6 @@ export function UpstreamReview({ skillId, onClose, onConfirmed }: UpstreamReview
         proposal_digest: pins.proposal_digest,
         base_version: pins.base_version,
       });
-      // Invalidate queries including skill-runtime
       queryClient.invalidateQueries({ queryKey: ['skill-sources', skillId] });
       queryClient.invalidateQueries({ queryKey: ['skill-runtime', skillId] });
       queryClient.invalidateQueries({ queryKey: ['skill', skillId] });
@@ -146,11 +195,11 @@ export function UpstreamReview({ skillId, onClose, onConfirmed }: UpstreamReview
         <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
           {isConflict409 && (
             <button type="button" className="fg-btn fg-btn--primary" onClick={() => void loadReview()}>
-              <span>Review again</span>
+              <span>{BTN_REVIEW_AGAIN}</span>
             </button>
           )}
           <button type="button" className="fg-btn fg-btn--secondary" onClick={onClose}>
-            <span>Close</span>
+            <span>{BTN_CLOSE}</span>
           </button>
         </div>
       </section>
@@ -161,10 +210,10 @@ export function UpstreamReview({ skillId, onClose, onConfirmed }: UpstreamReview
     return (
       <section className="fg-card" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
         <div className="fg-card__title">
-          <span>Upstream is unchanged.</span>
+          <span>{TITLE_UNCHANGED}</span>
         </div>
         <button type="button" className="fg-btn fg-btn--secondary" onClick={onClose}>
-          <span>Close</span>
+          <span>{BTN_CLOSE}</span>
         </button>
       </section>
     );
@@ -181,27 +230,30 @@ export function UpstreamReview({ skillId, onClose, onConfirmed }: UpstreamReview
 
   const hasUnresolved = preview.unresolved && preview.unresolved.length > 0;
   const commitDate = preview.target_committed_at ? preview.target_committed_at.slice(0, 10) : '';
+  const updateHeading = `Update ${skillId} from ${preview.base_commit?.slice(0, 7) || '-'} to ${preview.target_commit?.slice(0, 7) || '-'}${commitDate ? `, upstream commit of ${commitDate}` : ''}`;
+  const sourceText = `Source: ${preview.source_id}`;
+  const decisionBannerText = `${preview.unresolved.length} file(s) need a decision before this update can be applied.`;
+  const trustNoticeText = `After applying, agents cannot use ${skillId} until you approve the new content. Run skillhub skill review ${skillId} after applying.`;
 
   return (
     <section className="fg-card" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
         <div>
           <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600 }}>
-            Update {skillId} from {preview.base_commit?.slice(0, 7) || '-'} to {preview.target_commit?.slice(0, 7) || '-'}
-            {commitDate ? `, upstream commit of ${commitDate}` : ''}
+            <span>{updateHeading}</span>
           </h3>
-          <span style={{ fontSize: '12px', color: 'var(--color-text-subtle)' }}>
-            Source: {preview.source_id}
+          <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>
+            <span>{sourceText}</span>
           </span>
         </div>
         <button type="button" className="fg-btn fg-btn--secondary fg-btn--small" onClick={onClose}>
-          <span>Close</span>
+          <span>{BTN_CLOSE}</span>
         </button>
       </div>
 
       {hasUnresolved && (
         <div className="fg-banner fg-banner--warning">
-          <span>{preview.unresolved.length} file(s) need a decision before this update can be applied.</span>
+          <span>{decisionBannerText}</span>
         </div>
       )}
 
@@ -210,9 +262,9 @@ export function UpstreamReview({ skillId, onClose, onConfirmed }: UpstreamReview
         <table className="fg-table" style={{ width: '100%', fontSize: '13px' }}>
           <thead>
             <tr>
-              <th style={{ textAlign: 'left' }}>FILE</th>
-              <th style={{ textAlign: 'left' }}>CHANGE</th>
-              <th style={{ textAlign: 'left' }}>ACTION</th>
+              <th style={{ textAlign: 'left' }}><span>{COL_FILE}</span></th>
+              <th style={{ textAlign: 'left' }}><span>{COL_CHANGE}</span></th>
+              <th style={{ textAlign: 'left' }}><span>{COL_ACTION}</span></th>
             </tr>
           </thead>
           <tbody>
@@ -228,8 +280,8 @@ export function UpstreamReview({ skillId, onClose, onConfirmed }: UpstreamReview
                     backgroundColor: isSelected ? 'var(--color-surface-hover)' : undefined,
                   }}
                 >
-                  <td style={{ fontFamily: 'var(--font-mono)' }}>{file.path}</td>
-                  <td>{formatChange(file.status)}</td>
+                  <td style={{ fontFamily: 'var(--font-mono)' }}><span>{file.path}</span></td>
+                  <td><span>{formatChange(file.status)}</span></td>
                   <td onClick={(e) => e.stopPropagation()}>
                     <select
                       className="fg-select"
@@ -240,16 +292,16 @@ export function UpstreamReview({ skillId, onClose, onConfirmed }: UpstreamReview
                         setResolutions((prev) => ({
                           ...prev,
                           [file.path]: {
-                            ...prev[file.path],
                             action: newAction,
+                            content: prev[file.path]?.content,
                           },
                         }));
                       }}
                     >
-                      <option value="upstream">Take upstream</option>
-                      <option value="local">Keep mine</option>
-                      {file.conflicts === 0 && <option value="merged">Auto-merged</option>}
-                      <option value="manual">Edit manually</option>
+                      <option value="upstream">{OPT_TAKE_UPSTREAM}</option>
+                      <option value="local">{OPT_KEEP_MINE}</option>
+                      {file.conflicts === 0 && <option value="merged">{OPT_AUTO_MERGED}</option>}
+                      <option value="manual">{OPT_EDIT_MANUALLY}</option>
                     </select>
                   </td>
                 </tr>
@@ -266,7 +318,7 @@ export function UpstreamReview({ skillId, onClose, onConfirmed }: UpstreamReview
           onClick={() => void handleApplyChoices()}
           disabled={applying}
         >
-          <span>{applying ? 'Applying choices…' : 'Apply choices'}</span>
+          <span>{applying ? BTN_APPLYING : BTN_APPLY_CHOICES}</span>
         </button>
       </div>
 
@@ -275,7 +327,7 @@ export function UpstreamReview({ skillId, onClose, onConfirmed }: UpstreamReview
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontWeight: 600, fontSize: '13px', fontFamily: 'var(--font-mono)' }}>
-              {selectedFile.path}
+              <span>{selectedFile.path}</span>
             </span>
             <div style={{ display: 'flex', gap: 'var(--space-1)' }}>
               <button
@@ -283,21 +335,21 @@ export function UpstreamReview({ skillId, onClose, onConfirmed }: UpstreamReview
                 className={`fg-btn fg-btn--small ${diffMode === 'result' ? 'fg-btn--primary' : 'fg-btn--secondary'}`}
                 onClick={() => setDiffMode('result')}
               >
-                <span>Result diff</span>
+                <span>{BTN_RESULT_DIFF}</span>
               </button>
               <button
                 type="button"
                 className={`fg-btn fg-btn--small ${diffMode === 'upstream' ? 'fg-btn--primary' : 'fg-btn--secondary'}`}
                 onClick={() => setDiffMode('upstream')}
               >
-                <span>Upstream diff</span>
+                <span>{BTN_UPSTREAM_DIFF}</span>
               </button>
               <button
                 type="button"
                 className={`fg-btn fg-btn--small ${diffMode === 'local' ? 'fg-btn--primary' : 'fg-btn--secondary'}`}
                 onClick={() => setDiffMode('local')}
               >
-                <span>Local diff</span>
+                <span>{BTN_LOCAL_DIFF}</span>
               </button>
             </div>
           </div>
@@ -335,9 +387,7 @@ export function UpstreamReview({ skillId, onClose, onConfirmed }: UpstreamReview
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
           {preview.trust_impact?.review_required_after_apply && (
             <div className="fg-banner fg-banner--warning">
-              <span>
-                After applying, agents cannot use {skillId} until you approve the new content. Run skillhub skill review {skillId} after applying.
-              </span>
+              <span>{trustNoticeText}</span>
             </div>
           )}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
@@ -347,7 +397,7 @@ export function UpstreamReview({ skillId, onClose, onConfirmed }: UpstreamReview
               onClick={() => void handleConfirmUpdate()}
               disabled={confirming}
             >
-              <span>{confirming ? 'Confirming…' : 'Confirm update'}</span>
+              <span>{confirming ? BTN_CONFIRMING : BTN_CONFIRM_UPDATE}</span>
             </button>
           </div>
         </div>

@@ -8,6 +8,10 @@ import { useT } from '../../i18n';
 
 const ICON_SEARCH = '🔍';
 const ICON_MORE = '⋯';
+const OPT_UPSTREAM_ALL = 'All';
+const OPT_UPSTREAM_UPDATES = 'Updates';
+const OPT_UPSTREAM_MODIFIED = 'Modified locally';
+const OPT_UPSTREAM_UNTRACKED = 'Not tracked';
 
 export function SkillsScreen() {
   const t = useT();
@@ -26,6 +30,7 @@ export function SkillsScreen() {
   const updateCount = allSkills.filter(
     (s) => s.upstream_status === 'update_available' || s.upstream_status === 'diverged',
   ).length;
+  const updatesBadgeText = `Updates (${updateCount})`;
 
   // Build collection options dynamically
   const collections = Array.from(new Set(allSkills.map((s) => s.collection).filter(Boolean))).sort();
@@ -173,10 +178,10 @@ export function SkillsScreen() {
               value={upstreamParam}
               onChange={(e) => updateUpstreamFilter(e.target.value)}
             >
-              <option value="all">All</option>
-              <option value="updates">Updates</option>
-              <option value="modified">Modified locally</option>
-              <option value="untracked">Not tracked</option>
+              <option value="all">{OPT_UPSTREAM_ALL}</option>
+              <option value="updates">{OPT_UPSTREAM_UPDATES}</option>
+              <option value="modified">{OPT_UPSTREAM_MODIFIED}</option>
+              <option value="untracked">{OPT_UPSTREAM_UNTRACKED}</option>
             </select>
             <span className="fg-select__chev" aria-hidden="true">
               ▾
@@ -190,7 +195,7 @@ export function SkillsScreen() {
               style={{ cursor: 'pointer', border: 'none' }}
               onClick={() => updateUpstreamFilter('updates')}
             >
-              <span>Updates ({updateCount})</span>
+              <span>{updatesBadgeText}</span>
             </button>
           )}
         </div>

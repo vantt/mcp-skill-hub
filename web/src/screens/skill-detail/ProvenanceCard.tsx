@@ -1,5 +1,15 @@
 import type { SkillProvenance } from '../../api/types';
 
+const TITLE_PROVENANCE = 'Provenance';
+const BTN_VIEW_SOURCES = 'View sources →';
+const LABEL_NO_PROVENANCE = 'Created in this workspace';
+const LABEL_SOURCE_LOCATOR = 'Source locator';
+const LABEL_UPSTREAM_PATH = 'Upstream path';
+const LABEL_SOURCE_REVISION = 'Source revision';
+const LABEL_SOURCE_ID = 'Source ID';
+const LABEL_CREATED_BY = 'Created by';
+const LABEL_CREATED_AT = 'Created at';
+
 interface ProvenanceCardProps {
   provenance?: SkillProvenance;
   onViewSources: () => void;
@@ -20,27 +30,27 @@ export function ProvenanceCard({ provenance, onViewSources }: ProvenanceCardProp
     <section className="fg-card" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div className="fg-card__title">
-          <span>Provenance</span>
+          <span>{TITLE_PROVENANCE}</span>
         </div>
         <button
           type="button"
           className="fg-btn fg-btn--secondary fg-btn--small"
           onClick={onViewSources}
         >
-          <span>View sources →</span>
+          <span>{BTN_VIEW_SOURCES}</span>
         </button>
       </div>
 
       {!hasProvenance ? (
         <div style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>
-          <span>Created in this workspace</span>
+          <span>{LABEL_NO_PROVENANCE}</span>
         </div>
       ) : (
         <div className="fg-facts">
           {provenance?.source_locator && (
             <div className="fg-fact">
               <div className="fg-fact__label">
-                <span>Source locator</span>
+                <span>{LABEL_SOURCE_LOCATOR}</span>
               </div>
               <div className="fg-fact__value" style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
                 <span>{provenance.source_locator}</span>
@@ -50,7 +60,7 @@ export function ProvenanceCard({ provenance, onViewSources }: ProvenanceCardProp
           {provenance?.upstream_path && (
             <div className="fg-fact">
               <div className="fg-fact__label">
-                <span>Upstream path</span>
+                <span>{LABEL_UPSTREAM_PATH}</span>
               </div>
               <div className="fg-fact__value" style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
                 <span>{provenance.upstream_path}</span>
@@ -60,7 +70,7 @@ export function ProvenanceCard({ provenance, onViewSources }: ProvenanceCardProp
           {provenance?.source_revision && (
             <div className="fg-fact">
               <div className="fg-fact__label">
-                <span>Source revision</span>
+                <span>{LABEL_SOURCE_REVISION}</span>
               </div>
               <div className="fg-fact__value" style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
                 <span>{provenance.source_revision}</span>
@@ -70,7 +80,7 @@ export function ProvenanceCard({ provenance, onViewSources }: ProvenanceCardProp
           {provenance?.source_id && (
             <div className="fg-fact">
               <div className="fg-fact__label">
-                <span>Source ID</span>
+                <span>{LABEL_SOURCE_ID}</span>
               </div>
               <div className="fg-fact__value" style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
                 <span>{provenance.source_id}</span>
@@ -80,7 +90,7 @@ export function ProvenanceCard({ provenance, onViewSources }: ProvenanceCardProp
           {provenance?.created_by && (
             <div className="fg-fact">
               <div className="fg-fact__label">
-                <span>Created by</span>
+                <span>{LABEL_CREATED_BY}</span>
               </div>
               <div className="fg-fact__value" style={{ fontSize: '13px' }}>
                 <span>{provenance.created_by}</span>
@@ -90,7 +100,7 @@ export function ProvenanceCard({ provenance, onViewSources }: ProvenanceCardProp
           {provenance?.created_at && (
             <div className="fg-fact">
               <div className="fg-fact__label">
-                <span>Created at</span>
+                <span>{LABEL_CREATED_AT}</span>
               </div>
               <div className="fg-fact__value" style={{ fontSize: '13px' }}>
                 <span>{provenance.created_at}</span>

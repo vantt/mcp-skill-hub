@@ -10,6 +10,17 @@ import type { LearningReference } from '../../api/types';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { StatusBadge } from '../../components/StatusBadge';
 
+const TITLE_LEARNING = 'Learning references';
+const LABEL_NO_LEARNING =
+  'No learning references yet. Link a repository or document whose ideas should improve this skill.';
+const LABEL_LAST_CHECKED = 'Last checked: ';
+const LABEL_PENDING_SUFFIX = ' pending insight(s)';
+const BTN_UNLINK = 'Unlink';
+const BTN_ADD = 'Add learning reference';
+const BTN_ADDING = 'Adding…';
+const BTN_UNLINKING = 'Unlinking…';
+const PLACEHOLDER_LOCATOR = 'https://github.com/owner/repo';
+
 interface LearningSectionProps {
   skillId: string;
   learning: LearningReference[];
@@ -75,7 +86,7 @@ export function LearningSection({ skillId, learning }: LearningSectionProps) {
   return (
     <section className="fg-card" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
       <div className="fg-card__title">
-        <span>Learning references</span>
+        <span>{TITLE_LEARNING}</span>
       </div>
 
       {/* Add Reference Form */}
@@ -84,7 +95,7 @@ export function LearningSection({ skillId, learning }: LearningSectionProps) {
           type="text"
           className="fg-input"
           style={{ flex: 1, minWidth: '240px' }}
-          placeholder="https://github.com/owner/repo"
+          placeholder={PLACEHOLDER_LOCATOR}
           value={locator}
           onChange={(e) => setLocator(e.target.value)}
           disabled={adding}
@@ -94,7 +105,7 @@ export function LearningSection({ skillId, learning }: LearningSectionProps) {
           className="fg-btn fg-btn--secondary"
           disabled={adding || !locator.trim()}
         >
-          <span>{adding ? 'Adding…' : 'Add learning reference'}</span>
+          <span>{adding ? BTN_ADDING : BTN_ADD}</span>
         </button>
       </form>
 
@@ -111,7 +122,7 @@ export function LearningSection({ skillId, learning }: LearningSectionProps) {
 
       {learning.length === 0 ? (
         <div style={{ color: 'var(--color-text-muted)', fontSize: '13px', padding: 'var(--space-2) 0' }}>
-          <span>No learning references yet. Link a repository or document whose ideas should improve this skill.</span>
+          <span>{LABEL_NO_LEARNING}</span>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
@@ -143,13 +154,13 @@ export function LearningSection({ skillId, learning }: LearningSectionProps) {
                     {ref.locator}
                   </span>
                   <div style={{ display: 'flex', gap: 'var(--space-3)', fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
-                    <span>Last checked: {lastChecked}</span>
+                    <span>{LABEL_LAST_CHECKED}{lastChecked}</span>
                     {ref.pending_insights > 0 && (
                       <Link
                         to="/inbox"
                         style={{ color: 'var(--color-primary)', textDecoration: 'underline' }}
                       >
-                        {ref.pending_insights} pending insight(s)
+                        <span>{ref.pending_insights}{LABEL_PENDING_SUFFIX}</span>
                       </Link>
                     )}
                   </div>
@@ -160,7 +171,7 @@ export function LearningSection({ skillId, learning }: LearningSectionProps) {
                   className="fg-btn fg-btn--secondary fg-btn--small"
                   onClick={() => setUnlinkingSourceId(ref.source_id)}
                 >
-                  <span>Unlink</span>
+                  <span>{BTN_UNLINK}</span>
                 </button>
               </div>
             );
@@ -173,7 +184,7 @@ export function LearningSection({ skillId, learning }: LearningSectionProps) {
           open={Boolean(unlinkingSourceId)}
           title={`Unlink ${unlinkingSourceId}`}
           body={`Are you sure you want to unlink ${unlinkingSourceId} from this skill?`}
-          confirmLabel={unlinking ? 'Unlinking…' : 'Unlink'}
+          confirmLabel={unlinking ? BTN_UNLINKING : BTN_UNLINK}
           danger
           onConfirm={() => void handleConfirmUnlink()}
           onCancel={() => setUnlinkingSourceId(null)}

@@ -5,6 +5,8 @@ import { LearningSection } from './LearningSection';
 import { UpstreamReview } from './UpstreamReview';
 import { UpstreamSection } from './UpstreamSection';
 
+const LABEL_RETRY = 'Retry';
+
 interface SourcesTabProps {
   skillId: string;
 }
@@ -35,7 +37,7 @@ export function SourcesTab({ skillId }: SourcesTabProps) {
           style={{ width: 'fit-content' }}
           onClick={() => void refetch()}
         >
-          <span>Retry</span>
+          <span>{LABEL_RETRY}</span>
         </button>
       </div>
     );

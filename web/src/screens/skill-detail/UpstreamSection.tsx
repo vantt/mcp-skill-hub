@@ -5,6 +5,23 @@ import type { SkillUpstream } from '../../api/types';
 import { CommandBlock } from '../../components/CommandBlock';
 import { StatusBadge } from '../../components/StatusBadge';
 
+const TITLE_UPSTREAM = 'Upstream repository';
+const BTN_CHECK_NOW = 'Check now';
+const BTN_CHECKING = 'Checking…';
+const BTN_REVIEW_UPDATE = 'Review update';
+const LABEL_UNTRACKED_HINT =
+  'This skill does not have an attached upstream source record. Run backfill to link it:';
+const BANNER_UPSTREAM_REMOVED =
+  'Skill removed in upstream repository. Your local copy continues working as a custom skill and no upstream updates can be applied.';
+const LABEL_REPOSITORY = 'Repository';
+const LABEL_PATH = 'Path';
+const LABEL_CURRENT_COMMIT = 'Current commit';
+const LABEL_LATEST_COMMIT = 'Latest commit';
+const LABEL_FILES_CHANGED = 'Files changed';
+const LABEL_LAST_CHECKED = 'Last checked';
+const LABEL_CHANGED_UPSTREAM_PREFIX = 'Changed upstream (';
+const LABEL_CHANGED_UPSTREAM_SUFFIX = '):';
+
 interface UpstreamSectionProps {
   skillId: string;
   upstream: SkillUpstream | null;
@@ -64,12 +81,12 @@ export function UpstreamSection({ skillId, upstream, onReviewUpdate }: UpstreamS
   const shortBase = upstream.base_commit ? upstream.base_commit.slice(0, 12) : '-';
   const shortLatest = upstream.latest_commit ? upstream.latest_commit.slice(0, 12) : '-';
   const commitDate = upstream.latest_committed_at ? upstream.latest_committed_at.slice(0, 10) : '-';
-
+  const repoRefText = `${upstream.repository}@${upstream.ref || 'main'}`;
   return (
     <section className="fg-card" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-          <span className="fg-card__title">Upstream repository</span>
+          <span className="fg-card__title">{TITLE_UPSTREAM}</span>
           <StatusBadge tone={statusProps.tone} label={statusProps.label} />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
@@ -79,7 +96,7 @@ export function UpstreamSection({ skillId, upstream, onReviewUpdate }: UpstreamS
             onClick={handleCheckNow}
             disabled={checking}
           >
-            <span>{checking ? 'Checking…' : 'Check now'}</span>
+            <span>{checking ? BTN_CHECKING : BTN_CHECK_NOW}</span>
           </button>
           <button
             type="button"
@@ -87,7 +104,7 @@ export function UpstreamSection({ skillId, upstream, onReviewUpdate }: UpstreamS
             onClick={onReviewUpdate}
             disabled={!canReview}
           >
-            <span>Review update</span>
+            <span>{BTN_REVIEW_UPDATE}</span>
           </button>
         </div>
       </div>
@@ -100,8 +117,8 @@ export function UpstreamSection({ skillId, upstream, onReviewUpdate }: UpstreamS
 
       {upstream.status === 'untracked' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-          <span style={{ fontSize: '13px', color: 'var(--color-text-subtle)' }}>
-            This skill does not have an attached upstream source record. Run backfill to link it:
+          <span style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>
+            {LABEL_UNTRACKED_HINT}
           </span>
           <CommandBlock command={`skillhub source backfill --skill ${skillId}`} />
         </div>
@@ -109,25 +126,23 @@ export function UpstreamSection({ skillId, upstream, onReviewUpdate }: UpstreamS
 
       {upstream.status === 'upstream_removed' && (
         <div className="fg-banner fg-banner--warning" style={{ fontSize: '13px' }}>
-          <span>
-            Skill removed in upstream repository. Your local copy continues working as a custom skill and no upstream updates can be applied.
-          </span>
+          <span>{BANNER_UPSTREAM_REMOVED}</span>
         </div>
       )}
 
       <div className="fg-facts">
         <div className="fg-fact">
           <div className="fg-fact__label">
-            <span>Repository</span>
+            <span>{LABEL_REPOSITORY}</span>
           </div>
           <div className="fg-fact__value" style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
-            <span>{upstream.repository}@{upstream.ref || 'main'}</span>
+            <span>{repoRefText}</span>
           </div>
         </div>
         {upstream.path && (
           <div className="fg-fact">
             <div className="fg-fact__label">
-              <span>Path</span>
+              <span>{LABEL_PATH}</span>
             </div>
             <div className="fg-fact__value" style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
               <span>{upstream.path}</span>
@@ -136,7 +151,7 @@ export function UpstreamSection({ skillId, upstream, onReviewUpdate }: UpstreamS
         )}
         <div className="fg-fact">
           <div className="fg-fact__label">
-            <span>Current commit</span>
+            <span>{LABEL_CURRENT_COMMIT}</span>
           </div>
           <div className="fg-fact__value" style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
             <span>{shortBase}</span>
@@ -144,7 +159,7 @@ export function UpstreamSection({ skillId, upstream, onReviewUpdate }: UpstreamS
         </div>
         <div className="fg-fact">
           <div className="fg-fact__label">
-            <span>Latest commit</span>
+            <span>{LABEL_LATEST_COMMIT}</span>
           </div>
           <div className="fg-fact__value" style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
             <span>{shortLatest} {commitDate !== '-' ? `(${commitDate})` : ''}</span>
@@ -152,7 +167,7 @@ export function UpstreamSection({ skillId, upstream, onReviewUpdate }: UpstreamS
         </div>
         <div className="fg-fact">
           <div className="fg-fact__label">
-            <span>Files changed</span>
+            <span>{LABEL_FILES_CHANGED}</span>
           </div>
           <div className="fg-fact__value" style={{ fontSize: '13px' }}>
             <span>{upstream.changed_files >= 0 ? `${upstream.changed_files} file(s)` : '-'}</span>
@@ -160,7 +175,7 @@ export function UpstreamSection({ skillId, upstream, onReviewUpdate }: UpstreamS
         </div>
         <div className="fg-fact">
           <div className="fg-fact__label">
-            <span>Last checked</span>
+            <span>{LABEL_LAST_CHECKED}</span>
           </div>
           <div className="fg-fact__value" style={{ fontSize: '13px' }}>
             <span>{upstream.checked_at || 'never'}</span>
@@ -171,21 +186,26 @@ export function UpstreamSection({ skillId, upstream, onReviewUpdate }: UpstreamS
       {upstream.files && upstream.files.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
           <div style={{ fontSize: '13px', fontWeight: 600 }}>
-            <span>Changed upstream ({upstream.files.length}):</span>
+            <span>{LABEL_CHANGED_UPSTREAM_PREFIX}{upstream.files.length}{LABEL_CHANGED_UPSTREAM_SUFFIX}</span>
           </div>
           <ul style={{ margin: 0, paddingLeft: 'var(--space-4)', fontSize: '13px', fontFamily: 'var(--font-mono)' }}>
-            {upstream.files.map((file) => (
-              <li key={file.path}>
-                <span style={{ color: 'var(--color-text-subtle)', marginRight: 'var(--space-2)' }}>[{file.status}]</span>
-                <span>{file.path}</span>
-              </li>
-            ))}
+            {upstream.files.map((file) => {
+              const statusBadgeText = `[${file.status}]`;
+              return (
+                <li key={file.path}>
+                  <span style={{ color: 'var(--color-text-muted)', marginRight: 'var(--space-2)' }}>
+                    <span>{statusBadgeText}</span>
+                  </span>
+                  <span>{file.path}</span>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
 
       {upstream.next_action && (
-        <div style={{ fontSize: '13px', color: 'var(--color-text-subtle)', marginTop: 'var(--space-1)' }}>
+        <div style={{ fontSize: '13px', color: 'var(--color-text-muted)', marginTop: 'var(--space-1)' }}>
           <span>{upstream.next_action}</span>
         </div>
       )}
