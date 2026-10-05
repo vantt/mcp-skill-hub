@@ -40,7 +40,6 @@ func (service SourceService) SkillSources(ctx context.Context, path, skillID str
 	if err != nil {
 		return SkillSourcesResult{}, err
 	}
-	service = service.defaults(root)
 
 	skillID = strings.TrimSpace(skillID)
 	if skillID == "" {
@@ -81,27 +80,7 @@ func (service SourceService) SkillSources(ctx context.Context, path, skillID str
 		checkStatesByID[cs.SourceID] = cs
 	}
 
-	// 3. Count pending insights
-	totalPending := 0
-	pendingBySource := make(map[string]int)
-	handle, cErr := catalog.OpenCurrent(ctx, root)
-	if cErr == nil {
-		defer handle.Close()
-		rows, qErr := handle.DB.QueryContext(ctx, `SELECT COALESCE(p.source_id, json_extract(i.content_json, '$.source_id'), ''), count(i.id) FROM insights i LEFT JOIN provenance p ON p.insight_id = i.id WHERE i.skill_id = ? AND i.status = 'pending' GROUP BY 1`, skillID)
-		if qErr == nil {
-			defer rows.Close()
-			for rows.Next() {
-				var srcID string
-				var cnt int
-				if err := rows.Scan(&srcID, &cnt); err == nil {
-					totalPending += cnt
-					if srcID != "" {
-						pendingBySource[srcID] += cnt
-					}
-				}
-			}
-		}
-	}
+	totalPending, pendingBySource := countPendingInsights(ctx, root, skillID)
 
 	learning := []LearningReference{}
 	for _, l := range links {
@@ -177,4 +156,28 @@ func (service SourceService) SkillSources(ctx context.Context, path, skillID str
 		PendingInsights: totalPending,
 	}
 	return result, nil
+}
+
+func countPendingInsights(ctx context.Context, root, skillID string) (int, map[string]int) {
+	totalPending := 0
+	pendingBySource := make(map[string]int)
+	handle, cErr := catalog.OpenCurrent(ctx, root)
+	if cErr == nil {
+		defer handle.Close()
+		rows, qErr := handle.DB.QueryContext(ctx, `SELECT COALESCE(p.source_id, json_extract(i.content_json, '$.source_id'), ''), count(i.id) FROM insights i LEFT JOIN provenance p ON p.insight_id = i.id WHERE i.skill_id = ? AND i.status = 'pending' GROUP BY 1`, skillID)
+		if qErr == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var srcID string
+				var cnt int
+				if err := rows.Scan(&srcID, &cnt); err == nil {
+					totalPending += cnt
+					if srcID != "" {
+						pendingBySource[srcID] += cnt
+					}
+				}
+			}
+		}
+	}
+	return totalPending, pendingBySource
 }
