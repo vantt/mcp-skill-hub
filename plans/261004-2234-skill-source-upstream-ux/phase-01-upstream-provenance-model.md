@@ -1,6 +1,6 @@
 ---
 title: "Phase 1: Upstream provenance model"
-status: in-progress
+status: done
 ---
 
 # Phase 1: Upstream provenance model
@@ -91,7 +91,7 @@ Do not modify any other file.
 - [x] Task 1.1 canonical `files_digest`
 - [x] Task 1.2 `RevisionAt`, `RemoteRefCommit`, mirror lock
 - [x] Task 1.3 origin helper + `skill add` fixes
-- [ ] Task 1.4 `make check`
+- [x] Task 1.4 `make check`
 
 ## Success criteria
 

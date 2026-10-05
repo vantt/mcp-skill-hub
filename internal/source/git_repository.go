@@ -358,7 +358,6 @@ func (adapter GitRepositoryAdapter) List(ctx context.Context, source Source, rev
 	return resources, nil
 }
 
-
 type gitFile struct {
 	hash plumbing.Hash
 	size int64
@@ -457,7 +456,7 @@ func resolveCommit(repository *git.Repository, ref string) (plumbing.Hash, error
 		return head.Hash(), nil
 	}
 	if strings.HasPrefix(ref, "refs/skillhub/commits/") {
-		return plumbing.ZeroHash, fmt.Errorf("Git source ref %q was not found", ref)
+		return plumbing.ZeroHash, fmt.Errorf("git source ref %q was not found", ref)
 	}
 	clean := strings.TrimPrefix(strings.TrimPrefix(ref, "refs/heads/"), "refs/remotes/origin/")
 	clean = strings.TrimPrefix(clean, "refs/tags/")
@@ -482,7 +481,7 @@ func resolveCommit(repository *git.Repository, ref string) (plumbing.Hash, error
 			return hash, nil
 		}
 	}
-	return plumbing.ZeroHash, fmt.Errorf("Git source ref %q was not found", ref)
+	return plumbing.ZeroHash, fmt.Errorf("git source ref %q was not found", ref)
 }
 
 func (adapter GitRepositoryAdapter) withLimits(limits Limits) GitRepositoryAdapter {
@@ -677,7 +676,7 @@ func (adapter GitRepositoryAdapter) syncMirrorLocked(ctx context.Context, mirror
 		if created || errors.Is(err, ErrLimitExceeded) {
 			_ = os.RemoveAll(mirror)
 		}
-		return nil, fmt.Errorf("Git HTTPS source operation failed: %w", err)
+		return nil, fmt.Errorf("git HTTPS source operation failed: %w", err)
 	}
 	if err := adapter.checkMirrorSize(mirror); err != nil {
 		_ = os.RemoveAll(mirror)
@@ -883,7 +882,7 @@ func (adapter GitRepositoryAdapter) RemoteRefCommit(ctx context.Context, reposit
 				return item.Hash, nil
 			}
 		}
-		return "", fmt.Errorf("Git source ref %q was not found", ref)
+		return "", fmt.Errorf("git source ref %q was not found", ref)
 	}
 
 	clean := strings.TrimPrefix(strings.TrimPrefix(ref, "refs/heads/"), "refs/tags/")
@@ -914,7 +913,7 @@ func (adapter GitRepositoryAdapter) RemoteRefCommit(ctx context.Context, reposit
 			return item.Hash, nil
 		}
 	}
-	return "", fmt.Errorf("Git source ref %q was not found", ref)
+	return "", fmt.Errorf("git source ref %q was not found", ref)
 }
 
 // RevisionAt resolves the revision of a specific commit, fetching it into the mirror at depth 1 if not already present.
