@@ -253,3 +253,37 @@ func decodeRouting(content string, skill *Skill) error {
 	normalizeSkillRouting(skill)
 	return nil
 }
+
+// DecodeSkillDocument decodes a raw canonical skill entity JSON into a projected Skill.
+func DecodeSkillDocument(id string, contentJSON []byte) (Skill, error) {
+	var base struct {
+		Name         string `json:"name"`
+		Status       string `json:"status"`
+		Description  string `json:"description"`
+		CollectionID string `json:"collection_id"`
+		Collection   any    `json:"collection"`
+		Digest       string `json:"digest"`
+	}
+	if err := json.Unmarshal(contentJSON, &base); err != nil {
+		return Skill{}, err
+	}
+	skill := Skill{
+		ID:           id,
+		CollectionID: base.CollectionID,
+		Name:         base.Name,
+		Status:       base.Status,
+		Description:  base.Description,
+		Digest:       base.Digest,
+	}
+	if skill.CollectionID == "" {
+		if col, ok := base.Collection.(string); ok && col != "" {
+			skill.CollectionID = col
+		} else {
+			skill.CollectionID = "default"
+		}
+	}
+	if err := decodeRouting(string(contentJSON), &skill); err != nil {
+		return Skill{}, err
+	}
+	return skill, nil
+}

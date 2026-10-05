@@ -28,7 +28,11 @@ func (WorkspaceService) ValidateWorkspace(ctx context.Context, path string) (Res
 	if err != nil {
 		return Result{}, err
 	}
-	return formatValidationResult(issues), nil
+	result := formatValidationResult(issues)
+	if len(issues) == 0 {
+		result.Warnings = append(result.Warnings, workspaceLintWarnings(ctx, root)...)
+	}
+	return result, nil
 }
 
 func formatValidationResult(issues []canonical.Issue) Result {

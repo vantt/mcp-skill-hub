@@ -15,6 +15,7 @@ import (
 
 	"github.com/vantt/mcp-skill-hub/internal/canonical"
 	"github.com/vantt/mcp-skill-hub/internal/catalog"
+	resolverpkg "github.com/vantt/mcp-skill-hub/internal/resolver"
 	"github.com/vantt/mcp-skill-hub/internal/skill"
 	"github.com/vantt/mcp-skill-hub/internal/skillruntime"
 	"gopkg.in/yaml.v3"
@@ -129,7 +130,25 @@ func (SkillService) ReviewSkill(ctx context.Context, path, id string) (SkillRevi
 	entrypointRelPath, entrypointDigest, entrypointBytes := inspectCanonicalEntrypoint(root, skillRelDir)
 	canonicalIssues, valid := checkCanonicalIssues(root, skillRelDir)
 	readiness, isScaffold, missingFields := checkActivationReadiness(entrypointBytes, metaDoc, valid)
-
+	if handle, err := catalog.OpenCurrentLocked(ctx, root); err == nil {
+		defer handle.Close()
+		if sqliteCat, catErr := resolverpkg.NewSQLiteCatalog(handle.DB, handle.Pointer.CatalogSnapshot); catErr == nil {
+			if allSkills, skillsErr := sqliteCat.Skills(ctx); skillsErr == nil {
+				var activeSkills []resolverpkg.Skill
+				for _, s := range allSkills {
+					if s.Status == "active" && s.ID != "system-curator" {
+						activeSkills = append(activeSkills, s)
+					}
+				}
+				if targetSkill, decErr := resolverpkg.DecodeSkillDocument(id, skillMetaBytes); decErr == nil {
+					findings := resolverpkg.LintTargetSkill(targetSkill, activeSkills)
+					for _, f := range findings {
+						readiness.Warnings = append(readiness.Warnings, fmt.Sprintf("%s: %s Fix: %s", f.Code, f.Message, f.Fix))
+					}
+				}
+			}
+		}
+	}
 	fullSkillDir := filepath.Join(root, filepath.FromSlash(skillRelDir))
 	resourceStatus, resources, totalBytes := inventorySkillResources(root, fullSkillDir, entrypointRelPath, entrypointDigest)
 
@@ -147,8 +166,7 @@ func (SkillService) ReviewSkill(ctx context.Context, path, id string) (SkillRevi
 	gitSummary := getSkillGitSummary(ctx, root, skillRelDir+"/")
 	contentTrust := reviewContentTrust(id, skillRelDir, resources, skillMetaBytes)
 	contentTrust.ChangesSinceApproval = reviewChangesSinceApproval(ctx, approvalDiffInput{Root: root, SkillRelDir: skillRelDir, SkillMetaBytes: skillMetaBytes, Resources: resources, Trust: contentTrust, HistoryLimit: approvalHistoryLimit})
-	_, hasRuntimeBlock := reviewRuntimeSpec(skillMetaBytes)
-	runtimeHints := reviewRuntimeHints(root, skillRelDir, resources, hasRuntimeBlock)
+	runtimeHints, _ := canonicalRuntimeHints(root, id)
 
 	nextAction := computeNextAction(id, skillRelDir, metaDoc.Status, valid, canonicalIssues, readiness, isScaffold, missingFields, diverged, changedResources, missingResources, servedFacts, gitSummary)
 
