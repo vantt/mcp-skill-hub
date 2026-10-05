@@ -1,6 +1,6 @@
 ---
 title: "Phase 7: MCP tools and curator"
-status: in-progress
+status: done
 ---
 
 # Phase 7: MCP tools and curator
@@ -81,7 +81,7 @@ Do not modify any other file.
 - [x] Task 7.2 source tools
 - [x] Task 7.3 annotations
 - [x] Task 7.4 curator
-- [ ] Task 7.5 `make check`
+- [x] Task 7.5 `make check`
 
 ## Success criteria
 
