@@ -20,6 +20,7 @@ type RoutingEvalQuery struct {
 	WorkspacePath    string
 	NoSkillPath      string
 	PolicyPath       string
+	Policy           *resolverpkg.Policy
 	MinPrecision     *float64
 	MinRecall        *float64
 	MinNoSkillRecall *float64
@@ -328,9 +329,14 @@ func (service RoutingEvalService) Run(ctx context.Context, q RoutingEvalQuery) (
 		return RoutingEvalReport{}, err
 	}
 
-	customPolicy, err := loadCustomPolicy(q.PolicyPath)
-	if err != nil {
-		return RoutingEvalReport{}, err
+	var customPolicy resolverpkg.Policy
+	if q.Policy != nil {
+		customPolicy = *q.Policy
+	} else {
+		customPolicy, err = loadCustomPolicy(q.PolicyPath)
+		if err != nil {
+			return RoutingEvalReport{}, err
+		}
 	}
 
 	handle, err := catalog.OpenCurrentLocked(ctx, root)

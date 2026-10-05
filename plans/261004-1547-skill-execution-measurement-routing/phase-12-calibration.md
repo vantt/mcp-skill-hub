@@ -1,7 +1,7 @@
 ---
 phase: 12
 title: "Calibration with recorded evidence"
-status: pending
+status: done
 priority: P2
 effort: 4h
 dependencies: [10]
@@ -43,13 +43,13 @@ Modify (only if a change is applied):
 
 ## Steps
 
-- [ ] **1. Grid runner.**
+- [x] **1. Grid runner.**
   Pass: `SKILLHUB_CALIBRATE=1 go test -count=1 -run RoutingCalibration -v ./internal/app/` prints the full table; `go test -count=1 -run RoutingCalibration ./internal/app/` (without the variable) reports the test as skipped.
-- [ ] **2. Report** with the full table and the decision.
+- [x] **2. Report** with the full table and the decision.
   Pass: `reports/routing-calibration-report.md` exists with the commit hash and every grid row.
-- [ ] **3. Apply or decline** per the rule.
+- [x] **3. Apply or decline** per the rule.
   Pass: `go test -count=1 ./internal/resolver/ ./internal/evaluation/ ./internal/app/` → `ok` (golden-v1 gates and routing gate pass).
-- [ ] **4. Gate.** Pass: `make check` exits 0.
+- [x] **4. Gate.** Pass: `make check` exits 0.
 
 ## Risks
 
@@ -65,3 +65,6 @@ Revert the constants commit; the report stays as a record.
 ## Failure protocol
 
 Follow `plan.md` → "Executor notes" → "Failure protocol". Never apply a change whose evidence is not in the report. Write `reports/<agent>-<YYMMDD-HHMM>-calibration.md` if blocked, set `status: blocked`, report the blocker.
+
+## Implementation Note
+Implemented the calibration grid runner in `internal/app/routing_calibration_test.go` behind `SKILLHUB_CALIBRATE=1`, exploring all 162 parameter combinations over floor, margin, trigger weight, and not_for penalty against both the routing corpus and the golden-v1 held-out split. Evaluated one-off edits for example discount (0.9 confirmed optimal) and FTS trigger weight (5.0 vs 1.0 produced identical metrics). Documented the full grid search table in `reports/routing-calibration-report.md` and recorded the decision: no change to default policy parameters, preserving the golden-v1 calibration baseline and avoiding revision churn.
