@@ -81,7 +81,8 @@
     "recovery_items": 0,
     "optional_items": 0,
     "sources_due": 0,
-    "unavailable_sources": 0
+    "unavailable_sources": 0,
+    "upstream_updates": 0
   }
 }
 
