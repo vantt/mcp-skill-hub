@@ -79,7 +79,7 @@ Three user-accepted workstreams, executed as sequential phases (1–5, 5a, 5b ar
 | 5a | [Runtime revision: skill-level trust, state dir, platform-only checks, setup guidance](./phase-05a-runtime-revision.md) | 1–5 | 10h | Done |
 | 5b | [Runtime hardening: host permissions, unapproved content, review diff, secret env](./phase-05b-runtime-hardening.md) | 5a | 8h | Done |
 | 6 | [Server-side activation tracking](./phase-06-server-side-activation-tracking.md) | 2, 5b | 8h | Done |
-| 7 | [Funnel aggregation, CLI, WebUI Usage tab](./phase-07-funnel-cli-and-web-usage.md) | 2, 6 | 12h | Pending |
+| 7 | [Funnel aggregation, CLI, WebUI Usage tab](./phase-07-funnel-cli-and-web-usage.md) | 2, 6 | 12h | Done |
 | 8 | [Claude Code transcript import](./phase-08-transcript-import.md) | 2, 7 | 8h | Pending |
 | 9 | [Resolver routing features](./phase-09-resolver-routing-features.md) | 1 | 8h | Pending |
 | 10 | [Routing eval command, corpus, CI gate](./phase-10-routing-eval-and-gate.md) | 9 | 10h | Pending |

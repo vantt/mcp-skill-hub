@@ -3,6 +3,8 @@ import { apiFetch } from './client';
 import type {
   ConfirmationPins,
   CurationHome,
+  FunnelReport,
+  FunnelSince,
   SessionResponse,
   SkillAddProposal,
   SkillAddResult,
@@ -47,6 +49,15 @@ export function useSkillReview(id: string) {
   return useQuery({
     queryKey: ['skill-review', id],
     queryFn: () => apiFetch<SkillReviewResult>(`/skills/${encodeURIComponent(id)}/review`),
+    enabled: Boolean(id),
+  });
+}
+
+export function useSkillUsage(id: string, since: FunnelSince = '30d') {
+  return useQuery({
+    queryKey: ['skill-usage', id, since],
+    queryFn: () =>
+      apiFetch<FunnelReport>(`/skills/${encodeURIComponent(id)}/usage?since=${encodeURIComponent(since)}`),
     enabled: Boolean(id),
   });
 }

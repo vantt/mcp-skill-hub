@@ -19,11 +19,13 @@ import { Toast } from '../../components/Toast';
 import { EditorTab } from './EditorTab';
 import { ResourcesTab } from './ResourcesTab';
 import { ReviewTab } from './ReviewTab';
+import { UsagePanel } from './UsagePanel';
 import { useT } from '../../i18n';
 
 const LABEL_TAB_REVIEW = 'Review';
 const LABEL_TAB_EDITOR = 'Editor';
 const LABEL_TAB_RESOURCES = 'Resources';
+const LABEL_TAB_USAGE = 'Usage';
 const LABEL_ACTIVATE = 'Activate skill';
 const LABEL_DEPRECATE = 'Deprecate';
 const LABEL_ARCHIVE = 'Archive';
@@ -266,6 +268,15 @@ export function SkillDetailScreen() {
         >
           <span>{LABEL_TAB_RESOURCES}</span>
         </button>
+        <button
+          type="button"
+          className={`fg-tab ${activeTab === 'usage' ? 'fg-tab--active' : ''}`}
+          role="tab"
+          aria-selected={activeTab === 'usage'}
+          onClick={() => setTab('usage')}
+        >
+          <span>{LABEL_TAB_USAGE}</span>
+        </button>
       </div>
 
       {/* Tab Panels */}
@@ -285,6 +296,7 @@ export function SkillDetailScreen() {
 
       {activeTab === 'resources' && <ResourcesTab skill={skill} />}
 
+      {activeTab === 'usage' && <UsagePanel skillId={skill.skill_id} />}
       {/* Transition Proposal Preview */}
       {proposalOpen && transitionProposal && (
         <ProposalPreview

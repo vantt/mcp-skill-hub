@@ -1,0 +1,119 @@
+{
+  "window": {
+    "since": "2026-09-04",
+    "until": "2026-10-04",
+    "days": 31
+  },
+  "raw_retention_days": 14,
+  "rollup_retention_days": 180,
+  "metric_basis": {
+    "acceptance_rate": "server-observed",
+    "activations": "server-observed",
+    "blocked_by_review": "server-observed",
+    "doctor": "terminal",
+    "doctor_failure_rate": "terminal",
+    "loads": "server-observed",
+    "misses": "server-observed",
+    "negative_after_load": "host-reported",
+    "negative_feedback": "host-reported",
+    "overrides": "server-observed",
+    "recommended_primary": "server-observed",
+    "recommended_supporting": "server-observed",
+    "resolutions": "host-reported",
+    "resolutions_review_required": "server-observed",
+    "resolutions_setup_required": "server-observed",
+    "setup_failed": "host-reported",
+    "setup_failed_rate": "host-reported",
+    "transcripts": "transcript",
+    "unsolicited": "server-observed"
+  },
+  "skills": [
+    {
+      "skill_id": "review-skill",
+      "name": "Review Skill",
+      "recommended_primary": 10,
+      "recommended_supporting": 0,
+      "activations": {
+        "after_needs_context": 0,
+        "after_no_skill": 0,
+        "override": 1,
+        "recommended": 8,
+        "supporting": 0,
+        "unsolicited": 1
+      },
+      "total_activations": 10,
+      "acceptance_rate": 0.8,
+      "overrides": 1,
+      "misses": 0,
+      "unsolicited": 1,
+      "blocked_by_review": 0,
+      "resolutions_review_required": 0,
+      "resolutions_setup_required": 0,
+      "loads": {
+        "asset": 0,
+        "entrypoint": 13,
+        "reference": 1,
+        "resource": 0,
+        "script": 0
+      },
+      "total_loads": 14,
+      "doctor": {
+        "failed": 0,
+        "ready": 3,
+        "setup_required": 1,
+        "unsupported_platform": 0
+      },
+      "total_doctor": 4,
+      "doctor_failure_rate": 0.25,
+      "setup_failed": 1,
+      "setup_failed_rate": 0.1,
+      "negative_feedback": 1,
+      "negative_after_load": 1,
+      "transcripts": {}
+    }
+  ],
+  "skill": {
+    "skill_id": "review-skill",
+    "name": "Review Skill",
+    "recommended_primary": 10,
+    "recommended_supporting": 0,
+    "activations": {
+      "after_needs_context": 0,
+      "after_no_skill": 0,
+      "override": 1,
+      "recommended": 8,
+      "supporting": 0,
+      "unsolicited": 1
+    },
+    "total_activations": 10,
+    "acceptance_rate": 0.8,
+    "overrides": 1,
+    "misses": 0,
+    "unsolicited": 1,
+    "blocked_by_review": 0,
+    "resolutions_review_required": 0,
+    "resolutions_setup_required": 0,
+    "loads": {
+      "asset": 0,
+      "entrypoint": 13,
+      "reference": 1,
+      "resource": 0,
+      "script": 0
+    },
+    "total_loads": 14,
+    "doctor": {
+      "failed": 0,
+      "ready": 3,
+      "setup_required": 1,
+      "unsupported_platform": 0
+    },
+    "total_doctor": 4,
+    "doctor_failure_rate": 0.25,
+    "setup_failed": 1,
+    "setup_failed_rate": 0.1,
+    "negative_feedback": 1,
+    "negative_after_load": 1,
+    "transcripts": {}
+  }
+}
+

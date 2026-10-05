@@ -176,3 +176,51 @@ export interface SkillAddResult {
   operation_id: string;
   added_skills?: string[];
 }
+
+export type FunnelSince = '7d' | '30d' | '90d' | '180d';
+
+export interface FunnelWindow {
+  since: string;
+  until: string;
+  days: number;
+}
+
+export interface SkillFunnel {
+  skill_id: string;
+  name?: string;
+  recommended_primary: number;
+  recommended_supporting: number;
+  activations: Record<string, number>;
+  total_activations: number;
+  acceptance_rate: number | null;
+  overrides: number;
+  misses: number;
+  unsolicited: number;
+  blocked_by_review: number;
+  resolutions_review_required: number;
+  resolutions_setup_required: number;
+  loads: Record<string, number>;
+  total_loads: number;
+  doctor: Record<string, number>;
+  total_doctor: number;
+  doctor_failure_rate: number | null;
+  setup_failed: number;
+  setup_failed_rate: number | null;
+  negative_feedback: number;
+  negative_after_load: number;
+  transcripts: Record<string, number>;
+}
+
+export interface FunnelReport {
+  window: FunnelWindow;
+  raw_retention_days: number;
+  rollup_retention_days: number;
+  metric_basis: Record<string, string>;
+  skills?: SkillFunnel[];
+  skill?: SkillFunnel;
+  dead_skills?: string[];
+  recommended_never_activated?: string[];
+  blocked_by_review?: string[];
+  negative_after_load?: string[];
+  setup_failures?: string[];
+}

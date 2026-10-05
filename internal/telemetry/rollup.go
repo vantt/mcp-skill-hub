@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -143,7 +144,25 @@ func rollupKeys(ctx context.Context, envelope storedEnvelope, tx *sql.Tx) ([]rol
 	negative := false
 	var metrics []string
 	if envelope.Type == EventSkillUtilityReported {
-		negative = text("utility") == "harmful"
+		if text("utility") == "harmful" {
+			negative = true
+			if strings.HasSuffix(envelope.ID, ":utility") && tx != nil {
+				primaryID := strings.TrimSuffix(envelope.ID, ":utility")
+				var primaryStatus sql.NullString
+				err := tx.QueryRowContext(ctx, `
+SELECT json_extract(payload_json, '$.payload.status')
+FROM telemetry_events
+WHERE id = ?
+  AND json_valid(payload_json)
+LIMIT 1`, primaryID).Scan(&primaryStatus)
+				if err == nil && primaryStatus.Valid {
+					status := primaryStatus.String
+					if status == "failed" || status == "rejected" || status == "abandoned" {
+						negative = false
+					}
+				}
+			}
+		}
 	} else if status := text("status"); status != "" {
 		metrics = append(metrics, "feedback:"+status)
 		negative = status == "failed" || status == "rejected" || status == "abandoned"
