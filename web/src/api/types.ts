@@ -48,6 +48,7 @@ export interface SkillListItem {
   routing_eligible: boolean;
   collection: string;
   name: string;
+  upstream_status?: string;
 }
 
 export interface SkillListResult {
@@ -264,16 +265,11 @@ export interface RuntimeHints {
 
 export interface SkillProvenance {
   created_by?: string;
+  created_at?: string;
   source_id?: string;
-  source_url?: string;
-  source_path?: string;
-  origin?: {
-    kind: string;
-    repository: string;
-    commit: string;
-    tag?: string;
-    branch?: string;
-  };
+  source_locator?: string;
+  source_revision?: string;
+  upstream_path?: string;
 }
 
 export interface RuntimeBin {
@@ -326,5 +322,258 @@ export interface SkillRuntimeStatus {
   doctor_command: string;
   env_keys: string[];
   env_set_command: string;
+  warnings?: Array<{ code: string; summary: string }>;
+}
+
+export interface SkillUpstreamFile {
+  path: string;
+  status: string;
+}
+
+export interface SkillUpstream {
+  skill_id: string;
+  source_id: string;
+  repository: string;
+  ref: string;
+  path: string;
+  base_commit: string;
+  latest_commit: string;
+  latest_committed_at?: string;
+  changed_files: number;
+  files?: SkillUpstreamFile[];
+  local: string;
+  status: string;
+  checked_at: string;
+  error?: string;
+  next_action?: string;
+}
+
+export interface UpstreamListResult {
+  schema_version: string;
+  status: string;
+  summary: string;
+  skills: SkillUpstream[];
+}
+
+export interface UpstreamFile {
+  path: string;
+  status: string;
+  default_action: string;
+  action: string;
+  conflicts: number;
+  mergeable: boolean;
+  upstream_diff?: string;
+  local_diff?: string;
+  result_diff?: string;
+  merged_with_markers?: string;
+}
+
+export interface UpstreamTrustImpact {
+  third_party: boolean;
+  currently_approved: boolean;
+  review_required_after_apply: boolean;
+  review_command: string;
+}
+
+export interface UpstreamUpdatePreview {
+  schema_version: string;
+  status: string;
+  summary: string;
+  skill_id: string;
+  source_id: string;
+  base_commit: string;
+  target_commit: string;
+  target_committed_at?: string;
+  base_available: boolean;
+  files: UpstreamFile[];
+  unchanged_count: number;
+  unresolved: string[];
+  diff: {
+    added: string[];
+    modified: string[];
+    deleted: string[];
+  };
+  trust_impact: UpstreamTrustImpact;
+  confirmation: {
+    confirmation: {
+      required: boolean;
+      mode?: string;
+      pins: ConfirmationPins;
+    };
+  };
+}
+
+export interface UpstreamUpdateResult {
+  schema_version: string;
+  status: string;
+  summary: string;
+  skill_id: string;
+  operation_id: string;
+  changed_paths: string[];
+  trust_impact: UpstreamTrustImpact;
+}
+
+export interface LearningReference {
+  source_id: string;
+  locator: string;
+  ref?: string;
+  path?: string;
+  role: string;
+  monitoring: {
+    enabled: boolean;
+    cadence: string;
+  };
+  last_checked_at?: string;
+  availability?: string;
+  pending_insights: number;
+}
+
+export interface SkillSourcesResult {
+  schema_version: string;
+  status: string;
+  summary: string;
+  skill_id: string;
+  upstream: SkillUpstream | null;
+  learning: LearningReference[];
+  pending_insights: number;
+}
+
+export interface SourceSummary {
+  id: string;
+  status: string;
+  role: string;
+  referencing_skills: string[];
+  skills_vendored_count: number;
+  importable_count: number;
+  last_checked_at?: string;
+}
+
+export interface SourceRepositoryGroup {
+  repository: string;
+  sources: SourceSummary[];
+}
+
+export interface SourceCandidate {
+  id: string;
+  locator: string;
+  status: string;
+  reason: string;
+  created_at: string;
+}
+
+export interface SourceRecord {
+  id: string;
+  adapter: string;
+  locator: {
+    repository?: string;
+    ref?: string;
+    path?: string;
+    url?: string;
+  };
+  status: string;
+  identity: {
+    name: string;
+    canonical?: string;
+  };
+  monitoring: {
+    enabled: boolean;
+    cadence: string;
+  };
+  current_revision?: {
+    kind: string;
+    value: string;
+    observed_at: string;
+  };
+}
+
+export interface SourceListItem {
+  record: SourceRecord;
+  skills: string[];
+  role: string;
+  importable_count: number;
+}
+
+export interface SourceListResult {
+  schema_version: string;
+  status: string;
+  summary: string;
+  candidates: SourceCandidate[];
+  sources: SourceListItem[];
+  groups?: SourceRepositoryGroup[];
+}
+
+export interface SourceProposal {
+  schema_version: string;
+  status: string;
+  summary: string;
+  candidate_id?: string;
+  source?: SourceRecord;
+  diff?: {
+    added: string[];
+    modified: string[];
+    deleted: string[];
+  };
+  confirmation: {
+    confirmation: {
+      required: boolean;
+      mode?: string;
+      pins: ConfirmationPins;
+    };
+  };
+  warnings?: Array<{ code: string; summary: string }>;
+}
+
+export interface SourceMutationResult {
+  schema_version: string;
+  status: string;
+  summary: string;
+  operation_id?: string;
+  source_id?: string;
+}
+
+export interface DiscoveredImportSkill {
+  name: string;
+  target_id: string;
+  collection: string;
+  description: string;
+  path: string;
+  conflict: boolean;
+  imported?: boolean;
+  skip_reason?: string;
+}
+
+export interface SourceImportProposal {
+  schema_version: string;
+  status: string;
+  summary: string;
+  source_id: string;
+  revision: string;
+  discovered: DiscoveredImportSkill[];
+  importable: DiscoveredImportSkill[];
+  skipped: DiscoveredImportSkill[];
+  confirmation: {
+    confirmation: {
+      required: boolean;
+      mode?: string;
+      pins: ConfirmationPins;
+    };
+  };
+}
+
+export interface SourceCheckItem {
+  source_id: string;
+  status: string;
+  error?: string;
+  skills?: SkillUpstream[];
+}
+
+export interface SourceCheckResult {
+  schema_version: string;
+  status: string;
+  summary: string;
+  checked: number;
+  changed: number;
+  unavailable: number;
+  results: SourceCheckItem[];
   warnings?: Array<{ code: string; summary: string }>;
 }

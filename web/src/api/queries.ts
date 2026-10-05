@@ -14,6 +14,15 @@ import type {
   SkillProposal,
   SkillReviewResult,
   SkillRuntimeStatus,
+  SkillSourcesResult,
+  SkillUpstream,
+  SourceCheckResult,
+  SourceImportProposal,
+  SourceListResult,
+  SourceMutationResult,
+  SourceProposal,
+  UpstreamUpdatePreview,
+  UpstreamUpdateResult,
 } from './types';
 
 export function useSession() {
@@ -162,6 +171,126 @@ export async function previewSkillAdd(
 
 export async function confirmSkillAdd(pins: ConfirmationPins): Promise<SkillAddResult> {
   return apiFetch<SkillAddResult>('/skills/add/confirm', {
+    method: 'POST',
+    body: JSON.stringify(pins),
+  });
+}
+
+export function useSkillSources(id: string) {
+  return useQuery({
+    queryKey: ['skill-sources', id],
+    queryFn: () => apiFetch<SkillSourcesResult>(`/skills/${encodeURIComponent(id)}/sources`),
+    enabled: Boolean(id),
+  });
+}
+
+export function useSources() {
+  return useQuery({
+    queryKey: ['sources'],
+    queryFn: () => apiFetch<SourceListResult>('/sources'),
+  });
+}
+
+export async function checkSkillUpstream(id: string): Promise<SkillUpstream> {
+  return apiFetch<SkillUpstream>(`/skills/${encodeURIComponent(id)}/upstream/check`, {
+    method: 'POST',
+  });
+}
+
+export async function reviewSkillUpdate(
+  id: string,
+  body?: {
+    target_commit?: string;
+    resolutions?: Array<{ path: string; action: string; content?: string }>;
+    idempotency_key?: string;
+  },
+): Promise<UpstreamUpdatePreview> {
+  return apiFetch<UpstreamUpdatePreview>(`/skills/${encodeURIComponent(id)}/upstream/review`, {
+    method: 'POST',
+    body: JSON.stringify(body || {}),
+  });
+}
+
+export async function confirmUpstreamUpdate(
+  proposalId: string,
+  pins: { proposal_digest: string; base_version: string },
+): Promise<UpstreamUpdateResult> {
+  return apiFetch<UpstreamUpdateResult>(
+    `/upstream/proposals/${encodeURIComponent(proposalId)}/confirm`,
+    {
+      method: 'POST',
+      body: JSON.stringify(pins),
+    },
+  );
+}
+
+export async function previewAttachSource(
+  id: string,
+  body: {
+    source_id?: string;
+    locator?: string;
+    ref?: string;
+    path?: string;
+    cadence?: string;
+  },
+): Promise<SourceProposal> {
+  return apiFetch<SourceProposal>(`/skills/${encodeURIComponent(id)}/sources/attach/preview`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function previewDetachSource(id: string, sourceId: string): Promise<SourceProposal> {
+  return apiFetch<SourceProposal>(
+    `/skills/${encodeURIComponent(id)}/sources/${encodeURIComponent(sourceId)}/detach/preview`,
+    {
+      method: 'POST',
+    },
+  );
+}
+
+export async function previewUnwatchSource(sourceId: string): Promise<SourceProposal> {
+  return apiFetch<SourceProposal>(`/sources/${encodeURIComponent(sourceId)}/unwatch/preview`, {
+    method: 'POST',
+  });
+}
+
+export async function confirmSourceProposal(
+  proposalId: string,
+  pins: { proposal_digest: string; base_version: string },
+): Promise<SourceMutationResult> {
+  return apiFetch<SourceMutationResult>(
+    `/sources/proposals/${encodeURIComponent(proposalId)}/confirm`,
+    {
+      method: 'POST',
+      body: JSON.stringify(pins),
+    },
+  );
+}
+
+export async function checkSources(body: {
+  source_ids?: string[];
+  all?: boolean;
+  due?: boolean;
+}): Promise<SourceCheckResult> {
+  return apiFetch<SourceCheckResult>('/sources/check', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function previewSourceImport(
+  sourceId: string,
+  body?: { skills?: string[]; path?: string },
+): Promise<SourceImportProposal> {
+  return apiFetch<SourceImportProposal>(`/sources/${encodeURIComponent(sourceId)}/import/preview`, {
+    method: 'POST',
+    body: JSON.stringify(body || {}),
+  });
+}
+
+export async function confirmSourceImport(pins: ConfirmationPins): Promise<SourceMutationResult> {
+  return apiFetch<SourceMutationResult>('/sources/import/confirm', {
     method: 'POST',
     body: JSON.stringify(pins),
   });

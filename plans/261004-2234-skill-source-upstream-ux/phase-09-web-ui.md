@@ -1,6 +1,6 @@
 ---
 title: "Phase 9: Web UI"
-status: todo
+status: in-progress
 ---
 
 # Phase 9: Web UI
@@ -67,7 +67,7 @@ Do not modify any other file.
 
 ## Todo
 
-- [ ] Task 9.1 types + queries
+- [x] Task 9.1 types + queries
 - [ ] Task 9.2 Sources tab + provenance
 - [ ] Task 9.3 Skills list + Home
 - [ ] Task 9.4 Sources screen
