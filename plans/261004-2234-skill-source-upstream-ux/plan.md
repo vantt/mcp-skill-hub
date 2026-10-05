@@ -63,7 +63,7 @@ Since 2026-10-05 this plan also owns the rest of the WebUI v1. The WebUI plan `p
 | 3 | [Upstream check engine](./phase-03-upstream-check-engine.md) | 2 | 10h | Done |
 | 4 | [Update merge and apply](./phase-04-update-merge-and-apply.md) | 3 | 14h | Done |
 | 5 | [Source lifecycle and backfill](./phase-05-source-lifecycle-and-backfill.md) | 2, 3 | 10h | Done |
-| 6 | [CLI: upstream and sources](./phase-06-cli-upstream-and-sources.md) | 3, 4, 5 | 9h | In progress |
+| 6 | [CLI: upstream and sources](./phase-06-cli-upstream-and-sources.md) | 3, 4, 5 | 9h | Done |
 | 7 | [MCP tools and curator](./phase-07-mcp-tools-and-curator.md) | 3, 4, 5 | 6h | Pending |
 | 8 | [Web API](./phase-08-web-api.md) | 3, 4, 5 | 6h | Pending |
 | 9 | [Web UI](./phase-09-web-ui.md) | 8 | 8h | Pending |

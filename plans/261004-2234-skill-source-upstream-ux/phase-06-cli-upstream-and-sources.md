@@ -1,6 +1,6 @@
 ---
 title: "Phase 6: CLI: upstream and sources"
-status: in-progress
+status: done
 ---
 
 # Phase 6: CLI: upstream and sources
