@@ -1,6 +1,6 @@
 ---
 title: "Phase 2: Source attachment on add and import"
-status: todo
+status: in-progress
 ---
 
 # Phase 2: Source attachment on add and import
@@ -72,7 +72,7 @@ Do not modify any other file.
 
 ## Todo
 
-- [ ] Task 2.1 matching helper
+- [x] Task 2.1 matching helper
 - [ ] Task 2.2 `skill add` attachment
 - [ ] Task 2.3 `source import` origin
 - [ ] Task 2.4 CLI output
