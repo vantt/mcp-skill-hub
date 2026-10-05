@@ -51,6 +51,7 @@ type SkillOrigin struct {
 	Path            string   `json:"path,omitempty" yaml:"path,omitempty"`
 	Name            string   `json:"name,omitempty" yaml:"name,omitempty"`
 	FolderDigest    string   `json:"folder_digest,omitempty" yaml:"folder_digest,omitempty"`
+	FilesDigest     string   `json:"files_digest,omitempty" yaml:"files_digest,omitempty"`
 	ContentDigest   string   `json:"content_digest,omitempty" yaml:"content_digest,omitempty"`
 	Transformations []string `json:"transformations,omitempty" yaml:"transformations,omitempty"`
 	AddedAt         string   `json:"added_at,omitempty" yaml:"added_at,omitempty"`
@@ -177,7 +178,7 @@ func (service SkillAddService) PreviewSkillAdd(ctx context.Context, path string,
 	}
 
 	now := service.Clock.Now().UTC()
-	changes, diffAdded, allTransforms, changeProp, err := buildSkillAddChanges(selected, collection, captured.origin, now.Format(time.RFC3339Nano))
+	changes, diffAdded, allTransforms, changeProp, err := buildSkillAddChanges(selected, collection, captured, now.Format(time.RFC3339Nano))
 	if err != nil {
 		return SkillAddProposal{}, err
 	}
@@ -251,6 +252,8 @@ type skillAddCapture struct {
 	reader      ResourceReader
 	resources   []sourcepkg.Resource
 	scopePrefix string
+	scopePath   string
+	revisionAt  func(path string) (sourcepkg.Revision, error)
 }
 
 func resolveSkillAddSource(ctx context.Context, service SkillAddService, root, rawLocator string) (skillAddCapture, *SkillAddProposal, error) {
@@ -422,8 +425,7 @@ func captureRemoteSkillAddSource(ctx context.Context, service SkillAddService, r
 			Kind:         "github",
 			Repository:   resolved.Repository,
 			Ref:          resolved.Ref,
-			Commit:       resolved.Commit,
-			Path:         resolved.Path,
+			Commit:       rev.Value,
 			Name:         sanitizeSkillID(name),
 			FolderDigest: rev.ContentDigest,
 		},
@@ -434,6 +436,8 @@ func captureRemoteSkillAddSource(ctx context.Context, service SkillAddService, r
 		},
 		resources:   resources,
 		scopePrefix: "",
+		scopePath:   resolved.Path,
+		revisionAt:  makeRevisionAtCallback(ctx, gitAdapter, src, rev.Value),
 	}, nil, nil
 }
 
@@ -513,7 +517,7 @@ func selectSkillAddCandidates(input SkillAddInput, discovered []DiscoveredSkillI
 	return selected, nil
 }
 
-func buildSkillAddChanges(selected []DiscoveredSkillItem, collection string, capturedOrigin SkillOrigin, nowISO string) ([]mutation.Change, []string, []string, *SkillAddProposal, error) {
+func buildSkillAddChanges(selected []DiscoveredSkillItem, collection string, captured skillAddCapture, nowISO string) ([]mutation.Change, []string, []string, *SkillAddProposal, error) {
 	var changes []mutation.Change
 	diffAdded := []string{}
 	var allTransforms []string
@@ -531,7 +535,7 @@ func buildSkillAddChanges(selected []DiscoveredSkillItem, collection string, cap
 			return nil, nil, nil, &prop, nil
 		}
 
-		normMD, transforms, normErr := ensureImportedSkillFrontmatter(item.SkillMDBytes, targetID, item.Description)
+		files, transforms, normErr := importedSkillFiles(item, targetID)
 		if normErr != nil {
 			prop := SkillAddProposal{
 				Result: ErrorResult(NewInvalidRequestError(normErr.Error(), "Ensure SKILL.md contains valid frontmatter.")),
@@ -539,23 +543,32 @@ func buildSkillAddChanges(selected []DiscoveredSkillItem, collection string, cap
 			return nil, nil, nil, &prop, nil
 		}
 		allTransforms = append(allTransforms, transforms...)
+		normMD := files["SKILL.md"]
 		skillMDTarget := fmt.Sprintf("skills/%s/%s/SKILL.md", collection, targetID)
 		changes = append(changes, mutation.Change{Path: skillMDTarget, Contents: normMD})
 		diffAdded = append(diffAdded, skillMDTarget)
 
-		contentDigest := "sha256:" + hex.EncodeToString(func() []byte { s := sha256.Sum256(normMD); return s[:] }())
-
-		skillOrigin := capturedOrigin
-		skillOrigin.ContentDigest = contentDigest
-		if skillOrigin.Name == "" {
-			skillOrigin.Name = targetID
+		var skillOrigin SkillOrigin
+		if captured.origin.Kind == "local" {
+			contentDigest := "sha256:" + hex.EncodeToString(func() []byte { s := sha256.Sum256(normMD); return s[:] }())
+			skillOrigin = captured.origin
+			skillOrigin.ContentDigest = contentDigest
+			if skillOrigin.Name == "" {
+				skillOrigin.Name = targetID
+			}
+			if item.SkillDir != "" && isSafeRelativeSkillPath(item.SkillDir) {
+				skillOrigin.Path = item.SkillDir
+			}
+			skillOrigin.Transformations = transforms
+			skillOrigin.AddedAt = nowISO
+		} else {
+			capturedOrigin := captured.origin
+			capturedOrigin.AddedAt = nowISO
+			skillOrigin = buildGitOrigin(capturedOrigin, captured.scopePath, item.SkillDir, files, transforms, captured.revisionAt)
+			if skillOrigin.Name == "" {
+				skillOrigin.Name = targetID
+			}
 		}
-		if item.SkillDir != "" && isSafeRelativeSkillPath(item.SkillDir) {
-			skillOrigin.Path = item.SkillDir
-		}
-		skillOrigin.Transformations = transforms
-		skillOrigin.AddedAt = nowISO
-
 		metaDoc := map[string]any{
 			"schema_version": 1,
 			"id":             targetID,
@@ -960,6 +973,9 @@ func skillOriginToMap(origin SkillOrigin) map[string]any {
 	}
 	if origin.FolderDigest != "" {
 		m["folder_digest"] = origin.FolderDigest
+	}
+	if origin.FilesDigest != "" {
+		m["files_digest"] = origin.FilesDigest
 	}
 	if origin.ContentDigest != "" {
 		m["content_digest"] = origin.ContentDigest

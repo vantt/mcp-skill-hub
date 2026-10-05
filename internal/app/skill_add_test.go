@@ -14,6 +14,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/vantt/mcp-skill-hub/internal/canonical"
 	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
+	"gopkg.in/yaml.v3"
 )
 
 func TestSkillAddLocalDirectHappyPathBUG11(t *testing.T) {
@@ -632,22 +633,37 @@ func TestSkillAddRemoteGitRealAdapter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	skillDir := filepath.Join(repoDir, "my-skill")
-	if err := os.MkdirAll(skillDir, 0o700); err != nil {
+
+	skillADir := filepath.Join(repoDir, "skills", "a")
+	if err := os.MkdirAll(skillADir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\nname: my-skill\ndescription: Test git skill\n---\nBody\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(skillADir, "SKILL.md"), []byte("---\nname: a\ndescription: Test git skill a\n---\nBody A\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+
+	skillBDir := filepath.Join(repoDir, "skills", "b")
+	skillBScripts := filepath.Join(skillBDir, "scripts")
+	if err := os.MkdirAll(skillBScripts, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillBDir, "SKILL.md"), []byte("---\nname: b\ndescription: Test git skill b\n---\nBody B\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillBScripts, "run.sh"), []byte("#!/bin/sh\necho run\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
 	if _, err := wt.Add("."); err != nil {
 		t.Fatal(err)
 	}
-	_, err = wt.Commit("initial", &git.CommitOptions{
+	commitObj, err := wt.Commit("initial", &git.CommitOptions{
 		Author: &object.Signature{Name: "Tester", Email: "tester@example.com", When: time.Now()},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
+	headSHA := commitObj.String()
 
 	adapter := sourcepkg.GitRepositoryAdapter{
 		CacheRoot:         filepath.Join(root, "runtime", "sources", "git"),
@@ -661,12 +677,13 @@ func TestSkillAddRemoteGitRealAdapter(t *testing.T) {
 	fileURL := "file://" + filepath.ToSlash(repoDir)
 	preview, err := service.PreviewSkillAdd(context.Background(), root, SkillAddInput{
 		Locator: fileURL,
+		All:     true,
 	})
 	if err != nil || preview.Error != nil {
 		t.Fatalf("preview failed: %v, %#v", err, preview.Error)
 	}
-	if preview.SkillID != "my-skill" {
-		t.Fatalf("expected skill ID my-skill, got %s", preview.SkillID)
+	if len(preview.SkillIDs) != 2 {
+		t.Fatalf("expected 2 skills, got %v", preview.SkillIDs)
 	}
 
 	pins := preview.Confirmation.Confirmation.Pins
@@ -675,8 +692,67 @@ func TestSkillAddRemoteGitRealAdapter(t *testing.T) {
 		t.Fatalf("confirm failed: %v, %#v", err, result.Error)
 	}
 
+	type metaRecord struct {
+		Provenance struct {
+			Origin SkillOrigin `yaml:"origin"`
+		} `yaml:"provenance"`
+	}
+	loadMeta := func(id string) SkillOrigin {
+		t.Helper()
+		metaPath := filepath.Join(root, "skills", "default", id, "skill.meta.yaml")
+		data, err := os.ReadFile(metaPath)
+		if err != nil {
+			t.Fatalf("read %s: %v", metaPath, err)
+		}
+		var m metaRecord
+		if err := yaml.Unmarshal(data, &m); err != nil {
+			t.Fatalf("unmarshal %s: %v", metaPath, err)
+		}
+		return m.Provenance.Origin
+	}
+
+	originA := loadMeta("a")
+	originB := loadMeta("b")
+
+	if originA.Path != "skills/a" {
+		t.Fatalf("expected originA.Path 'skills/a', got %q", originA.Path)
+	}
+	if originB.Path != "skills/b" {
+		t.Fatalf("expected originB.Path 'skills/b', got %q", originB.Path)
+	}
+
+	if originA.Commit != headSHA {
+		t.Fatalf("expected originA.Commit %q, got %q", headSHA, originA.Commit)
+	}
+	if originB.Commit != headSHA {
+		t.Fatalf("expected originB.Commit %q, got %q", headSHA, originB.Commit)
+	}
+
+	if originA.FolderDigest == "" || originB.FolderDigest == "" {
+		t.Fatalf("expected non-empty folder digests: A=%q B=%q", originA.FolderDigest, originB.FolderDigest)
+	}
+	if originA.FolderDigest == originB.FolderDigest {
+		t.Fatalf("expected folder digests to differ between a and b, both are %q", originA.FolderDigest)
+	}
+
 	reviewService := SkillService{}
-	reviewResult, err := reviewService.ReviewSkill(context.Background(), root, "my-skill")
+	trustA, err := reviewService.ContentTrustFor(context.Background(), root, "a")
+	if err != nil {
+		t.Fatalf("ContentTrustFor a: %v", err)
+	}
+	if originA.FilesDigest != trustA.ContentDigest {
+		t.Fatalf("expected originA.FilesDigest == trustA.ContentDigest (%s), got %s", trustA.ContentDigest, originA.FilesDigest)
+	}
+
+	trustB, err := reviewService.ContentTrustFor(context.Background(), root, "b")
+	if err != nil {
+		t.Fatalf("ContentTrustFor b: %v", err)
+	}
+	if originB.FilesDigest != trustB.ContentDigest {
+		t.Fatalf("expected originB.FilesDigest == trustB.ContentDigest (%s), got %s", trustB.ContentDigest, originB.FilesDigest)
+	}
+
+	reviewResult, err := reviewService.ReviewSkill(context.Background(), root, "a")
 	if err != nil || reviewResult.Error != nil {
 		t.Fatalf("review failed: %v, %#v", err, reviewResult.Error)
 	}
