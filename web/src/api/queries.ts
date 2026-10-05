@@ -13,6 +13,7 @@ import type {
   SkillMutationResult,
   SkillProposal,
   SkillReviewResult,
+  SkillRuntimeStatus,
 } from './types';
 
 export function useSession() {
@@ -58,6 +59,15 @@ export function useSkillUsage(id: string, since: FunnelSince = '30d') {
     queryKey: ['skill-usage', id, since],
     queryFn: () =>
       apiFetch<FunnelReport>(`/skills/${encodeURIComponent(id)}/usage?since=${encodeURIComponent(since)}`),
+    enabled: Boolean(id),
+  });
+}
+
+export function useSkillRuntime(id: string) {
+  return useQuery({
+    queryKey: ['skill-runtime', id],
+    queryFn: () =>
+      apiFetch<SkillRuntimeStatus>(`/skills/${encodeURIComponent(id)}/runtime`),
     enabled: Boolean(id),
   });
 }

@@ -1,0 +1,48 @@
+{
+  "schema_version": "1",
+  "status": "ok",
+  "summary": "Runtime status for skill approved-skill.",
+  "items": [],
+  "suggested_actions": [],
+  "warnings": [],
+  "error": null,
+  "skill_id": "approved-skill",
+  "runtime": {
+    "requires": {
+      "bins": null,
+      "env": null,
+      "platforms": [
+        "linux",
+        "darwin",
+        "windows",
+        "freebsd"
+      ]
+    },
+    "setup": {
+      "command": "",
+      "check": ""
+    }
+  },
+  "served": true,
+  "setup": {
+    "state": "ready",
+    "basis": "terminal",
+    "checked_at": "<TIME>"
+  },
+  "doctor": {
+    "state": "ready",
+    "basis": "terminal",
+    "checked_at": "<TIME>",
+    "checks": [
+      {
+        "kind": "platform",
+        "name": "linux",
+        "status": "pass"
+      }
+    ]
+  },
+  "doctor_command": "skillhub skill doctor approved-skill",
+  "env_keys": [],
+  "env_set_command": "skillhub skill env set approved-skill <KEY>"
+}
+

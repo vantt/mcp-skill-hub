@@ -113,6 +113,9 @@ export interface SkillReviewResult {
   };
   diverged: boolean;
   next_action: string;
+  provenance?: SkillProvenance;
+  content_trust?: ContentTrust;
+  runtime_hints?: RuntimeHints;
 }
 
 export interface ConfirmationPins {
@@ -223,4 +226,96 @@ export interface FunnelReport {
   blocked_by_review?: string[];
   negative_after_load?: string[];
   setup_failures?: string[];
+}
+
+export interface SkillProvenance {
+  created_by?: string;
+  source_locator?: string;
+  source_revision?: string;
+  upstream_path?: string;
+  origin?: {
+    kind: string;
+    repository: string;
+    commit: string;
+    path?: string;
+  };
+}
+
+export interface ChangesSinceApproval {
+  found: boolean;
+  commit?: string;
+  diff_command?: string;
+  added?: string[];
+  removed?: string[];
+  modified?: string[];
+  runtime_changed?: boolean;
+  scripts_changed?: boolean;
+  dependencies_changed?: boolean;
+  history_truncated?: boolean;
+}
+
+export interface ContentTrust {
+  third_party: boolean;
+  approved: boolean;
+  content_digest: string;
+  reason_codes?: string[];
+  approve_command?: string;
+  changes_since_approval?: ChangesSinceApproval;
+}
+
+export interface RuntimeHints {
+  interpreters: string[];
+  dependency_manifests: string[];
+  missing_lockfiles: string[];
+  absolute_install_paths: string[];
+  missing_runtime_block: boolean;
+  install_prose_detected: boolean;
+  install_cues: string[];
+}
+
+export interface RuntimeSpec {
+  requires?: {
+    bins?: { name: string; version?: string }[] | null;
+    env?: string[] | null;
+    platforms?: string[] | null;
+  };
+  setup?: {
+    command?: string;
+    check?: string;
+  };
+}
+
+export interface SetupStatus {
+  state: 'ready' | 'setup_required' | 'review_required' | 'unsupported_platform' | 'unknown' | string;
+  reason_codes?: string[];
+  basis?: string;
+  checked_at?: string;
+}
+
+export interface DoctorCheck {
+  kind: string;
+  name: string;
+  status: 'pass' | 'fail' | 'warn' | string;
+  detail?: string;
+}
+
+export interface SkillRuntimeDoctor {
+  state: string;
+  basis: string;
+  checked_at: string;
+  checks: DoctorCheck[];
+}
+
+export interface SkillRuntimeStatus {
+  schema_version: string;
+  status: string;
+  summary: string;
+  skill_id: string;
+  runtime: RuntimeSpec | null;
+  served: boolean;
+  setup?: SetupStatus;
+  doctor?: SkillRuntimeDoctor;
+  doctor_command: string;
+  env_keys: string[];
+  env_set_command: string;
 }

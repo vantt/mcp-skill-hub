@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/vantt/mcp-skill-hub/internal/app"
 	"github.com/vantt/mcp-skill-hub/internal/skill"
 	"github.com/vantt/mcp-skill-hub/internal/telemetry"
+	"gopkg.in/yaml.v3"
 )
 
 func newWebWorkspace(t *testing.T) string {
@@ -219,4 +221,163 @@ func get(t *testing.T, srv *Server, path string) *httptest.ResponseRecorder {
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 	return rec
+}
+
+func newRuntimeWebWorkspace(t *testing.T) string {
+	t.Helper()
+	root := filepath.Join(t.TempDir(), "runtime-workspace")
+	if _, err := (app.WorkspaceService{}).Init(root, true); err != nil {
+		t.Fatal(err)
+	}
+
+	service := app.SkillService{}
+	ctx := context.Background()
+
+	// 1. vendor-skill (third-party, unapproved)
+	vContent := []byte("---\nname: vendor-skill\ndescription: Third-party vendor skill.\n---\n\n# Vendor Skill\n\nRun pip install some-pkg and check ~/.claude/skills/vendor-skill/scripts/run.py\n")
+	vCreated, err := service.PreviewCreate(ctx, root, skill.CreateInput{
+		ID:          "vendor-skill",
+		Collection:  "core",
+		Name:        "Vendor Skill",
+		Description: "Third-party vendor skill.",
+		Content:     vContent,
+		Routing: skill.RoutingInput{
+			Operations: []string{"operate"},
+			Triggers:   []string{"operate vendor skill"},
+			NotFor:     []string{"unrelated"},
+			MinScope:   "multi_step",
+		},
+	}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result, err := service.ConfirmSkillMutation(ctx, root, vCreated, vCreated.Confirmation.Confirmation.Pins); err != nil || result.Error != nil {
+		t.Fatalf("confirm create vendor = %#v, %v", result, err)
+	}
+	vActivated, err := service.PreviewActivate(ctx, root, "vendor-skill", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result, err := service.ConfirmSkillMutation(ctx, root, vActivated, vActivated.Confirmation.Confirmation.Pins); err != nil || result.Error != nil {
+		t.Fatalf("confirm activate vendor = %#v, %v", result, err)
+	}
+
+	vendorDir := filepath.Join(root, "skills", "core", "vendor-skill")
+	_ = os.MkdirAll(filepath.Join(vendorDir, "scripts"), 0o755)
+	_ = os.WriteFile(filepath.Join(vendorDir, "scripts", "run.py"), []byte("#!/usr/bin/env python3\nprint('vendor')\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(vendorDir, "package.json"), []byte(`{"name": "vendor-skill"}`), 0o644)
+
+	vMetaPath := filepath.Join(vendorDir, "skill.meta.yaml")
+	vMetaData, err := os.ReadFile(vMetaPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var vMetaDoc map[string]any
+	if err := yaml.Unmarshal(vMetaData, &vMetaDoc); err != nil {
+		t.Fatal(err)
+	}
+	vMetaDoc["provenance"] = map[string]any{
+		"created_by": "skillhub",
+		"origin": map[string]any{
+			"kind":       "github",
+			"repository": "https://github.com/example/vendor-skills",
+			"commit":     strings.Repeat("a", 40),
+		},
+	}
+	vMetaDoc["runtime"] = map[string]any{
+		"requires": map[string]any{
+			"bins": []any{"python3"},
+			"env":  []any{"VENDOR_TOKEN"},
+		},
+		"setup": map[string]any{
+			"check": "python3 scripts/run.py",
+		},
+	}
+	encodedVMeta, _ := yaml.Marshal(vMetaDoc)
+	_ = os.WriteFile(vMetaPath, encodedVMeta, 0o644)
+
+	// Store VENDOR_TOKEN with sentinel value
+	if _, err := (app.SkillEnvService{}).Set(ctx, root, "vendor-skill", "VENDOR_TOKEN", "SENTINEL-VENDOR-ENV-VALUE"); err != nil {
+		t.Fatalf("env set: %v", err)
+	}
+
+	// 2. approved-skill
+	aContent := []byte("---\nname: approved-skill\ndescription: Third-party approved skill.\n---\n\n# Approved Skill\n\nApproved instructions.\n")
+	aCreated, err := service.PreviewCreate(ctx, root, skill.CreateInput{
+		ID:          "approved-skill",
+		Collection:  "core",
+		Name:        "Approved Skill",
+		Description: "Third-party approved skill.",
+		Content:     aContent,
+		Routing: skill.RoutingInput{
+			Operations: []string{"operate"},
+			Triggers:   []string{"operate approved skill"},
+			NotFor:     []string{"unrelated"},
+			MinScope:   "multi_step",
+		},
+	}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result, err := service.ConfirmSkillMutation(ctx, root, aCreated, aCreated.Confirmation.Confirmation.Pins); err != nil || result.Error != nil {
+		t.Fatalf("confirm create approved = %#v, %v", result, err)
+	}
+	aActivated, err := service.PreviewActivate(ctx, root, "approved-skill", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result, err := service.ConfirmSkillMutation(ctx, root, aActivated, aActivated.Confirmation.Confirmation.Pins); err != nil || result.Error != nil {
+		t.Fatalf("confirm activate approved = %#v, %v", result, err)
+	}
+
+	approvedDir := filepath.Join(root, "skills", "core", "approved-skill")
+	aMetaPath := filepath.Join(approvedDir, "skill.meta.yaml")
+	aMetaData, err := os.ReadFile(aMetaPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var aMetaDoc map[string]any
+	if err := yaml.Unmarshal(aMetaData, &aMetaDoc); err != nil {
+		t.Fatal(err)
+	}
+	aMetaDoc["provenance"] = map[string]any{
+		"created_by": "skillhub",
+		"origin": map[string]any{
+			"kind":       "github",
+			"repository": "https://github.com/example/approved-skills",
+			"commit":     strings.Repeat("b", 40),
+		},
+	}
+	aMetaDoc["runtime"] = map[string]any{
+		"requires": map[string]any{
+			"platforms": []any{"linux", "darwin", "windows", "freebsd"},
+		},
+	}
+	encodedAMeta, _ := yaml.Marshal(aMetaDoc)
+	_ = os.WriteFile(aMetaPath, encodedAMeta, 0o644)
+
+	// Calculate trust digest and approve
+	trust, err := service.ContentTrustFor(ctx, root, "approved-skill")
+	if err != nil {
+		t.Fatal(err)
+	}
+	quality, _ := aMetaDoc["quality"].(map[string]any)
+	if quality == nil {
+		quality = map[string]any{}
+	}
+	quality["reviewed"] = true
+	quality["content_reviewed_digest"] = trust.ContentDigest
+	aMetaDoc["quality"] = quality
+	encodedAMeta, _ = yaml.Marshal(aMetaDoc)
+	_ = os.WriteFile(aMetaPath, encodedAMeta, 0o644)
+
+	// Rebuild catalog and run doctor once on approved-skill
+	if _, err := (app.CatalogService{}).BuildCatalogGeneration(ctx, root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (app.SkillDoctorService{}).Run(ctx, root, "approved-skill"); err != nil {
+		t.Fatalf("doctor run approved-skill: %v", err)
+	}
+
+	return root
 }
