@@ -180,7 +180,7 @@ export function SourcesScreen() {
 
       {isEmpty ? (
         <div className="fg-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-6) var(--space-4)' }}>
-          <span style={{ color: 'var(--color-text-subtle)', fontSize: '14px', textAlign: 'center' }}>
+          <span style={{ color: 'var(--color-text-muted)', fontSize: '14px', textAlign: 'center' }}>
             No sources yet. Link a repository whose ideas should improve your skills.
           </span>
           <Link to="/skills/add" className="fg-btn fg-btn--primary" style={{ textDecoration: 'none' }}>
@@ -220,7 +220,7 @@ export function SourcesScreen() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
                         <span style={{ fontWeight: 600, fontSize: '14px' }}>{src.id}</span>
                         {rec?.locator?.ref && (
-                          <span style={{ fontSize: '12px', color: 'var(--color-text-subtle)', fontFamily: 'var(--font-mono)' }}>
+                          <span style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>
                             @{rec.locator.ref}
                           </span>
                         )}
@@ -231,9 +231,9 @@ export function SourcesScreen() {
                       </div>
 
                       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap', fontSize: '13px' }}>
-                        <span style={{ color: 'var(--color-text-subtle)' }}>Skills:</span>
+                        <span style={{ color: 'var(--color-text-muted)' }}>Skills:</span>
                         {isOrphan ? (
-                          <span style={{ color: 'var(--color-text-subtle)', fontStyle: 'italic' }}>no skills</span>
+                          <span style={{ color: 'var(--color-text-muted)', fontStyle: 'italic' }}>no skills</span>
                         ) : (
                           src.referencing_skills.map((skillId) => (
                             <Link
@@ -247,7 +247,7 @@ export function SourcesScreen() {
                         )}
                       </div>
 
-                      <div style={{ display: 'flex', gap: 'var(--space-3)', fontSize: '12px', color: 'var(--color-text-subtle)' }}>
+                      <div style={{ display: 'flex', gap: 'var(--space-3)', fontSize: '12px', color: 'var(--color-text-muted)' }}>
                         <span>Last checked: {lastChecked}</span>
                         <span>Watch: {cadence}</span>
                       </div>
@@ -357,7 +357,7 @@ export function SourcesScreen() {
                           alignItems: 'center',
                           gap: 'var(--space-2)',
                           fontSize: '13px',
-                          color: isImported ? 'var(--color-text-subtle)' : 'var(--color-text)',
+                          color: isImported ? 'var(--color-text-muted)' : 'var(--color-text)',
                         }}
                       >
                         <input

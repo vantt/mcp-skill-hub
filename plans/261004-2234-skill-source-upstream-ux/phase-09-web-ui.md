@@ -71,7 +71,7 @@ Do not modify any other file.
 - [x] Task 9.2 Sources tab + provenance
 - [x] Task 9.3 Skills list + Home
 - [x] Task 9.4 Sources screen
-- [ ] Task 9.5 e2e smoke
+- [x] Task 9.5 e2e smoke
 - [ ] Task 9.6 gates
 
 ## Success criteria

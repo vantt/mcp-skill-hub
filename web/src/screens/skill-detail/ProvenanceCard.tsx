@@ -32,7 +32,7 @@ export function ProvenanceCard({ provenance, onViewSources }: ProvenanceCardProp
       </div>
 
       {!hasProvenance ? (
-        <div style={{ color: 'var(--color-text-subtle)', fontSize: '13px' }}>
+        <div style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>
           <span>Created in this workspace</span>
         </div>
       ) : (

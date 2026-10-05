@@ -110,7 +110,7 @@ export function LearningSection({ skillId, learning }: LearningSectionProps) {
       )}
 
       {learning.length === 0 ? (
-        <div style={{ color: 'var(--color-text-subtle)', fontSize: '13px', padding: 'var(--space-2) 0' }}>
+        <div style={{ color: 'var(--color-text-muted)', fontSize: '13px', padding: 'var(--space-2) 0' }}>
           <span>No learning references yet. Link a repository or document whose ideas should improve this skill.</span>
         </div>
       ) : (
@@ -139,10 +139,10 @@ export function LearningSection({ skillId, learning }: LearningSectionProps) {
                       <StatusBadge variant="chip" tone="danger" label="Unavailable" />
                     )}
                   </div>
-                  <span style={{ fontSize: '12px', fontFamily: 'var(--font-mono)', color: 'var(--color-text-subtle)' }}>
+                  <span style={{ fontSize: '12px', fontFamily: 'var(--font-mono)', color: 'var(--color-text-muted)' }}>
                     {ref.locator}
                   </span>
-                  <div style={{ display: 'flex', gap: 'var(--space-3)', fontSize: '12px', color: 'var(--color-text-subtle)', marginTop: '2px' }}>
+                  <div style={{ display: 'flex', gap: 'var(--space-3)', fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
                     <span>Last checked: {lastChecked}</span>
                     {ref.pending_insights > 0 && (
                       <Link
