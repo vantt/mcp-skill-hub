@@ -73,7 +73,7 @@ Do not modify any other file.
 
 ## Todo
 
-- [ ] Task 6.1 outdated + upstream
+- [x] Task 6.1 outdated + upstream
 - [ ] Task 6.2 update + confirm
 - [ ] Task 6.3 source commands
 - [ ] Task 6.4 help + width

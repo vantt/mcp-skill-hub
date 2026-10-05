@@ -18,14 +18,15 @@ import (
 type skillFlags struct {
 	workspace, id, collection, name, description, contentFile, minScope, rationale string
 	proposalID, proposalDigest, baseVersion, idempotencyKey, state                 string
-	locator, ref, subPath, approveContent, runtimeFile                             string
+	locator, ref, subPath, approveContent, runtimeFile, target, writeConflicts     string
 	operations, triggers, notFor, examples, counterExamples, skills, positionals   []string
-	jsonOutput, yes, fullDiff, editor, verbose, all                                bool
+	accepts, manuals                                                               []string
+	jsonOutput, yes, fullDiff, editor, verbose, all, check, noCheck, exitCode      bool
 }
 
 func runSkill(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), "skill requires a subcommand", "Run `skillhub skill list|show|create|edit|review|doctor|env|add|confirm|activate|deprecate|archive`.")
+		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), "skill requires a subcommand", "Run `skillhub skill list|show|create|edit|review|doctor|env|add|confirm|activate|deprecate|archive|outdated|upstream|update`.")
 	}
 	subcommand := args[0]
 	flags, err := parseSkillFlags(subcommand, args[1:])
@@ -45,6 +46,15 @@ func runSkill(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 	service := app.SkillService{}
 	if subcommand == "add" {
 		return runSkillAdd(ctx, service, flags, stdout, stderr)
+	}
+	if subcommand == "outdated" {
+		return runSkillOutdated(ctx, flags, stdout, stderr)
+	}
+	if subcommand == "upstream" {
+		return runSkillUpstream(ctx, flags, stdout, stderr)
+	}
+	if subcommand == "update" {
+		return runSkillUpdate(ctx, flags, stdout, stderr)
 	}
 	if subcommand == "review" {
 		result, err := service.ReviewSkill(ctx, flags.workspace, flags.id)
@@ -134,6 +144,13 @@ func runSkill(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 		case app.SkillAddResult:
 			return writeResult(stdout, stderr, flags.jsonOutput, r, func(p *termui.Printer) {
 				writeSkillAddResult(p, flags.verbose, r)
+			})
+		case app.UpstreamUpdateResult:
+			return writeResult(stdout, stderr, flags.jsonOutput, r, func(p *termui.Printer) {
+				p.Line(r.Summary)
+				if r.TrustImpact.ReviewRequiredAfterApply {
+					p.Line(fmt.Sprintf("Next: skillhub skill review %s", r.SkillID))
+				}
 			})
 		default:
 			if flags.jsonOutput {
@@ -300,7 +317,7 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 			return args[index], nil
 		}
 		switch value {
-		case "--workspace", "--id", "--collection", "--name", "--description", "--content-file", "--min-scope", "--rationale", "--operation", "--trigger", "--not-for", "--example", "--counter-example", "--approve-content", "--runtime-file", "--proposal", "--proposal-digest", "--base-version", "--idempotency-key", "--state", "--ref", "--path", "--skill":
+		case "--workspace", "--id", "--collection", "--name", "--description", "--content-file", "--min-scope", "--rationale", "--operation", "--trigger", "--not-for", "--example", "--counter-example", "--approve-content", "--runtime-file", "--proposal", "--proposal-digest", "--base-version", "--idempotency-key", "--state", "--ref", "--path", "--skill", "--target", "--write-conflicts", "--accept", "--manual":
 			item, err := next()
 			if err != nil {
 				return flags, err
@@ -352,6 +369,14 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 				flags.subPath = item
 			case "--skill":
 				flags.skills = append(flags.skills, item)
+			case "--target":
+				flags.target = item
+			case "--write-conflicts":
+				flags.writeConflicts = item
+			case "--accept":
+				flags.accepts = append(flags.accepts, item)
+			case "--manual":
+				flags.manuals = append(flags.manuals, item)
 			}
 		case "--all":
 			flags.all = true
@@ -365,6 +390,12 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 			flags.editor = true
 		case "--verbose":
 			flags.verbose = true
+		case "--check":
+			flags.check = true
+		case "--no-check":
+			flags.noCheck = true
+		case "--exit-code":
+			flags.exitCode = true
 		default:
 			if strings.HasPrefix(value, "-") {
 				return flags, fmt.Errorf("unknown argument %q", value)
@@ -380,6 +411,52 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 		return flags, errors.New("--runtime-file is available only for skill edit")
 	}
 	switch subcommand {
+	case "outdated":
+		if len(positionals) != 0 {
+			return flags, errors.New("outdated accepts no positional arguments")
+		}
+	case "upstream":
+		if len(positionals) == 1 {
+			if flags.id != "" && flags.id != positionals[0] {
+				return flags, fmt.Errorf("positional skill ID %q conflicts with --id %q", positionals[0], flags.id)
+			}
+			flags.id = positionals[0]
+		} else if len(positionals) == 0 && flags.id != "" {
+			// flags.id provided via --id
+		} else {
+			return flags, errors.New("upstream requires exactly one skill ID")
+		}
+	case "update":
+		if len(positionals) == 1 {
+			if flags.id != "" && flags.id != positionals[0] {
+				return flags, fmt.Errorf("positional skill ID %q conflicts with --id %q", positionals[0], flags.id)
+			}
+			flags.id = positionals[0]
+		} else if len(positionals) == 0 && flags.id != "" {
+			// flags.id provided via --id
+		} else {
+			return flags, errors.New("update requires a skill ID (e.g. `skillhub skill update <id>`). To update the skillhub binary itself, run `skillhub update`.")
+		}
+		for _, acc := range flags.accepts {
+			parts := strings.SplitN(acc, "=", 2)
+			if len(parts) != 2 || (parts[1] != "upstream" && parts[1] != "local" && parts[1] != "merged") {
+				val := acc
+				if len(parts) == 2 {
+					val = parts[1]
+				}
+				return flags, fmt.Errorf("invalid --accept value %q: allowed values are upstream, local, or merged", val)
+			}
+		}
+		for _, man := range flags.manuals {
+			parts := strings.SplitN(man, "=", 2)
+			if len(parts) != 2 {
+				return flags, fmt.Errorf("invalid --manual flag %q: must be <path>=<file>", man)
+			}
+			filePath := strings.TrimSpace(parts[1])
+			if _, statErr := os.Stat(filePath); statErr != nil {
+				return flags, fmt.Errorf("manual file %q does not exist", filePath)
+			}
+		}
 	case "add":
 		if len(positionals) != 1 {
 			return flags, errors.New("add requires exactly one locator")
