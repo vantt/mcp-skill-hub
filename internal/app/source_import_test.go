@@ -12,6 +12,7 @@ import (
 	"github.com/vantt/mcp-skill-hub/internal/catalog"
 	"github.com/vantt/mcp-skill-hub/internal/skill"
 	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
+	"gopkg.in/yaml.v3"
 )
 
 type fakeImportAdapter struct {
@@ -165,10 +166,10 @@ func TestSourceImportPreviewAndConfirmWithConflictSkipping(t *testing.T) {
 			t.Fatalf("imported skill %s status = %q, want draft", id, readSkill.Manifest.Status)
 		}
 
-		// Verify provenance link exists
+		// Verify no provenance link exists on disk
 		linkFile := filepath.Join(root, "sources", "skills", "LINK-"+id+"--gh-source.yaml")
-		if _, err := os.Stat(linkFile); err != nil {
-			t.Fatalf("missing provenance link %s: %v", linkFile, err)
+		if _, err := os.Stat(linkFile); !os.IsNotExist(err) {
+			t.Fatalf("expected no provenance link %s, but file exists", linkFile)
 		}
 
 		// Verify skill.meta.yaml provenance
@@ -177,9 +178,31 @@ func TestSourceImportPreviewAndConfirmWithConflictSkipping(t *testing.T) {
 		if err != nil {
 			t.Fatalf("read meta failed: %v", err)
 		}
-		metaStr := string(metaData)
-		if !strings.Contains(metaStr, "source_id: gh-source") || !strings.Contains(metaStr, "revision: "+sourceRec.CurrentRevision.Value) || !strings.Contains(metaStr, "created_by: source_import") {
-			t.Fatalf("metadata missing provenance fields: %s", metaStr)
+		var meta struct {
+			Provenance struct {
+				CreatedBy string `yaml:"created_by"`
+				SourceID  string `yaml:"source_id"`
+				Origin    struct {
+					Commit string `yaml:"commit"`
+					Path   string `yaml:"path"`
+				} `yaml:"origin"`
+			} `yaml:"provenance"`
+		}
+		if err := yaml.Unmarshal(metaData, &meta); err != nil {
+			t.Fatalf("unmarshal meta failed: %v", err)
+		}
+		if meta.Provenance.CreatedBy != "source_import" {
+			t.Fatalf("expected created_by source_import, got %q", meta.Provenance.CreatedBy)
+		}
+		if meta.Provenance.SourceID != "gh-source" {
+			t.Fatalf("expected source_id gh-source, got %q", meta.Provenance.SourceID)
+		}
+		if meta.Provenance.Origin.Commit != sourceRec.CurrentRevision.Value {
+			t.Fatalf("expected origin.commit %q, got %q", sourceRec.CurrentRevision.Value, meta.Provenance.Origin.Commit)
+		}
+		expectedPath := "skills/" + id
+		if meta.Provenance.Origin.Path != expectedPath {
+			t.Fatalf("expected origin.path %q, got %q", expectedPath, meta.Provenance.Origin.Path)
 		}
 	}
 
@@ -397,7 +420,6 @@ func TestSourceImportFolderScopedPreservesCompanionsBUG04(t *testing.T) {
 	expectedAdded := []string{
 		"skills/default/pdf/SKILL.md",
 		"skills/default/pdf/skill.meta.yaml",
-		"sources/skills/LINK-pdf--ap.yaml",
 		"skills/default/pdf/LICENSE.txt",
 		"skills/default/pdf/forms.md",
 		"skills/default/pdf/reference.md",
@@ -408,6 +430,9 @@ func TestSourceImportFolderScopedPreservesCompanionsBUG04(t *testing.T) {
 
 	addedMap := make(map[string]bool)
 	for _, a := range preview.Diff.Added {
+		if strings.HasPrefix(a, "sources/skills/LINK-") {
+			t.Errorf("unexpected link file in preview diff: %s", a)
+		}
 		addedMap[a] = true
 	}
 	for _, exp := range expectedAdded {
@@ -427,24 +452,46 @@ func TestSourceImportFolderScopedPreservesCompanionsBUG04(t *testing.T) {
 		t.Fatalf("unexpected import result: %#v", result)
 	}
 
+	// Verify no link file on disk
+	if _, err := os.Stat(filepath.Join(root, "sources", "skills", "LINK-pdf--ap.yaml")); !os.IsNotExist(err) {
+		t.Fatalf("expected no link file on disk, but found it: %v", err)
+	}
+
 	// Verify files on disk
-	for _, rel := range []string{
-		"skills/default/pdf/SKILL.md",
-		"skills/default/pdf/skill.meta.yaml",
-		"sources/skills/LINK-pdf--ap.yaml",
-		"skills/default/pdf/LICENSE.txt",
-		"skills/default/pdf/forms.md",
-		"skills/default/pdf/reference.md",
-		"skills/default/pdf/scripts/extract.py",
-		"skills/default/pdf/empty.txt",
-		"skills/default/pdf/assets/icon.png",
-	} {
+	for _, rel := range expectedAdded {
 		filePath := filepath.Join(root, filepath.FromSlash(rel))
 		if _, statErr := os.Stat(filePath); statErr != nil {
 			t.Errorf("expected imported file %s does not exist: %v", rel, statErr)
 		}
 	}
 
+	// Verify metadata provenance
+	pdfMetaData, err := os.ReadFile(filepath.Join(root, "skills", "default", "pdf", "skill.meta.yaml"))
+	if err != nil {
+		t.Fatalf("read pdf meta failed: %v", err)
+	}
+	var pdfMeta struct {
+		Provenance struct {
+			CreatedBy string `yaml:"created_by"`
+			SourceID  string `yaml:"source_id"`
+			Origin    struct {
+				Commit string `yaml:"commit"`
+				Path   string `yaml:"path"`
+			} `yaml:"origin"`
+		} `yaml:"provenance"`
+	}
+	if err := yaml.Unmarshal(pdfMetaData, &pdfMeta); err != nil {
+		t.Fatalf("unmarshal pdf meta failed: %v", err)
+	}
+	if pdfMeta.Provenance.SourceID != "ap" {
+		t.Fatalf("expected pdf source_id 'ap', got %q", pdfMeta.Provenance.SourceID)
+	}
+	if pdfMeta.Provenance.Origin.Commit != sourceRec.CurrentRevision.Value {
+		t.Fatalf("expected pdf origin.commit %q, got %q", sourceRec.CurrentRevision.Value, pdfMeta.Provenance.Origin.Commit)
+	}
+	if pdfMeta.Provenance.Origin.Path != "skills/pdf" {
+		t.Fatalf("expected pdf origin.path 'skills/pdf', got %q", pdfMeta.Provenance.Origin.Path)
+	}
 	// Verify empty file was preserved
 	emptyData, _ := os.ReadFile(filepath.Join(root, "skills", "default", "pdf", "empty.txt"))
 	if len(emptyData) != 0 {
