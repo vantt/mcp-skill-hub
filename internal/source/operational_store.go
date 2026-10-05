@@ -3,6 +3,7 @@ package source
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -72,6 +73,21 @@ CREATE TABLE IF NOT EXISTS source_check_state (
  retry_count INTEGER NOT NULL CHECK(retry_count >= 0),
  availability TEXT NOT NULL CHECK(availability IN ('available','unavailable')),
  next_check_at TEXT NOT NULL,
+ last_error TEXT NOT NULL
+) STRICT;
+CREATE TABLE IF NOT EXISTS skill_upstream_state (
+ skill_id TEXT PRIMARY KEY,
+ source_id TEXT NOT NULL,
+ repository TEXT NOT NULL,
+ ref TEXT NOT NULL,
+ path TEXT NOT NULL,
+ base_commit TEXT NOT NULL,
+ checked_commit TEXT NOT NULL,
+ checked_commit_at TEXT NOT NULL,
+ upstream TEXT NOT NULL CHECK(upstream IN ('same','changed','removed','pinned','unavailable')),
+ upstream_digest TEXT NOT NULL,
+ changed_files_json TEXT NOT NULL,
+ checked_at TEXT NOT NULL,
  last_error TEXT NOT NULL
 ) STRICT;`); err != nil {
 		return closeOnError(fmt.Errorf("initialize operational state: %w", err))
@@ -274,4 +290,181 @@ func (store OperationalStore) listAfterCorruption(db *sql.DB, cause error) ([]Ch
 		return nil, err
 	}
 	return []CheckState{}, nil
+}
+
+type UpstreamState struct {
+	SkillID         string    `json:"skill_id"`
+	SourceID        string    `json:"source_id"`
+	Repository      string    `json:"repository"`
+	Ref             string    `json:"ref"`
+	Path            string    `json:"path"`
+	BaseCommit      string    `json:"base_commit"`
+	CheckedCommit   string    `json:"checked_commit"`
+	CheckedCommitAt time.Time `json:"checked_commit_at"`
+	Upstream        string    `json:"upstream"`
+	UpstreamDigest  string    `json:"upstream_digest"`
+	ChangedFiles    []Change  `json:"changed_files"`
+	CheckedAt       time.Time `json:"checked_at"`
+	LastError       string    `json:"last_error"`
+}
+
+func (store OperationalStore) RecordUpstream(ctx context.Context, states []UpstreamState) error {
+	if len(states) == 0 {
+		return nil
+	}
+	for attempt := range 2 {
+		db, err := store.Open(ctx)
+		if err != nil {
+			return err
+		}
+		err = func() error {
+			tx, txErr := db.BeginTx(ctx, nil)
+			if txErr != nil {
+				return txErr
+			}
+			defer func() { _ = tx.Rollback() }()
+
+			stmt, prepErr := tx.PrepareContext(ctx, `INSERT INTO skill_upstream_state(
+skill_id, source_id, repository, ref, path, base_commit, checked_commit, checked_commit_at, upstream, upstream_digest, changed_files_json, checked_at, last_error
+) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(skill_id) DO UPDATE SET
+source_id=excluded.source_id,
+repository=excluded.repository,
+ref=excluded.ref,
+path=excluded.path,
+base_commit=excluded.base_commit,
+checked_commit=excluded.checked_commit,
+checked_commit_at=excluded.checked_commit_at,
+upstream=excluded.upstream,
+upstream_digest=excluded.upstream_digest,
+changed_files_json=excluded.changed_files_json,
+checked_at=excluded.checked_at,
+last_error=excluded.last_error
+WHERE excluded.checked_at >= skill_upstream_state.checked_at`)
+			if prepErr != nil {
+				return prepErr
+			}
+			defer stmt.Close()
+
+			for _, s := range states {
+				var filesJSON string
+				if s.ChangedFiles != nil {
+					data, jErr := json.Marshal(s.ChangedFiles)
+					if jErr != nil {
+						return jErr
+					}
+					filesJSON = string(data)
+				} else {
+					filesJSON = "null"
+				}
+				checkedCommitAt := s.CheckedCommitAt.UTC().Format(time.RFC3339Nano)
+				checkedAt := s.CheckedAt.UTC().Format(time.RFC3339Nano)
+				if _, execErr := stmt.ExecContext(ctx,
+					s.SkillID, s.SourceID, s.Repository, s.Ref, s.Path,
+					s.BaseCommit, s.CheckedCommit, checkedCommitAt,
+					s.Upstream, s.UpstreamDigest, filesJSON, checkedAt, s.LastError,
+				); execErr != nil {
+					return execErr
+				}
+			}
+			return tx.Commit()
+		}()
+		_ = db.Close()
+		if err == nil {
+			return nil
+		}
+		if !isOperationalCorruption(err) || attempt != 0 {
+			return err
+		}
+		if rErr := store.resetCorrupt(); rErr != nil {
+			return rErr
+		}
+	}
+	return nil
+}
+
+func (store OperationalStore) ListUpstream(ctx context.Context) ([]UpstreamState, error) {
+	db, err := store.Open(ctx)
+	if err != nil {
+		if isOperationalCorruption(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer db.Close()
+
+	rows, err := db.QueryContext(ctx, `SELECT
+skill_id, source_id, repository, ref, path, base_commit, checked_commit, checked_commit_at, upstream, upstream_digest, changed_files_json, checked_at, last_error
+FROM skill_upstream_state ORDER BY skill_id ASC`)
+	if err != nil {
+		if isOperationalCorruption(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []UpstreamState
+	for rows.Next() {
+		var s UpstreamState
+		var checkedCommitAt, checkedAt, filesJSON string
+		if err := rows.Scan(
+			&s.SkillID, &s.SourceID, &s.Repository, &s.Ref, &s.Path,
+			&s.BaseCommit, &s.CheckedCommit, &checkedCommitAt,
+			&s.Upstream, &s.UpstreamDigest, &filesJSON, &checkedAt, &s.LastError,
+		); err != nil {
+			return nil, err
+		}
+		if t, err := time.Parse(time.RFC3339Nano, checkedCommitAt); err == nil {
+			s.CheckedCommitAt = t
+		}
+		if t, err := time.Parse(time.RFC3339Nano, checkedAt); err == nil {
+			s.CheckedAt = t
+		}
+		if filesJSON != "" && filesJSON != "null" {
+			var files []Change
+			if err := json.Unmarshal([]byte(filesJSON), &files); err == nil {
+				s.ChangedFiles = files
+			}
+		} else {
+			s.ChangedFiles = nil
+		}
+		results = append(results, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return results, nil
+}
+
+func (store OperationalStore) DeleteUpstreamExcept(ctx context.Context, keep []string) error {
+	for attempt := range 2 {
+		db, err := store.Open(ctx)
+		if err != nil {
+			return err
+		}
+		if len(keep) == 0 {
+			_, err = db.ExecContext(ctx, `DELETE FROM skill_upstream_state`)
+		} else {
+			placeholders := make([]string, len(keep))
+			args := make([]any, len(keep))
+			for i, id := range keep {
+				placeholders[i] = "?"
+				args[i] = id
+			}
+			query := fmt.Sprintf(`DELETE FROM skill_upstream_state WHERE skill_id NOT IN (%s)`, strings.Join(placeholders, ","))
+			_, err = db.ExecContext(ctx, query, args...)
+		}
+		_ = db.Close()
+		if err == nil {
+			return nil
+		}
+		if !isOperationalCorruption(err) || attempt != 0 {
+			return err
+		}
+		if rErr := store.resetCorrupt(); rErr != nil {
+			return rErr
+		}
+	}
+	return nil
 }
