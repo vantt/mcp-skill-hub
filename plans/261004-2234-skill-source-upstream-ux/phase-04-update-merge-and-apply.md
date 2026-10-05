@@ -1,6 +1,6 @@
 ---
 title: "Phase 4: Update merge and apply"
-status: in-progress
+status: done
 ---
 
 # Phase 4: Update merge and apply
@@ -102,7 +102,7 @@ Do not modify any other file.
 - [x] Task 4.1 git-backed merge and diff
 - [x] Task 4.2 proposal kind
 - [x] Task 4.3 preview / write set / confirm
-- [ ] Task 4.4 `make check`
+- [x] Task 4.4 `make check`
 
 ## Success criteria
 
