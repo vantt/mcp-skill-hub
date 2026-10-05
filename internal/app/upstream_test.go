@@ -564,3 +564,65 @@ func TestUpstreamCheck(t *testing.T) {
 		t.Fatalf("expected skills/a status to remain up_to_date after outside commit, got %q", chk2Outside.Results[0].Skills[0].Status)
 	}
 }
+
+func TestNextAction(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		status   string
+		skillID  string
+		sha      string
+		expected string
+	}{
+		{
+			status:   "up_to_date",
+			skillID:  "my-skill",
+			expected: "Up to date with upstream.",
+		},
+		{
+			status:   "update_available",
+			skillID:  "my-skill",
+			expected: "Run skillhub upstream review my-skill to inspect and apply changes.",
+		},
+		{
+			status:   "modified",
+			skillID:  "my-skill",
+			expected: "Local edits differ from upstream base. Run skillhub upstream review my-skill to inspect drift.",
+		},
+		{
+			status:   "diverged",
+			skillID:  "my-skill",
+			expected: "Both local and upstream changed. Run skillhub upstream review my-skill to 3-way merge.",
+		},
+		{
+			status:   "upstream_removed",
+			skillID:  "my-skill",
+			expected: "Skill removed in upstream repository. Decide whether to retain as custom skill.",
+		},
+		{
+			status:   "unavailable",
+			skillID:  "my-skill",
+			expected: "Upstream repository could not be reached. Check network or repository access.",
+		},
+		{
+			status:   "untracked",
+			skillID:  "my-skill",
+			expected: "Not linked to an upstream source. Run skillhub source attach to track updates.",
+		},
+		{
+			status:   "pinned",
+			skillID:  "my-skill",
+			sha:      "aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111",
+			expected: "Upstream tracking pinned to commit aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111. Run skillhub source attach --ref <branch> to follow a branch.",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.status, func(t *testing.T) {
+			action := deriveNextAction(tc.status, tc.skillID, tc.sha)
+			if action != tc.expected {
+				t.Errorf("status %q: got %q, want %q", tc.status, action, tc.expected)
+			}
+		})
+	}
+}

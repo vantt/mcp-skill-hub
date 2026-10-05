@@ -80,19 +80,24 @@ func deriveLocalStatus(originFilesDigest, currentLocalDigest string) string {
 	return "modified"
 }
 
-func deriveNextAction(status, skillID, sourceID string) string {
+func deriveNextAction(status, skillID, sha string) string {
 	switch status {
-	case "update_available", "diverged":
-		return "skillhub skill update " + skillID
+	case "up_to_date":
+		return "Up to date with upstream."
+	case "update_available":
+		return fmt.Sprintf("Run skillhub upstream review %s to inspect and apply changes.", skillID)
+	case "modified":
+		return fmt.Sprintf("Local edits differ from upstream base. Run skillhub upstream review %s to inspect drift.", skillID)
+	case "diverged":
+		return fmt.Sprintf("Both local and upstream changed. Run skillhub upstream review %s to 3-way merge.", skillID)
 	case "upstream_removed":
-		return "skillhub skill upstream " + skillID
-	case "unknown", "unavailable":
-		if sourceID != "" {
-			return "skillhub source check " + sourceID
-		}
-		return ""
+		return "Skill removed in upstream repository. Decide whether to retain as custom skill."
+	case "unavailable":
+		return "Upstream repository could not be reached. Check network or repository access."
 	case "untracked":
-		return "skillhub source backfill"
+		return "Not linked to an upstream source. Run skillhub source attach to track updates."
+	case "pinned":
+		return fmt.Sprintf("Upstream tracking pinned to commit %s. Run skillhub source attach --ref <branch> to follow a branch.", sha)
 	default:
 		return ""
 	}
@@ -597,7 +602,13 @@ func buildSkillUpstreamModel(
 		Status:            status,
 		CheckedAt:         checkedAt,
 		Error:             errStr,
-		NextAction:        deriveNextAction(status, sk.SkillID, sk.SourceID),
+		NextAction: func() string {
+			pinSHA := sk.Origin.Ref
+			if pinSHA == "" || !is40Hex(pinSHA) {
+				pinSHA = sk.Origin.Commit
+			}
+			return deriveNextAction(status, sk.SkillID, pinSHA)
+		}(),
 	}
 }
 
