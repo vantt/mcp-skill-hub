@@ -5,6 +5,8 @@ status: todo
 
 # Phase 5: Source lifecycle and backfill
 
+<!-- Updated: Validation Session 1 - watch without skill refused (confirmed); triage --new-skill kept (confirmed) -->
+
 ## Context
 
 - Plan: [plan.md](./plan.md) (D1, D2, D11). Depends on phases 2–3.
@@ -22,7 +24,7 @@ Close every path that could leave a source without a skill, give sources an expl
    - `PreviewDetach(ctx, path, skillID, sourceID)`: delete the link. If the source is left with no learning link and no upstream skill, also delete `sources/catalog/<id>.yaml` **only when** no other canonical entity references it (search `canonical_entities.content_json` for `"source_id":"<id>"` outside skills and links); otherwise set `monitoring: {enabled: false, cadence: manual}` and add warning `source_kept_referenced`.
    - Both persist through `storeSourceProposal` and confirm through the existing `ConfirmSourceProposal`, whose success summary switches on `preview.planned.WriteSet.Command`: `source_attach` → `Linked <source> to <skill> as a learning reference.`, `source_detach` → `Unlinked <source> from <skill>.`, `source_unwatch` → see 2, existing commands keep their text. Add the exported accessor `func (p SourceProposal) WriteCommand() string { return p.planned.WriteSet.Command }` so delivery adapters (phase 7 widened `source_watch_confirm`) can check the command without touching unexported fields.
 2. **Unwatch** `PreviewUnwatch(ctx, path, sourceID)`: a source with no linked skill and no referencing entity is deleted; otherwise its monitoring becomes `{enabled: false, cadence: manual}` (explicit checks still work; due checks and status nags stop). Summary: `Stopped watching <id>.` or `Removed <id>.`
-3. **`source watch` requires a skill and is the same operation as attach**: `SourceWatchInput` gains `SkillID string`. Empty → `invalid_request`: why `A watched source must belong to a skill.`, fix ``Pass --skill-id <id> to use it as a learning reference, run `skillhub skill add <locator>` to vendor its skills, or `skillhub source capture <locator> --reason <text>` to save it for later.`` (default pending user decision Q3). Non-empty → `PreviewSourceWatch` delegates to `PreviewAttach` (one implementation of "create or reuse a source from a URL and link it"; write-set command `source_attach`). `checkExistingSourceCollisions` (`internal/app/source_watch.go:217-221`) switches from exact string comparison to `sameRepository`, so `https://github.com/o/r.git` and `https://github.com/o/r` never create two sources. New learning-source IDs keep `deriveSourceID`.
+3. **`source watch` requires a skill and is the same operation as attach**: `SourceWatchInput` gains `SkillID string`. Empty → `invalid_request`: why `A watched source must belong to a skill.`, fix ``Pass --skill-id <id> to use it as a learning reference, run `skillhub skill add <locator>` to vendor its skills, or `skillhub source capture <locator> --reason <text>` to save it for later.`` (confirmed in Validation Session 1). Non-empty → `PreviewSourceWatch` delegates to `PreviewAttach` (one implementation of "create or reuse a source from a URL and link it"; write-set command `source_attach`). `checkExistingSourceCollisions` (`internal/app/source_watch.go:217-221`) switches from exact string comparison to `sameRepository`, so `https://github.com/o/r.git` and `https://github.com/o/r` never create two sources. New learning-source IDs keep `deriveSourceID`.
 4. **Triage outcomes**: `SourceTriageInput` gains `NewSkillID string`. Decisions:
    - `accept` requires exactly one of `SkillID` (existing skill; learning link, as today) or `NewSkillID` (the write set also contains a scaffold draft skill from `skill.Manager{}.PreviewCreate(ctx, root, skill.CreateInput{ID, Collection: "default", Name: <id>, Description: "Skill that learns from <identity name>."}, false).WriteSet().Changes` plus the learning link). Neither → `invalid_request` listing both flags and the `import` decision.
    - New `import`: delegates to `SkillAddService.PreviewSkillAdd` with the candidate's locator and a new `SkillAddInput.CandidateID` (`json:"-"`); `PreviewSkillAdd` then appends the candidate file change (`status: accepted`) to its write set. Confirmation is `skillhub skill confirm <proposal>`.
@@ -98,7 +100,7 @@ Fix:   Pass --skill-id <id> to use it as a learning reference, run `skillhub ski
 
 | Risk | L×I | Mitigation |
 |---|---|---|
-| Scripts or agents calling `source watch` without a skill break | M×M | Clear fix text; MCP description updated in phase 7; documented in phase 10. User decision Q3 can choose auto-capture instead. |
+| Scripts or agents calling `source watch` without a skill break | M×M | Clear fix text; MCP description updated in phase 7; documented in phase 10. Refusal confirmed in Validation Session 1. |
 | Deleting a source that distilled records reference breaks validation | M×H | Reference check before delete; fallback to monitoring off; `canonical.Validate` asserted in tests. |
 | Backfill on a workspace with many legacy skills hits the network per repository | M×L | One `ensureUpstreamSource` and one mirror sync per repository and ref; per-skill failures become skips, not aborts. |
 | Legacy `origin.path` cannot be recovered | M×L | Explicit `--path` override; skip with reason; never guess. |

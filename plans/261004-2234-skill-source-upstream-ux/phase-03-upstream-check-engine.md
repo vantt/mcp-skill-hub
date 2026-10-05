@@ -5,6 +5,8 @@ status: todo
 
 # Phase 3: Upstream check engine
 
+<!-- Updated: Validation Session 1 - behind = changed files in the skill folder plus the upstream commit date; weekly schedule, explicit checks only -->
+
 ## Context
 
 - Plan: [plan.md](./plan.md) (D4, D5, D6). Depends on phases 1–2.
@@ -26,6 +28,7 @@ Compute a per-skill upstream status from one fetch per source, store the observa
     path TEXT NOT NULL,
     base_commit TEXT NOT NULL,
     checked_commit TEXT NOT NULL,
+    checked_commit_at TEXT NOT NULL,
     upstream TEXT NOT NULL CHECK(upstream IN ('same','changed','removed','pinned','unavailable')),
     upstream_digest TEXT NOT NULL,
     changed_files_json TEXT NOT NULL,
@@ -61,12 +64,13 @@ Compute a per-skill upstream status from one fetch per source, store the observa
      - `upstream_digest` = `ContentDigest(files, Spec{}, false)` of that set. Equal to `origin.files_digest` → `same`; else `changed`. When `files_digest` is empty, compare the tree digest with `origin.folder_digest` instead.
      - `ChangedFiles`: reconstruct the base set the same way at `origin.commit` and compare path → digest maps; if the base cannot be read, `ChangedFiles = nil`.
    - Comparing reconstructed file sets (not the raw tree hash) keeps nested skills and import transforms from producing false updates.
+   - "Behind" is reported as the number of changed files within the skill folder (`ChangedFiles`), never as a commit count (depth-1 mirrors have no history). Alongside it, `checked_commit_at` records the committer date of `head`, the newest upstream commit read, via a new adapter method `CommitTime(ctx context.Context, repository, commit string) (time.Time, error)` in `internal/source/git_repository.go` (reads the commit object from the mirror under the shared mirror lock; zero time and no error-state change when unreadable). Checks never run in the background: they run only from `skillhub check`, `source check`, `skill outdated --check`, `skill update`, WebUI Check now, and MCP `source_check`; the weekly cadence only makes the source show as due in `skillhub status`.
 4. `CheckSources` integration:
    - Load tracked skills (skills whose meta has `provenance.source_id` and a `github`/`git` origin) grouped by source, and the set of source IDs that have at least one learning link (`role` `learning-source` or `inspiration`) via a new `readSkillSourceLinks(root)`.
    - A source with `purpose: upstream` (phase 2) and no learning link is **upstream-only**. Its branch runs **instead of** the existing `adapter.CurrentRevision` call (`internal/app/source.go:494`): run the upstream check, record the existing `CheckState` (availability, next check), set `item.Status` to `updates_available` when any skill is `changed` or `removed`, `up_to_date` otherwise, or `unavailable`; never call the canonical revision update (`internal/app/source.go:537-552`).
    - Any other source (watched or triaged, `purpose` absent, or with a learning link) keeps the current behavior, including canonical revision writes and distill status; if it also has tracked skills, the upstream check runs after it and reuses the synced mirror.
    - `SourceCheckItem` gains `Skills []SkillUpstream \`json:"skills,omitempty"\``. `updates_available` counts toward `Changed`.
-5. Read model in `internal/app/upstream.go`: tracked skills are loaded from **working-tree** metas (skill IDs from the catalog `skills` table, meta bytes via `locateSkillDir`). `SkillUpstream` JSON fields `skill_id, source_id, repository, ref, path, base_commit, latest_commit, changed_files (int, -1 unknown), files ([]{path,status}, detail only), local, status, checked_at, error, next_action`. `next_action` is a CLI command string: `skillhub skill update <id>` for `update_available`/`diverged`, `skillhub skill upstream <id>` for `upstream_removed`, `skillhub source check <source>` for `unknown`/`unavailable`, `skillhub source backfill` for `untracked`, empty otherwise. Service methods: `ListSkillUpstream(ctx, path) (UpstreamListResult, error)` and `GetSkillUpstream(ctx, path, id) (SkillUpstreamResult, error)`; skills without a `github`/`git` origin are omitted from the list and return `invalid_request` ("Skill <id> was not added from a repository.") from Get.
+5. Read model in `internal/app/upstream.go`: tracked skills are loaded from **working-tree** metas (skill IDs from the catalog `skills` table, meta bytes via `locateSkillDir`). `SkillUpstream` JSON fields `skill_id, source_id, repository, ref, path, base_commit, latest_commit, latest_committed_at (RFC 3339, omitted when unknown), changed_files (int, -1 unknown), files ([]{path,status}, detail only), local, status, checked_at, error, next_action`. `next_action` is a CLI command string: `skillhub skill update <id>` for `update_available`/`diverged`, `skillhub skill upstream <id>` for `upstream_removed`, `skillhub source check <source>` for `unknown`/`unavailable`, `skillhub source backfill` for `untracked`, empty otherwise. Service methods: `ListSkillUpstream(ctx, path) (UpstreamListResult, error)` and `GetSkillUpstream(ctx, path, id) (SkillUpstreamResult, error)`; skills without a `github`/`git` origin are omitted from the list and return `invalid_request` ("Skill <id> was not added from a repository.") from Get.
 6. `skillhub status`:
    - The `ChangedSources` query (`curation_home.go:215`) excludes upstream-only sources: `json_extract(content_json,'$.purpose')='upstream'` and no `skill_source_link` entity with role `learning-source`/`inspiration` for that source.
    - New `CurationSummary.UpstreamUpdates int \`json:"upstream_updates"\`` = skills with status `update_available` or `diverged` (an `upstream_removed` skill has nothing to apply, so it shows in `skill outdated` and the WebUI but does not nag in `status`). When > 0, add `ActionItem{Kind: "review_upstream_updates", Count, Priority: 75, Summary: "%d skill(s) have upstream changes to review", Command: "skill_upstream_status"}`, add it to `AttentionItems` and `OptionalItems`, a `recommendationLabel` of `Review upstream updates with skillhub skill outdated`, and a summary case `%d skill(s) have upstream changes to review.`. A failure to read upstream state never fails `status`; it leaves the count at 0.
@@ -76,7 +80,7 @@ Compute a per-skill upstream status from one fetch per source, store the observa
 
 Create: `internal/app/upstream.go`, `internal/app/upstream_test.go`, `internal/app/source_links.go` (read helpers `readSkillSourceLinks`, `learningSourceIDs`).
 
-Modify: `internal/source/operational_store.go`, `internal/app/source.go` (`CheckSources`, `SourceCheckItem`), `internal/app/curation_home.go`, `schemas/curation-home-v1.schema.json`, `internal/delivery/web/testdata/golden/home.json` (regenerate), `internal/app/curation_home_test.go`, `internal/source/operational_store_test.go`.
+Modify: `internal/source/operational_store.go`, `internal/source/git_repository.go` (`CommitTime` only), `internal/app/source.go` (`CheckSources`, `SourceCheckItem`), `internal/app/curation_home.go`, `schemas/curation-home-v1.schema.json`, `internal/delivery/web/testdata/golden/home.json` (regenerate), `internal/app/curation_home_test.go`, `internal/source/operational_store_test.go`.
 
 Do not modify any other file.
 
@@ -93,7 +97,7 @@ Do not modify any other file.
 ### Task 3.3 — Per-source check and `CheckSources` integration
 - Steps:
   1. Implement `checkSourceUpstream`, `readSkillSourceLinks`, tracked-skill loading, and the `CheckSources` branch (Requirement 4). Use optional interfaces for `RemoteRefCommit` and `RevisionAt`; a stub adapter without them yields `unavailable` (never a substitute revision).
-  2. Integration test with a real file:// repository (configure `uploadpack.allowReachableSHA1InWant true` as in phase 1) (harness of `TestSkillAddRemoteGitRealAdapter`): add `skills/a` (phases 1–2 path), commit an upstream change to `skills/a/SKILL.md`, call `CheckSources(ctx, root, []string{sourceID}, false)`; assert `Results[0].Status == "updates_available"`, `Results[0].Skills[0].Status == "update_available"`, `ChangedFiles == 1`, and `sources/catalog/<id>.yaml` bytes unchanged. Then write a local edit to `skills/default/a/SKILL.md` and assert `GetSkillUpstream` returns `diverged` / `modified`. Then delete `skills/a` upstream, check again, assert `upstream_removed`. Separately, a commit that only adds a nested `skills/a/sub/SKILL.md` leaves `a` `up_to_date`. Regression for learning sources: a source created by `PreviewSourceWatch` (no `purpose`) from which a skill is then imported still gets its canonical `current_revision` updated by `CheckSources` and still counts in `distill_changed_sources`.
+  2. Integration test with a real file:// repository (configure `uploadpack.allowReachableSHA1InWant true` as in phase 1) (harness of `TestSkillAddRemoteGitRealAdapter`): add `skills/a` (phases 1–2 path), commit an upstream change to `skills/a/SKILL.md`, call `CheckSources(ctx, root, []string{sourceID}, false)`; assert `Results[0].Status == "updates_available"`, `Results[0].Skills[0].Status == "update_available"`, `ChangedFiles == 1`, `LatestCommittedAt` equals the fixture commit's committer time, and `sources/catalog/<id>.yaml` bytes unchanged. Then write a local edit to `skills/default/a/SKILL.md` and assert `GetSkillUpstream` returns `diverged` / `modified`. Then delete `skills/a` upstream, check again, assert `upstream_removed`. Separately, a commit that only adds a nested `skills/a/sub/SKILL.md` leaves `a` `up_to_date`. Regression for learning sources: a source created by `PreviewSourceWatch` (no `purpose`) from which a skill is then imported still gets its canonical `current_revision` updated by `CheckSources` and still counts in `distill_changed_sources`.
 - Verify: `go test ./internal/app/ -run 'TestUpstreamCheck|TestSourceChecks' -count=1` exits 0 and prints `ok`.
 
 ### Task 3.4 — Status integration

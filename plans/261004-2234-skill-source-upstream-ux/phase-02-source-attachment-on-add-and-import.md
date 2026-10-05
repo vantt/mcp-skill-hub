@@ -5,6 +5,8 @@ status: todo
 
 # Phase 2: Source attachment on add and import
 
+<!-- Updated: Validation Session 1 - weekly cadence confirmed; no background daemon -->
+
 ## Context
 
 - Plan: [plan.md](./plan.md) (D1, D2, D11). Depends on phase 1 (`buildGitOrigin`, `RevisionAt`).
@@ -20,7 +22,7 @@ A skill vendored from a repository is always attached to that repository's sourc
    - Match: an existing record with `adapter: git`, `sameRepository(record.Locator.Repository, repository)` and `record.Locator.Ref == ref`. `sameRepository` normalizes both URLs: lowercase scheme and host; for host `github.com` also lowercase the path (GitHub owner/repo names are case-insensitive); trim one trailing `/` and then one trailing `.git`. Other hosts keep path case.
    - New ID: `sanitizeSourceID(owner + "-" + repo)` from the repository URL path (fallback `deriveSourceID(repository, "")`), truncated to 64 characters. If that ID is already used by a source for a different repository or ref, or by any skill ID (`listWorkspaceSkillIDs`), append `"-" + sanitizeSourceID(ref)`; if still taken, append `-2`, `-3`, ... (canonical IDs share one namespace, `internal/canonical/canonical.go:141-147`).
    - The new record carries `purpose: upstream` (Requirement 5).
-   - New record: `SchemaVersion 1`, `Adapter "git"`, `Locator{Repository, Ref, Path: ""}`, `Status "watching"`, `Identity` from `adapter.Identify`, `License` from identity, `Trust{Source: "community"}`, `Monitoring{Enabled: true, Cadence: "weekly"}` (default pending user decision, Q4), default `Limits` as in `buildSourceWatchRecord`, `CurrentRevision` = `RevisionAt(Locator{Repository, Ref, Path: ""}, commit)`. Validate with `sourcepkg.ParseRecord(mustYAML(record))`.
+   - New record: `SchemaVersion 1`, `Adapter "git"`, `Locator{Repository, Ref, Path: ""}`, `Status "watching"`, `Identity` from `adapter.Identify`, `License` from identity, `Trust{Source: "community"}`, `Monitoring{Enabled: true, Cadence: "weekly"}` (confirmed in Validation Session 1; no background daemon: checks run only when a command or the WebUI asks), default `Limits` as in `buildSourceWatchRecord`, `CurrentRevision` = `RevisionAt(Locator{Repository, Ref, Path: ""}, commit)`. Validate with `sourcepkg.ParseRecord(mustYAML(record))`.
 2. `skill add` from GitHub/Git: every new skill's `skill.meta.yaml` has `provenance.source_id: <id>`; the write set contains `sources/catalog/<id>.yaml` only when the source is new. `SkillAddProposal` and `SkillAddResult` gain `UpstreamSource *UpstreamSourceRef \`json:"upstream_source,omitempty"\`` with `SourceID string \`json:"source_id"\`` and `Created bool \`json:"created"\``. Local adds: field absent, no source.
 3. `source import` from a source with `adapter: git`: reads the ref's current commit (`adapter.CurrentRevision` with the record's locator) instead of requiring `record.CurrentRevision`; writes `provenance: {created_by: source_import, source_id, origin: buildGitOrigin(...)}` with `origin.kind: github` when the repository host is `github.com`, else `git`, and `origin.path = repoRelativeSkillPath(record.Locator.Path, item.SkillDir)`; writes no `sources/skills/LINK-*` file and no legacy `revision`/`path` keys. The source record is not modified. Sources with other adapters (`filesystem`, `immutable-http`, `living-http`) keep today's provenance keys (`created_by`, `source_id`, `revision`, `path`) and get no origin block; they also stop writing the `role: origin` link, because `provenance.source_id` already records the edge. Such skills are linked to their source but are not upstream-tracked.
 4. CLI `skill add` human output names the upstream source (samples below) and no longer prints `Watching: off`.
@@ -102,7 +104,7 @@ Result line: `Draft pdf added. Agent use: off. Upstream: anthropics-skills. Chan
 | Risk | L×I | Mitigation |
 |---|---|---|
 | A source created by a concurrent add between preview and confirm | L×L | New file has an empty `BeforeDigest`; confirm fails as stale; re-preview reuses the source. |
-| Weekly default adds a "sources due" item to `skillhub status` | M×L | Intended: it prompts the explicit check; user decision Q4 may switch the default to manual. |
+| Weekly default adds a "sources due" item to `skillhub status` | M×L | Intended: it prompts the explicit check. Confirmed in Validation Session 1: weekly, explicit checks only. |
 | `source import` now needs network | M×L | Same as `skill add`; errors surface as `source_unavailable` with the existing message. |
 
 ## Security considerations

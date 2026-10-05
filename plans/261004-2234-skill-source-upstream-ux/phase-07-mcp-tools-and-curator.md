@@ -5,6 +5,8 @@ status: todo
 
 # Phase 7: MCP tools and curator
 
+<!-- Updated: Validation Session 1 - agents may not apply upstream updates; only skill_upstream_status reports them and returns the CLI/WebUI handoff -->
+
 ## Context
 
 - Plan: [plan.md](./plan.md) (D10, D11). Depends on phases 3–5.
@@ -12,7 +14,7 @@ status: todo
 
 ## Overview
 
-Let agents report and propose upstream updates and manage source links through preview/confirm tools that carry metadata only. The curator learns the new intents and the rule that content approval is human-only.
+Let agents **report** upstream status and manage source links through tools that carry metadata only. Agents cannot preview or apply an upstream update: taking an update is a review decision made where the diff is visible (CLI or WebUI), and applying it flips the skill to `review_required` mid-work (Validation Session 1, decision 5). The curator learns the new intents, hands updates off to `skillhub skill update <id>` or the WebUI, and keeps content approval human-only.
 
 ## Requirements
 
@@ -21,12 +23,10 @@ Let agents report and propose upstream updates and manage source links through p
    | Tool | Input | Output | Annotations (readOnly, destructive, idempotent, openWorld) |
    |---|---|---|---|
    | `skill_upstream_status` | `skill_id?` | list (`UpstreamListResult`) or one (`SkillUpstreamResult`); no network | true, false, false, false |
-   | `skill_upstream_update_preview` | `skill_id`, `target_commit?`, `idempotency_key?` (no resolutions) | `PreviewUpdate(...).MetadataOnly()` | false, false, false, false |
-   | `skill_upstream_update_confirm` | `proposal_id`, `proposal_digest`, `base_version` (all required) | `UpstreamUpdateResult` | false, true, true, false |
    | `source_link_preview` | `action: attach\|detach`, `skill_id`, `source_id?`, `locator?`, `ref?`, `path?`, `cadence?`, `idempotency_key?` | `SourceProposal` | false, false, false, true |
    | `source_unwatch_preview` | `source_id`, `idempotency_key?` | `SourceProposal` | false, false, false, false |
 
-   `skill_upstream_update_preview` accepts no resolutions: agents never see upstream content, so they cannot choose between versions (D10). It returns pins only when every file has a default action and at least one skill file changes; when anything is unresolved or blocked, or when the only effect would be re-pinning the base (all files kept local), it returns no pins and a summary `Review this update in \`skillhub skill update <id>\` or the WebUI.` This keeps an agent from dropping local edits or silently suppressing an upstream fix. Descriptions state: "Returns file paths, statuses, and counts only; upstream file content and diffs are never returned." and, for confirm, "After confirming, a third-party skill needs the user's content approval (`skillhub skill review <id>`); agents cannot approve content."
+   `skill_upstream_status` returns paths, statuses, counts, commits, and the upstream commit date only; no file content, diff, or commit message. Every entry with status `update_available` or `diverged` carries `next_action: "skillhub skill update <id>"` (phase 3 read model) and a `webui_hint` added by the tool: "Open the skill in the Skill Hub WebUI → Sources tab → Review update."`; the tool description says: "Agents cannot apply upstream updates. Give the user the update command or the WebUI hint; the user reviews the diff and applies it. After applying, a third-party skill needs the user's content approval (`skillhub skill review <id>`)." There is no `skill_upstream_update_preview` or `skill_upstream_update_confirm` tool, and no MCP tool returns pins for an `upstream_update` proposal; the generic confirm tools refuse that kind (phase 4 kind guard).
 2. Changed tools:
    - `source_watch_confirm`: instead of a new confirm tool, accept any stored source proposal whose `SourceProposal.WriteCommand()` (phase 5) is `source_watch`, `source_attach`, `source_detach`, or `source_unwatch` (replacing the `ApplicationCommand` check at `source_watch_tools.go:57`, which stored proposals cannot satisfy because `loadSourceProposal` hard-codes `TriageSourceCandidate`, `internal/app/source.go:944`); description updated.
    - `source_watch_preview`: new required `skill_id` input; description says the source becomes a learning reference of that skill.
@@ -37,14 +37,14 @@ Let agents report and propose upstream updates and manage source links through p
    - Start-order list: insert `Skills with upstream updates to review.` after "Changed sources ready to distill."
    - Intent rows (replace the "Watch a repository for updates" row; add the others):
      - Check whether my skills are outdated → call `skill_upstream_status`; call `source_check` first only when the user asks to check now (network).
-     - Update a skill from its repository → call `skill_upstream_update_preview`; show file statuses, unresolved files, and the trust impact; require explicit approval before `skill_upstream_update_confirm`; for unresolved files hand off to `skillhub skill update <id>` or the WebUI; after confirm tell the user to run `skillhub skill review <id>` and never approve content yourself.
+     - Update a skill from its repository → call `skill_upstream_status` for that skill, summarize what changed (file counts, local edits, upstream commit date), and tell the user to run `skillhub skill update <id>` or open the WebUI Sources tab to review the diff and apply it. Never try to apply the update yourself, never write the skill's files to imitate it, and never approve content; after the user applies it, remind them that `skillhub skill review <id>` is required before agents can use the skill again.
      - Watch a repository → ask which skill it should improve and call `source_link_preview` (attach), or offer `skill_add_preview` to vendor its skills.
      - Use a repository or document to improve a skill → `source_link_preview` with `action: attach`; documents go through `source_intake_add` then `source_triage` with `skill_id`.
      - Stop watching or unlink a source → `source_unwatch_preview` or `source_link_preview` with `action: detach`; confirm with `source_watch_confirm`.
      - Track skills added before upstream tracking → tell the user to run `skillhub source backfill` (CLI only).
    - One sentence under the safety intro: `Upstream file content is never returned by MCP tools; do not ask for it or reconstruct it.`
    - Bump the minor version (frontmatter `version:` and `CuratorSkillVersion`) from its current value.
-4. `curatorCompatibleTools` adds the five new tools in a stable position (after `source_check`); `embed_test.go` `wantTools` updated; the five names are also added to the fenced list under `## Compatible tools (contract version 1)` in `SKILL.md` (`system-skills/curator/SKILL.md:237-276`; `embed_test.go:116` requires each tool to start a line). The tool set changed, so bump `CuratorContractVersion` to `"2"` (`internal/systemskills/embed.go:16`), the heading to `contract version 2`, and the `SKILL.md` frontmatter `contract-version`, and update the tests that pin it (`internal/delivery/mcpserver/subprocess_test.go:83`, `internal/delivery/mcpserver/server_test.go:234`, `internal/app/distribution_test.go:35`). `TestCuratorGuidanceRequiresPreviewBeforeConfirm` pairs gain `skill_upstream_update_preview`/`skill_upstream_update_confirm` and `source_link_preview`/`source_watch_confirm`.
+4. `curatorCompatibleTools` adds the three new tools (`skill_upstream_status`, `source_link_preview`, `source_unwatch_preview`) in a stable position (after `source_check`); `embed_test.go` `wantTools` updated; the three names are also added to the fenced list under `## Compatible tools (contract version 1)` in `SKILL.md` (`system-skills/curator/SKILL.md:237-276`; `embed_test.go:116` requires each tool to start a line). The tool set changed, so bump `CuratorContractVersion` to `"2"` (`internal/systemskills/embed.go:16`), the heading to `contract version 2`, and the `SKILL.md` frontmatter `contract-version`, and update the tests that pin it (`internal/delivery/mcpserver/subprocess_test.go:83`, `internal/delivery/mcpserver/server_test.go:234`, `internal/app/distribution_test.go:35`). `TestCuratorGuidanceRequiresPreviewBeforeConfirm` pairs gain `source_link_preview`/`source_watch_confirm`. Add one durable-contract phrase to `TestCuratorGuidanceDurableBehaviorContract`: `"no upstream apply": "Never try to apply the update yourself"`.
 
 ## Related code files
 
@@ -56,8 +56,8 @@ Do not modify any other file.
 
 ## Implementation steps
 
-### Task 7.1 — Upstream tools
-- Steps: implement the three upstream tools. Test (`TestUpstreamTools`) on a workspace seeded like phase 6 Task 6.1 (state recorded directly) plus a real file:// repository for the preview: `skill_upstream_status` returns `update_available`; `skill_upstream_update_preview` structured content contains no key named `upstream_diff`, `local_diff`, `result_diff`, or `merged_with_markers` and no line of the upstream file's text (assert with `strings.Contains` against a sentinel string placed in the upstream file); a preview with a conflicting file returns no pins and the summary names `skillhub skill update`; an unknown `resolutions` argument is rejected by the input schema; confirm with the returned pins of a clean update succeeds and the result names `skillhub skill review`. Also assert no path or summary in any upstream tool response contains a raw control character.
+### Task 7.1 — Upstream status tool
+- Steps: implement `skill_upstream_status`. Test (`TestUpstreamTools`) on a workspace seeded like phase 6 Task 6.1 (state recorded directly; the upstream file contains a sentinel string): the list returns `update_available` with `next_action == "skillhub skill update <id>"` and the WebUI hint; the structured content contains neither the sentinel string nor keys named `upstream_diff`, `local_diff`, `result_diff`, `merged_with_markers`, or `confirmation`; no path or summary contains a raw control character; `tools/list` contains no tool whose name starts with `skill_upstream_update`; calling `skill_transition_confirm` with the ID of an `upstream_update` proposal created through `UpstreamService.PreviewUpdate` returns an error and leaves the files unchanged.
 - Verify: `go test ./internal/delivery/mcpserver/ -run TestUpstreamTools -count=1` exits 0 and prints `ok`.
 
 ### Task 7.2 — Source tools
@@ -65,7 +65,7 @@ Do not modify any other file.
 - Verify: `go test ./internal/delivery/mcpserver/ -run 'TestSource|TestUpstreamTools' -count=1` exits 0 and prints `ok`.
 
 ### Task 7.3 — Annotations table
-- Steps: add the five new tools to `expectedToolAnnotations` with the values above.
+- Steps: add the three new tools to `expectedToolAnnotations` with the values above.
 - Verify: `go test ./internal/delivery/mcpserver/ -count=1` exits 0 and prints `ok`.
 
 ### Task 7.4 — Curator
@@ -85,24 +85,24 @@ Do not modify any other file.
 
 ## Success criteria
 
-- An agent can list outdated skills, preview and (with approval) confirm a clean update, attach/detach learning references, and unwatch sources, all through preview/confirm.
+- An agent can list outdated skills and hand the user the exact update command, attach/detach learning references, and unwatch sources (preview/confirm); it has no way to apply an upstream update.
 - No MCP response carries upstream file content.
 
 ## UX acceptance
 
-Agent-facing summary for a conflicting preview: `1 file(s) need a decision before this update can be applied. Resolve the remaining files with \`skillhub skill update docx\` or in the WebUI.` Curator closing line after confirm: `docx is updated. Before agents can use it again, review and approve the new content: skillhub skill review docx`.
+Curator reply when asked to update `docx`: `docx has an upstream update (2 files changed upstream, newest commit 2026-10-03; you also edited it locally). I can't apply updates. Review and apply it with: skillhub skill update docx — or open docx in the WebUI, Sources tab, Review update. After applying, approve the new content with skillhub skill review docx before agents use it again.`
 
 ## Risk assessment
 
 | Risk | L×I | Mitigation |
 |---|---|---|
-| Agent confirms an update the user did not see in detail | M×M | The update cannot be used by agents until the human runs `--approve-content`; curator requires explicit approval; Q5 offers a human-only alternative. |
-| Content leak through warnings or summaries | L×H | `MetadataOnly()` strips text fields; sentinel test in Task 7.1. |
+| Agent applies an update the user did not review | L×H | No MCP tool previews or applies updates; generic confirm tools refuse `upstream_update` proposals (phase 4 guard, tested in Task 7.1). |
+| Content leak through summaries | L×H | `skill_upstream_status` returns only metadata; sentinel test in Task 7.1. |
 | Curator copies drift | L×M | `cmp` in Task 7.4 and the existing embed test. |
 
 ## Security considerations
 
-Confirm tools require all three pins. Content approval remains CLI-only. Upstream commit messages are not exposed through MCP.
+Source confirm tools require all three pins; no tool confirms upstream updates. Content approval remains CLI-only. Upstream commit messages are not exposed through MCP.
 
 ## Rollback
 

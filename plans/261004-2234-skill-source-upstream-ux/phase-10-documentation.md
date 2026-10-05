@@ -5,6 +5,8 @@ status: todo
 
 # Phase 10: Documentation
 
+<!-- Updated: Validation Session 1 - document agent-free updates, no daemon, behind semantics, git merge engine -->
+
 ## Context
 
 - Plan: [plan.md](./plan.md). Depends on phases 1–9 (document shipped behavior only; read the code and help text, not this plan, as the source of truth).
@@ -25,7 +27,7 @@ Update the smallest owning surface of each document so it matches the shipped co
 3. `README.md` line 67: replace "watch repositories (`skillhub source watch`)" with "keep vendored skills current (`skillhub skill outdated`, `skillhub skill update`)".
 4. `docs/design/06-source-learning-and-distillation.md`: conceptual model gains the two roles and their canonical encoding (D1), one source per repository and ref (D2), origin fields including `files_digest` (D3), the no-orphan invariant (D11), upstream checks without canonical writes for upstream-only sources (D5), and the MCP metadata-only rule (D10). Revision-check section notes that `CheckSources` also refreshes per-skill upstream state.
 5. `docs/design/07-storage-and-mutation-model.md`: `runtime/operational.db` lists table `skill_upstream_state` (volatile, rebuilt by the next check); the canonical skill metadata section lists `provenance.origin.files_digest`; mutation commands list `skill_upstream_update`, `source_backfill`, `source_attach`, `source_detach`, `source_unwatch`.
-6. `docs/use-cases/03-cli-and-curator-mcp-mapping.md`: one use-case block (CLI commands + MCP tools) for "Kiểm tra và cập nhật skill từ upstream" and one for "Gắn nguồn học cho skill", following the existing block format; update the watch/triage entries.
+6. `docs/use-cases/03-cli-and-curator-mcp-mapping.md`: one use-case block (CLI commands + MCP tools) for "Kiểm tra và cập nhật skill từ upstream" (MCP side: only `skill_upstream_status`; applying is CLI/WebUI only) and one for "Gắn nguồn học cho skill", following the existing block format; update the watch/triage entries.
 7. `docs/use-cases/04-webui-user-flows-and-screen-specs.md`: §2.5 adds the Sources tab (Upstream section, Upstream review, Learning section) and the real provenance card; §2.6 becomes the grouped Sources view as shipped (actions: Check now, Import more, Unwatch; orphan chip); §2.7 notes that watching requires a skill and that the dedicated page is not shipped; the Skills list section mentions the upstream chip and filter.
 8. `docs/use-cases/05-webui-design-brief.md` §4.6: replace the ASCII sketch with the grouped layout (repository heading, role chips, linked skills, actions).
 
@@ -45,7 +47,7 @@ Modify only: `README.md`, `docs/user-guide.md`, `docs/curating-skills.md`, `docs
 
 ### Task 10.3 — Design and use-case docs
 - Steps: implement Requirements 4–8.
-- Verify: `grep -l "skill_upstream_state" docs/design/07-storage-and-mutation-model.md && grep -l "files_digest" docs/design/06-source-learning-and-distillation.md docs/design/07-storage-and-mutation-model.md && grep -l "skill_upstream_update_preview" docs/use-cases/03-cli-and-curator-mcp-mapping.md` prints all four paths.
+- Verify: `grep -l "skill_upstream_state" docs/design/07-storage-and-mutation-model.md && grep -l "files_digest" docs/design/06-source-learning-and-distillation.md docs/design/07-storage-and-mutation-model.md && grep -l "skill_upstream_status" docs/use-cases/03-cli-and-curator-mcp-mapping.md` prints all four paths.
 
 ### Task 10.4 — Link and claim check
 - Steps: for every edited file, check relative links resolve (`grep -o "](\.\{0,2\}/[^)]*)" <file>` and test each path exists) and that every command quoted appears in the help output from Task 10.1.
@@ -75,7 +77,7 @@ A reader of `docs/curating-skills.md` can go from "is pdf outdated?" to an appli
 
 ## Security considerations
 
-Document plainly that upstream updates are untrusted content, never auto-applied, never auto-approved, and never shown to agents before approval.
+Document plainly that upstream updates are untrusted content, never auto-applied, never auto-approved, never shown to agents before approval, and applied only by a person through `skillhub skill update` or the WebUI (agents can only report them); that checks never run in the background (the weekly schedule only marks sources due in `skillhub status`); that "behind" means files changed in the skill folder plus the upstream commit date; and that the 3-way merge uses the system `git` (`git merge-file`).
 
 ## Rollback
 

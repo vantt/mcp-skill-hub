@@ -35,19 +35,21 @@ A source becomes an attribute of a skill, in one of two roles:
 
 ## Key decisions
 
+<!-- Updated: Validation Session 1 - D5, D6, D8, D10, D11 and data flow reflect the 2026-10-05 answers -->
+
 | ID | Decision |
 |---|---|
 | D1 | **Roles.** Upstream = skill meta `provenance.source_id` + `provenance.origin` (authoritative, one per skill). Learning reference = link file `sources/skills/LINK-<skill>--<source>.yaml` with `role: learning-source` (legacy `inspiration` is read as a learning reference). `role: origin` links are legacy: still valid, no longer written, removed by backfill. A learning link never sets `provenance.source_id`, so it never changes a skill's trust class. |
 | D2 | **One source per (repository, ref).** Upstream attachment reuses any source whose normalized repository URL and ref match; otherwise it creates one with ID `<owner>-<repo>` (sanitized), suffixed with the ref and then `-2`, `-3` on collision. New upstream sources are whole-repository (`locator.path: ""`), carry `purpose: upstream`, monitoring enabled, cadence `weekly`. Sources without `purpose` (created by watch/triage) keep their distill behavior even when skills are imported from them. |
 | D3 | **Origin fields.** `origin.path` = repository-root-relative skill folder. `origin.folder_digest` = digest of that folder's tree object at `origin.commit`. New optional `origin.files_digest` = `skillruntime.ContentDigest(files, Spec{}, false)` over the files as written from that commit (after import transforms). Local edits = current files digest differs from `files_digest`. |
 | D4 | **Volatile upstream state** lives in `runtime/operational.db` table `skill_upstream_state`. No derived catalog schema change: edges are read from `canonical_entities.content_json`. `DerivedSchemaVersion` is untouched (the runtime plan owns its bump). |
-| D5 | **Checks are explicit and per source**: `skillhub check`, `skillhub source check`, `skill outdated --check`, `skill update`, WebUI "Check now", MCP `source_check`. Each check probes the ref with ls-remote (`RemoteRefCommit`, no mirror write) and syncs the mirror at most once per source, only when the ref moved. Upstream status compares reconstructed file sets (same discovery and transforms as `skill add`), not raw tree hashes. Upstream-only sources (`purpose: upstream`, no learning link) never write canonical files during a check. |
-| D6 | **Status enum** per skill: `up_to_date`, `update_available`, `modified`, `diverged`, `upstream_removed`, `pinned`, `unavailable`, `unknown`, `untracked`. "Behind" is shown as the number of files changed upstream, not a commit count. |
+| D5 | **Checks are explicit and per source**: `skillhub check`, `skillhub source check`, `skill outdated --check`, `skill update`, WebUI "Check now", MCP `source_check`. There is no background daemon; the weekly cadence of auto-created sources only marks them due in `skillhub status`. Each check probes the ref with ls-remote (`RemoteRefCommit`, no mirror write) and syncs the mirror at most once per source, only when the ref moved. Upstream status compares reconstructed file sets (same discovery and transforms as `skill add`), not raw tree hashes. Upstream-only sources (`purpose: upstream`, no learning link) never write canonical files during a check. |
+| D6 | **Status enum** per skill: `up_to_date`, `update_available`, `modified`, `diverged`, `upstream_removed`, `pinned`, `unavailable`, `unknown`, `untracked`. "Behind" is shown as the number of files changed within the skill folder, never a commit count, together with the committer date of the newest upstream commit read (`latest_committed_at`). |
 | D7 | **Base reconstruction**: fetch `origin.commit` by SHA into the mirror on demand, re-apply the import transforms, and compare with `files_digest`. If the base is unavailable or does not reproduce `files_digest`, every file that differs between local and upstream needs an explicit choice. |
-| D8 | **Merge** in a new `internal/merge3` package on `github.com/epiclabs-io/diff3` (structured API, own 7-char markers) with unified diffs from `github.com/aymanbagabas/go-udiff`. Binary, non-UTF-8, or files over 256 KiB are whole-file choices. |
+| D8 | **Merge engine = the system `git`**: `git merge-file -p --diff3` for the 3-way merge (exit `0` clean, `1`–`127` conflict count, anything else an error) and `git diff --no-index` for display, run through the existing `offlineGitCommand` helper (`internal/app/operations.go:156`) from a thin `internal/app/upstream_merge.go`; inputs go to `0600` temp files under the workspace `runtime/tmp/`. No Go merge or diff library is added. Binary, non-UTF-8, or files over 256 KiB are whole-file choices and never reach git. |
 | D9 | **Apply** via a new proposal kind `upstream_update` (persisted, pinned, `BeforeDigest` on every file). Confirm never touches `quality.content_reviewed_digest`; the preview states whether agents lose access until re-approval and prints `skillhub skill review <id>`. |
-| D10 | **MCP stays metadata-only** for upstream: statuses, paths, counts, pins. No upstream file content, diff, or commit message reaches an agent (consistent with the runtime plan's rule that unapproved third-party content never reaches agents). MCP previews accept no per-file resolutions and return pins only for clean updates; conflicted or blocked updates are human-only (CLI or WebUI). Generic skill confirm paths refuse `upstream_update` proposals. |
-| D11 | **No orphan sources** on every write path. `source watch` without a skill target is refused with guidance (default pending user decision Q3); triage `accept` needs `--skill-id` or `--new-skill`, or the new `import` decision. Pre-existing orphans are reported by `skillhub status`, never as validation errors. |
+| D10 | **Agents can report upstream updates but never apply them.** Updates are reviewed and applied only in the CLI (`skillhub skill update`) or the WebUI, where the diff is visible: taking an update is a review decision, and applying it flips a third-party skill to `review_required` mid-work. The only MCP upstream tool, `skill_upstream_status`, returns statuses, paths, counts, commits, and dates (no file content, diff, or commit message) plus `skillhub skill update <id>` and a WebUI hint. No MCP tool previews an update or returns pins for one; generic skill confirm paths refuse `upstream_update` proposals (defense in depth). |
+| D11 | **No orphan sources** on every write path. `source watch` without a skill target is refused with guidance (confirmed 2026-10-05); triage `accept` needs `--skill-id` or `--new-skill`, or the new `import` decision. Pre-existing orphans are reported by `skillhub status`, never as validation errors. |
 | D12 | **CLI exit codes**: 0 on success including "updates available"; `skill outdated --exit-code` exits 1 when any skill is `update_available`, `diverged`, or `upstream_removed`; 2 for invalid requests or application errors (`internal/delivery/cli/output.go:17-46`); `--json` never changes the exit code. |
 
 ## Phases
@@ -77,9 +79,9 @@ skillhub check / source check / skill outdated --check / Web "Check now"
          └─► operational.db skill_upstream_state{checked_commit, upstream_digest, changed_files, status, checked_at}
 read paths (skill outdated, skill upstream, Skills list, Skill Detail, status)
    └─► state ⨝ working-tree origin ⨝ local files digest (working tree, same inventory as content trust) ─► status enum
-skill update / Web Review update / MCP skill_upstream_update_preview
+skill update (CLI) / Web Review update   (no MCP path; MCP skill_upstream_status only reports)
    └─► base = transform(mirror@origin.commit) · upstream = transform(mirror@checked_commit) · local = working tree
-   └─► merge3 per file ─► unresolved? return review model : persist upstream_update proposal (pins)
+   └─► per file: git merge-file / git diff --no-index (offlineGitCommand) ─► unresolved? return review model : persist upstream_update proposal (pins)
 confirm ─► mutation (files + meta origin.commit/folder_digest/files_digest) ─► catalog publish
    └─► content digest changes ─► third-party skill becomes review_required ─► human: skill review + --approve-content
 ```
@@ -104,12 +106,12 @@ Each phase is one or more focused commits; revert with `git revert` in reverse o
 ## Acceptance criteria (whole plan)
 
 - [ ] `skillhub skill add https://github.com/<o>/<r> --all --yes` creates one source and sets `provenance.source_id`, repository-relative `origin.path`, and `origin.files_digest` on every added skill; a second add from the same repository and ref reuses the source.
-- [ ] `skillhub skill outdated --check` lists every tracked skill with status, current/latest commit, changed-file count, and local state; `--exit-code` exits 1 only when something needs action; `--json` emits a stable `status` enum.
+- [ ] `skillhub skill outdated --check` lists every tracked skill with status, current/latest commit, the latest upstream commit date, the number of files changed in the skill folder, and local state; `--exit-code` exits 1 only when something needs action; `--json` emits a stable `status` enum.
 - [ ] `skillhub skill update <id>` previews per-file changes; a clean update applies through confirm; a conflicting update refuses to build pins until each conflict is resolved; after apply a third-party skill reports `review_required` and the output names `skillhub skill review <id>`.
 - [ ] Local edits are never overwritten silently: every file changed both locally and upstream is merged or requires an explicit choice.
 - [ ] `skillhub source list` groups by repository; `skillhub source backfill` attaches existing skills; no write path creates a source with zero linked skills.
-- [ ] MCP upstream tools never return upstream file content or diffs; the curator copies stay identical.
-- [ ] WebUI: Skills list badge and filter, Skill Detail Upstream tab and Learning section, `/sources` grouped view, with loading, empty, and error states.
+- [ ] MCP can report upstream status but has no way to preview or apply an update (no such tool; generic confirm tools refuse `upstream_update` proposals); MCP responses never carry upstream file content or diffs; the curator copies stay identical.
+- [ ] WebUI: Skills list badge and filter, one Skill Detail Sources tab (Upstream and Learning sections, indicator dot when an update is available), `/sources` grouped view, with loading, empty, and error states.
 - [ ] `make check` and `make web-check` pass; docs match shipped behavior.
 
 ## Executor notes
@@ -132,8 +134,8 @@ Each phase is one or more focused commits; revert with `git revert` in reverse o
 |---|---|---|---|---|
 | 1 | Web route `/skills/{id}/upstream/confirm` conflicts with `/skills/proposals/{proposal_id}/confirm`; `ServeMux` panics | Critical | Accept | Phase 8 (route moved to `/api/v1/upstream/proposals/{id}/confirm`), Phase 9 |
 | 2 | SHA-fetch test cannot pass (`git-upload-pack` refuses unadvertised SHAs); production path untested on fresh clones | Critical | Accept | Phase 1 (fixture config + negative fixture), Phases 3–4 (mirror-deleted subtest) |
-| 3 | Generic confirm paths (MCP `skill_*_confirm`, web skill confirm) would apply `upstream_update` proposals | Critical | Accept | Phase 4 (kind guard in `LoadSkillProposal` + tests) |
-| 4 | MCP resolutions contradict D10 (agent could drop local edits or hide a fix) | High | Accept | Phase 7 (no resolutions; pins only for clean updates), D10 |
+| 3 | Generic confirm paths (MCP `skill_*_confirm`, web skill confirm) would apply `upstream_update` proposals | Critical | Accept | Phase 4 (kind guard in `LoadSkillProposal` + tests); kept after Validation Session 1 as defense in depth |
+| 4 | MCP resolutions contradict D10 (agent could drop local edits or hide a fix) | High | Accept | Phase 7, D10. Superseded by Validation Session 1: agents cannot preview or apply updates at all |
 | 5 | Base not reproducible (description fallback, nested skills, transforms) | High | Accept | Phase 1 (`importedSkillFiles`), Phases 3–4 (file-set reconstruction + tests) |
 | 6 | `ResolveRefCommit` always fetches; double sync per check | High | Accept | Phase 1 (`RemoteRefCommit`), Phase 3, D5 |
 | 7 | Mirror lock re-entrant deadlock, no deadline, readers unlocked | High | Accept | Phase 1 (`withMirrorLock`, 30 s, shared reads) |
@@ -149,7 +151,7 @@ Each phase is one or more focused commits; revert with `git revert` in reverse o
 | 17 | Confirm through stored proposal loses `UpstreamSource`/`TrustImpact` | Medium | Accept | Phases 2, 4 (re-derive from write set) |
 | 18 | Upstream path names unsanitized (terminal and agent injection); `--write-conflicts` symlink escape | Medium | Accept | Phases 4, 6, 7 |
 | 19 | Case-fold collisions; empty `BeforeDigest` filled at plan time | Medium | Accept | Phase 4 |
-| 20 | Marker check mismatch between merge3 and canonical validation | Medium | Accept | Phase 4 (shared `canonical.HasConflictMarker`, `blocked` status) |
+| 20 | Marker check mismatch between the merge engine and canonical validation | Medium | Accept | Phase 4 (shared `canonical.HasConflictMarker`, `blocked` status) |
 | 21 | Source record repository may differ from origin repository | Medium | Accept | Phase 3 (`source_origin_mismatch`), Phase 6 (repository shown) |
 | 22 | Fetch by SHA accepts fork-network commits; no ancestry proof | Medium | Reject | Writing `origin.commit` requires canonical write access, which already allows editing the skill files directly; the content-approval gate still requires human review before agents use anything. Fetched refs are kept out of ref resolution (Phase 1). |
 | 23 | `source import` should import the checked revision, not HEAD | Medium | Reject | The import preview itself is the inspection: it pins the exact commit and file set, and confirm applies only those bytes (`PlanMutation` pins). |
@@ -168,7 +170,7 @@ Also applied without a finding number: dropped `CommitTime`/commit dates (unrequ
 ### Verification Results
 - **Tier:** Full (10 phases; all four roles, through the planner pass and the four red-team reviewers).
 - **Claims checked:** 143 by the planner (32 `file:line` citations, 89 existing file paths of 116 cited — the other 27 are files to create —, 22 helper symbols), plus about 95 by the Fact Checker and 26 traced flows by the Flow Tracer.
-- **Verified:** all remaining claims after fixes. **Failed (all corrected in the plan):** 3 off-by-a-few line citations in plan.md; `ResolveRefCommit` described as a cheap probe; `sameRepository` spec vs its test; empty `BeforeDigest` semantics; generic confirm paths assumed kind-aware; `termui.Table` assumed to truncate; `source_security_test.go` missing from Phase 5. **Unverified:** 1 — the exact exported names of `github.com/epiclabs-io/diff3`'s structured merge API (Phase 4 Task 4.1 tells the executor to read `go doc` first; tagged `[UNVERIFIED]`).
+- **Verified:** all remaining claims after fixes. **Failed (all corrected in the plan):** 3 off-by-a-few line citations in plan.md; `ResolveRefCommit` described as a cheap probe; `sameRepository` spec vs its test; empty `BeforeDigest` semantics; generic confirm paths assumed kind-aware; `termui.Table` assumed to truncate; `source_security_test.go` missing from Phase 5. **Unverified:** 0 (the earlier unverified library API was removed by Validation Session 1; the merge engine is now `git merge-file`, whose exit-code semantics were confirmed by research).
 - Baseline on 2026-10-04: `go build ./...` ok; `go test ./... -count=1` 1202 passed in 24 packages; `cd web && npm test` 36 passed.
 - `ak plan validate plans/261004-2234-skill-source-upstream-ux`: valid.
 
@@ -176,6 +178,29 @@ Also applied without a finding number: dropped `CommitTime`/commit dates (unrequ
 - Files reread: plan.md and all 10 phase files after red-team edits.
 - Decision deltas checked: 14 (listed above). Reconciled stale references: 4 (`ResolveRefCommit` mention in phase 3 context, commit-date UX lines in phases 6 and 9, `source_change_confirm` in phase 5). Unresolved contradictions: 0.
 
+### Validation Interview (2026-10-05)
+The user answered the 8 decision questions:
+
+| # | Question | Answer | Propagated to |
+|---|---|---|---|
+| 1 | How to show "behind" | Number of files changed within the skill folder, plus the commit date of the newest upstream commit read | D6; phase 3 (`checked_commit_at`, `CommitTime`, `latest_committed_at`); phase 6 (`UPDATED` column, detail and update lines); phase 9 (commit date); phase 10 |
+| 2 | Merge base source | Fetched on demand by commit hash into the repository cache | D7 unchanged; phases 1, 4 unchanged |
+| 3 | `source watch` without a skill | Refuse with guidance (`skill add`, `--skill-id`, `source capture`) | D11; phase 5 (marker resolved) |
+| 4 | Schedule for auto-created upstream sources | Weekly; `status` shows them due until `skillhub check`; no background daemon | D5; phase 2 (marker resolved), phase 3, phase 10 |
+| 5 | May agents apply upstream updates? | **No.** CLI or WebUI only, where the diff is visible. MCP reports status and returns `skillhub skill update <id>` plus a WebUI hint. Generic confirm refusal kept as defense in depth | D10; phase 4 (no MCP entry, no metadata-only variant; guard wording); phase 7 (removed `skill_upstream_update_preview`/`_confirm`; curator hands off; tests); phases 6, 8 (rollback/overview wording), 10; acceptance criteria |
+| 6 | Skill Detail layout | One Sources tab with Upstream and Learning sections, plus an indicator dot on the tab label when an update is available | phase 9 |
+| 7 | Triage `--new-skill` | Keep | phase 5 (unchanged) |
+| 8 | Merge engine | Neither a library nor own diff3: `git merge-file -p` and `git diff --no-index` through `offlineGitCommand` | D8; phase 4 (Requirement 1, Task 4.1, files, risks, rollback; `go.mod` untouched); data flow |
+
+Kept from the red-team session: `source_watch_confirm` is still widened, because attach, detach, and unwatch need it (it was never used for upstream updates).
+
+### Whole-Plan Consistency Sweep (Validation Session 1)
+- Files reread: plan.md and all 10 phase files.
+- Decision deltas checked: 8.
+- Terms searched across all plan files: `diff3` (only the git flag `--diff3` remains), `go-udiff`/`udiff`, `epiclabs`, `merge3`, `MetadataOnly`, `skill_upstream_update_preview`, `skill_upstream_update_confirm`, `pins` in MCP context, `commit count`/`commits behind`, `default pending user decision`, `Q3`/`Q4`/`Q5`, `go.mod`, `Mergeable`, `latest_committed_at`.
+- Reconciled stale references: D6, D8, D10, D11, data flow, acceptance criteria, Verification Results, Open questions in plan.md; phases 2, 3, 4, 5, 6, 7, 8, 9, 10.
+- Unresolved contradictions: 0.
+
 ## Open questions
 
-See the decision questions returned with this plan; recommended defaults are already written into the phases and marked `(default pending user decision)` where a question applies.
+None. All 8 decision questions were answered on 2026-10-05 (see Validation Interview).

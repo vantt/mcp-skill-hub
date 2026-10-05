@@ -5,6 +5,8 @@ status: todo
 
 # Phase 8: Web API
 
+<!-- Updated: Validation Session 1 - WebUI and CLI are the only update paths -->
+
 ## Context
 
 - Plan: [plan.md](./plan.md). Depends on phases 3–5 (services) and on the runtime plan's WebUI parity phase being complete (it also edits `routes_read_test.go`).
@@ -12,7 +14,7 @@ status: todo
 
 ## Overview
 
-Expose the upstream and source services to the WebUI with the same envelopes, error mapping, and preview/confirm pins as the existing skill routes. Upstream review responses include diffs (the WebUI is a human surface); nothing here weakens the agent-facing rules.
+Expose the upstream and source services to the WebUI with the same envelopes, error mapping, and preview/confirm pins as the existing skill routes. Upstream review responses include diffs: the WebUI is, with the CLI, one of the only two places an upstream update can be reviewed and applied (agents cannot, Validation Session 1 decision 5); nothing here weakens the agent-facing rules.
 
 ## Requirements
 

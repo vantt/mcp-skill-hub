@@ -5,6 +5,8 @@ status: todo
 
 # Phase 6: CLI: upstream and sources
 
+<!-- Updated: Validation Session 1 - UPDATED (upstream commit date) column; CHANGED = files in the skill folder; CLI is one of the two places updates are applied -->
+
 ## Context
 
 - Plan: [plan.md](./plan.md) (D6, D12). Depends on phases 3–5. Research: [upstream UX](./reports/researcher-261004-2234-upstream-update-ux-patterns.md) recommendations 5–6.
@@ -19,13 +21,13 @@ First-class CLI for the skill-centric model: `skill outdated`, `skill upstream`,
 1. **`skillhub skill outdated [--check] [--all] [--exit-code] [--json] [--workspace <p>]`**
    - `--check` first runs `SourceService.CheckSources` for every source with tracked skills (explicit IDs, not `allDue`), printing one warning line per unavailable source.
    - Default rows: statuses `update_available`, `diverged`, `upstream_removed`, `unknown`, `unavailable`, `untracked`. `--all` adds `up_to_date`, `modified`, `pinned`.
-   - Columns `SKILL SOURCE CURRENT LATEST CHANGED LOCAL STATUS`; commits shortened to 7; CHANGED is `N files`, `1 file`, `?` (unknown), or `-`; STATUS uses words: `update available`, `diverged`, `removed upstream`, `modified locally`, `up to date`, `pinned`, `unreachable`, `not checked`, `not tracked`.
+   - Columns `SKILL SOURCE CURRENT LATEST UPDATED CHANGED LOCAL STATUS`; commits shortened to 7; UPDATED is the date (`YYYY-MM-DD`) of the newest upstream commit read (`latest_committed_at`, `-` when unknown); CHANGED (files changed within the skill folder, never a commit count) is `N files`, `1 file`, `?` (unknown), or `-`; STATUS uses words: `update available`, `diverged`, `removed upstream`, `modified locally`, `up to date`, `pinned`, `unreachable`, `not checked`, `not tracked`.
    - Exit codes: 0 normally; with `--exit-code`, 1 when any skill is `update_available`, `diverged`, or `upstream_removed`; 2 for invalid flags. `--json` writes the `UpstreamListResult` and does not change the exit code.
 2. **`skillhub skill upstream <id> [--check] [--json]`** — detail view of `GetSkillUpstream` (with `--check`, checks that skill's source first). Non-repository skill → exit 2 with the service's `invalid_request`.
 3. **`skillhub skill update <id> [--no-check] [--target <commit>] [--accept <path>=upstream|local|merged]... [--manual <path>=<file>]... [--write-conflicts <dir>] [--idempotency-key <k>] [--yes] [--json] [--verbose]`**
    - Unless `--no-check`, checks the skill's source first.
    - Builds `UpstreamUpdateInput` (paths are relative to the skill folder; `--manual` reads the file).
-   - The first line names the repository URL and the source ID (`Update <id> from <B7> to <U7> (<repository>, source <source-id>).`) so a reviewer sees where the content comes from. CHANGE words: `changed upstream`, `changed here`, `changed here and upstream`, `added upstream`, `added here`, `removed upstream`, `removed here`, `blocked (contains lines Skill Hub reads as conflict markers)`.
+   - The first line names the repository URL and the source ID (`Update <id> from <B7> to <U7> (<repository>, source <source-id>), upstream commit of <YYYY-MM-DD>.`) so a reviewer sees where the content comes from. CHANGE words: `changed upstream`, `changed here`, `changed here and upstream`, `added upstream`, `added here`, `removed upstream`, `removed here`, `blocked (contains lines Skill Hub reads as conflict markers)`.
    - Human preview prints the file table, unified diffs for changed files (`ResultDiff`; with `--verbose` also `UpstreamDiff` and `LocalDiff`), the trust notice, and `Next: skillhub skill confirm <proposal>`. With `--yes` and no unresolved files it confirms immediately. With `--yes` and unresolved files it exits 2 (`invalid_request`: `N file(s) need a decision before this update can be applied.`).
    - `--write-conflicts <dir>` writes `MergedWithMarkers` for each unresolved text file to `<dir>/<path>` through `os.OpenRoot(<dir>)` (so symlinked parents cannot escape), creating parents and refusing to overwrite existing files, then prints the `--manual` command to use after editing.
 4. **`skillhub skill confirm`** adds a case for `app.UpstreamUpdateResult` printing its summary and `Next: skillhub skill review <id>` when `TrustImpact.ReviewRequiredAfterApply`.
@@ -88,9 +90,9 @@ Every new command has help text, `--json`, documented exit codes, and a `Next:` 
 ```text
 2 of 5 repository skills need attention. Checked 2h ago.
 
-SKILL  SOURCE                  CURRENT  LATEST   CHANGED  LOCAL     STATUS
-pdf    anthropics-skills@main  3f9c2a1  81d04be  2 files  clean     update available
-docx   anthropics-skills@main  3f9c2a1  81d04be  1 file   modified  diverged
+SKILL  SOURCE                  CURRENT  LATEST   UPDATED     CHANGED  LOCAL     STATUS
+pdf    anthropics-skills@main  3f9c2a1  81d04be  2026-10-03  2 files  clean     update available
+docx   anthropics-skills@main  3f9c2a1  81d04be  2026-10-03  1 file   modified  diverged
 
 Next: skillhub skill update pdf
 ```
@@ -103,7 +105,7 @@ Nothing to report: `All 5 repository skills are up to date. Checked 2h ago.` Nev
 pdf tracks anthropics-skills (https://github.com/anthropics/skills@main, skills/pdf).
 Status   update available (local copy is clean)
 Current  3f9c2a1b4d5e
-Latest   81d04be7c2aa (checked 2h ago)
+Latest   81d04be7c2aa, committed 2026-10-03 (checked 2h ago)
 Changed upstream (2):
   modified  SKILL.md
   added     scripts/fill.py
@@ -114,7 +116,7 @@ Next: skillhub skill update pdf
 `skillhub skill update docx` with a conflict:
 
 ```text
-Update docx from 3f9c2a1 to 81d04be (https://github.com/anthropics/skills, source anthropics-skills).
+Update docx from 3f9c2a1 to 81d04be (https://github.com/anthropics/skills, source anthropics-skills), upstream commit of 2026-10-03.
 
 FILE            CHANGE                     ACTION
 SKILL.md        changed here and upstream  needs decision (1 conflict)
@@ -169,7 +171,7 @@ An orphan row shows `no skills` in SKILLS and the `Next:` line becomes `skillhub
 
 ## Rollback
 
-Revert the phase commit; services from phases 3–5 remain callable through MCP and tests.
+Revert the phase commit; services from phases 3–5 remain callable through the WebUI and tests (upstream updates have no MCP path).
 
 ## Failure Protocol
 
