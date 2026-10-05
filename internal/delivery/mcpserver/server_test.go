@@ -53,6 +53,8 @@ func expectedToolAnnotations() map[string][4]bool {
 		"source_triage": {false, false, false, true}, "source_check": {false, false, false, true},
 		"source_import_preview": {false, false, false, false}, "source_import_confirm": {false, true, true, false},
 		"source_watch_preview": {false, false, false, true}, "source_watch_confirm": {false, true, true, false},
+		"source_link_preview": {false, false, false, true}, "source_unwatch_preview": {false, false, false, false},
+		"skill_upstream_status": {true, false, false, false},
 		"curation_run_start": {false, false, true, true}, "curation_run_submit": {false, false, false, false},
 		"curation_run_get": {true, false, true, false}, "curation_run_retry": {false, false, false, false},
 		"curation_run_cancel": {false, false, false, false}, "observation_list": {true, false, false, false},
@@ -130,8 +132,8 @@ func TestModernAndLegacySDKContracts(t *testing.T) {
 				t.Fatal(err)
 			}
 			wantAnnotations := expectedToolAnnotations()
-			if len(wantAnnotations) != 40 {
-				t.Fatalf("expectedToolAnnotations count = %d, want 40", len(wantAnnotations))
+			if len(wantAnnotations) != 43 {
+				t.Fatalf("expectedToolAnnotations count = %d, want 43", len(wantAnnotations))
 			}
 			if len(listedTools.Tools) != len(wantAnnotations) {
 				t.Fatalf("tool count = %d, want %d", len(listedTools.Tools), len(wantAnnotations))
