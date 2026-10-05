@@ -215,10 +215,6 @@ type Skill struct {
 	Operations      []string              `json:"operations,omitempty"`
 	Triggers        []string              `json:"triggers"`
 	NotFor          []string              `json:"not_for"`
-	Examples        []string              `json:"examples,omitempty"`
-	CounterExamples []string              `json:"counter_examples,omitempty"`
-	Topics          []string              `json:"topics,omitempty"`
-	Technologies    []string              `json:"technologies,omitempty"`
 	MinScope        string                `json:"min_scope"`
 	Requirements    Requirements          `json:"requirements,omitempty"`
 	DistinguishFrom []Discriminator       `json:"distinguish_from,omitempty"`
@@ -226,6 +222,10 @@ type Skill struct {
 	EquivalentTo    []string              `json:"equivalent_to,omitempty"`
 	Equivalence     []EquivalenceRelation `json:"equivalence,omitempty"`
 	Reviewed        bool                  `json:"reviewed"`
+	Examples        []string              `json:"examples,omitempty"`
+	CounterExamples []string              `json:"counter_examples,omitempty"`
+	Topics          []string              `json:"topics,omitempty"`
+	Technologies    []string              `json:"technologies,omitempty"`
 }
 
 type SearchHit struct {

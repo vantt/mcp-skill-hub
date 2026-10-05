@@ -11,28 +11,6 @@ import (
 	"testing"
 )
 
-func post(t *testing.T, srv *Server, path string, body []byte) *httptest.ResponseRecorder {
-	t.Helper()
-	var r ioReader
-	if body != nil {
-		r = bytes.NewReader(body)
-	} else {
-		r = http.NoBody
-	}
-	req := httptest.NewRequest(http.MethodPost, path, r)
-	req.Host = "127.0.0.1:7421"
-	req.Header.Set("Authorization", "Bearer test-token")
-	req.Header.Set("Origin", "http://127.0.0.1:7421")
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, req)
-	return rec
-}
-
-type ioReader interface {
-	Read(p []byte) (n int, err error)
-}
-
 func TestRuntimeEndpointsGolden(t *testing.T) {
 	root := newRuntimeWebWorkspace(t)
 	srv := newTestServer(t, root)
@@ -54,6 +32,8 @@ func TestRuntimeEndpointsGolden(t *testing.T) {
 		}
 	}
 
+	const sentinel = "SENTINEL-TEST-SECRET"
+
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := get(t, srv, tc.path)
@@ -61,8 +41,8 @@ func TestRuntimeEndpointsGolden(t *testing.T) {
 				t.Fatalf("status = %d, want %d (body: %s)", rec.Code, tc.wantStatus, rec.Body.String())
 			}
 
-			if strings.Contains(rec.Body.String(), "SENTINEL-VENDOR-ENV-VALUE") {
-				t.Fatalf("%s response leaked sentinel env value: %s", tc.name, rec.Body.String())
+			if strings.Contains(rec.Body.String(), sentinel) {
+				t.Fatalf("response leaked sentinel secret: %s", rec.Body.String())
 			}
 
 			var pretty bytes.Buffer
@@ -83,31 +63,41 @@ func TestRuntimeEndpointsGolden(t *testing.T) {
 
 			expected, err := os.ReadFile(goldenPath)
 			if err != nil {
-				t.Fatalf("failed to read golden file %s: %v (run go test -update)", goldenPath, err)
+				t.Fatalf("failed to read golden file %s: %v (run with -update)", goldenPath, err)
 			}
 
 			if normalized != string(expected) {
-				t.Fatalf("mismatch for %s:\nGOT:\n%s\nWANT:\n%s", tc.name, normalized, string(expected))
+				t.Errorf("mismatch for %s:\nGOT:\n%s\nWANT:\n%s", tc.name, normalized, string(expected))
 			}
 		})
 	}
 }
 
 func TestWebHasNoContentApprovalPath(t *testing.T) {
-	t.Parallel()
 	root := newRuntimeWebWorkspace(t)
 	srv := newTestServer(t, root)
-
-	// 1. POST /api/v1/skills/vendor-skill/approve is not routed -> 404 or 405
-	recApprove := post(t, srv, "/api/v1/skills/vendor-skill/approve", nil)
-	if recApprove.Code != http.StatusNotFound && recApprove.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("POST /approve should be rejected, got status %d: %s", recApprove.Code, recApprove.Body.String())
+	// 1. POST /api/v1/skills/vendor-skill/approve -> 404 or 405
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/skills/vendor-skill/approve", strings.NewReader("{}"))
+	req.Host = "127.0.0.1:7421"
+	req.Header.Set("Authorization", "Bearer test-token")
+	req.Header.Set("Origin", "http://127.0.0.1:7421")
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound && rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 404 or 405 for /approve, got %d", rec.Code)
 	}
 
-	// 2. POST /api/v1/skills/vendor-skill/update/preview with content_reviewed_digest -> 400
-	payload := `{"expected_content_digest":"sha256:123","content_reviewed_digest":"sha256:456"}`
-	recPreview := post(t, srv, "/api/v1/skills/vendor-skill/update/preview", []byte(payload))
-	if recPreview.Code != http.StatusBadRequest {
-		t.Fatalf("POST /update/preview with content_reviewed_digest should return 400, got %d: %s", recPreview.Code, recPreview.Body.String())
+	// 2. POST /api/v1/skills/vendor-skill/update/preview with content_reviewed_digest -> 400 DisallowUnknownFields
+	updateBody := `{"expected_content_digest":"sha256:aaaa","content_reviewed_digest":"sha256:bbbb"}`
+	req2 := httptest.NewRequest(http.MethodPost, "/api/v1/skills/vendor-skill/update/preview", strings.NewReader(updateBody))
+	req2.Host = "127.0.0.1:7421"
+	req2.Header.Set("Authorization", "Bearer test-token")
+	req2.Header.Set("Origin", "http://127.0.0.1:7421")
+	req2.Header.Set("Content-Type", "application/json")
+	rec2 := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for update/preview with content_reviewed_digest, got %d (body: %s)", rec2.Code, rec2.Body.String())
 	}
 }

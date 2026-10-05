@@ -103,6 +103,8 @@ export interface SkillReviewResult {
   activation_readiness: {
     ready: boolean;
     untouched_scaffold: boolean;
+    missing_fields?: string[];
+    warnings?: string[];
   };
   resource_status: {
     entrypoint_path: string;
@@ -228,19 +230,6 @@ export interface FunnelReport {
   setup_failures?: string[];
 }
 
-export interface SkillProvenance {
-  created_by?: string;
-  source_locator?: string;
-  source_revision?: string;
-  upstream_path?: string;
-  origin?: {
-    kind: string;
-    repository: string;
-    commit: string;
-    path?: string;
-  };
-}
-
 export interface ChangesSinceApproval {
   found: boolean;
   commit?: string;
@@ -248,10 +237,10 @@ export interface ChangesSinceApproval {
   added?: string[];
   removed?: string[];
   modified?: string[];
-  runtime_changed?: boolean;
-  scripts_changed?: boolean;
-  dependencies_changed?: boolean;
-  history_truncated?: boolean;
+  runtime_changed: boolean;
+  scripts_changed: boolean;
+  dependencies_changed: boolean;
+  history_truncated: boolean;
 }
 
 export interface ContentTrust {
@@ -273,11 +262,30 @@ export interface RuntimeHints {
   install_cues: string[];
 }
 
+export interface SkillProvenance {
+  created_by?: string;
+  source_id?: string;
+  source_url?: string;
+  source_path?: string;
+  origin?: {
+    kind: string;
+    repository: string;
+    commit: string;
+    tag?: string;
+    branch?: string;
+  };
+}
+
+export interface RuntimeBin {
+  name: string;
+  version?: string;
+}
+
 export interface RuntimeSpec {
   requires?: {
-    bins?: { name: string; version?: string }[] | null;
-    env?: string[] | null;
-    platforms?: string[] | null;
+    bins?: RuntimeBin[];
+    env?: string[];
+    platforms?: string[];
   };
   setup?: {
     command?: string;
@@ -286,7 +294,7 @@ export interface RuntimeSpec {
 }
 
 export interface SetupStatus {
-  state: 'ready' | 'setup_required' | 'review_required' | 'unsupported_platform' | 'unknown' | string;
+  state: string;
   reason_codes?: string[];
   basis?: string;
   checked_at?: string;
@@ -295,7 +303,7 @@ export interface SetupStatus {
 export interface DoctorCheck {
   kind: string;
   name: string;
-  status: 'pass' | 'fail' | 'warn' | string;
+  status: string;
   detail?: string;
 }
 
@@ -318,4 +326,5 @@ export interface SkillRuntimeStatus {
   doctor_command: string;
   env_keys: string[];
   env_set_command: string;
+  warnings?: Array<{ code: string; summary: string }>;
 }

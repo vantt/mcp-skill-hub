@@ -75,9 +75,7 @@ func populate(ctx context.Context, tx *sql.Tx, input buildInput, builderVersion 
 			return nil, err
 		}
 		aliases := strings.Join(stringValues(item.Document["aliases"]), " ")
-		topics := stringValues(item.Document["topics"])
-		techs := stringValues(item.Document["technologies"])
-		keywords := strings.Join(append(topics, techs...), " ")
+		keywords := strings.Join(append(stringValues(item.Document["topics"]), stringValues(item.Document["technologies"])...), " ")
 		if _, err := tx.ExecContext(ctx, `INSERT INTO skill_fts(skill_id,name,aliases,description,triggers,examples,keywords) VALUES(?,?,?,?,?,?,?)`, item.ID, name, aliases, description, strings.Join(triggers, " "), strings.Join(examples, " "), keywords); err != nil {
 			return nil, err
 		}

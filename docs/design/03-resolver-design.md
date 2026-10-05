@@ -67,6 +67,8 @@ id: consumer-reliability-review
 name: Consumer Reliability Review
 status: active
 description: Review retry, acknowledgement and duplicate-processing behavior.
+topics: [messaging, reliability]
+technologies: [kafka, rabbitmq, go]
 
 routing:
   operations: [review, debug]
@@ -74,11 +76,17 @@ routing:
     - review retry and idempotency handling in a message consumer
     - investigate duplicate handling after consumer restart
     - check acknowledgement ordering around side effects
+  examples:
+    - check message consumer for idempotent message processing
+    - verify acknowledgement occurs after database transaction commit
+    - investigate duplicate message handling upon consumer restart
+  counter_examples:
+    - design a new event-driven service topology
+    - tune broker cluster configuration
   not_for:
     - design a new event-driven service topology
     - tune broker cluster configuration
   min_scope: multi_step
-
   requirements:
     facts:
       any:
@@ -123,8 +131,21 @@ Active skill phải có:
 - mọi relationship target tồn tại và không self-cycle bất hợp lệ;
 - discriminator field/question/choices nhất quán nếu khai báo.
 
-Không bắt `distinguish_from` với mọi cặp. Duplicate detection/evaluation tạo curation warning cho cặp thường xuyên ambiguity.
+Không bắt `distinguish_from` với mọi cặp.
 
+### Metadata linting rules (warnings)
+
+Hệ thống cung cấp các quy tắc lint metadata tự động khi chạy `skillhub validate` hoặc `skillhub skill review`. Các cảnh báo này **không bao giờ làm hỏng hay chặn validation** (exit code 0 nếu không có lỗi cấu trúc):
+
+| Mã cảnh báo | Điều kiện kích hoạt | Hướng dẫn khắc phục (`fix`) |
+|---|---|---|
+| `trigger_collision` | Triggers giữa 2 skill overlap $\ge 0.8$ (hoặc trùng lặp sau normalize) mà không có quan hệ `distinguish_from`, `equivalent_to`, hoặc `not_for`/`counter_examples` giữa chúng (overlap $\ge 0.5$) | Thêm `distinguish_from` hoặc thu hẹp trigger |
+| `generic_trigger` | Toàn bộ token trong trigger đều thuộc stoplist chung (`code, coding, help, fix, task, work, write, create, update, change, build, make, do, run, use, general, stuff, thing, project, app, file, review, test, debug, issue, problem`) hoặc $< 2$ tokens | Bổ sung danh từ domain cụ thể cho trigger |
+| `missing_examples` | Active skill có ít hơn 3 `routing.examples` | Bổ sung 3–5 câu mô tả tác vụ tự nhiên |
+| `example_restates_trigger` | Một example overlap $\ge 0.9$ với trigger của chính skill đó | Diễn đạt lại theo ngữ cảnh tác vụ thực tế |
+| `near_duplicate` | Hai active skills có tập token description + triggers overlap $\ge 0.6$ mà không có quan hệ phân định giữa chúng | Bổ sung `distinguish_from`, `equivalent_to` hoặc gộp skill |
+
+*Ghi chú:* Việc kiểm tra theo cặp có độ phức tạp $O(n^2)$; nếu số lượng active skills vượt quá 2.000, bước kiểm tra cặp sẽ được bỏ qua với cảnh báo `lint_pairs_skipped`.
 ## 4. Index design
 
 ### 4.1 SQLite tables định hướng
@@ -145,19 +166,26 @@ Các tables này nằm trong immutable catalog generation được build từ ca
 
 ### 4.2 FTS document
 
-Mỗi skill có một document metadata và các trigger row riêng:
+Mỗi skill có document metadata trong bảng ảo `skill_fts` (`DerivedSchemaVersion = 3`):
 
 ```text
-name             high boost
-aliases          high boost
-description      medium-high
-triggers         high
-artifact kinds   medium
-topic/technology curated metadata  medium
-not_for          separate exclusion index; không ghép positive document
+skill_fts(skill_id UNINDEXED, name, aliases, description, triggers, examples, keywords)
 ```
 
-Không index toàn `SKILL.md`, references hoặc assets mặc định. Điều đó làm general prose và code noise lấn routing signals.
+Trọng số BM25 được định nghĩa tường minh cho cả 7 cột:
+`bm25(skill_fts, 0.0, 8.0, 5.0, 7.0, 1.0, 3.0, 2.0)`
+
+| Cột | Trọng số BM25 | Ý nghĩa |
+|---|---:|---|
+| `skill_id` | `0.0` | UNINDEXED, không tính điểm |
+| `name` | `8.0` | Tên chính thức của skill (high boost) |
+| `aliases` | `5.0` | Các tên gọi phụ/bí danh |
+| `description` | `7.0` | Mô tả mục đích sử dụng |
+| `triggers` | `1.0` | Các cụm từ kích hoạt (baseline weight) |
+| `examples` | `3.0` | Toàn bộ `routing.examples` nối bằng khoảng trắng |
+| `keywords` | `2.0` | `topics` + `technologies` nối bằng khoảng trắng |
+
+`counter_examples` và `not_for` **không được đưa vào index FTS** để tránh tạo ra ứng viên giả cho các truy vấn phủ định.
 
 ### 4.3 Normalization
 
@@ -282,8 +310,12 @@ score = clamp(base - penalty, 0, 1)
 
 Weights không được hard-code rải rác. Chúng nằm trong `config/recommendation.yaml`, có policy revision và được thay qua reviewed change.
 
-BM25/vector raw scores phải normalize theo method versioned. `score` là ranking score, không tự nhận là probability.
+- **Trigger feature:** tính bằng `max(bestOverlap(query, Triggers), 0.9 × bestOverlap(query, Examples))`. Khi example thắng và $\ge 0.3$, gán mã lý do `example_match`. Rank của kênh rule-channel dùng chung giá trị kết hợp này.
+- **Not-for feature:** tính bằng `max(bestOverlap(query, NotFor), bestOverlap(query, CounterExamples))`, chia sẻ ngưỡng soft penalty ($\ge 0.35 \to \text{unknown}$) và hard exclusion ($\ge 0.72 \to \text{violated}$).
+- **Lexical tokens:** bổ sung thêm `topics` và `technologies` vào tập từ khóa metadata.
+- **Technology matching:** khớp `technologies` với `ActiveArtifact.Language` hoặc các facts thuộc danh sách `language, framework, library, dependency, technology, runtime, platform`. Khi khớp, nâng artifact feature lên $\max(\text{current}, 1.0)$ và gán lý do `technology_match` (không phạt khi không khớp).
 
+BM25/vector raw scores phải normalize theo method versioned. `score` là ranking score, không tự nhận là probability.
 ### 7.2 Ambient fact cap
 
 Tổng boost từ workspace facts không được vượt task/trigger evidence. Config nên có cap:
@@ -390,9 +422,9 @@ calibration:
   method: none
   artifact: null
 ```
-
 Các số trên chỉ minh họa. Mọi thay đổi phải kèm eval report và catalog snapshot.
 
+Hiệu chuẩn chính sách tuyển chọn (calibration grid search) qua 162 điểm tham số đã chứng minh trọng số `weights.trigger: 0.44` và `weights.not_for_penalty: 0.36` tăng Precision@1 thêm +0.0244 và Recall thêm +0.0238 mà không làm thoái hóa bất kỳ chỉ số gate nào (chi tiết tại báo cáo routing calibration report).
 ## 10. Supporting skill selection
 
 Chỉ xét supporting sau khi primary được chọn. Candidate supporting phải:

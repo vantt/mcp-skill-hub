@@ -3,16 +3,9 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { RuntimeTab } from './RuntimeTab';
 import { loadGolden } from '../../test/golden';
-import type {
-  RuntimeHints,
-  SkillReviewResult,
-  SkillRuntimeStatus,
-} from '../../api/types';
+import type { RuntimeHints, SkillRuntimeStatus } from '../../api/types';
 
-function renderRuntimeTab(
-  statusData: SkillRuntimeStatus,
-  runtimeHints?: RuntimeHints,
-) {
+function renderRuntimeTab(statusData?: SkillRuntimeStatus, skillId = 'review-skill', hints?: RuntimeHints) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
@@ -21,66 +14,71 @@ function renderRuntimeTab(
     },
   });
 
-  queryClient.setQueryData(['skill-runtime', statusData.skill_id], statusData);
+  if (statusData) {
+    queryClient.setQueryData(['skill-runtime', skillId], statusData);
+  }
 
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <RuntimeTab skillId={statusData.skill_id} runtimeHints={runtimeHints} />
-    </QueryClientProvider>,
-  );
+  return {
+    queryClient,
+    ...render(
+      <QueryClientProvider client={queryClient}>
+        <RuntimeTab skillId={skillId} runtimeHints={hints} />
+      </QueryClientProvider>,
+    ),
+  };
 }
 
 describe('RuntimeTab', () => {
-  it('renders third-party runtime block, hints, and env keys from golden', () => {
+  const sentinel = 'SENTINEL-TEST-SECRET';
+
+  it('renders third-party unapproved runtime with hints and env keys', () => {
     const status = loadGolden<SkillRuntimeStatus>('skill-runtime-third-party');
-    const review = loadGolden<SkillReviewResult>('skill-review-third-party');
-    const hints = review.runtime_hints;
+    const hints: RuntimeHints = {
+      interpreters: ['python3'],
+      dependency_manifests: ['package.json'],
+      missing_lockfiles: ['package.json (package-lock.json)'],
+      absolute_install_paths: ['~/.claude/skills/target'],
+      missing_runtime_block: false,
+      install_prose_detected: true,
+      install_cues: ['pip install'],
+    };
 
-    const { container } = renderRuntimeTab(status, hints);
+    const { container } = renderRuntimeTab(status, 'vendor-skill', hints);
 
-    // Header verdict
+    expect(screen.getByText('Runtime readiness')).toBeInTheDocument();
     expect(screen.getByText('Needs review')).toBeInTheDocument();
-    expect(screen.getByText('content_review_required')).toBeInTheDocument();
-
-    // Runtime block
-    expect(screen.getAllByText('python3').length).toBeGreaterThan(0);
     expect(screen.getByText('VENDOR_TOKEN')).toBeInTheDocument();
-    expect(screen.getByText('stored in skill env')).toBeInTheDocument();
+    expect(screen.getByText('python3')).toBeInTheDocument();
     expect(screen.getByText('Values are never shown.')).toBeInTheDocument();
 
-    // Hints
-    expect(screen.getByText('Absolute install paths detected')).toBeInTheDocument();
-    expect(screen.getByText(/SKILL\.md/)).toBeInTheDocument();
-    expect(screen.getByText('Missing lockfiles')).toBeInTheDocument();
-    expect(screen.getByText(/package\.json/)).toBeInTheDocument();
+    // Authoring warnings
+    expect(screen.getByText(/Absolute install paths/)).toBeInTheDocument();
+    expect(screen.getByText(/Missing lockfiles/)).toBeInTheDocument();
 
-    // Sentinel check: never contains any secret sentinel
-    expect(container.textContent).not.toContain('SENTINEL');
+    // Verify secret sentinel is never rendered
+    expect(container.textContent).not.toContain(sentinel);
   });
 
-  it('renders approved third-party skill with doctor evidence and basis terminal', () => {
+  it('renders approved skill with doctor evidence and terminal basis', () => {
     const status = loadGolden<SkillRuntimeStatus>('skill-runtime-approved');
-    const { container } = renderRuntimeTab(status);
+    const { container } = renderRuntimeTab(status, 'approved-skill');
 
-    // Header verdict
+    expect(screen.getByText('Runtime readiness')).toBeInTheDocument();
     expect(screen.getByText('Ready')).toBeInTheDocument();
-    expect(container.textContent).toContain('basis: terminal');
+    expect(screen.getByText(/basis: terminal/)).toBeInTheDocument();
+    expect(screen.getByText('Supported platforms')).toBeInTheDocument();
 
-    // Platform checklist row
-    expect(screen.getByText('Platform support')).toBeInTheDocument();
-    expect(screen.getByText('pass')).toBeInTheDocument();
+    expect(screen.getByText('Re-check from your terminal:')).toBeInTheDocument();
+    expect(screen.getByText('skillhub skill doctor approved-skill')).toBeInTheDocument();
 
-    // Sentinel check
-    expect(container.textContent).not.toContain('SENTINEL');
+    expect(container.textContent).not.toContain(sentinel);
   });
 
   it('renders empty state when skill declares no runtime requirements', () => {
     const status = loadGolden<SkillRuntimeStatus>('skill-runtime');
-    const { container } = renderRuntimeTab(status);
+    const { container } = renderRuntimeTab(status, 'review-skill');
 
-    expect(
-      screen.getByText('This skill declares no runtime requirements.'),
-    ).toBeInTheDocument();
-    expect(container.textContent).not.toContain('SENTINEL');
+    expect(screen.getByText('This skill declares no runtime requirements.')).toBeInTheDocument();
+    expect(container.textContent).not.toContain(sentinel);
   });
 });

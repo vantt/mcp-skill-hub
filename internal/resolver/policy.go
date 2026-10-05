@@ -34,7 +34,7 @@ func DefaultPolicy() Policy {
 		CandidateLimit: 40, ApplicabilityFloor: 0.16, HighConfidence: 0.68,
 		MinimumMargin: 0.04, AmbiguityWindow: 0.04, SupportingFloor: 0.08,
 		MaximumSupporting: 2, ClarificationBudget: 1,
-		Weights: Weights{Lexical: .28, Trigger: .38, Artifact: .08, Fact: .10, Operation: .15, Quality: .03, NotFor: .42, Constraint: .48, Scope: .25},
+		Weights: Weights{Lexical: .28, Trigger: .44, Artifact: .08, Fact: .10, Operation: .15, Quality: .03, NotFor: .36, Constraint: .48, Scope: .25},
 	}
 	policy.Revision = fingerprint(struct {
 		CandidateLimit                                                                      int

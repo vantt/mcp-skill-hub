@@ -33,7 +33,7 @@ Skill Hub là một **hệ thống quản trị procedural knowledge được cu
 | Server owns Hub routing | Agent không học taxonomy hoặc rerank catalog bình thường |
 | Host owns activation | Hub không tự thay procedure local/host-locked |
 | Evidence before ontology | Request giữ task, constraints và facts thay vì rich semantic labels |
-| Progressive disclosure | Resolve trước, activate, rồi mới load `SKILL.md` và resources cần thiết |
+| Progressive disclosure | Resolve trước, activate, rồi mới load content và resources cần thiết. Với trusted skills, Hub cung cấp digest-pinned read-only local snapshot và writable state directory; Hub không bao giờ execute skill code trong MCP flow |
 | Abstention is success | `no_skill` tốt hơn ép một skill không hữu ích |
 | Reproducible policy | Metadata, weights, thresholds và eval cases đã duyệt nằm trong Git |
 
@@ -229,10 +229,11 @@ Các ranh giới quan trọng:
 
 - Hub sở hữu recommendation trong catalog nhưng không tự activate procedure.
 - Agent Host kiểm tra policy, capability và local procedure đang active.
-- Resolve response không chứa `SKILL.md`; manifest và content chỉ được đọc sau approval.
+- Resolve response không chứa `SKILL.md`; manifest, local snapshot và content chỉ được load sau khi activate (`skill_get` hoặc `skills/get` + `resources/read`).
+- Đối với third-party skill chưa được duyệt content (`review_required`), Hub trả về `local.status: review_required`, không trả content và từ chối `resources/read` với mã lỗi `content_review_required`.
+- Với trusted skill, Hub xuất digest-pinned snapshot read-only (`0444`) tại `runtime/cache/skills/<id>@<d16>/` và writable state directory tại `runtime/envs/<id>@<deps16>/`.
 - Skill identity, manifest và resources phải được pin vào cùng catalog snapshot/digest.
 - `no_skill` và `already_covered` là kết quả hợp lệ, không phải lỗi.
-
 Chi tiết contract, state machine và error model nằm trong [02-agent-hub-protocol.md](02-agent-hub-protocol.md); thuật toán retrieval/ranking nằm trong [03-resolver-design.md](03-resolver-design.md).
 
 ## 7. Data workspace lifecycle và consistency
@@ -291,8 +292,11 @@ skillhub-workspace/               # Git repository; không chứa skillhub binar
     │   └── generations/*.db
     ├── operational.db
     ├── telemetry.db
+    ├── config/<skill-id>/env     # 0600 per-skill secret env file (user data)
+    ├── envs/<skill-id>@<deps16>/ # writable state directory (disposable)
     └── cache/
-```
+        ├── skills/<id>@<d16>/    # 0444 read-only snapshot (disposable)
+        └── doctor/<machine>/<skill-id>@<fingerprint>.json # cached doctor results, basis: terminal (disposable)
 
 ### 7.3 Data ownership
 
@@ -534,14 +538,16 @@ Không coi tên dependency là quyết định vĩnh viễn trước prototype/l
 
 ## 11. Security và operational constraints
 
+- **Content trust gate (cooperative-not-adversarial):** Cơ chế content trust ngăn chặn việc agent hợp tác vô tình thực thi mã chưa kiểm duyệt từ bên thứ ba (nguồn `github`/`git` hoặc có `provenance.source_id`). Cổng này không chống lại agent thù địch có quyền truy cập trực tiếp filesystem workspace. Kỹ năng thêm từ thư mục local được mặc định tin cậy (user decision).
+- **Phê duyệt nội dung chỉ qua CLI:** Lệnh duyệt duy nhất là `skillhub skill edit <id> --approve-content <digest>`. Tuyệt đối không hỗ trợ duyệt qua MCP tools hoặc WebUI để tránh agent tự phê duyệt. Mọi sửa đổi nội dung hay runtime block đều làm mất hiệu lực phê duyệt cũ.
+- **Bảo mật biến môi trường:** Tệp secret env tại `runtime/config/<id>/env` có quyền `0600` trong thư mục `0700`, không bao giờ được commit vào Git hay log giá trị; các biến bắt đầu bằng `SKILLHUB_` là dành riêng. Lệnh `skill env list` và WebUI chỉ hiển thị tên biến, không hiển thị giá trị.
 - Chỉ cho phép repository protocol đã cấu hình; timeout và size limits.
 - Normalize và containment-check mọi resource path; reject symlink/path escape.
-- Không execute upstream script trong ingestion/distillation.
+- Không execute upstream script trong ingestion/distillation. Hub không thực thi script của skill trong luồng MCP; việc thực thi setup/run thuộc quyền kiểm soát của Agent Host / user terminal.
 - Không log secrets, absolute paths hoặc source snippets mặc định.
 - File permissions hạn chế cho DB/event logs.
 - `install.sh` không thực thi binary trước khi checksum verification; hỗ trợ pin version và uninstall path rõ ràng.
 - Release CI tạo SBOM, checksums và ký artifact khi hạ tầng cho phép.
-
 ## 12. Non-goals V1
 
 - Microservices hoặc distributed database.

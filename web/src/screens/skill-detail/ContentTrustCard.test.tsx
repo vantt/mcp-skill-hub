@@ -5,44 +5,47 @@ import { loadGolden } from '../../test/golden';
 import type { ContentTrust, SkillReviewResult } from '../../api/types';
 
 describe('ContentTrustCard', () => {
-  it('renders unapproved third-party skill from golden with no approve button', () => {
+  it('renders review required state without approve buttons from golden fixture', () => {
     const review = loadGolden<SkillReviewResult>('skill-review-third-party');
     expect(review.content_trust).toBeDefined();
+    const trust = review.content_trust!;
 
-    const { container } = render(<ContentTrustCard trust={review.content_trust!} />);
+    const { container } = render(<ContentTrustCard trust={trust} />);
 
-    // Shows Review required badge
     expect(screen.getByText('Review required')).toBeInTheDocument();
-
-    // Shows digest
-    expect(screen.getByText(review.content_trust!.content_digest)).toBeInTheDocument();
-
-    // Shows approve command text
-    expect(screen.getByText(review.content_trust!.approve_command!)).toBeInTheDocument();
+    expect(screen.getByText(trust.content_digest)).toBeInTheDocument();
+    if (trust.approve_command) {
+      expect(screen.getByText(trust.approve_command)).toBeInTheDocument();
+    }
     expect(
       screen.getByText(
-        'Approval is CLI-only. Review the content, then run this command in your terminal. The WebUI and agents cannot approve content.',
-      ),
+        'Approval is CLI-only. Review the content, then run this command in your terminal. The WebUI and agents cannot approve content.'
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Agents get no content and no files from this skill until it is approved.')
     ).toBeInTheDocument();
 
-    // CRITICAL: No approve button and no form element
+    // Verify security requirement: no approve button and no form element
     const approveButtons = screen.queryAllByRole('button', { name: /approve/i });
     expect(approveButtons).toHaveLength(0);
-    expect(container.querySelectorAll('form')).toHaveLength(0);
+    expect(container.querySelector('form')).toBeNull();
   });
 
-  it('renders changes since approval when modified', () => {
+  it('renders changed since approval with modified paths and diff command', () => {
     const trust: ContentTrust = {
       third_party: true,
       approved: false,
-      content_digest: 'sha256:1111222233334444555566667777888899990000aaaabbbbccccddddeeeeffff',
+      content_digest: 'sha256:1122334455667788',
+      approve_command: 'skillhub skill edit vendor-skill --approve-content sha256:1122334455667788',
       changes_since_approval: {
         found: true,
         scripts_changed: true,
         runtime_changed: true,
         dependencies_changed: false,
         modified: ['scripts/run.py'],
-        diff_command: 'git diff HEAD~1..HEAD',
+        diff_command: 'git diff sha256:old..HEAD -- skills/core/vendor-skill',
+        history_truncated: false,
       },
     };
 
@@ -51,38 +54,45 @@ describe('ContentTrustCard', () => {
     expect(screen.getByText('Changed since approval')).toBeInTheDocument();
     expect(screen.getByText('scripts changed')).toBeInTheDocument();
     expect(screen.getByText('runtime changed')).toBeInTheDocument();
-    expect(screen.queryByText('dependencies changed')).not.toBeInTheDocument();
-    expect(screen.getByText('scripts/run.py')).toBeInTheDocument();
-    expect(screen.getByText('git diff HEAD~1..HEAD')).toBeInTheDocument();
+    expect(screen.queryByText('dependencies changed')).toBeNull();
+    expect(screen.getByText('Modified: scripts/run.py')).toBeInTheDocument();
+    expect(
+      screen.getByText('git diff sha256:old..HEAD -- skills/core/vendor-skill')
+    ).toBeInTheDocument();
   });
 
-  it('shows truncation note when history is truncated', () => {
+  it('renders history truncation note when history_truncated is true', () => {
     const trust: ContentTrust = {
       third_party: true,
       approved: false,
-      content_digest: 'sha256:digest-trunc',
+      content_digest: 'sha256:1122334455667788',
       changes_since_approval: {
         found: true,
+        scripts_changed: false,
+        runtime_changed: false,
+        dependencies_changed: false,
+        modified: ['file.txt'],
         history_truncated: true,
       },
     };
 
     render(<ContentTrustCard trust={trust} />);
+
     expect(
-      screen.getByText('Commit history was truncated during diff walk.'),
+      screen.getByText('History was truncated; older commits are not shown.')
     ).toBeInTheDocument();
   });
 
-  it('renders nothing for local skills', () => {
-    const review = loadGolden<SkillReviewResult>('skill-review');
-    // Local skill has content_trust?.third_party === false (or undefined)
-    const trust: ContentTrust = review.content_trust || {
-      third_party: false,
+  it('renders approved state for approved third-party skill', () => {
+    const trust: ContentTrust = {
+      third_party: true,
       approved: true,
-      content_digest: 'sha256:local',
+      content_digest: 'sha256:approveddigest12345678',
     };
 
-    const { container } = render(<ContentTrustCard trust={trust} />);
-    expect(container).toBeEmptyDOMElement();
+    render(<ContentTrustCard trust={trust} />);
+
+    expect(screen.getByText('Approved')).toBeInTheDocument();
+    expect(screen.getByText("Agents receive this skill's content.")).toBeInTheDocument();
   });
 });

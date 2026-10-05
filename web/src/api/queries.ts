@@ -66,8 +66,7 @@ export function useSkillUsage(id: string, since: FunnelSince = '30d') {
 export function useSkillRuntime(id: string) {
   return useQuery({
     queryKey: ['skill-runtime', id],
-    queryFn: () =>
-      apiFetch<SkillRuntimeStatus>(`/skills/${encodeURIComponent(id)}/runtime`),
+    queryFn: () => apiFetch<SkillRuntimeStatus>(`/skills/${encodeURIComponent(id)}/runtime`),
     enabled: Boolean(id),
   });
 }

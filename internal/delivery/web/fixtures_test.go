@@ -3,6 +3,10 @@ package web
 import (
 	"context"
 	"fmt"
+	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/skill"
+	"github.com/vantt/mcp-skill-hub/internal/telemetry"
+	"gopkg.in/yaml.v3"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,11 +16,6 @@ import (
 	"testing"
 	"testing/fstest"
 	"time"
-
-	"github.com/vantt/mcp-skill-hub/internal/app"
-	"github.com/vantt/mcp-skill-hub/internal/skill"
-	"github.com/vantt/mcp-skill-hub/internal/telemetry"
-	"gopkg.in/yaml.v3"
 )
 
 func newWebWorkspace(t *testing.T) string {
@@ -231,60 +230,61 @@ func newRuntimeWebWorkspace(t *testing.T) string {
 	}
 
 	service := app.SkillService{}
-	ctx := context.Background()
 
-	// 1. vendor-skill (third-party, unapproved)
-	vContent := []byte("---\nname: vendor-skill\ndescription: Third-party vendor skill.\n---\n\n# Vendor Skill\n\nRun pip install some-pkg and check ~/.claude/skills/vendor-skill/scripts/run.py\n")
-	vCreated, err := service.PreviewCreate(ctx, root, skill.CreateInput{
+	// 1. vendor-skill (third-party, unapproved, runtime with bins/env/setup)
+	vendorContent := []byte("---\nname: vendor-skill\ndescription: Vendor integration tool.\nlicense: Apache-2.0\n---\n\n# Vendor Skill\n\nRun pip install something in ~/.claude/skills/\n")
+	created, err := service.PreviewCreate(context.Background(), root, skill.CreateInput{
 		ID:          "vendor-skill",
 		Collection:  "core",
 		Name:        "Vendor Skill",
-		Description: "Third-party vendor skill.",
-		Content:     vContent,
+		Description: "Vendor integration tool.",
+		Content:     vendorContent,
 		Routing: skill.RoutingInput{
-			Operations: []string{"operate"},
-			Triggers:   []string{"operate vendor skill"},
-			NotFor:     []string{"unrelated"},
-			MinScope:   "multi_step",
+			Triggers: []string{"vendor integration"},
+			NotFor:   []string{"unrelated tasks"},
+			MinScope: "single_step",
 		},
 	}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result, err := service.ConfirmSkillMutation(ctx, root, vCreated, vCreated.Confirmation.Confirmation.Pins); err != nil || result.Error != nil {
+	if result, err := service.ConfirmSkillMutation(context.Background(), root, created, created.Confirmation.Confirmation.Pins); err != nil || result.Error != nil {
 		t.Fatalf("confirm create vendor = %#v, %v", result, err)
 	}
-	vActivated, err := service.PreviewActivate(ctx, root, "vendor-skill", false)
+	activated, err := service.PreviewActivate(context.Background(), root, "vendor-skill", false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result, err := service.ConfirmSkillMutation(ctx, root, vActivated, vActivated.Confirmation.Confirmation.Pins); err != nil || result.Error != nil {
+	if result, err := service.ConfirmSkillMutation(context.Background(), root, activated, activated.Confirmation.Confirmation.Pins); err != nil || result.Error != nil {
 		t.Fatalf("confirm activate vendor = %#v, %v", result, err)
 	}
 
 	vendorDir := filepath.Join(root, "skills", "core", "vendor-skill")
+	// write scripts/run.py
 	_ = os.MkdirAll(filepath.Join(vendorDir, "scripts"), 0o755)
 	_ = os.WriteFile(filepath.Join(vendorDir, "scripts", "run.py"), []byte("#!/usr/bin/env python3\nprint('vendor')\n"), 0o644)
-	_ = os.WriteFile(filepath.Join(vendorDir, "package.json"), []byte(`{"name": "vendor-skill"}`), 0o644)
+	// write package.json without lockfile
+	_ = os.WriteFile(filepath.Join(vendorDir, "package.json"), []byte("{\"name\": \"vendor\"}\n"), 0o644)
 
-	vMetaPath := filepath.Join(vendorDir, "skill.meta.yaml")
-	vMetaData, err := os.ReadFile(vMetaPath)
+	// update vendor-skill metadata: provenance.origin, runtime block
+	vendorMetaPath := filepath.Join(vendorDir, "skill.meta.yaml")
+	vendorMetaData, err := os.ReadFile(vendorMetaPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var vMetaDoc map[string]any
-	if err := yaml.Unmarshal(vMetaData, &vMetaDoc); err != nil {
+	var vendorDoc map[string]any
+	if err := yaml.Unmarshal(vendorMetaData, &vendorDoc); err != nil {
 		t.Fatal(err)
 	}
-	vMetaDoc["provenance"] = map[string]any{
+	vendorDoc["provenance"] = map[string]any{
 		"created_by": "skillhub",
 		"origin": map[string]any{
 			"kind":       "github",
-			"repository": "https://github.com/example/vendor-skills",
+			"repository": "https://github.com/vendor/skills",
 			"commit":     strings.Repeat("a", 40),
 		},
 	}
-	vMetaDoc["runtime"] = map[string]any{
+	vendorDoc["runtime"] = map[string]any{
 		"requires": map[string]any{
 			"bins": []any{"python3"},
 			"env":  []any{"VENDOR_TOKEN"},
@@ -293,90 +293,100 @@ func newRuntimeWebWorkspace(t *testing.T) string {
 			"check": "python3 scripts/run.py",
 		},
 	}
-	encodedVMeta, _ := yaml.Marshal(vMetaDoc)
-	_ = os.WriteFile(vMetaPath, encodedVMeta, 0o644)
-
-	// Store VENDOR_TOKEN with sentinel value
-	if _, err := (app.SkillEnvService{}).Set(ctx, root, "vendor-skill", "VENDOR_TOKEN", "SENTINEL-VENDOR-ENV-VALUE"); err != nil {
-		t.Fatalf("env set: %v", err)
+	vendorEncoded, err := yaml.Marshal(vendorDoc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vendorEncoded = regexp.MustCompile(`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z`).ReplaceAll(vendorEncoded, []byte("2026-10-04T12:00:00.000000000Z"))
+	if err := os.WriteFile(vendorMetaPath, vendorEncoded, 0o644); err != nil {
+		t.Fatal(err)
 	}
 
-	// 2. approved-skill
-	aContent := []byte("---\nname: approved-skill\ndescription: Third-party approved skill.\n---\n\n# Approved Skill\n\nApproved instructions.\n")
-	aCreated, err := service.PreviewCreate(ctx, root, skill.CreateInput{
+	// Store VENDOR_TOKEN with a sentinel value
+	const sentinelValue = "SENTINEL-TEST-SECRET"
+	if _, err := (app.SkillEnvService{}).Set(context.Background(), root, "vendor-skill", "VENDOR_TOKEN", sentinelValue); err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. approved-skill (third-party, platforms-only runtime, content_reviewed_digest set, doctor run once)
+	approvedContent := []byte("---\nname: approved-skill\ndescription: Approved vendor tool.\nlicense: Apache-2.0\n---\n\n# Approved Skill\n\nApproved tool.\n")
+	apprCreated, err := service.PreviewCreate(context.Background(), root, skill.CreateInput{
 		ID:          "approved-skill",
 		Collection:  "core",
 		Name:        "Approved Skill",
-		Description: "Third-party approved skill.",
-		Content:     aContent,
+		Description: "Approved vendor tool.",
+		Content:     approvedContent,
 		Routing: skill.RoutingInput{
-			Operations: []string{"operate"},
-			Triggers:   []string{"operate approved skill"},
-			NotFor:     []string{"unrelated"},
-			MinScope:   "multi_step",
+			Triggers: []string{"approved vendor tool"},
+			NotFor:   []string{"unrelated tasks"},
+			MinScope: "single_step",
 		},
 	}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result, err := service.ConfirmSkillMutation(ctx, root, aCreated, aCreated.Confirmation.Confirmation.Pins); err != nil || result.Error != nil {
+	if result, err := service.ConfirmSkillMutation(context.Background(), root, apprCreated, apprCreated.Confirmation.Confirmation.Pins); err != nil || result.Error != nil {
 		t.Fatalf("confirm create approved = %#v, %v", result, err)
 	}
-	aActivated, err := service.PreviewActivate(ctx, root, "approved-skill", false)
+	apprActivated, err := service.PreviewActivate(context.Background(), root, "approved-skill", false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result, err := service.ConfirmSkillMutation(ctx, root, aActivated, aActivated.Confirmation.Confirmation.Pins); err != nil || result.Error != nil {
+	if result, err := service.ConfirmSkillMutation(context.Background(), root, apprActivated, apprActivated.Confirmation.Confirmation.Pins); err != nil || result.Error != nil {
 		t.Fatalf("confirm activate approved = %#v, %v", result, err)
 	}
 
 	approvedDir := filepath.Join(root, "skills", "core", "approved-skill")
-	aMetaPath := filepath.Join(approvedDir, "skill.meta.yaml")
-	aMetaData, err := os.ReadFile(aMetaPath)
+	apprMetaPath := filepath.Join(approvedDir, "skill.meta.yaml")
+	apprMetaData, err := os.ReadFile(apprMetaPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var aMetaDoc map[string]any
-	if err := yaml.Unmarshal(aMetaData, &aMetaDoc); err != nil {
+	var apprDoc map[string]any
+	if err := yaml.Unmarshal(apprMetaData, &apprDoc); err != nil {
 		t.Fatal(err)
 	}
-	aMetaDoc["provenance"] = map[string]any{
+	apprDoc["provenance"] = map[string]any{
 		"created_by": "skillhub",
 		"origin": map[string]any{
 			"kind":       "github",
-			"repository": "https://github.com/example/approved-skills",
+			"repository": "https://github.com/approved/skills",
 			"commit":     strings.Repeat("b", 40),
 		},
 	}
-	aMetaDoc["runtime"] = map[string]any{
+	apprDoc["runtime"] = map[string]any{
 		"requires": map[string]any{
 			"platforms": []any{"linux", "darwin", "windows", "freebsd"},
 		},
 	}
-	encodedAMeta, _ := yaml.Marshal(aMetaDoc)
-	_ = os.WriteFile(aMetaPath, encodedAMeta, 0o644)
-
-	// Calculate trust digest and approve
-	trust, err := service.ContentTrustFor(ctx, root, "approved-skill")
+	apprEncoded, err := yaml.Marshal(apprDoc)
 	if err != nil {
 		t.Fatal(err)
 	}
-	quality, _ := aMetaDoc["quality"].(map[string]any)
-	if quality == nil {
-		quality = map[string]any{}
-	}
-	quality["reviewed"] = true
-	quality["content_reviewed_digest"] = trust.ContentDigest
-	aMetaDoc["quality"] = quality
-	encodedAMeta, _ = yaml.Marshal(aMetaDoc)
-	_ = os.WriteFile(aMetaPath, encodedAMeta, 0o644)
-
-	// Rebuild catalog and run doctor once on approved-skill
-	if _, err := (app.CatalogService{}).BuildCatalogGeneration(ctx, root); err != nil {
+	apprEncoded = regexp.MustCompile(`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z`).ReplaceAll(apprEncoded, []byte("2026-10-04T12:00:00.000000000Z"))
+	if err := os.WriteFile(apprMetaPath, apprEncoded, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := (app.SkillDoctorService{}).Run(ctx, root, "approved-skill"); err != nil {
-		t.Fatalf("doctor run approved-skill: %v", err)
+
+	// Now calculate content digest and approve it
+	trust, err := service.ContentTrustFor(context.Background(), root, "approved-skill")
+	if err != nil || trust.ContentDigest == "" {
+		t.Fatalf("content digest error: %v", err)
+	}
+	apprDoc["quality"] = map[string]any{
+		"reviewed":                true,
+		"content_reviewed_digest": trust.ContentDigest,
+	}
+	apprEncoded, _ = yaml.Marshal(apprDoc)
+	apprEncoded = regexp.MustCompile(`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z`).ReplaceAll(apprEncoded, []byte("2026-10-04T12:00:00.000000000Z"))
+	_ = os.WriteFile(apprMetaPath, apprEncoded, 0o644)
+
+	// Rebuild catalog and run doctor once
+	if _, err := (app.CatalogService{}).BuildCatalogGeneration(context.Background(), root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (app.SkillDoctorService{}).Run(context.Background(), root, "approved-skill"); err != nil {
+		t.Fatal(err)
 	}
 
 	return root

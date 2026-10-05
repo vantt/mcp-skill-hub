@@ -7,14 +7,14 @@ routing:
   operations: [design]
   triggers: [design database schema indexes migrations]
   not_for: [unrelated tasks]
-  examples:
-    - "design relational schema for order management"
-    - "create sql migration adding foreign key indexes"
-    - "plan postgres database normalization and indexing"
-  counter_examples:
-    - "review pull request for logic bugs"
-    - "deploy docker container to production"
   min_scope: multi_step
+  examples:
+    - design postgres relational schema with foreign keys
+    - plan database index optimization for slow queries
+    - create database schema migration script
+  counter_examples:
+    - review pull request for code styling
+    - deploy service to production cluster
 quality:
   reviewed: true
 provenance:

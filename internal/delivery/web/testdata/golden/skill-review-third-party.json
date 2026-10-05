@@ -20,7 +20,7 @@
     },
     {
       "id": "resources",
-      "summary": "4 canonical file(s), 1105 bytes.",
+      "summary": "4 canonical file(s), 1067 bytes.",
       "impact": "Disk resource inventory."
     },
     {
@@ -40,33 +40,30 @@
   "skill_id": "vendor-skill",
   "collection": "core",
   "name": "Vendor Skill",
-  "description": "Third-party vendor skill.",
+  "description": "Vendor integration tool.",
   "lifecycle_state": "active",
   "active_locally": true,
   "routing_eligible": true,
   "valid": true,
   "activation_readiness": {
     "ready": true,
-    "untouched_scaffold": false,
-    "warnings": [
-      "missing_examples: Active skill vendor-skill has 0 routing examples (minimum 3). Fix: Add 3–5 natural task phrasings"
-    ]
+    "untouched_scaffold": false
   },
   "resource_status": {
     "entrypoint_path": "skills/core/vendor-skill/SKILL.md",
     "entrypoint_digest": "<DIGEST>",
     "resource_count": 4,
-    "total_bytes": 1105,
+    "total_bytes": 1067,
     "resources": [
       {
         "path": "skills/core/vendor-skill/SKILL.md",
         "digest": "<DIGEST>",
-        "size_bytes": 163
+        "size_bytes": 149
       },
       {
         "path": "skills/core/vendor-skill/package.json",
         "digest": "<DIGEST>",
-        "size_bytes": 24
+        "size_bytes": 19
       },
       {
         "path": "skills/core/vendor-skill/scripts/run.py",
@@ -76,7 +73,7 @@
       {
         "path": "skills/core/vendor-skill/skill.meta.yaml",
         "digest": "<DIGEST>",
-        "size_bytes": 879
+        "size_bytes": 860
       }
     ]
   },
@@ -94,16 +91,16 @@
     "generation": "gen-<ID>",
     "catalog_snapshot": "<DIGEST>",
     "name": "Vendor Skill",
-    "description": "Third-party vendor skill.",
+    "description": "Vendor integration tool.",
     "status": "active",
     "servable": true,
     "resource_count": 3,
-    "total_bytes": 226
+    "total_bytes": 207
   },
   "diverged": false,
   "provenance": {
     "created_by": "skillhub",
-    "source_locator": "https://github.com/example/vendor-skills",
+    "source_locator": "https://github.com/vendor/skills",
     "source_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
   },
   "git": {

@@ -87,19 +87,19 @@ func (service ResolverService) Resolve(ctx context.Context, path string, request
 	safeRecordTelemetry(service.Telemetry, telemetryEvent(telemetry.EventResolutionStarted, request, response, catalogSnapshot, policyRevision, resolutionStartPayload(request)))
 
 	stage = "resolution"
-	response, err = service.resolveWithin(ctx, root, handle, request, nil)
-	if err != nil {
-		return response, err
-	}
-	stage = "completed"
-	return response, nil
+	response, resultErr = service.resolveWithin(ctx, root, handle, request, nil)
+	return response, resultErr
 }
 
 func (service ResolverService) resolveWithin(ctx context.Context, root string, handle *catalog.Handle, request resolverpkg.Request, decorate func(resolverpkg.Catalog) resolverpkg.Catalog) (resolverpkg.Response, error) {
 	catalogSnapshot := handle.Pointer.CatalogSnapshot
-	view, err := resolverpkg.NewSQLiteCatalog(handle.DB, catalogSnapshot)
+	sqliteCatalog, err := resolverpkg.NewSQLiteCatalog(handle.DB, catalogSnapshot)
 	if err != nil {
 		return resolverpkg.Response{}, err
+	}
+	var view resolverpkg.Catalog = sqliteCatalog
+	if decorate != nil {
+		view = decorate(view)
 	}
 	policy := service.Policy
 	if policy.Revision == "" {
@@ -108,7 +108,6 @@ func (service ResolverService) resolveWithin(ctx context.Context, root string, h
 			return resolverpkg.Response{}, fmt.Errorf("load recommendation policy: %w", err)
 		}
 	}
-
 	baseCache := service.Cache
 	if baseCache == nil {
 		baseCache = sharedResolverCache
@@ -119,11 +118,7 @@ func (service ResolverService) resolveWithin(ctx context.Context, root string, h
 		if len(excluded) > 0 {
 			cache = resolverpkg.NewCache(1)
 		}
-		var cat resolverpkg.Catalog = excludingCatalog{Catalog: view, excluded: excluded}
-		if decorate != nil {
-			cat = decorate(cat)
-		}
-		engine, err := resolverpkg.New(cat, policy, cache)
+		engine, err := resolverpkg.New(excludingCatalog{Catalog: view, excluded: excluded}, policy, cache)
 		if err != nil {
 			return resolverpkg.Response{}, err
 		}

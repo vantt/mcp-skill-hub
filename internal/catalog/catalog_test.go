@@ -535,12 +535,25 @@ func TestCatalogBuildAndValidateParityOnFrontmatterMismatch(t *testing.T) {
 	}
 }
 
-func TestSkillFTSIncludesExamplesAndKeywords(t *testing.T) {
+func TestSkillFTSIndexesExamplesAndKeywords(t *testing.T) {
 	t.Parallel()
 	root := newWorkspace(t)
-	writeCanonical(t, root, "skills/core/review/skill.meta.yaml", "schema_version: 1\nid: review\nname: Review\nstatus: active\ndescription: Review code.\ntopics: [git, testing]\ntechnologies: [go, python]\nrouting:\n  triggers: [review code]\n  not_for: [write prose]\n  examples: [check my pull request, review diff]\n  counter_examples: [write documentation]\n  min_scope: multi_step\n")
-	writeCanonical(t, root, "skills/core/review/SKILL.md", "# Review\n")
-	build(t, root, BuildOptions{BuilderVersion: "test"})
+	writeCanonical(t, root, "skills/core/routed/skill.meta.yaml", `schema_version: 1
+id: routed
+name: Routed Skill
+status: active
+description: Routed skill for tests.
+topics: [testing, quality]
+technologies: [go, sqlite]
+routing:
+  triggers: [run test]
+  not_for: [build web]
+  min_scope: single_step
+  examples: [run unit tests with coverage, check performance metrics]
+  counter_examples: [deploy to production]
+`)
+	writeCanonical(t, root, "skills/core/routed/SKILL.md", "# Routed Skill\n")
+	build(t, root, BuildOptions{})
 
 	handle, err := OpenCurrent(context.Background(), root)
 	if err != nil {
@@ -549,22 +562,34 @@ func TestSkillFTSIncludesExamplesAndKeywords(t *testing.T) {
 	defer handle.Close()
 
 	var examples, keywords string
-	if err := handle.DB.QueryRow(`SELECT examples, keywords FROM skill_fts WHERE skill_id=?`, "review").Scan(&examples, &keywords); err != nil {
-		t.Fatalf("SELECT examples, keywords: %v", err)
+	err = handle.DB.QueryRow(`SELECT examples, keywords FROM skill_fts WHERE skill_id='routed'`).Scan(&examples, &keywords)
+	if err != nil {
+		t.Fatalf("query skill_fts examples and keywords: %v", err)
 	}
-	if examples != "check my pull request review diff" {
-		t.Errorf("examples = %q, want %q", examples, "check my pull request review diff")
+	expectedExamples := "run unit tests with coverage check performance metrics"
+	if examples != expectedExamples {
+		t.Fatalf("examples = %q, want %q", examples, expectedExamples)
 	}
-	if keywords != "git testing go python" {
-		t.Errorf("keywords = %q, want %q", keywords, "git testing go python")
+	expectedKeywords := "testing quality go sqlite"
+	if keywords != expectedKeywords {
+		t.Fatalf("keywords = %q, want %q", keywords, expectedKeywords)
 	}
 
-	// Counter-examples must NOT be indexed in FTS
-	var counterMatch int
-	if err := handle.DB.QueryRow(`SELECT count(*) FROM skill_fts WHERE skill_fts MATCH 'documentation'`).Scan(&counterMatch); err != nil {
+	var metadataCategories []string
+	rows, err := handle.DB.Query(`SELECT DISTINCT category FROM routing_metadata WHERE skill_id='routed' ORDER BY category`)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if counterMatch != 0 {
-		t.Errorf("counter_examples must not match in FTS, got %d matches", counterMatch)
+	defer rows.Close()
+	for rows.Next() {
+		var cat string
+		if err := rows.Scan(&cat); err != nil {
+			t.Fatal(err)
+		}
+		metadataCategories = append(metadataCategories, cat)
+	}
+	joinedCats := strings.Join(metadataCategories, ",")
+	if !strings.Contains(joinedCats, "example") || !strings.Contains(joinedCats, "counter_example") {
+		t.Fatalf("categories = %v, want both example and counter_example", metadataCategories)
 	}
 }

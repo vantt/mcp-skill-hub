@@ -69,6 +69,7 @@ The machine-owned schema authority for error envelopes is [error-envelope.schema
 | `validation_failed` | Correct canonical errors | Canonical workspace files failed schema or consistency validation; inspect the reported file and line errors. |
 | `local_watch_unsupported` | Use a remote Git repository | Watching a local directory is not supported; watching applies only to remote Git repositories. |
 | `resource_content_unavailable` | Re-add or re-import the skill | Required companion resource content is missing or corrupted and historical bytes are never guessed; re-add the skill or restore the resource. |
+| `content_review_required` | Do not retry automatically | The requested skill is from a third-party source and its content has not been approved; the agent must not use the skill and must tell the user to run `skillhub skill review <id>` to review and approve it. |
 
 `git_dirty_after_apply` is deliberately not an error code: after a successful
 approved apply, uncommitted Git changes are a user-facing status or warning.

@@ -1,387 +1,412 @@
 schema_version: 1
 id: no-skill-v1
 cases:
-- id: ns-01
-  partition: held_out
-  split: held_out
+- schema_version: 1
+  id: no-skill-01
+  partition: development
   request:
     schema_version: '1'
-    request_id: req-ns-01
+    request_id: req-no-skill-01
     task:
-      description: hello assistant how are you today
+      description: hello how are you today
       scope: single_step
-    operation: ''
   expected:
     status: no_skill
-- id: ns-02
-  partition: held_out
-  split: held_out
+    no_skill: true
+- schema_version: 1
+  id: no-skill-02
+  partition: development
   request:
     schema_version: '1'
-    request_id: req-ns-02
+    request_id: req-no-skill-02
     task:
-      description: tell me a funny programming joke about recursion
+      description: tell me a funny joke about programming
       scope: single_step
-    operation: ''
   expected:
     status: no_skill
-- id: ns-03
-  partition: held_out
-  split: held_out
+    no_skill: true
+- schema_version: 1
+  id: no-skill-03
+  partition: development
   request:
     schema_version: '1'
-    request_id: req-ns-03
+    request_id: req-no-skill-03
     task:
-      description: what is the capital city of Australia
+      description: what is the meaning of life
       scope: single_step
-    operation: ''
   expected:
     status: no_skill
-- id: ns-04
-  partition: held_out
-  split: held_out
+    no_skill: true
+- schema_version: 1
+  id: no-skill-04
+  partition: development
   request:
     schema_version: '1'
-    request_id: req-ns-04
+    request_id: req-no-skill-04
     task:
-      description: explain the rules of chess and how the knight moves
+      description: good morning what can you help me with
       scope: single_step
-    operation: ''
   expected:
     status: no_skill
-- id: ns-05
-  partition: held_out
-  split: held_out
+    no_skill: true
+- schema_version: 1
+  id: no-skill-05
+  partition: development
   request:
     schema_version: '1'
-    request_id: req-ns-05
+    request_id: req-no-skill-05
     task:
-      description: calculate the square root of 144 plus 37
+      description: who wrote the play Romeo and Juliet
       scope: single_step
-    operation: ''
   expected:
     status: no_skill
-- id: ns-06
-  partition: held_out
-  split: held_out
+    no_skill: true
+- schema_version: 1
+  id: no-skill-06
+  partition: development
   request:
     schema_version: '1'
-    request_id: req-ns-06
+    request_id: req-no-skill-06
     task:
-      description: write a short haiku poem about autumn leaves
+      description: write a haiku about autumn leaves
       scope: single_step
-    operation: ''
   expected:
     status: no_skill
-- id: ns-07
-  partition: held_out
-  split: held_out
+    no_skill: true
+- schema_version: 1
+  id: no-skill-07
+  partition: development
   request:
     schema_version: '1'
-    request_id: req-ns-07
+    request_id: req-no-skill-07
     task:
-      description: recommend a good recipe for homemade sourdough bread
+      description: can you recommend a good Italian restaurant in New York
       scope: single_step
-    operation: ''
   expected:
     status: no_skill
-- id: ns-08
-  partition: held_out
-  split: held_out
+    no_skill: true
+- schema_version: 1
+  id: no-skill-08
+  partition: development
   request:
     schema_version: '1'
-    request_id: req-ns-08
+    request_id: req-no-skill-08
     task:
-      description: how do I change a flat tire on a bicycle
+      description: how do I bake sourdough bread from scratch
       scope: single_step
-    operation: ''
   expected:
     status: no_skill
-- id: ns-09
-  partition: held_out
-  split: held_out
+    no_skill: true
+- schema_version: 1
+  id: no-skill-09
+  partition: development
   request:
     schema_version: '1'
-    request_id: req-ns-09
+    request_id: req-no-skill-09
     task:
-      description: summarize the plot of the novel Pride and Prejudice
+      description: what is the recommended watering schedule for indoor fiddle leaf
+        figs
       scope: single_step
-    operation: ''
   expected:
     status: no_skill
-- id: ns-10
-  partition: held_out
-  split: held_out
+    no_skill: true
+- schema_version: 1
+  id: no-skill-10
+  partition: development
   request:
     schema_version: '1'
-    request_id: req-ns-10
+    request_id: req-no-skill-10
     task:
-      description: translate the sentence good morning into Spanish and French
+      description: explain the rules of cricket and how runs are scored
       scope: single_step
-    operation: ''
   expected:
     status: no_skill
-- id: ns-11
-  partition: held_out
-  split: held_out
+    no_skill: true
+- schema_version: 1
+  id: no-skill-11
+  partition: development
   request:
     schema_version: '1'
-    request_id: req-ns-11
+    request_id: req-no-skill-11
     task:
-      description: what are the primary colors in subtractive color mixing
+      description: what are the symptoms of seasonal allergies and common treatments
       scope: single_step
-    operation: ''
   expected:
     status: no_skill
-- id: ns-12
-  partition: held_out
-  split: held_out
+    no_skill: true
+- schema_version: 1
+  id: no-skill-12
+  partition: development
   request:
     schema_version: '1'
-    request_id: req-ns-12
+    request_id: req-no-skill-12
     task:
-      description: write a polite thank you note to my interviewer
+      description: how to change motor oil in a 2018 Honda Civic
       scope: single_step
-    operation: ''
   expected:
     status: no_skill
-- id: ns-13
-  partition: held_out
-  split: held_out
+    no_skill: true
+- schema_version: 1
+  id: no-skill-13
+  partition: development
   request:
     schema_version: '1'
-    request_id: req-ns-13
+    request_id: req-no-skill-13
     task:
-      description: how does photosynthesis work in green plants
+      description: best practices for training a golden retriever puppy
       scope: single_step
-    operation: ''
   expected:
     status: no_skill
-- id: ns-14
-  partition: held_out
-  split: held_out
+    no_skill: true
+- schema_version: 1
+  id: no-skill-14
+  partition: development
   request:
     schema_version: '1'
-    request_id: req-ns-14
+    request_id: req-no-skill-14
     task:
-      description: who was the sixteenth president of the United States
+      description: calculate mortgage payments for a thirty year fixed loan
       scope: single_step
-    operation: ''
   expected:
     status: no_skill
-- id: ns-15
-  partition: held_out
-  split: held_out
+    no_skill: true
+- schema_version: 1
+  id: no-skill-15
+  partition: development
   request:
     schema_version: '1'
-    request_id: req-ns-15
+    request_id: req-no-skill-15
     task:
-      description: draft a grocery shopping list for a vegan dinner party
+      description: what is the history of the Roman empire during the Pax Romana
       scope: single_step
-    operation: ''
   expected:
     status: no_skill
-- id: ns-16
-  partition: held_out
-  split: held_out
+    no_skill: true
+- schema_version: 1
+  id: no-skill-16
+  partition: development
   request:
     schema_version: '1'
-    request_id: req-ns-16
+    request_id: req-no-skill-16
     task:
-      description: suggest five names for my new puppy
+      description: how to knit a wool scarf for beginners
       scope: single_step
-    operation: ''
   expected:
     status: no_skill
-- id: ns-17
-  partition: held_out
-  split: held_out
+    no_skill: true
+- schema_version: 1
+  id: no-skill-17
+  partition: development
   request:
     schema_version: '1'
-    request_id: req-ns-17
+    request_id: req-no-skill-17
     task:
-      description: what is the boiling temperature of water at high altitude
+      description: recipe for traditional Vietnamese pho noodle soup
       scope: single_step
-    operation: ''
   expected:
     status: no_skill
-- id: ns-18
-  partition: held_out
-  split: held_out
+    no_skill: true
+- schema_version: 1
+  id: no-skill-18
+  partition: development
   request:
     schema_version: '1'
-    request_id: req-ns-18
+    request_id: req-no-skill-18
     task:
-      description: give me travel tips for a weekend trip to Tokyo
+      description: tips for improving cardiovascular endurance for a half marathon
       scope: single_step
-    operation: ''
   expected:
     status: no_skill
-- id: ns-19
-  partition: held_out
-  split: held_out
+    no_skill: true
+- schema_version: 1
+  id: no-skill-19
+  partition: development
   request:
     schema_version: '1'
-    request_id: req-ns-19
+    request_id: req-no-skill-19
     task:
-      description: fix typo change recieve to receive in readme
+      description: what are the primary differences between acrylic and oil painting
       scope: single_step
-    operation: other
   expected:
     status: no_skill
-- id: ns-20
-  partition: held_out
-  split: held_out
+    no_skill: true
+- schema_version: 1
+  id: no-skill-20
+  partition: development
   request:
     schema_version: '1'
-    request_id: req-ns-20
+    request_id: req-no-skill-20
     task:
-      description: update copyright year from 2025 to 2026 in license file
+      description: 'fix the typo in this single word: recieve -> receive'
       scope: single_step
-    operation: other
   expected:
     status: no_skill
-- id: ns-21
-  partition: held_out
-  split: held_out
+    no_skill: true
+- schema_version: 1
+  id: no-skill-21
+  partition: development
   request:
     schema_version: '1'
-    request_id: req-ns-21
+    request_id: req-no-skill-21
     task:
-      description: rename variable x to count in simple loop
+      description: correct the misspelling of calendar in the readme header
       scope: single_step
-    operation: other
   expected:
     status: no_skill
-- id: ns-22
-  partition: held_out
-  split: held_out
+    no_skill: true
+- schema_version: 1
+  id: no-skill-22
+  partition: development
   request:
     schema_version: '1'
-    request_id: req-ns-22
+    request_id: req-no-skill-22
     task:
-      description: format markdown table alignment in notes file
+      description: capitalize the first letter of this title string
       scope: single_step
-    operation: other
   expected:
     status: no_skill
-- id: ns-23
-  partition: held_out
-  split: held_out
+    no_skill: true
+- schema_version: 1
+  id: no-skill-23
+  partition: development
   request:
     schema_version: '1'
-    request_id: req-ns-23
+    request_id: req-no-skill-23
     task:
-      description: convert temperature from 72 fahrenheit to celsius
+      description: remove the trailing whitespace from this line of text
       scope: single_step
-    operation: ''
   expected:
     status: no_skill
-- id: ns-24
-  partition: held_out
-  split: held_out
+    no_skill: true
+- schema_version: 1
+  id: no-skill-24
+  partition: development
   request:
     schema_version: '1'
-    request_id: req-ns-24
+    request_id: req-no-skill-24
     task:
-      description: help me choose a color palette for home interior design
+      description: 'fix spelling mistake in commit message: teh -> the'
       scope: single_step
-    operation: ''
   expected:
     status: no_skill
-- id: ns-25
-  partition: held_out
-  split: held_out
+    no_skill: true
+- schema_version: 1
+  id: no-skill-25
+  partition: development
   request:
     schema_version: '1'
-    request_id: req-ns-25
+    request_id: req-no-skill-25
     task:
-      description: what are the health benefits of green tea
+      description: replace tabs with spaces in this markdown bullet point
       scope: single_step
-    operation: ''
   expected:
     status: no_skill
-- id: ns-26
-  partition: held_out
-  split: held_out
+    no_skill: true
+- schema_version: 1
+  id: no-skill-26
+  partition: development
   request:
     schema_version: '1'
-    request_id: req-ns-26
+    request_id: req-no-skill-26
     task:
-      description: how many ounces are in three liquid quarts
+      description: what time is it right now in UTC
       scope: single_step
-    operation: ''
   expected:
     status: no_skill
-- id: ns-27
-  partition: held_out
-  split: held_out
+    no_skill: true
+- schema_version: 1
+  id: no-skill-27
+  partition: development
   request:
     schema_version: '1'
-    request_id: req-ns-27
+    request_id: req-no-skill-27
     task:
-      description: design plumbing layout for residential bathroom remodeling
-      scope: multi_step
-    operation: design
+      description: convert 50 miles per hour to kilometers per hour
+      scope: single_step
   expected:
     status: no_skill
-- id: ns-28
-  partition: held_out
-  split: held_out
+    no_skill: true
+- schema_version: 1
+  id: no-skill-28
+  partition: development
   request:
     schema_version: '1'
-    request_id: req-ns-28
+    request_id: req-no-skill-28
     task:
-      description: calculate solar panel wattage needed for off grid cabin
-      scope: multi_step
-    operation: explore
+      description: calculate the square root of 144
+      scope: single_step
   expected:
     status: no_skill
-- id: ns-29
-  partition: held_out
-  split: held_out
+    no_skill: true
+- schema_version: 1
+  id: no-skill-29
+  partition: development
   request:
     schema_version: '1'
-    request_id: req-ns-29
+    request_id: req-no-skill-29
     task:
-      description: solder copper pipe joint with propane torch
-      scope: multi_step
-    operation: operate
+      description: generate a list of random names for a fantasy story
+      scope: single_step
   expected:
     status: no_skill
-- id: ns-30
-  partition: held_out
-  split: held_out
+    no_skill: true
+- schema_version: 1
+  id: no-skill-30
+  partition: development
   request:
     schema_version: '1'
-    request_id: req-ns-30
+    request_id: req-no-skill-30
     task:
-      description: sew a button onto a woolen winter coat
-      scope: multi_step
-    operation: operate
+      description: what is the current price of gold per ounce
+      scope: single_step
   expected:
     status: no_skill
-- id: ns-31
-  partition: held_out
-  split: held_out
+    no_skill: true
+- schema_version: 1
+  id: no-skill-31
+  partition: development
   request:
     schema_version: '1'
-    request_id: req-ns-31
+    request_id: req-no-skill-31
     task:
-      description: tune carburetor idle mixture on motorcycle engine
-      scope: multi_step
-    operation: debug
+      description: summarize the plot of the movie Inception
+      scope: single_step
   expected:
     status: no_skill
-- id: ns-32
-  partition: held_out
-  split: held_out
+    no_skill: true
+- schema_version: 1
+  id: no-skill-32
+  partition: development
   request:
     schema_version: '1'
-    request_id: req-ns-32
+    request_id: req-no-skill-32
     task:
-      description: prune apple tree branches during late winter dormancy
-      scope: multi_step
-    operation: operate
+      description: how many days are there between May 1st and September 15th
+      scope: single_step
   expected:
     status: no_skill
+    no_skill: true
+- schema_version: 1
+  id: no-skill-33
+  partition: development
+  request:
+    schema_version: '1'
+    request_id: req-no-skill-33
+    task:
+      description: translate the word thank you into ten languages
+      scope: single_step
+  expected:
+    status: no_skill
+    no_skill: true
+- schema_version: 1
+  id: no-skill-34
+  partition: development
+  request:
+    schema_version: '1'
+    request_id: req-no-skill-34
+    task:
+      description: what are the seven wonders of the ancient world
+      scope: single_step
+  expected:
+    status: no_skill
+    no_skill: true

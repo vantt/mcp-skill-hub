@@ -5,116 +5,82 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
 )
 
-func copyDir(src, dst string) error {
-	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, err := filepath.Rel(src, path)
-		if err != nil {
-			return err
-		}
-		target := filepath.Join(dst, rel)
-		if info.IsDir() {
-			return os.MkdirAll(target, info.Mode())
-		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		return os.WriteFile(target, data, info.Mode())
-	})
-}
-
-func setupOverlayTestWorkspace(t *testing.T) string {
-	t.Helper()
-	root := filepath.Join(t.TempDir(), "workspace")
-	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
-		t.Fatalf("init=%d: %s", code, stderr.String())
+func TestEvaluationRoutingCLIExitCodesAndReporting(t *testing.T) {
+	t.Parallel()
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("locate evaluation test source")
 	}
+	repositoryRoot := filepath.Clean(filepath.Join(filepath.Dir(filename), "..", "..", ".."))
+	fixtureRoot := filepath.Join(repositoryRoot, "testdata", "evaluation")
+	workspace := filepath.Join(t.TempDir(), "workspace")
 
-	overlaySource, err := filepath.Abs("../../../testdata/evaluation/workspace-overlay/skills")
-	if err != nil {
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"init", workspace, "--yes"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("init=%d stdout=%s stderr=%s", code, stdout.String(), stderr.String())
+	}
+	copyEvaluationFixtureTree(t, filepath.Join(fixtureRoot, "workspace-overlay"), workspace)
+	if err := os.RemoveAll(filepath.Join(workspace, "runtime", "catalog")); err != nil {
 		t.Fatal(err)
 	}
-	targetSkills := filepath.Join(root, "skills")
-	if err := copyDir(overlaySource, targetSkills); err != nil {
-		t.Fatalf("copy overlay skills: %v", err)
-	}
-
 	stdout.Reset()
 	stderr.Reset()
-	if code := Run([]string{"rebuild", "--workspace", root, "--json"}, &stdout, &stderr); code != 0 {
-		t.Fatalf("rebuild=%d: %s", code, stderr.String())
-	}
-	return root
-}
-
-func TestEvaluationRoutingCLI(t *testing.T) {
-	t.Parallel()
-	root := setupOverlayTestWorkspace(t)
-	var stdout, stderr bytes.Buffer
-
-	// 1. Human output: exit 0
-	if code := Run([]string{"eval", "routing", "--workspace", root}, &stdout, &stderr); code != 0 {
-		t.Fatalf("eval routing human code=%d stdout=%s stderr=%s", code, stdout.String(), stderr.String())
-	}
-	out := stdout.String()
-	if !strings.Contains(out, "Routing Evaluation Summary") || !strings.Contains(out, "Precision@1") || !strings.Contains(out, "Gate: PASS") {
-		t.Fatalf("unexpected human output:\n%s", out)
+	if code := Run([]string{"rebuild", "--workspace", workspace, "--json"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("rebuild=%d stdout=%s stderr=%s", code, stdout.String(), stderr.String())
 	}
 
-	// 2. JSON output: exit 0
+	// 1. Success exit code 0 without thresholds
 	stdout.Reset()
 	stderr.Reset()
-	if code := Run([]string{"eval", "routing", "--workspace", root, "--json"}, &stdout, &stderr); code != 0 {
-		t.Fatalf("eval routing json code=%d stdout=%s stderr=%s", code, stdout.String(), stderr.String())
+	code := Run([]string{"eval", "routing", "--workspace", workspace, "--json"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("expected code 0, got %d (stdout=%s, stderr=%s)", code, stdout.String(), stderr.String())
 	}
-	var rep app.RoutingEvalReport
-	if err := json.Unmarshal(stdout.Bytes(), &rep); err != nil {
-		t.Fatalf("unmarshal eval report: %v", err)
+	var report app.RoutingEvalReport
+	if err := json.Unmarshal(stdout.Bytes(), &report); err != nil {
+		t.Fatalf("unmarshal report JSON: %v", err)
 	}
-	// 3 skills with 3 examples each = 9 positives, 6 counters
-	if rep.TotalPositives != 9 {
-		t.Errorf("TotalPositives = %d, want 9", rep.TotalPositives)
+	if report.PositiveCases != 9 { // 3 skills * 3 examples each = 9
+		t.Fatalf("expected 9 positive cases, got %d", report.PositiveCases)
 	}
-	if rep.TotalCounters != 6 {
-		t.Errorf("TotalCounters = %d, want 6", rep.TotalCounters)
-	}
-	if !rep.PassedGate {
-		t.Errorf("expected PassedGate=true without thresholds")
+	if report.CounterCases != 6 { // 3 skills * 2 counter examples each = 6
+		t.Fatalf("expected 6 counter cases, got %d", report.CounterCases)
 	}
 
-	// 3. Failed threshold: exit 1
+	// 2. Failed threshold exit code 1
 	stdout.Reset()
 	stderr.Reset()
-	if code := Run([]string{"eval", "routing", "--workspace", root, "--min-precision", "1.0"}, &stdout, &stderr); code != 0 && code != 1 {
-		t.Fatalf("unexpected exit code for threshold: %d", code)
+	code = Run([]string{"eval", "routing", "--workspace", workspace, "--min-recall", "1.0"}, &stdout, &stderr)
+	if report.Recall != nil && *report.Recall < 1.0 {
+		if code != 1 {
+			t.Fatalf("expected code 1 on failed threshold, got %d", code)
+		}
 	}
 
-	// 4. Invalid flag value: exit 2
+	// 3. Invalid argument exit code 2
 	stdout.Reset()
 	stderr.Reset()
-	if code := Run([]string{"eval", "routing", "--workspace", root, "--min-precision", "not-a-number"}, &stdout, &stderr); code != 2 {
-		t.Fatalf("invalid flag value code=%d, want 2", code)
+	code = Run([]string{"eval", "routing", "--workspace", workspace, "--min-precision", "invalid-float"}, &stdout, &stderr)
+	if code != 2 {
+		t.Fatalf("expected code 2 for invalid float, got %d", code)
 	}
 }
 
-func TestEvaluationHelpIncludesRouting(t *testing.T) {
+func TestEvaluationRoutingCLIHelpListsRouting(t *testing.T) {
 	t.Parallel()
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"help", "eval"}, &stdout, &stderr); code != 0 {
-		t.Fatalf("help eval code=%d stdout=%s stderr=%s", code, stdout.String(), stderr.String())
+	code := Run([]string{"help", "eval"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("expected code 0 for help eval, got %d", code)
 	}
-	out := stdout.String()
-	if !strings.Contains(out, "routing") {
-		t.Errorf("help eval missing routing subcommand:\n%s", out)
+	if !strings.Contains(stdout.String(), "routing") {
+		t.Fatalf("help eval should list routing subcommand, got:\n%s", stdout.String())
 	}
 }

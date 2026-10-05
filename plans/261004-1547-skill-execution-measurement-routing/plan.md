@@ -1,7 +1,7 @@
 ---
 title: "Skill execution, measurement funnel, and routing quality"
 description: "Serve digest-pinned local skill snapshots with skill-level content trust and runtime setup support, measure the recommend-to-activate funnel server-side with long-lived rollups and transcript ground truth, show runtime state in the WebUI, and raise routing quality with examples, a generated eval gate, lint, and calibration."
-status: in-progress
+status: done
 priority: P1
 effort: 132h
 branch: feat/skill-runtime-execution
@@ -85,8 +85,8 @@ Three user-accepted workstreams, executed as sequential phases (1–5, 5a, 5b ar
 | 10 | [Routing eval command, corpus, CI gate](./phase-10-routing-eval-and-gate.md) | 9 | 10h | Done |
 | 11 | [Metadata lint (routing and runtime hints)](./phase-11-metadata-lint.md) | 5b, 9 | 8h | Done |
 | 12 | [Calibration with recorded evidence](./phase-12-calibration.md) | 10 | 4h | Done |
-| 12a | [WebUI runtime parity](./phase-12a-webui-runtime-parity.md) | 5b (functional); after 7 for file ownership | 8h | Pending |
-| 13 | [Documentation](./phase-13-documentation.md) | 1–12, 12a | 8h | Pending |
+| 12a | [WebUI runtime parity](./phase-12a-webui-runtime-parity.md) | 5b (functional); after 7 for file ownership | 8h | Done |
+| 13 | [Documentation](./phase-13-documentation.md) | 1–12, 12a | 8h | Done |
 
 Phases run sequentially in the listed order. Shared files are owned by one phase at a time: `internal/delivery/mcpserver/server.go` (6), `internal/telemetry/{events.go,rollup.go,feedback.go}` and `schemas/telemetry-event-v1.schema.json` (6, then 7), `internal/delivery/cli/{telemetry.go,help.go}` (7, 8, 10), `internal/delivery/web/routes_read_test.go`, `web/src/api/{types.ts,queries.ts}`, `web/src/screens/skill-detail/SkillDetailScreen.tsx`, `web/src/i18n/en.ts` (7, then 12a), `internal/app/skill_review.go` (11).
 

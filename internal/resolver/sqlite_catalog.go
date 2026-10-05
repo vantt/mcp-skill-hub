@@ -26,18 +26,6 @@ var equivalenceVersionPolicies = setOf("exact", "compatible", "latest-reviewed")
 
 // LoadPolicy reads the optional Git-derived recommendation policy. Absence uses
 // the calibrated built-in baseline; malformed policy is an infrastructure error.
-func LoadPolicy(ctx context.Context, database *sql.DB) (Policy, error) {
-	var digest, content string
-	err := database.QueryRowContext(ctx, `SELECT digest,content_json FROM routing_documents WHERE path='config/recommendation.yaml'`).Scan(&digest, &content)
-	if err == sql.ErrNoRows {
-		return DefaultPolicy(), nil
-	}
-	if err != nil {
-		return Policy{}, err
-	}
-	return ParsePolicy(digest, []byte(content))
-}
-
 // ParsePolicy parses and validates recommendation policy JSON content.
 func ParsePolicy(digest string, contentJSON []byte) (Policy, error) {
 	policy := DefaultPolicy()
@@ -82,6 +70,20 @@ func ParsePolicy(digest string, contentJSON []byte) (Policy, error) {
 		return Policy{}, err
 	}
 	return policy, nil
+}
+
+// LoadPolicy reads the optional Git-derived recommendation policy. Absence uses
+// the calibrated built-in baseline; malformed policy is an infrastructure error.
+func LoadPolicy(ctx context.Context, database *sql.DB) (Policy, error) {
+	var digest, content string
+	err := database.QueryRowContext(ctx, `SELECT digest,content_json FROM routing_documents WHERE path='config/recommendation.yaml'`).Scan(&digest, &content)
+	if err == sql.ErrNoRows {
+		return DefaultPolicy(), nil
+	}
+	if err != nil {
+		return Policy{}, err
+	}
+	return ParsePolicy(digest, []byte(content))
 }
 
 func NewSQLiteCatalog(database *sql.DB, snapshot string) (*SQLiteCatalog, error) {
@@ -216,16 +218,6 @@ func normalizeSkillRouting(skill *Skill) {
 	sort.Slice(skill.Equivalence, func(i, j int) bool { return skill.Equivalence[i].SkillID < skill.Equivalence[j].SkillID })
 }
 
-// DecodeSkillDocument decodes a raw canonical entity content JSON string into a Skill.
-func DecodeSkillDocument(id string, contentJSON []byte) (Skill, error) {
-	var skill Skill
-	skill.ID = id
-	if err := decodeRouting(string(contentJSON), &skill); err != nil {
-		return Skill{}, err
-	}
-	return skill, nil
-}
-
 func decodeRouting(content string, skill *Skill) error {
 	var document skillDocument
 	if err := json.Unmarshal([]byte(content), &document); err != nil {
@@ -260,4 +252,38 @@ func decodeRouting(content string, skill *Skill) error {
 	}
 	normalizeSkillRouting(skill)
 	return nil
+}
+
+// DecodeSkillDocument decodes a raw canonical skill entity JSON into a projected Skill.
+func DecodeSkillDocument(id string, contentJSON []byte) (Skill, error) {
+	var base struct {
+		Name         string `json:"name"`
+		Status       string `json:"status"`
+		Description  string `json:"description"`
+		CollectionID string `json:"collection_id"`
+		Collection   any    `json:"collection"`
+		Digest       string `json:"digest"`
+	}
+	if err := json.Unmarshal(contentJSON, &base); err != nil {
+		return Skill{}, err
+	}
+	skill := Skill{
+		ID:           id,
+		CollectionID: base.CollectionID,
+		Name:         base.Name,
+		Status:       base.Status,
+		Description:  base.Description,
+		Digest:       base.Digest,
+	}
+	if skill.CollectionID == "" {
+		if col, ok := base.Collection.(string); ok && col != "" {
+			skill.CollectionID = col
+		} else {
+			skill.CollectionID = "default"
+		}
+	}
+	if err := decodeRouting(string(contentJSON), &skill); err != nil {
+		return Skill{}, err
+	}
+	return skill, nil
 }

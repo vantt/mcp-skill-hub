@@ -7,6 +7,7 @@ import type { RunningServer } from './support/server';
 import { startServer } from './support/server';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const binaryPath = path.resolve(__dirname, '../.e2e/skillhub');
 
 let server: RunningServer;
 
@@ -20,67 +21,57 @@ test.afterAll(async () => {
   }
 });
 
-test('runtime parity and content trust flow', async ({ page }) => {
+test('skill-runtime: review shows approve command, no approve button, and runtime tab shows env key without value', async ({
+  page,
+}) => {
   test.setTimeout(120_000);
 
-  const binaryPath = path.resolve(__dirname, '../.e2e/skillhub');
   const ws = server.ws;
-  const metaPath = path.join(ws, 'skills/core/smoke-skill/skill.meta.yaml');
-
-  // 1. Mark smoke-skill third-party by adding provenance.origin
-  let metaContent = fs.readFileSync(metaPath, 'utf-8');
-  metaContent = metaContent.replace(
-    /provenance:\s*\n\s*created_by:\s*skillhub/,
-    `provenance:
-    created_by: skillhub
+  const metaPath = path.join(ws, 'skills', 'core', 'smoke-skill', 'skill.meta.yaml');
+  const metaContent = fs.readFileSync(metaPath, 'utf8');
+  // 1. Mark smoke-skill third-party by adding origin to provenance
+  const updatedMeta = metaContent.replace(
+    '    created_by: skillhub',
+    `    created_by: skillhub
     origin:
         kind: github
-        repository: https://github.com/example/smoke-skills
+        repository: https://github.com/example/skills
         commit: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`,
   );
-  fs.writeFileSync(metaPath, metaContent, 'utf-8');
-
+  fs.writeFileSync(metaPath, updatedMeta);
   // 2. Run skillhub rebuild
-  execFileSync(binaryPath, ['rebuild', '--json'], {
-    env: { ...process.env, SKILLHUB_WORKSPACE: ws },
-    stdio: 'pipe',
-  });
+  execFileSync(binaryPath, ['rebuild', '--workspace', ws], { stdio: 'pipe' });
 
   // 3. Store E2E_TOKEN with secret value piped on stdin
-  const secretEnvValue = 'SECRET-E2E-VALUE-DO-NOT-LEAK';
-  execFileSync(
-    binaryPath,
-    ['skill', 'env', 'set', 'smoke-skill', 'E2E_TOKEN'],
-    {
-      input: secretEnvValue,
-      env: { ...process.env, SKILLHUB_WORKSPACE: ws },
-      stdio: ['pipe', 'pipe', 'pipe'],
+  const secretValue = 'SECRET-PIPED-VALUE-DO-NOT-LEAK-9988';
+  execFileSync(binaryPath, ['skill', 'env', 'set', 'smoke-skill', 'E2E_TOKEN'], {
+    input: secretValue,
+    env: {
+      ...process.env,
+      SKILLHUB_WORKSPACE: ws,
     },
-  );
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
 
-  // 4. Open startup URL to set session token
+  // 4. Open startup URL to set session token, then navigate to smoke-skill
   await page.goto(server.url);
-
-  // 5. Navigate to /skills/smoke-skill
   await page.goto(`${server.origin}/skills/smoke-skill`);
 
-  // Review tab shows "Review required" and approve command
+  // Review tab
+  await page.getByRole('tab', { name: 'Review' }).click();
   await expect(page.getByText('Review required')).toBeVisible();
   await expect(
     page.getByText(/skillhub skill edit smoke-skill --approve-content sha256:/),
   ).toBeVisible();
 
-  // No button named /approve/i
-  const approveButtons = await page.getByRole('button', { name: /approve/i }).all();
-  expect(approveButtons.length).toBe(0);
+  // Assert security requirement: no approve button
+  const approveButtons = page.getByRole('button', { name: /approve/i });
+  await expect(approveButtons).toHaveCount(0);
 
-  // 6. Click Runtime tab
+  // 5. Open Runtime tab
   await page.getByRole('tab', { name: 'Runtime' }).click();
-
-  // Runtime tab shows E2E_TOKEN
   await expect(page.getByText('E2E_TOKEN')).toBeVisible();
-
-  // Verify the secret value was never leaked in DOM
+  // Assert secret value is never in DOM
   const pageContent = await page.content();
-  expect(pageContent).not.toContain(secretEnvValue);
+  expect(pageContent).not.toContain(secretValue);
 });

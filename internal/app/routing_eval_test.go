@@ -1,156 +1,142 @@
 package app
 
 import (
-	"context"
+	"database/sql"
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/vantt/mcp-skill-hub/internal/skill"
+	"github.com/vantt/mcp-skill-hub/internal/catalog"
+	"github.com/vantt/mcp-skill-hub/internal/workspace"
 )
 
-func createSkillWithExamples(t *testing.T, root, id, name string, triggers, examples, counterExamples []string) {
-	t.Helper()
-	service := SkillService{}
-	ctx := context.Background()
-	preview, err := service.PreviewCreate(ctx, root, skill.CreateInput{
-		ID:          id,
-		Collection:  "software",
-		Name:        name,
-		Description: "Description for " + name,
-		Content:     []byte("# " + name + "\n"),
-		Routing: skill.RoutingInput{
-			Operations:      []string{"review"},
-			Triggers:        triggers,
-			NotFor:          []string{"unrelated"},
-			Examples:        examples,
-			CounterExamples: counterExamples,
-			MinScope:        "multi_step",
-		},
-	}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := service.ConfirmSkillMutation(ctx, root, preview, preview.Confirmation.Confirmation.Pins); err != nil {
-		t.Fatal(err)
-	}
-	previewAct, err := service.PreviewActivate(ctx, root, id, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := service.ConfirmSkillMutation(ctx, root, previewAct, previewAct.Confirmation.Confirmation.Pins); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestRoutingEvalService(t *testing.T) {
+func TestRoutingEvalTwoSkillsAndTelemetryIsolation(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+	if _, err := workspace.Apply(root); err != nil {
 		t.Fatal(err)
 	}
 
-	createSkillWithExamples(t, root, "skill-alpha", "Skill Alpha",
-		[]string{"alpha trigger"},
-		[]string{"run alpha task", "execute alpha workflow"},
-		[]string{"do beta thing"},
-	)
-	createSkillWithExamples(t, root, "skill-beta", "Skill Beta",
-		[]string{"beta trigger"},
-		[]string{"run beta task"},
-		[]string{"do alpha thing"},
-	)
-
-	if _, err := (CatalogService{}).BuildCatalogGeneration(context.Background(), root); err != nil {
+	skillADir := filepath.Join(root, "skills", "core", "code-review")
+	if err := os.MkdirAll(skillADir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-
-	// Create no-skill suite file
-	noSkillPath := filepath.Join(t.TempDir(), "no-skill.yaml")
-	noSkillYAML := `schema_version: 1
-id: test-no-skill
-cases:
-  - id: ns-1
-    partition: held_out
-    split: held_out
-    request:
-      schema_version: "1"
-      request_id: ns-req-1
-      task:
-        description: order a pizza with extra cheese
-        scope: multi_step
-      operation: ""
-    expected:
-      status: no_skill
-  - id: ns-2
-    partition: held_out
-    split: held_out
-    request:
-      schema_version: "1"
-      request_id: ns-req-2
-      task:
-        description: tell me a bedtime story
-        scope: multi_step
-      operation: ""
-    expected:
-      status: no_skill
+	skillAMeta := `schema_version: 1
+id: code-review
+name: Code Review
+status: active
+description: Review code and inspect pull requests.
+routing:
+  triggers: [review code, inspect diff]
+  not_for: [write prose]
+  min_scope: single_step
+  examples: [review pull request changes for issues, inspect git diff for security bugs]
+  counter_examples: [write database migration]
 `
-	if err := os.WriteFile(noSkillPath, []byte(noSkillYAML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(skillADir, "skill.meta.yaml"), []byte(skillAMeta), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillADir, "SKILL.md"), []byte("---\nname: code-review\ndescription: Review code and inspect pull requests.\n---\n# Code Review\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	service := RoutingEvalService{}
-	report, err := service.Run(context.Background(), RoutingEvalQuery{
+	skillBDir := filepath.Join(root, "skills", "core", "db-migrate")
+	if err := os.MkdirAll(skillBDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	skillBMeta := `schema_version: 1
+id: db-migrate
+name: Database Migration
+status: active
+description: Execute and write schema migrations.
+routing:
+  triggers: [run database migration, update schema]
+  not_for: [write prose]
+  min_scope: single_step
+  examples: [write database migration script, execute schema migration on postgres]
+  counter_examples: [review pull request]
+`
+	if err := os.WriteFile(filepath.Join(skillBDir, "skill.meta.yaml"), []byte(skillBMeta), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillBDir, "SKILL.md"), []byte("---\nname: db-migrate\ndescription: Execute and write schema migrations.\n---\n# Database Migration\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := catalog.BuildCatalogGeneration(t.Context(), root, catalog.BuildOptions{}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a no-skill suite file
+	noSkillPath := filepath.Join(t.TempDir(), "no-skill.yaml")
+	noSkillContent := `schema_version: 1
+id: no-skill-test
+cases:
+  - schema_version: 1
+    id: weather-query
+    partition: development
+    request:
+      schema_version: "1"
+      request_id: req-no-skill-1
+      task:
+        description: what is the weather in Tokyo today
+        scope: single_step
+    expected:
+      status: no_skill
+      no_skill: true
+`
+	if err := os.WriteFile(noSkillPath, []byte(noSkillContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := EvaluateRouting(t.Context(), RoutingEvalOptions{
 		WorkspacePath: root,
-		NoSkillPath:   noSkillPath,
+		NoSkillFile:   noSkillPath,
 	})
 	if err != nil {
-		t.Fatalf("RoutingEvalService.Run: %v", err)
+		t.Fatalf("EvaluateRouting failed: %v", err)
 	}
 
-	// Positives: 2 for alpha + 1 for beta = 3
-	if report.TotalPositives != 3 {
-		t.Errorf("TotalPositives = %d, want 3", report.TotalPositives)
+	if report.PositiveCases != 4 {
+		t.Fatalf("expected 4 positive cases, got %d", report.PositiveCases)
 	}
-	// Counters: 1 for alpha + 1 for beta = 2
-	if report.TotalCounters != 2 {
-		t.Errorf("TotalCounters = %d, want 2", report.TotalCounters)
+	if report.CounterCases != 2 {
+		t.Fatalf("expected 2 counter cases, got %d", report.CounterCases)
 	}
-	// NoSkill: 2
-	if report.TotalNoSkill != 2 {
-		t.Errorf("TotalNoSkill = %d, want 2", report.TotalNoSkill)
+	if report.NoSkillCases != 1 {
+		t.Fatalf("expected 1 no-skill case, got %d", report.NoSkillCases)
 	}
-
-	// Metrics should be non-nil
-	if report.Precision1 == nil {
-		t.Errorf("Precision1 is nil")
-	}
-	if report.Recall == nil {
-		t.Errorf("Recall is nil")
-	}
-	if report.NoSkillRecall == nil {
-		t.Errorf("NoSkillRecall is nil")
-	}
-	if report.FalsePositiveRate == nil {
-		t.Errorf("FalsePositiveRate is nil")
+	if report.TotalCases != 7 {
+		t.Fatalf("expected 7 total cases, got %d", report.TotalCases)
 	}
 
-	// Per-skill recall
-	if len(report.PerSkillRecall) != 2 {
-		t.Errorf("PerSkillRecall length = %d, want 2", len(report.PerSkillRecall))
+	if report.Recall == nil || *report.Recall < 1.0 {
+		t.Fatalf("expected 1.0 recall, got %f, failures: %#v", *report.Recall, report.Failures)
+	}
+	if report.Precision == nil || *report.Precision < 1.0 {
+		t.Fatalf("expected 1.0 precision, got %v", report.Precision)
+	}
+	if report.NoSkillRecall == nil || *report.NoSkillRecall < 1.0 {
+		t.Fatalf("expected 1.0 no-skill recall, got %v", report.NoSkillRecall)
+	}
+	if report.FalsePositiveRate == nil || *report.FalsePositiveRate > 0.0 {
+		t.Fatalf("expected 0.0 false positive rate, got %v", report.FalsePositiveRate)
 	}
 
-	// Telemetry isolation check: telemetry.db must have NO events
-	rec, err := (TelemetryService{}).Open(root)
+	// Verify Telemetry Isolation (Requirement 6)
+	telemetryDBPath := filepath.Join(root, "runtime", "telemetry.db")
+	db, err := sql.Open("sqlite", telemetryDBPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = rec.Close(context.Background()) }()
+	defer db.Close()
 
-	preview, err := rec.Preview(context.Background(), 100)
+	var resolutionEventCount int
+	err = db.QueryRow(`SELECT count(*) FROM telemetry_events WHERE kind LIKE 'resolution.%'`).Scan(&resolutionEventCount)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("query resolution events: %v", err)
 	}
-	if preview.Events != 0 || len(preview.JSONL) != 0 {
-		t.Fatalf("telemetry.db leaked events during eval: events=%d jsonl=%s", preview.Events, string(preview.JSONL))
+	if resolutionEventCount != 0 {
+		t.Fatalf("expected 0 resolution telemetry events after routing eval, got %d", resolutionEventCount)
 	}
 }

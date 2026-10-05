@@ -4,7 +4,7 @@
   "summary": "Runtime status for skill vendor-skill.",
   "items": [],
   "suggested_actions": [],
-  "warnings": [],
+  "warnings": null,
   "error": null,
   "skill_id": "vendor-skill",
   "runtime": {

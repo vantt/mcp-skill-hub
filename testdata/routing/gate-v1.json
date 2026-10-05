@@ -1,6 +1,9 @@
 {
-  "precision_at_1_min": 0.55,
-  "recall_min": 0.56,
-  "no_skill_recall_min": 0.82,
-  "false_positive_rate_max": 0.16
+  "schema_version": 1,
+  "thresholds": {
+    "min_precision": 0.60,
+    "min_recall": 0.58,
+    "min_no_skill_recall": 0.98,
+    "max_fpr": 0.13
+  }
 }

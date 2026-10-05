@@ -2,19 +2,18 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"strconv"
 	"strings"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
-	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
 )
 
-type routingFlags struct {
-	workspace        string
+type routingEvalFlags struct {
+	workspacePath    string
 	noSkillPath      string
 	policyPath       string
 	minPrecision     *float64
@@ -24,165 +23,180 @@ type routingFlags struct {
 	jsonOutput       bool
 }
 
-func parseRoutingFlags(args []string) (routingFlags, error) {
-	flags := routingFlags{}
-	seen := map[string]bool{}
+const routingUsage = "Run `skillhub eval routing [--workspace <path>] [--no-skill <file>] [--policy <file>] [--min-precision F] [--min-recall F] [--min-no-skill-recall F] [--max-fpr F] [--json]`."
 
-	for i := 0; i < len(args); i++ {
-		flag := args[i]
+func parseRoutingEvalFlags(args []string) (routingEvalFlags, error) {
+	var result routingEvalFlags
+	if len(args) > maxDeliveryArgs {
+		return result, errors.New("too many arguments")
+	}
+	seen := map[string]bool{}
+	for index := 0; index < len(args); index++ {
+		flag := args[index]
 		if seen[flag] {
-			return flags, fmt.Errorf("%s may only be provided once", flag)
+			return result, fmt.Errorf("%s may only be provided once", flag)
 		}
 		seen[flag] = true
-
 		switch flag {
 		case "--json":
-			flags.jsonOutput = true
+			result.jsonOutput = true
 		case "--workspace", "--no-skill", "--policy", "--min-precision", "--min-recall", "--min-no-skill-recall", "--max-fpr":
-			if i+1 == len(args) || strings.HasPrefix(args[i+1], "-") {
-				return flags, fmt.Errorf("%s requires a value", flag)
+			if index+1 == len(args) || strings.HasPrefix(args[index+1], "-") {
+				return result, fmt.Errorf("%s requires a value", flag)
 			}
-			val := args[i+1]
-			if len(val) == 0 || len(val) > maxDeliveryValueSize {
-				return flags, fmt.Errorf("value for %s must be between 1 and %d bytes", flag, maxDeliveryValueSize)
+			value := args[index+1]
+			if len(value) == 0 || len(value) > maxDeliveryValueSize {
+				return result, fmt.Errorf("%s value must be between 1 and %d bytes", flag, maxDeliveryValueSize)
 			}
-
 			switch flag {
 			case "--workspace":
-				flags.workspace = val
+				result.workspacePath = value
 			case "--no-skill":
-				if _, err := os.Stat(val); err != nil {
-					return flags, fmt.Errorf("--no-skill file %q not found", val)
-				}
-				flags.noSkillPath = val
+				result.noSkillPath = value
 			case "--policy":
-				if _, err := os.Stat(val); err != nil {
-					return flags, fmt.Errorf("--policy file %q not found", val)
-				}
-				flags.policyPath = val
+				result.policyPath = value
 			case "--min-precision":
-				f, err := strconv.ParseFloat(val, 64)
-				if err != nil || f < 0 || f > 1 {
-					return flags, fmt.Errorf("--min-precision must be a float between 0.0 and 1.0")
+				val, err := strconv.ParseFloat(value, 64)
+				if err != nil || val < 0.0 || val > 1.0 {
+					return result, fmt.Errorf("--min-precision must be a float between 0.0 and 1.0")
 				}
-				flags.minPrecision = &f
+				result.minPrecision = &val
 			case "--min-recall":
-				f, err := strconv.ParseFloat(val, 64)
-				if err != nil || f < 0 || f > 1 {
-					return flags, fmt.Errorf("--min-recall must be a float between 0.0 and 1.0")
+				val, err := strconv.ParseFloat(value, 64)
+				if err != nil || val < 0.0 || val > 1.0 {
+					return result, fmt.Errorf("--min-recall must be a float between 0.0 and 1.0")
 				}
-				flags.minRecall = &f
+				result.minRecall = &val
 			case "--min-no-skill-recall":
-				f, err := strconv.ParseFloat(val, 64)
-				if err != nil || f < 0 || f > 1 {
-					return flags, fmt.Errorf("--min-no-skill-recall must be a float between 0.0 and 1.0")
+				val, err := strconv.ParseFloat(value, 64)
+				if err != nil || val < 0.0 || val > 1.0 {
+					return result, fmt.Errorf("--min-no-skill-recall must be a float between 0.0 and 1.0")
 				}
-				flags.minNoSkillRecall = &f
+				result.minNoSkillRecall = &val
 			case "--max-fpr":
-				f, err := strconv.ParseFloat(val, 64)
-				if err != nil || f < 0 || f > 1 {
-					return flags, fmt.Errorf("--max-fpr must be a float between 0.0 and 1.0")
+				val, err := strconv.ParseFloat(value, 64)
+				if err != nil || val < 0.0 || val > 1.0 {
+					return result, fmt.Errorf("--max-fpr must be a float between 0.0 and 1.0")
 				}
-				flags.maxFPR = &f
+				result.maxFPR = &val
 			}
-			i++
+			index++
 		default:
-			return flags, fmt.Errorf("unrecognized flag %q", flag)
+			return result, fmt.Errorf("unknown argument %q", flag)
 		}
 	}
-
-	resolved, resErr := resolveWorkspace(flags.workspace)
+	resolved, resErr := resolveWorkspace(result.workspacePath)
 	if resErr != nil {
-		return flags, resErr
+		return result, resErr
 	}
-	flags.workspace = resolved
-	return flags, nil
-}
-
-func formatEvalPercent(val *float64) string {
-	if val == nil {
-		return "null"
-	}
-	return fmt.Sprintf("%.1f%%", *val*100)
-}
-
-func renderRoutingReport(stdout io.Writer, report app.RoutingEvalReport) {
-	p := termui.New(stdout)
-	p.Heading("Routing Evaluation Summary")
-	p.Fields(
-		termui.Field{Label: "Total Positives", Value: fmt.Sprintf("%d", report.TotalPositives)},
-		termui.Field{Label: "Total Counters", Value: fmt.Sprintf("%d", report.TotalCounters)},
-		termui.Field{Label: "Total No-Skill", Value: fmt.Sprintf("%d", report.TotalNoSkill)},
-	)
-
-	p.Heading("Metrics")
-	p.Fields(
-		termui.Field{Label: "Precision@1", Value: formatEvalPercent(report.Precision1)},
-		termui.Field{Label: "Recall", Value: formatEvalPercent(report.Recall)},
-		termui.Field{Label: "No-Skill Recall", Value: formatEvalPercent(report.NoSkillRecall)},
-		termui.Field{Label: "No-Skill Precision", Value: formatEvalPercent(report.NoSkillPrecision)},
-		termui.Field{Label: "False Positive Rate", Value: formatEvalPercent(report.FalsePositiveRate)},
-	)
-
-	p.Blank()
-	if report.PassedGate {
-		p.Line("Gate: PASS")
-	} else {
-		p.Line("Gate: FAIL")
-		if len(report.GateFailures) > 0 {
-			p.Heading("Gate Failures:")
-			p.Bullets(report.GateFailures...)
-		}
-	}
-
-	if len(report.FailedCases) > 0 {
-		p.Heading(fmt.Sprintf("Failing Cases (%d):", len(report.FailedCases)))
-		var lines []string
-		for _, fc := range report.FailedCases {
-			lines = append(lines, fmt.Sprintf("[%s] %s #%d %q -> status=%s, primary=%s",
-				fc.Kind, fc.SkillID, fc.Index, fc.Phrase, fc.GotStatus, fc.GotPrimary))
-		}
-		p.Bullets(lines...)
-	}
+	result.workspacePath = resolved
+	return result, nil
 }
 
 func runEvaluationRouting(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	const usage = "Run `skillhub eval routing [--workspace <path>] [--no-skill <file>] [--policy <file>] [--min-precision F] [--min-recall F] [--min-no-skill-recall F] [--max-fpr F] [--json]`."
-	flags, err := parseRoutingFlags(args)
+	flags, err := parseRoutingEvalFlags(args)
 	if err != nil {
 		var resErr *WorkspaceResolutionError
 		if errors.As(err, &resErr) {
 			return writeWorkspaceResolutionError(stdout, stderr, hasJSONFlag(args), resErr)
 		}
-		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), usage)
+		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), routingUsage)
 	}
 
-	service := app.RoutingEvalService{}
-	report, err := service.Run(ctx, app.RoutingEvalQuery{
-		WorkspacePath:    flags.workspace,
-		NoSkillPath:      flags.noSkillPath,
-		PolicyPath:       flags.policyPath,
-		MinPrecision:     flags.minPrecision,
-		MinRecall:        flags.minRecall,
-		MinNoSkillRecall: flags.minNoSkillRecall,
-		MaxFPR:           flags.maxFPR,
+	report, err := app.EvaluateRouting(ctx, app.RoutingEvalOptions{
+		WorkspacePath: flags.workspacePath,
+		NoSkillFile:   flags.noSkillPath,
+		PolicyFile:    flags.policyPath,
 	})
 	if err != nil {
-		return writeInvalidRequest(stdout, stderr, flags.jsonOutput, err.Error(), usage)
+		return writeWorkspaceResult(app.Result{}, err, stdout, stderr, flags.jsonOutput)
+	}
+
+	thresholdFailed := false
+	var failedReasons []string
+
+	formatRate := func(r *float64) string {
+		if r == nil {
+			return "null"
+		}
+		return fmt.Sprintf("%.4f", *r)
+	}
+
+	if flags.minPrecision != nil {
+		if report.Precision == nil || *report.Precision < *flags.minPrecision {
+			thresholdFailed = true
+			failedReasons = append(failedReasons, fmt.Sprintf("precision %s < min %f", formatRate(report.Precision), *flags.minPrecision))
+		}
+	}
+	if flags.minRecall != nil {
+		if report.Recall == nil || *report.Recall < *flags.minRecall {
+			thresholdFailed = true
+			failedReasons = append(failedReasons, fmt.Sprintf("recall %s < min %f", formatRate(report.Recall), *flags.minRecall))
+		}
+	}
+	if flags.minNoSkillRecall != nil {
+		if report.NoSkillRecall == nil || *report.NoSkillRecall < *flags.minNoSkillRecall {
+			thresholdFailed = true
+			failedReasons = append(failedReasons, fmt.Sprintf("no-skill recall %s < min %f", formatRate(report.NoSkillRecall), *flags.minNoSkillRecall))
+		}
+	}
+	if flags.maxFPR != nil {
+		if report.FalsePositiveRate == nil || *report.FalsePositiveRate > *flags.maxFPR {
+			thresholdFailed = true
+			failedReasons = append(failedReasons, fmt.Sprintf("false positive rate %s > max %f", formatRate(report.FalsePositiveRate), *flags.maxFPR))
+		}
 	}
 
 	if flags.jsonOutput {
-		if err := writeJSON(stdout, report); err != nil {
-			p := termui.New(stderr)
-			p.Error("Unable to write evaluation result.", err.Error(), "Check output destination.")
+		encoded, marshalErr := json.MarshalIndent(report, "", "  ")
+		if marshalErr != nil {
+			return writeWorkspaceResult(app.Result{}, marshalErr, stdout, stderr, true)
+		}
+		_, _ = fmt.Fprintln(stdout, string(encoded))
+		if thresholdFailed {
 			return 1
 		}
-	} else {
-		renderRoutingReport(stdout, report)
+		return 0
 	}
 
-	if !report.PassedGate {
+	// Human output
+	fmt.Fprintf(stdout, "Routing Evaluation Summary:\n")
+	fmt.Fprintf(stdout, "  Total cases:        %d\n", report.TotalCases)
+	fmt.Fprintf(stdout, "  Positive cases (P): %d\n", report.PositiveCases)
+	fmt.Fprintf(stdout, "  Counter cases (N):  %d\n", report.CounterCases)
+	fmt.Fprintf(stdout, "  No-skill cases (Z): %d\n", report.NoSkillCases)
+	fmt.Fprintf(stdout, "\nMetrics:\n")
+	fmt.Fprintf(stdout, "  Precision@1:        %s\n", formatRate(report.Precision))
+	fmt.Fprintf(stdout, "  Recall:             %s\n", formatRate(report.Recall))
+	fmt.Fprintf(stdout, "  No-Skill Recall:    %s\n", formatRate(report.NoSkillRecall))
+	fmt.Fprintf(stdout, "  No-Skill Precision: %s\n", formatRate(report.NoSkillPrecision))
+	fmt.Fprintf(stdout, "  False Positive Rate:%s\n", formatRate(report.FalsePositiveRate))
+
+	if len(report.SkillMetrics) > 0 {
+		fmt.Fprintf(stdout, "\nPer-Skill Recall:\n")
+		for _, sm := range report.SkillMetrics {
+			fmt.Fprintf(stdout, "  %-30s %d/%d (%s)\n", sm.SkillID, sm.Correct, sm.Total, formatRate(sm.Recall))
+		}
+	}
+
+	if len(report.Failures) > 0 {
+		fmt.Fprintf(stdout, "\nFailures (%d):\n", len(report.Failures))
+		for _, f := range report.Failures {
+			if f.Kind == "no_skill" {
+				fmt.Fprintf(stdout, "  [no_skill] #%d: %q (got status=%s, primary=%s)\n", f.Index, f.Phrase, f.GotStatus, f.GotPrimary)
+			} else {
+				fmt.Fprintf(stdout, "  [%s] %s #%d: %q (got status=%s, primary=%s)\n", f.Kind, f.SkillID, f.Index, f.Phrase, f.GotStatus, f.GotPrimary)
+			}
+		}
+	}
+
+	if thresholdFailed {
+		fmt.Fprintf(stderr, "\nEvaluation failed quality thresholds:\n")
+		for _, r := range failedReasons {
+			fmt.Fprintf(stderr, "  - %s\n", r)
+		}
 		return 1
 	}
+
 	return 0
 }

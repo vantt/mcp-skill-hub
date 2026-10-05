@@ -1,10 +1,22 @@
 package resolver
 
 import (
+	"math"
 	"sort"
 	"strings"
 	"unicode"
 )
+
+const ExampleOverlapWeight = 0.9
+
+func triggerFeature(query []string, skill Skill) (float64, bool) {
+	trigger := bestOverlap(query, skill.Triggers)
+	example := bestOverlap(query, skill.Examples) * ExampleOverlapWeight
+	if example > trigger {
+		return example, true
+	}
+	return trigger, false
+}
 
 type Truth string
 
@@ -253,30 +265,14 @@ func excludedSkill(skill Skill, request Request) bool {
 	return false
 }
 
-const ExampleDiscount = 0.9
-
-func triggerFeature(query []string, triggers, examples []string) (float64, bool) {
-	tScore := bestOverlap(query, triggers)
-	eScore := ExampleDiscount * bestOverlap(query, examples)
-	if eScore > tScore {
-		return eScore, true
-	}
-	return tScore, false
-}
-
-var techFactKeys = map[string]bool{
-	"language": true, "framework": true, "library": true, "dependency": true,
-	"technology": true, "runtime": true, "platform": true,
-}
-
 func scoreSkill(skill Skill, request Request, policy Policy) scoredCandidate {
 	query := tokenize(positiveQuery(request))
 	metaParts := append([]string{skill.Name, skill.Description}, skill.Aliases...)
 	metaParts = append(metaParts, skill.Topics...)
 	metaParts = append(metaParts, skill.Technologies...)
 	metadata := tokenize(strings.Join(metaParts, " "))
-	tScore, exampleWon := triggerFeature(query, skill.Triggers, skill.Examples)
-	f := features{Lexical: overlap(query, metadata), Trigger: tScore}
+	triggerScore, exampleWon := triggerFeature(query, skill)
+	f := features{Lexical: overlap(query, metadata), Trigger: triggerScore}
 	if artifact := request.Context.ActiveArtifact; artifact != nil {
 		f.Artifact = bestOverlap(tokenize(artifact.Kind+" "+artifact.Language), append(skill.Triggers, skill.Description))
 	}
@@ -285,24 +281,31 @@ func scoreSkill(skill Skill, request Request, policy Policy) scoredCandidate {
 		techEvidence = append(techEvidence, artifact.Language)
 	}
 	for _, fact := range request.Context.Facts {
-		if techFactKeys[normalizeIdentifier(fact.Key)] && fact.Value != "" {
-			techEvidence = append(techEvidence, fact.Value)
+		switch normalizeIdentifier(fact.Key) {
+		case "language", "framework", "library", "dependency", "technology", "runtime", "platform":
+			if fact.Value != "" {
+				techEvidence = append(techEvidence, fact.Value)
+			}
 		}
 	}
-	techMatched := false
-	for _, tech := range skill.Technologies {
-		for _, ev := range techEvidence {
-			if equalEvidence(tech, ev) {
-				techMatched = true
+	matchedTech := false
+	if len(skill.Technologies) > 0 && len(techEvidence) > 0 {
+		for _, tech := range skill.Technologies {
+			for _, ev := range techEvidence {
+				if equalEvidence(tech, ev) {
+					matchedTech = true
+					break
+				}
+			}
+			if matchedTech {
 				break
 			}
 		}
-		if techMatched {
-			break
-		}
 	}
-	if techMatched && f.Artifact < 1.0 {
-		f.Artifact = 1.0
+	if matchedTech {
+		if f.Artifact < 1.0 {
+			f.Artifact = 1.0
+		}
 	}
 	factTotal := len(skill.Requirements.FactsAll) + len(skill.Requirements.FactsAny)
 	if factTotal > 0 {
@@ -330,11 +333,7 @@ func scoreSkill(skill Skill, request Request, policy Policy) scoredCandidate {
 	if skill.Reviewed {
 		f.Quality = 1
 	}
-	notForScore := bestOverlap(query, skill.NotFor)
-	if counterScore := bestOverlap(query, skill.CounterExamples); counterScore > notForScore {
-		notForScore = counterScore
-	}
-	f.NotFor = notForScore
+	f.NotFor = math.Max(bestOverlap(query, skill.NotFor), bestOverlap(query, skill.CounterExamples))
 	if excludedSkill(skill, request) {
 		f.Constraint = 1
 	}
@@ -366,15 +365,17 @@ func scoreSkill(skill Skill, request Request, policy Policy) scoredCandidate {
 	if f.Lexical > 0 {
 		reasons = append(reasons, "task_match")
 	}
-	if exampleWon && f.Trigger >= .3 {
-		reasons = append(reasons, "example_match")
-	} else if f.Trigger >= .3 {
-		reasons = append(reasons, "trigger_match")
+	if f.Trigger >= .3 {
+		if exampleWon {
+			reasons = append(reasons, "example_match")
+		} else {
+			reasons = append(reasons, "trigger_match")
+		}
 	}
 	if f.Artifact > 0 {
 		reasons = append(reasons, "artifact_match")
 	}
-	if techMatched {
+	if matchedTech {
 		reasons = append(reasons, "technology_match")
 	}
 	if f.Fact > 0 {

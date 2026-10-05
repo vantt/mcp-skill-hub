@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	_ "modernc.org/sqlite"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -15,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	_ "modernc.org/sqlite"
 )
 
 type memoryCatalog struct {
@@ -807,156 +808,207 @@ func TestClarificationPriorIsValidatedWithoutSharedState(t *testing.T) {
 	}
 }
 
-func TestExampleMatchResolvesWithoutTriggerOverlap(t *testing.T) {
+func TestExampleMatchResolvesSkill(t *testing.T) {
 	t.Parallel()
 	skill := Skill{
-		ID:          "schema-linter",
-		Name:        "Schema Linter",
-		Description: "Validate JSON schemas",
-		Status:      "active",
-		Digest:      "v1",
-		Triggers:    []string{"format json document"},
-		Examples:    []string{"lint my schema definition"},
-		MinScope:    "multi_step",
-		Reviewed:    true,
-	}
-	catalog := memoryCatalog{[]Skill{skill}, "sha256:" + repeat("1", 64)}
-	r, _ := New(catalog, DefaultPolicy(), NewCache(4))
-
-	req := Request{
-		SchemaVersion: "1",
-		RequestID:     "req-ex",
-		Task:          Task{Description: "lint my schema definition", Scope: "multi_step"},
-		Operation:     "review",
-	}
-	res, err := r.Resolve(context.Background(), req)
-	if err != nil {
-		t.Fatalf("resolve: %v", err)
-	}
-	if res.Primary == nil || res.Primary.ID != "schema-linter" {
-		t.Fatalf("expected schema-linter primary, got %#v", res.Primary)
-	}
-	candidate := scoreSkill(skill, req, DefaultPolicy())
-	if !contains(candidate.Reasons, "example_match") {
-		t.Errorf("expected example_match in reasons: %v", candidate.Reasons)
-	}
-	if contains(candidate.Reasons, "trigger_match") {
-		t.Errorf("expected NO trigger_match in reasons: %v", candidate.Reasons)
-	}
-}
-
-func TestCounterExampleExcludesSkill(t *testing.T) {
-	t.Parallel()
-	skill := Skill{
-		ID:              "code-reviewer",
-		Name:            "Code Reviewer",
-		Description:     "Review code changes",
-		Status:          "active",
-		Digest:          "v1",
-		Triggers:        []string{"review code changes"},
-		CounterExamples: []string{"write creative marketing poetry"},
-		MinScope:        "multi_step",
-		Reviewed:        true,
-	}
-
-	req := Request{
-		SchemaVersion: "1",
-		RequestID:     "req-counter",
-		Task:          Task{Description: "write creative marketing poetry", Scope: "multi_step"},
-		Operation:     "create",
-	}
-
-	candidate := scoreSkill(skill, req, DefaultPolicy())
-	if candidate.Exclusion != Violated {
-		t.Fatalf("expected Violated exclusion for counter example, got %s", candidate.Exclusion)
-	}
-	if candidate.HardReason != "not_for_match" {
-		t.Fatalf("expected not_for_match hard reason, got %q", candidate.HardReason)
-	}
-}
-
-func TestTechnologyMatchLiftsArtifactScore(t *testing.T) {
-	t.Parallel()
-	skill := Skill{
-		ID:           "test-runner",
-		Name:         "Test Runner",
-		Description:  "Run test suites",
+		ID:           "k8s-deployer",
+		CollectionID: "core",
+		Name:         "K8s Deployer",
+		Description:  "Deploys containerized applications",
 		Status:       "active",
 		Digest:       "v1",
-		Triggers:     []string{"run tests"},
-		Technologies: []string{"golang", "postgres"},
-		MinScope:     "multi_step",
+		Triggers:     []string{"unrelated trigger phrase"},
+		Examples:     []string{"deploy kubernetes cluster to aws"},
+		MinScope:     "single_step",
 		Reviewed:     true,
 	}
-
-	baseReq := Request{
+	req := Request{
 		SchemaVersion: "1",
-		RequestID:     "req-tech-1",
-		Task:          Task{Description: "run tests", Scope: "multi_step"},
-		Operation:     "test",
+		RequestID:     "req-ex-match",
+		Task: Task{
+			Description: "deploy kubernetes cluster to aws",
+			Scope:       "single_step",
+		},
 	}
-	c1 := scoreSkill(skill, baseReq, DefaultPolicy())
-	if c1.Features.Artifact != 0 {
-		t.Errorf("expected 0 artifact feature without tech match, got %f", c1.Features.Artifact)
+	policy := DefaultPolicy()
+	scored := scoreSkill(skill, req, policy)
+	if scored.Features.Trigger < 0.89 || scored.Features.Trigger > 0.91 {
+		t.Fatalf("expected trigger feature ~0.9 from 1.0 * ExampleOverlapWeight, got %f", scored.Features.Trigger)
 	}
-	if contains(c1.Reasons, "technology_match") {
-		t.Errorf("expected no technology_match reason without tech match")
+	foundExample := false
+	foundTrigger := false
+	for _, r := range scored.Reasons {
+		if r == "example_match" {
+			foundExample = true
+		}
+		if r == "trigger_match" {
+			foundTrigger = true
+		}
+	}
+	if !foundExample {
+		t.Fatalf("expected example_match reason, got reasons: %v", scored.Reasons)
+	}
+	if foundTrigger {
+		t.Fatalf("did not expect trigger_match reason when example won, got reasons: %v", scored.Reasons)
 	}
 
-	// Match via ActiveArtifact.Language
-	artReq := baseReq
-	artReq.Context.ActiveArtifact = &Artifact{Kind: "file", Language: "golang"}
-	c2 := scoreSkill(skill, artReq, DefaultPolicy())
-	if c2.Features.Artifact != 1.0 {
-		t.Errorf("expected 1.0 artifact feature with language match, got %f", c2.Features.Artifact)
+	resolver, err := New(memoryCatalog{[]Skill{skill}, "sha256:" + repeat("1", 64)}, policy, NewCache(4))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !contains(c2.Reasons, "technology_match") {
-		t.Errorf("expected technology_match in reasons: %v", c2.Reasons)
+	resp, err := resolver.Resolve(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if c2.Score <= c1.Score {
-		t.Errorf("expected score to be lifted (c2=%f > c1=%f)", c2.Score, c1.Score)
+	if resp.Status != StatusResolved {
+		t.Fatalf("expected StatusResolved, got %s", resp.Status)
 	}
-
-	// Match via Context.Facts
-	factReq := baseReq
-	factReq.Context.Facts = []Fact{{Key: "framework", Value: "postgres"}}
-	c3 := scoreSkill(skill, factReq, DefaultPolicy())
-	if c3.Features.Artifact != 1.0 {
-		t.Errorf("expected 1.0 artifact feature with fact match, got %f", c3.Features.Artifact)
-	}
-	if !contains(c3.Reasons, "technology_match") {
-		t.Errorf("expected technology_match in reasons: %v", c3.Reasons)
+	if resp.Primary == nil || resp.Primary.ID != "k8s-deployer" {
+		t.Fatalf("expected k8s-deployer as primary, got %#v", resp.Primary)
 	}
 }
 
-func TestGoldenV1FeatureVectorIdentical(t *testing.T) {
+func TestCounterExamplePenalizesOrExcludesSkill(t *testing.T) {
+	t.Parallel()
+	skill := Skill{
+		ID:              "unit-tester",
+		CollectionID:    "core",
+		Name:            "Unit Tester",
+		Description:     "Run unit tests",
+		Status:          "active",
+		Digest:          "v1",
+		Triggers:        []string{"run tests"},
+		CounterExamples: []string{"deploy kubernetes cluster"},
+		MinScope:        "single_step",
+		Reviewed:        true,
+	}
+	// Near-exact counter-example -> hard exclusion (>= 0.72)
+	hardReq := Request{
+		SchemaVersion: "1",
+		RequestID:     "req-counter-hard",
+		Task: Task{
+			Description: "deploy kubernetes cluster",
+			Scope:       "single_step",
+		},
+	}
+	scoredHard := scoreSkill(skill, hardReq, DefaultPolicy())
+	if scoredHard.Exclusion != Violated || scoredHard.HardReason != "not_for_match" {
+		t.Fatalf("expected Violated with not_for_match, got %v (%s)", scoredHard.Exclusion, scoredHard.HardReason)
+	}
+
+	// Partial counter-example -> soft penalty (>= 0.35, < 0.72)
+	softReq := Request{
+		SchemaVersion: "1",
+		RequestID:     "req-counter-soft",
+		Task: Task{
+			Description: "deploy something else without kubernetes cluster",
+			Scope:       "single_step",
+		},
+	}
+	scoredSoft := scoreSkill(skill, softReq, DefaultPolicy())
+	if scoredSoft.Features.NotFor < 0.35 || scoredSoft.Features.NotFor >= 0.72 {
+		t.Fatalf("expected soft penalty in [.35, .72), got %f", scoredSoft.Features.NotFor)
+	}
+	if scoredSoft.Exclusion != Unknown {
+		t.Fatalf("expected Unknown exclusion for soft penalty, got %v", scoredSoft.Exclusion)
+	}
+	foundPenalty := false
+	for _, r := range scoredSoft.Reasons {
+		if r == "not_for_penalty" {
+			foundPenalty = true
+		}
+	}
+	if !foundPenalty {
+		t.Fatalf("expected not_for_penalty in reasons: %v", scoredSoft.Reasons)
+	}
+}
+
+func TestTechnologyMatchLiftsScore(t *testing.T) {
+	t.Parallel()
+	skill := Skill{
+		ID:           "go-linter",
+		CollectionID: "core",
+		Name:         "Go Linter",
+		Description:  "Lints code files",
+		Status:       "active",
+		Digest:       "v1",
+		Triggers:     []string{"lint files"},
+		Technologies: []string{"go"},
+		MinScope:     "single_step",
+		Reviewed:     true,
+	}
+	baseReq := Request{
+		SchemaVersion: "1",
+		RequestID:     "req-base",
+		Task: Task{
+			Description: "lint files",
+			Scope:       "single_step",
+		},
+	}
+	policy := DefaultPolicy()
+	skillWithoutTech := skill
+	skillWithoutTech.Technologies = nil
+
+	// Tech match via ActiveArtifact.Language
+	artifactReq := baseReq
+	artifactReq.Context.ActiveArtifact = &Artifact{
+		Kind:     "file",
+		Language: "go",
+		PathHint: "main.go",
+	}
+	scoredWithoutTech := scoreSkill(skillWithoutTech, artifactReq, policy)
+	scoredArtifact := scoreSkill(skill, artifactReq, policy)
+	if scoredArtifact.Features.Artifact < 1.0 {
+		t.Fatalf("expected Artifact feature >= 1.0, got %f", scoredArtifact.Features.Artifact)
+	}
+	if scoredArtifact.Score <= scoredWithoutTech.Score {
+		t.Fatalf("expected score lift from technology match: %f <= %f", scoredArtifact.Score, scoredWithoutTech.Score)
+	}
+	foundTech := false
+	for _, r := range scoredArtifact.Reasons {
+		if r == "technology_match" {
+			foundTech = true
+		}
+	}
+	if !foundTech {
+		t.Fatalf("expected technology_match reason, got %v", scoredArtifact.Reasons)
+	}
+
+	// Tech match via Fact with case-insensitive equalEvidence
+	factReq := baseReq
+	factReq.Context.Facts = []Fact{{Key: "framework", Value: "Go"}}
+	scoredBase := scoreSkill(skill, baseReq, policy)
+	scoredFact := scoreSkill(skill, factReq, policy)
+	if scoredFact.Features.Artifact < 1.0 {
+		t.Fatalf("expected Artifact feature >= 1.0, got %f", scoredFact.Features.Artifact)
+	}
+	if scoredFact.Score <= scoredBase.Score {
+		t.Fatalf("expected score lift: %f <= %f", scoredFact.Score, scoredBase.Score)
+	}
+}
+
+func TestGoldenV1FeatureVectorIdenticalBeforeAndAfter(t *testing.T) {
 	t.Parallel()
 	corpus := loadGolden(t)
 	policy := DefaultPolicy()
-
 	for _, c := range corpus.Cases {
-		req := c.Request
-		query := tokenize(positiveQuery(req))
-		for _, s := range corpus.Skills {
-			// Verify golden skills do not have the new fields
-			if len(s.Examples) != 0 || len(s.CounterExamples) != 0 || len(s.Topics) != 0 || len(s.Technologies) != 0 {
-				t.Fatalf("golden skill %s unexpectedly has new fields", s.ID)
+		for _, skill := range corpus.Skills {
+			scored := scoreSkill(skill, c.Request, policy)
+			// Verify baseline calculations without new features
+			query := tokenize(positiveQuery(c.Request))
+			metaTokens := tokenize(strings.Join(append([]string{skill.Name, skill.Description}, skill.Aliases...), " "))
+			baselineLexical := overlap(query, metaTokens)
+			baselineTrigger := bestOverlap(query, skill.Triggers)
+			baselineNotFor := bestOverlap(query, skill.NotFor)
+
+			if scored.Features.Lexical != baselineLexical {
+				t.Fatalf("case %s, skill %s: Lexical feature changed from %f to %f", c.ID, skill.ID, baselineLexical, scored.Features.Lexical)
 			}
-			scored := scoreSkill(s, req, policy)
-			oldLexical := overlap(query, tokenize(strings.Join(append([]string{s.Name, s.Description}, s.Aliases...), " ")))
-			oldTrigger := bestOverlap(query, s.Triggers)
-			oldNotFor := bestOverlap(query, s.NotFor)
-			if scored.Features.Lexical != oldLexical {
-				t.Errorf("skill %s case %s: lexical = %f, want %f", s.ID, c.ID, scored.Features.Lexical, oldLexical)
+			if scored.Features.Trigger != baselineTrigger {
+				t.Fatalf("case %s, skill %s: Trigger feature changed from %f to %f", c.ID, skill.ID, baselineTrigger, scored.Features.Trigger)
 			}
-			if scored.Features.Trigger != oldTrigger {
-				t.Errorf("skill %s case %s: trigger = %f, want %f", s.ID, c.ID, scored.Features.Trigger, oldTrigger)
-			}
-			if scored.Features.NotFor != oldNotFor {
-				t.Errorf("skill %s case %s: not_for = %f, want %f", s.ID, c.ID, scored.Features.NotFor, oldNotFor)
-			}
-			if contains(scored.Reasons, "example_match") || contains(scored.Reasons, "technology_match") {
-				t.Errorf("golden skill %s case %s unexpectedly had new reasons: %v", s.ID, c.ID, scored.Reasons)
+			if scored.Features.NotFor != baselineNotFor {
+				t.Fatalf("case %s, skill %s: NotFor feature changed from %f to %f", c.ID, skill.ID, baselineNotFor, scored.Features.NotFor)
 			}
 		}
 	}

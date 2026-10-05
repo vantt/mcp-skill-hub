@@ -71,101 +71,120 @@ func TestValidateStagedAndWorkingTree(t *testing.T) {
 	}
 }
 
-func TestValidateCLIOutputWithWarnings(t *testing.T) {
+func TestValidateCLIOutputsMetadataLintWarnings(t *testing.T) {
 	t.Parallel()
 	root := initTestWorkspace(t)
 
-	// Seed skill-c1 with an absolute install path reference in SKILL.md
-	c1Dir := filepath.Join(root, "skills", "core", "skill-c1")
-	_ = os.MkdirAll(c1Dir, 0o755)
-	c1Meta := `schema_version: 1
-id: skill-c1
-name: Skill C1
+	// Seed skill A with absolute install path in SKILL.md
+	skillADir := filepath.Join(root, "skills", "core", "skill-a")
+	if err := os.MkdirAll(skillADir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	skillAMeta := `schema_version: 1
+id: skill-a
+name: Skill A
 status: active
-description: First collision skill
+description: First skill with trigger.
 routing:
-  operations: [operate]
-  triggers: [deploy container image to cloud]
+  triggers: [manage cloud infrastructure]
   not_for: [unrelated tasks]
-  min_scope: multi_step
-  examples: [e1, e2, e3]
+  min_scope: single_step
+  examples: [ex1, ex2, ex3]
 quality:
   reviewed: true
-provenance:
-  created_by: skillhub
 `
-	_ = os.WriteFile(filepath.Join(c1Dir, "skill.meta.yaml"), []byte(c1Meta), 0o644)
-	_ = os.WriteFile(filepath.Join(c1Dir, "SKILL.md"), []byte("# Skill C1\nSee ~/.claude/skills/my-skill/run.sh for setup.\n"), 0o644)
-
-	// Seed skill-c2 with identical trigger to create trigger collision
-	c2Dir := filepath.Join(root, "skills", "core", "skill-c2")
-	_ = os.MkdirAll(c2Dir, 0o755)
-	c2Meta := `schema_version: 1
-id: skill-c2
-name: Skill C2
-status: active
-description: Second collision skill
-routing:
-  operations: [operate]
-  triggers: [deploy container image to cloud]
-  not_for: [unrelated tasks]
-  min_scope: multi_step
-  examples: [e1, e2, e3]
-quality:
-  reviewed: true
-provenance:
-  created_by: skillhub
+	if err := os.WriteFile(filepath.Join(skillADir, "skill.meta.yaml"), []byte(skillAMeta), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	skillAMD := `---
+name: skill-a
+description: First skill with trigger.
+---
+# Skill A
+cp helper.sh ~/.claude/skills/target
 `
-	_ = os.WriteFile(filepath.Join(c2Dir, "skill.meta.yaml"), []byte(c2Meta), 0o644)
-	_ = os.WriteFile(filepath.Join(c2Dir, "SKILL.md"), []byte("# Skill C2\nValid instructions.\n"), 0o644)
-
-	// Rebuild catalog so active skills are available in SQLite
-	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"rebuild", "--workspace", root, "--json"}, &stdout, &stderr); code != 0 {
-		t.Fatalf("rebuild failed (exit %d): %s", code, stderr.String())
+	if err := os.WriteFile(filepath.Join(skillADir, "SKILL.md"), []byte(skillAMD), 0o644); err != nil {
+		t.Fatal(err)
 	}
 
-	// 1. JSON output has warnings and exit code 0
+	// Seed skill B colliding with skill A's trigger
+	skillBDir := filepath.Join(root, "skills", "core", "skill-b")
+	if err := os.MkdirAll(skillBDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	skillBMeta := `schema_version: 1
+id: skill-b
+name: Skill B
+status: active
+description: Second skill colliding with first.
+routing:
+  triggers: [manage cloud infrastructure]
+  not_for: [unrelated tasks]
+  min_scope: single_step
+  examples: [ex1, ex2, ex3]
+quality:
+  reviewed: true
+`
+	if err := os.WriteFile(filepath.Join(skillBDir, "skill.meta.yaml"), []byte(skillBMeta), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	skillBMD := `---
+name: skill-b
+description: Second skill colliding with first.
+---
+# Skill B
+Normal skill body.
+`
+	if err := os.WriteFile(filepath.Join(skillBDir, "SKILL.md"), []byte(skillBMD), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Rebuild catalog so active skills are queryable
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"rebuild", "--workspace", root, "--json"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("rebuild failed: %s", stderr.String())
+	}
+
+	// 1. JSON validate output
 	stdout.Reset()
 	stderr.Reset()
 	code := Run([]string{"validate", "--workspace", root, "--json"}, &stdout, &stderr)
 	if code != 0 {
-		t.Fatalf("validate json failed (exit %d): %s", code, stderr.String())
+		t.Fatalf("expected code 0 for validate with warnings, got %d: %s", code, stderr.String())
 	}
-	var result app.Result
-	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+	var res app.Result
+	if err := json.Unmarshal(stdout.Bytes(), &res); err != nil {
 		t.Fatalf("unmarshal validate result: %v", err)
 	}
-
-	hasCollision := false
-	hasAbsPath := false
-	for _, w := range result.Warnings {
+	foundCollision := false
+	foundAbsolute := false
+	for _, w := range res.Warnings {
 		if w.Code == "trigger_collision" {
-			hasCollision = true
+			foundCollision = true
 		}
 		if w.Code == "absolute_install_path" {
-			hasAbsPath = true
+			foundAbsolute = true
 		}
 	}
-	if !hasCollision {
-		t.Errorf("expected trigger_collision in warnings: %+v", result.Warnings)
+	if !foundCollision {
+		t.Fatalf("expected trigger_collision warning in JSON, got: %v", res.Warnings)
 	}
-	if !hasAbsPath {
-		t.Errorf("expected absolute_install_path in warnings: %+v", result.Warnings)
+	if !foundAbsolute {
+		t.Fatalf("expected absolute_install_path warning in JSON, got: %v", res.Warnings)
 	}
 
-	// 2. Human output prints WARN lines and exit code 0
+	// 2. Human validate output prints WARN lines
 	stdout.Reset()
 	stderr.Reset()
 	code = Run([]string{"validate", "--workspace", root}, &stdout, &stderr)
 	if code != 0 {
-		t.Fatalf("validate human failed (exit %d): %s", code, stderr.String())
+		t.Fatalf("expected code 0 for human validate, got %d: %s", code, stderr.String())
 	}
-	outStr := stdout.String()
-	if !strings.Contains(outStr, "WARN trigger_collision") {
-		t.Errorf("human output missing WARN trigger_collision:\n%s", outStr)
+	humanOutput := stdout.String()
+	if !strings.Contains(humanOutput, "WARN trigger_collision") {
+		t.Fatalf("expected WARN trigger_collision in human output, got:\n%s", humanOutput)
 	}
-	if !strings.Contains(outStr, "WARN absolute_install_path") {
-		t.Errorf("human output missing WARN absolute_install_path:\n%s", outStr)
+	if !strings.Contains(humanOutput, "WARN absolute_install_path") {
+		t.Fatalf("expected WARN absolute_install_path in human output, got:\n%s", humanOutput)
 	}
 }
