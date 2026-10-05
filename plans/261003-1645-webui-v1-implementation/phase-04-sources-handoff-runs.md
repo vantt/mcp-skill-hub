@@ -1,13 +1,15 @@
 ---
 phase: 4
 title: "Sources, Handoff, Runs"
-status: pending
+status: superseded
 priority: P1
 effort: 34h
 dependencies: [3]
 ---
 
 <!-- Updated: Validation Session 1 - rewritten as an executor handover; watch confirm checks ApplicationCommand; run-not-found sentinel; concrete test seeding recipes -->
+> **Archived / Superseded:** This phase implemented standalone source monitoring and orphan watch flows (`/sources/watch`, `/sources/distill`). The architecture has transitioned to a **Skill-Centric Sources model** defined in `plans/261004-2234-skill-source-upstream-ux/` (where sources are strictly attached to skills as Upstream or Learning References, with drift checking and 3-way merge updates). The UI and API work for sources is now owned by Phases 8 & 9 of `plans/261004-2234-skill-source-upstream-ux/`.
+
 
 # Phase 4: Sources, Handoff, Runs
 

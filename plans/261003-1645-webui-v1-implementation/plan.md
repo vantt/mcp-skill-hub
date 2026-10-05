@@ -28,11 +28,11 @@ Supporting records: [decisions.md](./decisions.md) (all architecture decisions a
 | 1 | [Web adapter foundation (Go)](./phase-01-web-adapter-foundation.md) | — | 32h | Complete |
 | 2 | [Frontend foundation, Home, Skills catalog](./phase-02-frontend-foundation-home-skills.md) | 1 | 38h | Complete |
 | 3 | [Add, Create, Skill Detail, proposals](./phase-03-skill-add-create-detail-proposals.md) | 2 | 46h | Complete |
-| 4 | [Sources, Handoff, Runs](./phase-04-sources-handoff-runs.md) | 3 | 34h | Pending |
-| 5 | [Inbox, Insight, Patch Composer](./phase-05-inbox-insight-patch-composer.md) | 3, 4 | 40h | Pending |
-| 6 | [Hardening, docs, release](./phase-06-hardening-docs-release.md) | 4, 5 | 28h | Pending |
+| 4 | [Sources, Handoff, Runs](./phase-04-sources-handoff-runs.md) | 3 | 34h | Superseded by plans/261004-2234-skill-source-upstream-ux/ |
+| 5 | [Inbox, Insight, Patch Composer](./phase-05-inbox-insight-patch-composer.md) | 3 | 40h | Pending |
+| 6 | [Hardening, docs, release](./phase-06-hardening-docs-release.md) | 5 | 28h | Pending |
 
-Run the phases strictly in the order 1 → 6, one at a time, never in parallel. Phase 5 depends on phase 4 because it reuses the phase 4 test seeds.
+Phase 4 has been superseded by the skill-centric source architecture in `plans/261004-2234-skill-source-upstream-ux/` (Phases 8 & 9). Phase 5 is decoupled from Phase 4 and remains pending for the Inbox and Patch Composer workflow.
 
 ## Executor hard rules (apply to every task)
 

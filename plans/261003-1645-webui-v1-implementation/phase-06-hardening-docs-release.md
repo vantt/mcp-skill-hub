@@ -4,10 +4,12 @@ title: "Hardening, docs, release"
 status: pending
 priority: P1
 effort: 28h
-dependencies: [4, 5]
+dependencies: [5]
 ---
 
 <!-- Updated: Validation Session 1 - rewritten as an executor handover; npm ci without --ignore-scripts; exact doc edits and greps -->
+> **Status:** Pending. Final release hardening, accessibility, licensing, and documentation updates across all shipped WebUI screens.
+
 
 # Phase 6: Hardening, docs, release
 
