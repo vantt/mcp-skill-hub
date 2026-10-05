@@ -109,7 +109,6 @@ func TestTelemetryServerObservedBlockedLoadSchema(t *testing.T) {
 	validateJSON(t, TelemetryEvent, replaceJSON(blocked, `"attribution":"recommended"`, `"attribution":"recommended","first_activation":false`), true)
 }
 
-
 func TestEvaluationCaseSchemaSupportsMultipleOutcomesBranchesAndCounters(t *testing.T) {
 	valid := `{
 		"schema_version":1,"id":"routing-with-clarification","partition":"calibration",
