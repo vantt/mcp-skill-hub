@@ -1,13 +1,31 @@
 package app
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+	"time"
 
+	"github.com/vantt/mcp-skill-hub/internal/catalog"
+	"github.com/vantt/mcp-skill-hub/internal/mutation"
 	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
+	"github.com/vantt/mcp-skill-hub/internal/workspace"
 	"gopkg.in/yaml.v3"
 )
+
+type SourceAttachInput struct {
+	SkillID        string `json:"skill_id"`
+	SourceID       string `json:"source_id,omitempty"`
+	Locator        string `json:"locator,omitempty"`
+	Ref            string `json:"ref,omitempty"`
+	Path           string `json:"path,omitempty"`
+	Cadence        string `json:"cadence,omitempty"`
+	IdempotencyKey string `json:"idempotency_key,omitempty"`
+}
 
 func readSkillSourceLinks(root string) ([]sourcepkg.Link, error) {
 	dir := filepath.Join(root, "sources", "skills")
@@ -44,4 +62,401 @@ func learningSourceIDs(links []sourcepkg.Link) map[string]bool {
 		}
 	}
 	return set
+}
+
+func linkedSkills(root, sourceID string) ([]string, error) {
+	linked := make(map[string]bool)
+
+	allSkills, err := listAllSkillIDs(root)
+	if err == nil {
+		for _, id := range allSkills {
+			_, _, metaBytes, err := locateSkillDir(root, id)
+			if err != nil || len(metaBytes) == 0 {
+				continue
+			}
+			var meta struct {
+				Provenance struct {
+					SourceID string `yaml:"source_id"`
+				} `yaml:"provenance"`
+			}
+			if yaml.Unmarshal(metaBytes, &meta) == nil && meta.Provenance.SourceID == sourceID {
+				linked[id] = true
+			}
+		}
+	}
+
+	links, err := readSkillSourceLinks(root)
+	if err == nil {
+		for _, l := range links {
+			if l.SourceID == sourceID && l.SkillID != "" {
+				linked[l.SkillID] = true
+			}
+		}
+	}
+
+	result := make([]string, 0, len(linked))
+	for id := range linked {
+		result = append(result, id)
+	}
+	sort.Strings(result)
+	return result, nil
+}
+
+func sourceHasExternalReferences(root, sourceID string) bool {
+	distillSourceDir := filepath.Join(root, "distill", "sources", sourceID)
+	for _, sub := range []string{"observations", "runs"} {
+		if entries, err := os.ReadDir(filepath.Join(distillSourceDir, sub)); err == nil && len(entries) > 0 {
+			return true
+		}
+	}
+
+	handle, err := catalog.OpenCurrent(context.Background(), root)
+	if err != nil {
+		return false
+	}
+	defer handle.Close()
+
+	var count int
+	pattern := fmt.Sprintf(`%%"source_id":"%s"%%`, sourceID)
+	err = handle.DB.QueryRow(`SELECT count(*) FROM canonical_entities WHERE kind NOT IN ('skill', 'skill_source_link') AND (json_extract(content_json, '$.source_id') = ? OR content_json LIKE ?)`, sourceID, pattern).Scan(&count)
+	return err == nil && count > 0
+}
+
+func (service SourceService) PreviewAttach(ctx context.Context, path string, input SourceAttachInput) (SourceProposal, error) {
+	root, err := workspace.Discover(path)
+	if err != nil {
+		return SourceProposal{}, err
+	}
+	service = service.defaults(root)
+
+	skillID := strings.TrimSpace(input.SkillID)
+	if skillID == "" {
+		return SourceProposal{Result: ErrorResult(NewInvalidRequestError("skill_id is required", "Provide a target skill ID."))}, nil
+	}
+	if _, _, _, err := locateSkillDir(root, skillID); err != nil {
+		return SourceProposal{Result: ErrorResult(NewInvalidRequestError(fmt.Sprintf("skill %q not found", skillID), "Create the skill before attaching a source."))}, nil
+	}
+
+	hasSourceID := strings.TrimSpace(input.SourceID) != ""
+	hasLocator := strings.TrimSpace(input.Locator) != ""
+	if (hasSourceID && hasLocator) || (!hasSourceID && !hasLocator) {
+		return SourceProposal{Result: ErrorResult(NewInvalidRequestError("specify exactly one of source_id or locator", "Pass either source_id or locator."))}, nil
+	}
+
+	_, records, err := readSourceRecords(root)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return SourceProposal{}, err
+	}
+
+	var sourceRecord sourcepkg.Record
+	var newSource bool
+
+	if hasLocator {
+		if prop := validateSourceWatchLocator(input.Locator); prop != nil {
+			return *prop, nil
+		}
+		var matchedRecord *sourcepkg.Record
+		for i := range records {
+			r := &records[i]
+			if r.Adapter == "git" && sameRepository(r.Locator.Repository, input.Locator) &&
+				(input.Ref == "" || r.Locator.Ref == input.Ref) &&
+				r.Locator.Path == input.Path {
+				matchedRecord = r
+				break
+			}
+		}
+		if matchedRecord != nil {
+			sourceRecord = *matchedRecord
+		} else {
+			adapter, ok := service.Adapters["git"]
+			if !ok {
+				return SourceProposal{}, fmt.Errorf("git adapter is not configured")
+			}
+			route, rProp := resolveSourceWatchRoute(ctx, adapter, input.Locator, input.Ref, input.Path)
+			if rProp != nil {
+				return *rProp, nil
+			}
+			watchInput := SourceWatchInput{
+				Locator: input.Locator,
+				Ref:     input.Ref,
+				Path:    input.Path,
+				Cadence: input.Cadence,
+			}
+			cfg, cProp := deriveSourceWatchConfig(watchInput, route)
+			if cProp != nil {
+				return *cProp, nil
+			}
+			record, _, recProp, bErr := buildSourceWatchRecord(ctx, adapter, cfg, "")
+			if bErr != nil {
+				return SourceProposal{}, bErr
+			}
+			if recProp != nil {
+				return *recProp, nil
+			}
+			sourceRecord = record
+			newSource = true
+		}
+	} else {
+		for i := range records {
+			if records[i].ID == input.SourceID {
+				sourceRecord = records[i]
+				break
+			}
+		}
+		if sourceRecord.ID == "" {
+			return SourceProposal{Result: ErrorResult(NewInvalidRequestError(fmt.Sprintf("source %q not found", input.SourceID), "Check configured sources with skillhub source list."))}, nil
+		}
+	}
+
+	linkID := fmt.Sprintf("LINK-%s--%s", skillID, sourceRecord.ID)
+	linkPath := fmt.Sprintf("sources/skills/%s.yaml", linkID)
+	if _, statErr := os.Stat(filepath.Join(root, filepath.FromSlash(linkPath))); statErr == nil {
+		return SourceProposal{
+			Result: NewResult(StatusOK, fmt.Sprintf("Skill %q is already linked to %q.", skillID, sourceRecord.ID)),
+			Source: sourceRecord,
+		}, nil
+	}
+
+	var changes []mutation.Change
+	diff := SourceDiff{Added: []string{}, Modified: []string{}, Deleted: []string{}}
+
+	if newSource {
+		sourceBytes, _ := sourcepkg.MarshalCanonical(sourceRecord)
+		sourcePath := "sources/catalog/" + sourceRecord.ID + ".yaml"
+		changes = append(changes, mutation.Change{Path: sourcePath, Contents: sourceBytes})
+		diff.Added = append(diff.Added, sourcePath)
+	}
+
+	linkDoc := sourcepkg.Link{
+		SchemaVersion: 1,
+		ID:            linkID,
+		SkillID:       skillID,
+		SourceID:      sourceRecord.ID,
+		Role:          "learning-source",
+	}
+	linkBytes, err := sourcepkg.MarshalCanonical(linkDoc)
+	if err != nil {
+		return SourceProposal{}, err
+	}
+	changes = append(changes, mutation.Change{Path: linkPath, Contents: linkBytes})
+	diff.Added = append(diff.Added, linkPath)
+
+	set := mutation.WriteSet{
+		Command:        "source_attach",
+		IdempotencyKey: input.IdempotencyKey,
+		Changes:        changes,
+	}
+	planned, err := mutation.PlanMutation(root, set)
+	if err != nil {
+		return SourceProposal{}, err
+	}
+
+	pins := ConfirmationPins{
+		ProposalID:     planned.ID,
+		ProposalDigest: planned.Digest,
+		BaseVersion:    planned.BaseCatalogSnapshot,
+	}
+	expiresAt := service.Clock.Now().UTC().Add(24 * time.Hour)
+	proposal := SourceProposal{
+		Result: NewResult(StatusActionRequired, fmt.Sprintf("Attach proposal for %s to %s is ready for review.", sourceRecord.ID, skillID)),
+		Source: sourceRecord,
+		Diff:   diff,
+		Confirmation: ConfirmationPolicy{
+			PolicyRevision:     "policy_v1",
+			ActionClass:        "semantic",
+			ApplicationCommand: "source_watch_confirm",
+			Confirmation: ConfirmationRequirement{
+				Required: true,
+				Mode:     "preview-and-approval",
+				Pins:     pins,
+			},
+		},
+		planned:   planned,
+		expiresAt: expiresAt,
+	}
+
+	if err := storeSourceProposal(root, proposal, service.Clock.Now().UTC()); err != nil {
+		return SourceProposal{}, err
+	}
+	return proposal, nil
+}
+
+func (service SourceService) PreviewDetach(ctx context.Context, path, skillID, sourceID string) (SourceProposal, error) {
+	root, err := workspace.Discover(path)
+	if err != nil {
+		return SourceProposal{}, err
+	}
+	service = service.defaults(root)
+
+	linkID := fmt.Sprintf("LINK-%s--%s", skillID, sourceID)
+	linkPath := fmt.Sprintf("sources/skills/%s.yaml", linkID)
+	linkData, err := readWorkspaceFile(root, linkPath)
+	if err != nil {
+		return SourceProposal{Result: ErrorResult(NewInvalidRequestError(fmt.Sprintf("link %s does not exist", linkID), "Verify link exists."))}, nil
+	}
+
+	changes := []mutation.Change{
+		{Path: linkPath, BeforeDigest: sourcepkg.Digest(linkData), Delete: true},
+	}
+	diff := SourceDiff{Added: []string{}, Modified: []string{}, Deleted: []string{linkPath}}
+
+	linked, _ := linkedSkills(root, sourceID)
+	remaining := make([]string, 0, len(linked))
+	for _, id := range linked {
+		if id != skillID {
+			remaining = append(remaining, id)
+		}
+	}
+
+	sourcePath := "sources/catalog/" + sourceID + ".yaml"
+	sourceData, sErr := readWorkspaceFile(root, sourcePath)
+	var warnings []Warning
+
+	if len(remaining) == 0 && sErr == nil {
+		if !sourceHasExternalReferences(root, sourceID) {
+			changes = append(changes, mutation.Change{
+				Path:         sourcePath,
+				BeforeDigest: sourcepkg.Digest(sourceData),
+				Delete:       true,
+			})
+			diff.Deleted = append(diff.Deleted, sourcePath)
+		} else {
+			var rec sourcepkg.Record
+			if err := yaml.Unmarshal(sourceData, &rec); err == nil {
+				rec.Monitoring.Enabled = false
+				rec.Monitoring.Cadence = "manual"
+				updatedBytes, _ := sourcepkg.MarshalCanonical(rec)
+				changes = append(changes, mutation.Change{
+					Path:         sourcePath,
+					BeforeDigest: sourcepkg.Digest(sourceData),
+					Contents:     updatedBytes,
+				})
+				diff.Modified = append(diff.Modified, sourcePath)
+				warnings = append(warnings, Warning{
+					Code:    "source_kept_referenced",
+					Summary: fmt.Sprintf("Source %s is referenced by other canonical entities; retained with monitoring disabled.", sourceID),
+				})
+			}
+		}
+	}
+
+	set := mutation.WriteSet{
+		Command: "source_detach",
+		Changes: changes,
+	}
+	planned, err := mutation.PlanMutation(root, set)
+	if err != nil {
+		return SourceProposal{}, err
+	}
+
+	pins := ConfirmationPins{
+		ProposalID:     planned.ID,
+		ProposalDigest: planned.Digest,
+		BaseVersion:    planned.BaseCatalogSnapshot,
+	}
+	expiresAt := service.Clock.Now().UTC().Add(24 * time.Hour)
+	proposal := SourceProposal{
+		Result: NewResult(StatusActionRequired, fmt.Sprintf("Detach proposal for %s from %s is ready for review.", sourceID, skillID)),
+		Source: sourcepkg.Record{ID: sourceID},
+		Diff:   diff,
+		Confirmation: ConfirmationPolicy{
+			PolicyRevision:     "policy_v1",
+			ActionClass:        "semantic",
+			ApplicationCommand: "source_watch_confirm",
+			Confirmation: ConfirmationRequirement{
+				Required: true,
+				Mode:     "preview-and-approval",
+				Pins:     pins,
+			},
+		},
+		planned:   planned,
+		expiresAt: expiresAt,
+	}
+	proposal.Warnings = warnings
+
+	if err := storeSourceProposal(root, proposal, service.Clock.Now().UTC()); err != nil {
+		return SourceProposal{}, err
+	}
+	return proposal, nil
+}
+
+func (service SourceService) PreviewUnwatch(ctx context.Context, path, sourceID string) (SourceProposal, error) {
+	root, err := workspace.Discover(path)
+	if err != nil {
+		return SourceProposal{}, err
+	}
+	service = service.defaults(root)
+
+	sourcePath := "sources/catalog/" + sourceID + ".yaml"
+	sourceData, err := readWorkspaceFile(root, sourcePath)
+	if err != nil {
+		return SourceProposal{Result: ErrorResult(NewInvalidRequestError(fmt.Sprintf("source %q not found", sourceID), "Verify source exists."))}, nil
+	}
+
+	linked, _ := linkedSkills(root, sourceID)
+	hasReferences := sourceHasExternalReferences(root, sourceID)
+
+	var changes []mutation.Change
+	diff := SourceDiff{Added: []string{}, Modified: []string{}, Deleted: []string{}}
+
+	if len(linked) == 0 && !hasReferences {
+		changes = append(changes, mutation.Change{
+			Path:         sourcePath,
+			BeforeDigest: sourcepkg.Digest(sourceData),
+			Delete:       true,
+		})
+		diff.Deleted = append(diff.Deleted, sourcePath)
+	} else {
+		var rec sourcepkg.Record
+		if err := yaml.Unmarshal(sourceData, &rec); err != nil {
+			return SourceProposal{}, err
+		}
+		rec.Monitoring.Enabled = false
+		rec.Monitoring.Cadence = "manual"
+		updatedBytes, _ := sourcepkg.MarshalCanonical(rec)
+		changes = append(changes, mutation.Change{
+			Path:         sourcePath,
+			BeforeDigest: sourcepkg.Digest(sourceData),
+			Contents:     updatedBytes,
+		})
+		diff.Modified = append(diff.Modified, sourcePath)
+	}
+
+	set := mutation.WriteSet{
+		Command: "source_unwatch",
+		Changes: changes,
+	}
+	planned, err := mutation.PlanMutation(root, set)
+	if err != nil {
+		return SourceProposal{}, err
+	}
+
+	pins := ConfirmationPins{
+		ProposalID:     planned.ID,
+		ProposalDigest: planned.Digest,
+		BaseVersion:    planned.BaseCatalogSnapshot,
+	}
+	expiresAt := service.Clock.Now().UTC().Add(24 * time.Hour)
+	proposal := SourceProposal{
+		Result: NewResult(StatusActionRequired, fmt.Sprintf("Unwatch proposal for %s is ready for review.", sourceID)),
+		Source: sourcepkg.Record{ID: sourceID},
+		Diff:   diff,
+		Confirmation: ConfirmationPolicy{
+			PolicyRevision:     "policy_v1",
+			ActionClass:        "semantic",
+			ApplicationCommand: "source_watch_confirm",
+			Confirmation: ConfirmationRequirement{
+				Required: true,
+				Mode:     "preview-and-approval",
+				Pins:     pins,
+			},
+		},
+		planned:   planned,
+		expiresAt: expiresAt,
+	}
+
+	if err := storeSourceProposal(root, proposal, service.Clock.Now().UTC()); err != nil {
+		return SourceProposal{}, err
+	}
+	return proposal, nil
 }

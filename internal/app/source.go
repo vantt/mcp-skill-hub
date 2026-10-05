@@ -61,6 +61,10 @@ type SourceProposal struct {
 	expiresAt    time.Time
 }
 
+func (p SourceProposal) WriteCommand() string {
+	return p.planned.WriteSet.Command
+}
+
 type SourceMutationResult struct {
 	Result
 	SourceID        string   `json:"source_id,omitempty"`
@@ -433,7 +437,53 @@ func (service SourceService) ConfirmSourceProposal(ctx context.Context, path str
 	if err != nil {
 		return SourceMutationResult{}, err
 	}
-	summary := fmt.Sprintf("Watching %s. First analysis is ready: ask your agent 'distill new sources' or run `skillhub distill prepare %s`.\nWatching does not auto-import skills; accepted insights can create draft skills.", preview.Source.ID, preview.Source.ID)
+	cmd := preview.planned.WriteSet.Command
+	var summary string
+	switch cmd {
+	case "source_attach":
+		skillID := ""
+		for _, c := range preview.planned.WriteSet.Changes {
+			if strings.HasPrefix(c.Path, "sources/skills/LINK-") {
+				base := strings.TrimPrefix(filepath.Base(c.Path), "LINK-")
+				base = strings.TrimSuffix(base, ".yaml")
+				parts := strings.Split(base, "--")
+				if len(parts) >= 1 {
+					skillID = parts[0]
+				}
+				break
+			}
+		}
+		summary = fmt.Sprintf("Linked %s to %s as a learning reference.", preview.Source.ID, skillID)
+	case "source_detach":
+		skillID := ""
+		for _, c := range preview.planned.WriteSet.Changes {
+			if strings.HasPrefix(c.Path, "sources/skills/LINK-") {
+				base := strings.TrimPrefix(filepath.Base(c.Path), "LINK-")
+				base = strings.TrimSuffix(base, ".yaml")
+				parts := strings.Split(base, "--")
+				if len(parts) >= 1 {
+					skillID = parts[0]
+				}
+				break
+			}
+		}
+		summary = fmt.Sprintf("Unlinked %s from %s.", preview.Source.ID, skillID)
+	case "source_unwatch":
+		isRemoved := false
+		for _, c := range preview.planned.WriteSet.Changes {
+			if c.Delete && strings.HasPrefix(c.Path, "sources/catalog/") {
+				isRemoved = true
+				break
+			}
+		}
+		if isRemoved {
+			summary = fmt.Sprintf("Removed %s.", preview.Source.ID)
+		} else {
+			summary = fmt.Sprintf("Stopped watching %s.", preview.Source.ID)
+		}
+	default:
+		summary = fmt.Sprintf("Watching %s. First analysis is ready: ask your agent 'distill new sources' or run `skillhub distill prepare %s`.\nWatching does not auto-import skills; accepted insights can create draft skills.", preview.Source.ID, preview.Source.ID)
+	}
 	result := sourceMutationResult(summary, preview.Source.ID, receipt)
 	recordCurationTelemetry(ctx, service.Telemetry, root, curationTelemetryEvent(telemetry.EventSourceCandidateTriaged, map[string]any{
 		"candidate_id": preview.CandidateID, "source_id": preview.Source.ID, "status": "accepted", "triage": "accept",

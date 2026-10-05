@@ -43,6 +43,14 @@ func (a *fakeImportAdapter) Read(_ context.Context, _ sourcepkg.Source, _ source
 	return nil, os.ErrNotExist
 }
 
+func (a *fakeImportAdapter) Diff(_ context.Context, _ sourcepkg.Source, from, to sourcepkg.Revision) (sourcepkg.ChangeSet, error) {
+	var changes []sourcepkg.Change
+	for p := range a.files {
+		changes = append(changes, sourcepkg.Change{Path: p, Status: "modified"})
+	}
+	return sourcepkg.ChangeSet{From: from, To: to, Changes: changes}, nil
+}
+
 func TestSourceImportPreviewAndConfirmWithConflictSkipping(t *testing.T) {
 	t.Parallel()
 	root := newSourceWorkspace(t)
