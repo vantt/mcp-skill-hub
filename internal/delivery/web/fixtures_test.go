@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -9,9 +10,11 @@ import (
 	"regexp"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
 	"github.com/vantt/mcp-skill-hub/internal/skill"
+	"github.com/vantt/mcp-skill-hub/internal/telemetry"
 )
 
 func newWebWorkspace(t *testing.T) string {
@@ -64,6 +67,128 @@ func newWebWorkspace(t *testing.T) string {
 	if _, err := (app.CatalogService{}).BuildCatalogGeneration(context.Background(), root); err != nil {
 		t.Fatal(err)
 	}
+
+	// Seed telemetry rollups for review-skill
+	fixedTime := time.Date(2026, 10, 4, 10, 0, 0, 0, time.UTC)
+	recorder, err := (app.TelemetryService{Config: telemetry.Config{Clock: func() time.Time { return fixedTime }}}).Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	makeEvt := func(id, eventType string) telemetry.Event {
+		return telemetry.Event{
+			Version:         telemetry.EventVersion,
+			ID:              id,
+			Type:            eventType,
+			OccurredAt:      fixedTime,
+			CatalogSnapshot: "test-snapshot",
+			PolicyRevision:  "test-policy",
+			Client:          telemetry.Client{Name: "test", Version: "1.0"},
+		}
+	}
+
+	// 10 recommendations
+	for i := range 10 {
+		rec := makeEvt(fmt.Sprintf("evt_rec_%d", i), telemetry.EventResolutionRecommended)
+		rec.ResolutionID = fmt.Sprintf("res_%d", i)
+		rec.Payload = map[string]any{
+			"top_skill_id":          "review-skill",
+			"recommended_skill_ids": []string{"review-skill"},
+		}
+		recorder.Record(rec)
+	}
+
+	// 8 recommended activations
+	for i := range 8 {
+		load := makeEvt(fmt.Sprintf("evt_act_%d", i), telemetry.EventSkillLoaded)
+		load.ResolutionID = fmt.Sprintf("res_%d", i)
+		load.Payload = map[string]any{
+			"skill_id":         "review-skill",
+			"basis":            telemetry.LoadBasisServerObserved,
+			"resource_kind":    "entrypoint",
+			"surface":          "skill_get",
+			"attribution":      "recommended",
+			"first_activation": true,
+		}
+		recorder.Record(load)
+	}
+
+	// 1 override activation
+	actOver := makeEvt("evt_act_over", telemetry.EventSkillLoaded)
+	actOver.ResolutionID = "res_over"
+	actOver.Payload = map[string]any{
+		"skill_id":         "review-skill",
+		"basis":            telemetry.LoadBasisServerObserved,
+		"resource_kind":    "entrypoint",
+		"surface":          "skill_get",
+		"attribution":      "override",
+		"first_activation": true,
+	}
+	recorder.Record(actOver)
+
+	// 1 unsolicited activation
+	actUnsol := makeEvt("evt_act_unsol", telemetry.EventSkillLoaded)
+	actUnsol.Payload = map[string]any{
+		"skill_id":         "review-skill",
+		"basis":            telemetry.LoadBasisServerObserved,
+		"resource_kind":    "entrypoint",
+		"surface":          "skill_get",
+		"attribution":      "unsolicited",
+		"first_activation": true,
+	}
+	recorder.Record(actUnsol)
+
+	// 4 additional loads (3 entrypoint, 1 reference)
+	for i := range 3 {
+		load := makeEvt(fmt.Sprintf("evt_more_load_%d", i), telemetry.EventSkillLoaded)
+		load.Payload = map[string]any{
+			"skill_id":         "review-skill",
+			"basis":            telemetry.LoadBasisServerObserved,
+			"resource_kind":    "entrypoint",
+			"surface":          "skill_get",
+			"first_activation": false,
+		}
+		recorder.Record(load)
+	}
+	loadRef := makeEvt("evt_load_ref", telemetry.EventSkillLoaded)
+	loadRef.Payload = map[string]any{
+		"skill_id":         "review-skill",
+		"basis":            telemetry.LoadBasisServerObserved,
+		"resource_kind":    "reference",
+		"surface":          "resources_read",
+		"first_activation": false,
+	}
+	recorder.Record(loadRef)
+
+	// Doctor runs: 3 ready, 1 setup_required
+	for i := range 3 {
+		doc := makeEvt(fmt.Sprintf("evt_doc_ready_%d", i), telemetry.EventSkillDoctorChecked)
+		doc.Payload = map[string]any{"skill_id": "review-skill", "status": "ready"}
+		recorder.Record(doc)
+	}
+	docFail := makeEvt("evt_doc_fail", telemetry.EventSkillDoctorChecked)
+	docFail.Payload = map[string]any{"skill_id": "review-skill", "status": "setup_required"}
+	recorder.Record(docFail)
+
+	// Flush before feedback
+	if err := recorder.Flush(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	// Feedback: setup_failed
+	if _, err := recorder.RecordFeedback(context.Background(), telemetry.Feedback{
+		EventID:      "fb_review_setup_fail",
+		ResolutionID: "res_0",
+		Outcome:      "failed",
+		ReasonCode:   telemetry.FeedbackReasonSetupFailed,
+		SkillID:      "review-skill",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := recorder.Close(context.Background()); err != nil {
+		t.Fatal(err)
+	}
 	return root
 }
 
@@ -78,6 +203,7 @@ func newTestServer(t *testing.T, root string) *Server {
 		ListenPort: 7421,
 		Interfaces: fakeIfaces,
 		Assets:     fstest.MapFS{},
+		Now:        func() time.Time { return time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC) },
 	})
 	if err != nil {
 		t.Fatalf("failed to create test server: %v", err)

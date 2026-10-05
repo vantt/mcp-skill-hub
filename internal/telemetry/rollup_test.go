@@ -267,8 +267,8 @@ func TestFeedbackAfterLoadFlagAndTopSkillFallback(t *testing.T) {
 		"2026-10-04|beta|feedback:loaded":              1,
 		"2026-10-04|beta|load:entrypoint":              1,
 		"2026-10-04|beta|feedback:failed":              1,
-		"2026-10-04|beta|feedback:negative":            2,
-		"2026-10-04|beta|feedback:negative_after_load": 2,
+		"2026-10-04|beta|feedback:negative":            1,
+		"2026-10-04|beta|feedback:negative_after_load": 1,
 	})
 }
 
@@ -293,7 +293,7 @@ func TestSetupFailedFeedbackCountsOncePerSkill(t *testing.T) {
 	assertCounts(t, rollupCounts(t, recorder, "", ""), map[string]int64{
 		"2026-10-04||resolution:resolved":        1,
 		"2026-10-04|alpha|feedback:failed":       2,
-		"2026-10-04|alpha|feedback:negative":     3,
+		"2026-10-04|alpha|feedback:negative":     2,
 		"2026-10-04|alpha|feedback:setup_failed": 1,
 	})
 }
@@ -449,5 +449,107 @@ func TestBlockedLoadRollupAndFeedbackExclusion(t *testing.T) {
 
 	if health := recorder.Health(); health.Rejected != 2 {
 		t.Fatalf("expected 2 rejected events, got %d (%s)", health.Rejected, health.LastError)
+	}
+}
+
+func TestNegativeFeedbackRollupDeduplication(t *testing.T) {
+	now := time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC)
+	recorder := newTestRecorder(t, Config{Clock: func() time.Time { return now }})
+
+	// Seed resolution so feedback can resolve top skill if needed, though we provide skill_id explicitly
+	res := validEvent(EventResolutionCompleted)
+	res.ID, res.OccurredAt, res.ResolutionID = "res_1", now, "res_1"
+	res.Payload = map[string]any{"status": "resolved", "top_skill_id": "alpha", "recommended_skill_ids": []string{"alpha"}}
+	recorder.Record(res)
+	if err := recorder.Flush(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. One report outcome: failed + utility: harmful -> feedback:negative = 1
+	res1, err := recorder.RecordFeedback(t.Context(), Feedback{
+		EventID:      "fb_failed_harmful",
+		ResolutionID: "res_1",
+		Outcome:      "failed",
+		Utility:      "harmful",
+		Basis:        "user",
+		SkillID:      "alpha",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res1.Deduplicated {
+		t.Fatal("expected Deduplicated=false")
+	}
+
+	counts := rollupCounts(t, recorder, "", "")
+	if got := counts["2026-10-04|alpha|feedback:negative"]; got != 1 {
+		t.Fatalf("expected feedback:negative=1 for failed+harmful, got %d (all: %v)", got, counts)
+	}
+	if got := counts["2026-10-04|alpha|feedback:failed"]; got != 1 {
+		t.Fatalf("expected feedback:failed=1, got %d", got)
+	}
+
+	// Retry of the same report -> still 1
+	resRetry, err := recorder.RecordFeedback(t.Context(), Feedback{
+		EventID:      "fb_failed_harmful",
+		ResolutionID: "res_1",
+		Outcome:      "failed",
+		Utility:      "harmful",
+		Basis:        "user",
+		SkillID:      "alpha",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !resRetry.Deduplicated {
+		t.Fatal("expected Deduplicated=true on retry")
+	}
+	counts = rollupCounts(t, recorder, "", "")
+	if got := counts["2026-10-04|alpha|feedback:negative"]; got != 1 {
+		t.Fatalf("expected feedback:negative=1 after retry, got %d", got)
+	}
+
+	// 2. outcome: completed + utility: harmful -> adds 1 feedback:negative (total 2)
+	res2, err := recorder.RecordFeedback(t.Context(), Feedback{
+		EventID:      "fb_completed_harmful",
+		ResolutionID: "res_1",
+		Outcome:      "completed",
+		Utility:      "harmful",
+		Basis:        "user",
+		SkillID:      "alpha",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res2.Deduplicated {
+		t.Fatal("expected Deduplicated=false")
+	}
+	counts = rollupCounts(t, recorder, "", "")
+	if got := counts["2026-10-04|alpha|feedback:negative"]; got != 2 {
+		t.Fatalf("expected total feedback:negative=2 after completed+harmful, got %d (all: %v)", got, counts)
+	}
+	if got := counts["2026-10-04|alpha|feedback:completed"]; got != 1 {
+		t.Fatalf("expected feedback:completed=1, got %d", got)
+	}
+
+	// 3. outcome: failed alone -> adds 1 feedback:negative (total 3)
+	res3, err := recorder.RecordFeedback(t.Context(), Feedback{
+		EventID:      "fb_failed_alone",
+		ResolutionID: "res_1",
+		Outcome:      "failed",
+		SkillID:      "alpha",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res3.Deduplicated {
+		t.Fatal("expected Deduplicated=false")
+	}
+	counts = rollupCounts(t, recorder, "", "")
+	if got := counts["2026-10-04|alpha|feedback:negative"]; got != 3 {
+		t.Fatalf("expected total feedback:negative=3 after failed alone, got %d (all: %v)", got, counts)
+	}
+	if got := counts["2026-10-04|alpha|feedback:failed"]; got != 2 {
+		t.Fatalf("expected total feedback:failed=2, got %d", got)
 	}
 }

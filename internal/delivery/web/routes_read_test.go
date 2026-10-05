@@ -38,6 +38,7 @@ func TestReadEndpointsGolden(t *testing.T) {
 		{name: "skills", path: "/api/v1/skills", wantStatus: http.StatusOK},
 		{name: "skill-detail", path: "/api/v1/skills/review-skill", wantStatus: http.StatusOK},
 		{name: "skill-review", path: "/api/v1/skills/review-skill/review", wantStatus: http.StatusOK},
+		{name: "skill-usage", path: "/api/v1/skills/review-skill/usage?since=30d", wantStatus: http.StatusOK},
 		{name: "skill-unknown", path: "/api/v1/skills/unknown-skill", wantStatus: http.StatusNotFound},
 		{name: "skills-bad-state", path: "/api/v1/skills?state=invalid", wantStatus: http.StatusBadRequest},
 	}

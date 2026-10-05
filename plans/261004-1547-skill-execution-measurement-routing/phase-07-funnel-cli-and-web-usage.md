@@ -1,7 +1,7 @@
 ---
 phase: 7
 title: "Funnel aggregation, CLI, WebUI Usage tab"
-status: pending
+status: done
 priority: P1
 effort: 12h
 dependencies: [2, 6]
@@ -57,17 +57,17 @@ Modify:
 
 ## Steps
 
-- [ ] **1. Double-count fix.** Test: one report `outcome: failed` + `utility: harmful` → `feedback:negative` = 1; `outcome: completed` + `utility: harmful` → 1; `outcome: failed` alone → 1; retry of the same report → still 1.
+- [x] **1. Double-count fix.** Test: one report `outcome: failed` + `utility: harmful` → `feedback:negative` = 1; `outcome: completed` + `utility: harmful` → 1; `outcome: failed` alone → 1; retry of the same report → still 1.
   Pass: `go test -count=1 -run Rollup ./internal/telemetry/` → `ok`.
-- [ ] **2. UsageService.** Seed events through a real recorder in a temp workspace (`TelemetryService{}.Open`, record, `Flush`), never by writing SQL. Tests: acceptance rate; null rates at zero denominators; dead-skill detection using a rollup day 60 days old (inject the recorder clock as `rollup_test.go:79` does); window clamp at 180 days; `--skill` filter; `blocked_by_review` list; `setup_failed_rate`.
+- [x] **2. UsageService.** Seed events through a real recorder in a temp workspace (`TelemetryService{}.Open`, record, `Flush`), never by writing SQL. Tests: acceptance rate; null rates at zero denominators; dead-skill detection using a rollup day 60 days old (inject the recorder clock as `rollup_test.go:79` does); window clamp at 180 days; `--skill` filter; `blocked_by_review` list; `setup_failed_rate`.
   Pass: `go test -count=1 -run Usage ./internal/app/` → `ok`.
-- [ ] **3. CLI.** Human and JSON output tests; exit codes 0 and 2; help text lists `funnel`.
+- [x] **3. CLI.** Human and JSON output tests; exit codes 0 and 2; help text lists `funnel`.
   Pass: `go test -count=1 -run 'Funnel|Help' ./internal/delivery/cli/` → `ok`; `go run ./cmd/skillhub help telemetry` shows `funnel`.
-- [ ] **4. Web route + golden.** Add the route and a `skill-usage` case (`/api/v1/skills/review-skill/usage?since=30d`) plus a 404 case. Generate with `go test ./internal/delivery/web/ -run TestReadEndpointsGolden -update`, then rerun without `-update`.
+- [x] **4. Web route + golden.** Add the route and a `skill-usage` case (`/api/v1/skills/review-skill/usage?since=30d`) plus a 404 case. Generate with `go test ./internal/delivery/web/ -run TestReadEndpointsGolden -update`, then rerun without `-update`.
   Pass: `go test -count=1 ./internal/delivery/web/` → `ok`; `internal/delivery/web/testdata/golden/skill-usage.json` exists.
-- [ ] **5. Frontend.** Types, `useSkillUsage`, tab button, `UsagePanel`. Vitest renders `loadGolden('skill-usage')` and an all-zero report (empty state) and the window selector changes the query key.
+- [x] **5. Frontend.** Types, `useSkillUsage`, tab button, `UsagePanel`. Vitest renders `loadGolden('skill-usage')` and an all-zero report (empty state) and the window selector changes the query key.
   Pass: `make web-test` exits 0; `make web-build` exits 0.
-- [ ] **6. Gate.** Pass: `make check` exits 0.
+- [x] **6. Gate.** Pass: `make check` exits 0.
 
 ## Acceptance tests
 
@@ -90,3 +90,6 @@ Revert the phase commits; no persisted schema is added.
 ## Failure protocol
 
 Follow `plan.md` → "Executor notes" → "Failure protocol": stop, do not weaken tests or edit goldens to match broken output, write `reports/<agent>-<YYMMDD-HHMM>-funnel-usage.md`, set `status: blocked`, report the blocker.
+
+## Implementation Note
+Fixed negative feedback rollup double-counting by checking primary companion event status before incrementing metrics on utility reports. Implemented `UsageService.Funnel` in `internal/app/usage.go` providing day-granular aggregation across overall workspace and per-skill metrics, alongside list categorizations for dead skills, recommended but unactivated skills, and review blockers. Added the `telemetry funnel` CLI subcommand with JSON and human-formatted tables, created the Web API route `GET /api/v1/skills/{id}/usage`, generated golden tests, and implemented the WebUI Usage tab and `UsagePanel` component with window selection and empty-state handling.

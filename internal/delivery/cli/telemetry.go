@@ -39,6 +39,9 @@ func runTelemetry(ctx context.Context, args []string, stdout, stderr io.Writer) 
 		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), "telemetry requires a subcommand", "Run `skillhub telemetry health --workspace <path>`.")
 	}
 	subcommand := args[0]
+	if subcommand == "funnel" {
+		return runTelemetryFunnel(ctx, args[1:], stdout, stderr)
+	}
 	workspacePath, outputPath, jsonOutput, yes, err := telemetryFlags(subcommand, args[1:])
 	if err != nil {
 		var resErr *WorkspaceResolutionError
