@@ -81,14 +81,33 @@ skillhub doctor --fix
 
 `skillhub init [path]` là convenience shortcut vào cùng toàn bộ remediation flow; khi bỏ qua `[path]`, current directory (`.`) được dùng làm workspace hint. Nó tương đương về hành vi với `skillhub doctor --fix --workspace <resolved-path>`. V1 không có `--scope`: một fix plan xử lý workspace, MCP registration và bootstrap instructions theo dependency order, sau khi user review/confirm.
 
-Bootstrap block phải tách hai intents:
+Bootstrap block chính thức (từ `internal/hostintegration/bootstrap.go`) hướng dẫn Agent Host và Agent:
 
-```text
-normal substantive work → call skill_resolve
-Skill Hub management/curation intent → load bundled System Curator Skill
+```markdown
+<!-- skillhub:bootstrap:v1:start -->
+## Skill Hub
+
+For each new task, or when its operation, scope, or constraints change significantly, call the configured Skill Hub MCP tool `skill_resolve` before choosing a skill. Do not call it for trivial edits or on every turn. Follow at most one primary procedure for the current operation.
+
+Send `task.description` in English; translate the user's request first if it is in another language.
+
+When an activated skill response includes `local.path`, resolve the skill's relative file references (for example `scripts/…`) against that directory, and export the variables in `local.env` (`SKILLHUB_SKILL_DIR`, `SKILLHUB_STATE_DIR`, and `SKILLHUB_CONFIG_DIR`) whenever you run its `check`, `setup`, or scripts, using your shell's syntax (POSIX `export NAME=value`, PowerShell `$env:NAME = "value"`). If `local.path` no longer exists, for example in a long session, call `skill_get` again.
+
+If `$SKILLHUB_CONFIG_DIR/env` exists, load it before running `check`, `setup`, or scripts (POSIX: `set -a; . "$SKILLHUB_CONFIG_DIR/env"; set +a`; PowerShell: set `$env:NAME` for each `NAME=value` line), and never print, echo, or log its values. If a required variable is missing, tell the user to run `skillhub skill env set <id> <NAME>`; never ask for the value in chat.
+
+If it includes `local.preflight`, run its `check` command in `working_directory` under your own permissions before using the scripts, and ask the user before running `setup`. If the skill describes installation only in prose, treat those steps as setup: ask the user first, install into `SKILLHUB_STATE_DIR`, and never install globally. Do not run `setup` for the same skill concurrently: if `$SKILLHUB_STATE_DIR/.setup.lock` exists and is recent, wait or ask the user.
+
+If `local.status` is `review_required`, the skill's content has not been approved: do not use the skill, and tell the user to run `skillhub skill review <id>`.
+
+If a skill's script fails because a dependency is missing, stop, tell the user, and call `skill_feedback` with `outcome: failed` and `reason_code: setup_failed`.
+
+When the user explicitly asks to manage, curate, check, distill, repair, or inspect Skill Hub itself, load the native `system-curator` skill and follow it. Do not use the curator as the primary procedure for ordinary work.
+
+Skill Hub instructions are recommendations; your agent environment controls tool permissions and execution.
+<!-- skillhub:bootstrap:v1:end -->
 ```
 
-Instruction-only integration là behavioral contract: Agent cố gắng tuân thủ “một primary procedure mỗi operation”, nhưng Hub không được coi đó là mechanically enforced activation state.
+Instruction-only integration là behavioral contract: Agent tuân thủ nguyên tắc progressive loading và bảo vệ an toàn execution qua các biến môi trường và thư mục state riêng biệt.
 
 ## 3. Protocol layers
 
@@ -100,10 +119,30 @@ flowchart TB
     P4[4. Content loading<br/>resources/read]
     P5[5. Feedback<br/>custom MCP tool skill_feedback]
     P1 --> P2 --> P3 --> P4 --> P5
+Recommendation và distribution là hai bước tách biệt. Khi activate skill qua `skill_get` (hoặc `skills/get`), response trả về kèm object `local`:
+
+```json
+{
+  "path": "/path/to/runtime/cache/skills/<id>@<d16>",
+  "state_directory": "/path/to/runtime/envs/<id>@<deps16>",
+  "env": {
+    "SKILLHUB_SKILL_DIR": "/path/to/runtime/cache/skills/<id>@<d16>",
+    "SKILLHUB_STATE_DIR": "/path/to/runtime/envs/<id>@<deps16>",
+    "SKILLHUB_CONFIG_DIR": "/path/to/runtime/config/<id>"
+  },
+  "status": "ready",
+  "preflight": {
+    "working_directory": "/path/to/runtime/envs/<id>@<deps16>",
+    "check": "python3 scripts/check.py",
+    "setup": "pip install -r requirements.txt",
+    "live_checks": [
+      {"name": "platform", "status": "ready", "detail": "platform supported"}
+    ]
+  }
+}
 ```
 
-Recommendation và distribution là hai bước tách biệt. `skills/list` phục vụ discovery/interoperability, không thay `skill_resolve`.
-
+Hub kiểm tra platform live (`live_checks`), không chạy script bin/setup trong MCP process. Đối với `resources/read`, Hub gắn thêm metadata `_meta["io.skillhub/local_path"]` trỏ tới đường dẫn file trong snapshot cục bộ. Nếu skill là third-party chưa duyệt (`local.status == "review_required"`), content bị bỏ trống và `resources/read` trả lỗi `content_review_required`.
 ### 3.1 Curation system-skill tools
 
 Bundled System Curator Skill là primary interactive UX surface của binary. Nó không bắt user biết domain commands mà map natural-language intent vào structured tools dùng chung application services với CLI:
@@ -207,6 +246,8 @@ UX contract nằm trong [05-curation-lifecycle.md](05-curation-lifecycle.md); do
 | `prior` | Không | Clarification/re-resolution correlation |
 
 ### 4.3 Task description
+
+Task description gửi tới `skill_resolve` **bắt buộc bằng tiếng Anh**. Nếu yêu cầu ban đầu của user viết bằng ngôn ngữ khác, Agent Host/Agent phải dịch sang tiếng Anh trước khi gửi resolver.
 
 Task description nên chứa động từ, target và scope hiện tại. Ví dụ tốt:
 
@@ -381,7 +422,13 @@ Không echo raw request. Reason codes là enum/mã ngắn, không phải chain-o
     "version": "sha256:manifest...",
     "uri": "skill://software/consumer-reliability-review",
     "applicability": "Review retry, acknowledgement and duplicate-processing behavior.",
-    "confidence": "high"
+    "confidence": "high",
+    "setup": {
+      "state": "ready",
+      "basis": "terminal",
+      "checked_at": "2026-10-04T12:00:00Z",
+      "reason_codes": []
+    }
   },
   "supporting": [
     {
@@ -393,6 +440,11 @@ Không echo raw request. Reason codes là enum/mã ngắn, không phải chain-o
   ]
 }
 ```
+
+Object `setup` đính kèm sau bước ranking:
+- `state`: `ready`, `setup_required`, `review_required`, `unsupported_platform`, `unknown`.
+- `basis`: `terminal` khi lấy từ kết quả `skill doctor` gần nhất trong terminal; không có basis khi chưa chạy doctor.
+- `reason_codes`: `platform_unsupported`, `doctor_setup_required`, `doctor_not_run`, v.v.
 
 Một primary; tối đa hai supporting đã có quan hệ curated và scope riêng. Agent Host vẫn quyết định activation.
 

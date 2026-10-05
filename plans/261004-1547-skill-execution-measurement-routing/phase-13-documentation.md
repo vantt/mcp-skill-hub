@@ -1,7 +1,7 @@
 ---
 phase: 13
 title: "Documentation"
-status: pending
+status: done
 priority: P2
 effort: 8h
 dependencies: [1, 2, 3, 4, 5, 5a, 5b, 6, 7, 8, 9, 10, 11, 12, 12a]
@@ -59,19 +59,19 @@ Modify only: `docs/design/01-system-architecture.md`, `docs/design/02-agent-hub-
 
 ## Steps
 
-- [ ] **1. Read** every target in full and the source material listed in Context.
+- [x] **1. Read** every target in full and the source material listed in Context.
   Pass: none (reading step).
-- [ ] **2. Edit** design docs (Vietnamese), then user docs and contracts (English).
+- [x] **2. Edit** design docs (Vietnamese), then user docs and contracts (English).
   Pass: `grep -rnE 'approve-scripts|scripts_reviewed_digest|\.restricted|scripts_review_required|withheld' docs README.md` prints nothing.
-- [ ] **3. Verify commands and flags** against help output.
+- [x] **3. Verify commands and flags** against help output.
   Pass: for each of `skill`, `telemetry`, `eval`, `doctor`, `connect`, `validate`, every subcommand and flag named in the docs appears in `go run ./cmd/skillhub help <cmd>`.
-- [ ] **4. Verify field names** against schemas and code.
+- [x] **4. Verify field names** against schemas and code.
   Pass: every JSON field named in the docs (`local.*`, `setup.*`, `content_trust.*`, `changes_since_approval.*`, `runtime_hints.*`, funnel metric names) is found by `grep -rn '"<field>"' schemas internal --include='*.go' --include='*.json'`.
-- [ ] **5. Verify links.**
+- [x] **5. Verify links.**
   Pass: for each edited file, every relative link target from `grep -oE '\]\([^)#]+' <file>` exists on disk.
-- [ ] **6. Plan-ID scan.**
+- [x] **6. Plan-ID scan.**
   Pass: `grep -rnE '\b(D[0-9]+|R[0-9]+|phase[ -]?[0-9]+[ab]?)\b' docs/user-guide.md docs/curating-skills.md docs/contracts/error-codes.md` prints no plan references (review each hit manually; ordinary words are fine).
-- [ ] **7. Gate.** Pass: `make check` exits 0 (help tests guard the command surface).
+- [x] **7. Gate.** Pass: `make check` exits 0 (help tests guard the command surface).
 
 ## Risks
 
@@ -88,3 +88,7 @@ Revert the docs commit.
 ## Failure protocol
 
 Follow `plan.md` → "Executor notes" → "Failure protocol". If a documented behavior does not match the code, document the code's behavior and list the mismatch in `reports/<agent>-<YYMMDD-HHMM>-documentation.md`; do not change code in this phase.
+
+## Implementation Note
+
+Updated project documentation across design documents (Vietnamese), user guides (English), contract specifications, and README to reflect all shipped features: progressive disclosure with local snapshots and writable state dirs, cooperative content trust gate with CLI-only approval, per-skill secret env (0600) and terminal doctor checks, host permission entries for Claude Code / Codex / Gemini CLI, funnel measurement rollups and transcript import, routing examples and counter-examples with leave-one-out eval gate, metadata linting in validate and review, calibrated policy parameters, and WebUI runtime parity. All checks, links, and command surfaces verified.

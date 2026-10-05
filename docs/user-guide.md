@@ -80,17 +80,17 @@ skillhub connect -g --workspace ~/skillhub --yes
 
 ### What gets written
 
-| Scope | Files |
+| Scope | Files & Permissions |
 |---|---|
 | Project | `.mcp.json`, `.codex/config.toml`, `.gemini/settings.json` (server registration); `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` (a short block marked by `skillhub:bootstrap` comments); the `system-curator` skill under `.claude/skills/`, `.agents/skills/`, and `.gemini/skills/` |
 | Global (`-g`) | `~/.claude.json`, `~/.codex/config.toml`, `~/.gemini/settings.json`; `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, `~/.gemini/GEMINI.md`; the `system-curator` skill under `~/.claude/skills/`, `~/.agents/skills/`, and `~/.gemini/skills/` |
+| Host Permissions | `connect` and `doctor --fix --yes` configure filesystem access to `runtime/cache/skills`, `runtime/envs`, and `runtime/config`: Claude Code `permissions.additionalDirectories` (project `.claude/settings.local.json`, also honoring `.claude/settings.json`; user `~/.claude/settings.json`), Codex `[sandbox_workspace_write] writable_roots`, and Gemini CLI `context.includeDirectories`. `skillhub doctor` reports missing entries; entries are never removed automatically. |
 
 The registration stores the absolute path of the `skillhub` binary and of your workspace. If you move either, run `skillhub connect` again.
 
 Existing `CLAUDE.md`, `AGENTS.md`, and `GEMINI.md` files keep your own text. Skill Hub only manages the marked block.
 
 > **Caution on committing connection files:** Project connection files (`.mcp.json`, `.codex/config.toml`, `.gemini/settings.json`) contain machine-specific absolute paths to your local binary and workspace. We recommend adding `.mcp.json`, `.codex/`, and `.gemini/` to your project's `.gitignore` rather than committing them to shared repositories. Similarly, do not commit connection files that embed machine-specific paths into your canonical skills repository.
-
 ### Undo a connection
 
 Delete what `connect` wrote:
@@ -111,9 +111,19 @@ Skill curation has its own task-oriented guide:
 
 ## How the agent picks a skill
 
-The connection block tells your agent to call the hub's `skill_resolve` tool at the start of each new substantial task. It does not do this for trivial edits. The hub compares the task with skill descriptions, triggers, and "not for" entries in the catalog and answers with a recommendation, or with "no skill fits".
+The connection block tells your agent to call the hub's `skill_resolve` tool at the start of each new substantial task. It does not do this for trivial edits. The hub compares the task with skill descriptions, triggers, examples, and "not for" entries in the catalog and answers with a recommendation, or with "no skill fits".
 
 The answer is only a recommendation. Your agent host still decides whether to load the skill. Only active skills are candidates; a draft is not recommended.
+
+When your agent activates a skill via `skill_get` (or `skills/get`), the hub responds with a `local` execution payload:
+- `local.path`: a digest-pinned, read-only snapshot (`0444`) of the skill files at `runtime/cache/skills/<id>@<digest16>/`.
+- `local.state_directory`: an isolated writable directory at `runtime/envs/<id>@<deps16>/` where dependency manifests and build caches survive SKILL.md edits.
+- `local.env`: exports `SKILLHUB_SKILL_DIR`, `SKILLHUB_STATE_DIR`, and `SKILLHUB_CONFIG_DIR`.
+- `local.preflight`: check and setup commands with live platform verification checks.
+
+If a skill's setup status is `setup_required`, the agent receives instructions on what setup command to run before executing scripts.
+
+If a third-party skill's content has not been approved (`review_required`), the agent receives no content and cannot read any of the skill's files until you explicitly approve the content digest in your terminal (`skillhub skill edit <id> --approve-content <digest>`).
 
 You can try the same lookup by hand. Write a request file and run it:
 
@@ -123,6 +133,45 @@ skillhub resolve --request request.json
 ```
 
 The request format is [schemas/skill-resolve-request-v1.schema.json](../schemas/skill-resolve-request-v1.schema.json). Add `--json` for the full response. If the request is ambiguous, `resolve` provides guidance on how to refine it.
+## Run skills that need tools or secrets
+
+Some skills need external CLI tools (e.g. `ffmpeg`, `gh`), dependencies, or private API keys. Skill Hub categorizes skills into four execution models:
+
+| Case | Kind | Behavior |
+|---|---|---|
+| **A** | Prompt-only | No external tools or env required. Agent follows instructions directly. |
+| **B** | Standard bins | Requires system binaries (e.g. `git`, `python3`). Preflight verifies presence on host. |
+| **C** | Secret tokens | Requires private API keys. Set securely via `skillhub skill env set <id> <KEY>`. |
+| **D** | State & packages | Requires installed packages or virtualenvs. Installed into `$SKILLHUB_STATE_DIR`, never globally. |
+
+### Per-skill secret environment
+
+Store credentials (API tokens, private keys) per skill without committing them to Git:
+
+```bash
+skillhub skill env set <skill-id> <KEY>           # reads value securely from terminal (without echo)
+echo "$SECRET_TOKEN" | skillhub skill env set <skill-id> <KEY>  # pipe from stdin
+skillhub skill env list <skill-id>                # lists variable names only, never values
+skillhub skill env unset <skill-id> <KEY>         # removes variable
+```
+
+Values are stored with file permission `0600` under `runtime/config/<id>/env`. They are never logged, never exposed to WebUI or MCP list responses, and never tracked in Git. Variable names starting with `SKILLHUB_` are reserved.
+
+> **Windows caveat:** The env file uses POSIX `KEY=value` syntax with single-quoted values. PowerShell agent hosts should parse lines or set `$env:NAME` rather than dot-sourcing. Node ESM does not support `NODE_PATH`, so ESM dependencies should be installed inside `$SKILLHUB_STATE_DIR`.
+
+### Terminal doctor diagnostics
+
+Before executing or to debug issues, run the doctor in your terminal:
+
+```bash
+skillhub skill doctor <skill-id>
+skillhub skill doctor <skill-id> --json
+```
+
+- Probes binary availability and version constraints, verifies env variable presence (in terminal env or stored config), and executes `runtime.setup.check` inside the skill's state directory.
+- Results are marked `basis: terminal` and cached for agent resolution hints.
+- Untrusted third-party skills are not cached by design.
+- Exit codes: `0` (ready), `1` (setup required or unsupported platform), `2` (invalid request or unknown skill).
 
 ## Move to another machine
 
@@ -136,7 +185,6 @@ skillhub connect --workspace ~/skillhub --yes    # or add -g
 ```
 
 Push the workspace to a remote first. Skill Hub never pushes for you. Install the binary on the new machine as described in the README.
-
 ## Troubleshooting
 
 **Something feels wrong.** Run:
@@ -193,6 +241,28 @@ After cloning a workspace repository onto a new workstation (`git clone <remote>
 
 **Degraded MCP server startup.**
 If the SQLite catalog generation is missing or corrupt when an agent host starts `skillhub mcp serve`, the server launches in degraded fallback mode. Diagnostic tools (`hub_status`, `skill_review`, `workspace_validate`, `workspace_rebuild`) remain operational so the agent can inspect and repair the hub, while routing tools return actionable errors without crashing the connection.
+**"review_required" — third-party skill content withheld.**
+Third-party skills (imported from GitHub or Git sources) require explicit human approval before agents receive instructions or files. To review and approve:
+1. Inspect changes: `skillhub skill review <id> --verbose`
+2. Approve content: `skillhub skill edit <id> --approve-content <digest>`
+
+**"setup_failed" reported by an agent.**
+An agent reported that a skill's script or tool failed due to a missing dependency. Run:
+```bash
+skillhub skill doctor <id>
+```
+to see which binary, environment variable, or setup check failed.
+
+**Missing host permission entries.**
+If agent hosts refuse to read or write into skill runtime folders, run:
+```bash
+skillhub doctor --fix --yes
+```
+This re-applies directory access permissions in `.claude/settings.local.json`, `.codex/config.toml`, or `.gemini/settings.json`.
+
+**`local.path` expired in a long session.**
+If temporary cache folders were cleaned up or expired during a multi-hour session, the agent simply calls `skill_get` again to export a fresh read-only snapshot.
+
 **Telemetry is degraded.**
 `skillhub telemetry health` reports an error such as "file is not a database". Telemetry is a disposable local record of usage. Discard and recreate it:
 
@@ -205,7 +275,6 @@ Connected projects auto-resolve the workspace. Outside a connected project, pass
 
 **The agent does not see the hub.**
 Restart the agent after `connect`. Check that the `skillhub` binary still exists at the path recorded in the registration file. If you moved the binary or workspace, run `skillhub connect` again.
-
 ## Command cheat sheet
 
 | Task | Command |
@@ -218,7 +287,12 @@ Restart the agent after `connect`. Check that the `skillhub` binary still exists
 | Add a skill (GitHub or local) | `skillhub skill add <locator> [--skill <n>\|--all] [--yes]` |
 | Create a draft | `skillhub skill create <id> --collection <c> --name <n> --description <d> [flags] [--yes]` |
 | Review diagnostic facts | `skillhub skill review <id> [--verbose]` |
+| Approve third-party content | `skillhub skill edit <id> --approve-content <digest>` |
 | Edit instructions or metadata | `skillhub skill edit <id> [--description ...] [--editor] [--yes]` |
+| Attach runtime block | `skillhub skill edit <id> --runtime-file <spec.yaml>` |
+| Add routing examples | `skillhub skill edit <id> --example <text> / --counter-example <text>` |
+| Test skill requirements | `skillhub skill doctor <id> [--json]` |
+| Manage secret environment | `skillhub skill env set\|unset\|list <id> [<KEY>]` |
 | Confirm a proposal | `skillhub skill confirm <proposal-id>` |
 | List skills | `skillhub skill list [--state <state>]` |
 | Read a skill (any state) | `skillhub skill show <id>` |
@@ -231,13 +305,16 @@ Restart the agent after `connect`. Check that the `skillhub` binary still exists
 | List or triage candidates | `skillhub source list`; `skillhub source triage <id> ...` |
 | Import skills from source | `skillhub source import <source-id> [--path <subdir>] [--skill <name>] [--yes]` |
 | Ask for a skill recommendation | `skillhub resolve --request <file>` |
+| Evaluate routing quality | `skillhub eval routing [--no-skill <file>] [--policy <file>]` |
 | See uncommitted changes | `skillhub diff` |
 | Validate canonical files | `skillhub validate` |
 | Validate staged Git index | `skillhub validate --staged` |
 | Rebuild search catalog | `skillhub rebuild [--verbose]` |
+| Inspect funnel usage | `skillhub telemetry funnel [--since <Nd\|YYYY-MM-DD>]` |
+| Import local transcripts | `skillhub telemetry import-transcripts --project <dir>` |
+| Telemetry inspection | `skillhub telemetry health\|export\|purge --yes` |
 | Update binary in place | `skillhub update [--yes]` |
 | Migrate file format | `skillhub migrate [--to <n>] [--yes]` |
-| Telemetry inspection | `skillhub telemetry health\|export\|purge --yes` |
 | Version | `skillhub version` |
 
 Most commands accept `--workspace <path>` and `--json`.

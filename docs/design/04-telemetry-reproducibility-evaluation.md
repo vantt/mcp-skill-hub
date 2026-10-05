@@ -84,11 +84,12 @@ clarification.requested
 clarification.answered
 activation.approved
 activation.rejected
-skill.loaded
+skill.loaded                  # server-observed trên skill_get, skills/get, resources/read; mang status review_required khi bị chặn
+skill.doctor_checked          # terminal doctor check results
+transcript.tool_observed      # tool usage quan sát từ transcript Claude Code
 skill.used
 skill.abandoned
 task.outcome_reported
-
 source_candidate.captured
 source_candidate.triaged
 source.checked
@@ -150,15 +151,14 @@ flowchart LR
     DONE --> UT[Utility reported]
 ```
 
-- `recommended`: resolver trả skill.
-- `activated`: host chọn procedure làm active.
-- `loaded`: content đã fetch/verify.
+- `recommended`: resolver đề xuất skill (primary hoặc supporting).
+- `activated`: server ghi nhận qua lượt load đầu tiên của entrypoint từ host sau khi được recommend (phân loại attribution: `recommended`, `supporting`, `override`, `after_no_skill`, `after_needs_context`, `unsolicited`).
+- `loaded`: nội dung/tài nguyên được fetch qua `skill_get`, `skills/get` hoặc `resources/read`. Nếu skill là third-party chưa duyệt, load bị chặn (`status: review_required`) và được ghi nhận riêng vào `blocked:review_required` mà không tính là activation. Thao tác inspect của curator qua `skill_get` được xếp vào `unsolicited`; lượt đọc draft skill không được tính.
 - `used`: agent thực hiện ít nhất một phần workflow (host claim).
 - `completed`: task kết thúc.
 - `helpful/harmful/neutral`: chỉ khi có basis rõ (`user`, evaluator, controlled benchmark).
 
-Không suy ra helpful từ accepted/used.
-
+Không suy ra helpful từ accepted/used. Lượt phản hồi mang cả `outcome: failed` và `utility: harmful` chỉ tăng counter `feedback:negative` tối đa một lần.
 ### 3.5 Distillation event semantics
 
 Telemetry events không thay thế canonical run/observation/insight records. Chúng đo execution và UX; mất telemetry không được làm thay đổi cursor hoặc durable decisions.
@@ -206,12 +206,12 @@ Không có chế độ lưu full conversation.
 
 ### 4.2 Retention
 
-- Time + size based rotation.
+- **Raw events:** 14 ngày (time + size based rotation).
+- **Daily rollups:** 180 ngày tại `telemetry_daily_rollups` theo ngày UTC.
 - `skillhub telemetry purge` xóa ngay.
 - `skillhub telemetry export` tạo bundle đã sanitize, preview trước khi ghi.
 - HMAC key local có rotation; mất key chỉ làm mất khả năng correlate, không ảnh hưởng routing.
 - Crash recovery bỏ qua/truncate event segment cuối hỏng, không làm Hub không khởi động.
-
 ### 4.3 Redaction
 
 Pipeline:
@@ -233,11 +233,8 @@ SQLite tables định hướng:
 
 ```text
 telemetry_events
-resolution_events
-activation_events
-outcome_events
+telemetry_daily_rollups
 telemetry_meta
-```
 
 Có thể dùng normalized core columns + JSON payload versioned. Index theo timestamp, resolution ID, catalog snapshot và status. Telemetry writes:
 
@@ -322,7 +319,11 @@ skillhub resolution replay \
 
 Replay fail nếu required snapshot/model artifact unavailable; không âm thầm dùng latest.
 
-## 7. Golden evaluation corpus
+## 7. Golden evaluation corpus và routing eval gate
+
+Ngoài các suite đánh giá tĩnh, hệ thống hỗ trợ **Routing Evaluation** (`skillhub eval routing`) tự động sinh test cases từ `routing.examples` (positive cases) và `routing.counter_examples` (counter cases) của tất cả active skills theo cơ chế **leave-one-out** (loại bỏ example tương ứng khỏi bộ nhớ tính score của candidate để đo lường độ khái quát hóa, chấp nhận rò rỉ candidacy tại FTS).
+
+Bộ eval kết hợp tập đối chứng âm `testdata/routing/no-skill-v1.yaml` (các truy vấn phi kỹ thuật, chit-chat, typo nhỏ hoặc ngoài danh mục), và được gác cổng tự động trong `make check` (`TestRoutingEvalGate`) qua các ngưỡng tối thiểu được thiết lập trong `testdata/routing/gate-v1.json`.
 
 ### 7.1 Case schema
 
@@ -480,21 +481,19 @@ Nếu case cho phép nhiều acceptable IDs:
 top1_acceptability = selected ∈ acceptable_set
 ```
 
-Metrics:
+Metrics chất lượng routing và phễu chuyển đổi (Funnel metrics):
 
-- acceptable top-1 rate;
-- false-positive routing trên no-skill tasks;
-- missed useful skill rate;
-- no-skill precision/recall;
-- clarification precision: câu hỏi có thật sự cần/đổi decision;
-- re-resolution/veto rate;
-- duplicate activation rate;
-- cross-model agreement trên equivalent execution state;
-- paraphrase stability;
-- out-of-distribution/catalog-gap abstention.
+- `resolution:<status>`: `resolved`, `no_skill`, `needs_context`, `already_covered`, `failed`.
+- `recommended:primary`, `recommended:supporting`.
+- `activation:<attribution>`: `recommended`, `supporting`, `override`, `after_no_skill`, `after_needs_context`, `unsolicited`.
+- `acceptance_rate`: `activation:recommended / recommended:primary`.
+- `blocked:review_required`: số lượt cố load skill third-party chưa duyệt nội dung.
+- `setup:<state>`: phân bố trạng thái setup hint khi recommend (`ready`, `setup_required`, `review_required`, `unsupported_platform`, `unknown`).
+- `doctor:<state>`: số lượt chạy doctor theo trạng thái và `doctor_failure_rate`.
+- `feedback:<status>`, `feedback:setup_failed`, `feedback:negative`, `feedback:negative_after_load` (được deduplicate để không đếm hai lần khi có utility harmful).
+- `transcript:<tool>`, `native:no_resolve`, `native:resolved_before`.
 
-Không dùng plain accuracy duy nhất vì class imbalance/no-skill.
-
+*Ghi chú:* Việc đo lường theo named measurement cases được hoãn lại (deferred); lệnh `skillhub telemetry funnel` hỗ trợ phân tích theo khoảng thời gian `--since/--until` theo ngày UTC (mặc định 30 ngày, tối đa 180 ngày).
 ### 9.2 Calibration
 
 Tính theo confidence band/applicability label:

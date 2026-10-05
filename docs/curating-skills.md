@@ -44,6 +44,9 @@ status → source watch → source check → distill / inbox
 Skill Hub enforces durable boundaries between evidence, proposals, canonical files, and active behavior:
 
 - **Drafts by default:** Newly added and newly created skills always start in `draft` state. They are never recommended by the resolver or loaded by agents until explicitly activated.
+- **Content trust gate:** Skills originating from third-party sources (GitHub repositories, Git remotes, or upstream source imports) require explicit human content review before agents receive instructions or files. When unapproved, `local.status` is `review_required`, content is withheld, and file reads return `content_review_required`. Skills added directly from a local directory are trusted by design.
+- **Approval is CLI-only:** Content approval is granted strictly via `skillhub skill edit <id> --approve-content <digest>`. The WebUI and MCP tools never expose an approval action, preventing cooperative agents or browser automation from self-approving untrusted code. Any change to skill instructions, scripts, assets, or runtime requirements resets approval and makes prior digests stale.
+- **Cooperative security scope:** The content trust gate protects against accidental invocation by cooperative agents following host instructions. It is not an adversary boundary against rogue agents that possess direct filesystem access to the workspace directory.
 - **Preview before confirm:** Mutating commands preview their proposed changes by default. Passing `--yes` confirms only the freshly generated preview; it never skips validation or blindly overrides conflicts.
 - **Confirmation pins:** In the interactive CLI, users confirm proposals by short ID (`skillhub skill confirm <proposal-id>`). Automated interfaces and MCP tools require all three exact pins (`proposal_id`, `proposal_digest`, and `base_version`).
 - **No silent overwrites:** If a skill or source identifier already exists in the workspace, operations halt with `skill_conflict` or `source_conflict`.
@@ -52,7 +55,6 @@ Skill Hub enforces durable boundaries between evidence, proposals, canonical fil
 - **Watch is not a daemon:** Watching a source records monitoring configuration; it does not run a background daemon, poll automatically, or import skills. Upstream checks occur only when you or an authorized workflow run `skillhub source check`.
 - **Review is diagnostic, not approval:** `skill review` compiles diagnostic facts (validation, readiness, resources, provenance, git status); it is not an approval gate and does not mutate lifecycle state.
 - **Skill Hub never commits or pushes:** Skill Hub writes canonical workspace files but never executes `git commit` or `git push`. You inspect changes with `skillhub diff` and commit them when ready.
-
 ---
 
 ## Add a skill (`skillhub skill add`)
@@ -148,6 +150,16 @@ skillhub skill review reliability-review --verbose
 6. **Provenance:** Upstream repository locator, commit revision, and subpath, or local authoring designation.
 7. **Git working-tree status:** Clean or dirty (staged, unstaged, untracked changes in the skill folder).
 8. **Activation readiness:** Actionable warnings, such as untouched scaffold text or missing routing fields.
+9. **Content trust & history changes:** For third-party skills, reports `content_trust` (`third_party`, `approved`, `content_digest`, `approve_command`) and `changes_since_approval`:
+   - Lists added, removed, and modified files.
+   - Flags whether `scripts_changed`, `runtime_changed`, or `dependencies_changed`.
+   - Baseline commit is the oldest commit of the unbroken run of manifest commits carrying the recorded digest (walk capped at 200 commits).
+   - Provides the exact `git diff <commit>..HEAD -- <skill-dir>` command to inspect changes.
+   - Notes when history was truncated.
+10. **Runtime hints:** Advisory static hints from `skillruntime.AnalyzeHints`: detected interpreters, dependency manifests, `missing_lockfiles`, absolute install paths, and install cues.
+11. **Routing lint warnings:** Warnings for trigger collisions, generic triggers, missing examples, or near-duplicates.
+
+The WebUI Review tab and Runtime tab show these same diagnostic facts, diff commands, and approve commands with no approve button.
 
 `skill review` reports diagnostic facts to assist human decision-making. It does not store an approval flag and does not activate the skill.
 
@@ -193,6 +205,28 @@ skillhub skill edit reliability-review \
 *Explicit blind replacement:* Passing `--content-file <file>` without an editor session performs a standard preview against the current canonical base version without expecting an editor-captured digest.
 
 Routing flags (`--trigger`, `--not-for`, `--operation`, `--min-scope`) replace only the specified fields; unmentioned routing fields retain their existing values.
+
+### Add routing examples and counter-examples
+
+Provide natural task phrasings to guide resolver matching:
+
+```bash
+skillhub skill edit reliability-review \
+  --example "review message consumer for idempotent message processing" \
+  --counter-example "design a new event-driven service topology" \
+  --yes
+```
+
+### Attach or remove runtime specifications
+
+Declare executable dependencies, environment variables, and preflight commands:
+
+```bash
+skillhub skill edit reliability-review --runtime-file ./runtime.yaml --yes
+skillhub skill edit reliability-review --runtime-file '{}' --yes   # removes runtime block
+```
+
+The System Curator skill will propose runtime blocks with pinned versions and lockfiles. Any change to instructions, files, or runtime specifications resets content approval for third-party skills.
 
 ### Confirming an edit proposal
 
@@ -337,7 +371,52 @@ git -C ~/skillhub commit -m "Curate Skill Hub skills"
 
 Push to your remote backup using standard `git push`.
 
+
+## Measure usage (`skillhub telemetry funnel`)
+
+Analyze how skills are recommended, activated, loaded, and evaluated over time:
+
+```bash
+skillhub telemetry funnel                         # last 30 days overall
+skillhub telemetry funnel --since 90d --json      # last 90 days JSON output
+skillhub telemetry funnel --skill reliability-review
+```
+
+The funnel report measures:
+- Resolutions by status (`resolved`, `no_skill`, `needs_context`, `already_covered`, `failed`).
+- Recommendations (primary vs supporting).
+- Activations by attribution class (`recommended`, `supporting`, `override`, `after_no_skill`, `after_needs_context`, `unsolicited`).
+- Overall and per-skill acceptance rates (`activation:recommended / recommended:primary`).
+- Content loads by resource kind, and blocked loads (`blocked:review_required`).
+- Diagnostic lists: dead skills (zero recommendations or loads), recommended never activated, and skills blocked by review ("approve these to unlock demand").
+- Terminal doctor checks and failure rates.
+- Feedback outcomes and setup failure rates (`feedback:setup_failed`). Negative feedback is deduplicated so a combined failed outcome and harmful utility report counts once.
+
+### Import local Claude Code transcripts
+
+Import local execution transcripts as ground-truth telemetry:
+
+```bash
+skillhub telemetry import-transcripts --project ~/my-project
+```
+
+**Privacy boundary:** Transcript import scans only tool invocation blocks (`tool_use`). It records only the tool name, skill ID, timestamp, and a 16-byte session hash. Task text, conversation messages, file paths, and code snippets are never read or stored. The import is clamped to a 14-day window.
+
 ---
+
+## Check routing quality (`skillhub eval routing`)
+
+Evaluate the deterministic resolver across all active skills' examples and counter-examples using leave-one-out cross-validation:
+
+```bash
+skillhub eval routing
+skillhub eval routing --no-skill testdata/routing/no-skill-v1.yaml
+skillhub eval routing --policy custom-policy.yaml --min-precision 0.60 --min-recall 0.58 --max-fpr 0.13
+```
+
+- **Leave-one-out:** For each test case, the tested example is removed from the skill's candidate scoring set to measure true generalization.
+- **Metrics:** Reports Precision@1, Recall, No-Skill Recall, No-Skill Precision, and False Positive Rate.
+- **CI Gate:** Automated as a `make check` gate test (`TestRoutingEvalGate`) executing in under 1 second.
 
 ## Advanced intake and recovery
 
@@ -380,18 +459,26 @@ Use this workflow when you require multi-stage governance, audit logging of cand
 | Add a skill from GitHub or local folder | `skillhub skill add <locator> [--skill <name>\|--all] [--yes]` |
 | Create a new draft skill | `skillhub skill create <id> --collection <c> --name <n> --description <d> [flags] [--yes]` |
 | Run comprehensive diagnostic review | `skillhub skill review <id> [--verbose]` |
+| Approve third-party skill content | `skillhub skill edit <id> --approve-content <digest>` |
 | Edit skill instructions or routing | `skillhub skill edit <id> [--editor\|--content-file <f>] [flags] [--yes]` |
+| Attach or remove runtime specification | `skillhub skill edit <id> --runtime-file <yaml>` |
+| Add routing examples or counter-examples | `skillhub skill edit <id> --example <t> / --counter-example <t>` |
+| Test skill machine requirements | `skillhub skill doctor <id> [--json]` |
+| Manage secret environment variables | `skillhub skill env set\|unset\|list <id> [<KEY>]` |
 | Confirm a proposed mutation | `skillhub skill confirm <proposal-id>` |
-| Inspect skill details | `skillhub skill list [--state <s>]`; `skillhub skill show <id> [--verbose]` |
+| List skills | `skillhub skill list [--state <s>]` |
+| Read a skill (any state) | `skillhub skill show <id> [--verbose]` |
 | Change lifecycle state | `skillhub skill activate\|deprecate\|archive <id> [--yes]` |
 | Watch a remote repository | `skillhub source watch <locator> [--cadence daily\|weekly\|manual] [--yes]` |
 | Check watched sources for updates | `skillhub source check --all-due\|--all` (or `skillhub check ...`) |
 | Review insight proposals in inbox | `skillhub inbox`; `skillhub insight show <id>` |
 | Decide an insight proposal | `skillhub insight decide <id> --decision accept\|reject [flags]` |
+| Measure funnel usage and conversion | `skillhub telemetry funnel [--since <period>] [--skill <id>]` |
+| Import local Claude Code transcripts | `skillhub telemetry import-transcripts --project <dir>` |
+| Evaluate routing quality | `skillhub eval routing [--no-skill <f>] [--policy <f>]` |
 | Show uncommitted canonical changes | `skillhub diff` |
 | Validate working-tree files | `skillhub validate` |
 | Validate staged Git index files | `skillhub validate --staged` |
 | Rebuild derived search catalog | `skillhub rebuild [--verbose]` |
 | Diagnose and repair connections | `skillhub doctor [--fix [--yes]]` |
-
 Run `skillhub help <command>` for detailed flag specifications and examples. Most commands accept `--workspace <path>` and `--json`.
