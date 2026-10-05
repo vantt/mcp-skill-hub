@@ -17,6 +17,7 @@ type SkillListEntry struct {
 	RoutingEligible bool   `json:"routing_eligible"`
 	Collection      string `json:"collection"`
 	Name            string `json:"name"`
+	UpstreamStatus  string `json:"upstream_status,omitempty"`
 }
 
 // SkillListResult lists skills from the current catalog generation.
@@ -82,4 +83,24 @@ func (SkillService) ListSkills(ctx context.Context, path, state string) (SkillLi
 		result.Items = append(result.Items, Item{ID: entry.ID, Summary: entry.Name, Impact: "State: " + entry.State + "; collection: " + entry.Collection + "."})
 	}
 	return result, nil
+}
+
+// ListSkillsWithUpstream reads skills and merges their upstream drift statuses.
+func (s SkillService) ListSkillsWithUpstream(ctx context.Context, path, state string) (SkillListResult, error) {
+	res, err := s.ListSkills(ctx, path, state)
+	if err != nil {
+		return SkillListResult{}, err
+	}
+	upstreams, err := ListSkillUpstream(ctx, path)
+	if err != nil {
+		return res, nil
+	}
+	statusMap := make(map[string]string, len(upstreams))
+	for _, u := range upstreams {
+		statusMap[u.SkillID] = u.Status
+	}
+	for i := range res.Skills {
+		res.Skills[i].UpstreamStatus = statusMap[res.Skills[i].ID]
+	}
+	return res, nil
 }
