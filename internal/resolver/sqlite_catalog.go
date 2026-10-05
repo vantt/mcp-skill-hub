@@ -216,6 +216,16 @@ func normalizeSkillRouting(skill *Skill) {
 	sort.Slice(skill.Equivalence, func(i, j int) bool { return skill.Equivalence[i].SkillID < skill.Equivalence[j].SkillID })
 }
 
+// DecodeSkillDocument decodes a raw canonical entity content JSON string into a Skill.
+func DecodeSkillDocument(id string, contentJSON []byte) (Skill, error) {
+	var skill Skill
+	skill.ID = id
+	if err := decodeRouting(string(contentJSON), &skill); err != nil {
+		return Skill{}, err
+	}
+	return skill, nil
+}
+
 func decodeRouting(content string, skill *Skill) error {
 	var document skillDocument
 	if err := json.Unmarshal([]byte(content), &document); err != nil {

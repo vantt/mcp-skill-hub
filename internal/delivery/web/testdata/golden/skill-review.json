@@ -47,7 +47,10 @@
   "valid": true,
   "activation_readiness": {
     "ready": true,
-    "untouched_scaffold": false
+    "untouched_scaffold": false,
+    "warnings": [
+      "missing_examples: Active skill review-skill has 0 routing examples (minimum 3). Fix: Add 3–5 natural task phrasings"
+    ]
   },
   "resource_status": {
     "entrypoint_path": "skills/core/review-skill/SKILL.md",

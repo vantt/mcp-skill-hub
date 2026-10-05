@@ -106,6 +106,9 @@ func runValidate(ctx context.Context, args []string, stdout, stderr io.Writer) i
 	}
 	p := termui.New(stdout)
 	p.Line(result.Summary)
+	for _, w := range result.Warnings {
+		p.Line(fmt.Sprintf("WARN %s %s", w.Code, w.Summary))
+	}
 	return 0
 }
 

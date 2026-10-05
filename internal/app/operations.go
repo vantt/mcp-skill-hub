@@ -12,6 +12,8 @@ import (
 	"strings"
 
 	"github.com/vantt/mcp-skill-hub/internal/canonical"
+	"github.com/vantt/mcp-skill-hub/internal/catalog"
+	resolverpkg "github.com/vantt/mcp-skill-hub/internal/resolver"
 	"github.com/vantt/mcp-skill-hub/internal/workspace"
 )
 
@@ -28,7 +30,52 @@ func (WorkspaceService) ValidateWorkspace(ctx context.Context, path string) (Res
 	if err != nil {
 		return Result{}, err
 	}
-	return formatValidationResult(issues), nil
+	result := formatValidationResult(issues)
+	if result.Status == StatusError {
+		return result, nil
+	}
+
+	handle, err := catalog.OpenCurrent(ctx, root)
+	if err != nil {
+		result.Warnings = append(result.Warnings, Warning{
+			Code:    "lint_skipped",
+			Summary: "Routing and runtime lint was skipped because catalog generation is unavailable. Fix: Run `skillhub rebuild`.",
+		})
+		return result, nil
+	}
+	defer handle.Close()
+
+	catalogView, err := resolverpkg.NewSQLiteCatalog(handle.DB, handle.Pointer.CatalogSnapshot)
+	if err != nil {
+		result.Warnings = append(result.Warnings, Warning{
+			Code:    "lint_skipped",
+			Summary: "Routing and runtime lint was skipped because catalog view could not be opened. Fix: Run `skillhub rebuild`.",
+		})
+		return result, nil
+	}
+
+	skills, err := catalogView.Skills(ctx)
+	if err != nil {
+		result.Warnings = append(result.Warnings, Warning{
+			Code:    "lint_skipped",
+			Summary: "Routing and runtime lint was skipped because active skills could not be read. Fix: Run `skillhub rebuild`.",
+		})
+		return result, nil
+	}
+
+	for _, f := range resolverpkg.LintSkills(skills) {
+		result.Warnings = append(result.Warnings, routingLintWarning(f))
+	}
+
+	for _, s := range skills {
+		hints, hasRuntimeBlock, err := canonicalRuntimeHints(root, s.ID)
+		if err != nil {
+			continue
+		}
+		result.Warnings = append(result.Warnings, runtimeHintFindings(s.ID, hints, hasRuntimeBlock)...)
+	}
+
+	return result, nil
 }
 
 func formatValidationResult(issues []canonical.Issue) Result {

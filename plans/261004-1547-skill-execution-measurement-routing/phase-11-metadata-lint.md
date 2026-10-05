@@ -1,7 +1,7 @@
 ---
 phase: 11
 title: "Metadata lint (routing and runtime hints)"
-status: pending
+status: done
 priority: P2
 effort: 8h
 dependencies: [5b, 9]
@@ -65,17 +65,17 @@ Modify:
 
 ## Steps
 
-- [ ] **1. Routing rules** with table tests: one positive and one suppressed case per rule; pair-skip above 2,000.
+- [x] **1. Routing rules** with table tests: one positive and one suppressed case per rule; pair-skip above 2,000.
   Pass: `go test -count=1 -run Lint ./internal/resolver/` → `ok`.
-- [ ] **2. Runtime-hint findings** with table tests per code, using `skillruntime.AnalyzeHints` on synthetic `HintFile`s; assert no file content appears in any summary (sentinel string in a file body).
+- [x] **2. Runtime-hint findings** with table tests per code, using `skillruntime.AnalyzeHints` on synthetic `HintFile`s; assert no file content appears in any summary (sentinel string in a file body).
   Pass: `go test -count=1 -run 'MetadataLint|RuntimeHint' ./internal/app/` → `ok`.
-- [ ] **3. Wire validate and review;** extract `canonicalRuntimeHints` (review output for existing tests stays identical apart from new warnings).
+- [x] **3. Wire validate and review;** extract `canonicalRuntimeHints` (review output for existing tests stays identical apart from new warnings).
   Pass: `go test -count=1 -run 'Validate|Review' ./internal/app/` → `ok`; `go test -count=1 ./internal/delivery/web/` → `ok` (after regenerating `skill-review.json` if needed).
-- [ ] **4. CLI output.** A workspace with a seeded trigger collision and a skill referencing `~/.claude/skills/` in SKILL.md: `skillhub validate --json` shows `trigger_collision` and `absolute_install_path` in `warnings` and exits 0; human output prints `WARN` lines.
+- [x] **4. CLI output.** A workspace with a seeded trigger collision and a skill referencing `~/.claude/skills/` in SKILL.md: `skillhub validate --json` shows `trigger_collision` and `absolute_install_path` in `warnings` and exits 0; human output prints `WARN` lines.
   Pass: `go test -count=1 -run 'Validate' ./internal/delivery/cli/` → `ok`.
-- [ ] **5. Corpus check.** Run lint over the phase 10 materialized golden-v1 workspace and the overlay fixture; fix fixture metadata only for genuine defects; note accepted findings in `reports/routing-eval-baseline-report.md`.
+- [x] **5. Corpus check.** Run lint over the phase 10 materialized golden-v1 workspace and the overlay fixture; fix fixture metadata only for genuine defects; note accepted findings in `reports/routing-eval-baseline-report.md`.
   Pass: `make check` still passes the routing gate.
-- [ ] **6. Gate.** Pass: `make check` exits 0.
+- [x] **6. Gate.** Pass: `make check` exits 0.
 
 ## Risks
 
@@ -92,3 +92,6 @@ Revert; warnings disappear, no data changes.
 ## Failure protocol
 
 Follow `plan.md` → "Executor notes" → "Failure protocol": write `reports/<agent>-<YYMMDD-HHMM>-metadata-lint.md`, set `status: blocked`, report the blocker.
+
+## Implementation Note
+Implemented `resolver.LintSkills` in `internal/resolver/lint.go` and exported `resolver.DecodeSkillDocument` in `internal/resolver/sqlite_catalog.go`. Created `runtimeHintFindings` in `internal/app/metadata_lint.go` to convert runtime hints into structured warnings. Extracted `canonicalRuntimeHints` in `internal/app/skill_review.go` and integrated routing linting into both `ReviewSkill` (appended to readiness warnings) and `ValidateWorkspace` in `internal/app/operations.go`. Updated CLI `skillhub validate` output to display `WARN` lines and regenerated `skill-review.json` golden tests.

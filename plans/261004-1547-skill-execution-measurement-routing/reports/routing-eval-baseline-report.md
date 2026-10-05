@@ -34,3 +34,10 @@ Thresholds are derived by flooring rates to two decimal places minus 0.02 (and c
   - 27 of 32 correctly abstained with `no_skill`. 5 non-software tasks (e.g. plumbing, soldering) matched vocabulary like `design` or `operate` on `event-architecture-review` or `kubernetes-operations`.
 - **Calibration Opportunity (Phase 12):**
   - These baseline metrics establish the uncalibrated floor. Phase 12 will execute grid search across policy parameters (applicability floor, minimum margin, trigger weight, not-for penalty) to further optimize Precision@1 and Recall.
+
+## Accepted Corpus Lint Findings (Phase 11)
+Running `skillhub validate` / `resolver.LintSkills` over the 42 golden-v1 skills identifies 6 expected warnings corresponding to the 3 intentionally ambiguous sibling pairs in golden-v1:
+1. `api-design` and `graphql-api`: `trigger_collision` and `near_duplicate` on trigger `"design API contract schema"`.
+2. `code-review` and `pull-request-review`: `trigger_collision` and `near_duplicate` on trigger `"review code changes pull requests"`.
+3. `test-design` and `unit-testing`: `trigger_collision` and `near_duplicate` on trigger `"write unit tests test cases coverage"`.
+These pairs are intentionally retained in the golden corpus as part of ambiguity evaluation and test coverage. The overlay fixture skills (`code-review`, `database-design`, `deploy-service`) produce 0 warnings.

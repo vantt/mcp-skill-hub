@@ -15,6 +15,7 @@ import (
 
 	"github.com/vantt/mcp-skill-hub/internal/canonical"
 	"github.com/vantt/mcp-skill-hub/internal/catalog"
+	resolverpkg "github.com/vantt/mcp-skill-hub/internal/resolver"
 	"github.com/vantt/mcp-skill-hub/internal/skill"
 	"github.com/vantt/mcp-skill-hub/internal/skillruntime"
 	"gopkg.in/yaml.v3"
@@ -147,9 +148,8 @@ func (SkillService) ReviewSkill(ctx context.Context, path, id string) (SkillRevi
 	gitSummary := getSkillGitSummary(ctx, root, skillRelDir+"/")
 	contentTrust := reviewContentTrust(id, skillRelDir, resources, skillMetaBytes)
 	contentTrust.ChangesSinceApproval = reviewChangesSinceApproval(ctx, approvalDiffInput{Root: root, SkillRelDir: skillRelDir, SkillMetaBytes: skillMetaBytes, Resources: resources, Trust: contentTrust, HistoryLimit: approvalHistoryLimit})
-	_, hasRuntimeBlock := reviewRuntimeSpec(skillMetaBytes)
-	runtimeHints := reviewRuntimeHints(root, skillRelDir, resources, hasRuntimeBlock)
-
+	runtimeHints, _, _ := canonicalRuntimeHints(root, id)
+	applyReviewRoutingLint(ctx, root, id, metaDoc.Status, skillMetaBytes, &readiness)
 	nextAction := computeNextAction(id, skillRelDir, metaDoc.Status, valid, canonicalIssues, readiness, isScaffold, missingFields, diverged, changedResources, missingResources, servedFacts, gitSummary)
 
 	activeLocally := (metaDoc.Status == "active")
@@ -376,6 +376,72 @@ func reviewContentTrust(skillID, skillRelDir string, resources []ResourceItem, s
 // hintReadLimit bounds how much of each file the runtime hints inspect.
 const hintReadLimit = 256 << 10
 
+// canonicalRuntimeHints inspects canonical skill files on disk and parses any runtime spec.
+func canonicalRuntimeHints(root, id string) (skillruntime.Hints, bool, error) {
+	_, skillRelDir, skillMetaBytes, err := locateSkillDir(root, id)
+	if err != nil {
+		return skillruntime.Hints{}, false, err
+	}
+	entrypointRelPath, entrypointDigest, _ := inspectCanonicalEntrypoint(root, skillRelDir)
+	fullSkillDir := filepath.Join(root, filepath.FromSlash(skillRelDir))
+	_, resources, _ := inventorySkillResources(root, fullSkillDir, entrypointRelPath, entrypointDigest)
+	_, hasRuntimeBlock := reviewRuntimeSpec(skillMetaBytes)
+	hints := reviewRuntimeHints(root, skillRelDir, resources, hasRuntimeBlock)
+	return hints, hasRuntimeBlock, nil
+}
+
+func applyReviewRoutingLint(ctx context.Context, root, id, status string, skillMetaBytes []byte, readiness *ActivationReadiness) {
+	var docAny any
+	if err := yaml.Unmarshal(skillMetaBytes, &docAny); err != nil {
+		return
+	}
+	jsonBytes, err := json.Marshal(docAny)
+	if err != nil {
+		return
+	}
+	reviewedSkill, err := resolverpkg.DecodeSkillDocument(id, jsonBytes)
+	if err != nil {
+		return
+	}
+	reviewedSkill.Status = status
+
+	handle, err := catalog.OpenCurrent(ctx, root)
+	if err != nil {
+		return
+	}
+	defer handle.Close()
+
+	catalogView, err := resolverpkg.NewSQLiteCatalog(handle.DB, handle.Pointer.CatalogSnapshot)
+	if err != nil {
+		return
+	}
+	activeSkills, err := catalogView.Skills(ctx)
+	if err != nil {
+		return
+	}
+
+	var pool []resolverpkg.Skill
+	foundInActive := false
+	for _, s := range activeSkills {
+		if s.ID == id {
+			foundInActive = true
+			pool = append(pool, reviewedSkill)
+		} else {
+			pool = append(pool, s)
+		}
+	}
+	if !foundInActive {
+		pool = append([]resolverpkg.Skill{reviewedSkill}, activeSkills...)
+	}
+
+	findings := resolverpkg.LintSkills(pool)
+	for _, f := range findings {
+		if f.SkillID == id || f.OtherSkillID == id {
+			readiness.Warnings = append(readiness.Warnings, fmt.Sprintf("%s: %s Fix: %s", f.Code, f.Message, f.Fix))
+		}
+	}
+}
+
 // reviewRuntimeHints derives static runtime hints from the canonical skill
 // files. Unreadable files are skipped: the hints are advisory.
 func reviewRuntimeHints(root, skillRelDir string, resources []ResourceItem, hasRuntimeBlock bool) skillruntime.Hints {
@@ -390,7 +456,6 @@ func reviewRuntimeHints(root, skillRelDir string, resources []ResourceItem, hasR
 	}
 	return skillruntime.AnalyzeHints(files, hasRuntimeBlock)
 }
-
 func readLeadingBytes(path string, limit int64) []byte {
 	file, err := os.Open(path)
 	if err != nil {
@@ -404,7 +469,6 @@ func readLeadingBytes(path string, limit int64) []byte {
 	return content
 }
 
-// reviewRuntimeSpec parses the runtime block from skill.meta.yaml. An invalid
 // block is already reported as a canonical issue, so it is treated as absent.
 func reviewRuntimeSpec(skillMetaBytes []byte) (skillruntime.Spec, bool) {
 	var document map[string]any
