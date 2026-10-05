@@ -1,6 +1,6 @@
 ---
 title: "Phase 5: Source lifecycle and backfill"
-status: in-progress
+status: done
 ---
 
 # Phase 5: Source lifecycle and backfill
