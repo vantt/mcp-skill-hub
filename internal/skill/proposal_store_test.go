@@ -2,6 +2,7 @@ package skill
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -363,5 +364,60 @@ func TestProposalDispatcherDispatchByKind(t *testing.T) {
 	}
 	if _, err := dispatcher.Dispatch(context.Background(), "", unregisteredProposal, mutation.Confirmation{}); err == nil {
 		t.Fatal("expected error on unregistered proposal kind")
+	}
+}
+
+func TestProposalArtifactUpstreamUpdateRoundTrip(t *testing.T) {
+	t.Parallel()
+	root := filepath.Join(t.TempDir(), "workspace")
+	if _, err := workspace.Apply(root); err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
+	artifact := proposalArtifact{
+		Version:      1,
+		Kind:         ProposalKindUpstreamUpdate,
+		CreatedAt:    now,
+		ExpiresAt:    now.Add(24 * time.Hour),
+		ID:           "PROP-upstream-update-1",
+		Digest:       "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+		BaseSnapshot: "catalog-snapshot-1",
+		SkillID:      "my-skill",
+		Command:      "skill_upstream_update",
+		Summary:      DiffSummary{Modified: []string{"skills/default/my-skill/SKILL.md"}},
+		WriteSet: mutation.WriteSet{
+			Command: "skill_upstream_update",
+			Changes: []mutation.Change{
+				{Path: "skills/default/my-skill/SKILL.md", Contents: []byte("new contents\n")},
+			},
+		},
+	}
+
+	data, err := json.Marshal(artifact)
+	if err != nil {
+		t.Fatal(err)
+	}
+	proposalsDir := filepath.Join(root, "runtime", "proposals")
+	if err := os.MkdirAll(proposalsDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(proposalsDir, artifact.ID+".json")
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	loaded, err := LoadProposal(root, artifact.ID, now.Add(time.Hour))
+	if err != nil {
+		t.Fatalf("LoadProposal failed: %v", err)
+	}
+	if loaded.Kind != ProposalKindUpstreamUpdate {
+		t.Fatalf("expected Kind %q, got %q", ProposalKindUpstreamUpdate, loaded.Kind)
+	}
+	if loaded.SkillID != "my-skill" || loaded.Command != "skill_upstream_update" {
+		t.Fatalf("unexpected loaded fields: %#v", loaded)
+	}
+	if len(loaded.planned.WriteSet.Changes) != 1 || string(loaded.planned.WriteSet.Changes[0].Contents) != "new contents\n" {
+		t.Fatalf("unexpected changes: %#v", loaded.planned.WriteSet.Changes)
 	}
 }

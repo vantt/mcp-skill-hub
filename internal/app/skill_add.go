@@ -765,7 +765,7 @@ func planSkillAddProposal(ctx context.Context, planCtx skillAddPlanContext) (Ski
 
 	primaryItem := planCtx.selected[0]
 	primaryTargetID := primaryItem.TargetID
-	if err := storeSkillAddProposal(planCtx.root, storedProposalArtifact{
+	if err := storeProposalArtifact(planCtx.root, storedProposalArtifact{
 		Version:      1,
 		Kind:         skill.ProposalKindAdd,
 		CreatedAt:    planCtx.now,
@@ -1087,7 +1087,7 @@ type storedProposalArtifact struct {
 	RecoveryID     string               `json:"recovery_id,omitempty"`
 }
 
-func storeSkillAddProposal(root string, artifact storedProposalArtifact) error {
+func storeProposalArtifact(root string, artifact storedProposalArtifact) error {
 	data, err := json.Marshal(artifact)
 	if err != nil {
 		return err

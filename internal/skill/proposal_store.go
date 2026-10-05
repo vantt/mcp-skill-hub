@@ -148,7 +148,7 @@ func LoadProposal(root, id string, now time.Time) (Proposal, error) {
 	}
 	if artifact.Kind == "" {
 		artifact.Kind = ProposalKindLifecycle
-	} else if artifact.Kind != ProposalKindLifecycle && artifact.Kind != ProposalKindAdd {
+	} else if artifact.Kind != ProposalKindLifecycle && artifact.Kind != ProposalKindAdd && artifact.Kind != ProposalKindUpstreamUpdate {
 		return Proposal{}, fmt.Errorf("proposal artifact has unknown kind %q", artifact.Kind)
 	}
 	if !now.UTC().Before(artifact.ExpiresAt) {
