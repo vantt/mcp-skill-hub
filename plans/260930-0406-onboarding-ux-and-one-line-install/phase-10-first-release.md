@@ -21,10 +21,10 @@ Publish the first stable release `v0.1.0` so `releases/latest/download/install.s
 
 ## Tasks & Steps
 - [x] With user approval: commit and push the work (conventional commits, no AI references). (Committed locally: 8cadb79)
-- [ ] With user approval: run `release.yml` via `workflow_dispatch` (draft) and review artifacts: 6 archives, install.sh/install.ps1 stamped, checksums, bundles, SBOMs, attestations.
-- [ ] Fix any failures in the owning phase; re-run draft until green.
-- [ ] With user approval: `scripts/release-preflight.sh --push` to tag `v0.1.0` (stable, no suffix).
-- [ ] Confirm post-publish smoke job green on all OS runners; manually run the README one-liners once on a real machine per OS if available.
+- [x] With user approval: run `release.yml` via `workflow_dispatch` (draft) and review artifacts: 6 archives, install.sh/install.ps1 stamped, checksums, bundles, SBOMs, attestations.
+- [x] Fix any failures in the owning phase; re-run draft until green.
+- [x] With user approval: `scripts/release-preflight.sh --push` to tag `v0.1.0` (stable, no suffix).
+- [x] Confirm post-publish smoke job green on all OS runners; manually run the README one-liners once on a real machine per OS if available.
 - [x] Update plan status and journal.
 
 ## Verification
