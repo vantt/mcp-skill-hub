@@ -45,7 +45,7 @@ describe('HomeScreen', () => {
     expect(screen.getByText('Index current')).toBeInTheDocument();
   });
 
-  it('resolves CTAs for all 10 known kinds plus future_kind', () => {
+  it('resolves CTAs for all known kinds plus future_kind', () => {
     const kinds: Array<{ kind: string; id?: string; count?: number; wantType: string; wantText?: string }> = [
       { kind: 'repair_workspace', wantType: 'command', wantText: 'skillhub doctor --fix' },
       { kind: 'recover_workspace', wantType: 'command', wantText: 'skillhub doctor --fix' },
@@ -57,6 +57,9 @@ describe('HomeScreen', () => {
       { kind: 'review_insights', wantType: 'link', wantText: '/inbox' },
       { kind: 'first_run_commit', wantType: 'command', wantText: 'git commit -m "feat: initial skillhub workspace"' },
       { kind: 'review_git_changes', wantType: 'command', wantText: 'git status' },
+      { kind: 'review_upstream_updates', wantType: 'link', wantText: '/skills?upstream=updates' },
+      { kind: 'track_upstream_skills', wantType: 'command', wantText: 'skillhub source backfill' },
+      { kind: 'link_orphan_sources', wantType: 'link', wantText: '/sources' },
       { kind: 'future_kind', wantType: 'none' },
     ];
 

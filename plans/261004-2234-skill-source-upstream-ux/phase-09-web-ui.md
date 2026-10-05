@@ -69,7 +69,7 @@ Do not modify any other file.
 
 - [x] Task 9.1 types + queries
 - [x] Task 9.2 Sources tab + provenance
-- [ ] Task 9.3 Skills list + Home
+- [x] Task 9.3 Skills list + Home
 - [ ] Task 9.4 Sources screen
 - [ ] Task 9.5 e2e smoke
 - [ ] Task 9.6 gates

@@ -18,10 +18,14 @@ export function SkillsScreen() {
   const queryParam = searchParams.get('q') ?? '';
   const stateParam = searchParams.get('state') ?? 'all';
   const colParam = searchParams.get('collection') ?? 'all';
+  const upstreamParam = searchParams.get('upstream') ?? 'all';
 
   const { data, isLoading, error } = useSkills(stateParam === 'all' ? undefined : stateParam);
 
   const allSkills = data?.skills ?? [];
+  const updateCount = allSkills.filter(
+    (s) => s.upstream_status === 'update_available' || s.upstream_status === 'diverged',
+  ).length;
 
   // Build collection options dynamically
   const collections = Array.from(new Set(allSkills.map((s) => s.collection).filter(Boolean))).sort();
@@ -30,6 +34,19 @@ export function SkillsScreen() {
   const filteredSkills = allSkills.filter((s) => {
     if (colParam !== 'all' && s.collection !== colParam) {
       return false;
+    }
+    if (upstreamParam === 'updates') {
+      if (s.upstream_status !== 'update_available' && s.upstream_status !== 'diverged') {
+        return false;
+      }
+    } else if (upstreamParam === 'modified') {
+      if (s.upstream_status !== 'modified' && s.upstream_status !== 'diverged') {
+        return false;
+      }
+    } else if (upstreamParam === 'untracked') {
+      if (s.upstream_status !== 'untracked') {
+        return false;
+      }
     }
     if (queryParam) {
       const q = queryParam.toLowerCase();
@@ -68,6 +85,16 @@ export function SkillsScreen() {
       next.set('collection', nextCol);
     } else {
       next.delete('collection');
+    }
+    setSearchParams(next);
+  };
+
+  const updateUpstreamFilter = (nextUpstream: string) => {
+    const next = new URLSearchParams(searchParams);
+    if (nextUpstream !== 'all') {
+      next.set('upstream', nextUpstream);
+    } else {
+      next.delete('upstream');
     }
     setSearchParams(next);
   };
@@ -139,6 +166,33 @@ export function SkillsScreen() {
               ▾
             </span>
           </div>
+
+          <div className="fg-select" style={{ width: '160px' }}>
+            <select
+              aria-label="Filter upstream status"
+              value={upstreamParam}
+              onChange={(e) => updateUpstreamFilter(e.target.value)}
+            >
+              <option value="all">All</option>
+              <option value="updates">Updates</option>
+              <option value="modified">Modified locally</option>
+              <option value="untracked">Not tracked</option>
+            </select>
+            <span className="fg-select__chev" aria-hidden="true">
+              ▾
+            </span>
+          </div>
+
+          {updateCount > 0 && (
+            <button
+              type="button"
+              className="fg-chip fg-chip--warning"
+              style={{ cursor: 'pointer', border: 'none' }}
+              onClick={() => updateUpstreamFilter('updates')}
+            >
+              <span>Updates ({updateCount})</span>
+            </button>
+          )}
         </div>
 
         <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
@@ -286,11 +340,22 @@ export function SkillsScreen() {
                       <span>{s.collection}</span>
                     </td>
                     <td>
-                      <StatusBadge
-                        variant="chip"
-                        label={t(`lifecycle_short.${s.lifecycle_state}`)}
-                        tone={tone}
-                      />
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-1)', flexWrap: 'wrap' }}>
+                        <StatusBadge
+                          variant="chip"
+                          label={t(`lifecycle_short.${s.lifecycle_state}`)}
+                          tone={tone}
+                        />
+                        {s.upstream_status === 'update_available' && (
+                          <StatusBadge variant="chip" tone="warning" label="Update available" />
+                        )}
+                        {s.upstream_status === 'diverged' && (
+                          <StatusBadge variant="chip" tone="danger" label="Diverged" />
+                        )}
+                        {s.upstream_status === 'upstream_removed' && (
+                          <StatusBadge variant="chip" tone="danger" label="Removed upstream" />
+                        )}
+                      </div>
                     </td>
                     <td className="t-body-sm">
                       <span style={{ color: s.routing_eligible ? 'var(--color-text)' : 'var(--color-text-muted)' }}>
