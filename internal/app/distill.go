@@ -23,6 +23,9 @@ import (
 	"github.com/vantt/mcp-skill-hub/internal/workspace"
 )
 
+// ErrDistillRunNotFound reports a run ID with no stored run.
+var ErrDistillRunNotFound = errors.New("distill run not found")
+
 // DistillService owns the exact application contracts intended for CLI and future MCP adapters.
 type DistillService struct {
 	Clock           Clock
@@ -1099,7 +1102,7 @@ func readRun(root, id string) (distillpkg.Run, []byte, error) {
 	}
 	matches, err := filepath.Glob(filepath.Join(root, "distill", "sources", "*", "runs", id+".yaml"))
 	if err != nil || len(matches) != 1 {
-		return distillpkg.Run{}, nil, errors.New("distill run not found")
+		return distillpkg.Run{}, nil, ErrDistillRunNotFound
 	}
 	data, err := os.ReadFile(matches[0])
 	if err != nil {
