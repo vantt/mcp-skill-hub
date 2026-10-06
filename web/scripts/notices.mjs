@@ -1,3 +1,4 @@
+/* global console */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -70,7 +71,9 @@ for (const pkg of packages) {
     if (licenseFileName) {
       licenseText = fs.readFileSync(path.join(fullPkgDir, licenseFileName), 'utf8').trim();
     }
-  } catch {}
+  } catch (err) {
+    void err;
+  }
 
   output += `## ${pkg.name}@${pkg.version}\n\n`;
   output += `License: ${licenseField}\n\n`;
