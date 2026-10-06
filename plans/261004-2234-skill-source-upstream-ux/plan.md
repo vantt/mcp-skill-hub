@@ -1,7 +1,7 @@
 ---
 title: "Skill-centric sources and WebUI v1 completion"
 description: "Tie every source to skills: track the upstream repo of each vendored skill, report drift, review and apply updates with a 3-way merge through preview/confirm, attach learning references to skills, expose it consistently in CLI, MCP, and the WebUI, then finish the WebUI v1 (distill handoff and runs, Inbox, Patch Composer, hardening, release, docs)."
-status: pending
+status: completed
 priority: P1
 effort: 168h
 branch: feat/skill-source-upstream
@@ -70,7 +70,7 @@ Since 2026-10-05 this plan also owns the rest of the WebUI v1. The WebUI plan `p
 | 10 | [Distill handoff and runs](./phase-10-distill-handoff-and-runs.md) | 9 | 18h | Done |
 | 11 | [Inbox, Insight, Patch Composer](./phase-11-inbox-insight-patch-composer.md) | 10 | 40h | Done |
 | 12 | [WebUI hardening and release](./phase-12-webui-hardening-and-release.md) | 9–11 | 22h | Done |
-| 13 | [Documentation and plan close](./phase-13-documentation.md) | 1–12 | 10h | In progress |
+| 13 | [Documentation and plan close](./phase-13-documentation.md) | 1–12 | 10h | Done |
 
 Phases run strictly in order, one at a time (user decision 2026-10-05: phases 10–13 start only after phase 9). Each phase file lists the only files it may modify.
 
@@ -111,18 +111,18 @@ Each phase is one or more focused commits; revert with `git revert` in reverse o
 
 ## Acceptance criteria (whole plan)
 
-- [ ] `skillhub skill add https://github.com/<o>/<r> --all --yes` creates one source and sets `provenance.source_id`, repository-relative `origin.path`, and `origin.files_digest` on every added skill; a second add from the same repository and ref reuses the source.
-- [ ] `skillhub skill outdated --check` lists every tracked skill with status, current/latest commit, the latest upstream commit date, the number of files changed in the skill folder, and local state; `--exit-code` exits 1 only when something needs action; `--json` emits a stable `status` enum.
-- [ ] `skillhub skill update <id>` previews per-file changes; a clean update applies through confirm; a conflicting update refuses to build pins until each conflict is resolved; after apply a third-party skill reports `review_required` and the output names `skillhub skill review <id>`.
-- [ ] Local edits are never overwritten silently: every file changed both locally and upstream is merged or requires an explicit choice.
-- [ ] `skillhub source list` groups by repository; `skillhub source backfill` attaches existing skills; no write path creates a source with zero linked skills.
-- [ ] MCP can report upstream status but has no way to preview or apply an update (no such tool; generic confirm tools refuse `upstream_update` proposals); MCP responses never carry upstream file content or diffs; the curator copies stay identical.
-- [ ] WebUI: Skills list badge and filter, one Skill Detail Sources tab (Upstream and Learning sections, indicator dot when an update is available), `/sources` grouped view, with loading, empty, and error states.
-- [ ] WebUI provenance renders the flat Go fields, and an upstream update or Composer apply refreshes the Runtime tab and trust card.
-- [ ] WebUI distill loop: select learning sources on `/sources`, copy a handoff brief, open returned runs, cancel an active run; no web route can start, retry, or submit a run (`TestRoutesNeverMutateRuns`).
-- [ ] WebUI improvement loop: paged Inbox, Insight decisions, Patch Composer with full evidence mapping and conflict detection; MCP paging behavior unchanged.
-- [ ] No route left on `LaterPhasePage`; every route passes the axe and 360 px sweep; release smoke proves `skillhub serve web` serves the authenticated UI; notices ship with the release.
-- [ ] `make check`, `make web-check`, and `make web-e2e` pass; docs, including `docs/contracts/web-api.md`, match shipped behavior.
+- [x] `skillhub skill add https://github.com/<o>/<r> --all --yes` creates one source and sets `provenance.source_id`, repository-relative `origin.path`, and `origin.files_digest` on every added skill; a second add from the same repository and ref reuses the source.
+- [x] `skillhub skill outdated --check` lists every tracked skill with status, current/latest commit, the latest upstream commit date, the number of files changed in the skill folder, and local state; `--exit-code` exits 1 only when something needs action; `--json` emits a stable `status` enum.
+- [x] `skillhub skill update <id>` previews per-file changes; a clean update applies through confirm; a conflicting update refuses to build pins until each conflict is resolved; after apply a third-party skill reports `review_required` and the output names `skillhub skill review <id>`.
+- [x] Local edits are never overwritten silently: every file changed both locally and upstream is merged or requires an explicit choice.
+- [x] `skillhub source list` groups by repository; `skillhub source backfill` attaches existing skills; no write path creates a source with zero linked skills.
+- [x] MCP can report upstream status but has no way to preview or apply an update (no such tool; generic confirm tools refuse `upstream_update` proposals); MCP responses never carry upstream file content or diffs; the curator copies stay identical.
+- [x] WebUI: Skills list badge and filter, one Skill Detail Sources tab (Upstream and Learning sections, indicator dot when an update is available), `/sources` grouped view, with loading, empty, and error states.
+- [x] WebUI provenance renders the flat Go fields, and an upstream update or Composer apply refreshes the Runtime tab and trust card.
+- [x] WebUI distill loop: select learning sources on `/sources`, copy a handoff brief, open returned runs, cancel an active run; no web route can start, retry, or submit a run (`TestRoutesNeverMutateRuns`).
+- [x] WebUI improvement loop: paged Inbox, Insight decisions, Patch Composer with full evidence mapping and conflict detection; MCP paging behavior unchanged.
+- [x] No route left on `LaterPhasePage`; every route passes the axe and 360 px sweep; release smoke proves `skillhub serve web` serves the authenticated UI; notices ship with the release.
+- [x] `make check`, `make web-check`, and `make web-e2e` pass; docs, including `docs/contracts/web-api.md`, match shipped behavior.
 
 ## Executor notes
 

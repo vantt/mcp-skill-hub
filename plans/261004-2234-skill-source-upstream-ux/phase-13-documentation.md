@@ -1,6 +1,6 @@
 ---
 title: "Phase 13: Documentation and plan close"
-status: in-progress
+status: done
 ---
 
 # Phase 13: Documentation and plan close
@@ -75,8 +75,8 @@ Create: `docs/contracts/web-api.md`.
 - [x] Task 13.2 user docs
 - [x] Task 13.3 design + use-case docs
 - [x] Task 13.4 WebUI shipped docs
-- [ ] Task 13.5 links and claims
-- [ ] Task 13.6 plan close
+- [x] Task 13.5 links and claims
+- [x] Task 13.6 plan close
 
 ## Success criteria
 
