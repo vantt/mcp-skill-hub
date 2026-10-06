@@ -11,8 +11,9 @@ curation recovery and approval boundaries are owned by
 [Source Learning and Distillation](../design/06-source-learning-and-distillation.md).
 
 This registry records the initial V1 contract only. It makes no claim that a
-command, schema, recovery service, or event log exists, and it adds no web UI,
-cloud dependency, or automatic application behavior.
+command, schema, recovery service, or event log exists, and it adds no
+cloud dependency or automatic application behavior; the web adapter ([Web API](web-api.md))
+uses the same result envelope mapped to appropriate HTTP status codes.
 
 ## User-facing rendering
 

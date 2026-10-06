@@ -122,7 +122,7 @@ flowchart TB
     CLIENT <--> AGENT
 ```
 
-**Modular monolith:** CLI và MCP gọi cùng application services. Bundled system skills là Agent-facing UX surface, version cùng binary và điều phối MCP tools; chúng không chứa domain mutation logic riêng. Web UI không thuộc V1.
+**Modular monolith:** CLI, MCP và Web UI gọi cùng application services. Bundled system skills là Agent-facing UX surface, version cùng binary và điều phối MCP tools; chúng không chứa domain mutation logic riêng. Web UI được chuyển giao trong V1 dưới dạng delivery adapter `internal/delivery/web` (lệnh `skillhub serve web`).
 
 ## 5. Module view
 
@@ -131,6 +131,7 @@ flowchart LR
     subgraph Delivery
       CLI
       MCP
+      WEB[Web adapter]
       SYS[System skill surface]
     end
     subgraph Application
@@ -189,7 +190,7 @@ flowchart LR
 | Resolver | Retrieve, score, clarify, abstain | Activate skill hoặc tự đọc private workspace |
 | Distribution | `skills/get`, resource manifest/read, digest pinning | Recommend bằng `skills/list` |
 | Evaluation | Replay corpus, compare variants, publish reports | Online-learn hidden weights |
-| Delivery | Validate transport, map errors/status | Chứa business logic riêng |
+| Delivery | Validate transport, map errors/status (CLI: `internal/delivery/cli`, MCP: `internal/delivery/mcpserver`, Web: `internal/delivery/web`) | Chứa business logic riêng |
 
 - **Phân loại lỗi:** Error classification do `internal/app` sở hữu (`app.ClassifyError`, `app.ErrorOf`). Các delivery adapter chỉ bổ sung transport policy (ví dụ MCP retryable flag, correlation ID) và không giữ matching rules riêng.
 - **Shared read models:** Các read model dùng chung giữa nhiều adapter nằm trong `internal/app`, ví dụ `SkillService.GetSkillDetail` phục vụ MCP `skill_get`, CLI và WebUI.
@@ -483,7 +484,7 @@ Defaults:
 
 - MCP qua stdio.
 - System Curator Skill là interactive curation surface; CLI là recovery/automation surface.
-- Không Web UI trong V1.
+- Web UI local qua `skillhub serve web`, chỉ chạy khi người dùng khởi động.
 - Không telemetry network mặc định.
 - Scheduler chỉ chạy trong `serve` hoặc bằng command/OS timer rõ ràng.
 - Repository path explicit; không tự scan home directory.
@@ -558,7 +559,6 @@ Không coi tên dependency là quyết định vĩnh viễn trước prototype/l
 - Universal control đối với native/local skills của mọi client.
 - Generated multi-skill procedural package.
 - Server-side LLM bật mặc định.
-- Web UI trong V1.
 
 ## 13. Quality attributes và budgets ban đầu
 

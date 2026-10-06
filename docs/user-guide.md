@@ -172,6 +172,38 @@ skillhub skill doctor <skill-id> --json
 - Results are marked `basis: terminal` and cached for agent resolution hints.
 - Untrusted third-party skills are not cached by design.
 - Exit codes: `0` (ready), `1` (setup required or unsupported platform), `2` (invalid request or unknown skill).
+## Local Web UI
+
+Skill Hub includes an embedded browser dashboard for visual skill curation, diff reviews, upstream tracking, and insight drafting.
+
+### Start the Web UI
+
+From your workspace or project directory, run:
+
+```bash
+skillhub serve web
+```
+
+Skill Hub starts an embedded HTTP server and prints the authenticated URL:
+```text
+Skill Hub web UI: http://127.0.0.1:7421/#token=36dee9ed913f3c4e56d973ef16a0f612741760c0f33d9495cdd4a6c17d72666a
+```
+
+Unless `--no-open` is passed, Skill Hub automatically opens your default browser to this URL. The token in the URL fragment is held in memory by the browser application and sent as a Bearer token on API calls.
+
+### Network Binding and Host Protection
+
+- **Multi-IP environments:** When your computer has multiple non-loopback network interfaces (e.g. Wi-Fi, Ethernet, Docker bridges, or Tailscale/VPNs), `skillhub serve web` binds to `0.0.0.0` so you can access the UI across local interfaces. On single-interface machines, it binds strictly to `127.0.0.1`.
+- **Force loopback:** To ensure the server binds exclusively to the local loopback address:
+  ```bash
+  skillhub serve web --loopback-only
+  ```
+- **Custom hostnames or reverse proxies:** Accessing the dashboard through custom domain names or reverse proxies requires passing `--allow-host <host[:port]>`. Requests with unapproved `Host` headers return `421 Misdirected Request` to protect against DNS rebinding attacks.
+- **Port override:** To specify an explicit port or address:
+  ```bash
+  skillhub serve web --addr 127.0.0.1:8080
+  ```
+- **Plain HTTP warning:** The embedded server speaks unencrypted HTTP. Do not expose it to untrusted public networks without a TLS reverse proxy.
 
 ## Move to another machine
 
@@ -207,6 +239,9 @@ When connecting Skill Hub to agent hosts, each host may prompt for permission on
 
 **Windows SmartScreen or unsigned binary warnings.**
 Skill Hub binaries are checksum-verified and Sigstore-attested via GitHub CI. On Windows, Windows SmartScreen or antivirus may flag newly downloaded unsigned executables. Choose "More info" -> "Run anyway" if prompted, or verify the file's SHA-256 against `checksums.txt` published with the release.
+
+**Windows firewall prompt on `serve web`.**
+On Windows, when `skillhub serve web` binds to `0.0.0.0` on a multi-adapter machine, Windows Defender Firewall may display a prompt asking whether to allow network traffic. Click "Allow access" on private networks, or pass `--loopback-only` to bind strictly to `127.0.0.1` and avoid the firewall prompt entirely.
 
 **`connect -g` refuses because of a symbolic link.**
 The error states that a host integration path contains a symbolic link (for example, if `~/.claude` or `~/.agents` is symlinked). Skill Hub refuses to write through symlinks for security. Workarounds:
