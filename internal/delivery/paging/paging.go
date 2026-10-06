@@ -112,7 +112,7 @@ func Make[T any](items []T, limit int, lastKey, owner, filter string, key func(T
 		found := false
 		for index, item := range items {
 			if key(item) == lastKey {
-				start, found = index + 1, true
+				start, found = index+1, true
 				break
 			}
 		}

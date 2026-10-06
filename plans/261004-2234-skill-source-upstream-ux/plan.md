@@ -68,7 +68,7 @@ Since 2026-10-05 this plan also owns the rest of the WebUI v1. The WebUI plan `p
 | 8 | [Web API](./phase-08-web-api.md) | 3, 4, 5 | 6h | Done |
 | 9 | [Web UI](./phase-09-web-ui.md) | 8 | 8h | Done |
 | 10 | [Distill handoff and runs](./phase-10-distill-handoff-and-runs.md) | 9 | 18h | Done |
-| 11 | [Inbox, Insight, Patch Composer](./phase-11-inbox-insight-patch-composer.md) | 10 | 40h | In progress |
+| 11 | [Inbox, Insight, Patch Composer](./phase-11-inbox-insight-patch-composer.md) | 10 | 40h | Done |
 | 12 | [WebUI hardening and release](./phase-12-webui-hardening-and-release.md) | 9–11 | 22h | Pending |
 | 13 | [Documentation and plan close](./phase-13-documentation.md) | 1–12 | 10h | Pending |
 

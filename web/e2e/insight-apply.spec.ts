@@ -3,14 +3,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { seedDistillWorkspace, type SeededDistillWorkspace } from './support/seed-workspace';
 import { startServer, type RunningServer } from './support/server';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const binaryPath = path.resolve(__dirname, '../.e2e/skillhub');
 
-async function checkA11y(page: any, contextName: string) {
+async function checkA11y(page: Page, contextName: string) {
   const scan = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
     .analyze();

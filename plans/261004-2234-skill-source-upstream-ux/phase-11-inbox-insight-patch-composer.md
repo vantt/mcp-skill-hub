@@ -1,6 +1,6 @@
 ---
 title: "Phase 11: Inbox, Insight, Patch Composer"
-status: in-progress
+status: done
 ---
 
 # Phase 11: Inbox, Insight, Patch Composer
@@ -85,7 +85,7 @@ Do not modify any other file.
 - [x] Task 11.4 domain logic
 - [x] Task 11.5 screens
 - [x] Task 11.6 e2e
-- [ ] Task 11.7 gates
+- [x] Task 11.7 gates
 
 ## Success criteria
 
