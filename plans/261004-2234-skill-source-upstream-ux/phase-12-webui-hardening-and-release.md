@@ -1,6 +1,6 @@
 ---
 title: "Phase 12: WebUI hardening and release"
-status: todo
+status: in-progress
 ---
 
 # Phase 12: WebUI hardening and release
@@ -63,7 +63,7 @@ Do not modify any other file.
 
 ## Todo
 
-- [ ] Task 12.1 journeys
+- [x] Task 12.1 journeys
 - [ ] Task 12.2 a11y sweep
 - [ ] Task 12.3 glyph coverage
 - [ ] Task 12.4 notices
