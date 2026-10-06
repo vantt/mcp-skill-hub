@@ -263,22 +263,145 @@ Transitions are strictly ordered. An active skill cannot jump directly to archiv
 
 ---
 
-## Watch and learn from upstream sources
+## Keep vendored skills up to date
 
-Use source watching when you want to monitor upstream repositories for improvements rather than copying complete skills.
+When you add skills from a remote Git repository (`skillhub skill add https://github.com/owner/repo --skill pdf --yes`), Skill Hub automatically records the repository as the skill's upstream source. It captures the repository URL, branch or tag ref, commit SHA, relative directory path, and initial `files_digest`.
 
-### Watch a repository (`skillhub source watch`)
+### Check for upstream drift (`skillhub skill outdated`)
 
-Register an upstream Git repository for ongoing monitoring:
+Check whether vendored skills have upstream updates available:
 
 ```bash
-skillhub source watch https://github.com/owner/repo --cadence weekly --yes
+skillhub skill outdated --check
 ```
 
-- `--cadence`: `daily`, `weekly`, or `manual` (default: `weekly`).
-- `--ref`: Watch a specific branch or tag (default: `main`).
-- `--path`: Scope monitoring to a specific subdirectory.
-- Watching a source records the monitor in `sources/catalog/<source-id>.yaml`. It does not fetch upstream content immediately, does not import skills, and does not alter active skills.
+- `--check`: Probes remote repositories via `ls-remote` to check current branch commits before reporting.
+- `--all`: Includes skills that are up to date in the output table.
+- `--exit-code`: Exits with code `1` when any skill needs attention (`update_available`, `diverged`, `upstream_removed`), and `0` when clean.
+- `--json`: Emits machine-readable JSON status details.
+
+The output table reports:
+- **SKILL**: The skill ID.
+- **UPSTREAM**: The source repository and ref.
+- **STATUS**: The drift classification:
+  - `up_to_date`: Local files match the latest upstream commit.
+  - `update_available`: Upstream has newer commits that change files in the skill directory, with no conflicting local edits.
+  - `modified`: Local files have been edited since vendoring, but upstream has not changed.
+  - `diverged`: Both upstream and local files have changed since vendoring; a 3-way merge is needed.
+  - `upstream_removed`: The skill folder was removed upstream.
+  - `pinned`: The skill tracks a fixed commit rather than a moving branch ref.
+  - `unavailable`: The remote repository cannot be reached.
+  - `untracked`: The skill has no upstream repository attached.
+- **LOCAL**: Whether local files match `files_digest` (`clean` or `edited`).
+- **BEHIND**: The count of changed files in the skill folder and the upstream commit date.
+
+### Inspect upstream details (`skillhub skill upstream`)
+
+Inspect full upstream repository metadata, commit SHAs, file lists, and drift for an individual skill:
+
+```bash
+skillhub skill upstream pdf --check
+```
+
+### Apply updates with 3-way merge (`skillhub skill update`)
+
+When an update is available, merge changes from upstream into your local skill:
+
+```bash
+skillhub skill update pdf
+```
+
+Skill Hub executes a 3-way merge using the system `git merge-file` engine between the original base commit, your current local files, and the newest upstream commit.
+
+The update displays a file status table:
+- **Status flags:** `merged` (cleanly integrated changes), `modified` (applied upstream changes), `added` (new upstream files), `deleted` (files deleted upstream), or `conflicted` (overlapping changes requiring resolution).
+- **Conflict resolution options:**
+  - `--accept <path>=upstream|local|merged`: Choose how to resolve a file.
+  - `--manual <path>=<file>`: Supply an edited resolution file for a conflicted path.
+  - `--write-conflicts <dir>`: Write conflicted files with standard Git conflict markers to a directory for manual editing.
+  - `--yes`: Apply a clean update immediately.
+
+If conflicts exist, Skill Hub refuses to build confirmation pins until every conflict is explicitly resolved. Once clean or resolved, confirm the proposal:
+
+```bash
+skillhub skill confirm PROP-123
+```
+
+### Re-approval step (updates never approve content)
+
+Applying an upstream update updates files and metadata, but **never approves content automatically**. Because updated code or instructions are untrusted third-party changes, the skill transitions to `review_required` and connected agents cannot use it until you re-review and approve:
+
+```bash
+skillhub skill review pdf
+skillhub skill edit pdf --approve-content <digest>
+```
+
+### Backfill legacy skills (`skillhub source backfill`)
+
+Skills vendored before Skill Hub's upstream tracking model lack `provenance.source_id` and `origin.files_digest`. Attach source records and compute missing digests using `source backfill`:
+
+```bash
+skillhub source backfill --yes
+```
+
+If multiple candidate paths exist within an upstream repository, specify `--skill <id> --path <subdir>` to resolve ambiguity.
+
+*Binary compatibility note:* Workspaces containing skills with `provenance.origin.files_digest` require Skill Hub binaries that support upstream provenance. Older binaries will reject the unknown field during strict YAML validation.
+
+---
+
+## Learn from references
+
+Use learning references when you want curator agents to monitor repositories for patterns, architectural ideas, or domain guidance without vendoring whole skills directly.
+
+### Attach and detach learning references
+
+Attach an existing source or new repository to a skill as a learning reference:
+
+```bash
+skillhub source attach https://github.com/owner/reference-repo --skill-id my-skill --yes
+```
+
+To remove a learning link:
+
+```bash
+skillhub source detach reference-repo --skill-id my-skill --yes
+```
+
+### Watch a repository for a skill (`skillhub source watch`)
+
+Register a new repository to watch for a specific skill:
+
+```bash
+skillhub source watch https://github.com/owner/reference-repo --skill-id my-skill --cadence weekly --yes
+```
+
+- **The No-Orphan Invariant:** Every watched source must be linked to at least one skill. Watching a repository without `--skill-id` is refused with actionable guidance.
+- To completely stop watching a source and delete its monitoring record if unreferenced by other skills:
+  ```bash
+  skillhub source unwatch reference-repo --yes
+  ```
+
+### Triage candidate sources (`skillhub source triage`)
+
+When reviewing intake candidates recorded with `skillhub source capture`:
+
+```bash
+# Accept as a learning reference for an existing skill
+skillhub source triage SRCQ-12345 --decision accept --skill-id my-skill
+
+# Accept as a learning reference for a new skill draft
+skillhub source triage SRCQ-12345 --decision accept --new-skill new-skill
+
+# Vendor skills directly from candidate repository
+skillhub source triage SRCQ-12345 --decision import --path skills
+
+# Defer or reject candidates
+skillhub source triage SRCQ-12345 --decision defer --reason "Revisit next quarter"
+skillhub source triage SRCQ-12345 --decision reject --reason "Incompatible license"
+```
+
+Triage `accept` always requires a skill target (`--skill-id` or `--new-skill`), enforcing the no-orphan rule.
 
 ### Check for updates (`skillhub source check`)
 
@@ -290,29 +413,23 @@ skillhub source check --all
 skillhub source check owner-repo
 ```
 
-*Top-level compatibility spelling:* `skillhub check` is fully supported as an exact alias of `skillhub source check`.
-
-A source check queries remote repositories, compares advertised commit hashes, and records new revisions. It never modifies your curated skills.
+*Top-level compatibility spelling:* `skillhub check` is fully supported as an exact alias of `skillhub source check`. When skills track an upstream repository, running check also refreshes per-skill upstream drift.
 
 ### Distill changes and review the inbox
 
-When sources have new revisions, ask your connected agent:
+When learning sources have new revisions, run `skillhub distill` or ask your connected curator agent:
 
 > Distill changed sources and show me the most valuable idea.
 
-The agent starts a distill run, analyzes changes, produces findings, and places insight proposals in your inbox. Distillation never modifies active skills.
-
-Inspect and act on insights in the inbox:
+The agent analyzes changes, creates findings and comparisons, and submits insight proposals to your inbox. Inspect and decide insights:
 
 ```bash
 skillhub inbox
 skillhub insight show INS-101
-skillhub insight decide INS-101 --decision reject --reason "Already addressed in our reliability review"
+skillhub insight decide INS-101 --decision plan --reason "Incorporate security patterns"
 ```
 
 Applying an insight generates a pinned preview. Approve the proposal only after inspecting the diff.
-
----
 
 ## Resource-verified fallback and state basis
 
@@ -430,13 +547,13 @@ skillhub source capture https://github.com/owner/repo.git --reason "Audit candid
 skillhub source list
 skillhub source show SRCQ-XXXXXXXXXXXX
 
-# 3. Triage candidate and preview onboarding
+# 3. Triage candidate and preview onboarding (targeting a skill or importing)
 skillhub source triage SRCQ-XXXXXXXXXXXX \
   --decision accept \
+  --skill-id my-skill \
   --source-id audit-repo \
   --adapter git \
   --path skills
-
 # 4. Confirm onboarding with exact pins
 skillhub source confirm \
   --proposal PROP-YYYYY \
@@ -469,10 +586,19 @@ Use this workflow when you require multi-stage governance, audit logging of cand
 | List skills | `skillhub skill list [--state <s>]` |
 | Read a skill (any state) | `skillhub skill show <id> [--verbose]` |
 | Change lifecycle state | `skillhub skill activate\|deprecate\|archive <id> [--yes]` |
-| Watch a remote repository | `skillhub source watch <locator> [--cadence daily\|weekly\|manual] [--yes]` |
+| Check skill drift from upstream | `skillhub skill outdated [--check] [--all] [--exit-code] [--json]` |
+| Inspect upstream repository details | `skillhub skill upstream <id> [--check] [--json]` |
+| Apply 3-way upstream update | `skillhub skill update <id> [--yes] [--json]` |
+| List candidates, sources, groups | `skillhub source list [--status <s>]` |
+| Watch repository for a skill | `skillhub source watch <locator> --skill-id <id> [--cadence <c>] [--yes]` |
+| Attach learning reference | `skillhub source attach <source-id\|url> --skill-id <id> [--yes]` |
+| Detach learning reference | `skillhub source detach <source-id> --skill-id <id> [--yes]` |
+| Stop watching source | `skillhub source unwatch <source-id> [--yes]` |
+| Backfill legacy provenance | `skillhub source backfill [--skill <id>] [--yes]` |
 | Check watched sources for updates | `skillhub source check --all-due\|--all` (or `skillhub check ...`) |
 | Review insight proposals in inbox | `skillhub inbox`; `skillhub insight show <id>` |
-| Decide an insight proposal | `skillhub insight decide <id> --decision accept\|reject [flags]` |
+| Decide an insight proposal | `skillhub insight decide <id> --decision plan\|reject [flags]` |
+| Import skills from source | `skillhub source import <source-id> [--path <subdir>] [--skill <name>] [--yes]` |
 | Measure funnel usage and conversion | `skillhub telemetry funnel [--since <period>] [--skill <id>]` |
 | Import local Claude Code transcripts | `skillhub telemetry import-transcripts --project <dir>` |
 | Evaluate routing quality | `skillhub eval routing [--no-skill <f>] [--policy <f>]` |

@@ -72,7 +72,7 @@ Create: `docs/contracts/web-api.md`.
 ## Todo
 
 - [x] Task 13.1 shipped behavior
-- [ ] Task 13.2 user docs
+- [x] Task 13.2 user docs
 - [ ] Task 13.3 design + use-case docs
 - [ ] Task 13.4 WebUI shipped docs
 - [ ] Task 13.5 links and claims

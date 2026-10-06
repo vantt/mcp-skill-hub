@@ -64,7 +64,7 @@ go build -o ~/.local/bin/skillhub ./cmd/skillhub
 
 ## What next
 
-- **Curate your skills.** Use the [curating skills guide](docs/curating-skills.md) to add skills (`skillhub skill add`), create workflows (`skillhub skill create`), review diagnostic facts (`skillhub skill review`), edit instructions (`skillhub skill edit --editor`), and watch repositories (`skillhub source watch`).
+- **Curate your skills.** Use the [curating skills guide](docs/curating-skills.md) to add skills (`skillhub skill add`), create workflows (`skillhub skill create`), review diagnostic facts (`skillhub skill review`), edit instructions (`skillhub skill edit --editor`), and keep vendored skills current (`skillhub skill outdated`, `skillhub skill update`).
 - **Check health and changes.** `skillhub status` shows what needs attention. `skillhub diff` shows uncommitted changes, and `skillhub validate --staged` validates commits before staging.
 - **Diagnose issues.** `skillhub doctor` checks workspace and agent connections (`--fix` to repair); `skillhub skill doctor <id>` tests executable tools and environment requirements for an individual skill.
 - **See every command.** `skillhub help`, or `skillhub help <command>`.

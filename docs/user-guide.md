@@ -27,7 +27,7 @@ Without it, pass `--workspace ~/skillhub` to each command, or run the command fr
 
 Transitions go in order: draft to active to deprecated to archived. You cannot jump from active straight to archived.
 
-**Source.** A remote Git repository (for example on GitHub) that you watch for useful skills or patterns. Watching a source records monitoring settings; it is not a background daemon and never changes your skills automatically.
+**Source.** A remote Git repository tied to skills in one of two roles: an *upstream* source (the repository a vendored skill was copied from) or a *learning reference* (a repository your curator agent monitors for improvement ideas). Skill Hub tracks upstream commit revisions and local changes without background daemons, letting you check drift and 3-way merge updates on demand. Sources never exist as unreferenced orphans; watching or attaching a source always connects it directly to one or more skills.
 
 **Intent-first skill addition.** You can add existing skills directly from a GitHub repository or a local folder with `skillhub skill add <locator>`. Skills start as drafts and retain provenance.
 
@@ -297,12 +297,20 @@ Restart the agent after `connect`. Check that the `skillhub` binary still exists
 | List skills | `skillhub skill list [--state <state>]` |
 | Read a skill (any state) | `skillhub skill show <id>` |
 | Change lifecycle state | `skillhub skill activate\|deprecate\|archive <id> [--yes]` |
-| Watch an upstream repository | `skillhub source watch <locator> [--cadence <c>] [--yes]` |
-| Check upstream for updates | `skillhub source check --all-due` or `--all` (alias: `skillhub check`) |
+| Check skill drift from upstream | `skillhub skill outdated [--check] [--all] [--exit-code] [--json]` |
+| Inspect upstream details | `skillhub skill upstream <id> [--check] [--json]` |
+| Apply upstream 3-way update | `skillhub skill update <id> [--yes] [--json]` |
+| List candidates, sources, groups | `skillhub source list [--status <s>]` |
+| Watch and link learning source | `skillhub source watch <locator> --skill-id <id> [--cadence <c>] [--yes]` |
+| Attach learning reference | `skillhub source attach <source-id\|url> --skill-id <id> [--yes]` |
+| Detach learning reference | `skillhub source detach <source-id> --skill-id <id> [--yes]` |
+| Stop watching source | `skillhub source unwatch <source-id> [--yes]` |
+| Backfill legacy provenance | `skillhub source backfill [--skill <id>] [--yes]` |
+| Check watched sources for updates | `skillhub source check --all-due` or `--all` (alias: `skillhub check`) |
 | Review the inbox | `skillhub inbox` |
 | Act on an insight | `skillhub insight show\|decide\|apply\|confirm` |
 | Save an intake candidate | `skillhub source capture <url> --reason <text>` |
-| List or triage candidates | `skillhub source list`; `skillhub source triage <id> ...` |
+| Triage candidate sources | `skillhub source triage <id> --decision accept\|defer\|reject\|import ...` |
 | Import skills from source | `skillhub source import <source-id> [--path <subdir>] [--skill <name>] [--yes]` |
 | Ask for a skill recommendation | `skillhub resolve --request <file>` |
 | Evaluate routing quality | `skillhub eval routing [--no-skill <file>] [--policy <file>]` |
