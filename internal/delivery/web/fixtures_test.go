@@ -548,12 +548,36 @@ func seedFinalizedRun(t *testing.T, root string, adapter fakeSourceAdapter) stri
 				},
 			},
 		},
+		Insights: []app.InsightSubmission{
+			{
+				StableKey:      "retry-review-concept",
+				SkillID:        "review-skill",
+				Recommendation: "Add retry guidance to code review.",
+				ObservationIDs: []string{distill.ObservationID("source-a", "retry-review")},
+				Category:       "reliability",
+				Priority:       "high",
+				Rationale:      "Improves reliability.",
+			},
+		},
 	}
 	_, err = service.SubmitDistillRun(context.Background(), root, runID, sub)
 	if err != nil {
 		t.Fatalf("submit failed: %v", err)
 	}
 	return runID
+}
+
+func seedPendingInsight(t *testing.T, root string) string {
+	t.Helper()
+	adapter := fakeSourceAdapter{
+		files: map[string]map[string][]byte{
+			"r1": {"SKILL.md": []byte("# Version 1\n")},
+			"r2": {"SKILL.md": []byte("# Version 2\n")},
+		},
+		fail: map[string]error{},
+	}
+	seedFinalizedRun(t, root, adapter)
+	return distill.InsightID("review-skill", "retry-review-concept")
 }
 
 func revisionForWebDistill(value string, files map[string][]byte) sourcepkg.Revision {
