@@ -65,7 +65,7 @@ Do not modify any other file.
 
 - [x] Task 12.1 journeys
 - [x] Task 12.2 a11y sweep
-- [ ] Task 12.3 glyph coverage
+- [x] Task 12.3 glyph coverage
 - [ ] Task 12.4 notices
 - [ ] Task 12.5 release smoke
 - [ ] Task 12.6 evidence + gates
