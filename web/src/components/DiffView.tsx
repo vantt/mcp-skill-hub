@@ -176,6 +176,7 @@ export function DiffView({ diff, stat }: DiffViewProps) {
                     <span>{String(num)}</span>
                   </span>
                   <span
+                    role="img"
                     aria-label={lineAriaLabel(line.type)}
                     style={{ textAlign: 'center', color: lineFg(line.type), fontWeight: 'bold' }}
                   >
@@ -201,6 +202,7 @@ export function DiffView({ diff, stat }: DiffViewProps) {
                   }}
                 >
                   <span
+                    role="img"
                     aria-label={lineAriaLabel(line.type)}
                     style={{ textAlign: 'center', color: lineFg(line.type), fontWeight: 'bold' }}
                   >
@@ -223,6 +225,7 @@ export function DiffView({ diff, stat }: DiffViewProps) {
                   }}
                 >
                   <span
+                    role="img"
                     aria-label={lineAriaLabel(line.type)}
                     style={{ textAlign: 'center', color: lineFg(line.type), fontWeight: 'bold' }}
                   >

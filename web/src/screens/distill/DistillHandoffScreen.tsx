@@ -323,6 +323,8 @@ export function DistillHandoffScreen() {
             </button>
           </div>
           <pre
+            tabIndex={0}
+            aria-label={TITLE_BRIEF_BAR}
             style={{
               margin: 0,
               padding: 'var(--space-4)',

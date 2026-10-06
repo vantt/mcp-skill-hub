@@ -64,7 +64,7 @@ Do not modify any other file.
 ## Todo
 
 - [x] Task 12.1 journeys
-- [ ] Task 12.2 a11y sweep
+- [x] Task 12.2 a11y sweep
 - [ ] Task 12.3 glyph coverage
 - [ ] Task 12.4 notices
 - [ ] Task 12.5 release smoke
