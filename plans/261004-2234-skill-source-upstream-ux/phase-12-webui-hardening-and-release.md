@@ -1,6 +1,6 @@
 ---
 title: "Phase 12: WebUI hardening and release"
-status: in-progress
+status: done
 ---
 
 # Phase 12: WebUI hardening and release
@@ -68,7 +68,7 @@ Do not modify any other file.
 - [x] Task 12.3 glyph coverage
 - [x] Task 12.4 notices
 - [x] Task 12.5 release smoke
-- [ ] Task 12.6 evidence + gates
+- [x] Task 12.6 evidence + gates
 
 ## Success criteria
 
