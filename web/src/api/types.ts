@@ -645,3 +645,140 @@ export interface DistillRunResult {
   run: DistillRun;
   operation_id?: string;
 }
+
+export interface InsightInboxItem {
+  id: string;
+  stable_key: string;
+  skill_id: string;
+  status: string;
+  recommendation: string;
+  observation_ids: string[];
+  comparison_ids?: string[];
+  category: string;
+  priority: string;
+  rationale: string;
+  evidence_digest: string;
+  rank_score: number;
+  impact: string;
+}
+
+export interface InsightInboxGroup {
+  skill_id: string;
+  category: string;
+  priority: string;
+  rank_score: number;
+  total_items: number;
+  insights: InsightInboxItem[];
+}
+
+export interface InboxPageResult {
+  schema_version: string;
+  status: string;
+  summary: string;
+  groups: InsightInboxGroup[];
+  has_more: boolean;
+  next_cursor?: string;
+  total: number;
+}
+
+export interface Observation {
+  schema_version: number;
+  id: string;
+  source_id: string;
+  run_id: string;
+  stable_key: string;
+  status: 'active' | 'removed' | 'superseded' | string;
+  what: string;
+  vocabulary: string[];
+  evidence: Array<{
+    revision: {
+      kind: string;
+      value: string;
+      content_digest: string;
+    };
+    run_id: string;
+    package_digest: string;
+    path: string;
+    locator: string;
+    digest: string;
+  }>;
+}
+
+export interface Comparison {
+  schema_version: number;
+  id: string;
+  run_id: string;
+  subject: string;
+  observation_ids: string[];
+  verdict: string;
+  tradeoffs: string;
+  stale: boolean;
+}
+
+export interface Insight {
+  schema_version: number;
+  id: string;
+  run_id: string;
+  stable_key: string;
+  skill_id: string;
+  status: 'pending' | 'planned' | 'rejected' | 'obsolete' | 'withdrawn' | string;
+  recommendation: string;
+  observation_ids: string[];
+  comparison_ids?: string[];
+  category: string;
+  priority: string;
+  rationale: string;
+  evidence_digest: string;
+  decision_history?: Array<{
+    decision: string;
+    rationale: string;
+    decided_at: string;
+  }>;
+}
+
+export interface InsightDetailResult {
+  schema_version: string;
+  status: string;
+  summary: string;
+  insight: Insight;
+  findings: Observation[];
+  comparisons: Comparison[];
+}
+
+export interface InsightApplicationPreview {
+  schema_version: string;
+  status: string;
+  summary: string;
+  proposal_id: string;
+  proposal_digest: string;
+  base_catalog_version: string;
+  insight_id: string;
+  skill_id: string;
+  path_pins: Array<{
+    path: string;
+    digest: string;
+  }>;
+  diff: string;
+  confirmation: {
+    confirmation: {
+      required: boolean;
+      mode?: string;
+      pins: ConfirmationPins;
+    };
+  };
+}
+
+export interface InsightApplicationResult {
+  schema_version: string;
+  status: string;
+  summary: string;
+  operation_id?: string;
+}
+
+export interface InsightDecisionResult {
+  schema_version: string;
+  status: string;
+  summary: string;
+  insight: Insight;
+  operation_id?: string;
+}
