@@ -9,6 +9,7 @@ tags: [feature, backend, api, frontend, cli, mcp, docs, security, release]
 blockedBy: []
 blocks: []
 created: 2026-10-04
+completed: 2026-10-06
 ---
 
 # Skill-centric sources and WebUI v1 completion
