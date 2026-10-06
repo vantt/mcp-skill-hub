@@ -102,13 +102,30 @@ export function DistillHandoffScreen() {
 
   // Find all sources from groups or allSources
   const allSources: SourceSummary[] = [];
-  if (sourcesData?.groups) {
+  if (sourcesData?.sources && sourcesData.sources.length > 0) {
+    for (const s of sourcesData.sources) {
+      const rec = s.record;
+      const isUpstreamOnly = rec.purpose === 'upstream' || s.role === 'upstream';
+      const isNeverDistilled = !rec.distilled_revision || !rec.distilled_revision.value;
+      const isChangedOrPending = rec.status === 'changed' || rec.status === 'distill_pending';
+      const isReadyToDistill = !isUpstreamOnly && (isChangedOrPending || isNeverDistilled);
+
+      allSources.push({
+        id: rec.id,
+        status: rec.status,
+        role: s.role,
+        referencing_skills: s.skills || [],
+        skills_vendored_count: 0,
+        importable_count: s.importable_count,
+        current_revision: rec.current_revision,
+        distilled_revision: rec.distilled_revision,
+        ready_to_distill: isReadyToDistill,
+        upstream_only: isUpstreamOnly,
+      });
+    }
+  } else if (sourcesData?.groups) {
     for (const g of sourcesData.groups) {
       allSources.push(...g.sources);
-    }
-  } else if (sourcesData?.sources) {
-    for (const s of sourcesData.sources) {
-      allSources.push(s.record as unknown as SourceSummary);
     }
   }
 

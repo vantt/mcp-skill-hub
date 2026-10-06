@@ -90,7 +90,7 @@ Do not modify any other file.
 - [x] Task 10.2 run endpoints + route safety
 - [x] Task 10.3 domain logic
 - [x] Task 10.4 screens
-- [ ] Task 10.5 seed + journey
+- [x] Task 10.5 seed + journey
 - [ ] Task 10.6 gates
 
 ## Success criteria

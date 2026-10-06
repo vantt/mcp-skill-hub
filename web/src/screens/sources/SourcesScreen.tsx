@@ -236,12 +236,34 @@ export function SourcesScreen() {
 
   const isEmpty = groups.length === 0 && allSources.length === 0;
 
+  const resolveSummary = (src: SourceSummary): SourceSummary => {
+    const rec = sourcesMap.get(src.id);
+    const isUpstreamOnly =
+      src.upstream_only ??
+      (rec?.purpose === 'upstream' ||
+        src.role === 'upstream' ||
+        (src.skills_vendored_count > 0 && src.referencing_skills.length === 0));
+    const isNeverDistilled = !rec?.distilled_revision || !rec?.distilled_revision.value;
+    const isChangedOrPending = rec?.status === 'changed' || rec?.status === 'distill_pending';
+    const isReadyToDistill =
+      src.ready_to_distill ?? (!isUpstreamOnly && (isChangedOrPending || isNeverDistilled));
+
+    return {
+      ...src,
+      status: rec?.status || src.status,
+      current_revision: rec?.current_revision || src.current_revision,
+      distilled_revision: rec?.distilled_revision || src.distilled_revision,
+      ready_to_distill: isReadyToDistill,
+      upstream_only: isUpstreamOnly,
+    };
+  };
+
   // Filter groups if filterReady is true
   const displayedGroups = filterReady
     ? groups
         .map((g) => ({
           ...g,
-          sources: g.sources.filter((s) => distillLabel(s).selectable),
+          sources: g.sources.filter((s) => distillLabel(resolveSummary(s)).selectable),
         }))
         .filter((g) => g.sources.length > 0)
     : groups;
@@ -332,7 +354,7 @@ export function SourcesScreen() {
                 const lastChecked = src.last_checked_at ? src.last_checked_at.slice(0, 10) : 'never';
                 const cadence = rec?.monitoring?.cadence || 'weekly';
                 const refText = rec?.locator?.ref ? `@${rec.locator.ref}` : '';
-                const distill = distillLabel(src);
+                const distill = distillLabel(resolveSummary(src));
 
                 return (
                   <div

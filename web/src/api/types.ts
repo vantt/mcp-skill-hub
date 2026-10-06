@@ -500,8 +500,14 @@ export interface SourceRecord {
   current_revision?: {
     kind: string;
     value: string;
-    observed_at: string;
+    observed_at?: string;
   };
+  distilled_revision?: {
+    kind: string;
+    value: string;
+    observed_at?: string;
+  };
+  purpose?: string;
 }
 
 export interface SourceListItem {
