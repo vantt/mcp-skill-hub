@@ -222,29 +222,35 @@ Draft saved in this browser · 2 min ago            [Preview changes]
 ### 4.6 Sources `/sources`
 
 ```text
-Sources            [Watch new source] [Check due sources] [Check all sources]
-Filter [All | Ready to distill]                [Distill with Curator Agent (2)]
-┌─┬──────────────────────────┬─────────┬───────────┬──────────┬─────────────┐
-│☐│ Source                   │ Monitor │ Trust     │ Revision │ Status      │
-│☑│ acme-agent-skills        │ Weekly  │ Community │ 3f9c2a1  │ ◆ Changed   │
-│ │ github.com/acme/…@main   │         │ MIT       │ ← 81d04be│ [Check now] │
-└─┴──────────────────────────┴─────────┴───────────┴──────────┴─────────────┘
+Sources                                 [Check due sources] [Check all sources]
+Filter [All | Ready to distill]                [Distill with Curator Agent (1)]
+
+┌ Repository: https://github.com/anthropics/skills @ main ────────────────────┐
+│ Role: [Upstream] [Learning reference]                                       │
+│ Linked skills: pdf (Upstream), review (Learning)                            │
+│ ┌─┬──────────────────────┬─────────┬───────────┬──────────┬───────────────┐ │
+│ │☐│ Source               │ Monitor │ Trust     │ Revision │ Actions       │ │
+│ │☑│ anthropics-skills    │ Weekly  │ Community │ 3f9c2a1  │ [Check now]   │ │
+│ │ │                      │         │ MIT       │ ← 81d04be│ [Import more] │ │
+│ │ │                      │         │           │          │ [Unwatch]     │ │
+│ └─┴──────────────────────┴─────────┴───────────┴──────────┴───────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
 Last check: 3 checked · 1 changed · 2 unchanged · 0 unreachable  (this session)
 
-┌ Open a run ─────────────────────────────────────────────────────────────┐
-│ Run ID [RUN-…………………]  [Open]                                             │
-│ Recent runs on this browser  (not a full workspace history)             │
-│ RUN-7K2M9QX4B1D8F3A6  acme-agent-skills  Awaiting decision   [Remove]   │
-└──────────────────────────────────────────────────────────────────────────┘
+┌ Open a run ─────────────────────────────────────────────────────────────────┐
+│ Run ID [RUN-…………………]  [Open]                                                │
+│ Recent runs on this browser  (not a full workspace history)                 │
+│ RUN-7K2M9QX4B1D8F3A6  anthropics-skills  Awaiting decision   [Remove]       │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- The checkbox is enabled only for rows that are ready to distill.
+- The checkbox is enabled only for learning source rows that are ready to distill.
 - The revision cell shows `current ← distilled`, or "Never distilled".
+- Each group displays repository URL, ref, role badges, linked skills, and per-source actions (`Check now`, `Import more`, `Unwatch`).
 
-### 4.7 Watch source `/sources/watch`
+### 4.7 Source attachment and monitoring (No standalone Watch page)
 
-A single-column form with these fields: GitHub URL*, Source ID, Ref, Repository path, Monitoring (switch), Cadence (Daily / Weekly / Manual; locked to Manual when monitoring is off), Trust, License. The footer has `Preview`.
-
+Watching an external repository requires a skill target to satisfy the no-orphan invariant (D11). Consequently, there is no standalone `/sources/watch` route; source monitoring is registered during `skill add` (for upstream tracking) or directly from the Skill Detail Sources tab (for learning references).
 ### 4.8 Distill handoff `/sources/distill`
 
 ```text

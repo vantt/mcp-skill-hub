@@ -19,7 +19,7 @@ Các quyết định sau là ràng buộc đầu vào cho screen design:
 5. **Không force overwrite:** Xung đột chỉnh sửa phải được giải quyết bằng cách đọc phiên bản mới, merge và tạo proposal mới. WebUI không cung cấp hành động ghi đè bỏ qua concurrency guard.
 6. **Không tự động Git commit/push:** WebUI chỉ hiển thị working-tree state và changed paths do application service trả về.
 7. **Thiết bị:** Desktop là bề mặt chính. Tablet và mobile vẫn phải sử dụng được theo quy tắc responsive tại mục 7; editor/diff không được cắt mất nội dung.
-8. **Delivery adapter:** `internal/delivery` hiện chỉ có `cli/` và `mcpserver/`. WebUI v1 cần một HTTP adapter local (backend scope) gọi cùng application service và sử dụng chuẩn hóa lỗi của application layer (`app.ClassifyError`) vì nhiều service trả plain Go error. Screen design dùng error code đã chuẩn hóa tại mục 6.
+8. **Delivery adapter:** Giao diện WebUI được cung cấp bởi adapter `internal/delivery/web` thông qua lệnh `skillhub serve web`. Adapter này gọi trực tiếp các application service trong `internal/app` và sử dụng chuẩn hóa lỗi `app.ClassifyError` để trả về HTTP status và JSON envelope nhất quán.
 9. **Mutation trực tiếp có chủ đích:** `insight_decide`, `curation_run_cancel` và `source_check` không có Preview → Confirm trong contract. Cancel run và Obsolete insight dùng destructive confirmation; Check source được ghi rõ là có cập nhật revision/trạng thái source.
 
 ### Ngoài phạm vi v1
@@ -48,7 +48,6 @@ graph TD
     Skills --> Add["Add Skill /skills/add"]
     Skills --> Create["Create Skill /skills/create"]
     Skills --> Detail["Skill Detail /skills/:id"]
-    Sources --> Watch["Watch Source /sources/watch"]
     Sources --> Distill["Curator Agent Handoff /sources/distill"]
     Sources --> Run["Distill Run Return /sources/runs/:id"]
     Inbox --> Insight["Insight Detail /inbox/:id"]
@@ -65,7 +64,6 @@ graph TD
 | `/skills/create` | Create Skill | UC-03 | Route-backed form page |
 | `/skills/:id` | Skill Detail | UC-04, UC-05, UC-06 | Page với tabs |
 | `/sources` | Watched Sources & Run Recovery | UC-07B, UC-07C | Page |
-| `/sources/watch` | Watch Source | UC-07A | Route-backed form page |
 | `/sources/distill` | Curator Agent Distill Handoff | UC-07C | Route-backed handoff page |
 | `/sources/runs/:id` | Distill Run Return | UC-07C | Route-backed status/recovery page |
 | `/inbox` | Improvement Inbox | UC-07D | Page |
@@ -149,6 +147,7 @@ Không có Recent Operations widget trong v1.
 - Search client-side theo `id` và `name`.
 - Filter trạng thái: All, Draft, Active, Deprecated, Archived.
 - Filter collection dựa trên các giá trị có trong result.
+- Filter Upstream: All, Updates available, Up to date, Diverged, No upstream.
 - Primary actions: `Thêm từ GitHub` và `Tạo skill`.
 - Search/filter/page được phản ánh trong URL query.
 
@@ -159,10 +158,9 @@ Không có Recent Operations widget trong v1.
 | Skill | name và id |
 | Collection | collection |
 | Lifecycle | draft/active/deprecated/archived badge |
+| Upstream | Upstream status chip (`up_to_date`, `update_available`, `diverged`, `modified`, ...) và repo name |
 | Routing | “Có thể được định tuyến” hoặc “Chưa được định tuyến” từ `routing_eligible` |
 | Actions | Review; menu lifecycle chỉ chứa Deprecate (active) và Archive (deprecated). Activate chỉ có trong Skill Detail vì list không trả activation readiness |
-
-Không hiển thị triggers, updated time hoặc per-skill Git state vì list contract hiện chưa cung cấp các field này. Khi catalog được phục vụ từ fallback generation, hiển thị notice bằng nguyên văn `summary`; không có field riêng.
 
 ### 2.3 Add Skill (`/skills/add`)
 
@@ -253,20 +251,52 @@ Nguồn dữ liệu: `skill_get` (`content`, `content_digest`, `path`, `routing`
 - Không xem nội dung resource trong v1 vì chưa có canonical resource-read contract cho mọi lifecycle state; không upload/delete.
 - Missing/changed resource hiển thị recovery guidance: `skillhub rebuild` nếu chỉ lệch catalog, khôi phục/re-add nếu file bị mất.
 
-### 2.6 Watched Sources & Run Recovery (`/sources`)
+#### Tab Runtime
 
-**Mục tiêu:** Theo dõi public Git repositories, kiểm tra revision và mở lại các curation run có ID đã biết.
+- Yêu cầu môi trường thực thi: các binary công cụ bắt buộc (`bins`), biến môi trường (`env`), nền tảng hệ điều hành hỗ trợ (`platforms`).
+- Hướng dẫn cài đặt (`setup.command`) và lệnh kiểm tra môi trường (`setup.check`).
+- Trạng thái phê duyệt nội dung (`content_trust`): hiển thị content digest đã duyệt hoặc cảnh báo chưa duyệt. Đối với mã nguồn bên thứ ba chưa phê duyệt, hiển thị hộp code lệnh CLI chỉ đọc `skillhub skill review <id> --approve`, không cung cấp nút bấm duyệt trên WebUI để bảo đảm an toàn.
+
+#### Tab Usage
+
+- Thống kê lượt sử dụng thực tế từ telemetry cục bộ: số lượt agent đề xuất (`recommendations`), số lượt kích hoạt (`activations`), số lượt kiểm tra môi trường (`doctor checks`).
+- Biểu đồ thời gian và phân bố kết quả thực thi theo ngày trong cửa sổ thời gian đã chọn (7 ngày, 30 ngày, 90 ngày).
+
+#### Tab Sources
+
+- **Section Upstream:**
+  - Hiển thị repository nguồn, branch/tag ref, commit gốc đã vendor, đường dẫn thư mục trong repo, và `files_digest`.
+  - Trạng thái drift upstream: `up_to_date`, `update_available`, `modified`, `diverged`, `upstream_removed`, `pinned`, `unavailable`.
+  - Khi có cập nhật (`update_available` hoặc `diverged`), nút `Review update` mở modal so sánh diff 3-way merge và cho phép Apply cập nhật.
+- **Section Learning references:**
+  - Danh sách các repository tham khảo được gắn với skill này.
+  - Cung cấp checkbox chọn distill và nút `Detach` để gỡ bỏ quan hệ học tập.
+  - Form gắn thêm learning reference mới trực tiếp cho skill này.
+- **Card Provenance:** Hiển thị chi tiết nguồn gốc dạng phẳng trực quan từ Go payload: kind, repository, ref, commit, path, folder digest, và files digest.
+
+### 2.6 Watched Sources & Grouped Sources View (`/sources`)
+
+**Mục tiêu:** Theo dõi các remote Git repositories theo từng nhóm (grouped by repository), kiểm tra revision, handoff distill cho curator agent và khôi phục các run đã biết ID.
 
 #### Sources toolbar
 
-- `Theo dõi nguồn mới` → `/sources/watch`.
-- `Kiểm tra các nguồn đến hạn` gọi `CheckSources(all_due=true)`. Check không có Preview → Confirm: nó cập nhật `current_revision`/`status` của source và operational state, không sửa skill. Button khóa trong khi chạy.
-- `Kiểm tra tất cả nguồn` gọi `CheckSources` với toàn bộ source ID đang monitoring; dùng để retry nguồn unavailable.
-- `Distill với Curator Agent` → `/sources/distill` với các source đã chọn; WebUI không tự start analyzer.
+- `Kiểm tra các nguồn đến hạn` gọi `CheckSources(all_due=true)` (không sửa skill, cập nhật revision và trạng thái).
+- `Kiểm tra tất cả nguồn` gọi `CheckSources(all=true)` để retry hoặc quét toàn diện.
+- `Distill với Curator Agent` → `/sources/distill` với các source learning đã chọn qua checkbox.
 
-#### Sources table
+#### Grouped sources view
 
-Nguồn dữ liệu: `ListSources` → `sources[]` (candidate intake không hiển thị trong v1).
+Nguồn dữ liệu: `ListSources` nhóm theo `repository` và `ref`:
+- **Header mỗi nhóm:** Tên repository URL, ref nhánh/tag, và các role chips:
+  - `upstream`: Nguồn gốc vendored của các skill trong nhóm.
+  - `learning-source`: Nguồn tài liệu học tập của các skill.
+  - `orphan`: Cảnh báo nguồn mồ côi nếu không liên kết với bất kỳ skill nào (từ workspace cũ).
+- **Danh sách skills liên kết:** Liệt kê các skill ID kèm vai trò tương ứng và liên kết đến Skill Detail.
+- **Distill selection checkbox:** Chỉ khả dụng cho các nguồn đóng vai trò learning source có revision mới hoặc đang chờ phân tích.
+- **Actions per source/group:**
+  - `Kiểm tra ngay` (Check now): Thăm dò revision qua Git ls-remote.
+  - `Import thêm skill`: Chuyển sang flow nhập draft skills từ repository này.
+  - `Ngừng theo dõi` (Unwatch): Gỡ bỏ source nếu không còn skill nào tham chiếu.
 
 - Source ID và `locator` (repository/path/ref).
 - `monitoring.enabled` và `monitoring.cadence`.
@@ -351,15 +381,9 @@ Nếu không có `idempotency_key` (run mở từ trình duyệt khác, từ Das
 
 WebUI không tự suy diễn findings từ changed-resource metadata và không thể khám phá run không có ID.
 
-### 2.7 Watch Source (`/sources/watch`)
+### 2.7 Đăng ký Source gắn liền với Skill (Không có trang Watch độc lập)
 
-- Public GitHub URL bắt buộc.
-- Optional: source ID, ref, repository path, cadence, monitoring enabled, trust và license.
-- Nếu monitoring disabled, cadence phải là manual.
-- Preview hiển thị resolved repository/ref/path/commit, monitoring policy và canonical diff.
-- Confirm thành công quay về Sources và focus hàng vừa tạo.
-- Local path bị từ chối ngay tại client và vẫn phải xử lý `local_watch_unsupported` từ server.
-
+Trong WebUI v1, theo nguyên tắc không tạo source mồ côi (No orphan sources - Quyết định D11), việc theo dõi một repository bắt buộc phải gắn liền với một skill cụ thể (qua `skill add` khi vendor hoặc qua tab Sources của Skill Detail). Do đó, không có trang `/sources/watch` độc lập. Việc đăng ký nguồn học mới được thực hiện trực tiếp từ tab Sources của từng skill.
 ### 2.8 Improvement Inbox (`/inbox`)
 
 Nguồn dữ liệu: `inbox_list` (snapshot-bound page, `limit` ≤ 100, `cursor`). Inbox chỉ chứa insight `pending` và `planned`.
@@ -492,10 +516,9 @@ sequenceDiagram
 
 Không có Force overwrite.
 
-### 3.5 Watch, Check và Distill Source
+### 3.5 Check và Distill Source
 
-1. Watch Source: nhập URL → preview resolved revision/policy → confirm.
-2. Check: chạy cho một source hoặc all due; UI hiển thị result từng source.
+1. Check: chạy cho một source hoặc all due; UI hiển thị result từng source và cập nhật trạng thái drift của skill liên kết.
 3. Khi revision changed, người dùng chọn source và mở `/sources/distill`; chưa có run nào được tạo.
 4. Người dùng copy handoff brief cho Curator Agent có Curator MCP và workspace access.
 5. Curator Agent gọi `curation_run_start`; tool chuẩn bị immutable package và chuyển run sang `in_progress`, đồng thời trả package trong `items[].prepared.revision_package`.

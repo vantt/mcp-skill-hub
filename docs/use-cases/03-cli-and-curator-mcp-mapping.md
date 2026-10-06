@@ -265,14 +265,14 @@ skillhub skill list --state active
 
 #### 1. CLI Commands
 ```bash
-# 7A: Đăng ký theo dõi repository GitHub
-skillhub source watch https://github.com/anthropics/skills --cadence weekly --yes
+# 7A: Đăng ký theo dõi repository GitHub và gắn với skill
+skillhub source watch https://github.com/anthropics/skills --skill-id pdf --cadence weekly --yes
 
 # 7B: Kiểm tra cập nhật của các nguồn đã đến hạn
 skillhub source check --all-due
 # Hoặc dùng alias tương đương:
 skillhub check --all-due
-
+```
 # 7C: Chuẩn bị và thực hiện chắt lọc bài học từ các nguồn có commit mới
 skillhub distill prepare --all-changed
 skillhub distill start RUN-01
@@ -303,6 +303,74 @@ skillhub insight confirm --proposal PROP-99 --proposal-digest sha256:... --base-
 
 ---
 
+### UC-08: Kiểm tra và cập nhật skill từ upstream (Upstream Check, Outdated & 3-way Merge)
+
+#### 1. CLI Commands
+```bash
+# 8A: Kiểm tra độ lệch upstream của tất cả skills
+skillhub skill outdated --check
+
+# Chế độ CI/script: exit code 1 khi có skill cần cập nhật/chú ý
+skillhub skill outdated --check --exit-code
+
+# 8B: Xem chi tiết repository upstream và commit mới nhất của một skill
+skillhub skill upstream pdf --check
+
+# 8C: Áp dụng cập nhật upstream qua 3-way merge
+skillhub skill update pdf
+# Nếu có xung đột, giải quyết tường minh hoặc ghi file conflict ra thư mục:
+skillhub skill update pdf --accept "references/spec.md=upstream" --yes
+
+# 8D: Xác nhận proposal sau khi đã giải quyết sạch xung đột
+skillhub skill confirm PROP-upstream-123
+
+# 8E: Tái gắn source và provenance cho skill vendored từ trước
+skillhub source backfill --yes
+```
+
+#### 2. Curator MCP Tool
+* **Tool Name:** `skill_upstream_status`
+* **Annotations:** `read_only = true`
+* **Tham số:** `{ "skill_id": "pdf" }` (tùy chọn; để trống để lấy toàn bộ).
+* **Return Payload:** `app.SkillUpstreamStatusResult`
+  - Danh sách skills kèm trạng thái drift: `up_to_date`, `update_available`, `modified`, `diverged`, `upstream_removed`, `pinned`, `unavailable`, `untracked`.
+  - Chi tiết commit đã check, committer date (`latest_committed_at`), số file thay đổi trong thư mục skill (`changed_files`).
+* **Ranh giới an toàn tuyệt đối (Quyết định D10):**
+  - Agent qua MCP **chỉ được đọc trạng thái drift**, hoàn toàn **không có tool preview hay apply cập nhật upstream**.
+  - Cập nhật upstream đưa mã nguồn bên thứ ba vào workspace và chuyển trạng thái skill thành `review_required`, đòi hỏi con người xem xét diff và quyết định qua CLI (`skillhub skill update`) hoặc WebUI. Các công cụ confirm MCP thông thường chủ động từ chối proposal loại `upstream_update`.
+
+---
+
+### UC-09: Gắn nguồn học cho skill (Attach & Manage Learning References)
+
+#### 1. CLI Commands
+```bash
+# 9A: Gắn một source có sẵn hoặc URL repo làm learning reference cho skill
+skillhub source attach https://github.com/example/reliability-reference --skill-id consumer-reliability-review --yes
+
+# 9B: Gỡ bỏ learning reference khỏi skill
+skillhub source detach reliability-reference --skill-id consumer-reliability-review --yes
+
+# 9C: Đăng ký watch repo mới và gắn ngay với skill (bảo đảm no-orphan)
+skillhub source watch https://github.com/example/reference --skill-id my-skill --cadence weekly --yes
+
+# 9D: Ngừng theo dõi và xóa source nếu không còn skill nào trỏ tới
+skillhub source unwatch reliability-reference --yes
+
+# 9E: Triage candidate sang learning reference hoặc import
+skillhub source triage SRCQ-001 --decision accept --skill-id my-skill
+skillhub source triage SRCQ-002 --decision accept --new-skill new-skill-draft
+skillhub source triage SRCQ-003 --decision import --path skills
+```
+
+#### 2. Curator MCP Tools
+* **Đăng ký và liên kết nguồn:**
+  - `source_watch_preview` và `source_watch_confirm` (bắt buộc truyền `skill_id` để ngăn source mồ côi).
+* **Triage ứng viên:**
+  - `source_triage`: `decision` hỗ trợ `"accept"`, `"defer"`, `"reject"`, `"import"`. Quyết định `accept` bắt buộc cung cấp `skill_id` hoặc `new_skill`.
+
+---
+
 ## 3. Ma trận Đối chiếu Bề mặt Vận hành (Parity Matrix Table)
 
 Bảng tổng hợp đối chiếu trực tiếp giữa Core Use Case, lệnh CLI và công cụ Curator MCP:
@@ -315,12 +383,13 @@ Bảng tổng hợp đối chiếu trực tiếp giữa Core Use Case, lệnh CL
 | **UC-04: Edit Skill** | `skillhub skill edit <id>` | `skill_update_preview` | `skill_update_confirm` | CLI: `--yes` hoặc Short ID<br/>MCP: Đủ 3 pins | Lưu recovery artifact 24h khi có xung đột phiên bản |
 | **UC-05: Review Skill** | `skillhub skill review <id>` | `skill_review` | *(Read-only)* | Không cần confirm | Chẩn đoán đa chiều, không phải approval gate |
 | **UC-06: Lifecycle** | `skillhub skill activate\|deprecate\|archive` | `skill_transition_preview` | `skill_transition_confirm` | CLI: `--yes` hoặc Short ID<br/>MCP: Đủ 3 pins | Kích hoạt tự động rebuild SQLite catalog |
-| **UC-07A: Source Watch** | `skillhub source watch <url>` | `source_watch_preview` | `source_watch_confirm` | CLI: `--yes` hoặc Short ID<br/>MCP: Đủ 3 pins | Chỉ hỗ trợ remote Git repo; không chạy daemon ngầm |
-| **UC-07B: Source Check** | `skillhub source check` / `check` | `source_check` | *(Read-only)* | Không cần confirm | Chỉ kiểm tra Git commit hash, không sửa file skill |
+| **UC-07A: Source Watch** | `skillhub source watch <url> --skill-id <id>` | `source_watch_preview` | `source_watch_confirm` | CLI: `--yes` hoặc Short ID<br/>MCP: Đủ 3 pins | Bắt buộc gắn với skill (No orphan); không chạy daemon ngầm |
+| **UC-07B: Source Check** | `skillhub source check` / `check` | `source_check` | *(Read-only)* | Không cần confirm | Thăm dò Git commit hash, không sửa file skill |
 | **UC-07C: Distill** | `skillhub distill prepare\|start` | `curation_run_start` | `curation_run_submit` | Bounded submission package | Phân tích bài học, không ghi đè tự động |
 | **UC-07D: Insights** | `skillhub inbox` / `insight apply` | `insight_apply_preview` | `insight_apply_confirm` | CLI: Pin flags<br/>MCP: Đủ 3 pins | Đề xuất sửa đổi phải được con người phê duyệt |
+| **UC-08: Upstream Drift & Merge** | `skillhub skill outdated`<br/>`skillhub skill update` | *(Read-only)* `skill_upstream_status` | *(Không có)* | CLI: `--yes` hoặc Short ID<br/>MCP: **Không hỗ trợ apply** | Agent chỉ đọc metadata drift; apply là quyết định con người qua CLI/WebUI |
+| **UC-09: Learning References** | `skillhub source attach\|detach\|unwatch` | `source_watch_preview` | `source_watch_confirm` | CLI: `--yes`<br/>MCP: Đủ 3 pins | Quản lý quan hệ học tập; ngăn source mồ côi |
 | **Workspace Maintenance** | `skillhub validate [--staged]`<br/>`skillhub diff` | `workspace_validate`<br/>`workspace_diff` | *(Read-only)* | Không cần confirm | `validate --staged` đọc trực tiếp Git index blob |
-
 ---
 
 ## 4. Chuẩn hóa Khung Kết quả Máy đọc (JSON Result Envelope)
