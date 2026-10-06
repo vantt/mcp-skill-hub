@@ -48,10 +48,6 @@ export function AppShell({ children }: AppShellProps) {
     parentPath = '/skills';
   } else if (path === '/sources') {
     pageTitle = t('nav.sources');
-  } else if (path === '/sources/watch') {
-    pageTitle = 'Watch source';
-    parentLabel = t('nav.sources');
-    parentPath = '/sources';
   } else if (path === '/sources/distill') {
     pageTitle = 'Distill with Curator Agent';
     parentLabel = t('nav.sources');

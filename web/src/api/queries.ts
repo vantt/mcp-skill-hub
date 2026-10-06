@@ -297,7 +297,10 @@ export async function confirmSourceImport(pins: ConfirmationPins): Promise<Sourc
   });
 }
 
-export function useDistillRun(id: string, refetchInterval?: number | false) {
+export function useDistillRun(
+  id: string,
+  refetchInterval?: number | false | ((query: { state: { data?: DistillRunResult } }) => number | false),
+) {
   return useQuery({
     queryKey: ['distill-run', id],
     queryFn: () => apiFetch<DistillRunResult>(`/runs/${encodeURIComponent(id)}`),

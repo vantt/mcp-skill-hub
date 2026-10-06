@@ -1,12 +1,14 @@
 package web
 
 import (
+	"bytes"
 	"encoding/json"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -174,4 +176,54 @@ func TestRoutesNeverMutateRuns(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestRunGolden(t *testing.T) {
+	root := newWebWorkspace(t)
+	adapter := fakeSourceAdapter{
+		files: map[string]map[string][]byte{
+			"r1": {"SKILL.md": []byte("# Version 1\n")},
+			"r2": {"SKILL.md": []byte("# Version 2\n")},
+		},
+		fail: map[string]error{},
+	}
+	runID := seedRun(t, root, adapter)
+	srv := newTestServer(t, root)
+	srv.distill = app.DistillService{
+		Clock:    app.SystemClock{},
+		Adapters: map[string]sourcepkg.Adapter{"filesystem": adapter},
+	}
+
+	rec := get(t, srv, "/api/v1/runs/"+runID)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var pretty bytes.Buffer
+	if err := json.Indent(&pretty, rec.Body.Bytes(), "", "  "); err != nil {
+		t.Fatalf("failed to indent response JSON: %v", err)
+	}
+	pretty.WriteString("\n")
+
+	normalized := normalizeGolden(pretty.String(), root)
+	goldenPath := filepath.Join("testdata", "golden", "run.json")
+
+	if *update {
+		if err := os.WriteFile(goldenPath, []byte(normalized), 0o644); err != nil {
+			t.Fatalf("failed to write golden file: %v", err)
+		}
+		return
+	}
+
+	expected, err := os.ReadFile(goldenPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			t.Fatalf("golden file %s does not exist; run with -update to generate", goldenPath)
+		}
+		t.Fatalf("failed to read golden file: %v", err)
+	}
+
+	if string(expected) != normalized {
+		t.Fatalf("golden mismatch for run.json:\nwant:\n%s\ngot:\n%s", string(expected), normalized)
+	}
 }
