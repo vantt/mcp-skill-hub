@@ -1,6 +1,6 @@
 ---
 title: "Phase 13: Documentation and plan close"
-status: todo
+status: in-progress
 ---
 
 # Phase 13: Documentation and plan close
@@ -71,7 +71,7 @@ Create: `docs/contracts/web-api.md`.
 
 ## Todo
 
-- [ ] Task 13.1 shipped behavior
+- [x] Task 13.1 shipped behavior
 - [ ] Task 13.2 user docs
 - [ ] Task 13.3 design + use-case docs
 - [ ] Task 13.4 WebUI shipped docs
