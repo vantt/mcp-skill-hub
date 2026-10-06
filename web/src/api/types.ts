@@ -452,6 +452,18 @@ export interface SourceSummary {
   skills_vendored_count: number;
   importable_count: number;
   last_checked_at?: string;
+  current_revision?: {
+    kind: string;
+    value: string;
+    observed_at?: string;
+  };
+  distilled_revision?: {
+    kind: string;
+    value: string;
+    observed_at?: string;
+  };
+  ready_to_distill?: boolean;
+  upstream_only?: boolean;
 }
 
 export interface SourceRepositoryGroup {
@@ -582,4 +594,48 @@ export interface SourceCheckResult {
   unavailable: number;
   results: SourceCheckItem[];
   warnings?: Array<{ code: string; summary: string }>;
+}
+
+export interface DistillRun {
+  id: string;
+  source_id: string;
+  state: 'prepared' | 'in_progress' | 'awaiting_decision' | 'failed' | 'finalized' | 'cancelled' | string;
+  attempt: number;
+  from_revision?: {
+    kind: string;
+    value: string;
+    observed_at?: string;
+  };
+  to_revision: {
+    kind: string;
+    value: string;
+    observed_at?: string;
+  };
+  changed_resources: Array<{
+    path: string;
+    status: string;
+    before_digest?: string;
+    after_digest?: string;
+  }>;
+  package_digest: string;
+  prepared_at: string;
+  started_at?: string;
+  finalized_at?: string;
+  cancelled_at?: string;
+  failure?: string;
+  finding_ids?: string[];
+  comparison_ids?: string[];
+  insight_ids?: string[];
+  outstanding_decisions?: Array<{
+    category: string;
+    detail: string;
+  }>;
+}
+
+export interface DistillRunResult {
+  schema_version: string;
+  status: string;
+  summary: string;
+  run: DistillRun;
+  operation_id?: string;
 }

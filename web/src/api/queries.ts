@@ -3,6 +3,7 @@ import { apiFetch } from './client';
 import type {
   ConfirmationPins,
   CurationHome,
+  DistillRunResult,
   FunnelReport,
   FunnelSince,
   SessionResponse,
@@ -293,5 +294,21 @@ export async function confirmSourceImport(pins: ConfirmationPins): Promise<Sourc
   return apiFetch<SourceMutationResult>('/sources/import/confirm', {
     method: 'POST',
     body: JSON.stringify(pins),
+  });
+}
+
+export function useDistillRun(id: string, refetchInterval?: number | false) {
+  return useQuery({
+    queryKey: ['distill-run', id],
+    queryFn: () => apiFetch<DistillRunResult>(`/runs/${encodeURIComponent(id)}`),
+    enabled: Boolean(id),
+    refetchInterval,
+  });
+}
+
+export async function cancelDistillRun(id: string): Promise<DistillRunResult> {
+  return apiFetch<DistillRunResult>(`/runs/${encodeURIComponent(id)}/cancel`, {
+    method: 'POST',
+    body: JSON.stringify({}),
   });
 }
