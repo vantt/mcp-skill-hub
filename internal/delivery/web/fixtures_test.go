@@ -521,27 +521,35 @@ func seedFinalizedRun(t *testing.T, root string, adapter fakeSourceAdapter) stri
 		Clock:    app.SystemClock{},
 		Adapters: map[string]sourcepkg.Adapter{"filesystem": adapter},
 	}
+	runRes, err := service.GetDistillRun(context.Background(), root, runID)
+	if err != nil {
+		t.Fatalf("get run failed: %v", err)
+	}
+	run := runRes.Run
 	sub := app.DistillSubmission{
 		Coverage: []distill.CoverageEntry{
 			{Resource: "SKILL.md", Status: "analyzed", Reason: "Read target."},
-			{Resource: "removed.md", Status: "analyzed", Reason: "Checked deletion."},
 		},
 		Findings: []app.FindingSubmission{
 			{
-				StableKey: "retry-review",
-				Status:    "active",
-				What:      "The source reviews retries.",
+				StableKey:  "retry-review",
+				Status:     "active",
+				What:       "The source reviews retries.",
+				Vocabulary: []string{"retry"},
 				Evidence: []distill.Evidence{
 					{
-						Path:    "SKILL.md",
-						Locator: "SKILL.md",
-						Digest:  sourcepkg.Digest(adapter.files["r2"]["SKILL.md"]),
+						Revision:      distill.IdentityOf(run.ToRevision),
+						RunID:         run.ID,
+						PackageDigest: run.PackageDigest,
+						Path:          "SKILL.md",
+						Locator:       "SKILL.md",
+						Digest:        sourcepkg.Digest(adapter.files["r2"]["SKILL.md"]),
 					},
 				},
 			},
 		},
 	}
-	_, err := service.SubmitDistillRun(context.Background(), root, runID, sub)
+	_, err = service.SubmitDistillRun(context.Background(), root, runID, sub)
 	if err != nil {
 		t.Fatalf("submit failed: %v", err)
 	}

@@ -1,6 +1,6 @@
 ---
 title: "Phase 10: Distill handoff and runs"
-status: in-progress
+status: done
 ---
 
 # Phase 10: Distill handoff and runs
@@ -91,7 +91,7 @@ Do not modify any other file.
 - [x] Task 10.3 domain logic
 - [x] Task 10.4 screens
 - [x] Task 10.5 seed + journey
-- [ ] Task 10.6 gates
+- [x] Task 10.6 gates
 
 ## Success criteria
 

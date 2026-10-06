@@ -98,42 +98,45 @@ func TestRoutesNeverMutateRuns(t *testing.T) {
 
 	// 1. Static AST inspection of all non-test .go files in web package
 	fset := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fset, ".", func(fi os.FileInfo) bool {
-		return strings.HasSuffix(fi.Name(), ".go") && !strings.HasSuffix(fi.Name(), "_test.go")
-	}, 0)
+	entries, err := os.ReadDir(".")
 	if err != nil {
-		t.Fatalf("failed to parse web package: %v", err)
+		t.Fatalf("failed to read web directory: %v", err)
 	}
 
 	var patterns []string
-	for _, pkg := range pkgs {
-		for _, file := range pkg.Files {
-			ast.Inspect(file, func(n ast.Node) bool {
-				call, ok := n.(*ast.CallExpr)
-				if !ok {
-					return true
-				}
-				sel, ok := call.Fun.(*ast.SelectorExpr)
-				if !ok {
-					return true
-				}
-				if sel.Sel.Name == "HandleFunc" || sel.Sel.Name == "Handle" {
-					if len(call.Args) == 0 {
-						t.Fatal("HandleFunc/Handle call has no arguments")
-					}
-					lit, ok := call.Args[0].(*ast.BasicLit)
-					if !ok || lit.Kind != token.STRING {
-						t.Fatalf("non-string-literal route pattern in %s: %#v", fset.Position(call.Pos()), call.Args[0])
-					}
-					pattern, err := strconv.Unquote(lit.Value)
-					if err != nil {
-						t.Fatalf("failed to unquote route pattern %s: %v", lit.Value, err)
-					}
-					patterns = append(patterns, pattern)
-				}
-				return true
-			})
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+			continue
 		}
+		file, err := parser.ParseFile(fset, entry.Name(), nil, 0)
+		if err != nil {
+			t.Fatalf("failed to parse %s: %v", entry.Name(), err)
+		}
+		ast.Inspect(file, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			sel, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok {
+				return true
+			}
+			if sel.Sel.Name == "HandleFunc" || sel.Sel.Name == "Handle" {
+				if len(call.Args) == 0 {
+					t.Fatal("HandleFunc/Handle call has no arguments")
+				}
+				lit, ok := call.Args[0].(*ast.BasicLit)
+				if !ok || lit.Kind != token.STRING {
+					t.Fatalf("non-string-literal route pattern in %s: %#v", fset.Position(call.Pos()), call.Args[0])
+				}
+				pattern, err := strconv.Unquote(lit.Value)
+				if err != nil {
+					t.Fatalf("failed to unquote route pattern %s: %v", lit.Value, err)
+				}
+				patterns = append(patterns, pattern)
+			}
+			return true
+		})
 	}
 
 	if len(patterns) < 20 {
@@ -197,6 +200,18 @@ func TestRunGolden(t *testing.T) {
 	rec := get(t, srv, "/api/v1/runs/"+runID)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	// Also verify seedFinalizedRun loads successfully in a separate workspace
+	rootFinal := newWebWorkspace(t)
+	srvFinal := newTestServer(t, rootFinal)
+	srvFinal.distill = app.DistillService{
+		Clock:    app.SystemClock{},
+		Adapters: map[string]sourcepkg.Adapter{"filesystem": adapter},
+	}
+	finalizedRunID := seedFinalizedRun(t, rootFinal, adapter)
+	recFinalized := get(t, srvFinal, "/api/v1/runs/"+finalizedRunID)
+	if recFinalized.Code != http.StatusOK {
+		t.Fatalf("expected 200 for finalized run, got %d: %s", recFinalized.Code, recFinalized.Body.String())
 	}
 
 	var pretty bytes.Buffer
