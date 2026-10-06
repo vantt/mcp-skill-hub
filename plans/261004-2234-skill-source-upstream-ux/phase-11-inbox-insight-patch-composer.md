@@ -1,6 +1,6 @@
 ---
 title: "Phase 11: Inbox, Insight, Patch Composer"
-status: todo
+status: in-progress
 ---
 
 # Phase 11: Inbox, Insight, Patch Composer
@@ -79,7 +79,7 @@ Do not modify any other file.
 
 ## Todo
 
-- [ ] Task 11.1 paging package
+- [x] Task 11.1 paging package
 - [ ] Task 11.2 sentinel
 - [ ] Task 11.3 endpoints
 - [ ] Task 11.4 domain logic

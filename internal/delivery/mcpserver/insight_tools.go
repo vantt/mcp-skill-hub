@@ -8,30 +8,31 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/delivery/paging"
 	resolverpkg "github.com/vantt/mcp-skill-hub/internal/resolver"
 	"github.com/vantt/mcp-skill-hub/internal/skill"
 )
 
 func (adapter *Server) registerInsightTools(server *mcp.Server) {
 	addTool(server, &mcp.Tool{Name: "inbox_list", Title: "List insight inbox", Description: "Return a snapshot-bound page of ranked insight groups. Nothing is auto-adopted.", Annotations: annotations(true, false, false, false)},
-		func(ctx context.Context, _ *mcp.CallToolRequest, input pageInput) (*mcp.CallToolResult, toolOutcome[page[app.InsightInboxGroup]], error) {
-			limit, err := normalizeLimit(input.Limit)
+		func(ctx context.Context, _ *mcp.CallToolRequest, input pageInput) (*mcp.CallToolResult, toolOutcome[paging.Page[app.InsightInboxGroup]], error) {
+			limit, err := paging.NormalizeLimit(input.Limit)
 			if err != nil {
-				return failure[page[app.InsightInboxGroup]](err)
+				return failure[paging.Page[app.InsightInboxGroup]](err)
 			}
 			result, err := (app.InsightService{}).GetInsightInbox(ctx, adapter.workspace)
 			if err != nil {
-				return failure[page[app.InsightInboxGroup]](err)
+				return failure[paging.Page[app.InsightInboxGroup]](err)
 			}
 			filter := "inbox"
-			owner := pageOwner(filter, result.Groups)
-			lastKey, err := decodeCursor(input.Cursor, owner, filter)
+			owner := paging.Owner(filter, result.Groups)
+			lastKey, err := paging.DecodeCursor(input.Cursor, owner, filter)
 			if err != nil {
-				return failure[page[app.InsightInboxGroup]](fmt.Errorf("snapshot_expired: inbox cursor is invalid or expired"))
+				return failure[paging.Page[app.InsightInboxGroup]](fmt.Errorf("snapshot_expired: inbox cursor is invalid or expired"))
 			}
-			paged, err := makePage(result.Groups, limit, lastKey, owner, filter, func(item app.InsightInboxGroup) string { return item.SkillID + "\x00" + item.Category })
+			paged, err := paging.Make(result.Groups, limit, lastKey, owner, filter, func(item app.InsightInboxGroup) string { return item.SkillID + "\x00" + item.Category })
 			if err != nil {
-				return failure[page[app.InsightInboxGroup]](fmt.Errorf("snapshot_expired: inbox cursor is invalid or expired"))
+				return failure[paging.Page[app.InsightInboxGroup]](fmt.Errorf("snapshot_expired: inbox cursor is invalid or expired"))
 			}
 			return success(paged)
 		})

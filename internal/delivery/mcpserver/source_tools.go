@@ -7,6 +7,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/delivery/paging"
 )
 
 func (adapter *Server) registerSourceTools(server *mcp.Server) {
@@ -25,14 +26,14 @@ func (adapter *Server) registerSourceTools(server *mcp.Server) {
 		Name: "source_intake_list", Title: "List source intake",
 		Description: "List source candidates and monitored sources as a snapshot-bound page. Pass next_cursor unchanged to continue; limit defaults to 25 and is at most 100.",
 		Annotations: annotations(true, false, false, false),
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, input sourceIntakeListInput) (*mcp.CallToolResult, toolOutcome[page[sourceListItem]], error) {
-		limit, err := normalizeLimit(input.Limit)
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, input sourceIntakeListInput) (*mcp.CallToolResult, toolOutcome[paging.Page[sourceListItem]], error) {
+		limit, err := paging.NormalizeLimit(input.Limit)
 		if err != nil {
-			return failure[page[sourceListItem]](err)
+			return failure[paging.Page[sourceListItem]](err)
 		}
 		result, err := adapter.source.ListSources(ctx, adapter.workspace, strings.TrimSpace(input.Status))
 		if err != nil {
-			return failure[page[sourceListItem]](err)
+			return failure[paging.Page[sourceListItem]](err)
 		}
 		filter := "status=" + strings.TrimSpace(input.Status)
 		items := make([]sourceListItem, 0, len(result.Candidates)+len(result.Sources))
@@ -44,19 +45,19 @@ func (adapter *Server) registerSourceTools(server *mcp.Server) {
 			source := result.Sources[index].Record
 			items = append(items, sourceListItem{Kind: "source", Source: &source})
 		}
-		owner := pageOwner(filter, items)
-		lastKey, err := decodeCursor(input.Cursor, owner, filter)
+		owner := paging.Owner(filter, items)
+		lastKey, err := paging.DecodeCursor(input.Cursor, owner, filter)
 		if err != nil {
-			return failure[page[sourceListItem]](fmt.Errorf("snapshot_expired: source list cursor is invalid or expired"))
+			return failure[paging.Page[sourceListItem]](fmt.Errorf("snapshot_expired: source list cursor is invalid or expired"))
 		}
-		paged, err := makePage(items, limit, lastKey, owner, filter, func(item sourceListItem) string {
+		paged, err := paging.Make(items, limit, lastKey, owner, filter, func(item sourceListItem) string {
 			if item.Candidate != nil {
 				return "candidate\x00" + item.Candidate.ID
 			}
 			return "source\x00" + item.Source.ID
 		})
 		if err != nil {
-			return failure[page[sourceListItem]](fmt.Errorf("snapshot_expired: source list cursor is invalid or expired"))
+			return failure[paging.Page[sourceListItem]](fmt.Errorf("snapshot_expired: source list cursor is invalid or expired"))
 		}
 		return success(paged)
 	})

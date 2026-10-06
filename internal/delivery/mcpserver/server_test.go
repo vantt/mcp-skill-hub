@@ -3,7 +3,6 @@ package mcpserver
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"os"
@@ -16,6 +15,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/delivery/paging"
 	"github.com/vantt/mcp-skill-hub/internal/mutation"
 	"github.com/vantt/mcp-skill-hub/internal/resolver"
 	"github.com/vantt/mcp-skill-hub/internal/skill"
@@ -366,15 +366,15 @@ func TestPaginationAndConfirmationBoundaries(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = session.Close() })
 
-	oversizedPage, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "inbox_list", Arguments: map[string]any{"limit": maximumLimit + 1}})
+	oversizedPage, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "inbox_list", Arguments: map[string]any{"limit": paging.MaximumLimit + 1}})
 	if err != nil || !oversizedPage.IsError {
 		t.Fatalf("oversized page = %#v, %v", oversizedPage, err)
 	}
-	stalePage, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "inbox_list", Arguments: map[string]any{"cursor": encodeCursor("stale", "inbox", "last")}})
+	stalePage, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "inbox_list", Arguments: map[string]any{"cursor": paging.EncodeCursor("stale", "inbox", "last")}})
 	if err != nil || !stalePage.IsError {
 		t.Fatalf("stale page = %#v, %v", stalePage, err)
 	}
-	var staleOutcome toolOutcome[page[app.InsightInboxGroup]]
+	var staleOutcome toolOutcome[paging.Page[app.InsightInboxGroup]]
 	decodeStructuredContent(t, stalePage, &staleOutcome)
 	if staleOutcome.Error == nil || staleOutcome.Error.Code != "snapshot_expired" {
 		t.Fatalf("stale cursor outcome = %#v", staleOutcome)
@@ -565,45 +565,6 @@ func TestSafeErrorMappingDoesNotLeakUnknownDetails(t *testing.T) {
 	}
 }
 
-func TestOpaqueCursorMultiPageAndIntegrity(t *testing.T) {
-	t.Parallel()
-	items := []string{"alpha", "bravo", "charlie", "delta", "echo"}
-	filter := "status=active"
-	owner := pageOwner(filter, items)
-	cursor := ""
-	var collected []string
-	for {
-		lastKey, err := decodeCursor(cursor, owner, filter)
-		if err != nil {
-			t.Fatal(err)
-		}
-		paged, err := makePage(items, 2, lastKey, owner, filter, func(item string) string { return item })
-		if err != nil {
-			t.Fatal(err)
-		}
-		collected = append(collected, paged.Items...)
-		if !paged.HasMore {
-			break
-		}
-		cursor = paged.NextCursor
-	}
-	if strings.Join(collected, ",") != strings.Join(items, ",") {
-		t.Fatalf("collected pages = %#v", collected)
-	}
-	cursor = encodeCursor(owner, filter, "bravo")
-	mutated := append(append([]string(nil), items...), "foxtrot")
-	if _, err := decodeCursor(cursor, pageOwner(filter, mutated), filter); err == nil {
-		t.Fatal("cursor survived owner-result mutation")
-	}
-	bytes, err := base64.RawURLEncoding.DecodeString(cursor)
-	if err != nil {
-		t.Fatal(err)
-	}
-	bytes[len(bytes)-2] ^= 1
-	if _, err := decodeCursor(base64.RawURLEncoding.EncodeToString(bytes), owner, filter); err == nil {
-		t.Fatal("tampered cursor passed checksum validation")
-	}
-}
 
 func findSkillEntryByName(t *testing.T, entries []skillEntry, name string) skillEntry {
 	t.Helper()

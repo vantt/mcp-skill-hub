@@ -3,6 +3,7 @@ package mcpserver
 import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/delivery/paging"
 	"github.com/vantt/mcp-skill-hub/internal/resolver"
 	"github.com/vantt/mcp-skill-hub/internal/skill"
 	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
@@ -10,8 +11,6 @@ import (
 
 const (
 	SchemaVersion = "1"
-	defaultLimit  = 25
-	maximumLimit  = 100
 )
 
 type noArgs struct{}
@@ -281,8 +280,8 @@ type workspaceDiffInput struct {
 type workspaceDiffResult struct {
 	Kind      string                     `json:"kind"`
 	GitDirty  bool                       `json:"git_dirty,omitempty"`
-	Files     *page[app.DiffFile]        `json:"files,omitempty"`
-	Operation *page[app.OperationChange] `json:"operation_changes,omitempty"`
+	Files     *paging.Page[app.DiffFile]        `json:"files,omitempty"`
+	Operation *paging.Page[app.OperationChange] `json:"operation_changes,omitempty"`
 }
 
 type feedbackInput struct {
@@ -312,12 +311,6 @@ type toolOutcome[T any] struct {
 	Error         *toolError `json:"error,omitempty"`
 }
 
-type page[T any] struct {
-	Items      []T    `json:"items"`
-	HasMore    bool   `json:"has_more"`
-	NextCursor string `json:"next_cursor,omitempty"`
-	Total      int    `json:"total,omitempty"`
-}
 
 type runStartItem struct {
 	SourceID string                  `json:"source_id"`
