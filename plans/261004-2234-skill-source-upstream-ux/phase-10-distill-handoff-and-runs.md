@@ -87,7 +87,7 @@ Do not modify any other file.
 ## Todo
 
 - [x] Task 10.1 sentinel
-- [ ] Task 10.2 run endpoints + route safety
+- [x] Task 10.2 run endpoints + route safety
 - [ ] Task 10.3 domain logic
 - [ ] Task 10.4 screens
 - [ ] Task 10.5 seed + journey

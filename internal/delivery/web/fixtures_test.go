@@ -2,20 +2,25 @@ package web
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"github.com/vantt/mcp-skill-hub/internal/app"
-	"github.com/vantt/mcp-skill-hub/internal/skill"
-	"github.com/vantt/mcp-skill-hub/internal/telemetry"
-	"gopkg.in/yaml.v3"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 	"testing/fstest"
 	"time"
+
+	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/distill"
+	"github.com/vantt/mcp-skill-hub/internal/skill"
+	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
+	"github.com/vantt/mcp-skill-hub/internal/telemetry"
+	"gopkg.in/yaml.v3"
 )
 
 func newWebWorkspace(t *testing.T) string {
@@ -390,4 +395,169 @@ func newRuntimeWebWorkspace(t *testing.T) string {
 	}
 
 	return root
+}
+
+type fakeSourceAdapter struct {
+	files map[string]map[string][]byte
+	fail  map[string]error
+}
+
+func (a fakeSourceAdapter) Identify(context.Context, sourcepkg.Locator) (sourcepkg.Identity, error) {
+	return sourcepkg.Identity{}, nil
+}
+func (a fakeSourceAdapter) CurrentRevision(context.Context, sourcepkg.Source) (sourcepkg.Revision, error) {
+	return sourcepkg.Revision{}, errors.New("unused")
+}
+func (a fakeSourceAdapter) Diff(_ context.Context, src sourcepkg.Source, from, to sourcepkg.Revision) (sourcepkg.ChangeSet, error) {
+	if err := a.fail[src.ID]; err != nil {
+		return sourcepkg.ChangeSet{}, err
+	}
+	before, after := a.files[from.Value], a.files[to.Value]
+	paths := map[string]bool{}
+	for p := range before {
+		paths[p] = true
+	}
+	for p := range after {
+		paths[p] = true
+	}
+	names := make([]string, 0, len(paths))
+	for p := range paths {
+		names = append(names, p)
+	}
+	sort.Strings(names)
+	var changes []sourcepkg.Change
+	for _, p := range names {
+		status := ""
+		old, oldOK := before[p]
+		current, newOK := after[p]
+		switch {
+		case !oldOK:
+			status = "added"
+		case !newOK:
+			status = "deleted"
+		case sourcepkg.Digest(old) != sourcepkg.Digest(current):
+			status = "modified"
+		}
+		if status != "" {
+			changes = append(changes, sourcepkg.Change{Path: p, Status: status})
+		}
+	}
+	return sourcepkg.ChangeSet{From: from, To: to, Changes: changes}, nil
+}
+func (a fakeSourceAdapter) Read(_ context.Context, src sourcepkg.Source, rev sourcepkg.Revision, path string) ([]byte, error) {
+	if err := a.fail[src.ID]; err != nil {
+		return nil, err
+	}
+	value, ok := a.files[rev.Value][path]
+	if !ok {
+		return nil, os.ErrNotExist
+	}
+	return append([]byte(nil), value...), nil
+}
+func (a fakeSourceAdapter) List(_ context.Context, src sourcepkg.Source, rev sourcepkg.Revision, _ sourcepkg.Scope) ([]sourcepkg.Resource, error) {
+	if err := a.fail[src.ID]; err != nil {
+		return nil, err
+	}
+	var result []sourcepkg.Resource
+	for path, contents := range a.files[rev.Value] {
+		result = append(result, sourcepkg.Resource{Path: path, Size: int64(len(contents))})
+	}
+	return result, nil
+}
+
+func writeSourceRecord(t *testing.T, root, id, adapter string, from, to *sourcepkg.Revision) {
+	t.Helper()
+	record := sourcepkg.Record{
+		SchemaVersion:     1,
+		ID:                id,
+		Adapter:           adapter,
+		Locator:           sourcepkg.Locator{Path: "testdata"},
+		Status:            "changed",
+		Identity:          sourcepkg.Identity{Name: id, Canonical: "testdata"},
+		Trust:             sourcepkg.Trust{Source: "test", Reviewed: true},
+		Monitoring:        sourcepkg.Monitoring{Enabled: true, Cadence: "weekly"},
+		Limits:            sourcepkg.Limits{TimeoutSeconds: 20, MaxBytes: 8 << 20, MaxFiles: 100, MaxFileBytes: 2 << 20},
+		CurrentRevision:   to,
+		DistilledRevision: from,
+	}
+	data, err := sourcepkg.MarshalCanonical(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = os.MkdirAll(filepath.Join(root, "sources", "catalog"), 0o755)
+	if err := os.WriteFile(filepath.Join(root, "sources", "catalog", id+".yaml"), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func seedRun(t *testing.T, root string, adapter fakeSourceAdapter) string {
+	t.Helper()
+	r1Rev := revisionForWebDistill("r1", adapter.files["r1"])
+	r2Rev := revisionForWebDistill("r2", adapter.files["r2"])
+	writeSourceRecord(t, root, "source-a", "filesystem", &r1Rev, &r2Rev)
+	if _, err := (app.CatalogService{}).BuildCatalogGeneration(context.Background(), root); err != nil {
+		t.Fatal(err)
+	}
+	service := app.DistillService{
+		Clock:    app.SystemClock{},
+		Adapters: map[string]sourcepkg.Adapter{"filesystem": adapter},
+	}
+	prep, err := service.PrepareDistillRuns(context.Background(), root, app.DistillPrepareInput{SourceIDs: []string{"source-a"}})
+	if err != nil || prep.Prepared != 1 {
+		t.Fatalf("prepare failed: %v, %#v", err, prep)
+	}
+	runID := prep.Results[0].Run.ID
+	started, err := service.StartDistillRun(context.Background(), root, runID)
+	if err != nil {
+		t.Fatalf("start failed: %v", err)
+	}
+	return started.Run.ID
+}
+
+func seedFinalizedRun(t *testing.T, root string, adapter fakeSourceAdapter) string {
+	t.Helper()
+	runID := seedRun(t, root, adapter)
+	service := app.DistillService{
+		Clock:    app.SystemClock{},
+		Adapters: map[string]sourcepkg.Adapter{"filesystem": adapter},
+	}
+	sub := app.DistillSubmission{
+		Coverage: []distill.CoverageEntry{
+			{Resource: "SKILL.md", Status: "analyzed", Reason: "Read target."},
+			{Resource: "removed.md", Status: "analyzed", Reason: "Checked deletion."},
+		},
+		Findings: []app.FindingSubmission{
+			{
+				StableKey: "retry-review",
+				Status:    "active",
+				What:      "The source reviews retries.",
+				Evidence: []distill.Evidence{
+					{
+						Path:    "SKILL.md",
+						Locator: "SKILL.md",
+						Digest:  sourcepkg.Digest(adapter.files["r2"]["SKILL.md"]),
+					},
+				},
+			},
+		},
+	}
+	_, err := service.SubmitDistillRun(context.Background(), root, runID, sub)
+	if err != nil {
+		t.Fatalf("submit failed: %v", err)
+	}
+	return runID
+}
+
+func revisionForWebDistill(value string, files map[string][]byte) sourcepkg.Revision {
+	names := make([]string, 0, len(files))
+	for name := range files {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	all := []byte{}
+	for _, name := range names {
+		all = append(all, []byte(name)...)
+		all = append(all, files[name]...)
+	}
+	return sourcepkg.Revision{Kind: "declared-version", Value: value, ContentDigest: sourcepkg.Digest(all), ObservedAt: time.Date(2026, 9, 29, 3, 0, 0, 0, time.UTC)}
 }
