@@ -1,0 +1,65 @@
+{
+  "schema_version": "1",
+  "status": "ok",
+  "summary": "Insight evidence loaded on demand.",
+  "items": [],
+  "suggested_actions": [],
+  "warnings": [],
+  "error": null,
+  "insight": {
+    "schema_version": 1,
+    "id": "<PREFIX>-<ID>",
+    "run_id": "<PREFIX>-<ID>",
+    "stable_key": "retry-review-concept",
+    "skill_id": "review-skill",
+    "status": "pending",
+    "recommendation": "Add retry guidance to code review.",
+    "observation_ids": [
+      "<PREFIX>-<ID>"
+    ],
+    "category": "reliability",
+    "priority": "high",
+    "rationale": "Improves reliability.",
+    "evidence_digest": "<DIGEST>"
+  },
+  "findings": [
+    {
+      "schema_version": 1,
+      "id": "<PREFIX>-<ID>",
+      "source_id": "source-a",
+      "run_id": "<PREFIX>-<ID>",
+      "stable_key": "retry-review",
+      "status": "active",
+      "first_seen": {
+        "kind": "declared-version",
+        "value": "r2",
+        "content_digest": "<DIGEST>"
+      },
+      "last_seen": {
+        "kind": "declared-version",
+        "value": "r2",
+        "content_digest": "<DIGEST>"
+      },
+      "what": "The source reviews retries.",
+      "vocabulary": [
+        "retry"
+      ],
+      "evidence": [
+        {
+          "revision": {
+            "kind": "declared-version",
+            "value": "r2",
+            "content_digest": "<DIGEST>"
+          },
+          "run_id": "<PREFIX>-<ID>",
+          "package_digest": "<DIGEST>",
+          "path": "SKILL.md",
+          "locator": "SKILL.md",
+          "digest": "<DIGEST>"
+        }
+      ]
+    }
+  ],
+  "comparisons": null
+}
+

@@ -1,10 +1,13 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -323,5 +326,83 @@ func TestInsightEndpoints(t *testing.T) {
 	}
 	if confirmRes.OperationID == "" {
 		t.Fatalf("expected non-empty operation_id in confirmation receipt")
+	}
+}
+
+func TestInboxGolden(t *testing.T) {
+	root := newWebWorkspace(t)
+	seedPendingInsight(t, root)
+	srv := newTestServer(t, root)
+
+	rec := get(t, srv, "/api/v1/inbox")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var pretty bytes.Buffer
+	if err := json.Indent(&pretty, rec.Body.Bytes(), "", "  "); err != nil {
+		t.Fatalf("failed to indent response JSON: %v", err)
+	}
+	pretty.WriteString("\n")
+
+	normalized := normalizeGolden(pretty.String(), root)
+	goldenPath := filepath.Join("testdata", "golden", "inbox.json")
+
+	if *update {
+		if err := os.WriteFile(goldenPath, []byte(normalized), 0o644); err != nil {
+			t.Fatalf("failed to write golden file: %v", err)
+		}
+		return
+	}
+
+	expected, err := os.ReadFile(goldenPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			t.Fatalf("golden file %s does not exist; run with -update to generate", goldenPath)
+		}
+		t.Fatalf("failed to read golden file: %v", err)
+	}
+
+	if string(expected) != normalized {
+		t.Fatalf("golden mismatch for inbox.json:\nwant:\n%s\ngot:\n%s", string(expected), normalized)
+	}
+}
+
+func TestInsightDetailGolden(t *testing.T) {
+	root := newWebWorkspace(t)
+	insID := seedPendingInsight(t, root)
+	srv := newTestServer(t, root)
+
+	rec := get(t, srv, "/api/v1/insights/"+insID)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var pretty bytes.Buffer
+	if err := json.Indent(&pretty, rec.Body.Bytes(), "", "  "); err != nil {
+		t.Fatalf("failed to indent response JSON: %v", err)
+	}
+	pretty.WriteString("\n")
+
+	normalized := normalizeGolden(pretty.String(), root)
+	goldenPath := filepath.Join("testdata", "golden", "insight-detail.json")
+
+	if *update {
+		if err := os.WriteFile(goldenPath, []byte(normalized), 0o644); err != nil {
+			t.Fatalf("failed to write golden file: %v", err)
+		}
+		return
+	}
+
+	expected, err := os.ReadFile(goldenPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			t.Fatalf("golden file %s does not exist; run with -update to generate", goldenPath)
+		}
+		t.Fatalf("failed to read golden file: %v", err)
+	}
+
+	if string(expected) != normalized {
+		t.Fatalf("golden mismatch for insight-detail.json:\nwant:\n%s\ngot:\n%s", string(expected), normalized)
 	}
 }

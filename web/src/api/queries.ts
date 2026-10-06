@@ -6,6 +6,11 @@ import type {
   DistillRunResult,
   FunnelReport,
   FunnelSince,
+  InboxPageResult,
+  InsightApplicationPreview,
+  InsightApplicationResult,
+  InsightDecisionResult,
+  InsightDetailResult,
   SessionResponse,
   SkillAddProposal,
   SkillAddResult,
@@ -313,5 +318,57 @@ export async function cancelDistillRun(id: string): Promise<DistillRunResult> {
   return apiFetch<DistillRunResult>(`/runs/${encodeURIComponent(id)}/cancel`, {
     method: 'POST',
     body: JSON.stringify({}),
+  });
+}
+
+export async function fetchInboxPage(limit?: number, cursor?: string): Promise<InboxPageResult> {
+  const params = new URLSearchParams();
+  if (limit) {
+    params.set('limit', String(limit));
+  }
+  if (cursor) {
+    params.set('cursor', cursor);
+  }
+  const queryStr = params.toString();
+  const url = queryStr ? `/inbox?${queryStr}` : '/inbox';
+  return apiFetch<InboxPageResult>(url);
+}
+
+export function useInsightDetail(id: string) {
+  return useQuery({
+    queryKey: ['insight', id],
+    queryFn: () => apiFetch<InsightDetailResult>(`/insights/${encodeURIComponent(id)}`),
+    enabled: Boolean(id),
+  });
+}
+
+export async function decideInsight(
+  id: string,
+  decision: string,
+  rationale: string,
+): Promise<InsightDecisionResult> {
+  return apiFetch<InsightDecisionResult>(`/insights/${encodeURIComponent(id)}/decision`, {
+    method: 'POST',
+    body: JSON.stringify({ decision, rationale }),
+  });
+}
+
+export async function previewInsightApply(
+  id: string,
+  contents: string,
+  mappings: Array<{ observation_id: string; concept: string }>,
+): Promise<InsightApplicationPreview> {
+  return apiFetch<InsightApplicationPreview>(`/insights/${encodeURIComponent(id)}/apply/preview`, {
+    method: 'POST',
+    body: JSON.stringify({ contents, mappings }),
+  });
+}
+
+export async function confirmInsightApply(
+  pins: ConfirmationPins,
+): Promise<InsightApplicationResult> {
+  return apiFetch<InsightApplicationResult>('/insights/apply/confirm', {
+    method: 'POST',
+    body: JSON.stringify(pins),
   });
 }

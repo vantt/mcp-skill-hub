@@ -646,29 +646,23 @@ export interface DistillRunResult {
   operation_id?: string;
 }
 
-export interface InsightInboxItem {
-  id: string;
-  stable_key: string;
-  skill_id: string;
-  status: string;
-  recommendation: string;
-  observation_ids: string[];
-  comparison_ids?: string[];
-  category: string;
-  priority: string;
-  rationale: string;
-  evidence_digest: string;
-  rank_score: number;
+export interface InsightRank {
+  score: number;
+  evidence_sources: number;
+  evidence_findings: number;
   impact: string;
+  stale: boolean;
+}
+
+export interface InsightInboxItem {
+  insight: Insight;
+  rank: InsightRank;
 }
 
 export interface InsightInboxGroup {
   skill_id: string;
   category: string;
-  priority: string;
-  rank_score: number;
-  total_items: number;
-  insights: InsightInboxItem[];
+  items: InsightInboxItem[];
 }
 
 export interface InboxPageResult {

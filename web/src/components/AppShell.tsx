@@ -59,9 +59,16 @@ export function AppShell({ children }: AppShellProps) {
   } else if (path === '/inbox') {
     pageTitle = t('nav.inbox');
   } else if (path.startsWith('/inbox/')) {
-    pageTitle = 'Insight';
-    parentLabel = t('nav.inbox');
-    parentPath = '/inbox';
+    if (path.endsWith('/apply')) {
+      const insightId = path.split('/')[2] ?? '';
+      pageTitle = 'Compose patch';
+      parentLabel = 'Insight';
+      parentPath = `/inbox/${encodeURIComponent(insightId)}`;
+    } else {
+      pageTitle = 'Insight';
+      parentLabel = t('nav.inbox');
+      parentPath = '/inbox';
+    }
   }
 
   useEffect(() => {

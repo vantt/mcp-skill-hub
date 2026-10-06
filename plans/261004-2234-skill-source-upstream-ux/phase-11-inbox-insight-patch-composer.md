@@ -83,7 +83,7 @@ Do not modify any other file.
 - [x] Task 11.2 sentinel
 - [x] Task 11.3 endpoints
 - [x] Task 11.4 domain logic
-- [ ] Task 11.5 screens
+- [x] Task 11.5 screens
 - [ ] Task 11.6 e2e
 - [ ] Task 11.7 gates
 

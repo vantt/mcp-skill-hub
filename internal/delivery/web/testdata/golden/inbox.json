@@ -1,0 +1,41 @@
+{
+  "schema_version": "1",
+  "status": "ok",
+  "summary": "One high-value insight is ready for review.",
+  "groups": [
+    {
+      "skill_id": "review-skill",
+      "category": "reliability",
+      "items": [
+        {
+          "insight": {
+            "schema_version": 1,
+            "id": "<PREFIX>-<ID>",
+            "run_id": "<PREFIX>-<ID>",
+            "stable_key": "retry-review-concept",
+            "skill_id": "review-skill",
+            "status": "pending",
+            "recommendation": "Add retry guidance to code review.",
+            "observation_ids": [
+              "<PREFIX>-<ID>"
+            ],
+            "category": "reliability",
+            "priority": "high",
+            "rationale": "Improves reliability.",
+            "evidence_digest": "<DIGEST>"
+          },
+          "rank": {
+            "score": 78,
+            "evidence_sources": 1,
+            "evidence_findings": 1,
+            "impact": "high",
+            "stale": false
+          }
+        }
+      ]
+    }
+  ],
+  "has_more": false,
+  "total": 1
+}
+
