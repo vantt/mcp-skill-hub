@@ -127,10 +127,10 @@ export function AppShell({ children }: AppShellProps) {
           <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
             {parentLabel && parentPath && (
               <div className="fg-breadcrumb" style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <Link to={parentPath} style={{ color: 'var(--color-text-subtle)', textDecoration: 'none' }}>
+                <Link to={parentPath} style={{ color: 'var(--color-text-muted)', textDecoration: 'none' }}>
                   <span>{parentLabel}</span>
                 </Link>
-                <span className="fg-breadcrumb__sep" style={{ color: 'var(--color-text-subtle)' }}>
+                <span className="fg-breadcrumb__sep" style={{ color: 'var(--color-text-muted)' }}>
                   /
                 </span>
                 <span className="fg-breadcrumb__here" style={{ color: 'var(--color-text)' }}>

@@ -197,7 +197,7 @@ export function InsightDetailScreen() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', minWidth: 0 }}>
           {/* Header Card */}
           <section className="fg-card" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12.5px', color: 'var(--color-text-subtle)' }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12.5px', color: 'var(--color-text-muted)' }}>
               <span>{insight.id}</span>
             </span>
             <span className="t-title" style={{ fontSize: '18px', fontWeight: 600, textWrap: 'pretty' }}>
@@ -214,8 +214,6 @@ export function InsightDetailScreen() {
                     ? 'danger'
                     : insight.priority === 'high'
                       ? 'warning'
-                      : insight.priority === 'medium'
-                        ? 'info'
                         : 'neutral'
                 }
                 label={insight.priority}
@@ -247,7 +245,7 @@ export function InsightDetailScreen() {
                     borderBottom: '1px solid var(--color-border)',
                   }}
                 >
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--color-text-subtle)' }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--color-text-muted)' }}>
                     <span>{o.id}</span>
                   </span>
                   <span className="t-body-sm" style={{ fontSize: '13px' }}>
@@ -279,7 +277,7 @@ export function InsightDetailScreen() {
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--color-text-subtle)' }}>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--color-text-muted)' }}>
                         <span>{c.id}</span>
                       </span>
                       {c.stale && (
@@ -358,7 +356,7 @@ export function InsightDetailScreen() {
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span className="t-label" style={{ color: 'var(--color-text-subtle)', fontSize: '13px' }}>
+            <span className="t-label" style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>
               <span>{LABEL_STATUS}</span>
             </span>
             <StatusBadge
@@ -366,11 +364,9 @@ export function InsightDetailScreen() {
               tone={
                 status === 'planned'
                   ? 'success'
-                  : status === 'pending'
-                    ? 'info'
-                    : status === 'rejected'
-                      ? 'danger'
-                      : 'neutral'
+                  : status === 'rejected'
+                    ? 'danger'
+                    : 'neutral'
               }
               label={status}
             />
@@ -433,12 +429,12 @@ export function InsightDetailScreen() {
           )}
 
           {isReadOnly && (
-            <span className="t-caption" style={{ color: 'var(--color-text-subtle)' }}>
+            <span className="t-caption" style={{ color: 'var(--color-text-muted)' }}>
               <span>{LABEL_READ_ONLY}</span>
             </span>
           )}
 
-          <span className="t-caption" style={{ color: 'var(--color-text-subtle)', fontSize: '12px' }}>
+          <span className="t-caption" style={{ color: 'var(--color-text-muted)', fontSize: '12px' }}>
             <span>{LABEL_SIDEBAR_HINT}</span>
           </span>
         </aside>

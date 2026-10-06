@@ -259,7 +259,7 @@ export function InboxScreen() {
           <span className="fg-select__chev">{LABEL_CHEVRON_DOWN}</span>
         </div>
 
-        <span className="t-caption" style={{ color: 'var(--color-text-subtle)' }}>
+        <span className="t-caption" style={{ color: 'var(--color-text-muted)' }}>
           <span>{filterCaption}</span>
         </span>
       </div>
@@ -354,9 +354,7 @@ export function InboxScreen() {
                             ? 'danger'
                             : ins.priority === 'high'
                               ? 'warning'
-                              : ins.priority === 'medium'
-                                ? 'info'
-                                : 'neutral'
+                              : 'neutral'
                         }
                         label={ins.priority}
                       />
@@ -365,7 +363,7 @@ export function InboxScreen() {
                         <span className="t-ui" style={{ fontWeight: 600, fontSize: '14px', textWrap: 'pretty' }}>
                           {ins.recommendation}
                         </span>
-                        <span className="t-caption" style={{ color: 'var(--color-text-subtle)', fontFamily: 'var(--font-mono)' }}>
+                        <span className="t-caption" style={{ color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>
                           <span>{itemCaption}</span>
                           {rank?.stale && (
                             <span style={{ color: 'var(--color-warning)', marginLeft: '8px' }}>
@@ -377,13 +375,7 @@ export function InboxScreen() {
 
                       <StatusBadge
                         variant="chip"
-                        tone={
-                          ins.status === 'planned'
-                            ? 'success'
-                            : ins.status === 'pending'
-                              ? 'info'
-                              : 'neutral'
-                        }
+                        tone={ins.status === 'planned' ? 'success' : 'neutral'}
                         label={ins.status}
                       />
 

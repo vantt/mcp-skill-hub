@@ -418,7 +418,7 @@ function PatchComposerEditor({ insightData, skillData, workspaceId }: PatchCompo
                     />
                   </div>
 
-                  <span className="t-caption" style={{ color: 'var(--color-text-subtle)', fontSize: '12px' }}>
+                  <span className="t-caption" style={{ color: 'var(--color-text-muted)', fontSize: '12px' }}>
                     <span>{sourceText}</span>
                   </span>
 
@@ -434,7 +434,7 @@ function PatchComposerEditor({ insightData, skillData, workspaceId }: PatchCompo
                       {obsMappings.map((m) => (
                         <span
                           key={m.concept}
-                          className="fg-chip fg-chip--info"
+                          className="fg-chip fg-chip--neutral"
                           style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px' }}
                         >
                           <span>{m.concept}</span>
@@ -512,7 +512,7 @@ function PatchComposerEditor({ insightData, skillData, workspaceId }: PatchCompo
         <span
           className="t-caption"
           style={{
-            color: isCoverageComplete ? 'var(--color-success, #16a34a)' : 'var(--color-text-subtle)',
+            color: isCoverageComplete ? 'var(--color-success, #16a34a)' : 'var(--color-text-muted)',
             flex: 1,
             fontSize: '13px',
           }}
