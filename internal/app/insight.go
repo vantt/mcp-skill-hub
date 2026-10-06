@@ -21,6 +21,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// ErrInsightNotFound reports an insight ID with no stored insight.
+var ErrInsightNotFound = errors.New("insight not found")
+
 // InsightService owns review, application, provenance, and outcome semantics.
 type InsightService struct {
 	Clock           Clock
@@ -754,7 +757,7 @@ func loadInsightContext(root, id string) (distillpkg.Insight, []byte, map[string
 		}
 	}
 	if !found {
-		return selected, nil, nil, errors.New("insight not found")
+		return selected, nil, nil, ErrInsightNotFound
 	}
 	observations, _, err := readObservations(root)
 	if err != nil {
