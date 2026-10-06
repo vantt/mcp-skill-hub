@@ -195,6 +195,14 @@ func (service SkillService) LoadSkillProposal(ctx context.Context, path, proposa
 	if err != nil {
 		return SkillProposal{}, err
 	}
+	if proposal.Kind != skill.ProposalKindLifecycle {
+		return SkillProposal{
+			Result: ErrorResult(NewInvalidRequestError(
+				fmt.Sprintf("Proposal %s is a %s proposal; confirm it with `skillhub skill confirm %s`.", proposalID, proposal.Kind, proposalID),
+				fmt.Sprintf("Run `skillhub skill confirm %s`.", proposalID),
+			)),
+		}, nil
+	}
 	return makeSkillProposal(proposal, "Stored skill proposal is ready for confirmation."), nil
 }
 

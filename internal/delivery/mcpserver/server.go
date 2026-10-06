@@ -3,10 +3,7 @@ package mcpserver
 
 import (
 	"context"
-	"crypto/hmac"
 	"crypto/rand"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -24,6 +21,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/vantt/mcp-skill-hub/internal/app"
 	"github.com/vantt/mcp-skill-hub/internal/catalog"
+	"github.com/vantt/mcp-skill-hub/internal/delivery/paging"
 	"github.com/vantt/mcp-skill-hub/internal/skill"
 	"github.com/vantt/mcp-skill-hub/internal/systemskills"
 	"github.com/vantt/mcp-skill-hub/internal/telemetry"
@@ -53,13 +51,6 @@ type Server struct {
 var activeDiagnostics atomic.Pointer[slog.Logger]
 var correlationSequence atomic.Uint64
 
-var cursorMACKey = func() []byte {
-	key := make([]byte, 32)
-	if _, err := rand.Read(key); err != nil {
-		panic("initialize cursor integrity key: " + err.Error())
-	}
-	return key
-}()
 
 // New constructs one stateless server surface for a configured workspace.
 func New(workspacePath string, diagnostics io.Writer) (*Server, *mcp.Server, error) {
@@ -85,7 +76,7 @@ func New(workspacePath string, diagnostics io.Writer) (*Server, *mcp.Server, err
 	capabilities.AddExtension("io.modelcontextprotocol/skills", map[string]any{"directoryRead": false})
 	server := mcp.NewServer(&mcp.Implementation{Name: "skillhub", Version: "1"}, &mcp.ServerOptions{
 		Capabilities: capabilities,
-		PageSize:     maximumLimit,
+		PageSize:     paging.MaximumLimit,
 		Logger:       logger,
 		SetCacheable: func(_ context.Context, _ mcp.Request, cache *mcp.Cacheable) {
 			cache.TTLMs = cacheTTLMS
@@ -179,15 +170,15 @@ func (adapter *Server) listSkills(ctx context.Context, _ *mcp.ServerSession, par
 		adapter.logger.Warn("skill omitted from listing because it cannot be served", "skill_id", item.SkillID, "reason", item.Reason)
 	}
 	filter := "skills"
-	owner := pageOwner(filter, struct {
+	owner := paging.Owner(filter, struct {
 		Snapshot string                 `json:"snapshot"`
 		Entries  []app.DistributedSkill `json:"entries"`
 	}{Snapshot: snapshot, Entries: entries})
-	lastKey, err := decodeCursor(params.Cursor, owner, filter)
+	lastKey, err := paging.DecodeCursor(params.Cursor, owner, filter)
 	if err != nil {
 		return nil, invalidParams("snapshot_expired", "The skill listing cursor is invalid or expired.")
 	}
-	paged, err := makePage(entries, defaultLimit, lastKey, owner, filter, func(entry app.DistributedSkill) string { return entry.SkillID })
+	paged, err := paging.Make(entries, paging.DefaultLimit, lastKey, owner, filter, func(entry app.DistributedSkill) string { return entry.SkillID })
 	if err != nil {
 		return nil, invalidParams("snapshot_expired", "The skill listing cursor is invalid or expired.")
 	}
@@ -379,6 +370,7 @@ func (adapter *Server) registerTools(server *mcp.Server) {
 	adapter.registerSourceTools(server)
 	adapter.registerSourceImportTools(server)
 	adapter.registerSourceWatchTools(server)
+	adapter.registerUpstreamTools(server)
 	adapter.registerCurationRunTools(server)
 	adapter.registerInsightTools(server)
 	adapter.registerSkillTools(server)
@@ -520,12 +512,12 @@ func applyCommonConstraints(schema *jsonschema.Schema) {
 		return
 	}
 	if schemaHasType(schema, "array") && schema.MaxItems == nil {
-		schema.MaxItems = intPointer(maximumLimit)
+		schema.MaxItems = intPointer(paging.MaximumLimit)
 	}
 	for name, property := range schema.Properties {
 		switch name {
 		case "limit":
-			minimum, maximum := float64(1), float64(maximumLimit)
+			minimum, maximum := float64(1), float64(paging.MaximumLimit)
 			property.Minimum, property.Maximum = &minimum, &maximum
 		case "schema_version":
 			property.Enum = []any{SchemaVersion}
@@ -654,94 +646,6 @@ func correlationID() string {
 	return hex.EncodeToString(value[:])
 }
 
-type cursorValue struct {
-	Version    int    `json:"v"`
-	Owner      string `json:"o"`
-	FilterHash string `json:"f"`
-	LastKey    string `json:"k"`
-	Checksum   string `json:"c"`
-}
-
-func pageDigest(value any) string {
-	encoded, _ := json.Marshal(value)
-	sum := sha256.Sum256(encoded)
-	return "sha256:" + hex.EncodeToString(sum[:])
-}
-
-func pageOwner(filter string, sortedResult any) string {
-	return pageDigest(struct {
-		Filter string `json:"filter"`
-		Result any    `json:"result"`
-	}{Filter: filter, Result: sortedResult})
-}
-
-func encodeCursor(owner, filter, lastKey string) string {
-	value := cursorValue{Version: 2, Owner: owner, FilterHash: pageDigest(filter), LastKey: lastKey}
-	value.Checksum = cursorChecksum(value)
-	data, _ := json.Marshal(value)
-	return base64.RawURLEncoding.EncodeToString(data)
-}
-
-func cursorChecksum(value cursorValue) string {
-	value.Checksum = ""
-	encoded, _ := json.Marshal(value)
-	mac := hmac.New(sha256.New, cursorMACKey)
-	_, _ = mac.Write([]byte("skillhub-page-cursor-v2\x00"))
-	_, _ = mac.Write(encoded)
-	return hex.EncodeToString(mac.Sum(nil))
-}
-
-func decodeCursor(cursor, owner, filter string) (string, error) {
-	if cursor == "" {
-		return "", nil
-	}
-	if len(cursor) > 4096 {
-		return "", errors.New("cursor too large")
-	}
-	data, err := base64.RawURLEncoding.DecodeString(cursor)
-	if err != nil {
-		return "", err
-	}
-	var value cursorValue
-	decoder := json.NewDecoder(strings.NewReader(string(data)))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&value); err != nil || value.Version != 2 || value.Owner != owner || value.FilterHash != pageDigest(filter) || value.LastKey == "" || !hmac.Equal([]byte(value.Checksum), []byte(cursorChecksum(value))) {
-		return "", errors.New("cursor mismatch")
-	}
-	return value.LastKey, nil
-}
-
-func normalizeLimit(limit int) (int, error) {
-	if limit == 0 {
-		return defaultLimit, nil
-	}
-	if limit < 1 || limit > maximumLimit {
-		return 0, fmt.Errorf("limit must be between 1 and %d", maximumLimit)
-	}
-	return limit, nil
-}
-
-func makePage[T any](items []T, limit int, lastKey, owner, filter string, key func(T) string) (page[T], error) {
-	start := 0
-	if lastKey != "" {
-		found := false
-		for index, item := range items {
-			if key(item) == lastKey {
-				start, found = index+1, true
-				break
-			}
-		}
-		if !found {
-			return page[T]{}, errors.New("cursor last sort key is absent")
-		}
-	}
-	end := min(start+limit, len(items))
-	result := page[T]{Items: append([]T(nil), items[start:end]...), HasMore: end < len(items), Total: len(items)}
-	if result.HasMore && len(result.Items) > 0 {
-		result.NextCursor = encodeCursor(owner, filter, key(result.Items[len(result.Items)-1]))
-	}
-	return result, nil
-}
 
 func applicationError(value any) *app.Error {
 	_ = errorEnvelope{}

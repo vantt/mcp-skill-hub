@@ -1,0 +1,39 @@
+{
+  "schema_version": "1",
+  "status": "ok",
+  "summary": "Distill run loaded.",
+  "items": [],
+  "suggested_actions": [],
+  "warnings": [],
+  "error": null,
+  "run": {
+    "schema_version": 1,
+    "id": "<PREFIX>-<ID>",
+    "source_id": "source-a",
+    "state": "in_progress",
+    "from_revision": {
+      "kind": "declared-version",
+      "value": "r1",
+      "content_digest": "<DIGEST>",
+      "observed_at": "<TIME>"
+    },
+    "to_revision": {
+      "kind": "declared-version",
+      "value": "r2",
+      "content_digest": "<DIGEST>",
+      "observed_at": "<TIME>"
+    },
+    "changed_resources": [
+      {
+        "path": "SKILL.md",
+        "status": "modified"
+      }
+    ],
+    "package_digest": "<DIGEST>",
+    "prepared_at": "<TIME>",
+    "started_at": "<TIME>",
+    "attempt": 1
+  },
+  "changed_paths": []
+}
+

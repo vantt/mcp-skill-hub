@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
 )
 
 func TestSkillAddLocalPreviewAndConfirm(t *testing.T) {
@@ -135,5 +136,84 @@ func TestSkillAddShortConfirmDispatched(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "Draft short-confirm added.") {
 		t.Errorf("confirm output missing draft added summary: %s", stdout.String())
+	}
+}
+
+func TestSkillAddPreviewAndResultRenderUpstream(t *testing.T) {
+	var buf bytes.Buffer
+	p := termui.NewWithWidth(&buf, termui.MaxWidth)
+
+	// 1. Preview with new upstream source
+	preview := app.SkillAddProposal{
+		SkillID: "pdf",
+		Origin: app.SkillOrigin{
+			Kind:       "github",
+			Repository: "https://github.com/anthropics/skills",
+			Path:       "skills/pdf",
+			Commit:     "3f9c2a1b4d5e",
+		},
+		Resources:  []app.DiscoveredCompanion{{Path: "f1"}, {Path: "f2"}},
+		TotalBytes: 49152,
+		Confirmation: app.ConfirmationPolicy{
+			Confirmation: app.ConfirmationRequirement{
+				Pins: app.ConfirmationPins{ProposalID: "PROP-12345"},
+			},
+		},
+		UpstreamSource: &app.UpstreamSourceRef{
+			SourceID: "anthropics-skills",
+			Created:  true,
+		},
+	}
+	writeSkillAddPreview(p, preview)
+	out := buf.String()
+	wantPreviewLine := "Upstream: tracked by new source anthropics-skills (checked weekly by `skillhub check`; nothing runs in the background)."
+	if !strings.Contains(out, wantPreviewLine) {
+		t.Fatalf("preview output missing upstream line %q, got:\n%s", wantPreviewLine, out)
+	}
+	if strings.Contains(out, "Watching: off") {
+		t.Fatalf("preview output should not contain 'Watching: off', got:\n%s", out)
+	}
+
+	// 2. Preview with existing upstream source
+	buf.Reset()
+	preview.UpstreamSource.Created = false
+	writeSkillAddPreview(p, preview)
+	outExisting := buf.String()
+	wantExistingLine := "Upstream: tracked by source anthropics-skills."
+	if !strings.Contains(outExisting, wantExistingLine) {
+		t.Fatalf("preview output missing existing upstream line %q, got:\n%s", wantExistingLine, outExisting)
+	}
+
+	// 3. Result with upstream source
+	buf.Reset()
+	result := app.SkillAddResult{
+		SkillID: "pdf",
+		UpstreamSource: &app.UpstreamSourceRef{
+			SourceID: "anthropics-skills",
+		},
+	}
+	writeSkillAddResult(p, false, result)
+	outResult := buf.String()
+	wantResultLine := "Draft pdf added. Agent use: off. Upstream: anthropics-skills. Changes are not committed."
+	if !strings.Contains(outResult, wantResultLine) {
+		t.Fatalf("result output missing upstream line %q, got:\n%s", wantResultLine, outResult)
+	}
+	if strings.Contains(outResult, "Watching: off") {
+		t.Fatalf("result output should not contain 'Watching: off', got:\n%s", outResult)
+	}
+
+	// 4. Result without upstream source (local add)
+	buf.Reset()
+	resultLocal := app.SkillAddResult{
+		SkillID: "pdf",
+	}
+	writeSkillAddResult(p, false, resultLocal)
+	outLocal := buf.String()
+	wantLocalLine := "Draft pdf added. Agent use: off. Changes are not committed."
+	if !strings.Contains(outLocal, wantLocalLine) {
+		t.Fatalf("local result output missing expected line %q, got:\n%s", wantLocalLine, outLocal)
+	}
+	if strings.Contains(outLocal, "Watching: off") {
+		t.Fatalf("local result output should not contain 'Watching: off', got:\n%s", outLocal)
 	}
 }

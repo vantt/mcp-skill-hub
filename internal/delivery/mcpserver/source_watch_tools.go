@@ -13,7 +13,7 @@ func (adapter *Server) registerSourceWatchTools(server *mcp.Server) {
 	addTool(server, &mcp.Tool{
 		Name:        "source_watch_preview",
 		Title:       "Preview source watch",
-		Description: "Preview watching a public GitHub repository for skill updates. Local filesystem folders are rejected. Returns an immutable watch proposal with confirmation pins. No canonical source records change during preview.",
+		Description: "Preview watching a public GitHub repository for skill updates and attaching it as a learning reference. Local filesystem folders are rejected. Returns an immutable watch proposal with confirmation pins. No canonical source records change during preview.",
 		Annotations: annotations(false, false, false, true),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input sourceWatchPreviewInput) (*mcp.CallToolResult, toolOutcome[app.SourceProposal], error) {
 		locator := strings.TrimSpace(input.Locator)
@@ -23,6 +23,7 @@ func (adapter *Server) registerSourceWatchTools(server *mcp.Server) {
 		service := app.SourceService{}
 		return appResult(service.PreviewSourceWatch(ctx, adapter.workspace, app.SourceWatchInput{
 			Locator:           locator,
+			SkillID:           strings.TrimSpace(input.SkillID),
 			SourceID:          strings.TrimSpace(input.SourceID),
 			Ref:               strings.TrimSpace(input.Ref),
 			Path:              strings.TrimSpace(input.Path),
@@ -37,7 +38,7 @@ func (adapter *Server) registerSourceWatchTools(server *mcp.Server) {
 	addTool(server, &mcp.Tool{
 		Name:        "source_watch_confirm",
 		Title:       "Confirm source watch",
-		Description: "Apply an approved source watch proposal. All proposal_id, proposal_digest, and base_version pins are required.",
+		Description: "Apply an approved source watch, attach, detach, or unwatch proposal. All proposal_id, proposal_digest, and base_version pins are required.",
 		Annotations: annotations(false, true, true, false),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input confirmationInput) (*mcp.CallToolResult, toolOutcome[app.SourceMutationResult], error) {
 		proposalID := strings.TrimSpace(input.ProposalID)
@@ -54,13 +55,16 @@ func (adapter *Server) registerSourceWatchTools(server *mcp.Server) {
 		if err != nil {
 			return failure[app.SourceMutationResult](err)
 		}
-		if preview.Confirmation.ApplicationCommand != "source_watch" {
+		cmd := preview.WriteCommand()
+		switch cmd {
+		case "source_watch", "source_attach", "source_detach", "source_unwatch":
+		default:
 			return failure[app.SourceMutationResult](app.NewInvalidRequestError(
-				fmt.Sprintf("proposal %s is not a source_watch proposal", proposalID),
-				"Supply a valid source_watch proposal ID.",
+				fmt.Sprintf("proposal %s has command %q, expected source_watch, source_attach, source_detach, or source_unwatch", proposalID, cmd),
+				"Supply a valid source proposal ID.",
 			))
 		}
-		return appResult(service.ConfirmSourceWatch(ctx, adapter.workspace, preview, app.ConfirmationPins{
+		return appResult(service.ConfirmSourceProposal(ctx, adapter.workspace, preview, app.ConfirmationPins{
 			ProposalID:     proposalID,
 			ProposalDigest: proposalDigest,
 			BaseVersion:    baseVersion,

@@ -270,7 +270,7 @@ V1 không nhằm:
             ▼                                  ▼
    ┌───────────────────┐              ┌─────────────────┐
    │ MCP Skill Server  │              │ Simple Web UI   │
-   │                   │              │                 │
+   │                   │              │ (serve web)     │
    │ skills/list       │              │ search          │
    │ skills/get        │              │ edit            │
    │ resources/read    │              │ diff            │
@@ -282,6 +282,7 @@ V1 không nhằm:
        Agent / Client
 ```
 
+*Note:* The Simple Web UI is delivered locally via `skillhub serve web`.
 ---
 
 # 7. Repository Layout

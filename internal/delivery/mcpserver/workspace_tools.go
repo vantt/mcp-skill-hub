@@ -7,6 +7,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/delivery/paging"
 )
 
 func (adapter *Server) registerWorkspaceTools(server *mcp.Server) {
@@ -40,7 +41,7 @@ func (adapter *Server) registerWorkspaceTools(server *mcp.Server) {
 		})
 	addTool(server, &mcp.Tool{Name: "workspace_diff", Title: "Read workspace diff", Description: "Return an owner-bound page of canonical Git paths, or retained changes for one managed operation_id. File contents are only returned through the bounded operation-diff contract.", Annotations: annotations(true, false, false, false)},
 		func(ctx context.Context, _ *mcp.CallToolRequest, input workspaceDiffInput) (*mcp.CallToolResult, toolOutcome[workspaceDiffResult], error) {
-			limit, err := normalizeLimit(input.Limit)
+			limit, err := paging.NormalizeLimit(input.Limit)
 			if err != nil {
 				return failure[workspaceDiffResult](err)
 			}
@@ -50,12 +51,12 @@ func (adapter *Server) registerWorkspaceTools(server *mcp.Server) {
 				if callErr != nil {
 					return failure[workspaceDiffResult](callErr)
 				}
-				owner := pageOwner(filter, value.Changes)
-				lastKey, cursorErr := decodeCursor(input.Cursor, owner, filter)
+				owner := paging.Owner(filter, value.Changes)
+				lastKey, cursorErr := paging.DecodeCursor(input.Cursor, owner, filter)
 				if cursorErr != nil {
 					return failure[workspaceDiffResult](fmt.Errorf("snapshot_expired: diff cursor is invalid or expired"))
 				}
-				paged, pageErr := makePage(value.Changes, limit, lastKey, owner, filter, func(item app.OperationChange) string { return item.Path })
+				paged, pageErr := paging.Make(value.Changes, limit, lastKey, owner, filter, func(item app.OperationChange) string { return item.Path })
 				if pageErr != nil {
 					return failure[workspaceDiffResult](fmt.Errorf("snapshot_expired: diff cursor is invalid or expired"))
 				}
@@ -69,15 +70,15 @@ func (adapter *Server) registerWorkspaceTools(server *mcp.Server) {
 			for _, group := range value.Groups {
 				files = append(files, group.Files...)
 			}
-			owner := pageOwner(filter, struct {
+			owner := paging.Owner(filter, struct {
 				Configured bool           `json:"configured"`
 				Files      []app.DiffFile `json:"files"`
 			}{Configured: value.GitConfigured, Files: files})
-			lastKey, cursorErr := decodeCursor(input.Cursor, owner, filter)
+			lastKey, cursorErr := paging.DecodeCursor(input.Cursor, owner, filter)
 			if cursorErr != nil {
 				return failure[workspaceDiffResult](fmt.Errorf("snapshot_expired: diff cursor is invalid or expired"))
 			}
-			paged, pageErr := makePage(files, limit, lastKey, owner, filter, func(item app.DiffFile) string { return item.Path + "\x00" + item.Status })
+			paged, pageErr := paging.Make(files, limit, lastKey, owner, filter, func(item app.DiffFile) string { return item.Path + "\x00" + item.Status })
 			if pageErr != nil {
 				return failure[workspaceDiffResult](fmt.Errorf("snapshot_expired: diff cursor is invalid or expired"))
 			}

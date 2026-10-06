@@ -55,8 +55,9 @@ func (e *EditConflictError) Is(target error) bool {
 type ProposalKind string
 
 const (
-	ProposalKindLifecycle ProposalKind = "lifecycle"
-	ProposalKindAdd       ProposalKind = "add"
+	ProposalKindLifecycle      ProposalKind = "lifecycle"
+	ProposalKindAdd            ProposalKind = "add"
+	ProposalKindUpstreamUpdate ProposalKind = "upstream_update"
 )
 
 // ScaffoldMarker is the deterministic marker placed in untouched generated templates.

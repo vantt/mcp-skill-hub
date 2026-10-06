@@ -7,6 +7,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/delivery/paging"
 )
 
 func (adapter *Server) registerSourceTools(server *mcp.Server) {
@@ -25,14 +26,14 @@ func (adapter *Server) registerSourceTools(server *mcp.Server) {
 		Name: "source_intake_list", Title: "List source intake",
 		Description: "List source candidates and monitored sources as a snapshot-bound page. Pass next_cursor unchanged to continue; limit defaults to 25 and is at most 100.",
 		Annotations: annotations(true, false, false, false),
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, input sourceIntakeListInput) (*mcp.CallToolResult, toolOutcome[page[sourceListItem]], error) {
-		limit, err := normalizeLimit(input.Limit)
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, input sourceIntakeListInput) (*mcp.CallToolResult, toolOutcome[paging.Page[sourceListItem]], error) {
+		limit, err := paging.NormalizeLimit(input.Limit)
 		if err != nil {
-			return failure[page[sourceListItem]](err)
+			return failure[paging.Page[sourceListItem]](err)
 		}
 		result, err := adapter.source.ListSources(ctx, adapter.workspace, strings.TrimSpace(input.Status))
 		if err != nil {
-			return failure[page[sourceListItem]](err)
+			return failure[paging.Page[sourceListItem]](err)
 		}
 		filter := "status=" + strings.TrimSpace(input.Status)
 		items := make([]sourceListItem, 0, len(result.Candidates)+len(result.Sources))
@@ -41,29 +42,29 @@ func (adapter *Server) registerSourceTools(server *mcp.Server) {
 			items = append(items, sourceListItem{Kind: "candidate", Candidate: &candidate})
 		}
 		for index := range result.Sources {
-			source := result.Sources[index]
+			source := result.Sources[index].Record
 			items = append(items, sourceListItem{Kind: "source", Source: &source})
 		}
-		owner := pageOwner(filter, items)
-		lastKey, err := decodeCursor(input.Cursor, owner, filter)
+		owner := paging.Owner(filter, items)
+		lastKey, err := paging.DecodeCursor(input.Cursor, owner, filter)
 		if err != nil {
-			return failure[page[sourceListItem]](fmt.Errorf("snapshot_expired: source list cursor is invalid or expired"))
+			return failure[paging.Page[sourceListItem]](fmt.Errorf("snapshot_expired: source list cursor is invalid or expired"))
 		}
-		paged, err := makePage(items, limit, lastKey, owner, filter, func(item sourceListItem) string {
+		paged, err := paging.Make(items, limit, lastKey, owner, filter, func(item sourceListItem) string {
 			if item.Candidate != nil {
 				return "candidate\x00" + item.Candidate.ID
 			}
 			return "source\x00" + item.Source.ID
 		})
 		if err != nil {
-			return failure[page[sourceListItem]](fmt.Errorf("snapshot_expired: source list cursor is invalid or expired"))
+			return failure[paging.Page[sourceListItem]](fmt.Errorf("snapshot_expired: source list cursor is invalid or expired"))
 		}
 		return success(paged)
 	})
 
 	addTool(server, &mcp.Tool{
 		Name: "source_triage", Title: "Triage source candidate",
-		Description: "Accept, defer, or reject a source candidate. Acceptance returns a persisted preview unless confirmation contains the exact proposal_id, proposal_digest, and base_version from an earlier preview.",
+		Description: "Triage a source candidate. Outcomes: accept with skill_id (link existing skill) or new_skill_id (scaffold draft skill), import (vendor skills), defer (keep in queue), or reject (with reason). Acceptance or import returns a preview proposal.",
 		Annotations: annotations(false, false, false, true),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input sourceTriageInput) (*mcp.CallToolResult, toolOutcome[sourceTriageResult], error) {
 		service := adapter.source
@@ -85,16 +86,21 @@ func (adapter *Server) registerSourceTools(server *mcp.Server) {
 		if input.MonitoringEnabled != nil {
 			monitor = *input.MonitoringEnabled
 		}
+		newSkillID := strings.TrimSpace(input.NewSkillID)
+		if newSkillID == "" {
+			newSkillID = strings.TrimSpace(input.NewSkill)
+		}
 		preview, mutation, err := service.TriageSourceCandidate(ctx, adapter.workspace, app.SourceTriageInput{
 			CandidateID: input.CandidateID, Decision: input.Decision, DecisionReason: input.DecisionReason,
 			SourceID: input.SourceID, Adapter: input.Adapter, Ref: input.Ref, SourcePath: input.SourcePath,
 			License: input.License, Trust: input.Trust, Cadence: input.Cadence, SkillID: input.SkillID,
+			NewSkillID:        newSkillID,
 			MonitoringEnabled: monitor, IdempotencyKey: input.IdempotencyKey,
 		})
 		if err != nil {
 			return failure[sourceTriageResult](err)
 		}
-		if input.Decision == "accept" {
+		if input.Decision == "accept" || input.Decision == "import" {
 			return success(sourceTriageResult{Preview: &preview})
 		}
 		return appResult(sourceTriageResult{Mutation: &mutation}, nil)
@@ -102,7 +108,7 @@ func (adapter *Server) registerSourceTools(server *mcp.Server) {
 
 	addTool(server, &mcp.Tool{
 		Name: "source_check", Title: "Check sources",
-		Description: "Check selected or due source revisions through configured adapters. This may access external sources and records revision changes, but does not edit curated skills.",
+		Description: "Check selected or due source revisions through configured adapters. This records revision changes and per-skill upstream results in results[].skills without editing curated skills.",
 		Annotations: annotations(false, false, false, true),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input sourceCheckInput) (*mcp.CallToolResult, toolOutcome[app.SourceCheckResult], error) {
 		if len(input.SourceIDs) == 0 && !input.AllDue {

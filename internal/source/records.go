@@ -40,6 +40,7 @@ type Record struct {
 	ID                string     `yaml:"id" json:"id"`
 	Adapter           string     `yaml:"adapter" json:"adapter"`
 	Locator           Locator    `yaml:"locator" json:"locator"`
+	Purpose           string     `yaml:"purpose,omitempty" json:"purpose,omitempty"`
 	Status            string     `yaml:"status" json:"status"`
 	Identity          Identity   `yaml:"identity" json:"identity"`
 	License           string     `yaml:"license,omitempty" json:"license,omitempty"`
@@ -99,6 +100,9 @@ func ParseRecord(data []byte) (Record, error) {
 	}
 	if err := ValidateLocator(value.Adapter, value.Locator); err != nil {
 		return value, err
+	}
+	if value.Purpose != "" && value.Purpose != "upstream" {
+		return value, errors.New("source purpose must be upstream or empty")
 	}
 	if value.Monitoring.Cadence != "daily" && value.Monitoring.Cadence != "weekly" && value.Monitoring.Cadence != "manual" {
 		return value, errors.New("monitoring cadence must be daily, weekly, or manual")

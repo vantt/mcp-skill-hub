@@ -46,6 +46,49 @@ describe('SkillsScreen', () => {
     expect(screen.getAllByText('core').length).toBeGreaterThan(0);
   });
 
+  it('renders update_available chip and filters by ?upstream=updates', () => {
+    const data: SkillListResult = {
+      schema_version: '1',
+      status: 'ok',
+      summary: '2 skills',
+      skills: [
+        {
+          id: 'pdf',
+          name: 'PDF Tool',
+          collection: 'core',
+          lifecycle_state: 'active',
+          state: 'active',
+          active_locally: true,
+          routing_eligible: true,
+          upstream_status: 'update_available',
+        },
+        {
+          id: 'docx',
+          name: 'Docx Tool',
+          collection: 'core',
+          lifecycle_state: 'active',
+          state: 'active',
+          active_locally: true,
+          routing_eligible: true,
+          upstream_status: 'up_to_date',
+        },
+      ],
+    };
+
+    // Render with no filter
+    const { unmount } = renderSkillsScreen(data);
+    expect(screen.getByText('Update available')).toBeInTheDocument();
+    expect(screen.getByText('Updates (1)')).toBeInTheDocument();
+    expect(screen.getByText('PDF Tool')).toBeInTheDocument();
+    expect(screen.getByText('Docx Tool')).toBeInTheDocument();
+    unmount();
+
+    // Render with ?upstream=updates
+    renderSkillsScreen(data, ['/skills?upstream=updates']);
+    expect(screen.getByText('PDF Tool')).toBeInTheDocument();
+    expect(screen.queryByText('Docx Tool')).not.toBeInTheDocument();
+  });
+
   it('search narrows rows', () => {
     const data: SkillListResult = {
       schema_version: '1',

@@ -132,6 +132,9 @@ func onboardCLIFilesystemSource(t *testing.T) string {
 	if err := os.WriteFile(filepath.Join(fixture, "notes.md"), []byte("upstream content\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	if c, _, se := runCLIForTest([]string{"skill", "create", "--workspace", root, "--id", "cli-skill", "--collection", "default", "--name", "CLI Skill", "--description", "CLI test skill", "--yes"}); c != 0 {
+		t.Fatalf("skill create failed: %s", se)
+	}
 	code, stdout, stderr := runCLIForTest([]string{"source", "capture", "sources/upstream", "--reason", "private source rationale", "--workspace", root, "--json"})
 	if code != 0 {
 		t.Fatalf("capture=%d stdout=%s stderr=%s", code, stdout, stderr)
@@ -140,7 +143,7 @@ func onboardCLIFilesystemSource(t *testing.T) string {
 	if err := json.Unmarshal([]byte(stdout), &captured); err != nil {
 		t.Fatal(err)
 	}
-	code, stdout, stderr = runCLIForTest([]string{"source", "triage", captured.Candidate.ID, "--decision", "accept", "--source-id", "source-a", "--adapter", "filesystem", "--workspace", root, "--json"})
+	code, stdout, stderr = runCLIForTest([]string{"source", "triage", captured.Candidate.ID, "--decision", "accept", "--source-id", "source-a", "--skill-id", "cli-skill", "--adapter", "filesystem", "--workspace", root, "--json"})
 	if code != 0 {
 		t.Fatalf("triage=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -183,6 +186,9 @@ func TestSourceImportCLI(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(skillMD), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	if c, _, se := runCLIForTest([]string{"skill", "create", "--workspace", root, "--id", "calc-skill", "--collection", "default", "--name", "Calc Skill", "--description", "Calc test skill", "--yes"}); c != 0 {
+		t.Fatalf("skill create failed: %s", se)
+	}
 
 	// Capture, triage, confirm
 	code, stdout, stderr := runCLIForTest([]string{"source", "capture", "sources/upstream", "--reason", "has skills", "--workspace", root, "--json"})
@@ -192,7 +198,7 @@ func TestSourceImportCLI(t *testing.T) {
 	var captured app.SourceCandidateResult
 	_ = json.Unmarshal([]byte(stdout), &captured)
 
-	code, stdout, stderr = runCLIForTest([]string{"source", "triage", captured.Candidate.ID, "--decision", "accept", "--source-id", "calc-source", "--adapter", "filesystem", "--workspace", root, "--json"})
+	code, stdout, stderr = runCLIForTest([]string{"source", "triage", captured.Candidate.ID, "--decision", "accept", "--source-id", "calc-source", "--skill-id", "calc-skill", "--adapter", "filesystem", "--workspace", root, "--json"})
 	if code != 0 {
 		t.Fatalf("triage failed: %d, %s %s", code, stdout, stderr)
 	}
@@ -237,6 +243,65 @@ func TestSourceImportCLI(t *testing.T) {
 	if !strings.Contains(stdout, `"status":"draft"`) {
 		t.Fatalf("imported skill is not in draft status: %s", stdout)
 	}
+}
+
+func TestSourceCommandsPhase6(t *testing.T) {
+	t.Parallel()
+
+	t.Run("source list grouped and json", func(t *testing.T) {
+		root := onboardCLIFilesystemSource(t)
+
+		// 1. source list --json contains "groups"
+		code, stdout, stderr := runCLIForTest([]string{"source", "list", "--workspace", root, "--json"})
+		if code != 0 {
+			t.Fatalf("list --json failed: %d, %s %s", code, stdout, stderr)
+		}
+		if !strings.Contains(stdout, `"groups"`) {
+			t.Fatalf("expected list --json to contain '\"groups\"', got:\n%s", stdout)
+		}
+
+		// 2. human list prints the repository heading and role
+		code, stdout, stderr = runCLIForTest([]string{"source", "list", "--workspace", root})
+		if code != 0 {
+			t.Fatalf("list human failed: %d, %s %s", code, stdout, stderr)
+		}
+		if !strings.Contains(stdout, "sources/upstream") {
+			t.Fatalf("expected repository heading in human output, got:\n%s", stdout)
+		}
+		if !strings.Contains(stdout, "learning-source") && !strings.Contains(stdout, "upstream") {
+			t.Fatalf("expected role in human output, got:\n%s", stdout)
+		}
+	})
+
+	t.Run("source watch without skill-id exits 2", func(t *testing.T) {
+		root := initTestWorkspace(t)
+		code, stdout, stderr := runCLIForTest([]string{"source", "watch", "https://github.com/example/skills.git", "--workspace", root})
+		if code != 2 {
+			t.Fatalf("expected exit 2, got %d, out=%s, err=%s", code, stdout, stderr)
+		}
+		if !strings.Contains(stderr, "A watched source must belong to a skill.") {
+			t.Fatalf("expected 'A watched source must belong to a skill.', got:\n%s", stderr)
+		}
+	})
+
+	t.Run("source backfill without candidates prints Nothing to backfill", func(t *testing.T) {
+		root := initTestWorkspace(t)
+		code, stdout, stderr := runCLIForTest([]string{"source", "backfill", "--workspace", root})
+		if code != 0 {
+			t.Fatalf("expected exit 0, got %d, out=%s, err=%s", code, stdout, stderr)
+		}
+		if !strings.Contains(stdout, "Nothing to backfill.") {
+			t.Fatalf("expected 'Nothing to backfill.', got:\n%s", stdout)
+		}
+	})
+
+	t.Run("source unwatch missing-id exits 2", func(t *testing.T) {
+		root := initTestWorkspace(t)
+		code, stdout, stderr := runCLIForTest([]string{"source", "unwatch", "missing-id", "--workspace", root})
+		if code != 2 {
+			t.Fatalf("expected exit 2, got %d, out=%s, err=%s", code, stdout, stderr)
+		}
+	})
 }
 
 func runCLIForTest(args []string) (int, string, string) {

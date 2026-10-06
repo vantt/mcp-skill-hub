@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -37,6 +38,7 @@ type DiscoveredSkill struct {
 	Description string `json:"description"`
 	Path        string `json:"path"`
 	Conflict    bool   `json:"conflict"`
+	Imported    bool   `json:"imported,omitempty"`
 	SkipReason  string `json:"skip_reason,omitempty"`
 }
 
@@ -103,10 +105,6 @@ func (service SourceImportService) PreviewSourceImport(ctx context.Context, path
 	if record == nil {
 		return SourceImportProposal{}, fmt.Errorf("source %q not found", sourceID)
 	}
-	if record.CurrentRevision == nil {
-		return SourceImportProposal{}, fmt.Errorf("source %q has no current revision; run skillhub check %s first", sourceID, sourceID)
-	}
-
 	adapter, ok := service.Adapters[record.Adapter]
 	if !ok {
 		return SourceImportProposal{}, fmt.Errorf("source adapter %q is not configured", record.Adapter)
@@ -116,9 +114,28 @@ func (service SourceImportService) PreviewSourceImport(ctx context.Context, path
 	opCtx, cancel := context.WithTimeout(ctx, time.Duration(record.Limits.TimeoutSeconds)*time.Second)
 	defer cancel()
 
-	scopePrefix := input.Path
+	var currentRev sourcepkg.Revision
+	if record.Adapter == "git" {
+		rev, revErr := adapter.CurrentRevision(opCtx, src)
+		if (revErr != nil || rev.Value == "") && record.CurrentRevision != nil {
+			currentRev = *record.CurrentRevision
+		} else if revErr != nil {
+			return SourceImportProposal{}, fmt.Errorf("determine git revision: %w", revErr)
+		} else {
+			currentRev = rev
+		}
+	} else {
+		if record.CurrentRevision == nil {
+			return SourceImportProposal{}, fmt.Errorf("source %q has no current revision; run skillhub check %s first", sourceID, sourceID)
+		}
+		currentRev = *record.CurrentRevision
+	}
 
-	resources, err := adapter.List(opCtx, src, *record.CurrentRevision, sourcepkg.Scope{Prefix: scopePrefix})
+	scopePrefix := input.Path
+	if scopePrefix == "" && record.Locator.Path == "" {
+		scopePrefix = commonParentDirForSource(root, record.ID)
+	}
+	resources, err := adapter.List(opCtx, src, currentRev, sourcepkg.Scope{Prefix: scopePrefix})
 	if err != nil {
 		return SourceImportProposal{}, err
 	}
@@ -134,7 +151,7 @@ func (service SourceImportService) PreviewSourceImport(ctx context.Context, path
 		wanted[strings.ToLower(strings.TrimSpace(s))] = true
 	}
 
-	discoveredItems, err := DiscoverSkillsFromResources(opCtx, AdapterResourceReader{Adapter: adapter, Source: src, Revision: *record.CurrentRevision}, resources, scopePrefix)
+	discoveredItems, err := DiscoverSkillsFromResources(opCtx, AdapterResourceReader{Adapter: adapter, Source: src, Revision: currentRev}, resources, scopePrefix)
 	if err != nil {
 		return SourceImportProposal{}, err
 	}
@@ -165,6 +182,7 @@ func (service SourceImportService) PreviewSourceImport(ctx context.Context, path
 			skipped = append(skipped, discItem)
 		} else if existingSkills[item.TargetID] {
 			discItem.Conflict = true
+			discItem.Imported = true
 			discItem.SkipReason = fmt.Sprintf("Skill %q already exists in workspace", item.TargetID)
 			skipped = append(skipped, discItem)
 		} else {
@@ -192,79 +210,18 @@ func (service SourceImportService) PreviewSourceImport(ctx context.Context, path
 	var changes []mutation.Change
 	diff := SourceDiff{Added: []string{}, Modified: []string{}, Deleted: []string{}}
 
+	var revCallback func(string) (sourcepkg.Revision, error)
+	if record.Adapter == "git" {
+		revCallback = makeRevisionAtCallback(opCtx, adapter, src, currentRev.Value)
+	}
+
 	for _, pi := range pendingImports {
-		targetID := pi.TargetID
-		// 1. Normalized SKILL.md
-		normMD, _, normErr := ensureImportedSkillFrontmatter(pi.SkillMDBytes, targetID, pi.Description)
-		if normErr != nil {
-			return SourceImportProposal{}, normErr
+		itemChanges, itemAdded, itemErr := buildImportItemChanges(pi, record, currentRev, revCallback, nowISO)
+		if itemErr != nil {
+			return SourceImportProposal{}, itemErr
 		}
-		skillMDTarget := "skills/default/" + targetID + "/SKILL.md"
-		changes = append(changes, mutation.Change{Path: skillMDTarget, Contents: normMD})
-		diff.Added = append(diff.Added, skillMDTarget)
-
-		// 2. skill.meta.yaml
-		metaDoc := map[string]any{
-			"schema_version": 1,
-			"id":             targetID,
-			"name":           pi.Name,
-			"status":         "draft",
-			"description":    pi.Description,
-			"routing": map[string]any{
-				"triggers":  []string{},
-				"not_for":   []string{},
-				"min_scope": "",
-			},
-			"quality": map[string]any{
-				"reviewed": false,
-			},
-			"provenance": map[string]any{
-				"created_by": "source_import",
-				"source_id":  record.ID,
-				"revision":   record.CurrentRevision.Value,
-				"path":       pi.SkillDir,
-			},
-			"history": []any{
-				map[string]any{
-					"state":       "draft",
-					"occurred_at": nowISO,
-				},
-			},
-			"created_at": nowISO,
-			"updated_at": nowISO,
-		}
-		metaBytes, err := yaml.Marshal(metaDoc)
-		if err != nil {
-			return SourceImportProposal{}, err
-		}
-		metaTarget := "skills/default/" + targetID + "/skill.meta.yaml"
-		changes = append(changes, mutation.Change{Path: metaTarget, Contents: metaBytes})
-		diff.Added = append(diff.Added, metaTarget)
-
-		// 3. Provenance link
-		linkID := "LINK-" + targetID + "--" + record.ID
-		linkDoc := sourcepkg.Link{
-			SchemaVersion: 1,
-			ID:            linkID,
-			SkillID:       targetID,
-			SourceID:      record.ID,
-			Role:          "origin",
-		}
-		linkBytes, err := sourcepkg.MarshalCanonical(linkDoc)
-		if err != nil {
-			return SourceImportProposal{}, err
-		}
-		linkTarget := "sources/skills/" + linkID + ".yaml"
-		changes = append(changes, mutation.Change{Path: linkTarget, Contents: linkBytes})
-		diff.Added = append(diff.Added, linkTarget)
-
-		// 4. Companion files (BUG-04: byte-for-byte copy, no empty/binary skips)
-		for _, comp := range pi.Companions {
-			compData := pi.CompanionBytes[comp.Path]
-			compTarget := "skills/default/" + targetID + "/" + comp.Path
-			changes = append(changes, mutation.Change{Path: compTarget, Contents: compData})
-			diff.Added = append(diff.Added, compTarget)
-		}
+		changes = append(changes, itemChanges...)
+		diff.Added = append(diff.Added, itemAdded...)
 	}
 
 	var planned mutation.Proposal
@@ -312,6 +269,48 @@ func (service SourceImportService) PreviewSourceImport(ctx context.Context, path
 	}
 
 	return proposal, nil
+}
+
+func commonParentDirForSource(root, sourceID string) string {
+	skillIDs, err := listAllSkillIDs(root)
+	if err != nil {
+		return ""
+	}
+	var paths []string
+	for _, id := range skillIDs {
+		_, _, metaBytes, err := locateSkillDir(root, id)
+		if err != nil || len(metaBytes) == 0 {
+			continue
+		}
+		var meta struct {
+			Provenance struct {
+				SourceID string      `yaml:"source_id"`
+				Origin   SkillOrigin `yaml:"origin"`
+			} `yaml:"provenance"`
+		}
+		if err := yaml.Unmarshal(metaBytes, &meta); err == nil {
+			if meta.Provenance.SourceID == sourceID && meta.Provenance.Origin.Path != "" {
+				paths = append(paths, meta.Provenance.Origin.Path)
+			}
+		}
+	}
+	if len(paths) == 0 {
+		return ""
+	}
+	common := filepath.ToSlash(filepath.Dir(paths[0]))
+	if common == "." || common == "/" {
+		common = ""
+	}
+	for _, p := range paths[1:] {
+		pDir := filepath.ToSlash(filepath.Dir(p))
+		for common != "" && !strings.HasPrefix(pDir+"/", common+"/") {
+			common = filepath.ToSlash(filepath.Dir(common))
+			if common == "." || common == "/" {
+				common = ""
+			}
+		}
+	}
+	return common
 }
 
 func (service SourceImportService) LoadSourceImportProposal(ctx context.Context, path, id string) (SourceImportProposal, error) {
@@ -540,4 +539,96 @@ func listWorkspaceSkillIDs(root string) (map[string]bool, error) {
 		}
 	}
 	return ids, nil
+}
+
+func buildImportItemChanges(
+	pi DiscoveredSkillItem,
+	record *sourcepkg.Record,
+	currentRev sourcepkg.Revision,
+	revCallback func(string) (sourcepkg.Revision, error),
+	nowISO string,
+) ([]mutation.Change, []string, error) {
+	var changes []mutation.Change
+	var added []string
+	targetID := pi.TargetID
+
+	files, transforms, normErr := importedSkillFiles(pi, targetID)
+	if normErr != nil {
+		return nil, nil, normErr
+	}
+	skillMDTarget := "skills/default/" + targetID + "/SKILL.md"
+	changes = append(changes, mutation.Change{Path: skillMDTarget, Contents: files["SKILL.md"]})
+	added = append(added, skillMDTarget)
+
+	var provDoc map[string]any
+	if record.Adapter == "git" {
+		originKind := "git"
+		if u, err := url.Parse(record.Locator.Repository); err == nil && strings.ToLower(u.Host) == "github.com" {
+			originKind = "github"
+		}
+		capturedOrigin := SkillOrigin{
+			Kind:       originKind,
+			Repository: record.Locator.Repository,
+			Ref:        record.Locator.Ref,
+			Commit:     currentRev.Value,
+			AddedAt:    nowISO,
+		}
+		skillOrigin := buildGitOrigin(capturedOrigin, record.Locator.Path, pi.SkillDir, files, transforms, revCallback)
+		if skillOrigin.Name == "" {
+			skillOrigin.Name = targetID
+		}
+		provDoc = map[string]any{
+			"created_by": "source_import",
+			"source_id":  record.ID,
+			"origin":     skillOriginToMap(skillOrigin),
+		}
+	} else {
+		provDoc = map[string]any{
+			"created_by": "source_import",
+			"source_id":  record.ID,
+			"revision":   currentRev.Value,
+			"path":       pi.SkillDir,
+		}
+	}
+
+	metaDoc := map[string]any{
+		"schema_version": 1,
+		"id":             targetID,
+		"name":           pi.Name,
+		"status":         "draft",
+		"description":    pi.Description,
+		"routing": map[string]any{
+			"triggers":  []string{},
+			"not_for":   []string{},
+			"min_scope": "",
+		},
+		"quality": map[string]any{
+			"reviewed": false,
+		},
+		"provenance": provDoc,
+		"history": []any{
+			map[string]any{
+				"state":       "draft",
+				"occurred_at": nowISO,
+			},
+		},
+		"created_at": nowISO,
+		"updated_at": nowISO,
+	}
+	metaBytes, err := yaml.Marshal(metaDoc)
+	if err != nil {
+		return nil, nil, err
+	}
+	metaTarget := "skills/default/" + targetID + "/skill.meta.yaml"
+	changes = append(changes, mutation.Change{Path: metaTarget, Contents: metaBytes})
+	added = append(added, metaTarget)
+
+	for _, comp := range pi.Companions {
+		compData := pi.CompanionBytes[comp.Path]
+		compTarget := "skills/default/" + targetID + "/" + comp.Path
+		changes = append(changes, mutation.Change{Path: compTarget, Contents: compData})
+		added = append(added, compTarget)
+	}
+
+	return changes, added, nil
 }

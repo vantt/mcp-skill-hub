@@ -77,7 +77,15 @@ export const en = {
   'action.back': 'Back',
   'action.close': 'Close',
   'action.reload': 'Reload',
-
+  'action.review_upstream_updates': 'Review updates →',
+  'action.track_upstream_skills': 'Copy command',
+  'action.link_orphan_sources': 'Open sources →',
+  'action.distill_with_curator': 'Distill with Curator Agent',
+  'action.copy_handoff': 'Copy handoff',
+  'action.copy_resume_handoff': 'Copy resume handoff',
+  'action.open_runs': 'Open runs',
+  'action.cancel_run': 'Cancel run',
+  'action.refresh_status': 'Refresh status',
   // Home Screen
   'home.title': 'Home',
   'home.subtitle': 'Curate and monitor your Skill Hub workspace.',

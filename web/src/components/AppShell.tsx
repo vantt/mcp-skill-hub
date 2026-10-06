@@ -48,10 +48,6 @@ export function AppShell({ children }: AppShellProps) {
     parentPath = '/skills';
   } else if (path === '/sources') {
     pageTitle = t('nav.sources');
-  } else if (path === '/sources/watch') {
-    pageTitle = 'Watch source';
-    parentLabel = t('nav.sources');
-    parentPath = '/sources';
   } else if (path === '/sources/distill') {
     pageTitle = 'Distill with Curator Agent';
     parentLabel = t('nav.sources');
@@ -63,9 +59,16 @@ export function AppShell({ children }: AppShellProps) {
   } else if (path === '/inbox') {
     pageTitle = t('nav.inbox');
   } else if (path.startsWith('/inbox/')) {
-    pageTitle = 'Insight';
-    parentLabel = t('nav.inbox');
-    parentPath = '/inbox';
+    if (path.endsWith('/apply')) {
+      const insightId = path.split('/')[2] ?? '';
+      pageTitle = 'Compose patch';
+      parentLabel = 'Insight';
+      parentPath = `/inbox/${encodeURIComponent(insightId)}`;
+    } else {
+      pageTitle = 'Insight';
+      parentLabel = t('nav.inbox');
+      parentPath = '/inbox';
+    }
   }
 
   useEffect(() => {
@@ -124,10 +127,10 @@ export function AppShell({ children }: AppShellProps) {
           <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
             {parentLabel && parentPath && (
               <div className="fg-breadcrumb" style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <Link to={parentPath} style={{ color: 'var(--color-text-subtle)', textDecoration: 'none' }}>
+                <Link to={parentPath} style={{ color: 'var(--color-text-muted)', textDecoration: 'none' }}>
                   <span>{parentLabel}</span>
                 </Link>
-                <span className="fg-breadcrumb__sep" style={{ color: 'var(--color-text-subtle)' }}>
+                <span className="fg-breadcrumb__sep" style={{ color: 'var(--color-text-muted)' }}>
                   /
                 </span>
                 <span className="fg-breadcrumb__here" style={{ color: 'var(--color-text)' }}>

@@ -270,6 +270,27 @@ func TestSkillMetadataProvenanceAndStructuredOrigin(t *testing.T) {
 	}`
 	validateJSON(t, loadSkillMetadataSchema, validLocal, true)
 
+	validWithFilesDigest := `{
+		"schema_version": 1,
+		"id": "my-skill",
+		"name": "My Skill",
+		"status": "draft",
+		"description": "Origin files_digest test",
+		"routing": {},
+		"provenance": {
+			"origin": {
+				"kind": "github",
+				"repository": "https://github.com/anthropics/skills",
+				"ref": "main",
+				"commit": "8a1541c8a1541c8a1541c8a1541c8a1541c8a154",
+				"path": "skills/pdf",
+				"folder_digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+				"files_digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+			}
+		}
+	}`
+	validateJSON(t, loadSkillMetadataSchema, validWithFilesDigest, true)
+
 	invalidCases := []struct {
 		name string
 		json string

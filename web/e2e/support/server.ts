@@ -13,18 +13,22 @@ export interface RunningServer {
   stop: () => Promise<void>;
 }
 
-export async function startServer(): Promise<RunningServer> {
+export interface StartServerOptions {
+  workspace?: string;
+}
+
+export async function startServer(options?: StartServerOptions): Promise<RunningServer> {
   const binaryPath = path.resolve(__dirname, '../../.e2e/skillhub');
   if (!fs.existsSync(binaryPath)) {
     throw new Error(`skillhub binary not found at ${binaryPath}. Run make web-e2e to build.`);
   }
 
-  const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'skillhub-e2e-'));
+  const customWorkspace = options?.workspace;
+  const ws = customWorkspace || fs.mkdtempSync(path.join(os.tmpdir(), 'skillhub-e2e-'));
 
-  // 1. Initialize workspace
-  execFileSync(binaryPath, ['init', ws, '--yes'], { stdio: 'pipe' });
-
-  // 2. Write Markdown file and create smoke-skill
+  if (!customWorkspace) {
+    // 1. Initialize workspace
+    execFileSync(binaryPath, ['init', ws, '--yes'], { stdio: 'pipe' });
   const contentFile = path.join(os.tmpdir(), `smoke-${Date.now()}.md`);
   fs.writeFileSync(contentFile, '# Smoke Skill\n\nSmoke test instructions.\n');
 
@@ -56,6 +60,7 @@ export async function startServer(): Promise<RunningServer> {
     fs.unlinkSync(contentFile);
   } catch {
     // Ignore error if file was already removed.
+  }
   }
 
   // 3. Spawn serve web
@@ -111,10 +116,12 @@ export async function startServer(): Promise<RunningServer> {
         }, 3000);
       });
     }
-    try {
-      fs.rmSync(ws, { recursive: true, force: true });
-    } catch {
-      // Ignore cleanup error on temp dir.
+    if (!customWorkspace) {
+      try {
+        fs.rmSync(ws, { recursive: true, force: true });
+      } catch {
+        // Ignore cleanup error on temp dir.
+      }
     }
   };
 

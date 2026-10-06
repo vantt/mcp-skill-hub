@@ -384,6 +384,28 @@ provenance:
 	if !strings.Contains(issueMessages(issues), "provenance.origin.repository is not allowed for local origin") {
 		t.Fatalf("expected rejection of repository in local origin, got:\n%s", issueMessages(issues))
 	}
+
+	// Valid: with files_digest
+	validFilesDigestMeta := strings.Replace(validLocalMeta, "folder_digest:", "files_digest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n    folder_digest:", 1)
+	write(t, root, "skills/software/rr/skill.meta.yaml", validFilesDigestMeta)
+	issues, err = Validate(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(issues) != 0 {
+		t.Fatalf("expected valid files_digest to pass, got:\n%s", issueMessages(issues))
+	}
+
+	// Invalid: files_digest format
+	invalidFilesDigestMeta := strings.Replace(validLocalMeta, "folder_digest:", "files_digest: abc\n    folder_digest:", 1)
+	write(t, root, "skills/software/rr/skill.meta.yaml", invalidFilesDigestMeta)
+	issues, err = Validate(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(issueMessages(issues), "provenance.origin.files_digest must be a lowercase SHA-256 digest") {
+		t.Fatalf("expected rejection of invalid files_digest, got:\n%s", issueMessages(issues))
+	}
 }
 
 const runtimeAndExamplesMetadata = `schema_version: 1

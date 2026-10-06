@@ -133,6 +133,7 @@
         "path": {"type": "string", "pattern": "^([a-zA-Z0-9_.-]*[a-zA-Z0-9_-][a-zA-Z0-9_.-]*)(/[a-zA-Z0-9_.-]*[a-zA-Z0-9_-][a-zA-Z0-9_.-]*)*$"},
         "name": {"type": "string", "pattern": "^[a-zA-Z0-9_.-]*[a-zA-Z0-9_-][a-zA-Z0-9_.-]*$"},
         "folder_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "files_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
         "content_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
         "transformations": {"type": "array", "items": {"type": "string", "minLength": 1}},
         "added_at": {"type": "string", "format": "date-time"}

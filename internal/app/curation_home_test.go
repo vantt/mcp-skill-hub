@@ -9,8 +9,9 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-
+	"time"
 	"github.com/vantt/mcp-skill-hub/internal/mutation"
+	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
 	"gopkg.in/yaml.v3"
 )
 
@@ -352,5 +353,147 @@ func TestGetCurationHomeNeverReportsCountsKnownWhenInvalid(t *testing.T) {
 	}
 	if !strings.Contains(invalidHome.Summary, "Workspace needs repair") {
 		t.Fatalf("summary = %q, want repair guidance", invalidHome.Summary)
+	}
+}
+
+func TestCurationHomeUpstreamUpdatesAndExcludesUpstreamOnlySources(t *testing.T) {
+	t.Parallel()
+	root := filepath.Join(t.TempDir(), "workspace")
+	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Create an upstream-only source (purpose: upstream, without distilled_revision)
+	sourceData := `schema_version: 1
+id: anthropics-skills
+purpose: upstream
+adapter: git
+locator:
+  repository: https://github.com/anthropics/skills
+  ref: main
+status: watching
+identity:
+  name: skills
+  canonical: https://github.com/anthropics/skills
+trust:
+  source: community
+  reviewed: false
+monitoring:
+  enabled: true
+  cadence: weekly
+limits:
+  timeout_seconds: 60
+  max_bytes: 10485760
+  max_files: 100
+  max_file_bytes: 1048576
+`
+	if err := os.WriteFile(filepath.Join(root, "sources", "catalog", "anthropics-skills.yaml"), []byte(sourceData), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a tracked skill for this source
+	skillDir := filepath.Join(root, "skills", "default", "pdf")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\nname: pdf\ndescription: PDF skill\n---\nBody\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	skillMeta := `schema_version: 1
+id: pdf
+name: pdf
+status: draft
+description: PDF skill
+routing:
+  triggers: []
+  not_for: []
+  min_scope: ""
+quality:
+  reviewed: false
+provenance:
+  created_by: skill_add
+  source_id: anthropics-skills
+  origin:
+    kind: github
+    repository: https://github.com/anthropics/skills
+    ref: main
+    commit: aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111
+    path: skills/pdf
+    files_digest: sha256:1111111111111111111111111111111111111111111111111111111111111111
+`
+	if err := os.WriteFile(filepath.Join(skillDir, "skill.meta.yaml"), []byte(skillMeta), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	commitWorkspace(t, root)
+	if _, err := (CatalogService{}).BuildCatalogGeneration(t.Context(), root); err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. Check curation home before recording upstream state:
+	// - ChangedSources must be 0 (upstream-only source excluded from distill_changed_sources)
+	// - UpstreamUpdates must be 0
+	home, err := (CurationService{}).GetCurationHome(t.Context(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, cat := range home.Categories {
+		if cat.Kind == "changed_sources" && cat.Count != 0 {
+			t.Fatalf("expected changed_sources count 0, got %d", cat.Count)
+		}
+	}
+	if home.HomeSummary.UpstreamUpdates != 0 {
+		t.Fatalf("expected UpstreamUpdates 0, got %d", home.HomeSummary.UpstreamUpdates)
+	}
+
+	// 3. Record an upstream state with upstream: changed
+	store := sourcepkg.OperationalStore{Root: root}
+	now := time.Now().UTC()
+	err = store.RecordUpstream(t.Context(), []sourcepkg.UpstreamState{
+		{
+			SkillID:         "pdf",
+			SourceID:        "anthropics-skills",
+			Repository:      "https://github.com/anthropics/skills",
+			Ref:             "main",
+			Path:            "skills/pdf",
+			BaseCommit:      "aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111",
+			CheckedCommit:   "bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222",
+			CheckedCommitAt: now,
+			Upstream:        "changed",
+			UpstreamDigest:  "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+			ChangedFiles:    []sourcepkg.Change{{Path: "SKILL.md", Status: "modified"}},
+			CheckedAt:       now,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 4. Check curation home again:
+	// - UpstreamUpdates must be 1
+	// - Actions contains review_upstream_updates with Count: 1, Priority: 75
+	// - Recommendation is "Review upstream updates with skillhub skill outdated"
+	homeAfter, err := (CurationService{}).GetCurationHome(t.Context(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if homeAfter.HomeSummary.UpstreamUpdates != 1 {
+		t.Fatalf("expected UpstreamUpdates 1, got %d", homeAfter.HomeSummary.UpstreamUpdates)
+	}
+	var foundAction *ActionItem
+	for _, a := range homeAfter.Actions {
+		if a.Kind == "review_upstream_updates" {
+			foundAction = &a
+			break
+		}
+	}
+	if foundAction == nil {
+		t.Fatalf("expected action review_upstream_updates, got actions: %#v", homeAfter.Actions)
+	}
+	if foundAction.Count != 1 || foundAction.Priority != 75 {
+		t.Fatalf("expected count 1 priority 75, got %#v", foundAction)
+	}
+	if len(homeAfter.SuggestedActions) == 0 || homeAfter.SuggestedActions[0].Label != "Review upstream updates with skillhub skill outdated" {
+		t.Fatalf("expected recommended label 'Review upstream updates with skillhub skill outdated', got %#v", homeAfter.SuggestedActions)
 	}
 }

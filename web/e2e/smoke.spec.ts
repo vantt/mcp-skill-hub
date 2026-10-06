@@ -62,6 +62,18 @@ test('smoke: home and skills routes, theme persistence, loopback-only requests, 
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-scheme', 'dark');
 
+  // 5b. Open /sources and verify empty state text
+  await page.click('a[href="/sources"]');
+  await expect(page).toHaveURL(new RegExp('/sources'));
+  await expect(
+    page.getByText('No sources yet. Link a repository whose ideas should improve your skills.'),
+  ).toBeVisible();
+
+  // 5c. Open /skills/smoke-skill?tab=sources and verify learning empty state
+  await page.goto(`${server.origin}/skills/smoke-skill?tab=sources`);
+  await expect(
+    page.getByText('No learning references yet. Link a repository or document whose ideas should improve this skill.'),
+  ).toBeVisible();
   // 6. Assert all recorded network requests were loopback-only (origin or data:)
   expect(requestedUrls.length).toBeGreaterThan(0);
   for (const reqUrl of requestedUrls) {
@@ -70,7 +82,7 @@ test('smoke: home and skills routes, theme persistence, loopback-only requests, 
   }
 
   // 7. Run Axe accessibility checks on / and /skills in light and dark at 1280 and 390
-  const routesToCheck = ['/', '/skills'];
+  const routesToCheck = ['/', '/skills', '/sources'];
   const viewports = [
     { width: 1280, height: 800, name: 'desktop' },
     { width: 390, height: 844, name: 'mobile' },

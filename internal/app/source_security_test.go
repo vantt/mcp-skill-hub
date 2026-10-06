@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/vantt/mcp-skill-hub/internal/catalog"
+	"github.com/vantt/mcp-skill-hub/internal/skill"
 	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
 )
 
@@ -103,13 +104,27 @@ func TestSourceProposalExpiryIsRecheckedAtConfirmation(t *testing.T) {
 	t.Parallel()
 	root := newSourceWorkspace(t)
 	now := time.Date(2026, 9, 29, 1, 0, 0, 0, time.UTC)
+	skillService := SkillService{}
+	skPrev, err := skillService.PreviewCreate(context.Background(), root, skill.CreateInput{
+		ID:          "sec-skill",
+		Collection:  "default",
+		Name:        "Security Skill",
+		Description: "Security skill description",
+	}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := skillService.ConfirmSkillMutation(context.Background(), root, skPrev, skPrev.Confirmation.Confirmation.Pins); err != nil {
+		t.Fatal(err)
+	}
+
 	adapter := &fakeSourceAdapter{revisions: map[string]sourcepkg.Revision{"expiring-source": revision("one")}, errors: map[string]error{}}
 	service := SourceService{Clock: sourceClock{now: now}, IDs: fixedSourceID("0011223344556677"), Adapters: map[string]sourcepkg.Adapter{"git": adapter}}
 	captured, err := service.CaptureSourceCandidate(context.Background(), root, SourceCandidateInput{Locator: "https://github.com/example/expiry.git", Reason: "expiry test"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	preview, _, err := service.TriageSourceCandidate(context.Background(), root, SourceTriageInput{CandidateID: captured.Candidate.ID, Decision: "accept", SourceID: "expiring-source", Adapter: "git", MonitoringEnabled: true})
+	preview, _, err := service.TriageSourceCandidate(context.Background(), root, SourceTriageInput{CandidateID: captured.Candidate.ID, Decision: "accept", SourceID: "expiring-source", Adapter: "git", MonitoringEnabled: true, SkillID: "sec-skill"})
 	if err != nil {
 		t.Fatal(err)
 	}

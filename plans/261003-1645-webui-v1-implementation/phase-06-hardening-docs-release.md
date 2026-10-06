@@ -1,14 +1,14 @@
 ---
 phase: 6
 title: "Hardening, docs, release"
-status: pending
+status: moved
 priority: P1
 effort: 28h
 dependencies: [5]
 ---
 
 <!-- Updated: Validation Session 1 - rewritten as an executor handover; npm ci without --ignore-scripts; exact doc edits and greps -->
-> **Status:** Pending. Final release hardening, accessibility, licensing, and documentation updates across all shipped WebUI screens.
+> **Moved 2026-10-05:** tasks 6.1–6.4 and 6.6 to `plans/261004-2234-skill-source-upstream-ux/phase-12-webui-hardening-and-release.md`; task 6.5 (documentation) to `plans/261004-2234-skill-source-upstream-ux/phase-13-documentation.md`. Do not execute this file.
 
 
 # Phase 6: Hardening, docs, release

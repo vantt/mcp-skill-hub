@@ -1,12 +1,13 @@
+import { useSearchParams } from 'react-router';
 import type { SkillDetail, SkillReviewResult } from '../../api/types';
 import { CopyButton } from '../../components/CopyButton';
 import { StatusBadge } from '../../components/StatusBadge';
 import { ContentTrustCard } from './ContentTrustCard';
+import { ProvenanceCard } from './ProvenanceCard';
 const TITLE_VALIDITY = 'Validity';
 const TITLE_READINESS = 'Activation readiness';
 const TITLE_RESOURCES = 'Resources status';
 const TITLE_CANONICAL_SERVED = 'Canonical vs served';
-const TITLE_PROVENANCE = 'Provenance';
 const TITLE_GIT = 'Git';
 const LABEL_STRUCTURALLY_VALID = 'Structurally valid';
 const LABEL_CANONICAL_ISSUES = '0 canonical issues';
@@ -14,20 +15,30 @@ const LABEL_MISSING = 'Missing';
 const LABEL_GO_TO_FIELD = 'Go to field';
 const LABEL_CANONICAL = 'Canonical';
 const LABEL_SERVED = 'Served';
-const LABEL_ORIGIN = 'Origin';
-const LABEL_REF_COMMIT = 'Ref · commit';
+const WARNING_DIVERGED = 'Served catalog differs from canonical files. Rebuild to publish.';
 const LABEL_GIT_NOTICE = 'The WebUI never commits or pushes.';
 const CMD_GIT_STATUS = 'git status';
-const REF_MAIN_CANONICAL = 'main · canonical';
-const WARNING_DIVERGED = 'Served catalog differs from canonical files. Rebuild to publish.';
 
 interface ReviewTabProps {
   skill: SkillDetail;
   review?: SkillReviewResult;
   onGoToEditor: (field?: string) => void;
+  onViewSources?: () => void;
 }
 
-export function ReviewTab({ skill, review, onGoToEditor }: ReviewTabProps) {
+export function ReviewTab({ skill, review, onGoToEditor, onViewSources }: ReviewTabProps) {
+  const [, setSearchParams] = useSearchParams();
+  const handleViewSources = () => {
+    if (onViewSources) {
+      onViewSources();
+    } else {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.set('tab', 'sources');
+        return next;
+      });
+    }
+  };
   const readiness = review?.activation_readiness;
   const isUntouched = readiness?.untouched_scaffold ?? false;
 
@@ -177,29 +188,7 @@ export function ReviewTab({ skill, review, onGoToEditor }: ReviewTabProps) {
       </section>
 
       {/* Provenance Card */}
-      <section className="fg-card" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-        <div className="fg-card__title">
-          <span>{TITLE_PROVENANCE}</span>
-        </div>
-        <div className="fg-facts">
-          <div className="fg-fact">
-            <div className="fg-fact__label">
-              <span>{LABEL_ORIGIN}</span>
-            </div>
-            <div className="fg-fact__value" style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
-              <span>{skill.path}</span>
-            </div>
-          </div>
-          <div className="fg-fact">
-            <div className="fg-fact__label">
-              <span>{LABEL_REF_COMMIT}</span>
-            </div>
-            <div className="fg-fact__value" style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
-              <span>{REF_MAIN_CANONICAL}</span>
-            </div>
-          </div>
-        </div>
-      </section>
+      <ProvenanceCard provenance={review?.provenance} onViewSources={handleViewSources} />
 
       {/* Git Card */}
       <section className="fg-card" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>

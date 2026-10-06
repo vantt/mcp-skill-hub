@@ -1,0 +1,14 @@
+{
+  "schema_version": "1",
+  "status": "ok",
+  "summary": "Sources for review-skill.",
+  "items": [],
+  "suggested_actions": [],
+  "warnings": [],
+  "error": null,
+  "skill_id": "review-skill",
+  "upstream": null,
+  "learning": [],
+  "pending_insights": 0
+}
+

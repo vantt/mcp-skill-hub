@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/vantt/mcp-skill-hub/internal/catalog"
 	"github.com/vantt/mcp-skill-hub/internal/mutation"
+	"github.com/vantt/mcp-skill-hub/internal/skill"
 	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
 	"github.com/vantt/mcp-skill-hub/internal/telemetry"
 	"github.com/vantt/mcp-skill-hub/internal/workspace"
@@ -17,6 +18,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 // SourceService is the shared boundary for source intake, onboarding, and explicit checks.
@@ -33,14 +36,37 @@ type SourceCandidateResult struct {
 	Candidate   sourcepkg.Candidate `json:"candidate"`
 	OperationID string              `json:"operation_id,omitempty"`
 }
+type SourceListItem struct {
+	Record          sourcepkg.Record `json:"record"`
+	Skills          []string         `json:"skills"`
+	Role            string           `json:"role"`
+	ImportableCount int              `json:"importable_count"`
+}
+
+type SourceSummary struct {
+	ID                  string     `json:"id"`
+	Status              string     `json:"status"`
+	Role                string     `json:"role"`
+	ReferencingSkills   []string   `json:"referencing_skills"`
+	SkillsVendoredCount int        `json:"skills_vendored_count"`
+	ImportableCount     int        `json:"importable_count"`
+	LastCheckedAt       *time.Time `json:"last_checked_at,omitempty"`
+}
+
+type SourceRepositoryGroup struct {
+	Repository string          `json:"repository"`
+	Sources    []SourceSummary `json:"sources"`
+}
+
 type SourceListResult struct {
 	Result
-	Candidates []sourcepkg.Candidate `json:"candidates"`
-	Sources    []sourcepkg.Record    `json:"sources"`
+	Candidates []sourcepkg.Candidate   `json:"candidates"`
+	Sources    []SourceListItem        `json:"sources"`
+	Groups     []SourceRepositoryGroup `json:"groups,omitempty"`
 }
 
 type SourceTriageInput struct {
-	CandidateID, Decision, DecisionReason, SourceID, Adapter, Ref, SourcePath, License, Trust, Cadence, SkillID, IdempotencyKey string
+	CandidateID, Decision, DecisionReason, SourceID, Adapter, Ref, SourcePath, License, Trust, Cadence, SkillID, NewSkillID, IdempotencyKey string
 	MonitoringEnabled                                                                                                           bool
 }
 
@@ -61,6 +87,10 @@ type SourceProposal struct {
 	expiresAt    time.Time
 }
 
+func (p SourceProposal) WriteCommand() string {
+	return p.planned.WriteSet.Command
+}
+
 type SourceMutationResult struct {
 	Result
 	SourceID        string   `json:"source_id,omitempty"`
@@ -77,6 +107,7 @@ type SourceCheckItem struct {
 	Revision  *sourcepkg.Revision `json:"revision,omitempty"`
 	LatencyMS int64               `json:"latency_ms"`
 	Error     string              `json:"error,omitempty"`
+	Skills    []SkillUpstream     `json:"skills,omitempty"`
 }
 
 type SourceCheckResult struct {
@@ -167,7 +198,7 @@ func (service SourceService) CaptureSourceCandidate(ctx context.Context, path st
 	return result, nil
 }
 
-func (SourceService) ListSources(ctx context.Context, path, status string) (SourceListResult, error) {
+func (service SourceService) ListSources(ctx context.Context, path, status string) (SourceListResult, error) {
 	root, err := workspace.Discover(path)
 	if err != nil {
 		return SourceListResult{}, err
@@ -175,7 +206,8 @@ func (SourceService) ListSources(ctx context.Context, path, status string) (Sour
 	if err := ctx.Err(); err != nil {
 		return SourceListResult{}, err
 	}
-	candidates, sources, err := readSourceRecords(root)
+	service = service.defaults(root)
+	candidates, rawSources, err := readSourceRecords(root)
 	if err != nil {
 		return SourceListResult{}, err
 	}
@@ -188,14 +220,183 @@ func (SourceService) ListSources(ctx context.Context, path, status string) (Sour
 		}
 		candidates = filtered
 	}
-	result := SourceListResult{Result: NewResult(StatusOK, fmt.Sprintf("%d candidate(s) and %d monitored source(s).", len(candidates), len(sources))), Candidates: candidates, Sources: sources}
+
+	upstreamMap, linkMap := computeSourceRoleAndSkills(root)
+
+	var sources []SourceListItem
+	for _, rec := range rawSources {
+		upSkills := upstreamMap[rec.ID]
+		lnkSkills := linkMap[rec.ID]
+		isUpstream := len(upSkills) > 0
+		isLearning := len(lnkSkills) > 0
+
+		var role string
+		switch {
+		case isUpstream && isLearning:
+			role = "both"
+		case isUpstream:
+			role = "upstream"
+		case isLearning:
+			role = "learning-source"
+		default:
+			role = "unattached"
+		}
+
+		skillSet := make(map[string]bool)
+		for _, s := range upSkills {
+			skillSet[s] = true
+		}
+		for _, s := range lnkSkills {
+			skillSet[s] = true
+		}
+		var combinedSkills []string
+		for s := range skillSet {
+			combinedSkills = append(combinedSkills, s)
+		}
+		sort.Strings(combinedSkills)
+
+		importableCount := -1
+		if service.Adapters != nil && rec.CurrentRevision != nil {
+			if adapter, ok := service.Adapters[rec.Adapter]; ok {
+				src := sourcepkg.Source{ID: rec.ID, Locator: rec.Locator, Limits: rec.Limits}
+				scopePrefix := rec.Locator.Path
+				if scopePrefix == "" {
+					scopePrefix = commonParentDirForSource(root, rec.ID)
+				}
+				resources, err := adapter.List(ctx, src, *rec.CurrentRevision, sourcepkg.Scope{Prefix: scopePrefix})
+				if err == nil {
+					reader := AdapterResourceReader{Adapter: adapter, Source: src, Revision: *rec.CurrentRevision}
+					items, err := DiscoverSkillsFromResources(ctx, reader, resources, scopePrefix)
+					if err == nil {
+						existingSkills, _ := listWorkspaceSkillIDs(root)
+						count := 0
+						for _, it := range items {
+							if it.Error == "" && !existingSkills[it.TargetID] {
+								count++
+							}
+						}
+						importableCount = count
+					}
+				}
+			}
+		}
+
+		sources = append(sources, SourceListItem{
+			Record:          rec,
+			Skills:          combinedSkills,
+			Role:            role,
+			ImportableCount: importableCount,
+		})
+	}
+
+	result := SourceListResult{
+		Result:     NewResult(StatusOK, fmt.Sprintf("%d candidate(s) and %d monitored source(s).", len(candidates), len(sources))),
+		Candidates: candidates,
+		Sources:    sources,
+	}
 	for _, item := range candidates {
 		result.Items = append(result.Items, Item{ID: item.ID, Summary: item.Locator, Impact: "Intake status: " + item.Status})
 	}
 	for _, item := range sources {
-		result.Items = append(result.Items, Item{ID: item.ID, Summary: item.Identity.Name, Impact: "Source status: " + item.Status})
+		result.Items = append(result.Items, Item{ID: item.Record.ID, Summary: item.Record.Identity.Name, Impact: "Source status: " + item.Record.Status})
 	}
 	return result, nil
+}
+
+func (service SourceService) ListSourceGroups(ctx context.Context, path string) (SourceListResult, error) {
+	root, err := workspace.Discover(path)
+	if err != nil {
+		return SourceListResult{}, err
+	}
+	res, err := service.ListSources(ctx, root, "")
+	if err != nil {
+		return SourceListResult{}, err
+	}
+	upstreamMap, _ := computeSourceRoleAndSkills(root)
+	groupsMap := make(map[string][]SourceSummary)
+	for _, item := range res.Sources {
+		repo := item.Record.Locator.Repository
+		var lastChecked *time.Time
+		if item.Record.CurrentRevision != nil && !item.Record.CurrentRevision.ObservedAt.IsZero() {
+			t := item.Record.CurrentRevision.ObservedAt
+			lastChecked = &t
+		}
+		summary := SourceSummary{
+			ID:                  item.Record.ID,
+			Status:              item.Record.Status,
+			Role:                item.Role,
+			ReferencingSkills:   item.Skills,
+			SkillsVendoredCount: len(upstreamMap[item.Record.ID]),
+			ImportableCount:     item.ImportableCount,
+			LastCheckedAt:       lastChecked,
+		}
+		groupsMap[repo] = append(groupsMap[repo], summary)
+	}
+	var repoKeys []string
+	for k := range groupsMap {
+		repoKeys = append(repoKeys, k)
+	}
+	sort.Strings(repoKeys)
+	var groups []SourceRepositoryGroup
+	for _, k := range repoKeys {
+		groups = append(groups, SourceRepositoryGroup{
+			Repository: k,
+			Sources:    groupsMap[k],
+		})
+	}
+	res.Groups = groups
+	return res, nil
+}
+
+func computeSourceRoleAndSkills(root string) (map[string][]string, map[string][]string) {
+	upstreamMap := make(map[string][]string)
+	linkMap := make(map[string][]string)
+	skillIDs, _ := listAllSkillIDs(root)
+	for _, id := range skillIDs {
+		_, _, metaBytes, err := locateSkillDir(root, id)
+		if err != nil || len(metaBytes) == 0 {
+			continue
+		}
+		var meta struct {
+			Provenance struct {
+				SourceID string `yaml:"source_id"`
+			} `yaml:"provenance"`
+		}
+		if err := yaml.Unmarshal(metaBytes, &meta); err == nil && meta.Provenance.SourceID != "" {
+			upstreamMap[meta.Provenance.SourceID] = append(upstreamMap[meta.Provenance.SourceID], id)
+		}
+	}
+	links, _ := readSourceLinks(root)
+	for _, l := range links {
+		linkMap[l.SourceID] = append(linkMap[l.SourceID], l.SkillID)
+	}
+	return upstreamMap, linkMap
+}
+
+func readSourceLinks(root string) ([]sourcepkg.Link, error) {
+	skillsDir := filepath.Join(root, "sources", "skills")
+	entries, err := os.ReadDir(skillsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var links []sourcepkg.Link
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".yaml") || !strings.HasPrefix(entry.Name(), "LINK-") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(skillsDir, entry.Name()))
+		if err != nil {
+			continue
+		}
+		var link sourcepkg.Link
+		if err := yaml.Unmarshal(data, &link); err == nil && link.ID != "" {
+			links = append(links, link)
+		}
+	}
+	return links, nil
 }
 
 func (service SourceService) TriageSourceCandidate(ctx context.Context, path string, input SourceTriageInput) (SourceProposal, SourceMutationResult, error) {
@@ -242,8 +443,29 @@ func (service SourceService) TriageSourceCandidate(ctx context.Context, path str
 	case "accept":
 		proposal, previewErr := service.previewOnboarding(ctx, root, candidate, candidateBytes, input)
 		return proposal, SourceMutationResult{}, previewErr
+	case "import":
+		addService := SkillAddService{
+			Clock:    service.Clock,
+			Adapters: service.Adapters,
+		}
+		addProposal, addErr := addService.PreviewSkillAdd(ctx, root, SkillAddInput{
+			Locator:        candidate.Locator,
+			CandidateID:    candidate.ID,
+			IdempotencyKey: input.IdempotencyKey,
+		})
+		if addErr != nil {
+			return SourceProposal{}, SourceMutationResult{}, addErr
+		}
+		sourceProp := SourceProposal{
+			Result:       addProposal.Result,
+			CandidateID:  candidate.ID,
+			Confirmation: addProposal.Confirmation,
+			planned:      addProposal.planned,
+			expiresAt:    addProposal.expiresAt,
+		}
+		return sourceProp, SourceMutationResult{}, nil
 	default:
-		return SourceProposal{}, SourceMutationResult{}, errors.New("triage decision must be accept, defer, or reject")
+		return SourceProposal{}, SourceMutationResult{}, errors.New("triage decision must be accept, defer, reject, or import")
 	}
 }
 
@@ -337,18 +559,45 @@ func (service SourceService) previewOnboarding(ctx context.Context, root string,
 	sourceBytes, _ := sourcepkg.MarshalCanonical(record)
 	changes := []mutation.Change{{Path: "sources/intake/" + candidate.ID + ".yaml", BeforeDigest: sourcepkg.Digest(candidateBytes), Contents: candidateAfter}, {Path: "sources/catalog/" + record.ID + ".yaml", Contents: sourceBytes}}
 	diff := SourceDiff{Added: []string{"sources/catalog/" + record.ID + ".yaml"}, Modified: []string{"sources/intake/" + candidate.ID + ".yaml"}, Deleted: []string{}}
-	var link *sourcepkg.Link
-	if input.SkillID != "" {
-		linkID := "LINK-" + input.SkillID + "--" + record.ID
-		link = &sourcepkg.Link{SchemaVersion: 1, ID: linkID, SkillID: input.SkillID, SourceID: record.ID, Role: "learning-source"}
-		linkBytes, marshalErr := sourcepkg.MarshalCanonical(link)
-		if marshalErr != nil {
-			return SourceProposal{}, marshalErr
+	skillID := strings.TrimSpace(input.SkillID)
+	newSkillID := strings.TrimSpace(input.NewSkillID)
+	if (skillID == "" && newSkillID == "") || (skillID != "" && newSkillID != "") {
+		prop := SourceProposal{
+			Result: ErrorResult(NewInvalidRequestError(
+				"accept requires either --skill-id or --new-skill",
+				"Specify --skill-id <id> to link an existing skill, --new-skill <id> to scaffold a new skill, or use --decision import to vendor its skills.",
+			)),
 		}
-		linkPath := "sources/skills/" + linkID + ".yaml"
-		changes = append(changes, mutation.Change{Path: linkPath, Contents: linkBytes})
-		diff.Added = append(diff.Added, linkPath)
+		return prop, nil
 	}
+
+	targetSkillID := skillID
+	if newSkillID != "" {
+		targetSkillID = newSkillID
+		manager := skill.Manager{Clock: service.Clock.Now}
+		skillCreatePrev, err := manager.PreviewCreate(ctx, root, skill.CreateInput{
+			ID:          newSkillID,
+			Collection:  "default",
+			Name:        newSkillID,
+			Description: fmt.Sprintf("Skill that learns from %s.", identity.Name),
+		}, false)
+		if err != nil {
+			return SourceProposal{}, err
+		}
+		for _, c := range skillCreatePrev.WriteSet().Changes {
+			changes = append(changes, c)
+			diff.Added = append(diff.Added, c.Path)
+		}
+	}
+	linkID := "LINK-" + targetSkillID + "--" + record.ID
+	link := &sourcepkg.Link{SchemaVersion: 1, ID: linkID, SkillID: targetSkillID, SourceID: record.ID, Role: "learning-source"}
+	linkBytes, marshalErr := sourcepkg.MarshalCanonical(link)
+	if marshalErr != nil {
+		return SourceProposal{}, marshalErr
+	}
+	linkPath := "sources/skills/" + linkID + ".yaml"
+	changes = append(changes, mutation.Change{Path: linkPath, Contents: linkBytes})
+	diff.Added = append(diff.Added, linkPath)
 	set := mutation.WriteSet{Command: "source_onboard", IdempotencyKey: input.IdempotencyKey, Changes: changes}
 	planned, err := mutation.PlanMutation(root, set)
 	if err != nil {
@@ -432,7 +681,53 @@ func (service SourceService) ConfirmSourceProposal(ctx context.Context, path str
 	if err != nil {
 		return SourceMutationResult{}, err
 	}
-	summary := fmt.Sprintf("Watching %s. First analysis is ready: ask your agent 'distill new sources' or run `skillhub distill prepare %s`.\nWatching does not auto-import skills; accepted insights can create draft skills.", preview.Source.ID, preview.Source.ID)
+	cmd := preview.planned.WriteSet.Command
+	var summary string
+	switch cmd {
+	case "source_attach":
+		skillID := ""
+		for _, c := range preview.planned.WriteSet.Changes {
+			if strings.HasPrefix(c.Path, "sources/skills/LINK-") {
+				base := strings.TrimPrefix(filepath.Base(c.Path), "LINK-")
+				base = strings.TrimSuffix(base, ".yaml")
+				parts := strings.Split(base, "--")
+				if len(parts) >= 1 {
+					skillID = parts[0]
+				}
+				break
+			}
+		}
+		summary = fmt.Sprintf("Linked %s to %s as a learning reference.", preview.Source.ID, skillID)
+	case "source_detach":
+		skillID := ""
+		for _, c := range preview.planned.WriteSet.Changes {
+			if strings.HasPrefix(c.Path, "sources/skills/LINK-") {
+				base := strings.TrimPrefix(filepath.Base(c.Path), "LINK-")
+				base = strings.TrimSuffix(base, ".yaml")
+				parts := strings.Split(base, "--")
+				if len(parts) >= 1 {
+					skillID = parts[0]
+				}
+				break
+			}
+		}
+		summary = fmt.Sprintf("Unlinked %s from %s.", preview.Source.ID, skillID)
+	case "source_unwatch":
+		isRemoved := false
+		for _, c := range preview.planned.WriteSet.Changes {
+			if c.Delete && strings.HasPrefix(c.Path, "sources/catalog/") {
+				isRemoved = true
+				break
+			}
+		}
+		if isRemoved {
+			summary = fmt.Sprintf("Removed %s.", preview.Source.ID)
+		} else {
+			summary = fmt.Sprintf("Stopped watching %s.", preview.Source.ID)
+		}
+	default:
+		summary = fmt.Sprintf("Watching %s. First analysis is ready: ask your agent 'distill new sources' or run `skillhub distill prepare %s`.\nWatching does not auto-import skills; accepted insights can create draft skills.", preview.Source.ID, preview.Source.ID)
+	}
 	result := sourceMutationResult(summary, preview.Source.ID, receipt)
 	recordCurationTelemetry(ctx, service.Telemetry, root, curationTelemetryEvent(telemetry.EventSourceCandidateTriaged, map[string]any{
 		"candidate_id": preview.CandidateID, "source_id": preview.Source.ID, "status": "accepted", "triage": "accept",
@@ -456,6 +751,15 @@ func (service SourceService) CheckSources(ctx context.Context, path string, ids 
 	}
 	store := sourcepkg.OperationalStore{Root: root}
 	now := service.Clock.Now().UTC()
+	trackedBySource, _ := loadTrackedSkillsBySource(root)
+	links, _ := readSkillSourceLinks(root)
+	learningSources := learningSourceIDs(links)
+	allTrackedSkills, _ := loadTrackedSkills(root)
+	existingStatesList, _ := store.ListUpstream(ctx)
+	existingStates := make(map[string]sourcepkg.UpstreamState, len(existingStatesList))
+	for _, st := range existingStatesList {
+		existingStates[st.SkillID] = st
+	}
 	result := SourceCheckResult{Result: NewResult(StatusOK, "Source checks completed; curated skills are unchanged."), Results: []SourceCheckItem{}}
 	operationalWarning := false
 	warnOperational := func() {
@@ -491,6 +795,43 @@ func (service SourceService) CheckSources(ctx context.Context, path string, ids 
 			result.Results = append(result.Results, item)
 			continue
 		}
+		isUpstreamOnly := record.Purpose == "upstream" && !learningSources[record.ID]
+		skillsForSource := trackedBySource[record.ID]
+		if isUpstreamOnly {
+			item, checkErr := service.checkUpstreamOnlySource(ctx, root, record, skillsForSource, existingStates, now)
+			item.LatencyMS = time.Since(started).Milliseconds()
+			if checkErr != nil {
+				result.Unavailable++
+			} else if item.Status == "updates_available" {
+				result.Changed++
+			} else if item.Status == "unavailable" {
+				result.Unavailable++
+			} else {
+				result.Unchanged++
+			}
+			result.Results = append(result.Results, item)
+			continue
+		}
+
+		attachSkills := func() {
+			if len(skillsForSource) > 0 {
+				upstreamStates, uErr := checkSourceUpstream(ctx, adapter, record, skillsForSource, existingStates, now)
+				if uErr == nil {
+					_ = store.RecordUpstream(ctx, upstreamStates)
+				}
+				for _, sk := range skillsForSource {
+					var matchingState *sourcepkg.UpstreamState
+					for i := range upstreamStates {
+						if upstreamStates[i].SkillID == sk.SkillID {
+							matchingState = &upstreamStates[i]
+							break
+						}
+					}
+					localDigest := workingTreeSkillFilesDigest(root, sk.SkillRelDir)
+					item.Skills = append(item.Skills, buildSkillUpstreamModel(sk, &record, matchingState, localDigest))
+				}
+			}
+		}
 		checkContext, cancel := context.WithTimeout(ctx, time.Duration(record.Limits.TimeoutSeconds)*time.Second)
 		revision, checkErr := adapter.CurrentRevision(checkContext, sourcepkg.Source{ID: record.ID, Locator: record.Locator, Limits: record.Limits})
 		cancel()
@@ -523,6 +864,7 @@ func (service SourceService) CheckSources(ctx context.Context, path string, ids 
 					warnOperational()
 				}
 				item.Status = "up_to_date"
+				attachSkills()
 				result.Unchanged++
 				result.Results = append(result.Results, item)
 				continue
@@ -531,6 +873,7 @@ func (service SourceService) CheckSources(ctx context.Context, path string, ids 
 				warnOperational()
 			}
 			item.Status = "needs_analysis"
+			attachSkills()
 			result.Changed++
 			result.Results = append(result.Results, item)
 			continue
@@ -568,6 +911,7 @@ func (service SourceService) CheckSources(ctx context.Context, path string, ids 
 		if record.DistilledRevision == nil {
 			item.Status = "needs_analysis"
 		}
+		attachSkills()
 		result.Changed++
 		result.Results = append(result.Results, item)
 	}
@@ -601,6 +945,12 @@ func (service SourceService) CheckSources(ctx context.Context, path string, ids 
 		result.Status = StatusPartialFailure
 		result.Summary = fmt.Sprintf("Checked %d source(s); %d changed, %d unchanged, %d unavailable. Curated skills are unchanged.", result.Checked, result.Changed, result.Unchanged, result.Unavailable)
 	}
+	keepSkillIDs := make([]string, 0, len(allTrackedSkills))
+	for _, sk := range allTrackedSkills {
+		keepSkillIDs = append(keepSkillIDs, sk.SkillID)
+	}
+	_ = store.DeleteUpstreamExcept(ctx, keepSkillIDs)
+
 	events := make([]telemetry.Event, 0, len(result.Results))
 	for _, item := range result.Results {
 		result.Items = append(result.Items, Item{ID: item.SourceID, Summary: "Source check: " + item.Status, Impact: "Curated skills remain unchanged."})
@@ -620,6 +970,87 @@ func confirmAndPublish(ctx context.Context, root string, proposal mutation.Propo
 		}
 		return mutation.Publication{CatalogSnapshot: built.Pointer.CatalogSnapshot, Generation: built.Pointer.Generation}, nil
 	}})
+}
+
+func (service SourceService) checkUpstreamOnlySource(
+	ctx context.Context,
+	root string,
+	record sourcepkg.Record,
+	skills []TrackedSkill,
+	existingStates map[string]sourcepkg.UpstreamState,
+	now time.Time,
+) (SourceCheckItem, error) {
+	adapter, adapterFound := service.Adapters[record.Adapter]
+	item := SourceCheckItem{SourceID: record.ID}
+	if !adapterFound {
+		item.Status, item.Error = "unavailable", "source adapter is not configured"
+		return item, errors.New(item.Error)
+	}
+
+	upstreamStates, checkErr := checkSourceUpstream(ctx, adapter, record, skills, existingStates, now)
+	store := sourcepkg.OperationalStore{Root: root}
+
+	if checkErr != nil {
+		previousState, found, _ := store.Get(ctx, record.ID)
+		retries := 1
+		if found {
+			retries = previousState.RetryCount + 1
+		}
+		operational := sourcepkg.CheckState{
+			SourceID:      record.ID,
+			LastCheckedAt: now,
+			Latency:       0,
+			RetryCount:    retries,
+			Availability:  "unavailable",
+			NextCheckAt:   now.Add(retryDelay(retries)),
+			LastError:     sanitizeOperationalError(checkErr),
+		}
+		_ = store.Record(ctx, operational)
+		item.Status, item.Error = "unavailable", operational.LastError
+		return item, checkErr
+	}
+
+	_ = store.RecordUpstream(ctx, upstreamStates)
+	_ = store.Record(ctx, sourcepkg.CheckState{
+		SourceID:      record.ID,
+		LastCheckedAt: now,
+		Latency:       0,
+		Availability:  "available",
+		NextCheckAt:   nextCheck(now, record.Monitoring.Cadence),
+	})
+
+	anyUpdates := false
+	allUnavailable := len(upstreamStates) > 0
+	for _, st := range upstreamStates {
+		if st.Upstream == "changed" || st.Upstream == "removed" {
+			anyUpdates = true
+		}
+		if st.Upstream != "unavailable" {
+			allUnavailable = false
+		}
+	}
+
+	if anyUpdates {
+		item.Status = "updates_available"
+	} else if allUnavailable {
+		item.Status = "unavailable"
+	} else {
+		item.Status = "up_to_date"
+	}
+
+	for _, sk := range skills {
+		var matchingState *sourcepkg.UpstreamState
+		for i := range upstreamStates {
+			if upstreamStates[i].SkillID == sk.SkillID {
+				matchingState = &upstreamStates[i]
+				break
+			}
+		}
+		localDigest := workingTreeSkillFilesDigest(root, sk.SkillRelDir)
+		item.Skills = append(item.Skills, buildSkillUpstreamModel(sk, &record, matchingState, localDigest))
+	}
+
+	return item, nil
 }
 
 func readSourceRecords(root string) ([]sourcepkg.Candidate, []sourcepkg.Record, error) {

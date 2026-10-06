@@ -7,6 +7,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/delivery/paging"
 	distillpkg "github.com/vantt/mcp-skill-hub/internal/distill"
 )
 
@@ -74,24 +75,24 @@ func (adapter *Server) registerCurationRunTools(server *mcp.Server) {
 		})
 
 	addTool(server, &mcp.Tool{Name: "observation_list", Title: "List observations", Description: "Return a snapshot-bound page of distilled observations, optionally filtered by source_id. Limit defaults to 25 and is at most 100.", Annotations: annotations(true, false, false, false)},
-		func(ctx context.Context, _ *mcp.CallToolRequest, input observationListInput) (*mcp.CallToolResult, toolOutcome[page[distillpkg.Observation]], error) {
-			limit, err := normalizeLimit(input.Limit)
+		func(ctx context.Context, _ *mcp.CallToolRequest, input observationListInput) (*mcp.CallToolResult, toolOutcome[paging.Page[distillpkg.Observation]], error) {
+			limit, err := paging.NormalizeLimit(input.Limit)
 			if err != nil {
-				return failure[page[distillpkg.Observation]](err)
+				return failure[paging.Page[distillpkg.Observation]](err)
 			}
 			query, err := adapter.distill.QueryDistill(ctx, adapter.workspace, "findings", input.SourceID, "")
 			if err != nil {
-				return failure[page[distillpkg.Observation]](err)
+				return failure[paging.Page[distillpkg.Observation]](err)
 			}
 			filter := "source_id=" + strings.TrimSpace(input.SourceID)
-			owner := pageOwner(filter, query.Findings)
-			lastKey, err := decodeCursor(input.Cursor, owner, filter)
+			owner := paging.Owner(filter, query.Findings)
+			lastKey, err := paging.DecodeCursor(input.Cursor, owner, filter)
 			if err != nil {
-				return failure[page[distillpkg.Observation]](fmt.Errorf("snapshot_expired: observation cursor is invalid or expired"))
+				return failure[paging.Page[distillpkg.Observation]](fmt.Errorf("snapshot_expired: observation cursor is invalid or expired"))
 			}
-			paged, err := makePage(query.Findings, limit, lastKey, owner, filter, func(item distillpkg.Observation) string { return item.ID })
+			paged, err := paging.Make(query.Findings, limit, lastKey, owner, filter, func(item distillpkg.Observation) string { return item.ID })
 			if err != nil {
-				return failure[page[distillpkg.Observation]](fmt.Errorf("snapshot_expired: observation cursor is invalid or expired"))
+				return failure[paging.Page[distillpkg.Observation]](fmt.Errorf("snapshot_expired: observation cursor is invalid or expired"))
 			}
 			return success(paged)
 		})

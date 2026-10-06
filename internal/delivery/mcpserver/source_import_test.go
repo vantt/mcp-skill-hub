@@ -49,6 +49,7 @@ func TestSourceImportMCPPreviewAndConfirm(t *testing.T) {
 			"decision":     "accept",
 			"source_id":    "mcp-source",
 			"adapter":      "filesystem",
+			"new_skill":    "mcp-scaffold",
 		},
 	})
 	if err != nil {
@@ -149,6 +150,11 @@ func TestSourceImportMCPPreviewAndConfirm(t *testing.T) {
 		t.Fatalf("status = %q, want draft", getResult.Result.Status)
 	}
 
+	// Verify no learning link file was created for the imported skill
+	linkFiles, _ := filepath.Glob(filepath.Join(root, "sources", "skills", "LINK-mcp-agent-skill--*.yaml"))
+	if len(linkFiles) > 0 {
+		t.Fatalf("expected no link files created during source import, found %v", linkFiles)
+	}
 	// 7. Preview again via MCP: must show as skipped conflict (idempotent)
 	rePrevRes, err := session.CallTool(t.Context(), &mcp.CallToolParams{
 		Name: "source_import_preview",

@@ -48,6 +48,7 @@ export interface SkillListItem {
   routing_eligible: boolean;
   collection: string;
   name: string;
+  upstream_status?: string;
 }
 
 export interface SkillListResult {
@@ -264,16 +265,11 @@ export interface RuntimeHints {
 
 export interface SkillProvenance {
   created_by?: string;
+  created_at?: string;
   source_id?: string;
-  source_url?: string;
-  source_path?: string;
-  origin?: {
-    kind: string;
-    repository: string;
-    commit: string;
-    tag?: string;
-    branch?: string;
-  };
+  source_locator?: string;
+  source_revision?: string;
+  upstream_path?: string;
 }
 
 export interface RuntimeBin {
@@ -327,4 +323,456 @@ export interface SkillRuntimeStatus {
   env_keys: string[];
   env_set_command: string;
   warnings?: Array<{ code: string; summary: string }>;
+}
+
+export interface SkillUpstreamFile {
+  path: string;
+  status: string;
+}
+
+export interface UpstreamResolution {
+  path: string;
+  action: string;
+  content?: string;
+}
+
+export interface SkillUpstream {
+  skill_id: string;
+  source_id: string;
+  repository: string;
+  ref: string;
+  path: string;
+  base_commit: string;
+  latest_commit: string;
+  latest_committed_at?: string;
+  changed_files: number;
+  files?: SkillUpstreamFile[];
+  local: string;
+  status: string;
+  checked_at: string;
+  error?: string;
+  next_action?: string;
+}
+
+export interface UpstreamListResult {
+  schema_version: string;
+  status: string;
+  summary: string;
+  skills: SkillUpstream[];
+}
+
+export interface UpstreamFile {
+  path: string;
+  status: string;
+  default_action: string;
+  action: string;
+  conflicts: number;
+  mergeable: boolean;
+  upstream_diff?: string;
+  local_diff?: string;
+  result_diff?: string;
+  merged_with_markers?: string;
+}
+
+export interface UpstreamTrustImpact {
+  third_party: boolean;
+  currently_approved: boolean;
+  review_required_after_apply: boolean;
+  review_command: string;
+}
+
+export interface UpstreamUpdatePreview {
+  schema_version: string;
+  status: string;
+  summary: string;
+  skill_id: string;
+  source_id: string;
+  base_commit: string;
+  target_commit: string;
+  target_committed_at?: string;
+  base_available: boolean;
+  files: UpstreamFile[];
+  unchanged_count: number;
+  unresolved: string[];
+  diff: {
+    added: string[];
+    modified: string[];
+    deleted: string[];
+  };
+  trust_impact: UpstreamTrustImpact;
+  confirmation: {
+    confirmation: {
+      required: boolean;
+      mode?: string;
+      pins: ConfirmationPins;
+    };
+  };
+}
+
+export interface UpstreamUpdateResult {
+  schema_version: string;
+  status: string;
+  summary: string;
+  skill_id: string;
+  operation_id: string;
+  changed_paths: string[];
+  trust_impact: UpstreamTrustImpact;
+}
+
+export interface LearningReference {
+  source_id: string;
+  locator: string;
+  ref?: string;
+  path?: string;
+  role: string;
+  monitoring: {
+    enabled: boolean;
+    cadence: string;
+  };
+  last_checked_at?: string;
+  availability?: string;
+  pending_insights: number;
+}
+
+export interface SkillSourcesResult {
+  schema_version: string;
+  status: string;
+  summary: string;
+  skill_id: string;
+  upstream: SkillUpstream | null;
+  learning: LearningReference[];
+  pending_insights: number;
+}
+
+export interface SourceSummary {
+  id: string;
+  status: string;
+  role: string;
+  referencing_skills: string[];
+  skills_vendored_count: number;
+  importable_count: number;
+  last_checked_at?: string;
+  current_revision?: {
+    kind: string;
+    value: string;
+    observed_at?: string;
+  };
+  distilled_revision?: {
+    kind: string;
+    value: string;
+    observed_at?: string;
+  };
+  ready_to_distill?: boolean;
+  upstream_only?: boolean;
+}
+
+export interface SourceRepositoryGroup {
+  repository: string;
+  sources: SourceSummary[];
+}
+
+export interface SourceCandidate {
+  id: string;
+  locator: string;
+  status: string;
+  reason: string;
+  created_at: string;
+}
+
+export interface SourceRecord {
+  id: string;
+  adapter: string;
+  locator: {
+    repository?: string;
+    ref?: string;
+    path?: string;
+    url?: string;
+  };
+  status: string;
+  identity: {
+    name: string;
+    canonical?: string;
+  };
+  monitoring: {
+    enabled: boolean;
+    cadence: string;
+  };
+  current_revision?: {
+    kind: string;
+    value: string;
+    observed_at?: string;
+  };
+  distilled_revision?: {
+    kind: string;
+    value: string;
+    observed_at?: string;
+  };
+  purpose?: string;
+}
+
+export interface SourceListItem {
+  record: SourceRecord;
+  skills: string[];
+  role: string;
+  importable_count: number;
+}
+
+export interface SourceListResult {
+  schema_version: string;
+  status: string;
+  summary: string;
+  candidates: SourceCandidate[];
+  sources: SourceListItem[];
+  groups?: SourceRepositoryGroup[];
+}
+
+export interface SourceProposal {
+  schema_version: string;
+  status: string;
+  summary: string;
+  candidate_id?: string;
+  source?: SourceRecord;
+  diff?: {
+    added: string[];
+    modified: string[];
+    deleted: string[];
+  };
+  confirmation: {
+    confirmation: {
+      required: boolean;
+      mode?: string;
+      pins: ConfirmationPins;
+    };
+  };
+  warnings?: Array<{ code: string; summary: string }>;
+}
+
+export interface SourceMutationResult {
+  schema_version: string;
+  status: string;
+  summary: string;
+  operation_id?: string;
+  source_id?: string;
+}
+
+export interface DiscoveredImportSkill {
+  name: string;
+  target_id: string;
+  collection: string;
+  description: string;
+  path: string;
+  conflict: boolean;
+  imported?: boolean;
+  skip_reason?: string;
+}
+
+export interface SourceImportProposal {
+  schema_version: string;
+  status: string;
+  summary: string;
+  source_id: string;
+  revision: string;
+  discovered: DiscoveredImportSkill[];
+  importable: DiscoveredImportSkill[];
+  skipped: DiscoveredImportSkill[];
+  confirmation: {
+    confirmation: {
+      required: boolean;
+      mode?: string;
+      pins: ConfirmationPins;
+    };
+  };
+}
+
+export interface SourceCheckItem {
+  source_id: string;
+  status: string;
+  error?: string;
+  skills?: SkillUpstream[];
+}
+
+export interface SourceCheckResult {
+  schema_version: string;
+  status: string;
+  summary: string;
+  checked: number;
+  changed: number;
+  unavailable: number;
+  results: SourceCheckItem[];
+  warnings?: Array<{ code: string; summary: string }>;
+}
+
+export interface DistillRun {
+  id: string;
+  source_id: string;
+  state: 'prepared' | 'in_progress' | 'awaiting_decision' | 'failed' | 'finalized' | 'cancelled' | string;
+  attempt: number;
+  from_revision?: {
+    kind: string;
+    value: string;
+    observed_at?: string;
+  };
+  to_revision: {
+    kind: string;
+    value: string;
+    observed_at?: string;
+  };
+  changed_resources: Array<{
+    path: string;
+    status: string;
+    before_digest?: string;
+    after_digest?: string;
+  }>;
+  package_digest: string;
+  prepared_at: string;
+  started_at?: string;
+  finalized_at?: string;
+  cancelled_at?: string;
+  failure?: string;
+  finding_ids?: string[];
+  comparison_ids?: string[];
+  insight_ids?: string[];
+  outstanding_decisions?: Array<{
+    category: string;
+    detail: string;
+  }>;
+}
+
+export interface DistillRunResult {
+  schema_version: string;
+  status: string;
+  summary: string;
+  run: DistillRun;
+  operation_id?: string;
+}
+
+export interface InsightRank {
+  score: number;
+  evidence_sources: number;
+  evidence_findings: number;
+  impact: string;
+  stale: boolean;
+}
+
+export interface InsightInboxItem {
+  insight: Insight;
+  rank: InsightRank;
+}
+
+export interface InsightInboxGroup {
+  skill_id: string;
+  category: string;
+  items: InsightInboxItem[];
+}
+
+export interface InboxPageResult {
+  schema_version: string;
+  status: string;
+  summary: string;
+  groups: InsightInboxGroup[];
+  has_more: boolean;
+  next_cursor?: string;
+  total: number;
+}
+
+export interface Observation {
+  schema_version: number;
+  id: string;
+  source_id: string;
+  run_id: string;
+  stable_key: string;
+  status: 'active' | 'removed' | 'superseded' | string;
+  what: string;
+  vocabulary: string[];
+  evidence: Array<{
+    revision: {
+      kind: string;
+      value: string;
+      content_digest: string;
+    };
+    run_id: string;
+    package_digest: string;
+    path: string;
+    locator: string;
+    digest: string;
+  }>;
+}
+
+export interface Comparison {
+  schema_version: number;
+  id: string;
+  run_id: string;
+  subject: string;
+  observation_ids: string[];
+  verdict: string;
+  tradeoffs: string;
+  stale: boolean;
+}
+
+export interface Insight {
+  schema_version: number;
+  id: string;
+  run_id: string;
+  stable_key: string;
+  skill_id: string;
+  status: 'pending' | 'planned' | 'rejected' | 'obsolete' | 'withdrawn' | string;
+  recommendation: string;
+  observation_ids: string[];
+  comparison_ids?: string[];
+  category: string;
+  priority: string;
+  rationale: string;
+  evidence_digest: string;
+  decision_history?: Array<{
+    decision: string;
+    rationale: string;
+    decided_at: string;
+  }>;
+}
+
+export interface InsightDetailResult {
+  schema_version: string;
+  status: string;
+  summary: string;
+  insight: Insight;
+  findings: Observation[];
+  comparisons: Comparison[];
+}
+
+export interface InsightApplicationPreview {
+  schema_version: string;
+  status: string;
+  summary: string;
+  proposal_id: string;
+  proposal_digest: string;
+  base_catalog_version: string;
+  insight_id: string;
+  skill_id: string;
+  path_pins: Array<{
+    path: string;
+    digest: string;
+  }>;
+  diff: string;
+  confirmation: {
+    confirmation: {
+      required: boolean;
+      mode?: string;
+      pins: ConfirmationPins;
+    };
+  };
+}
+
+export interface InsightApplicationResult {
+  schema_version: string;
+  status: string;
+  summary: string;
+  operation_id?: string;
+}
+
+export interface InsightDecisionResult {
+  schema_version: string;
+  status: string;
+  summary: string;
+  insight: Insight;
+  operation_id?: string;
 }

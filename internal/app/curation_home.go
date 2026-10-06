@@ -61,6 +61,7 @@ type CurationSummary struct {
 	OptionalItems            int `json:"optional_items"`
 	SourcesDue               int `json:"sources_due"`
 	UnavailableSources       int `json:"unavailable_sources"`
+	UpstreamUpdates          int `json:"upstream_updates"`
 }
 
 // CurationHome is the single read model rendered by human, JSON, and quiet adapters.
@@ -212,7 +213,7 @@ func readHomeCounts(ctx context.Context, root string, state *homeState) (resultE
 		{`SELECT count(*) FROM provenance WHERE kind='run' AND state IN ('failed','interrupted')`, &state.Summary.FailedOrInterruptedRuns},
 		{`SELECT count(*) FROM insights WHERE status='pending'`, &state.Summary.PendingInsights},
 		{`SELECT count(*) FROM insights WHERE status='pending' AND (json_extract(content_json,'$.high_value')=1 OR json_extract(content_json,'$.priority') IN ('high','critical'))`, &state.Summary.PendingHighValueInsights},
-		{`SELECT count(*) FROM canonical_entities WHERE kind='source' AND (json_extract(content_json,'$.status') IN ('changed', 'distill_pending') OR json_extract(content_json,'$.distilled_revision') IS NULL)`, &state.ChangedSources},
+		{`SELECT count(*) FROM canonical_entities s WHERE s.kind='source' AND (json_extract(s.content_json,'$.status') IN ('changed', 'distill_pending') OR json_extract(s.content_json,'$.distilled_revision') IS NULL) AND NOT (COALESCE(json_extract(s.content_json,'$.purpose'), '') = 'upstream' AND NOT EXISTS (SELECT 1 FROM canonical_entities l WHERE l.kind='skill_source_link' AND json_extract(l.content_json,'$.source_id') = s.id AND json_extract(l.content_json,'$.role') IN ('learning-source','inspiration')))`, &state.ChangedSources},
 	}
 	for _, item := range queries {
 		if err := handle.DB.QueryRowContext(ctx, item.query).Scan(item.target); err != nil {
@@ -283,6 +284,16 @@ func readHomeCounts(ctx context.Context, root string, state *homeState) (resultE
 	setCategoryCount(state.Categories, "changed_sources", state.ChangedSources)
 	setCategoryCount(state.Categories, "sources_due", state.DueSources)
 	setCategoryCount(state.Categories, "pending_insights", state.Summary.PendingInsights)
+	upstreamSkills, upstreamErr := ListSkillUpstream(ctx, root)
+	if upstreamErr == nil {
+		count := 0
+		for _, sk := range upstreamSkills {
+			if sk.Status == "update_available" || sk.Status == "diverged" {
+				count++
+			}
+		}
+		state.Summary.UpstreamUpdates = count
+	}
 	return nil
 }
 
@@ -374,6 +385,20 @@ func deriveCurationHome(state homeState) CurationHome {
 		}
 		home.Actions = append(home.Actions, ActionItem{Kind: "retry_unavailable_sources", Count: state.UnavailableSources, Priority: 80, Summary: fmt.Sprintf("%d source(s) are temporarily unavailable", state.UnavailableSources), Command: "source_check"})
 	}
+	if state.Summary.UpstreamUpdates > 0 {
+		home.HomeSummary.OptionalItems += state.Summary.UpstreamUpdates
+		home.HomeSummary.AttentionItems += state.Summary.UpstreamUpdates
+		if home.Status == StatusOK {
+			home.Status = StatusActionRequired
+		}
+		home.Actions = append(home.Actions, ActionItem{
+			Kind:     "review_upstream_updates",
+			Count:    state.Summary.UpstreamUpdates,
+			Priority: 75,
+			Summary:  fmt.Sprintf("%d skill(s) have upstream changes to review", state.Summary.UpstreamUpdates),
+			Command:  "skill_upstream_status",
+		})
+	}
 	if state.ChangedSources > 0 {
 		home.HomeSummary.OptionalItems += state.ChangedSources
 		home.HomeSummary.AttentionItems += state.ChangedSources
@@ -433,6 +458,8 @@ func deriveCurationHome(state homeState) CurationHome {
 		switch recommended.Kind {
 		case "rebuild_index":
 			home.Summary = "Search index is stale; skill and source counts are unavailable until it is rebuilt."
+		case "review_upstream_updates":
+			home.Summary = fmt.Sprintf("%d skill(s) have upstream changes to review.", recommended.Count)
 		case "distill_changed_sources":
 			home.Summary = fmt.Sprintf("%d source(s) are ready to distill.", recommended.Count)
 		case "review_insights":
@@ -460,6 +487,7 @@ func recommendationLabel(kind string) string {
 		"resume_run":                "Resume the interrupted run",
 		"rebuild_index":             "Run `skillhub rebuild` to refresh the search index",
 		"retry_unavailable_sources": "Retry unavailable source checks",
+		"review_upstream_updates":   "Review upstream updates with skillhub skill outdated",
 		"distill_changed_sources":   "Distill changed sources",
 		"check_due_sources":         "Check all due sources",
 		"review_insights":           "Review pending insights",

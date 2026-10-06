@@ -47,6 +47,8 @@ flowchart LR
 10. Status command không network; source check/fetch là action explicit.
 11. Routine unchanged checks không tạo canonical Git churn.
 12. Valid normal run submission auto-finalizes; user chỉ xử lý blocking decisions.
+13. No-orphan invariant: Mọi source được theo dõi phải liên kết với ít nhất một skill (vai trò upstream hoặc learning-source). Không cho phép watch tự do không gắn skill.
+14. Agent an toàn: Agent qua MCP chỉ được đọc metadata trạng thái upstream (`skill_upstream_status`); tuyệt đối không preview hoặc apply cập nhật upstream qua MCP.
 
 ## 3. Conceptual model
 
@@ -142,9 +144,46 @@ status: pending
 
 States: `pending`, `accepted`, `rejected`, `deferred`. Rejection requires reason if the candidate was materially evaluated.
 
-### 3.2 Source
+### 3.2 Source và hai vai trò đối với Skill
 
-A monitored source linked to zero or more curated skills:
+Source là một thuộc tính gắn liền với skill, thuộc một trong hai vai trò rõ ràng:
+
+1. **Upstream (Nguồn gốc vendored):**
+   - Là repository mà skill được copy/vendor về workspace.
+   - Được lưu trực tiếp trong metadata của skill (`skills/<collection>/<id>/skill.meta.yaml`) tại `provenance.source_id` và block `provenance.origin`:
+     ```yaml
+     provenance:
+       source_id: anthropics-skills
+       origin:
+         kind: github
+         repository: https://github.com/anthropics/skills
+         ref: main
+         commit: a1b2c3d4e5f6...
+         path: skills/pdf
+         folder_digest: sha256:...
+         files_digest: sha256:...
+     ```
+   - `origin.path`: Đường dẫn tương đối từ gốc repository đến thư mục skill.
+   - `origin.folder_digest`: Digest của Git tree tại commit nguồn.
+   - `origin.files_digest`: Digest nội dung file (`skillruntime.ContentDigest`) sau các bước chuyển đổi (transformations) khi import. Cho phép phát hiện chỉnh sửa cục bộ (local edits) hoàn toàn offline.
+   - Mỗi skill có tối đa một upstream source.
+
+2. **Learning reference (Tài liệu học tập):**
+   - Là repository bên ngoài mà curator agent theo dõi để rút ra ý tưởng cải tiến (observations, insights) thông qua distillation.
+   - Được lưu bằng file liên kết canonical riêng biệt: `sources/skills/LINK-<skill>--<source>.yaml`:
+     ```yaml
+     schema_version: 1
+     skill_id: consumer-reliability-review
+     source_id: tech-leads-reliability
+     role: learning-source
+     ```
+   - Một skill có thể có nhiều learning references.
+   - Learning reference **không bao giờ** gán `provenance.source_id` trên skill, do đó không làm thay đổi phân loại tin cậy (trust class) của skill.
+
+**Quy tắc quản lý Source:**
+- **Một source cho mỗi cặp (repository, ref):** Khi gán upstream hoặc theo dõi, hệ thống tái sử dụng source có cùng repository URL và ref đã chuẩn hóa. Source upstream tự động tạo có `purpose: upstream`, phạm vi toàn repository (`path: ""`) và chu kỳ kiểm tra mặc định hàng tuần (`cadence: weekly`).
+- **Bất biến không có source mồ côi (No orphan sources):** Không ghi source mới mà không liên kết với skill. Lệnh `source watch` bắt buộc cờ `--skill-id`. Triage candidate với quyết định `accept` bắt buộc chỉ định `--skill-id` hoặc `--new-skill`.
+- **Kiểm tra upstream không gây churn canonical:** Với source thuần upstream (`purpose: upstream`, không có learning link), các đợt kiểm tra revision định kỳ không ghi file canonical nếu không có thay đổi phục vụ distillation.
 
 ```yaml
 id: tech-leads-reliability
@@ -160,9 +199,6 @@ links:
   - skill_id: consumer-reliability-review
     role: learning-source
 ```
-
-A source may remain unlinked for general learning. Linkage does not copy/activate content.
-
 ### 3.3 Source Revision
 
 Opaque adapter-owned revision identity:
@@ -401,8 +437,16 @@ transient availability
 
 Routine unchanged checks do not dirty Git. A meaningful new revision/digest is canonical because it creates durable curation work. Pause/retire/unavailable decisions become canonical only after policy/user action, not from one transient fetch failure.
 
-A check never edits curated content and does not auto-start semantic analysis unless policy explicitly schedules proposal-only work.
+### 6.1 Đồng bộ trạng thái Upstream của Skill trong lúc Check
 
+Khi thực thi `CheckSources` (qua CLI `skillhub check`, `skillhub source check`, `skillhub skill outdated --check`, WebUI "Check now", hoặc MCP `source_check`):
+1. **Thăm dò nhẹ nhàng (Lightweight probe):** Sử dụng `RemoteRefCommit` (Git `ls-remote`) để kiểm tra commit mới nhất của branch/tag mà không cần ghi mirror hoặc kéo git objects.
+2. **Đồng bộ mirror tối đa một lần:** Chỉ khi remote ref thực sự dịch chuyển, hub mới sync git mirror cục bộ một lần duy nhất cho mỗi source.
+3. **Tái dựng file-set:** So sánh tập file được tái dựng (áp dụng cùng transformation rules như khi `skill add`) thay vì chỉ so sánh tree hash thô.
+4. **Lưu trữ operational volatile:** Cập nhật bảng `skill_upstream_state` trong SQLite `runtime/operational.db` (`skill_id`, `source_id`, `checked_commit`, `upstream_digest`, `changed_files`, `status`, `checked_at`).
+5. **Không churn canonical:** Đối với source thuần upstream (`purpose: upstream`), hub không ghi đè file catalog canonical trong các lần check định kỳ.
+
+A check never edits curated content and does not auto-start semantic analysis unless policy explicitly schedules proposal-only work.
 ## 7. Distill Run lifecycle
 
 ```mermaid

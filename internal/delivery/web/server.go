@@ -38,19 +38,21 @@ type Options struct {
 
 // Server delivers the WebUI over local HTTP.
 type Server struct {
-	workspace   string
-	opts        Options
-	curation    app.CurationService
-	skills      app.SkillService
-	skillAdd    app.SkillAddService
-	sources     app.SourceService
-	distill     app.DistillService
-	insights    app.InsightService
-	throttle    *authThrottle
-	hostMu      sync.Mutex
-	hostCacheAt time.Time
-	cachedIPs   map[string]bool
-	cachedHost  string
+	workspace    string
+	opts         Options
+	curation     app.CurationService
+	skills       app.SkillService
+	skillAdd     app.SkillAddService
+	sources      app.SourceService
+	distill      app.DistillService
+	insights     app.InsightService
+	upstream     app.UpstreamService
+	sourceImport app.SourceImportService
+	throttle     *authThrottle
+	hostMu       sync.Mutex
+	hostCacheAt  time.Time
+	cachedIPs    map[string]bool
+	cachedHost   string
 }
 
 var defaultAssets = func() fs.FS {

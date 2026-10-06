@@ -77,6 +77,24 @@ export function resolveActionCta(action?: ActionInput): CtaResult {
         command: action.command || 'git status',
         label: 'Copy command',
       };
+    case 'review_upstream_updates':
+      return {
+        type: 'link',
+        to: '/skills?upstream=updates',
+        label: 'Review updates →',
+      };
+    case 'track_upstream_skills':
+      return {
+        type: 'command',
+        command: action.command || 'skillhub source backfill',
+        label: 'Copy command',
+      };
+    case 'link_orphan_sources':
+      return {
+        type: 'link',
+        to: '/sources',
+        label: 'Open sources →',
+      };
     default:
       return { type: 'none' };
   }

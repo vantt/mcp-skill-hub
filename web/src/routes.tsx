@@ -1,12 +1,16 @@
 import type { RouteObject } from 'react-router';
-import { LaterPhasePage } from './components/LaterPhasePage';
 import { NotFoundPage } from './components/NotFoundPage';
 import { HomeScreen } from './screens/home/HomeScreen';
 import { SkillsScreen } from './screens/skills/SkillsScreen';
 import { AddSkillScreen } from './screens/skill-add/AddSkillScreen';
 import { CreateSkillScreen } from './screens/skill-create/CreateSkillScreen';
 import { SkillDetailScreen } from './screens/skill-detail/SkillDetailScreen';
-
+import { SourcesScreen } from './screens/sources/SourcesScreen';
+import { DistillHandoffScreen } from './screens/distill/DistillHandoffScreen';
+import { RunScreen } from './screens/run/RunScreen';
+import { InboxScreen } from './screens/inbox/InboxScreen';
+import { InsightDetailScreen } from './screens/insight/InsightDetailScreen';
+import { PatchComposerScreen } from './screens/composer/PatchComposerScreen';
 export const routes: RouteObject[] = [
   {
     path: '/',
@@ -30,31 +34,27 @@ export const routes: RouteObject[] = [
   },
   {
     path: '/sources',
-    Component: LaterPhasePage,
-  },
-  {
-    path: '/sources/watch',
-    Component: LaterPhasePage,
+    Component: SourcesScreen,
   },
   {
     path: '/sources/distill',
-    Component: LaterPhasePage,
+    Component: DistillHandoffScreen,
   },
   {
     path: '/sources/runs/:id',
-    Component: LaterPhasePage,
+    Component: RunScreen,
   },
   {
     path: '/inbox',
-    Component: LaterPhasePage,
+    Component: InboxScreen,
   },
   {
     path: '/inbox/:id',
-    Component: LaterPhasePage,
+    Component: InsightDetailScreen,
   },
   {
     path: '/inbox/:id/apply',
-    Component: LaterPhasePage,
+    Component: PatchComposerScreen,
   },
   {
     path: '*',

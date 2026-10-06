@@ -79,8 +79,7 @@ skillhub-workspace/
 ├── sources/
 │   ├── intake/<candidate-id>.yaml
 │   ├── catalog/<source-id>.yaml
-│   └── skills/<skill-id>.sources.yaml
-├── distill/
+│   └── skills/LINK-<skill-id>--<source-id>.yaml
 │   ├── sources/<source-id>/
 │   │   ├── observations/<observation-id>.yaml
 │   │   └── runs/<run-id>.yaml
@@ -520,10 +519,10 @@ SQLite WAL mode; contains disposable machine-local state:
 - scheduler next run;
 - transient availability/retry state;
 - cache metadata;
-- local job leases/progress that can be reconstructed or retried.
+- local job leases/progress that can be reconstructed or retried;
+- table `skill_upstream_state`: volatile, rebuilt by the next check. Chứa trạng thái drift per-skill (`skill_id`, `source_id`, `checked_commit`, `upstream_digest`, `changed_files`, `status`, `checked_at`).
 
 It must not contain the only copy of cursor, decision, proposal or incorporation state.
-
 #### Telemetry database
 
 ```text
@@ -665,9 +664,10 @@ Typical mapping:
 
 | Canonical input | Derived projection |
 |---|---|
-| `skill.meta.yaml` | skill, trigger, requirement and relationship rows |
+| `skill.meta.yaml` | skill, trigger, requirement and relationship rows; `provenance.origin.files_digest` for local edit verification |
 | `SKILL.md` and resources | resource manifests, paths and digests; selected searchable fields only |
 | `sources/catalog/*.yaml` | source/revision/query rows |
+| `sources/skills/LINK-*.yaml` | learning relationship links |
 | observations/comparisons | learning relationship and optional curation FTS rows |
 | insights/incorporations/outcomes | inbox, provenance and outcome rows |
 | operation receipts | operation/idempotency lookup rows |
@@ -870,8 +870,16 @@ PublishCatalogGeneration()
 GetWorkspaceStatus()
 ```
 
-Domain-specific commands such as `ConfirmInsightApplication`, `SubmitDistillRun` or `ConfirmSkillUpdate` compose the generic mutation service with their own invariants.
-
+Domain-specific mutation commands compose the generic mutation service with their own invariants:
+- `skill_create`: tạo draft skill mới.
+- `skill_edit`: sửa metadata hoặc content của skill.
+- `skill_lifecycle`: chuyển trạng thái `draft` → `active` → `deprecated` → `archived`.
+- `skill_upstream_update`: áp dụng cập nhật 3-way merge từ upstream repository vào skill với các file pins và before digests.
+- `source_backfill`: bổ sung source record và `provenance.origin.files_digest` cho các skill legacy.
+- `source_attach`: gắn learning reference vào skill (`sources/skills/LINK-*.yaml`).
+- `source_detach`: gỡ bỏ learning reference khỏi skill.
+- `source_unwatch`: ngừng theo dõi và xóa source nếu không còn skill nào tham chiếu (bảo đảm no-orphan).
+- `insight_apply`: áp dụng insight proposal vào `SKILL.md` qua patch composer.
 Repository adapters expose controlled operations:
 
 ```go

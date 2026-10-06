@@ -2,16 +2,17 @@
 
 **Trạng thái:** V1 UX-first product/design baseline  
 **Phạm vi:** Agent-facing curation UX, CLI fallback, approval model, application commands và lifecycle mapping  
-**Không bao gồm:** Web UI  
+**Không bao gồm:** Multi-user collaboration, cloud synchronization
 **Phụ thuộc:** [Kiến trúc tổng thể](01-system-architecture.md), [Agent ↔ Hub protocol](02-agent-hub-protocol.md), [Source learning và distillation](06-source-learning-and-distillation.md), [Storage/mutation model](07-storage-and-mutation-model.md), [Telemetry/evaluation](04-telemetry-reproducibility-evaluation.md)
 
 ## 1. Product decision
 
-V1 có hai surfaces:
+V1 có ba surfaces:
 
 ```text
 Primary interactive surface = bundled System Curator Skill
-Operational fallback         = CLI
+Visual management surface   = Web UI (`skillhub serve web`)
+Operational fallback        = CLI
 ```
 
 User không cần biết entity/state/command để curate. Họ nói mục tiêu bằng ngôn ngữ tự nhiên; System Curator Skill dùng structured MCP tools gọi Skill Hub binary.

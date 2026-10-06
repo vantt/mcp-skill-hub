@@ -19,6 +19,7 @@ func runSourceWatch(ctx context.Context, service app.SourceService, flags source
 
 	input := app.SourceWatchInput{
 		Locator:        locator,
+		SkillID:        flags.skillID,
 		SourceID:       flags.sourceID,
 		Ref:            flags.ref,
 		Path:           flags.sourcePath,

@@ -1,0 +1,183 @@
+package app
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/vantt/mcp-skill-hub/internal/catalog"
+	"github.com/vantt/mcp-skill-hub/internal/skill"
+	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
+	"github.com/vantt/mcp-skill-hub/internal/workspace"
+)
+
+type LearningReference struct {
+	SourceID        string               `json:"source_id"`
+	Locator         string               `json:"locator"`
+	Ref             string               `json:"ref,omitempty"`
+	Path            string               `json:"path,omitempty"`
+	Role            string               `json:"role"`
+	Monitoring      sourcepkg.Monitoring `json:"monitoring"`
+	LastCheckedAt   *time.Time           `json:"last_checked_at,omitempty"`
+	Availability    string               `json:"availability,omitempty"`
+	PendingInsights int                  `json:"pending_insights"`
+}
+
+type SkillSourcesResult struct {
+	Result
+	SkillID         string              `json:"skill_id"`
+	Upstream        *SkillUpstream      `json:"upstream"`
+	Learning        []LearningReference `json:"learning"`
+	PendingInsights int                 `json:"pending_insights"`
+}
+
+func (service SourceService) SkillSources(ctx context.Context, path, skillID string) (SkillSourcesResult, error) {
+	root, err := workspace.Discover(path)
+	if err != nil {
+		return SkillSourcesResult{}, err
+	}
+
+	skillID = strings.TrimSpace(skillID)
+	if skillID == "" {
+		return SkillSourcesResult{}, skill.ErrNotFound
+	}
+
+	_, _, _, err = locateSkillDir(root, skillID)
+	if err != nil {
+		return SkillSourcesResult{}, skill.ErrNotFound
+	}
+
+	// 1. Get Upstream (nil if skill has no github/git origin)
+	var upstream *SkillUpstream
+	up, upErr := GetSkillUpstream(ctx, root, skillID)
+	if upErr == nil && up.Repository != "" && up.Status != "untracked" {
+		upstream = &up
+	}
+
+	// 2. Discover learning references from sources/skills/
+	links, err := readSkillSourceLinks(root)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return SkillSourcesResult{}, err
+	}
+
+	_, records, err := readSourceRecords(root)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return SkillSourcesResult{}, err
+	}
+	recordsByID := make(map[string]sourcepkg.Record, len(records))
+	for _, r := range records {
+		recordsByID[r.ID] = r
+	}
+
+	store := sourcepkg.OperationalStore{Root: root}
+	checkStates, _ := store.List(ctx)
+	checkStatesByID := make(map[string]sourcepkg.CheckState, len(checkStates))
+	for _, cs := range checkStates {
+		checkStatesByID[cs.SourceID] = cs
+	}
+
+	totalPending, pendingBySource := countPendingInsights(ctx, root, skillID)
+
+	learning := []LearningReference{}
+	for _, l := range links {
+		if l.SkillID != skillID {
+			continue
+		}
+		rec, found := recordsByID[l.SourceID]
+		locator := ""
+		ref := ""
+		path := ""
+		monitoring := sourcepkg.Monitoring{Enabled: false, Cadence: "manual"}
+		var lastChecked *time.Time
+		availability := "available"
+
+		if found {
+			locator = rec.Locator.Repository
+			if locator == "" {
+				locator = rec.Locator.URL
+			}
+			if locator == "" {
+				locator = rec.Locator.Path
+			}
+			ref = rec.Locator.Ref
+			path = rec.Locator.Path
+			monitoring = rec.Monitoring
+			if rec.CurrentRevision != nil && !rec.CurrentRevision.ObservedAt.IsZero() {
+				t := rec.CurrentRevision.ObservedAt
+				lastChecked = &t
+			}
+			if rec.Status == "unavailable" {
+				availability = "unavailable"
+			}
+		}
+		if cs, ok := checkStatesByID[l.SourceID]; ok {
+			if cs.Availability != "" {
+				availability = cs.Availability
+			}
+		}
+
+		pInsights := pendingBySource[l.SourceID]
+
+		learning = append(learning, LearningReference{
+			SourceID:        l.SourceID,
+			Locator:         locator,
+			Ref:             ref,
+			Path:            path,
+			Role:            l.Role,
+			Monitoring:      monitoring,
+			LastCheckedAt:   lastChecked,
+			Availability:    availability,
+			PendingInsights: pInsights,
+		})
+	}
+
+	attributedTotal := 0
+	for _, ref := range learning {
+		attributedTotal += ref.PendingInsights
+	}
+	if len(learning) > 0 && totalPending > attributedTotal {
+		learning[0].PendingInsights += (totalPending - attributedTotal)
+	}
+
+	sort.Slice(learning, func(i, j int) bool {
+		return learning[i].SourceID < learning[j].SourceID
+	})
+
+	summary := fmt.Sprintf("Sources for %s.", skillID)
+	result := SkillSourcesResult{
+		Result:          NewResult(StatusOK, summary),
+		SkillID:         skillID,
+		Upstream:        upstream,
+		Learning:        learning,
+		PendingInsights: totalPending,
+	}
+	return result, nil
+}
+
+func countPendingInsights(ctx context.Context, root, skillID string) (int, map[string]int) {
+	totalPending := 0
+	pendingBySource := make(map[string]int)
+	handle, cErr := catalog.OpenCurrent(ctx, root)
+	if cErr == nil {
+		defer handle.Close()
+		rows, qErr := handle.DB.QueryContext(ctx, `SELECT COALESCE(p.source_id, json_extract(i.content_json, '$.source_id'), ''), count(i.id) FROM insights i LEFT JOIN provenance p ON p.insight_id = i.id WHERE i.skill_id = ? AND i.status = 'pending' GROUP BY 1`, skillID)
+		if qErr == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var srcID string
+				var cnt int
+				if err := rows.Scan(&srcID, &cnt); err == nil {
+					totalPending += cnt
+					if srcID != "" {
+						pendingBySource[srcID] += cnt
+					}
+				}
+			}
+		}
+	}
+	return totalPending, pendingBySource
+}

@@ -20,6 +20,7 @@
         "mode": {"enum": ["immutable", "living"]}
       }
     },
+    "purpose": {"enum": ["upstream"]},
     "status": {"enum": ["watching", "changed", "distill_pending", "retired"]},
     "identity": {"type": "object"},
     "license": {"type": "string"},

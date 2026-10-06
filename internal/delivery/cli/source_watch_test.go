@@ -9,7 +9,7 @@ import (
 func TestSourceWatchRemoteValidationAndJSON(t *testing.T) {
 	t.Parallel()
 	root := initTestWorkspace(t)
-
+	runCLI(t, "skill", "create", "--workspace", root, "--id", "test-skill", "--collection", "default", "--name", "Test Skill", "--description", "Test skill description", "--yes")
 	// 1. Missing locator fails
 	code, _, stderr := runCLI(t, "source", "watch", "--workspace", root)
 	if code != 2 {
@@ -21,7 +21,7 @@ func TestSourceWatchRemoteValidationAndJSON(t *testing.T) {
 
 	// 2. Non-existent remote repo returns exit 2 with actionable error
 	locator := "https://github.com/example/nonexistent-skillhub-test-repo"
-	code, _, stderr = runCLI(t, "source", "watch", locator, "--workspace", root, "--cadence", "daily")
+	code, _, stderr = runCLI(t, "source", "watch", locator, "--workspace", root, "--cadence", "daily", "--skill-id", "test-skill")
 	if code != 2 {
 		t.Fatalf("expected exit 2 on nonexistent repo, got %d", code)
 	}
@@ -31,7 +31,7 @@ func TestSourceWatchRemoteValidationAndJSON(t *testing.T) {
 
 	// 3. JSON error output is a valid envelope without prose on stdout
 	var stdout, jsonErr bytes.Buffer
-	code = Run([]string{"source", "watch", locator, "--workspace", root, "--json"}, &stdout, &jsonErr)
+	code = Run([]string{"source", "watch", locator, "--workspace", root, "--json", "--skill-id", "test-skill"}, &stdout, &jsonErr)
 	if code != 2 {
 		t.Fatalf("expected exit 2 on JSON error, got %d", code)
 	}

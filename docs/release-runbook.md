@@ -51,13 +51,19 @@ Pushing a `v*.*.*` tag initiates the automated GitHub Actions release workflow (
 
 1. **Prepare:** Validates the SemVer tag and determines release vs. prerelease classification.
 2. **Verify:** Runs test suites, lifecycle installer tests (Unix and Windows), fuzzing, and static checks on Linux, macOS, and Windows runners.
-3. **Build & Package:** Cross-compiles CGO-free binaries for all 6 target platforms, attaches SPDX SBOMs via Syft, packages tar.gz/zip archives, and computes `checksums.txt`.
-4. **Sign & Attest:**
+3. **Web UI Build:** Runs `make web-build`, generates third-party software notices (`npm run notices`), and uploads the `web-dist` artifact containing compiled embedded web assets and `THIRD_PARTY_NOTICES.md`.
+4. **Build & Package:** Downloads `web-dist` into `internal/delivery/web/dist` for Go asset embedding, cross-compiles CGO-free binaries for all 6 target platforms, attaches SPDX SBOMs via Syft, packages tar.gz/zip archives, and computes platform artifacts.
+5. **Sign & Attest:**
+   - Copies standalone installers (`install.sh`, `install.ps1`) and `THIRD_PARTY_NOTICES.md` from `web-dist` into `release/`.
+   - Computes deterministic `checksums.txt` over all release assets.
    - Signs `checksums.txt` and all platform archives using keyless Sigstore cosign with GitHub OIDC tokens.
    - Generates GitHub Build Provenance and SBOM attestations using GitHub Artifact Attestations (`actions/attest-build-provenance`).
-5. **Publish:** Creates GitHub Release with assets, SBOMs, signatures, and installation scripts.
-6. **Post-publish smoke test:** Executes on three runners (`ubuntu-latest`, `macos-latest`, `windows-latest`) testing literal one-liner installation, automatic PATH configuration, upgrade flow from previous release, and uninstallation.
-
+6. **Publish:** Creates GitHub Release uploading all release assets in `release/*` (including binaries, installers, checksums, signatures, SBOMs, and `THIRD_PARTY_NOTICES.md`).
+7. **Post-publish smoke test:** Executes on three runners (`ubuntu-latest`, `macos-latest`, `windows-latest`) testing:
+   - Literal one-liner installation and automatic PATH configuration.
+   - Upgrade flow from previous stable release (if available).
+   - **Web UI release smoke:** Starts `skillhub serve web --loopback-only --no-open --addr 127.0.0.1:0` in the background on a freshly initialized workspace, extracts the URL and token, verifies authenticated `GET /api/v1/session` (200), unauthenticated request refusal (401), and HTML root element rendering (`id="root"`), then terminates the server.
+   - Complete uninstallation via `SKILLHUB_UNINSTALL=1` and verification of binary removal.
 Prerelease tags (such as `v0.1.0-rc.1`) are published as GitHub prereleases and do not update the `latest` release pointer.
 
 ## Signature policy and verification

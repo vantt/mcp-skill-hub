@@ -3,6 +3,7 @@ package mcpserver
 import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/delivery/paging"
 	"github.com/vantt/mcp-skill-hub/internal/resolver"
 	"github.com/vantt/mcp-skill-hub/internal/skill"
 	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
@@ -10,8 +11,6 @@ import (
 
 const (
 	SchemaVersion = "1"
-	defaultLimit  = 25
-	maximumLimit  = 100
 )
 
 type noArgs struct{}
@@ -44,6 +43,10 @@ type sourceTriageInput struct {
 	Trust             string                `json:"trust,omitempty"`
 	Cadence           string                `json:"cadence,omitempty"`
 	SkillID           string                `json:"skill_id,omitempty"`
+	NewSkillID        string                `json:"new_skill_id,omitempty"`
+	NewSkill          string                `json:"new_skill,omitempty"`
+	Selection         string                `json:"selection,omitempty"`
+	All               bool                  `json:"all,omitempty"`
 	MonitoringEnabled *bool                 `json:"monitoring_enabled,omitempty"`
 	IdempotencyKey    string                `json:"idempotency_key,omitempty"`
 	Confirmation      *app.ConfirmationPins `json:"confirmation,omitempty"`
@@ -117,6 +120,7 @@ type skillAddPreviewInput struct {
 
 type sourceWatchPreviewInput struct {
 	Locator           string `json:"locator" jsonschema:"Public GitHub repository URL (e.g. https://github.com/owner/repo). Local folders are rejected."`
+	SkillID           string `json:"skill_id,omitempty" jsonschema:"Skill identifier this watched source will attach to as a learning reference."`
 	SourceID          string `json:"source_id,omitempty" jsonschema:"Optional explicit source identifier. Derived from repo/path if omitted."`
 	Ref               string `json:"ref,omitempty" jsonschema:"Optional branch, tag, or commit ref to monitor. Defaults to default branch."`
 	Path              string `json:"path,omitempty" jsonschema:"Optional subdirectory path within the repository to scope watching."`
@@ -136,6 +140,58 @@ type sourceImportPreviewInput struct {
 	Path           string   `json:"path,omitempty" jsonschema:"Optional subdirectory within the source repository to search for skills."`
 	Skills         []string `json:"skills,omitempty" jsonschema:"Optional list of skill names or IDs to import. If omitted, all discovered skills are considered."`
 	IdempotencyKey string   `json:"idempotency_key,omitempty" jsonschema:"Optional caller-provided idempotency key."`
+}
+
+type skillUpstreamStatusInput struct {
+	SkillID string `json:"skill_id,omitempty" jsonschema:"Optional skill identifier to inspect. If omitted, returns upstream status for all tracked skills."`
+}
+
+type sourceLinkPreviewInput struct {
+	Action         string `json:"action" jsonschema:"Action to perform: attach (link source) or detach (unlink source)."`
+	SkillID        string `json:"skill_id" jsonschema:"Skill identifier to link or unlink."`
+	SourceID       string `json:"source_id,omitempty" jsonschema:"Source identifier (required for detach; optional for attach if locator is provided)."`
+	Locator        string `json:"locator,omitempty" jsonschema:"Repository URL or locator to watch and attach."`
+	Ref            string `json:"ref,omitempty" jsonschema:"Branch, tag, or commit ref."`
+	Path           string `json:"path,omitempty" jsonschema:"Subdirectory path in the source."`
+	Cadence        string `json:"cadence,omitempty" jsonschema:"Monitoring cadence: manual, daily, or weekly."`
+	IdempotencyKey string `json:"idempotency_key,omitempty" jsonschema:"Optional idempotency key."`
+}
+
+type sourceUnwatchPreviewInput struct {
+	SourceID       string `json:"source_id" jsonschema:"Source identifier to stop watching."`
+	IdempotencyKey string `json:"idempotency_key,omitempty" jsonschema:"Optional idempotency key."`
+}
+
+type SkillUpstreamItem struct {
+	SkillID           string                  `json:"skill_id"`
+	SourceID          string                  `json:"source_id"`
+	Repository        string                  `json:"repository"`
+	Ref               string                  `json:"ref"`
+	Path              string                  `json:"path"`
+	BaseCommit        string                  `json:"base_commit"`
+	LatestCommit      string                  `json:"latest_commit"`
+	LatestCommittedAt string                  `json:"latest_committed_at,omitempty"`
+	ChangedFiles      int                     `json:"changed_files"`
+	Files             []app.SkillUpstreamFile `json:"files,omitempty"`
+	Local             string                  `json:"local"`
+	Status            string                  `json:"status"`
+	CheckedAt         string                  `json:"checked_at"`
+	Error             string                  `json:"error,omitempty"`
+	NextAction        string                  `json:"next_action,omitempty"`
+	WebUIHint         string                  `json:"webui_hint,omitempty"`
+}
+
+type UpstreamListResult struct {
+	Skills []SkillUpstreamItem `json:"skills"`
+}
+
+type SkillUpstreamResult struct {
+	Skill SkillUpstreamItem `json:"skill"`
+}
+
+type skillUpstreamStatusResult struct {
+	Skill  *SkillUpstreamItem  `json:"skill,omitempty"`
+	Skills []SkillUpstreamItem `json:"skills,omitempty"`
 }
 
 type skillUpdatePreviewInput struct {
@@ -224,8 +280,8 @@ type workspaceDiffInput struct {
 type workspaceDiffResult struct {
 	Kind      string                     `json:"kind"`
 	GitDirty  bool                       `json:"git_dirty,omitempty"`
-	Files     *page[app.DiffFile]        `json:"files,omitempty"`
-	Operation *page[app.OperationChange] `json:"operation_changes,omitempty"`
+	Files     *paging.Page[app.DiffFile]        `json:"files,omitempty"`
+	Operation *paging.Page[app.OperationChange] `json:"operation_changes,omitempty"`
 }
 
 type feedbackInput struct {
@@ -255,12 +311,6 @@ type toolOutcome[T any] struct {
 	Error         *toolError `json:"error,omitempty"`
 }
 
-type page[T any] struct {
-	Items      []T    `json:"items"`
-	HasMore    bool   `json:"has_more"`
-	NextCursor string `json:"next_cursor,omitempty"`
-	Total      int    `json:"total,omitempty"`
-}
 
 type runStartItem struct {
 	SourceID string                  `json:"source_id"`
@@ -284,6 +334,7 @@ type routingEvaluationResult struct {
 type sourceTriageResult struct {
 	Preview  *app.SourceProposal       `json:"preview,omitempty"`
 	Mutation *app.SourceMutationResult `json:"mutation,omitempty"`
+	SkillAdd *app.SkillAddProposal     `json:"skill_add,omitempty"`
 }
 
 type sourceListItem struct {

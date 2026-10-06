@@ -54,17 +54,37 @@ The agent shows the state of your hub and suggests one next step.
 
 ## Other install options
 
-**Build from source:** (requires Git and Go 1.26+)
+**Build from source:** (requires Git, Go 1.26+, and Node.js for embedded web assets)
 
 ```bash
 git clone https://github.com/vantt/mcp-skill-hub.git
 cd mcp-skill-hub
+make web-build
 go build -o ~/.local/bin/skillhub ./cmd/skillhub
 ```
 
+## Web UI
+
+Skill Hub includes an embedded local web dashboard for visual curation, diff reviews, upstream tracking, and insight drafting:
+
+```bash
+skillhub serve web
+```
+
+On startup, Skill Hub outputs an authenticated browser URL containing a one-time session token in the URL fragment:
+```text
+Skill Hub web UI: http://127.0.0.1:7421/#token=36dee9ed...
+```
+
+**Network and Security Behavior:**
+- **Multi-IP Detection:** On machines with multiple non-loopback IPv4 interfaces (e.g. Wi-Fi, Ethernet, Docker bridges, or Tailscale/VPNs), the server binds to `0.0.0.0` to permit access across local network interfaces. On single-interface machines, it binds strictly to `127.0.0.1`.
+- **Loopback Only:** Pass `--loopback-only` to force the server to bind exclusively to `127.0.0.1`.
+- **Allowed Hosts:** Access through custom hostnames requires `--allow-host <host[:port]>`. Requests with untrusted `Host` headers return `421 Misdirected Request` to prevent DNS rebinding attacks.
+- **Plain HTTP Warning:** Traffic is served over unencrypted HTTP. Do not expose `skillhub serve web` to untrusted public networks without a secure TLS reverse proxy.
+
 ## What next
 
-- **Curate your skills.** Use the [curating skills guide](docs/curating-skills.md) to add skills (`skillhub skill add`), create workflows (`skillhub skill create`), review diagnostic facts (`skillhub skill review`), edit instructions (`skillhub skill edit --editor`), and watch repositories (`skillhub source watch`).
+- **Curate your skills.** Use the [curating skills guide](docs/curating-skills.md) to add skills (`skillhub skill add`), create workflows (`skillhub skill create`), review diagnostic facts (`skillhub skill review`), edit instructions (`skillhub skill edit --editor`), and keep vendored skills current (`skillhub skill outdated`, `skillhub skill update`).
 - **Check health and changes.** `skillhub status` shows what needs attention. `skillhub diff` shows uncommitted changes, and `skillhub validate --staged` validates commits before staging.
 - **Diagnose issues.** `skillhub doctor` checks workspace and agent connections (`--fix` to repair); `skillhub skill doctor <id>` tests executable tools and environment requirements for an individual skill.
 - **See every command.** `skillhub help`, or `skillhub help <command>`.

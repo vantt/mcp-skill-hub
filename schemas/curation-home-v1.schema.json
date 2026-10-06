@@ -74,14 +74,15 @@
     },
     "homeSummary": {
       "type": "object", "additionalProperties": false,
-      "required": ["active_skills", "watching_sources", "failed_or_interrupted_runs", "pending_insights", "pending_high_value_insights", "attention_items", "invalid_workspaces", "recovery_items", "optional_items", "sources_due", "unavailable_sources"],
+      "required": ["active_skills", "watching_sources", "failed_or_interrupted_runs", "pending_insights", "pending_high_value_insights", "attention_items", "invalid_workspaces", "recovery_items", "optional_items", "sources_due", "unavailable_sources", "upstream_updates"],
       "properties": {
         "active_skills": {"type": "integer"}, "watching_sources": {"type": "integer"},
         "failed_or_interrupted_runs": {"type": "integer"}, "pending_insights": {"type": "integer"},
         "pending_high_value_insights": {"type": "integer"}, "attention_items": {"type": "integer"},
         "invalid_workspaces": {"type": "integer"}, "recovery_items": {"type": "integer"},
         "optional_items": {"type": "integer"}, "sources_due": {"type": "integer"},
-        "unavailable_sources": {"type": "integer"}
+        "unavailable_sources": {"type": "integer"},
+        "upstream_updates": {"type": "integer"}
       }
     }
   }

@@ -667,3 +667,43 @@ func TestSkillUpdatePreviewAcceptsRuntimeBlockOnly(t *testing.T) {
 		t.Fatal("an empty runtime object must be accepted as a removal request")
 	}
 }
+
+func TestSkillTransitionConfirmRefusesUpstreamUpdateProposal(t *testing.T) {
+	t.Parallel()
+	root := newEmptyMCPWorkspace(t)
+	proposalJSON := `{
+		"version": 1,
+		"kind": "upstream_update",
+		"created_at": "2026-10-05T12:00:00Z",
+		"expires_at": "2099-10-06T12:00:00Z",
+		"id": "PROP-guard-upstream-1",
+		"digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+		"base_snapshot": "base-snap-1",
+		"skill_id": "test-skill",
+		"command": "skill_upstream_update",
+		"summary": {"modified": ["skills/core/test-skill/SKILL.md"]},
+		"write_set": {
+			"command": "skill_upstream_update",
+			"changes": [{"path": "skills/core/test-skill/SKILL.md", "contents": "bW9kaWZpZWQK"}]
+		}
+	}`
+	proposalsDir := filepath.Join(root, "runtime", "proposals")
+	_ = os.MkdirAll(proposalsDir, 0o700)
+	_ = os.WriteFile(filepath.Join(proposalsDir, "PROP-guard-upstream-1.json"), []byte(proposalJSON), 0o600)
+
+	session := connectInMemoryServer(t, root)
+	res, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name: "skill_transition_confirm",
+		Arguments: map[string]any{
+			"proposal_id":     "PROP-guard-upstream-1",
+			"proposal_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+			"base_version":    "base-snap-1",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.IsError {
+		t.Fatalf("expected error result from skill_transition_confirm on upstream_update proposal, got %#v", res)
+	}
+}

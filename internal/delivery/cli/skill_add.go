@@ -111,8 +111,15 @@ func writeSkillAddPreview(p *termui.Printer, preview app.SkillAddProposal) {
 	}
 
 	p.Line(fmt.Sprintf("Add %s as a draft from %s.", skillName, originDesc))
-	p.Line(fmt.Sprintf("%s, %s. Origin retained. Watching: off. Agent use: off.",
+	p.Line(fmt.Sprintf("%s, %s. Origin retained. Agent use: off.",
 		termui.Plural(len(preview.Resources), "file", "files"), termui.Bytes(preview.TotalBytes)))
+	if preview.UpstreamSource != nil {
+		if preview.UpstreamSource.Created {
+			p.Line(fmt.Sprintf("Upstream: tracked by new source %s (checked weekly by `skillhub check`; nothing runs in the background).", preview.UpstreamSource.SourceID))
+		} else {
+			p.Line(fmt.Sprintf("Upstream: tracked by source %s.", preview.UpstreamSource.SourceID))
+		}
+	}
 	p.Line("No collection files changed.")
 	pins := preview.Confirmation.Confirmation.Pins
 	p.Line(fmt.Sprintf("Next: skillhub skill confirm %s", pins.ProposalID))
@@ -123,7 +130,11 @@ func writeSkillAddResult(p *termui.Printer, verbose bool, result app.SkillAddRes
 	if len(result.SkillIDs) > 1 {
 		skillName = strings.Join(result.SkillIDs, ", ")
 	}
-	p.Line(fmt.Sprintf("Draft %s added. Agent use: off. Watching: off. Changes are not committed.", skillName))
+	if result.UpstreamSource != nil {
+		p.Line(fmt.Sprintf("Draft %s added. Agent use: off. Upstream: %s. Changes are not committed.", skillName, result.UpstreamSource.SourceID))
+	} else {
+		p.Line(fmt.Sprintf("Draft %s added. Agent use: off. Changes are not committed.", skillName))
+	}
 	if verbose {
 		p.Fields(
 			termui.Field{Label: "Operation", Value: result.OperationID},

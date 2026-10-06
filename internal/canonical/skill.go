@@ -176,7 +176,7 @@ func validateSkillMetadata(path string, contents []byte) (skillMetadata, []Issue
 					if origin.Kind != yaml.MappingNode {
 						add("provenance.origin must be a mapping")
 					} else {
-						originValues, err := mappingValues(origin, stringSet("kind", "repository", "ref", "commit", "path", "name", "folder_digest", "content_digest", "transformations", "added_at"))
+						originValues, err := mappingValues(origin, stringSet("kind", "repository", "ref", "commit", "path", "name", "folder_digest", "files_digest", "content_digest", "transformations", "added_at"))
 						if err != nil {
 							add("invalid provenance.origin: " + err.Error())
 						} else {
@@ -204,7 +204,7 @@ func validateSkillMetadata(path string, contents []byte) (skillMetadata, []Issue
 									add("provenance.origin.added_at must be an RFC3339 timestamp", originValues["added_at"])
 								}
 							}
-							for _, digestField := range []string{"folder_digest", "content_digest"} {
+							for _, digestField := range []string{"folder_digest", "files_digest", "content_digest"} {
 								if d := scalar(originValues[digestField]); d != "" {
 									if !isValidDigest(d) {
 										add("provenance.origin."+digestField+" must be a lowercase SHA-256 digest (e.g. sha256:<hex>)", originValues[digestField])

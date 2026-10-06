@@ -27,7 +27,7 @@ Without it, pass `--workspace ~/skillhub` to each command, or run the command fr
 
 Transitions go in order: draft to active to deprecated to archived. You cannot jump from active straight to archived.
 
-**Source.** A remote Git repository (for example on GitHub) that you watch for useful skills or patterns. Watching a source records monitoring settings; it is not a background daemon and never changes your skills automatically.
+**Source.** A remote Git repository tied to skills in one of two roles: an *upstream* source (the repository a vendored skill was copied from) or a *learning reference* (a repository your curator agent monitors for improvement ideas). Skill Hub tracks upstream commit revisions and local changes without background daemons, letting you check drift and 3-way merge updates on demand. Sources never exist as unreferenced orphans; watching or attaching a source always connects it directly to one or more skills.
 
 **Intent-first skill addition.** You can add existing skills directly from a GitHub repository or a local folder with `skillhub skill add <locator>`. Skills start as drafts and retain provenance.
 
@@ -172,6 +172,38 @@ skillhub skill doctor <skill-id> --json
 - Results are marked `basis: terminal` and cached for agent resolution hints.
 - Untrusted third-party skills are not cached by design.
 - Exit codes: `0` (ready), `1` (setup required or unsupported platform), `2` (invalid request or unknown skill).
+## Local Web UI
+
+Skill Hub includes an embedded browser dashboard for visual skill curation, diff reviews, upstream tracking, and insight drafting.
+
+### Start the Web UI
+
+From your workspace or project directory, run:
+
+```bash
+skillhub serve web
+```
+
+Skill Hub starts an embedded HTTP server and prints the authenticated URL:
+```text
+Skill Hub web UI: http://127.0.0.1:7421/#token=36dee9ed913f3c4e56d973ef16a0f612741760c0f33d9495cdd4a6c17d72666a
+```
+
+Unless `--no-open` is passed, Skill Hub automatically opens your default browser to this URL. The token in the URL fragment is held in memory by the browser application and sent as a Bearer token on API calls.
+
+### Network Binding and Host Protection
+
+- **Multi-IP environments:** When your computer has multiple non-loopback network interfaces (e.g. Wi-Fi, Ethernet, Docker bridges, or Tailscale/VPNs), `skillhub serve web` binds to `0.0.0.0` so you can access the UI across local interfaces. On single-interface machines, it binds strictly to `127.0.0.1`.
+- **Force loopback:** To ensure the server binds exclusively to the local loopback address:
+  ```bash
+  skillhub serve web --loopback-only
+  ```
+- **Custom hostnames or reverse proxies:** Accessing the dashboard through custom domain names or reverse proxies requires passing `--allow-host <host[:port]>`. Requests with unapproved `Host` headers return `421 Misdirected Request` to protect against DNS rebinding attacks.
+- **Port override:** To specify an explicit port or address:
+  ```bash
+  skillhub serve web --addr 127.0.0.1:8080
+  ```
+- **Plain HTTP warning:** The embedded server speaks unencrypted HTTP. Do not expose it to untrusted public networks without a TLS reverse proxy.
 
 ## Move to another machine
 
@@ -207,6 +239,9 @@ When connecting Skill Hub to agent hosts, each host may prompt for permission on
 
 **Windows SmartScreen or unsigned binary warnings.**
 Skill Hub binaries are checksum-verified and Sigstore-attested via GitHub CI. On Windows, Windows SmartScreen or antivirus may flag newly downloaded unsigned executables. Choose "More info" -> "Run anyway" if prompted, or verify the file's SHA-256 against `checksums.txt` published with the release.
+
+**Windows firewall prompt on `serve web`.**
+On Windows, when `skillhub serve web` binds to `0.0.0.0` on a multi-adapter machine, Windows Defender Firewall may display a prompt asking whether to allow network traffic. Click "Allow access" on private networks, or pass `--loopback-only` to bind strictly to `127.0.0.1` and avoid the firewall prompt entirely.
 
 **`connect -g` refuses because of a symbolic link.**
 The error states that a host integration path contains a symbolic link (for example, if `~/.claude` or `~/.agents` is symlinked). Skill Hub refuses to write through symlinks for security. Workarounds:
@@ -297,12 +332,20 @@ Restart the agent after `connect`. Check that the `skillhub` binary still exists
 | List skills | `skillhub skill list [--state <state>]` |
 | Read a skill (any state) | `skillhub skill show <id>` |
 | Change lifecycle state | `skillhub skill activate\|deprecate\|archive <id> [--yes]` |
-| Watch an upstream repository | `skillhub source watch <locator> [--cadence <c>] [--yes]` |
-| Check upstream for updates | `skillhub source check --all-due` or `--all` (alias: `skillhub check`) |
+| Check skill drift from upstream | `skillhub skill outdated [--check] [--all] [--exit-code] [--json]` |
+| Inspect upstream details | `skillhub skill upstream <id> [--check] [--json]` |
+| Apply upstream 3-way update | `skillhub skill update <id> [--yes] [--json]` |
+| List candidates, sources, groups | `skillhub source list [--status <s>]` |
+| Watch and link learning source | `skillhub source watch <locator> --skill-id <id> [--cadence <c>] [--yes]` |
+| Attach learning reference | `skillhub source attach <source-id\|url> --skill-id <id> [--yes]` |
+| Detach learning reference | `skillhub source detach <source-id> --skill-id <id> [--yes]` |
+| Stop watching source | `skillhub source unwatch <source-id> [--yes]` |
+| Backfill legacy provenance | `skillhub source backfill [--skill <id>] [--yes]` |
+| Check watched sources for updates | `skillhub source check --all-due` or `--all` (alias: `skillhub check`) |
 | Review the inbox | `skillhub inbox` |
 | Act on an insight | `skillhub insight show\|decide\|apply\|confirm` |
 | Save an intake candidate | `skillhub source capture <url> --reason <text>` |
-| List or triage candidates | `skillhub source list`; `skillhub source triage <id> ...` |
+| Triage candidate sources | `skillhub source triage <id> --decision accept\|defer\|reject\|import ...` |
 | Import skills from source | `skillhub source import <source-id> [--path <subdir>] [--skill <name>] [--yes]` |
 | Ask for a skill recommendation | `skillhub resolve --request <file>` |
 | Evaluate routing quality | `skillhub eval routing [--no-skill <file>] [--policy <file>]` |
