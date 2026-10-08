@@ -72,6 +72,27 @@ func curationTelemetryEvent(eventType string, payload map[string]any) telemetry.
 	return telemetry.Event{Version: telemetry.EventVersion, Type: eventType, Client: telemetry.Client{Name: "skillhub"}, Payload: payload}
 }
 
+// RecordCatalogChange records catalog.changed and index.rebuilt telemetry events
+// from the app layer after a generation change.
+func RecordCatalogChange(ctx context.Context, sink TelemetrySink, root string, changeKind string, entityCount int64, durationMS int64) {
+	if sink == nil {
+		return
+	}
+	defer func() { _ = recover() }()
+
+	evt1 := curationTelemetryEvent(telemetry.EventCatalogChanged, map[string]any{
+		"change_kind":  changeKind,
+		"entity_count": entityCount,
+		"duration_ms":  durationMS,
+	})
+	evt2 := curationTelemetryEvent(telemetry.EventIndexRebuilt, map[string]any{
+		"status":       "completed",
+		"entity_count": entityCount,
+		"duration_ms":  durationMS,
+	})
+	recordCurationTelemetry(ctx, sink, root, evt1, evt2)
+}
+
 // CurationSessionInput contains only explicitly observed, content-free values.
 // Nil measurements were unavailable and are omitted rather than guessed.
 type CurationSessionInput struct {

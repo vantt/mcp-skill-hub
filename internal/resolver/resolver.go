@@ -119,6 +119,7 @@ func (resolver *Resolver) Resolve(ctx context.Context, raw Request) (Response, e
 		response.CoveredBy = covered.ID
 		response.CoverageBasis = "agent-host-declared"
 		response.ReasonCodes = []string{"active_procedure_coverage"}
+
 		resolver.cache.Put(key, response)
 		return response, nil
 	}
@@ -126,6 +127,7 @@ func (resolver *Resolver) Resolve(ctx context.Context, raw Request) (Response, e
 		response.Status = StatusNoSkill
 		response.NoSkill = &NoSkill{ReasonCode: "constraint_conflict", RetryWhen: "activation_context_changes"}
 		response.ReasonCodes = []string{"active_primary_conflict"}
+
 		resolver.cache.Put(key, response)
 		return response, nil
 	}
@@ -190,6 +192,16 @@ func (resolver *Resolver) Resolve(ctx context.Context, raw Request) (Response, e
 	for _, candidate := range rules {
 		candidateIDs[candidate.id] = true
 	}
+	var channels []string
+	if len(hits) > 0 {
+		channels = append(channels, "fts")
+	}
+	if len(rules) > 0 {
+		channels = append(channels, "rules")
+	}
+	response.Channels = channels
+	response.RetrievalCandidateCount = len(candidateIDs)
+
 	ids := make([]string, 0, len(candidateIDs))
 	for id := range candidateIDs {
 		ids = append(ids, id)
@@ -226,6 +238,7 @@ func (resolver *Resolver) Resolve(ctx context.Context, raw Request) (Response, e
 		}
 		return candidates[i].Skill.ID < candidates[j].Skill.ID
 	})
+
 	if len(candidates) == 0 {
 		reason := "catalog_gap"
 		if hardReasons["missing_required_capability"] > 0 {

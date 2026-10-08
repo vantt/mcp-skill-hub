@@ -8,10 +8,12 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"time"
 
 	"github.com/vantt/mcp-skill-hub/internal/catalog"
 	"github.com/vantt/mcp-skill-hub/internal/evaluation"
 	resolverpkg "github.com/vantt/mcp-skill-hub/internal/resolver"
+	"github.com/vantt/mcp-skill-hub/internal/telemetry"
 	"github.com/vantt/mcp-skill-hub/internal/workspace"
 	"gopkg.in/yaml.v3"
 )
@@ -138,6 +140,7 @@ func loadEvalPolicy(ctx context.Context, handle *catalog.Handle, opts RoutingEva
 // examples and counter-examples using leave-one-out cross-validation, and optionally
 // across a dedicated no-skill test suite.
 func EvaluateRouting(ctx context.Context, opts RoutingEvalOptions) (RoutingEvalReport, error) {
+	startedAt := time.Now()
 	root, err := workspace.Discover(opts.WorkspacePath)
 	if err != nil {
 		return RoutingEvalReport{}, err
@@ -188,7 +191,26 @@ func EvaluateRouting(ctx context.Context, opts RoutingEvalOptions) (RoutingEvalR
 		}
 	}
 
-	return acc.toReport(), nil
+	report := acc.toReport()
+	if tel, tErr := (TelemetryService{}).Open(root); tErr == nil {
+		defer tel.Close(ctx)
+		runID := fmt.Sprintf("eval-%d", startedAt.UnixNano())
+		evalPayload := map[string]any{
+			"run_id":           runID,
+			"suite_id":         "routing-eval",
+			"variant":          "leave-one-out",
+			"status":           "completed",
+			"case_count":       report.TotalCases,
+			"acceptable_count": acc.correctP + acc.noSkillZ,
+			"no_skill_count":   acc.totalZ,
+			"duration_ms":      time.Since(startedAt).Milliseconds(),
+		}
+		evt := curationTelemetryEvent(telemetry.EventEvaluationRunCompleted, evalPayload)
+		evt.CatalogSnapshot = handle.Pointer.CatalogSnapshot
+		evt.PolicyRevision = policy.Revision
+		recordCurationTelemetry(ctx, tel, root, evt)
+	}
+	return report, nil
 }
 
 func evaluatePositiveCases(ctx context.Context, root string, handle *catalog.Handle, skills []resolverpkg.Skill, svc ResolverService, acc *routingEvalAccumulator) error {

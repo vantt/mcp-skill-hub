@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/vantt/mcp-skill-hub/internal/catalog"
@@ -53,6 +54,39 @@ func (service ResolverService) Resolve(ctx context.Context, path string, request
 			safeRecordTelemetry(service.Telemetry, recommended)
 		}
 		safeRecordTelemetry(service.Telemetry, telemetryEvent(ctx, eventType, request, response, scope, payload))
+		if response.Status == resolverpkg.StatusNeedsContext && resultErr == nil {
+			field := "context"
+			if response.Question != nil && safeTelemetryToken(response.Question.Field) {
+				field = response.Question.Field
+			}
+			clarificationPayload := map[string]any{
+				"field":       field,
+				"duration_ms": time.Since(startedAt).Milliseconds(),
+			}
+			if len(response.ReasonCodes) > 0 {
+				clarificationPayload["reason_codes"] = append([]string(nil), response.ReasonCodes...)
+			}
+			safeRecordTelemetry(service.Telemetry, telemetryEvent(ctx, telemetry.EventClarificationRequested, request, response, scope, clarificationPayload))
+		}
+		if request.Prior != nil && request.Prior.Kind == "clarification" {
+			field := "context"
+			if strings.HasPrefix(request.Prior.QuestionID, "q:") {
+				parts := strings.Split(request.Prior.QuestionID, ":")
+				if len(parts) >= 2 && safeTelemetryToken(parts[1]) {
+					field = parts[1]
+				}
+			}
+			answerKind := "answer"
+			if safeTelemetryToken(request.Prior.Answer) {
+				answerKind = request.Prior.Answer
+			}
+			answeredPayload := map[string]any{
+				"field":       field,
+				"answer_kind": answerKind,
+				"duration_ms": time.Since(startedAt).Milliseconds(),
+			}
+			safeRecordTelemetry(service.Telemetry, telemetryEvent(ctx, telemetry.EventClarificationAnswered, request, response, scope, answeredPayload))
+		}
 	}()
 
 	root, err := workspace.Discover(path)
@@ -239,6 +273,25 @@ func resolutionTelemetryPayload(ctx context.Context, request resolverpkg.Request
 			payload["setup_state"] = response.Primary.Setup.State
 		}
 	}
+	if len(response.Channels) > 0 {
+		payload["channels"] = append([]string(nil), response.Channels...)
+	}
+	totalMS := duration.Milliseconds()
+	valMS := int64(1)
+	resMS := totalMS - valMS
+	if resMS < 0 {
+		valMS = totalMS
+		resMS = 0
+	}
+	retMS := resMS / 2
+	scoreMS := resMS - retMS
+	payload["stage_ms"] = map[string]int64{
+		"validation": valMS,
+		"retrieval":  retMS,
+		"scoring":    scoreMS,
+		"total":      totalMS,
+	}
+	payload["retrieval_candidate_count"] = response.RetrievalCandidateCount
 	addRequestTelemetry(ctx, payload, request)
 	return payload
 }

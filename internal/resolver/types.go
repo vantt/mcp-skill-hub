@@ -122,6 +122,10 @@ type Response struct {
 	CoveredBy       string          `json:"covered_by,omitempty"`
 	CoverageBasis   string          `json:"coverage_basis,omitempty"`
 	Warnings        []string        `json:"warnings,omitempty"`
+
+	// Observability metadata (not serialized to public JSON contract)
+	Channels                []string `json:"-"`
+	RetrievalCandidateCount int      `json:"-"`
 }
 
 type ValidFor struct {
