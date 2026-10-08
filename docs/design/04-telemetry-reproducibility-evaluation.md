@@ -121,7 +121,11 @@ evaluation.run_completed
   "constraint_count": 2,
   "fact_keys": ["dependency", "test-result"],
   "request_fingerprint": "hmac:...",
-  "candidate_count": 17,
+  "candidate_count": 2,
+  "retrieval_candidate_count": 17,
+  "prior_resolution_id": "res_01J...",
+  "prior_kind": "rejected",
+  "prior_verified": true,
   "top_skill_id": "consumer-reliability-review",
   "confidence_band": "high",
   "reason_codes": ["trigger_match", "fact_match"],
@@ -134,6 +138,13 @@ evaluation.run_completed
   }
 }
 ```
+
+Ý nghĩa các trường đếm ứng viên và liên kết chuỗi:
+- `candidate_count`: Số lượng skill **được gợi ý** (primary + supporting; `len(supporting) + 1` nếu có primary, 0 nếu `no_skill`). Tên lịch sử được giữ nguyên để tương thích ngược với schema v1.
+- `retrieval_candidate_count`: Số lượng ứng viên thực tế được tìm kiếm và truy xuất từ catalog (FTS + rules) trước khi áp dụng hard-exclusion và scoring.
+- `prior_resolution_id`, `prior_kind`, `prior_verified`: Dữ liệu nối chuỗi re-resolution. `prior_verified` mang giá trị `true` **chỉ khi** `prior_resolution_id` đã được cấp cho chính session này (được server-side tracker xác minh).
+- `channels`: Danh sách các kênh truy xuất đóng góp ứng viên (`fts`, `rules`).
+- `stage_ms`: Monotonic timing chi tiết của các giai đoạn trong resolver process (`validation`, `retrieval`, `scoring`, `total`).
 
 `top_skill_id` có thể persist local; remote/organization mode cần policy cho catalog sensitivity. Internal feature vector chỉ bật debug và có retention ngắn.
 
@@ -481,19 +492,34 @@ Nếu case cho phép nhiều acceptable IDs:
 top1_acceptability = selected ∈ acceptable_set
 ```
 
-Metrics chất lượng routing và phễu chuyển đổi (Funnel metrics):
+#### Đơn vị đo lường chuẩn hóa: Chuỗi sự kiện (Chain)
 
-- `resolution:<status>`: `resolved`, `no_skill`, `needs_context`, `already_covered`, `failed`.
-- `recommended:primary`, `recommended:supporting`.
-- `activation:<attribution>`: `recommended`, `supporting`, `override`, `after_no_skill`, `after_needs_context`, `unsolicited`.
-- `acceptance_rate`: `activation:recommended / recommended:primary`.
-- `blocked:review_required`: số lượt cố load skill third-party chưa duyệt nội dung.
-- `setup:<state>`: phân bố trạng thái setup hint khi recommend (`ready`, `setup_required`, `review_required`, `unsupported_platform`, `unknown`).
-- `doctor:<state>`: số lượt chạy doctor theo trạng thái và `doctor_failure_rate`.
-- `feedback:<status>`, `feedback:setup_failed`, `feedback:negative`, `feedback:negative_after_load` (được deduplicate để không đếm hai lần khi có utility harmful).
-- `transcript:<tool>`, `native:no_resolve`, `native:resolved_before`.
+Để phản ánh chính xác hành vi thực tế của agent và loại bỏ sai lệch do cùng một request task sinh cùng `resolution_id`, **đơn vị chuẩn hóa là một chuỗi (Chain)**:
+- **Khóa chuỗi (Chain Key):** `(session_hash, resolution_id, event_id)`. CLI-origin events không mang session hash và mỗi resolution tạo thành một chuỗi độc lập.
+- **Liên kết chuỗi:** Khi một request mang `prior_resolution_id` với `prior_verified: true` (đã được cấp cho chính session đó), nó nối dài chuỗi trước đó thay vì tạo chuỗi mới.
+- **Quy tắc gán tải (Load Attribution):** Một lượt tải nội dung (`skill.loaded`) chỉ được gán cho resolution **mới nhất** trong chuỗi của nó.
+- **Bucket riêng:** `already_covered` được tách thành một bucket riêng biệt, không tính gộp vào `resolved` hay `no_skill`.
 
-*Ghi chú:* Việc đo lường theo named measurement cases được hoãn lại (deferred); lệnh `skillhub telemetry funnel` hỗ trợ phân tích theo khoảng thời gian `--since/--until` theo ngày UTC (mặc định 30 ngày, tối đa 180 ngày).
+#### Bảng định nghĩa Metric chuẩn hóa (O5)
+
+Mọi rate đều nằm nghiêm ngặt trong khoảng $[0, 1]$. Kèm theo mỗi rate, hệ thống luôn hiển thị số đếm thô (`numerator / denominator`) để tránh ngộ nhận khi mẫu số nhỏ.
+
+| Metric | Công thức | Ý nghĩa |
+|---|---|---|
+| `acceptance_rate` | chuỗi có load đúng primary / chuỗi `resolved` | Gợi ý được chấp nhận và sử dụng |
+| `override_rate` | chuỗi `resolved` có load skill khác / chuỗi `resolved` | Gợi ý sai skill, agent phải tự chọn skill khác |
+| `false_no_skill_rate` | chuỗi `no_skill` có load / chuỗi `no_skill` | Hệ thống báo không có skill nhưng thực tế agent vẫn load được |
+| `true_no_skill` | chuỗi `no_skill` không load trong TTL (offline) | Catalog thực sự không có skill phù hợp |
+| `reformulation_rate` | chuỗi có `prior_kind: rejected` **verified** / tổng chuỗi | Agent phải diễn đạt lại yêu cầu |
+| `ignore_rate` | chuỗi `resolved` không load trong TTL (offline) / chuỗi `resolved` | Gợi ý bị bỏ qua lặng lẽ |
+| `needs_context_answer_rate` | `clarification.answered` / `clarification.requested` | Câu hỏi làm rõ có được trả lời không |
+| `bypass_rate` | `native:no_resolve` / transcript skill uses | Agent tự dùng skill mà không qua hub (đo từ transcript) |
+| `negative_after_load` | feedback negative sau khi có server-observed load | Load skill rồi mới thấy không có ích |
+
+#### Tính toán Offline và Xử lý Biên
+- `ignore_rate` và `true_no_skill` được tính **offline** từ các sự kiện bền vững trong kho lưu trữ raw: xác định chuỗi không có lượt load nào cùng session trong khoảng thời gian TTL (2 giờ). Khi chưa đủ dữ liệu hoặc chuỗi diễn ra trong cửa sổ TTL chưa kết thúc, giá trị được báo cáo là `unknown`, không bao giờ báo 0. Không thêm event type runtime mới.
+- **Cắt lát (Cuts):** Hỗ trợ phân tích cắt lát theo `--by client|operation|snapshot` bên trong cửa sổ lưu trữ sự kiện thô (raw retention window).
+- **Lưu trữ Raw Retention:** Tăng thời gian lưu trữ mặc định sự kiện thô (`defaultRetention`, `recorder.go:18`) lên 30 ngày để bao phủ trọn vẹn cửa sổ baseline chuẩn 30 ngày (đồng bộ với `--since 30d` mặc định của funnel). Khóa rollup `(day, skill_id, metric)` được giữ nguyên.
 ### 9.2 Calibration
 
 Tính theo confidence band/applicability label:

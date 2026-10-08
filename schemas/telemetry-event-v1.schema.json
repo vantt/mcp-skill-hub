@@ -81,6 +81,8 @@
       "properties": {
         "status": {"$ref": "#/$defs/token"}, "operation": {"$ref": "#/$defs/token"}, "artifact_kind": {"$ref": "#/$defs/token"},
         "constraint_count": {"$ref": "#/$defs/count"}, "fact_keys": {"$ref": "#/$defs/tokens"}, "candidate_count": {"$ref": "#/$defs/count"},
+        "retrieval_candidate_count": {"$ref": "#/$defs/count"},
+        "prior_resolution_id": {"$ref": "#/$defs/token"}, "prior_kind": {"$ref": "#/$defs/token"}, "prior_verified": {"type": "boolean"},
         "top_skill_id": {"$ref": "#/$defs/token"}, "skill_id": {"$ref": "#/$defs/token"}, "confidence_band": {"$ref": "#/$defs/token"},
         "reason_codes": {"$ref": "#/$defs/tokens"}, "recommended_skill_ids": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"$ref": "#/$defs/token"}}, "channels": {"$ref": "#/$defs/tokens"}, "stage_ms": {"$ref": "#/$defs/stageMillis"},
         "duration_ms": {"$ref": "#/$defs/count"}, "error_code": {"$ref": "#/$defs/token"}, "basis": {"$ref": "#/$defs/token"},
