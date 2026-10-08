@@ -1,12 +1,14 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/vantt/mcp-skill-hub/internal/canonical"
 	"github.com/vantt/mcp-skill-hub/internal/mutation"
 	workspacepkg "github.com/vantt/mcp-skill-hub/internal/workspace"
 )
@@ -337,5 +339,99 @@ func hostArtifactPaths() []string {
 		"CLAUDE.md",
 		"AGENTS.md",
 		"GEMINI.md",
+	}
+}
+
+func TestFreshCloneWithMissingLayoutDirectoriesGivesHealthyStatusAndValidate(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	root := filepath.Join(t.TempDir(), "workspace")
+	if _, err := workspacepkg.Apply(root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (CatalogService{}).EnsureCatalog(ctx, root); err != nil {
+		t.Fatal(err)
+	}
+
+	// Simulate fresh clone: delete all empty required canonical directories
+	for _, dir := range workspacepkg.RequiredDirectories() {
+		_ = os.Remove(filepath.Join(root, filepath.FromSlash(dir)))
+	}
+
+	// 1. validate must pass with 0 issues
+	issues, err := canonical.Validate(root)
+	if err != nil {
+		t.Fatalf("validate error on clone: %v", err)
+	}
+	if len(issues) != 0 {
+		t.Fatalf("expected 0 issues on clone-like workspace, got: %#v", issues)
+	}
+
+	// 2. status must report healthy valid workspace without statat errors
+	home, err := (CurationService{}).GetCurationHome(ctx, root)
+	if err != nil {
+		t.Fatalf("status error on clone: %v", err)
+	}
+	if home.Workspace.Health != "valid" {
+		t.Fatalf("expected workspace health 'valid', got %q", home.Workspace.Health)
+	}
+
+	// 3. doctor must run without errors
+	result, err := (WorkspaceService{}).Doctor(root)
+	if err != nil {
+		t.Fatalf("doctor error on clone: %v", err)
+	}
+	if result.Error != nil {
+		t.Fatalf("doctor result error on clone: %#v", result.Error)
+	}
+}
+
+func TestDoctorAndStatusReportHostIntegrationMissing(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	root := healthyWorkspaceWithoutHosts(t)
+
+	// 1. Doctor reports host integration missing as fixable with note to re-run skillhub integrate
+	docResult, err := (WorkspaceService{}).Doctor(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if docResult.Status != StatusActionRequired {
+		t.Fatalf("doctor status = %q, want action_required", docResult.Status)
+	}
+	if !strings.Contains(docResult.Summary, "host integration missing") || !strings.Contains(docResult.Summary, "re-run skillhub integrate after a pull that untracked those files") {
+		t.Fatalf("doctor summary missing expected host integration text: %q", docResult.Summary)
+	}
+	hasFixableImpact := false
+	for _, item := range docResult.Items {
+		if strings.Contains(item.Impact, "Fixable") && strings.Contains(item.Impact, "re-run skillhub integrate after a pull that untracked those files") {
+			hasFixableImpact = true
+			break
+		}
+	}
+	if !hasFixableImpact {
+		t.Fatalf("doctor items missing fixable impact with integrate note: %#v", docResult.Items)
+	}
+
+	// 2. Status reports host_integration_missing action and finding with note to re-run skillhub integrate
+	home, err := (CurationService{}).GetCurationHome(ctx, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if home.Status != StatusActionRequired {
+		t.Fatalf("status = %q, want action_required", home.Status)
+	}
+	if !strings.Contains(home.Summary, "Host integration is missing; re-run skillhub integrate after a pull that untracked those files") {
+		t.Fatalf("status summary missing expected note: %q", home.Summary)
+	}
+	hasStatusItem := false
+	for _, item := range home.Items {
+		if item.ID == "host_integration_missing" && strings.Contains(item.Impact, "re-run skillhub integrate after a pull that untracked those files") {
+			hasStatusItem = true
+			break
+		}
+	}
+	if !hasStatusItem {
+		t.Fatalf("status items missing host_integration_missing item: %#v", home.Items)
 	}
 }

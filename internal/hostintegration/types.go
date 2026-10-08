@@ -200,3 +200,41 @@ func (e *ConflictError) Error() string {
 }
 
 func (e *ConflictError) Unwrap() error { return ErrConflict }
+
+// Finding describes a host integration issue reported to doctor or status.
+type Finding struct {
+	ID      string `json:"id"`
+	Summary string `json:"summary"`
+	Note    string `json:"note,omitempty"`
+	Fixable bool   `json:"fixable"`
+}
+
+const (
+	FindingHostIntegrationMissing = "host_integration_missing"
+	SummaryHostIntegrationMissing = "host integration missing"
+	NoteReRunIntegrate            = "re-run skillhub integrate after a pull that untracked those files"
+)
+
+// MissingFinding returns a fixable Finding if the plan contains missing host files.
+func MissingFinding(plan PlanResult) *Finding {
+	for _, change := range plan.Changes {
+		if change.PreimageDigest == missingDigest {
+			return &Finding{
+				ID:      FindingHostIntegrationMissing,
+				Summary: SummaryHostIntegrationMissing,
+				Note:    NoteReRunIntegrate,
+				Fixable: true,
+			}
+		}
+	}
+	return nil
+}
+
+// CheckMissing inspects the workspace and returns a Finding if host integration files are missing.
+func CheckMissing(ctx context.Context, request Request) (*Finding, error) {
+	plan, err := Plan(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	return MissingFinding(plan), nil
+}

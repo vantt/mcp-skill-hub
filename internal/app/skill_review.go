@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -240,6 +241,9 @@ func locateSkillDir(root, id string) (string, string, []byte, error) {
 	skillsDir := filepath.Join(root, "skills")
 	collections, err := os.ReadDir(skillsDir)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", "", nil, skill.ErrNotFound
+		}
 		return "", "", nil, err
 	}
 	var foundCollection string

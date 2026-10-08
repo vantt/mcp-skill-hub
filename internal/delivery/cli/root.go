@@ -34,7 +34,7 @@ func RunContext(ctx context.Context, args []string, stdout, stderr io.Writer) in
 	switch args[0] {
 	case "help":
 		return runHelp(args[1:], stdout, stderr)
-	case "connect":
+	case "connect", "integrate":
 		return runConnect(ctx, args[1:], stdout, stderr)
 	case "version":
 		return runVersion(args[1:], stdout, stderr)

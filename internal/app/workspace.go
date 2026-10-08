@@ -389,8 +389,13 @@ func inspectHostIntegration(ctx context.Context, root string, result Result) (Re
 	if err != nil {
 		return Result{}, err
 	}
+	missing := hostintegration.MissingFinding(plan)
+	impact := "Remediation is available after explicit confirmation."
+	if missing != nil {
+		impact = "Fixable: " + missing.Note + " (or run `skillhub doctor --fix --yes`)."
+	}
 	for _, change := range plan.Changes {
-		item := hostChangeItem(change.Host, levels[change.Host], change.Kind, change.Path, "Remediation is available after explicit confirmation.")
+		item := hostChangeItem(change.Host, levels[change.Host], change.Kind, change.Path, impact)
 		if change.Preview != "" {
 			item.Summary += "\nManaged diff preview:\n" + change.Preview
 		}
@@ -398,7 +403,11 @@ func inspectHostIntegration(ctx context.Context, root string, result Result) (Re
 	}
 	if len(plan.Changes) > 0 {
 		result.Status = StatusActionRequired
-		result.Summary = "Workspace and catalog are healthy; host integration needs attention."
+		if missing != nil {
+			result.Summary = "Workspace and catalog are healthy; host integration missing. Note: " + missing.Note + "."
+		} else {
+			result.Summary = "Workspace and catalog are healthy; host integration needs attention."
+		}
 		result.SuggestedActions = append(result.SuggestedActions, Action{Label: "Apply host integration remediation", Command: "skillhub doctor --fix --workspace " + root + " --yes", RequiresConfirmation: true})
 	}
 	return result, nil

@@ -11,6 +11,7 @@ import (
 
 	"github.com/vantt/mcp-skill-hub/internal/canonical"
 	"github.com/vantt/mcp-skill-hub/internal/catalog"
+	"github.com/vantt/mcp-skill-hub/internal/hostintegration"
 	"github.com/vantt/mcp-skill-hub/internal/mutation"
 	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
 	"github.com/vantt/mcp-skill-hub/internal/workspace"
@@ -141,6 +142,14 @@ func (CurationService) GetCurationHome(ctx context.Context, path string) (Curati
 		} else {
 			markCatalogCategoriesUnavailable(state.Categories)
 		}
+		if !state.RecoveryPending {
+			req, reqErr := hostIntegrationRequest(root)
+			if reqErr == nil {
+				if missing, _ := hostintegration.CheckMissing(ctx, req); missing != nil {
+					state.HostIntegrationFinding = missing
+				}
+			}
+		}
 	} else {
 		markCatalogCategoriesUnavailable(state.Categories)
 		state.CountsKnown = false
@@ -162,14 +171,15 @@ type homeState struct {
 	Summary           CurationSummary
 	// TotalSkills and TotalSources count every state; CountsKnown is false when
 	// the catalog could not be read, so a missing count is never taken for zero.
-	TotalSkills        int
-	TotalSources       int
-	CountsKnown        bool
-	InterruptedID      string
-	ChangedSources     int
-	DueSources         int
-	UnavailableSources int
-	Categories         []ActionCategory
+	TotalSkills            int
+	TotalSources           int
+	CountsKnown            bool
+	InterruptedID          string
+	ChangedSources         int
+	DueSources             int
+	UnavailableSources     int
+	Categories             []ActionCategory
+	HostIntegrationFinding *hostintegration.Finding
 }
 
 func defaultCategories() []ActionCategory {
@@ -434,6 +444,21 @@ func deriveCurationHome(state homeState) CurationHome {
 		}
 		home.Actions = append(home.Actions, ActionItem{Kind: "review_git_changes", Count: 1, Priority: 10, Summary: "Git has uncommitted canonical changes", Command: "workspace_diff"})
 	}
+	if state.HostIntegrationFinding != nil {
+		home.HomeSummary.AttentionItems++
+		if home.Status == StatusOK {
+			home.Status = StatusActionRequired
+			home.Summary = "Workspace and search index are healthy, but host integration needs attention."
+		}
+		home.Actions = append(home.Actions, ActionItem{
+			Kind:     "host_integration_missing",
+			ID:       state.HostIntegrationFinding.ID,
+			Count:    1,
+			Priority: 85,
+			Summary:  state.HostIntegrationFinding.Summary,
+			Command:  "doctor",
+		})
+	}
 	if state.Health == "valid" && state.CountsKnown && state.TotalSkills == 0 && state.TotalSources == 0 && state.GitDirty {
 		// A fresh workspace has no skills in any state and no sources. Replace
 		// the bare "review uncommitted changes" suggestion with the onboarding
@@ -458,6 +483,8 @@ func deriveCurationHome(state homeState) CurationHome {
 		switch recommended.Kind {
 		case "rebuild_index":
 			home.Summary = "Search index is stale; skill and source counts are unavailable until it is rebuilt."
+		case "host_integration_missing":
+			home.Summary = "Host integration is missing; re-run skillhub integrate after a pull that untracked those files."
 		case "review_upstream_updates":
 			home.Summary = fmt.Sprintf("%d skill(s) have upstream changes to review.", recommended.Count)
 		case "distill_changed_sources":
@@ -477,6 +504,13 @@ func deriveCurationHome(state homeState) CurationHome {
 	if recommended.Kind != "repair_workspace" {
 		home.Items = append(home.Items, Item{ID: firstNonEmpty(recommended.ID, recommended.Kind), Summary: recommended.Summary, Impact: actionImpact(recommended.Kind)})
 	}
+	if state.HostIntegrationFinding != nil && recommended.Kind != "host_integration_missing" {
+		home.Items = append(home.Items, Item{
+			ID:      state.HostIntegrationFinding.ID,
+			Summary: state.HostIntegrationFinding.Summary,
+			Impact:  actionImpact("host_integration_missing"),
+		})
+	}
 	return home
 }
 
@@ -486,6 +520,7 @@ func recommendationLabel(kind string) string {
 		"recover_workspace":         "Run skillhub doctor --fix",
 		"resume_run":                "Resume the interrupted run",
 		"rebuild_index":             "Run `skillhub rebuild` to refresh the search index",
+		"host_integration_missing":  "Re-run skillhub integrate (or run skillhub doctor --fix)",
 		"retry_unavailable_sources": "Retry unavailable source checks",
 		"review_upstream_updates":   "Review upstream updates with skillhub skill outdated",
 		"distill_changed_sources":   "Distill changed sources",
@@ -497,6 +532,9 @@ func recommendationLabel(kind string) string {
 }
 
 func actionImpact(kind string) string {
+	if kind == "host_integration_missing" {
+		return "Fixable finding: re-run skillhub integrate after a pull that untracked those files (or run skillhub doctor --fix --yes)."
+	}
 	if strings.Contains(kind, "workspace") || kind == "rebuild_index" {
 		return "Other curation work should wait until local workspace state is healthy."
 	}

@@ -1,6 +1,6 @@
 ---
 name: system-curator
-version: 1.5.1
+version: 1.5.2
 contract-version: "2"
 description: Guide Skill Hub maintenance through the bundled, application-service-backed curation tools.
 activation-policy: explicit-only
@@ -15,6 +15,7 @@ compatible-tools:
   - source_triage
   - source_check
   - skill_upstream_status
+  - source_watch_confirm
   - source_link_preview
   - source_unwatch_preview
   - source_import_preview
@@ -31,12 +32,15 @@ compatible-tools:
   - insight_decide
   - insight_apply_preview
   - insight_apply_confirm
+  - skill_add_preview
+  - skill_add_confirm
   - skill_create_preview
   - skill_create_confirm
   - skill_transition_preview
   - skill_transition_confirm
   - skill_list
   - skill_get
+  - skill_review
   - skill_update_preview
   - skill_update_confirm
   - routing_evaluate
@@ -295,6 +299,7 @@ source_intake_list
 source_triage
 source_check
 skill_upstream_status
+source_watch_confirm
 source_link_preview
 source_unwatch_preview
 source_import_preview
@@ -311,12 +316,15 @@ insight_get
 insight_decide
 insight_apply_preview
 insight_apply_confirm
+skill_add_preview
+skill_add_confirm
 skill_create_preview
 skill_create_confirm
 skill_transition_preview
 skill_transition_confirm
 skill_list
 skill_get
+skill_review
 skill_update_preview
 skill_update_confirm
 routing_evaluate

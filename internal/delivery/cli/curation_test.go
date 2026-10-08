@@ -165,6 +165,24 @@ func TestStatusSuggestsRunnableCreateCommandBUG17(t *testing.T) {
 	}
 }
 
+func TestIntegrateCommandAlias(t *testing.T) {
+	t.Parallel()
+	root := filepath.Join(t.TempDir(), "workspace")
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
+		t.Fatal(stderr.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+	project := t.TempDir()
+	if code := Run([]string{"integrate", "--workspace", root, "--project", project, "--yes"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("integrate exit = %d: %s", code, stderr.String())
+	}
+	if _, err := os.Stat(filepath.Join(project, ".mcp.json")); err != nil {
+		t.Fatalf("integrate did not write .mcp.json: %v", err)
+	}
+}
+
 func commitCLIWorkspace(t *testing.T, root string) {
 	t.Helper()
 	for _, args := range [][]string{{"add", "-A"}, {"-c", "user.name=Skill Hub Test", "-c", "user.email=test@skillhub.invalid", "commit", "-m", "initial"}} {

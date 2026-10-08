@@ -1062,6 +1062,9 @@ func readSourceRecords(root string) ([]sourcepkg.Candidate, []sourcepkg.Record, 
 	readDir := func(relative string) ([]fs.DirEntry, error) {
 		info, statErr := handle.Lstat(relative)
 		if statErr != nil {
+			if errors.Is(statErr, os.ErrNotExist) {
+				return nil, nil
+			}
 			return nil, statErr
 		}
 		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
