@@ -122,6 +122,6 @@ These rules exist because a previous executor satisfied checks without satisfyin
 
 - [x] `guard.sh check 6` prints `GUARD RESULT: PASS (phase 6)`.
 - [x] The user approved the phase 2 error mapping, the phase 4 renderer samples, and the phase 5 before/after CLI output.
-- [ ] A final code review (outside the executor) finds no rule-5 violations.
+- [x] A final code review (outside the executor) finds no rule-5 violations. Reviewed 2026-10-08 over `2ad9018..df9e1d8`: no `TODO/FIXME/nolint/build ignore/testing.Testing/TestMain` or vacuous assertions added, no test removed, extracted helpers have single responsibilities, `verifyProposalPins` is shared by 8 call sites, `skill_get` delegates to `GetSkillDetail`. One finding: `buildAndStoreSourceWatchProposal` and `appendSourceSizeWarnings` were orphaned when a later feature made `PreviewSourceWatch` delegate to `PreviewAttach`; removed as dead code (`make lint` back to 0 issues, `internal/app` tests pass).
 
 <!-- slug: pre-webui-architecture-and-cli-output -->
