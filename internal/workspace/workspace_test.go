@@ -148,3 +148,37 @@ func TestInspectWithOptionsDetachedIgnoresMissingGitRepository(t *testing.T) {
 		}
 	}
 }
+
+func TestIsHubMeta(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		path string
+		want bool
+	}{
+		{"skill.meta.yaml", true},
+		{"skill.meta.yml", true},
+		{"SKILL.META.YAML", true},
+		{".meta", true},
+		{".meta/skill.yaml", true},
+		{".meta/distill.yaml", true},
+		{".meta/sub/file.txt", true},
+		{"skills/default/my-skill/skill.meta.yaml", true},
+		{"skills/default/my-skill/skill.meta.yml", true},
+		{"skills/default/my-skill/.meta", true},
+		{"skills/default/my-skill/.meta/distill.yaml", true},
+		{"skills/default/my-skill/.meta/skill.yaml", true},
+		{"SKILL.md", false},
+		{"skills/default/my-skill/SKILL.md", false},
+		{"scripts/check.sh", false},
+		{"skills/default/my-skill/scripts/check.sh", false},
+		{"sub/.meta/file", false},
+		{"sources/catalog/source.yaml", false},
+		{"", false},
+	}
+	for _, tc := range cases {
+		got := IsHubMeta(tc.path)
+		if got != tc.want {
+			t.Errorf("IsHubMeta(%q) = %v, want %v", tc.path, got, tc.want)
+		}
+	}
+}

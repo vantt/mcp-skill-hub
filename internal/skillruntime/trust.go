@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"slices"
 	"strings"
+
+	"github.com/vantt/mcp-skill-hub/internal/workspace"
 )
 
 // Reason codes reported when a third-party skill has not been approved.
@@ -14,8 +16,10 @@ const (
 	ReasonContentReviewStale    = "content_review_stale"
 )
 
-// metaFileName is hub metadata that is never part of the reviewed content.
-const metaFileName = "skill.meta.yaml"
+// IsHubMeta reports whether path is hub-managed metadata.
+func IsHubMeta(relPath string) bool {
+	return workspace.IsHubMeta(relPath)
+}
 
 // Provenance is the subset of manifest provenance that decides trust.
 type Provenance struct {
@@ -44,11 +48,11 @@ func ContentDigest(files []ResourceDigest, spec Spec, hasSpec bool) string {
 	return "sha256:" + hashFilesAndRuntime("files", withoutMeta(files), spec, hasSpec)
 }
 
-// withoutMeta returns files sorted by path and digest, minus skill.meta.yaml.
+// withoutMeta returns files sorted by path and digest, minus hub metadata.
 func withoutMeta(files []ResourceDigest) []ResourceDigest {
 	sorted := make([]ResourceDigest, 0, len(files))
 	for _, file := range files {
-		if file.Path != metaFileName {
+		if !workspace.IsHubMeta(file.Path) {
 			sorted = append(sorted, file)
 		}
 	}

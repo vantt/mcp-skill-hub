@@ -290,7 +290,11 @@ func groupDiffFiles(files []DiffFile, roots ...string) []DiffGroup {
 			parts := strings.Split(file.Path, "/")
 			if len(parts) >= 3 {
 				metaPath := filepath.Join(root, parts[0], parts[1], parts[2], "skill.meta.yaml")
-				if content, err := os.ReadFile(metaPath); err == nil {
+				content, err := os.ReadFile(metaPath)
+				if err != nil {
+					content, err = os.ReadFile(filepath.Join(root, parts[0], parts[1], parts[2], ".meta", "skill.yaml"))
+				}
+				if err == nil {
 					if bytes.Contains(content, []byte("status: draft")) || bytes.Contains(content, []byte("status: \"draft\"")) {
 						kind = "draft_skills"
 					}

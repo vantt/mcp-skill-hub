@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
+	"github.com/vantt/mcp-skill-hub/internal/workspace"
 	"gopkg.in/yaml.v3"
 	"path/filepath"
 	"sort"
@@ -89,6 +90,7 @@ type DiscoveredSkillItem struct {
 	TotalBytes      int64                 `json:"total_bytes"`
 	FileCount       int                   `json:"file_count"`
 	License         SkillLicenseInfo      `json:"license"`
+	Warnings        []Warning             `json:"warnings,omitempty"`
 	Transformations []string              `json:"transformations,omitempty"`
 	Conflict        bool                  `json:"conflict"`
 	SkipReason      string                `json:"skip_reason,omitempty"`
@@ -461,7 +463,14 @@ func DiscoverSkillsFromResources(ctx context.Context, reader ResourceReader, res
 			}
 
 			relPath := strings.TrimPrefix(cleanPath, prefix)
-			if relPath == "" || relPath == "SKILL.md" || relPath == "skill.meta.yaml" {
+			if relPath == "" || relPath == "SKILL.md" {
+				continue
+			}
+			if workspace.IsHubMeta(relPath) {
+				item.Warnings = append(item.Warnings, Warning{
+					Code:    "upstream_meta_ignored",
+					Summary: fmt.Sprintf("Ignored upstream metadata file %q.", cleanPath),
+				})
 				continue
 			}
 

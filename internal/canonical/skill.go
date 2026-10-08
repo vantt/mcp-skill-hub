@@ -47,7 +47,8 @@ func validateSkills(root string, files []string) []Issue {
 		if len(parts) >= 4 {
 			resourceDirectories[strings.Join(parts[:3], "/")] = struct{}{}
 		}
-		if len(parts) == 4 && parts[3] == "skill.meta.yaml" {
+		isMetaFile := (len(parts) == 4 && parts[3] == "skill.meta.yaml") || (len(parts) == 5 && parts[3] == ".meta" && parts[4] == "skill.yaml")
+		if isMetaFile {
 			contents, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
 			if err != nil {
 				issues = append(issues, Issue{Path: path, Message: err.Error()})
@@ -56,7 +57,8 @@ func validateSkills(root string, files []string) []Issue {
 			item, validationIssues := validateSkillMetadata(path, contents)
 			issues = append(issues, validationIssues...)
 			metadata = append(metadata, item)
-			entrypoint := item.Directory + "/SKILL.md"
+			skillDir := strings.Join(parts[:3], "/")
+			entrypoint := skillDir + "/SKILL.md"
 			if _, ok := fileSet[entrypoint]; !ok {
 				issues = append(issues, Issue{Path: entrypoint, Line: 1, Message: "skill entrypoint is missing", Fix: "Create SKILL.md in the skill directory."})
 			}
@@ -76,7 +78,8 @@ func validateSkills(root string, files []string) []Issue {
 	ids := make(map[string]string, len(metadata))
 	metadataDirectories := make(map[string]struct{}, len(metadata))
 	for _, item := range metadata {
-		metadataDirectories[item.Directory] = struct{}{}
+		skillDir := strings.Join(strings.Split(item.Path, "/")[:3], "/")
+		metadataDirectories[skillDir] = struct{}{}
 		if item.ID != "" {
 			ids[item.ID] = item.Path
 		}
@@ -100,7 +103,11 @@ func validateSkills(root string, files []string) []Issue {
 }
 
 func validateSkillMetadata(path string, contents []byte) (skillMetadata, []Issue) {
-	item := skillMetadata{Path: path, Directory: filepath.ToSlash(filepath.Dir(path))}
+	dir := filepath.ToSlash(filepath.Dir(path))
+	if filepath.Base(dir) == ".meta" {
+		dir = filepath.ToSlash(filepath.Dir(dir))
+	}
+	item := skillMetadata{Path: path, Directory: dir}
 	var document yaml.Node
 	decoder := yaml.NewDecoder(bytes.NewReader(contents))
 	if err := decoder.Decode(&document); err != nil {

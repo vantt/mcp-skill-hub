@@ -845,6 +845,9 @@ func planSkillAddProposal(ctx context.Context, planCtx skillAddPlanContext) (Ski
 			Summary: primaryItem.License.Warning,
 		})
 	}
+	for _, item := range planCtx.selected {
+		proposal.Warnings = append(proposal.Warnings, item.Warnings...)
+	}
 
 	return proposal, nil
 }
@@ -1018,7 +1021,7 @@ func (service SkillAddService) LoadSkillAddProposal(ctx context.Context, path, p
 
 func deriveUpstreamSourceFromChanges(changes []mutation.Change) *UpstreamSourceRef {
 	for _, c := range changes {
-		if strings.HasSuffix(c.Path, "skill.meta.yaml") {
+		if workspace.IsHubMeta(c.Path) && (strings.HasSuffix(c.Path, "skill.meta.yaml") || strings.HasSuffix(c.Path, "skill.yaml")) {
 			var m struct {
 				Provenance struct {
 					SourceID string `yaml:"source_id"`

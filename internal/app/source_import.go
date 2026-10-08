@@ -199,6 +199,7 @@ func (service SourceImportService) PreviewSourceImport(ctx context.Context, path
 				Summary: fmt.Sprintf("Skill %s: %s", item.TargetID, item.License.Warning),
 			})
 		}
+		warnings = append(warnings, item.Warnings...)
 	}
 
 	sort.Slice(discovered, func(i, j int) bool { return discovered[i].TargetID < discovered[j].TargetID })

@@ -493,3 +493,38 @@ func TestValidateAcceptsExactlyTenRoutingExamplesOfMaximumLength(t *testing.T) {
 		t.Fatalf("boundary examples rejected: %s", issueMessages(issues))
 	}
 }
+
+func TestDistillYamlDoesNotChangeCatalogSnapshot(t *testing.T) {
+	t.Parallel()
+	root := filepath.Join(t.TempDir(), "workspace")
+	if _, err := workspace.Apply(root); err != nil {
+		t.Fatal(err)
+	}
+	write(t, root, "skills/core/demo/SKILL.md", "---\nname: demo\ndescription: Demo skill\n---\n# Demo\n")
+	write(t, root, "skills/core/demo/skill.meta.yaml", "schema_version: 1\nid: demo\nname: Demo\nstatus: draft\ndescription: Demo skill\n")
+
+	initial, err := Scan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Write .meta/distill.yaml
+	write(t, root, "skills/core/demo/.meta/distill.yaml", "goal: learn something\nlessons: []\n")
+	afterDistill, err := Scan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if afterDistill.CatalogSnapshot != initial.CatalogSnapshot {
+		t.Fatalf("writing .meta/distill.yaml changed CatalogSnapshot: %s -> %s", initial.CatalogSnapshot, afterDistill.CatalogSnapshot)
+	}
+
+	// 2. Write .meta/skill.yaml (must change CatalogSnapshot)
+	write(t, root, "skills/core/demo/.meta/skill.yaml", "schema_version: 1\nid: demo\nname: Demo Updated\nstatus: draft\ndescription: Demo skill updated\n")
+	afterSkill, err := Scan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if afterSkill.CatalogSnapshot == initial.CatalogSnapshot {
+		t.Fatal("writing .meta/skill.yaml did not change CatalogSnapshot")
+	}
+}

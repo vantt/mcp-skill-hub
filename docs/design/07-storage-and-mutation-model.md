@@ -448,7 +448,11 @@ Migration follows the same prepare/confirm contract as any semantic mutation:
 4. The immutable operation receipt records `source_schema_version` and `target_schema_version` in addition to normal proposal and snapshot evidence.
 5. A crash uses ordinary deterministic recovery. A retry with the same normalized request is idempotent; a stale preview or changed source fails closed.
 
-The V1 registry contains the narrow legacy `0 → 1` transition. It updates only `.skillhub/schema-version` and accepts the transition only when the remaining canonical tree is already compatible with V1. Future transitions must be ordered, deterministic, separately tested, and must never derive canonical truth from SQLite. Catalog format incompatibility remains derived maintenance: after canonical validation and recovery checks pass, it may rebuild automatically without a canonical migration.
+The migration registry contains the ordered transitions:
+- `0 → 1`: legacy unversioned workspace to V1 canonical schema.
+- `1 → 2`: V1 to V2 canonical schema, establishing the `.meta` boundary rule where hub metadata (`.meta/` and `skill.meta.yaml`) is excluded from content digests and distribution, and `.meta/distill.yaml` is excluded from the catalog snapshot. Workspaces at schema version 2 require binary version >= 1.6.0; older binaries reject the workspace via the schema version check instead of misjudging trust.
+
+Future transitions must be ordered, deterministic, separately tested, and must never derive canonical truth from SQLite. Catalog format incompatibility remains derived maintenance: after canonical validation and recovery checks pass, it may rebuild automatically without a canonical migration.
 
 ## 13. Catalog snapshot
 
@@ -469,6 +473,7 @@ telemetry
 runtime check timestamps
 source intake not exposed to routing
 distill proposals not yet applied
+.meta/distill.yaml (lessons/coverage do not affect the catalog snapshot)
 ```
 
 Canonical serialization includes normalized relative path, byte digest and role. Git commit SHA alone is insufficient because working tree may be dirty.
@@ -550,7 +555,7 @@ SQLite WAL mode; bounded retention. May be merged physically with operational DB
   "database": "generations/gen-01J....db",
   "catalog_snapshot": "sha256:...",
   "projection_input_digest": "sha256:...",
-  "canonical_schema_version": 1,
+  "canonical_schema_version": 2,
   "derived_schema_version": 3,
   "builder_version": "1.0.0"
 }

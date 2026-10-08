@@ -184,8 +184,7 @@ func readLocalSkillFiles(root, skillRelDir string) (map[string][]byte, error) {
 			return err
 		}
 		cleanRel := filepath.ToSlash(rel)
-		lower := strings.ToLower(cleanRel)
-		if lower == "skill.meta.yaml" || lower == "skill.meta.yml" {
+		if workspace.IsHubMeta(cleanRel) {
 			return nil
 		}
 		data, err := os.ReadFile(p)
@@ -213,8 +212,7 @@ func validateAndFilterUpstreamPaths(rawFiles map[string][]byte) (map[string][]by
 			}
 		}
 
-		lower := strings.ToLower(p)
-		if lower == "skill.meta.yaml" || lower == "skill.meta.yml" {
+		if workspace.IsHubMeta(p) {
 			warnings = append(warnings, Warning{
 				Code:    "upstream_meta_ignored",
 				Summary: fmt.Sprintf("Ignored upstream metadata file %q.", p),
@@ -222,6 +220,7 @@ func validateAndFilterUpstreamPaths(rawFiles map[string][]byte) (map[string][]by
 			continue
 		}
 
+		lower := strings.ToLower(p)
 		if existing, exists := caseFolded[lower]; exists {
 			return nil, nil, NewInvalidRequestError(
 				fmt.Sprintf("upstream path case-folding collision between %q and %q", existing, p),
@@ -711,7 +710,7 @@ func reconstructBaseAndUpstreamFiles(
 ) (updateFileSets, []Warning, *Error, error) {
 	var warnings []Warning
 
-	baseFiles, _, baseErr := reconstructSkillFilesAtCommit(ctx, adapter, sourceRec, tracked.Origin.Path, tracked.Origin.Commit, tracked.SkillID)
+	baseFiles, _, _, baseErr := reconstructSkillFilesAtCommit(ctx, adapter, sourceRec, tracked.Origin.Path, tracked.Origin.Commit, tracked.SkillID)
 	baseAvailable := baseErr == nil
 	if baseAvailable && tracked.Origin.FilesDigest != "" {
 		if filesDigestOf(baseFiles) != tracked.Origin.FilesDigest {
@@ -722,11 +721,11 @@ func reconstructBaseAndUpstreamFiles(
 		warnings = append(warnings, Warning{Code: "upstream_base_unavailable", Summary: "Upstream base commit could not be retrieved."})
 	}
 
-	rawUpstreamFiles, _, uErr := reconstructSkillFilesAtCommit(ctx, adapter, sourceRec, tracked.Origin.Path, targetCommit, tracked.SkillID)
+	rawUpstreamFiles, upstreamWarnings, _, uErr := reconstructSkillFilesAtCommit(ctx, adapter, sourceRec, tracked.Origin.Path, targetCommit, tracked.SkillID)
 	if uErr != nil {
 		return updateFileSets{}, nil, nil, fmt.Errorf("reconstruct upstream files: %w", uErr)
 	}
-
+	warnings = append(warnings, upstreamWarnings...)
 	upstreamFiles, pathWarnings, pathErr := validateAndFilterUpstreamPaths(rawUpstreamFiles)
 	if pathErr != nil {
 		var invErr *Error

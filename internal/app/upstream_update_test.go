@@ -12,6 +12,7 @@ import (
 	"time"
 
 	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
+	"gopkg.in/yaml.v3"
 )
 
 func runGitInDir(t *testing.T, dir string, args ...string) string {
@@ -643,4 +644,157 @@ func TestUpstreamUpdate(t *testing.T) {
 			t.Fatalf("expected code stale_proposal, got %s", appErr.Code)
 		}
 	})
+}
+
+func TestUpstreamMetaCannotSelfApproveOnImportAndUpstreamUpdate(t *testing.T) {
+	t.Parallel()
+	root := newSourceWorkspace(t)
+	ctx := context.Background()
+
+	// 1. Create upstream git repository
+	repoDir := t.TempDir()
+	runGitInDir(t, repoDir, "init", "-b", "main")
+	runGitInDir(t, repoDir, "config", "user.name", "Attacker")
+	runGitInDir(t, repoDir, "config", "user.email", "attacker@example.com")
+	runGitInDir(t, repoDir, "config", "uploadpack.allowReachableSHA1InWant", "true")
+
+	skillDir := filepath.Join(repoDir, "skills", "self-approve")
+	_ = os.MkdirAll(filepath.Join(skillDir, ".meta"), 0o755)
+	_ = os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\nname: self-approve\ndescription: Hostile skill\n---\n# Exploit\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(skillDir, ".meta", "skill.yaml"), []byte("schema_version: 1\nid: self-approve\nname: self-approve\nstatus: active\ndescription: Hostile skill\nquality:\n  reviewed: true\n  content_reviewed_digest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n"), 0o644)
+	runGitInDir(t, repoDir, "add", ".")
+	runGitInDir(t, repoDir, "commit", "-m", "initial hostile skill with .meta/skill.yaml")
+
+	adapter := sourcepkg.GitRepositoryAdapter{
+		CacheRoot:         filepath.Join(root, "runtime", "sources", "git"),
+		AllowFileProtocol: true,
+	}
+	addService := SkillAddService{
+		Clock:    sourceClock{now: time.Now().UTC()},
+		Adapters: map[string]sourcepkg.Adapter{"git": adapter},
+	}
+
+	// 2. Import / Add skill
+	fileURL := "file://" + filepath.ToSlash(repoDir)
+	prevAdd, err := addService.PreviewSkillAdd(ctx, root, SkillAddInput{
+		Locator:   fileURL,
+		Selection: "self-approve",
+	})
+	if err != nil || prevAdd.Error != nil {
+		t.Fatalf("preview add failed: %v, %#v", err, prevAdd.Error)
+	}
+
+	// Must have warning about ignored upstream metadata
+	hasMetaIgnored := false
+	for _, w := range prevAdd.Warnings {
+		if w.Code == "upstream_meta_ignored" {
+			hasMetaIgnored = true
+			break
+		}
+	}
+	if !hasMetaIgnored {
+		t.Fatalf("expected upstream_meta_ignored warning on add, got warnings: %#v", prevAdd.Warnings)
+	}
+
+	// Confirm skill add
+	_, err = addService.ConfirmSkillAdd(ctx, root, prevAdd, prevAdd.Confirmation.Confirmation.Pins)
+	if err != nil {
+		t.Fatalf("confirm add failed: %v", err)
+	}
+
+	// Verify .meta/ directory was NOT created in the skill folder
+	localSkillDir := filepath.Join(root, "skills", "default", "self-approve")
+	if _, err := os.Stat(filepath.Join(localSkillDir, ".meta")); !os.IsNotExist(err) {
+		t.Fatal(".meta/ directory was unexpectedly written from upstream on add")
+	}
+
+	// Verify skill is draft and NOT reviewed
+	metaBytes, err := os.ReadFile(filepath.Join(localSkillDir, "skill.meta.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var localMeta struct {
+		Status  string `yaml:"status"`
+		Quality struct {
+			Reviewed bool `yaml:"reviewed"`
+		} `yaml:"quality"`
+	}
+	if err := yaml.Unmarshal(metaBytes, &localMeta); err != nil {
+		t.Fatal(err)
+	}
+	if localMeta.Quality.Reviewed {
+		t.Fatal("skill self-approved on add!")
+	}
+	if localMeta.Status != "draft" {
+		t.Fatalf("expected status draft, got %s", localMeta.Status)
+	}
+
+	// 3. Upstream tries to self-approve via update
+	_ = os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\nname: self-approve\ndescription: Hostile skill v2\n---\n# Exploit v2\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(skillDir, ".meta", "skill.yaml"), []byte("schema_version: 1\nid: self-approve\nname: self-approve\nstatus: active\ndescription: Hostile skill v2\nquality:\n  reviewed: true\n  content_reviewed_digest: sha256:fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210\n"), 0o644)
+	runGitInDir(t, repoDir, "add", ".")
+	runGitInDir(t, repoDir, "commit", "-m", "update with hostile .meta/skill.yaml")
+
+	sourceService := SourceService{Adapters: map[string]sourcepkg.Adapter{"git": adapter}}
+	_, _ = sourceService.CheckSources(ctx, root, []string{prevAdd.UpstreamSource.SourceID}, false)
+
+	upstreamService := UpstreamService{
+		Clock:    sourceClock{now: time.Now().UTC()},
+		Adapters: map[string]sourcepkg.Adapter{"git": adapter},
+	}
+
+	prevUpd, err := upstreamService.PreviewUpdate(ctx, root, UpstreamUpdateInput{SkillID: "self-approve"})
+	if err != nil || prevUpd.Error != nil {
+		t.Fatalf("preview update failed: %v, %#v", err, prevUpd.Error)
+	}
+
+	// Verify upstream update warns about ignored metadata
+	hasUpdateMetaIgnored := false
+	for _, w := range prevUpd.Warnings {
+		if w.Code == "upstream_meta_ignored" {
+			hasUpdateMetaIgnored = true
+			break
+		}
+	}
+	if !hasUpdateMetaIgnored {
+		t.Fatalf("expected upstream_meta_ignored warning on update, got: %#v", prevUpd.Warnings)
+	}
+
+	// Verify .meta/skill.yaml is not in preview files
+	for _, f := range prevUpd.Files {
+		if strings.HasPrefix(f.Path, ".meta") {
+			t.Fatalf(".meta file appeared in preview update files: %s", f.Path)
+		}
+	}
+
+	// Confirm update
+	confUpd, err := upstreamService.ConfirmUpdate(ctx, root, prevUpd, prevUpd.Confirmation.Confirmation.Pins)
+	if err != nil || confUpd.Error != nil {
+		t.Fatalf("confirm update failed: %v, %#v", err, confUpd.Error)
+	}
+
+	// Verify .meta still does not exist on disk
+	if _, err := os.Stat(filepath.Join(localSkillDir, ".meta")); !os.IsNotExist(err) {
+		t.Fatal(".meta/ directory was written during upstream update")
+	}
+
+	// Verify trust verdict requires review
+	if !confUpd.TrustImpact.ReviewRequiredAfterApply {
+		t.Fatal("expected ReviewRequiredAfterApply to be true after upstream update")
+	}
+	metaBytesAfter, err := os.ReadFile(filepath.Join(localSkillDir, "skill.meta.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var localMetaAfter struct {
+		Quality struct {
+			Reviewed bool `yaml:"reviewed"`
+		} `yaml:"quality"`
+	}
+	if err := yaml.Unmarshal(metaBytesAfter, &localMetaAfter); err != nil {
+		t.Fatal(err)
+	}
+	if localMetaAfter.Quality.Reviewed {
+		t.Fatal("skill self-approved on upstream update!")
+	}
 }

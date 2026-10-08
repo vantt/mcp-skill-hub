@@ -8,6 +8,7 @@ import (
 
 	"github.com/vantt/mcp-skill-hub/internal/skillruntime"
 	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
+	"github.com/vantt/mcp-skill-hub/internal/workspace"
 )
 
 type revisionAtAdapter interface {
@@ -46,7 +47,7 @@ func filesDigestOf(files map[string][]byte) string {
 	resDigests := make([]skillruntime.ResourceDigest, 0, len(files))
 	for relPath, bytes := range files {
 		clean := filepath.ToSlash(filepath.Clean(relPath))
-		if clean == "skill.meta.yaml" || strings.HasSuffix(clean, "/skill.meta.yaml") {
+		if workspace.IsHubMeta(clean) {
 			continue
 		}
 		resDigests = append(resDigests, skillruntime.ResourceDigest{

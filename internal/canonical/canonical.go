@@ -326,7 +326,7 @@ func validCanonicalPath(path string) bool {
 
 func entityPath(path string) bool {
 	if strings.HasPrefix(path, "skills/") {
-		return strings.HasSuffix(path, "/skill.meta.yaml")
+		return strings.HasSuffix(path, "/skill.meta.yaml") || strings.HasSuffix(path, "/.meta/skill.yaml")
 	}
 	return (strings.HasPrefix(path, "sources/") || strings.HasPrefix(path, "distill/") || strings.HasPrefix(path, "history/operations/") || strings.HasPrefix(path, "registry/collections/") || strings.HasPrefix(path, "evals/routing/")) && (strings.HasSuffix(path, ".yaml") || strings.HasSuffix(path, ".yml"))
 }
@@ -447,6 +447,9 @@ func sameInventory(first, second []FileDigest) bool {
 }
 
 func catalogAffecting(path string) bool {
+	if strings.HasSuffix(path, "/.meta/distill.yaml") || path == ".meta/distill.yaml" {
+		return false
+	}
 	return path == ".skillhub/schema-version" || strings.HasPrefix(path, "skills/") || strings.HasPrefix(path, "registry/") || strings.HasPrefix(path, "config/") || strings.HasPrefix(path, "evals/routing/")
 }
 

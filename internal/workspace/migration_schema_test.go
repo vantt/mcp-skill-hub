@@ -28,7 +28,7 @@ func TestInspectMarksCanonicalVersionIncompatibleAndNotMechanicallyFixable(t *te
 	if _, err := Apply(root); err != nil {
 		t.Fatal(err)
 	}
-	for name, marker := range map[string][]byte{"legacy_missing": nil, "malformed": []byte("future\n"), "future": []byte("2\n")} {
+	for name, marker := range map[string][]byte{"legacy_missing": nil, "legacy_v1": []byte("1\n"), "malformed": []byte("future\n"), "future": []byte("3\n")} {
 		t.Run(name, func(t *testing.T) {
 			path := filepath.Join(root, ".skillhub", "schema-version")
 			if marker == nil {

@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	SchemaVersion = "1"
+	SchemaVersion = "2"
 
 	// V1 canonical workspaces are deliberately bounded so inventory, validation,
 	// and catalog builds cannot consume unbounded memory from workspace content.
@@ -558,6 +558,33 @@ func rejectSymlink(path string) error {
 		return fmt.Errorf("managed path must not be a symlink: %s", path)
 	}
 	return nil
+}
+
+// IsHubMeta reports whether path (either skill-relative or workspace-relative
+// within skills/<collection>/<id>/) is hub-managed metadata: the top-level
+// skill.meta.yaml (or .yml) or anything in the .meta/ directory.
+func IsHubMeta(relPath string) bool {
+	clean := filepath.ToSlash(filepath.Clean(relPath))
+	clean = strings.TrimPrefix(clean, "./")
+	clean = strings.Trim(clean, "/")
+	if clean == "" {
+		return false
+	}
+	parts := strings.Split(clean, "/")
+	if len(parts) >= 4 && parts[0] == "skills" {
+		parts = parts[3:]
+	}
+	if len(parts) == 0 {
+		return false
+	}
+	if parts[0] == ".meta" {
+		return true
+	}
+	if len(parts) == 1 {
+		lower := strings.ToLower(parts[0])
+		return lower == "skill.meta.yaml" || lower == "skill.meta.yml"
+	}
+	return false
 }
 
 // RequiredDirectories exposes the canonical layout to validators without allowing mutation.

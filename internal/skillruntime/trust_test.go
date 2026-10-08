@@ -39,6 +39,13 @@ func TestContentDigest(t *testing.T) {
 	if digest != ContentDigest(withMeta, spec, true) {
 		t.Fatal("skill.meta.yaml must not affect the digest")
 	}
+	withHubMeta := append(append([]ResourceDigest{}, a...),
+		ResourceDigest{Path: ".meta/distill.yaml", Digest: "sha256:distill"},
+		ResourceDigest{Path: ".meta/skill.yaml", Digest: "sha256:skill"},
+	)
+	if digest != ContentDigest(withHubMeta, spec, true) {
+		t.Fatal(".meta files must not affect the digest")
+	}
 	if digest == ContentDigest(a, spec, false) {
 		t.Fatal("digest ignores the runtime block")
 	}

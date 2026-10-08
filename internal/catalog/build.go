@@ -11,6 +11,7 @@ import (
 	"github.com/vantt/mcp-skill-hub/internal/canonical"
 	"github.com/vantt/mcp-skill-hub/internal/mutation"
 	"github.com/vantt/mcp-skill-hub/internal/version"
+	"github.com/vantt/mcp-skill-hub/internal/workspace"
 	"io/fs"
 	_ "modernc.org/sqlite"
 	"net/url"
@@ -379,7 +380,7 @@ func verifyGeneration(ctx context.Context, path string, input buildInput, builde
 		}
 	}
 	for _, file := range input.Files {
-		if strings.HasPrefix(file.Path, "skills/") && !strings.HasSuffix(file.Path, "/skill.meta.yaml") && searchableResource(file.Path) {
+		if strings.HasPrefix(file.Path, "skills/") && !workspace.IsHubMeta(file.Path) && searchableResource(file.Path) {
 			token := ftsToken(string(file.Bytes))
 			if token == "" {
 				continue

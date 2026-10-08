@@ -66,7 +66,7 @@ func AnalyzeHints(files []HintFile, hasSpec bool) Hints {
 	interpreters := map[string]bool{}
 	cues := map[string]bool{}
 	for _, file := range files {
-		if file.Path == "skill.meta.yaml" {
+		if IsHubMeta(file.Path) {
 			continue
 		}
 		if name := interpreterOf(file); name != "" {

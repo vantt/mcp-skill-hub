@@ -254,6 +254,10 @@ func locateSkillDir(root, id string) (string, string, []byte, error) {
 		}
 		metaFile := filepath.Join(skillsDir, coll.Name(), id, "skill.meta.yaml")
 		data, readErr := os.ReadFile(metaFile)
+		if readErr != nil {
+			metaFile = filepath.Join(skillsDir, coll.Name(), id, ".meta", "skill.yaml")
+			data, readErr = os.ReadFile(metaFile)
+		}
 		if readErr == nil {
 			foundCollection = coll.Name()
 			skillMetaBytes = data

@@ -253,10 +253,10 @@ func reconstructSkillFilesAtCommit(
 	originPath string,
 	commit string,
 	skillID string,
-) (map[string][]byte, sourcepkg.Revision, error) {
+) (map[string][]byte, []Warning, sourcepkg.Revision, error) {
 	revAdapter, ok := adapter.(revisionAtAdapter)
 	if !ok {
-		return nil, sourcepkg.Revision{}, sourcepkg.ErrHistoryUnavailable
+		return nil, nil, sourcepkg.Revision{}, sourcepkg.ErrHistoryUnavailable
 	}
 
 	src := sourcepkg.Source{
@@ -271,18 +271,18 @@ func reconstructSkillFilesAtCommit(
 
 	rev, err := revAdapter.RevisionAt(ctx, src, commit)
 	if err != nil {
-		return nil, sourcepkg.Revision{}, err
+		return nil, nil, sourcepkg.Revision{}, err
 	}
 
 	resources, err := adapter.List(ctx, src, rev, sourcepkg.Scope{})
 	if err != nil {
-		return nil, sourcepkg.Revision{}, err
+		return nil, nil, sourcepkg.Revision{}, err
 	}
 
 	reader := AdapterResourceReader{Adapter: adapter, Source: src, Revision: rev}
 	discovered, err := DiscoverSkillsFromResources(ctx, reader, resources, "")
 	if err != nil {
-		return nil, sourcepkg.Revision{}, err
+		return nil, nil, sourcepkg.Revision{}, err
 	}
 
 	var rootItem *DiscoveredSkillItem
@@ -293,14 +293,14 @@ func reconstructSkillFilesAtCommit(
 		}
 	}
 	if rootItem == nil {
-		return nil, sourcepkg.Revision{}, errSkillNotFoundInCommit
+		return nil, nil, sourcepkg.Revision{}, errSkillNotFoundInCommit
 	}
 
 	files, _, err := importedSkillFiles(*rootItem, skillID)
 	if err != nil {
-		return nil, sourcepkg.Revision{}, err
+		return nil, nil, sourcepkg.Revision{}, err
 	}
-	return files, rev, nil
+	return files, rootItem.Warnings, rev, nil
 }
 
 func diffReconstructedFiles(baseFiles, headFiles map[string][]byte) []sourcepkg.Change {
@@ -488,7 +488,7 @@ func checkSkillUpstreamState(
 		}
 	}
 
-	headFiles, headRev, err := reconstructSkillFilesAtCommit(ctx, adapter, record, sk.Origin.Path, checkCtx.Head, sk.SkillID)
+	headFiles, _, headRev, err := reconstructSkillFilesAtCommit(ctx, adapter, record, sk.Origin.Path, checkCtx.Head, sk.SkillID)
 	if err != nil {
 		if errors.Is(err, sourcepkg.ErrPathNotFound) || errors.Is(err, errSkillNotFoundInCommit) {
 			return sourcepkg.UpstreamState{
@@ -531,7 +531,7 @@ func checkSkillUpstreamState(
 		upstreamStatus = "same"
 	}
 
-	baseFiles, _, baseErr := reconstructSkillFilesAtCommit(ctx, adapter, record, sk.Origin.Path, sk.Origin.Commit, sk.SkillID)
+	baseFiles, _, _, baseErr := reconstructSkillFilesAtCommit(ctx, adapter, record, sk.Origin.Path, sk.Origin.Commit, sk.SkillID)
 	var changedFiles []sourcepkg.Change
 	if baseErr == nil {
 		changedFiles = diffReconstructedFiles(baseFiles, headFiles)

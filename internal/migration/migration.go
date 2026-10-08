@@ -15,7 +15,7 @@ import (
 	"github.com/vantt/mcp-skill-hub/internal/workspace"
 )
 
-const CurrentVersion = 1
+const CurrentVersion = 2
 
 var (
 	ErrNoMigrationPath = errors.New("no canonical migration path is registered")
@@ -55,7 +55,10 @@ func (registry Registry) Empty() bool { return len(registry.steps) == 0 }
 
 // DefaultRegistry includes every migration understood by this binary.
 func DefaultRegistry() Registry {
-	return Registry{steps: map[int]step{0: {from: 0, to: 1, plan: planLegacyV0ToV1}}}
+	return Registry{steps: map[int]step{
+		0: {from: 0, to: 1, plan: planLegacyV0ToV1},
+		1: {from: 1, to: 2, plan: planV1ToV2},
+	}}
 }
 
 // DetectVersion reads the canonical marker. A missing marker is the legacy v0
@@ -89,8 +92,9 @@ func (registry Registry) Preview(root string, target int) (Proposal, error) {
 		return Proposal{}, fmt.Errorf("%w: %d to %d", ErrNoMigrationPath, source, target)
 	}
 
-	var changes []mutation.Change
-	var diffs []FileDiff
+	changeMap := make(map[string]mutation.Change)
+	diffMap := make(map[string]FileDiff)
+	orderedPaths := make([]string, 0)
 	version := source
 	for version < target {
 		next, ok := registry.steps[version]
@@ -101,9 +105,39 @@ func (registry Registry) Preview(root string, target int) (Proposal, error) {
 		if err != nil {
 			return Proposal{}, err
 		}
-		changes = append(changes, stepChanges...)
-		diffs = append(diffs, stepDiffs...)
+		for _, sc := range stepChanges {
+			if _, exists := changeMap[sc.Path]; !exists {
+				orderedPaths = append(orderedPaths, sc.Path)
+			}
+			changeMap[sc.Path] = sc
+		}
+		for _, sd := range stepDiffs {
+			if prev, exists := diffMap[sd.Path]; exists {
+				beforeVal := prev.Before
+				afterVal := sd.After
+				diffStr := fmt.Sprintf("--- a/%s\n+++ b/%s\n", sd.Path, sd.Path)
+				if beforeVal == "" {
+					diffStr += "@@ -0,0 +1 @@\n+" + strings.TrimSuffix(afterVal, "\n") + "\n"
+				} else {
+					diffStr += fmt.Sprintf("@@ -1 +1 @@\n-%s\n+%s\n", strings.TrimSuffix(beforeVal, "\n"), strings.TrimSuffix(afterVal, "\n"))
+				}
+				diffMap[sd.Path] = FileDiff{
+					Path:   sd.Path,
+					Before: beforeVal,
+					After:  afterVal,
+					Diff:   diffStr,
+				}
+			} else {
+				diffMap[sd.Path] = sd
+			}
+		}
 		version = next.to
+	}
+	changes := make([]mutation.Change, 0, len(changeMap))
+	diffs := make([]FileDiff, 0, len(diffMap))
+	for _, p := range orderedPaths {
+		changes = append(changes, changeMap[p])
+		diffs = append(diffs, diffMap[p])
 	}
 	sort.Slice(diffs, func(i, j int) bool { return diffs[i].Path < diffs[j].Path })
 	sourceVersion, targetVersion := source, target
@@ -153,13 +187,56 @@ func planLegacyV0ToV1(root string) ([]mutation.Change, []FileDiff, error) {
 		return nil, nil, fmt.Errorf("read legacy schema marker: %w", err)
 	}
 	before := string(beforeBytes)
-	after := workspace.SchemaVersion + "\n"
+	after := "1\n"
 	diff := "--- a/.skillhub/schema-version\n+++ b/.skillhub/schema-version\n"
 	if before == "" {
-		diff += "@@ -0,0 +1 @@\n+" + workspace.SchemaVersion + "\n"
+		diff += "@@ -0,0 +1 @@\n+1\n"
 	} else {
-		diff += "@@ -1 +1 @@\n-" + strings.TrimSuffix(before, "\n") + "\n+" + workspace.SchemaVersion + "\n"
+		diff += "@@ -1 +1 @@\n-" + strings.TrimSuffix(before, "\n") + "\n+1\n"
 	}
+	return []mutation.Change{{Path: ".skillhub/schema-version", Contents: []byte(after)}}, []FileDiff{{
+		Path: ".skillhub/schema-version", Before: before, After: after, Diff: diff,
+	}}, nil
+}
+
+func planV1ToV2(root string) ([]mutation.Change, []FileDiff, error) {
+	plan, err := workspace.Inspect(root)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, finding := range plan.Findings {
+		if finding.ID != "canonical_schema_incompatible" {
+			return nil, nil, fmt.Errorf("v1 layout is not otherwise v2-compatible: %s: %s", finding.Path, finding.Summary)
+		}
+	}
+	if len(plan.Findings) != 1 {
+		return nil, nil, errors.New("v1 migration requires exactly one schema marker finding")
+	}
+	issues, err := canonical.Validate(root)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, issue := range issues {
+		if issue.Path != ".skillhub/schema-version" {
+			return nil, nil, fmt.Errorf("v1 layout is not otherwise v2-compatible: %s: %s", issue.Path, issue.Message)
+		}
+	}
+	if len(issues) != 1 {
+		return nil, nil, errors.New("v1 migration requires an otherwise valid v2 canonical layout")
+	}
+	markerPath := filepath.Join(root, ".skillhub", "schema-version")
+	beforeBytes, err := os.ReadFile(markerPath)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, nil, fmt.Errorf("read schema marker: %w", err)
+	}
+	before := string(beforeBytes)
+	if before == "" {
+		before = "1\n"
+	} else if strings.TrimSpace(before) != "1" {
+		return nil, nil, fmt.Errorf("expected schema version 1, got %q", strings.TrimSpace(before))
+	}
+	after := "2\n"
+	diff := "--- a/.skillhub/schema-version\n+++ b/.skillhub/schema-version\n@@ -1 +1 @@\n-1\n+2\n"
 	return []mutation.Change{{Path: ".skillhub/schema-version", Contents: []byte(after)}}, []FileDiff{{
 		Path: ".skillhub/schema-version", Before: before, After: after, Diff: diff,
 	}}, nil

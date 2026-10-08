@@ -12,6 +12,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/vantt/mcp-skill-hub/internal/workspace"
 	"gopkg.in/yaml.v3"
 )
 
@@ -85,7 +86,7 @@ func populate(ctx context.Context, tx *sql.Tx, input buildInput, builderVersion 
 	}
 
 	for _, file := range input.Files {
-		if strings.HasPrefix(file.Path, "skills/") && !strings.HasSuffix(file.Path, "/skill.meta.yaml") {
+		if strings.HasPrefix(file.Path, "skills/") && !workspace.IsHubMeta(file.Path) {
 			skillID := owningSkill(file.Path, skillByDirectory)
 			if _, err := tx.ExecContext(ctx, `INSERT INTO resources(path,skill_id,kind,digest,size_bytes) VALUES(?,?,?,?,?)`, file.Path, nullable(skillID), resourceKind(file.Path), file.Digest, len(file.Bytes)); err != nil {
 				return nil, err
@@ -309,7 +310,7 @@ func expectedRowCounts(input buildInput) map[string]int64 {
 	counts["canonical_files"] = int64(len(input.Files))
 	counts["canonical_entities"] = int64(len(input.Entities))
 	for _, file := range input.Files {
-		if strings.HasPrefix(file.Path, "skills/") && !strings.HasSuffix(file.Path, "/skill.meta.yaml") {
+		if strings.HasPrefix(file.Path, "skills/") && !workspace.IsHubMeta(file.Path) {
 			counts["resources"]++
 			if searchableResource(file.Path) {
 				counts["resource_fts"]++

@@ -223,7 +223,7 @@ func (manager Manager) PreviewCreate(ctx context.Context, root string, input Cre
 	directory := skillDirectory(input.Collection, input.ID)
 	metadataPath := directory + "/skill.meta.yaml"
 	entrypointPath := directory + "/SKILL.md"
-	if exists(root, metadataPath) || exists(root, entrypointPath) {
+	if exists(root, metadataPath) || exists(root, directory+"/.meta/skill.yaml") || exists(root, entrypointPath) {
 		return Proposal{}, ErrAlreadyExists
 	}
 	now := manager.now().Format(time.RFC3339Nano)
@@ -788,6 +788,10 @@ func loadSkill(root, id string) (string, []byte, map[string]any, error) {
 		}
 		candidate := directory + "/skill.meta.yaml"
 		info, statErr := handle.Lstat(candidate)
+		if errors.Is(statErr, os.ErrNotExist) {
+			candidate = directory + "/.meta/skill.yaml"
+			info, statErr = handle.Lstat(candidate)
+		}
 		if errors.Is(statErr, os.ErrNotExist) {
 			continue
 		}

@@ -15,6 +15,7 @@ import (
 
 	"github.com/vantt/mcp-skill-hub/internal/canonical"
 	"github.com/vantt/mcp-skill-hub/internal/mutation"
+	"github.com/vantt/mcp-skill-hub/internal/workspace"
 	"gopkg.in/yaml.v3"
 )
 
@@ -95,7 +96,7 @@ func servableSkillWarnings(input buildInput) []string {
 		var entrypoint []byte
 		count, total := 0, int64(0)
 		for _, file := range input.Files {
-			if !strings.HasPrefix(file.Path, directory+"/") || file.Path == directory+"/skill.meta.yaml" {
+			if !strings.HasPrefix(file.Path, directory+"/") || workspace.IsHubMeta(file.Path) {
 				continue
 			}
 			count++
@@ -190,6 +191,10 @@ func AssessSkillStateWhileLocked(ctx context.Context, root, id string) (SkillSta
 			}
 			metaPath := filepath.Join(skillsDir, coll.Name(), id, "skill.meta.yaml")
 			metaBytes, readErr := os.ReadFile(metaPath)
+			if readErr != nil {
+				metaPath = filepath.Join(skillsDir, coll.Name(), id, ".meta", "skill.yaml")
+				metaBytes, readErr = os.ReadFile(metaPath)
+			}
 			if readErr == nil {
 				assessment.Canonical.Known = true
 				assessment.Canonical.Collection = coll.Name()

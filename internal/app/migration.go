@@ -124,38 +124,38 @@ func (service MigrationService) Migrate(ctx context.Context, path string, target
 }
 
 func lookupAppliedMigration(ctx context.Context, root string, target int) (mutation.Receipt, bool, error) {
-	// V1 has one explicit canonical transition. Reconstructing its normalized
-	// request lets a confirmed retry find the immutable receipt even though the
-	// successful marker update means a fresh preview is now a no-op.
-	if target != 1 {
-		return mutation.Receipt{}, false, nil
-	}
-	source := 0
-	set := mutation.WriteSet{
-		Command: "canonical_migration", IdempotencyKey: fmt.Sprintf("canonical-migration:%d:%d", source, target),
-		SourceSchemaVersion: &source, TargetSchemaVersion: &target,
-		Changes: []mutation.Change{{Path: ".skillhub/schema-version", Contents: []byte(fmt.Sprintf("%d\n", target))}},
-	}
-	digest, err := mutation.DigestRequest(set)
-	if err != nil {
-		return mutation.Receipt{}, false, err
-	}
-	set.RequestDigest = digest
-	receipt, found, err := mutation.LookupOperation(root, set)
-	if err != nil || !found {
-		return mutation.Receipt{}, found, err
-	}
-	if receipt.SourceSchemaVersion == nil || receipt.TargetSchemaVersion == nil ||
-		*receipt.SourceSchemaVersion != source || *receipt.TargetSchemaVersion != target {
-		return mutation.Receipt{}, false, fmt.Errorf("applied migration receipt has invalid schema version context")
-	}
-	if receipt.Generation == "" {
-		receipt.Generation, err = catalogpkg.FindGenerationForOperation(ctx, root, receipt.OperationID, receipt.CatalogSnapshot)
+	for _, source := range []int{target - 1, 0} {
+		src := source
+		tgt := target
+		set := mutation.WriteSet{
+			Command: "canonical_migration", IdempotencyKey: fmt.Sprintf("canonical-migration:%d:%d", src, tgt),
+			SourceSchemaVersion: &src, TargetSchemaVersion: &tgt,
+			Changes: []mutation.Change{{Path: ".skillhub/schema-version", Contents: []byte(fmt.Sprintf("%d\n", tgt))}},
+		}
+		digest, err := mutation.DigestRequest(set)
 		if err != nil {
-			return mutation.Receipt{}, false, fmt.Errorf("published generation for applied migration %s is unavailable: %w", receipt.OperationID, err)
+			return mutation.Receipt{}, false, err
+		}
+		set.RequestDigest = digest
+		receipt, found, err := mutation.LookupOperation(root, set)
+		if err != nil {
+			return mutation.Receipt{}, false, err
+		}
+		if found {
+			if receipt.SourceSchemaVersion == nil || receipt.TargetSchemaVersion == nil ||
+				*receipt.SourceSchemaVersion != src || *receipt.TargetSchemaVersion != tgt {
+				return mutation.Receipt{}, false, fmt.Errorf("applied migration receipt has invalid schema version context")
+			}
+			if receipt.Generation == "" {
+				receipt.Generation, err = catalogpkg.FindGenerationForOperation(ctx, root, receipt.OperationID, receipt.CatalogSnapshot)
+				if err != nil {
+					return mutation.Receipt{}, false, fmt.Errorf("published generation for applied migration %s is unavailable: %w", receipt.OperationID, err)
+				}
+			}
+			return receipt, true, nil
 		}
 	}
-	return receipt, true, nil
+	return mutation.Receipt{}, false, nil
 }
 
 func migrationRetryResult(receipt mutation.Receipt) MigrationResult {

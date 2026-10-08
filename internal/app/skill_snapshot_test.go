@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -826,4 +827,68 @@ func TestSnapshotMemoSkipsRehashUntilStatChanges(t *testing.T) {
 	removeSnapshotTree(local.Path)
 	again := ensureSnapshot(t, service, root, "snap-memo")
 	assertSnapshotMatchesManifest(t, root, again)
+}
+
+func TestMetaFilesNeverDistributedOrInSnapshots(t *testing.T) {
+	t.Parallel()
+	root := newSkillWorkspace(t)
+	id := "meta-exclude-test"
+	createActiveDistributionSkill(t, root, id, "Meta Exclude Test")
+
+	// Write companion script and various .meta files
+	writeSkillFile(t, root, id, "scripts/check.sh", "echo ok\n")
+	writeSkillFile(t, root, id, ".meta/notes.yaml", "notes: some hub-side notes\n")
+	writeSkillFile(t, root, id, ".meta/distill.yaml", "goal: test\n")
+	writeSkillFile(t, root, id, ".meta/nested/file.txt", "nested\n")
+
+	// Ensure catalog generation
+	if _, err := (CatalogService{}).EnsureCatalog(t.Context(), root); err != nil {
+		t.Fatal(err)
+	}
+
+	distService := DistributionService{}
+	skills, _, err := distService.LookupSkills(t.Context(), root, []string{id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	active := skills[id]
+	// 1. Verify entry.Resources contains no .meta/ or skill.meta.yaml
+	for _, res := range active.Resources {
+		if strings.Contains(res.URI, ".meta") || strings.Contains(res.URI, "skill.meta.yaml") {
+			t.Fatalf("active skill resources contains hub meta: %s", res.URI)
+		}
+	}
+
+	// 2. ReadResource with .meta path must fail
+	metaURI := active.URI[:strings.LastIndex(active.URI, "/")+1] + ".meta/distill.yaml"
+	if _, err := distService.ReadResource(t.Context(), root, metaURI); err == nil {
+		t.Fatalf("ReadResource succeeded for hub meta path: %s", metaURI)
+	}
+
+	// 3. Snapshot export must NOT copy .meta/ directory
+	snapshotService := SnapshotService{}
+	local, err := snapshotService.Ensure(t.Context(), root, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if local.Path == "" {
+		t.Fatal("expected local snapshot path")
+	}
+
+	err = filepath.Walk(local.Path, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, _ := filepath.Rel(local.Path, path)
+		if rel == ".meta" || strings.HasPrefix(rel, ".meta"+string(filepath.Separator)) {
+			return fmt.Errorf("snapshot tree contains .meta file: %s", rel)
+		}
+		if rel == "skill.meta.yaml" {
+			return fmt.Errorf("snapshot tree contains skill.meta.yaml: %s", rel)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 }

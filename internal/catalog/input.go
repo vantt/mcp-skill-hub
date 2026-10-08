@@ -134,7 +134,7 @@ func readInput(root string) (buildInput, error) {
 			if err != nil {
 				return buildInput{}, err
 			}
-			if strings.HasSuffix(file.Path, "/skill.meta.yaml") && !ok {
+			if (strings.HasSuffix(file.Path, "/skill.meta.yaml") || strings.HasSuffix(file.Path, "/.meta/skill.yaml")) && !ok {
 				return buildInput{}, fmt.Errorf("skill metadata %s is missing an ID", file.Path)
 			}
 			if ok {
@@ -254,7 +254,7 @@ func flattenText(value any) string {
 
 func classifyEntity(path string) string {
 	switch {
-	case strings.HasSuffix(path, "/skill.meta.yaml"):
+	case strings.HasSuffix(path, "/skill.meta.yaml"), strings.HasSuffix(path, "/.meta/skill.yaml"):
 		return "skill"
 	case strings.HasPrefix(path, "sources/catalog/"):
 		return "source"
@@ -291,12 +291,15 @@ func classifyEntity(path string) string {
 
 func isCanonicalEntityPath(path string) bool {
 	if strings.HasPrefix(path, "skills/") {
-		return strings.HasSuffix(path, "/skill.meta.yaml")
+		return strings.HasSuffix(path, "/skill.meta.yaml") || strings.HasSuffix(path, "/.meta/skill.yaml")
 	}
 	return (strings.HasPrefix(path, "sources/") || strings.HasPrefix(path, "distill/") || strings.HasPrefix(path, "history/operations/") || strings.HasPrefix(path, "registry/collections/") || strings.HasPrefix(path, "evals/routing/")) && (strings.HasSuffix(path, ".yaml") || strings.HasSuffix(path, ".yml"))
 }
 
 func catalogAffecting(path string) bool {
+	if strings.HasSuffix(path, "/.meta/distill.yaml") || path == ".meta/distill.yaml" {
+		return false
+	}
 	return path == ".skillhub/schema-version" || strings.HasPrefix(path, "skills/") || strings.HasPrefix(path, "registry/") || strings.HasPrefix(path, "config/") || strings.HasPrefix(path, "evals/routing/")
 }
 

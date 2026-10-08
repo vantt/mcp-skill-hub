@@ -394,11 +394,11 @@ func hashDistributedManifest(entries []manifestDigestEntry) (string, error) {
 }
 
 // distributedRelativePath maps a catalog resource path to its path inside the
-// distributed skill folder. skill.meta.yaml is hub metadata and never
+// distributed skill folder. Hub metadata (.meta/ or skill.meta.yaml) is never
 // distributed.
 func distributedRelativePath(internal, id string) (string, bool) {
 	relative, ok := relativeSkillPath(internal, id)
-	if !ok || relative == "skill.meta.yaml" {
+	if !ok || workspace.IsHubMeta(relative) {
 		return "", false
 	}
 	return relative, true

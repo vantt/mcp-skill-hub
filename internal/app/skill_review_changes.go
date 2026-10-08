@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/vantt/mcp-skill-hub/internal/skillruntime"
+	"github.com/vantt/mcp-skill-hub/internal/workspace"
 	"gopkg.in/yaml.v3"
 )
 
@@ -162,7 +163,7 @@ func gitTreeBlobs(ctx context.Context, root, commit, skillRelDir string) (map[st
 			continue
 		}
 		relative, inside := strings.CutPrefix(string(name), prefix)
-		if inside && relative != skillManifestName {
+		if inside && !workspace.IsHubMeta(relative) {
 			blobs[relative] = fields[2]
 		}
 	}
@@ -176,7 +177,7 @@ func currentBlobs(ctx context.Context, root, skillRelDir string, resources []Res
 	var names, paths []string
 	for _, resource := range resources {
 		relative, inside := strings.CutPrefix(resource.Path, prefix)
-		if !inside || relative == skillManifestName || strings.ContainsAny(resource.Path, "\r\n") {
+		if !inside || workspace.IsHubMeta(relative) || strings.ContainsAny(resource.Path, "\r\n") {
 			continue
 		}
 		names = append(names, relative)
