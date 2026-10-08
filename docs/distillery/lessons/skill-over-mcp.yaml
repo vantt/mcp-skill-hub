@@ -90,39 +90,6 @@ lessons:
       at: 167da6c0d42c
       local: curator compatibility frontmatter
 
-  - key: directory-read-for-deferred-files
-    domains:
-      - skill-over-mcp
-    layer: content
-    what: >-
-      resources/directory/read is a scoped, paginated readdir for skill directories, enabled
-      by directoryRead: true, because skills routinely defer the choice of file to the agent
-      ("use the template in templates/ that matches the document type").
-    notable: >-
-      Without it an agent following such a skill over MCP cannot see which files exist. The
-      host declares directoryRead: false, so skills written for the filesystem that say
-      "pick a file in this folder" cannot be followed through the hub.
-    where:
-      - ext-skills@167da6c0d42c:docs/rationale.md#L53-L61
-      - ext-skills@167da6c0d42c:docs/decisions.md#L252-L256
-    contrast: new
-    host: internal/delivery/mcpserver/server.go
-    score:
-      relevance: 3
-      facts:
-        - a
-        - b
-        - c
-      impact: 3
-      evidence: 1
-      effort: 2
-      why: >-
-        Core of the goal. a: server.go:75 declares directoryRead false, so folder-deferred
-        instructions fail; b: not implemented; c: any skill with such instructions. One
-        source (normative); one method to add.
-    final_score: 4.5
-    decision: {state: candidate}
-
   - key: token-budget-disclosure-levels
     domains:
       - skill-over-mcp
@@ -196,6 +163,49 @@ lessons:
         update. Contradicts a deliberate pinning design; a URI scheme change.
     final_score: 3
     decision: {state: candidate}
+
+  - key: directory-read-for-deferred-files
+    domains:
+      - skill-over-mcp
+    layer: content
+    what: >-
+      resources/directory/read is a scoped, paginated readdir for skill directories, enabled
+      by directoryRead: true, because skills routinely defer the choice of file to the agent
+      ("use the template in templates/ that matches the document type").
+    notable: >-
+      In this host the file list is already reachable without it: skills/get returns every
+      file of the skill with its URI (DistributedSkill.Resources), and skill_get returns
+      local.path, a read-only copy of the folder that a shell agent can list. Only a client
+      that uses the pure MCP skills extension, ignores the resources list and has no shell
+      would miss files. directoryRead stays a spec-conformance gap, not an observed failure.
+    where:
+      - ext-skills@167da6c0d42c:docs/rationale.md#L53-L61
+      - ext-skills@167da6c0d42c:docs/decisions.md#L252-L256
+    contrast: extends
+    host: >-
+      internal/delivery/mcpserver/server.go:75 (directoryRead false);
+      internal/app/distribution.go:40 (Resources in skills/get); skill_get local.path
+    score:
+      relevance: 3
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 2
+      why: >-
+        Core domain, but no fact a: no known client fails, because skills/get lists every
+        file with its URI and skill_get exposes local.path. The earlier fact a
+        ("folder-deferred instructions fail") was wrong for this host. Reopen if the Phase 1
+        counter for reads of unlisted paths or calls to unsupported skill methods is above
+        zero.
+    final_score: 0
+    decision:
+      state: rejected
+      reason: >-
+        Deferred 2026-10-08: the host already lists skill files via skills/get resources and
+        skill_get local.path; reopen when the Phase 1 counter for unlisted-path reads or
+        unsupported skill methods is above zero (plan
+        docs/plans/2026-10-08-observer-and-enrichment.md).
+      at: 167da6c0d42c
 
   - key: bounded-file-fetch
     domains:
