@@ -36,6 +36,40 @@ lessons:
     final_score: 4
     decision: {state: candidate}
 
+  - key: findability-lint
+    domains:
+      - curation
+      - skill-recommendation
+    layer: enforcement
+    what: >-
+      meta_skill's lint rules meaningful-description and embedding-quality flag skills that
+      are hard to find: short or placeholder descriptions, fewer than 3 description words
+      ("Include key terms users might search for"), no tags.
+    notable: >-
+      Findability is checked when the skill is written, not discovered when a user misses
+      it. The host already lints generic and colliding triggers and missing examples; the
+      stronger form for its model is a self-resolution check: each skill's own examples must
+      resolve to it with the current policy (a synthesis, not something the source does).
+    where:
+      - meta-skill@e999668e8d8c:src/lint/rules/quality.rs#L543-L626
+    contrast: extends
+    host: internal/resolver/lint.go
+    score:
+      relevance: 2
+      facts:
+        - a
+        - b
+        - d
+      impact: 3
+      evidence: 1
+      effort: 2
+      why: >-
+        In scope (curation for findability). a: a skill whose examples resolve elsewhere is
+        unfindable until someone misses it; b: lint does not run the resolver on a skill's
+        own examples; d: lands as a lint check. One source.
+    final_score: 3
+    decision: {state: candidate}
+
   - key: prune-proposals-human-approved
     domains:
       - curation

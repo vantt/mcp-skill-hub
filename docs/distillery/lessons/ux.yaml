@@ -3,6 +3,33 @@
 # facts); ranked lessons come first by final_score, then unranked ones by key.
 lessons:
 
+  - key: lint-explain-and-fix
+    domains:
+      - ux
+      - curation
+    layer: craft
+    what: >-
+      `ms lint` offers --list-rules, --explain RULE and --fix, and `ms quality` shows a
+      skill's score per component, so a curator learns why a rule fired and can apply
+      mechanical fixes.
+    notable: >-
+      Lighter curation: the explanation lives with the rule. The host's lint findings carry
+      fix text already; an explain command and a per-skill "why is this hard to pick" view
+      are the gap.
+    where:
+      - meta-skill@e999668e8d8c:src/cli/commands/lint.rs#L40-L76
+    contrast: extends
+    host: internal/resolver/lint.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: In scope (curation UX), but no concrete failure it prevents yet.
+    final_score: 0
+    decision: {state: candidate}
+
   - key: derive-published-values
     domains:
       - ux

@@ -22,6 +22,8 @@ lessons:
       three defects were caught by type-checking or unit tests, only by running against a
       real server. A fourth, tech-leads-club, still documents its MCP server as having no
       local filesystem access after a tool that writes a cache directory was added.
+      meta_skill also ships an MCP suggest tool described as context-aware that returns the
+      most recently modified skills.
     notable: >-
       The mechanism is to turn every operational promise (rebuild from Git, install command,
       advertised counts) into something executed: a test or CI job that clones, rebuilds and
@@ -37,6 +39,7 @@ lessons:
       - skills-mcp@9f51399
       - ext-skills@167da6c0d42c:docs/archive/experimental-findings.md#L19-L36
       - tech-leads-club@120b67676388:SECURITY.md#L172-L172
+      - meta-skill@e999668e8d8c:src/cli/commands/mcp.rs#L1309-L1310
     contrast: extends
     host: internal/workspace/workspace_test.go
     score:
@@ -69,7 +72,8 @@ lessons:
       It gets a learning signal without asking the user every time, at the price of treating
       dwell time as usefulness. The host deliberately refuses this: outcome_record "never
       infers usefulness from activation or use". Recorded as a contradiction for the human
-      to weigh, not as a gap.
+      to weigh, not as a gap. In the source the rewards update a bandit with empty context,
+      so they cannot learn which context a skill helped in.
     where:
       - meta-skill@e999668e8d8c:src/suggestions/bandit/rewards.rs#L94-L130
     contrast: contradicts
@@ -122,4 +126,59 @@ lessons:
         measure of whether it helped; b: no skill-level experiment exists; e: the failure is
         silent. One source, and a new subsystem.
     final_score: 2
+    decision: {state: candidate}
+
+  - key: eval-before-ranking-changes
+    domains:
+      - evaluation
+      - skill-recommendation
+    layer: history
+    what: >-
+      meta_skill has no eval set or ranking metric; its suggest tests check output shape
+      only, and its three latest quality fixes were silent failures found by users: lexical
+      search was a LIKE scan, embeddings were never written, vector hits polluted results.
+    notable: >-
+      Without a measured gate a ranking channel can be inert for months. The host gates
+      routing on a held-out suite in CI (42 fixture skills, 168 examples, 126
+      counter-examples, 34 no-skill cases, a golden set).
+    where:
+      - meta-skill@69c1da3ed221
+      - meta-skill@73020b1efa2b
+      - meta-skill@e999668e8d8c:tests/e2e/suggestions_workflow.rs#L240-L266
+    contrast: already-covered
+    host: internal/app/routing_eval_gate_test.go
+    score:
+      relevance: 3
+      facts: []
+      impact: 0
+      evidence: 2
+      effort: 1
+      why: Already covered by the host's routing eval gate.
+    decision: {state: candidate}
+
+  - key: feedback-learns-without-context
+    domains:
+      - evaluation
+      - skill-recommendation
+    layer: content
+    what: >-
+      meta_skill's `ms feedback` updates the contextual bandit with default (empty) context
+      features, and the MCP feedback tool only writes a row; explicit feedback therefore
+      teaches a global popularity signal, never which context a skill helped in.
+    notable: >-
+      Feedback is only useful for ranking if it is joined to the request it answers. The
+      host's feedback carries the resolution_id of the request and never mutates routing by
+      itself.
+    where:
+      - meta-skill@e999668e8d8c:src/cli/commands/feedback.rs#L216-L220
+      - meta-skill@e999668e8d8c:src/cli/commands/mcp.rs#L1341-L1362
+    contrast: already-covered
+    host: docs/design/02-agent-hub-protocol.md
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered by resolution-linked feedback.
     decision: {state: candidate}

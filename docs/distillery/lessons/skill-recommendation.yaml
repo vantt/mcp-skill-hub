@@ -113,6 +113,79 @@ lessons:
     final_score: 4.5
     decision: {state: candidate}
 
+  - key: user-skill-preferences
+    domains:
+      - skill-recommendation
+      - curation
+    layer: content
+    what: >-
+      meta_skill stores per-user favorite and hidden preferences (user_preferences table);
+      `ms suggest` drops hidden skills and adds 0.25 to favorites. Search and auto-load
+      ignore them.
+    notable: >-
+      A person can shape suggestions without editing or deprecating a skill for everyone.
+      For the host this fits better as a fact than a boost: hidden as a per-user hard
+      exclusion and pinned as a tie-break, both explained by a reason code, applied on every
+      resolution path.
+    where:
+      - meta-skill@e999668e8d8c:migrations/011_add_user_preferences.sql#L3-L9
+      - meta-skill@e999668e8d8c:src/cli/commands/suggest.rs#L206-L225
+    contrast: new
+    host: internal/resolver/evidence.go
+    score:
+      relevance: 3
+      facts:
+        - a
+        - b
+      impact: 2
+      evidence: 1
+      effort: 2
+      why: >-
+        Core of the goal (the right skill, under the human's control). a: a user who never
+        wants a skill suggested can only deprecate it for everyone; b: no per-user
+        preference exists. One source, and only one of its paths applies it.
+    final_score: 3
+    decision: {state: candidate}
+
+  - key: session-mining-drafts-only
+    domains:
+      - skill-recommendation
+      - curation
+      - source-learning
+    layer: content
+    what: >-
+      meta_skill mines agent sessions (after a prompt-injection taint scan) into command,
+      code, workflow and error patterns, and `ms build --guided` turns them into draft
+      SKILL.md files without frontmatter; mining never adds tags or context to an existing
+      skill.
+    notable: >-
+      Sessions hold the best evidence of how people phrase tasks, but the source spends it
+      on new drafts. The host already imports transcripts and promotes resolutions into
+      eval-case drafts, so it can take the step the source lacks: propose new routing
+      examples, counter_examples or not_for for an existing skill from tasks that ended in
+      no_skill then a chosen skill, or in a rejection, through the normal preview/confirm.
+    where:
+      - meta-skill@e999668e8d8c:src/cass/mining.rs#L671-L706
+      - meta-skill@e999668e8d8c:src/cass/brenner.rs#L299-L339
+    contrast: extends
+    host: internal/telemetry/promotion.go
+    score:
+      relevance: 3
+      facts:
+        - a
+        - b
+        - c
+      impact: 3
+      evidence: 1
+      effort: 3
+      why: >-
+        Core of the goal (enrichment that makes the right skill findable). a: routing
+        examples are only written by hand, so real phrasings that missed never improve them;
+        b: nothing proposes metadata from telemetry; c: every resolution that misses. One
+        source, and the host-side step is a new pipeline.
+    final_score: 3
+    decision: {state: candidate}
+
   - key: regex-domain-classifier
     domains:
       - skill-recommendation
