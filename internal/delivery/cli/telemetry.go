@@ -42,6 +42,9 @@ func runTelemetry(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	if subcommand == "funnel" {
 		return runTelemetryFunnel(ctx, args[1:], stdout, stderr)
 	}
+	if subcommand == "chains" {
+		return runTelemetryChains(ctx, args[1:], stdout, stderr)
+	}
 	if subcommand == "import-transcripts" {
 		return runTelemetryImportTranscripts(ctx, args[1:], stdout, stderr)
 	}

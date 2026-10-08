@@ -11,17 +11,18 @@ import (
 )
 
 const (
-	FunnelRawRetentionDays    = 14
+	FunnelRawRetentionDays    = 30
 	FunnelRollupRetentionDays = 180
 	MaxFunnelDays             = 180
 	DefaultFunnelDays         = 30
 )
 
-// FunnelQuery specifies the time window and optional skill filter for a funnel report.
+// FunnelQuery specifies the time window, optional skill filter, and optional cut dimension for a funnel report.
 type FunnelQuery struct {
 	Since   time.Time
 	Until   time.Time
 	SkillID string
+	By      string // "client", "operation", "snapshot"
 }
 
 // FunnelWindow records the normalized inclusive date range and day count.
@@ -56,6 +57,7 @@ type OverallFunnel struct {
 	NegativeFeedback          int64            `json:"negative_feedback"`
 	NegativeAfterLoad         int64            `json:"negative_after_load"`
 	Transcripts               map[string]int64 `json:"transcripts"`
+	ChainMetrics              *ChainMetrics    `json:"chain_metrics,omitempty"`
 }
 
 // SkillFunnel holds telemetry metrics for a single skill.
@@ -83,6 +85,7 @@ type SkillFunnel struct {
 	NegativeFeedback          int64            `json:"negative_feedback"`
 	NegativeAfterLoad         int64            `json:"negative_after_load"`
 	Transcripts               map[string]int64 `json:"transcripts"`
+	ChainMetrics              *ChainMetrics    `json:"chain_metrics,omitempty"`
 }
 
 // FunnelReport is the top-level report returned by UsageService.
@@ -94,6 +97,7 @@ type FunnelReport struct {
 	Overall                   *OverallFunnel    `json:"overall,omitempty"`
 	Skills                    []SkillFunnel     `json:"skills,omitempty"`
 	Skill                     *SkillFunnel      `json:"skill,omitempty"`
+	Cuts                      []FunnelCut       `json:"cuts,omitempty"`
 	DeadSkills                []string          `json:"dead_skills,omitempty"`
 	RecommendedNeverActivated []string          `json:"recommended_never_activated,omitempty"`
 	BlockedByReview           []string          `json:"blocked_by_review,omitempty"`
@@ -443,14 +447,22 @@ func (service UsageService) Funnel(ctx context.Context, path string, q FunnelQue
 
 	overallAcc, skillAccs := aggregateRollups(rows, activeNames)
 
+	rawEvents, _ := recorder.RawEvents(ctx, fromStr, toStr)
+	chains, rawCounts, firstValid := service.buildChains(rawEvents)
+
 	if q.SkillID != "" {
 		acc := skillAccs[q.SkillID]
 		if acc == nil {
 			acc = newAccumulator()
 		}
 		sf := buildSkillFunnel(q.SkillID, activeNames[q.SkillID], acc)
+		skillMetrics := calculateChainMetrics(chains, rawCounts, firstValid, time.Now().UTC(), q.SkillID)
+		sf.ChainMetrics = &skillMetrics
 		report.Skill = &sf
 		report.Skills = []SkillFunnel{sf}
+		if q.By != "" {
+			report.Cuts = calculateCuts(chains, rawCounts, firstValid, time.Now().UTC(), q.By)
+		}
 		return report, nil
 	}
 
@@ -495,7 +507,18 @@ func (service UsageService) Funnel(ctx context.Context, path string, q FunnelQue
 		}
 		return skillsSlice[i].SkillID < skillsSlice[j].SkillID
 	})
+	overallMetrics := calculateChainMetrics(chains, rawCounts, firstValid, time.Now().UTC(), "")
+	report.Overall.ChainMetrics = &overallMetrics
+
+	for i := range skillsSlice {
+		sm := calculateChainMetrics(chains, rawCounts, firstValid, time.Now().UTC(), skillsSlice[i].SkillID)
+		skillsSlice[i].ChainMetrics = &sm
+	}
 	report.Skills = skillsSlice
+
+	if q.By != "" {
+		report.Cuts = calculateCuts(chains, rawCounts, firstValid, time.Now().UTC(), q.By)
+	}
 
 	report.DeadSkills, report.RecommendedNeverActivated, report.BlockedByReview, report.NegativeAfterLoad, report.SetupFailures = buildFunnelLists(skillAccs, activeNames)
 

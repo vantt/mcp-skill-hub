@@ -54,8 +54,8 @@ func TestTranscriptImportService(t *testing.T) {
 		projectRoot, now.Add(-55*time.Minute).Format(time.RFC3339),
 		projectRoot, now.Add(-50*time.Minute).Format(time.RFC3339),
 		projectRoot, now.Add(-45*time.Minute).Format(time.RFC3339),
-		// Event 20 days ago (should be excluded by 14-day clamp):
-		projectRoot, now.Add(-20*24*time.Hour).Format(time.RFC3339),
+		// Event 35 days ago (should be excluded by raw retention clamp):
+		projectRoot, now.Add(-35*24*time.Hour).Format(time.RFC3339),
 	)
 
 	if err := os.WriteFile(filepath.Join(projectTranscriptDir, "session_1.jsonl"), []byte(mainContent), 0o644); err != nil {

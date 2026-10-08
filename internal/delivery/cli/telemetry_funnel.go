@@ -18,6 +18,7 @@ type funnelFlags struct {
 	sinceStr   string
 	untilStr   string
 	skillID    string
+	by         string
 	jsonOutput bool
 }
 
@@ -33,7 +34,7 @@ func parseFunnelFlags(args []string) (funnelFlags, error) {
 		switch flag {
 		case "--json":
 			flags.jsonOutput = true
-		case "--workspace", "--since", "--until", "--skill":
+		case "--workspace", "--since", "--until", "--skill", "--by":
 			if i+1 == len(args) || strings.HasPrefix(args[i+1], "-") {
 				return flags, fmt.Errorf("%s requires a value", flag)
 			}
@@ -50,6 +51,11 @@ func parseFunnelFlags(args []string) (funnelFlags, error) {
 				flags.untilStr = val
 			case "--skill":
 				flags.skillID = val
+			case "--by":
+				if val != "client" && val != "operation" && val != "snapshot" {
+					return flags, fmt.Errorf("--by must be client, operation, or snapshot")
+				}
+				flags.by = val
 			}
 			i++
 		default:
@@ -111,6 +117,26 @@ func formatRate(rate *float64) string {
 	return fmt.Sprintf("%.1f%%", *rate*100)
 }
 
+func formatRateWithCounts(rate *float64, num, den int64) string {
+	if rate == nil {
+		if den > 0 {
+			return fmt.Sprintf("N/A (%d/%d)", num, den)
+		}
+		return "N/A"
+	}
+	return fmt.Sprintf("%.1f%% (%d/%d)", *rate*100, num, den)
+}
+
+func formatRateMetric(m app.RateMetric) string {
+	if m.Rate == nil || m.Status == "unknown" {
+		if m.Denominator > 0 {
+			return fmt.Sprintf("unknown (%d/%d)", m.Numerator, m.Denominator)
+		}
+		return "unknown"
+	}
+	return fmt.Sprintf("%.1f%% (%d/%d)", *m.Rate*100, m.Numerator, m.Denominator)
+}
+
 func renderFunnel(stdout io.Writer, report app.FunnelReport, singleSkill bool) {
 	p := termui.New(stdout)
 	p.Heading(fmt.Sprintf("Funnel Report (%s to %s, %d days)", report.Window.Since, report.Window.Until, report.Window.Days))
@@ -125,12 +151,42 @@ func renderFunnel(stdout io.Writer, report app.FunnelReport, singleSkill bool) {
 			termui.Field{Label: "Recommendations", Value: fmt.Sprintf("%d primary, %d supporting", o.RecommendedPrimary, o.RecommendedSupporting)},
 			termui.Field{Label: "Activations", Value: fmt.Sprintf("%d total (%d recommended, %d override, %d unsolicited)",
 				o.TotalActivations, o.Activations["recommended"], o.Overrides, o.Unsolicited)},
-			termui.Field{Label: "Acceptance Rate", Value: formatRate(o.AcceptanceRate)},
+			termui.Field{Label: "Acceptance Rate", Value: formatRateWithCounts(o.AcceptanceRate, o.Activations["recommended"], o.RecommendedPrimary)},
 			termui.Field{Label: "Blocked by Review", Value: fmt.Sprintf("%d", o.BlockedByReview)},
-			termui.Field{Label: "Setup Failures", Value: fmt.Sprintf("%d (%s)", o.SetupFailed, formatRate(o.SetupFailedRate))},
-			termui.Field{Label: "Doctor Runs", Value: fmt.Sprintf("%d (%s failure rate)", o.TotalDoctor, formatRate(o.DoctorFailureRate))},
+			termui.Field{Label: "Setup Failures", Value: fmt.Sprintf("%d (%s)", o.SetupFailed, formatRateWithCounts(o.SetupFailedRate, o.SetupFailed, o.TotalActivations))},
+			termui.Field{Label: "Doctor Runs", Value: fmt.Sprintf("%d (%s failure rate)", o.TotalDoctor, formatRateWithCounts(o.DoctorFailureRate, o.Doctor["setup_required"]+o.Doctor["unsupported_platform"]+o.Doctor["failed"], o.TotalDoctor))},
 			termui.Field{Label: "Negative Feedback", Value: fmt.Sprintf("%d (%d after load)", o.NegativeFeedback, o.NegativeAfterLoad)},
 		)
+
+		if cm := o.ChainMetrics; cm != nil {
+			p.Heading("Chain Quality Metrics (O5)")
+			p.Fields(
+				termui.Field{Label: "Total Chains", Value: fmt.Sprintf("%d (%d resolved, %d no skill, %d needs context, %d already covered)", cm.TotalChains, cm.ChainsResolved, cm.ChainsNoSkill, cm.ChainsNeedsContext, cm.ChainsAlreadyCovered)},
+				termui.Field{Label: "Chain Acceptance", Value: formatRateMetric(cm.AcceptanceRate)},
+				termui.Field{Label: "Override Rate", Value: formatRateMetric(cm.OverrideRate)},
+				termui.Field{Label: "False No-Skill Rate", Value: formatRateMetric(cm.FalseNoSkillRate)},
+				termui.Field{Label: "True No-Skill", Value: formatRateMetric(cm.TrueNoSkill)},
+				termui.Field{Label: "Reformulation Rate", Value: formatRateMetric(cm.ReformulationRate)},
+				termui.Field{Label: "Ignore Rate", Value: formatRateMetric(cm.IgnoreRate)},
+			)
+		}
+	}
+
+	if len(report.Cuts) > 0 {
+		p.Heading("Breakdown by " + report.Window.Since)
+		cutHeaders := []string{"DIMENSION", "CHAINS", "ACCEPTANCE", "OVERRIDE", "REFORMULATION", "IGNORE"}
+		var cutRows [][]string
+		for _, cut := range report.Cuts {
+			cutRows = append(cutRows, []string{
+				cut.Key,
+				fmt.Sprintf("%d", cut.Metrics.TotalChains),
+				formatRateMetric(cut.Metrics.AcceptanceRate),
+				formatRateMetric(cut.Metrics.OverrideRate),
+				formatRateMetric(cut.Metrics.ReformulationRate),
+				formatRateMetric(cut.Metrics.IgnoreRate),
+			})
+		}
+		p.Table(cutHeaders, cutRows)
 	}
 
 	p.Heading("Skills")
@@ -199,6 +255,7 @@ func runTelemetryFunnel(ctx context.Context, args []string, stdout, stderr io.Wr
 		Since:   since,
 		Until:   until,
 		SkillID: flags.skillID,
+		By:      flags.by,
 	})
 	if err != nil {
 		return writeInvalidRequest(stdout, stderr, flags.jsonOutput, err.Error(), "Check arguments and workspace health with `skillhub doctor`.")
