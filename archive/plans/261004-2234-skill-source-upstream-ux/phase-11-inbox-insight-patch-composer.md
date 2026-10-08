@@ -5,12 +5,12 @@ status: done
 
 # Phase 11: Inbox, Insight, Patch Composer
 
-<!-- Moved from plans/261003-1645-webui-v1-implementation phase 5 on 2026-10-05; fixtures come from phase 10; guard checks replaced by this plan's gates -->
+<!-- Moved from archive/plans/261003-1645-webui-v1-implementation phase 5 on 2026-10-05; fixtures come from phase 10; guard checks replaced by this plan's gates -->
 
 ## Context
 
 - Plan: [plan.md](./plan.md). Depends on phase 10 (`seedFinalizedRun` in `internal/delivery/web/fixtures_test.go`, `seedDistillWorkspace()` in `web/e2e/support/seed-workspace.ts`).
-- Origin: the closed WebUI plan's phase 5 (`plans/261003-1645-webui-v1-implementation/phase-05-inbox-insight-patch-composer.md`). Earlier user decisions kept: paging helpers move fully to `internal/delivery/paging` with the two MCP test files updated; decisions send no idempotency key; cursors are compared by decoded content, never bytes.
+- Origin: the closed WebUI plan's phase 5 (`archive/plans/261003-1645-webui-v1-implementation/phase-05-inbox-insight-patch-composer.md`). Earlier user decisions kept: paging helpers move fully to `internal/delivery/paging` with the two MCP test files updated; decisions send no idempotency key; cursors are compared by decoded content, never bytes.
 - Behavior authority: spec 04 §2.8–§2.9 (including Patch Composer), §3.6, §4.3, §6. Visual authority: `docs/design/webui-mockup/` lines 447–475 (Inbox), 476–509 (Insight), 510–552 (Composer).
 - Read first: `internal/delivery/mcpserver/server.go` (`cursorMACKey`, `pageDigest`, `pageOwner` near line 671, `encodeCursor`, `decodeCursor`, `normalizeLimit`, `makePage`, `cursorValue`), `internal/delivery/mcpserver/types.go` (`defaultLimit`, `maximumLimit`, `page[T]`, `pageInput`), `internal/delivery/mcpserver/insight_tools.go`, `internal/app/insight.go` (`GetInsightInbox` line 171, `GetInsightDetail` 274, `DecideInsight` 306 and its derived idempotency key, `PreviewInsightApplication` 391, `ConfirmInsightApplication` 506, `errors.New("insight not found")` line 757), `internal/app/skill_detail.go` (`Path`, `ContentDigest`), `web/src/components/{ProposalPreview,ConflictDrawer,ConfirmDialog}.tsx`, `web/src/state/drafts.ts`.
 - Facts verified on 2026-10-05: the paging helpers are still in `mcpserver` (no `internal/delivery/paging` package); `PreviewInsightApplication` takes `changes[]` (`path`, `contents`) and `mappings[]` (`observation_id`, `artifact_path`, `concept`) and no expected digest; `cursorMACKey` is random per process.

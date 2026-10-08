@@ -6,7 +6,7 @@ status: done
 # Phase 13: Documentation and plan close
 
 <!-- Updated: Validation Session 1 - document agent-free updates, no daemon, behind semantics, git merge engine -->
-<!-- Updated: 2026-10-05 - renumbered from phase 10; absorbs the documentation task of the closed WebUI plan (plans/261003-1645-webui-v1-implementation phase 6, task 6.5) and closes this plan -->
+<!-- Updated: 2026-10-05 - renumbered from phase 10; absorbs the documentation task of the closed WebUI plan (archive/plans/261003-1645-webui-v1-implementation phase 6, task 6.5) and closes this plan -->
 
 ## Context
 

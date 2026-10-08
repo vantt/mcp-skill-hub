@@ -49,7 +49,7 @@ Create:
 - `internal/app/routing_eval_gate_test.go` (fixture materialization helper lives here)
 - `internal/delivery/cli/evaluation_routing.go`, `internal/delivery/cli/evaluation_routing_test.go`
 - `testdata/routing/examples-v1.json`, `testdata/routing/no-skill-v1.yaml`, `testdata/routing/gate-v1.json`
-- `plans/261004-1547-skill-execution-measurement-routing/reports/routing-eval-baseline-report.md`
+- `archive/plans/261004-1547-skill-execution-measurement-routing/reports/routing-eval-baseline-report.md`
 
 Modify:
 - `internal/app/resolver.go` (extract `resolveWithin`; no behavior change)

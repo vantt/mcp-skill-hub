@@ -8,7 +8,7 @@ dependencies: [5]
 ---
 
 <!-- Updated: Validation Session 1 - rewritten as an executor handover; npm ci without --ignore-scripts; exact doc edits and greps -->
-> **Moved 2026-10-05:** tasks 6.1–6.4 and 6.6 to `plans/261004-2234-skill-source-upstream-ux/phase-12-webui-hardening-and-release.md`; task 6.5 (documentation) to `plans/261004-2234-skill-source-upstream-ux/phase-13-documentation.md`. Do not execute this file.
+> **Moved 2026-10-05:** tasks 6.1–6.4 and 6.6 to `archive/plans/261004-2234-skill-source-upstream-ux/phase-12-webui-hardening-and-release.md`; task 6.5 (documentation) to `archive/plans/261004-2234-skill-source-upstream-ux/phase-13-documentation.md`. Do not execute this file.
 
 
 # Phase 6: Hardening, docs, release
@@ -91,11 +91,11 @@ End-to-end and accessibility coverage of every user flow, Vietnamese glyph cover
 
 ### Task 6.7 — Phase and plan close
 - Goal: final evidence.
-- Target files: create `plans/261003-1645-webui-v1-implementation/reports/phase-06-report.md`.
+- Target files: create `archive/plans/261003-1645-webui-v1-implementation/reports/phase-06-report.md`.
 - Steps:
   1. Run `make check` and `make web-check`.
   2. Record, on this machine: `ip -o -4 addr show up` output, the address chosen by `skillhub serve web --no-open` (first startup line), a request through one non-loopback address with the token (200) and the same with header `Host: evil.example:7421` (421).
-  3. Run `bash plans/261003-1645-webui-v1-implementation/guard/guard.sh check 6`, paste its full output, commit.
+  3. Run `bash archive/plans/261003-1645-webui-v1-implementation/guard/guard.sh check 6`, paste its full output, commit.
   4. Mark the plan status `completed` with the plan CLI (`ak plan --help` for the exact command) only after the guard passes.
 - Success criteria: guard passes; all phase reports exist.
 - Verify: `make check` exits 0; `make web-check` exits 0; the guard's last line is exactly `GUARD RESULT: PASS (phase 6)`.
@@ -112,7 +112,7 @@ End-to-end and accessibility coverage of every user flow, Vietnamese glyph cover
 
 ## Failure Protocol
 If any Verify step does not meet its stated pass condition:
-1. You may make **one** fix attempt for that task. Change only the task's target files. Never edit a test's assertions to make it pass, never edit golden files by hand, never touch `plans/261003-1645-webui-v1-implementation/guard/`, `.golangci.yml`, or CI files unless the task lists them.
+1. You may make **one** fix attempt for that task. Change only the task's target files. Never edit a test's assertions to make it pass, never edit golden files by hand, never touch `archive/plans/261003-1645-webui-v1-implementation/guard/`, `.golangci.yml`, or CI files unless the task lists them.
 2. Re-run exactly the same Verify command.
 3. If it still fails, STOP this phase. Do not try a second fix and do not reason around the failure.
 4. If a `kongming` subagent can be spawned, give it: the phase and task id, the steps you ran, both Verify commands with their full output, and the pass condition. Apply its guidance, then re-run Verify once.

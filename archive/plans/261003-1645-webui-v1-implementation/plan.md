@@ -13,7 +13,7 @@ created: 2026-10-03
 
 # Skill Hub WebUI v1 implementation
 
-> **Closed 2026-10-05.** Phases 1–3 shipped. All remaining work moved to [`plans/261004-2234-skill-source-upstream-ux/`](../261004-2234-skill-source-upstream-ux/plan.md) so this plan can close (user decision): phase 4 Sources/Watch is replaced by that plan's phases 8–9, and its Handoff/Runs part moved to phase 10; phase 5 moved to phase 11; phase 6 moved to phases 12 (hardening, release) and 13 (documentation). The guard below is retired. Do not execute phases 4–6 from this plan. Evidence: [reports/261005-o-a-b-compatibility-review.md](./reports/261005-o-a-b-compatibility-review.md).
+> **Closed 2026-10-05.** Phases 1–3 shipped. All remaining work moved to [`archive/plans/261004-2234-skill-source-upstream-ux/`](../261004-2234-skill-source-upstream-ux/plan.md) so this plan can close (user decision): phase 4 Sources/Watch is replaced by that plan's phases 8–9, and its Handoff/Runs part moved to phase 10; phase 5 moved to phase 11; phase 6 moved to phases 12 (hardening, release) and 13 (documentation). The guard below is retired. Do not execute phases 4–6 from this plan. Evidence: [reports/261005-o-a-b-compatibility-review.md](./reports/261005-o-a-b-compatibility-review.md).
 
 ## Overview
 
@@ -30,9 +30,9 @@ Supporting records: [decisions.md](./decisions.md) (all architecture decisions a
 | 1 | [Web adapter foundation (Go)](./phase-01-web-adapter-foundation.md) | — | 32h | Complete |
 | 2 | [Frontend foundation, Home, Skills catalog](./phase-02-frontend-foundation-home-skills.md) | 1 | 38h | Complete |
 | 3 | [Add, Create, Skill Detail, proposals](./phase-03-skill-add-create-detail-proposals.md) | 2 | 46h | Complete |
-| 4 | [Sources, Handoff, Runs](./phase-04-sources-handoff-runs.md) | 3 | 34h | Superseded by Sources → plans/261004-2234-skill-source-upstream-ux phases 8–9; Handoff/Runs → phase 10 |
-| 5 | [Inbox, Insight, Patch Composer](./phase-05-inbox-insight-patch-composer.md) | 3 | 40h | Superseded by plans/261004-2234-skill-source-upstream-ux phase 11 |
-| 6 | [Hardening, docs, release](./phase-06-hardening-docs-release.md) | 5 | 28h | Superseded by plans/261004-2234-skill-source-upstream-ux phases 12–13 |
+| 4 | [Sources, Handoff, Runs](./phase-04-sources-handoff-runs.md) | 3 | 34h | Superseded by Sources → archive/plans/261004-2234-skill-source-upstream-ux phases 8–9; Handoff/Runs → phase 10 |
+| 5 | [Inbox, Insight, Patch Composer](./phase-05-inbox-insight-patch-composer.md) | 3 | 40h | Superseded by archive/plans/261004-2234-skill-source-upstream-ux phase 11 |
+| 6 | [Hardening, docs, release](./phase-06-hardening-docs-release.md) | 5 | 28h | Superseded by archive/plans/261004-2234-skill-source-upstream-ux phases 12–13 |
 
 Phases 4–6 moved to the skill-centric sources plan on 2026-10-05; see the closing note above.
 
@@ -40,11 +40,11 @@ Phases 4–6 moved to the skill-centric sources plan on 2026-10-05; see the clos
 
 A previous executor in this repository satisfied checks without satisfying requirements. Breaking any rule below fails the phase even if every test passes.
 
-1. **Never touch the guard.** Do not edit, move, regenerate or commit changes under `plans/261003-1645-webui-v1-implementation/guard/`. Never run `guard.sh baseline`.
+1. **Never touch the guard.** Do not edit, move, regenerate or commit changes under `archive/plans/261003-1645-webui-v1-implementation/guard/`. Never run `guard.sh baseline`.
 2. **Tests are evidence.** Never delete, rename or skip a test; never add `t.Skip`, `.skip`, `.only`, `xit`; never weaken an assertion; never edit golden files by hand (regenerate them only with `-update` inside the task that owns them, and read the result). Do not modify existing `*_test.go` files, except `internal/delivery/mcpserver/server_test.go` and `hardening_test.go` in task 5.1, exactly as that task says.
 3. **Public contracts are frozen.** CLI `--json` output, CLI human output, MCP tool names and schemas, JSON field names and error code strings must not change. The guard compares CLI output with a baseline byte for byte.
 4. **No placeholders or test-only paths.** No `TODO`, `FIXME`, `XXX`, `HACK`, `nolint`, `@ts-ignore`, `@ts-expect-error`, `eslint-disable`, `testing.Testing()`, `TestMain`, or code that behaves differently under test. Do not create exports, wrappers or seams that only tests use (AGENTS.md, Testing). Test doubles live in `_test.go` files.
-5. **Lint limits.** Go functions at most 120 lines, at most 6 parameters (`.golangci.yml`). `make lint LINT_BASE=$(cat plans/261003-1645-webui-v1-implementation/guard/baseline/base_commit.txt)` must print no new issues. Never edit `.golangci.yml`.
+5. **Lint limits.** Go functions at most 120 lines, at most 6 parameters (`.golangci.yml`). `make lint LINT_BASE=$(cat archive/plans/261003-1645-webui-v1-implementation/guard/baseline/base_commit.txt)` must print no new issues. Never edit `.golangci.yml`.
 6. **Satisfy intent, not grep.** Guard greps are a floor. Renaming to dodge a grep, splitting a function into meaningless parts, or copying logic the plan says to reuse will be rejected in review.
 7. **Stay in scope.** Implement exactly the tasks. Do not add features, dependencies or files that no task names. If a step is ambiguous or seems wrong, follow the Failure Protocol; do not improvise.
 8. **Processes.** Start long-running processes only as the tasks say (Playwright starts and stops its own server on port 0; `scripts/web-dev.sh` refuses busy ports). Stop every process you start before the task ends.
@@ -55,7 +55,7 @@ A previous executor in this repository satisfied checks without satisfying requi
 
 > **Retired 2026-10-05** (user decision). Its baseline predates the runtime plan, and it froze CLI output that the sources plan changes on purpose. Its hard rules now live in the executor notes of the sources plan. Kept as history only.
 
-- Run: `bash plans/261003-1645-webui-v1-implementation/guard/guard.sh check <phase>` at the end of each phase.
+- Run: `bash archive/plans/261003-1645-webui-v1-implementation/guard/guard.sh check <phase>` at the end of each phase.
 - Pass: the last line is exactly `GUARD RESULT: PASS (phase <phase>)` and the exit code is 0.
 - Checks: guard integrity; Go build, vet, tests, gofmt, lint (new issues only); `web/` excluded from Go packages; no removed tests, no new skips, no removed JSON tags, unchanged MCP tool set; forbidden patterns; test-file edit rules; CLI `--json` and human output identical to the baseline; from phase 2, `make web-check`, `make web-e2e` and frontend forbidden patterns; per-phase required files, greps and named tests.
 - Baseline: commit `37b61880fc9cf33a0fd9428368adfe4a9f1264b4`, captured by the planner on 2026-10-04. `guard.sh check 0` on that tree passed every check except "guard directory is committed", which passes once step 1 of the handover is done.
@@ -63,7 +63,7 @@ A previous executor in this repository satisfied checks without satisfying requi
 ### Handover (the user does this once, before giving the plan to the executor)
 
 1. Commit the plan directory (including `guard/`) and `docs/design/webui-mockup/`.
-2. Run `bash plans/261003-1645-webui-v1-implementation/guard/guard.sh check 0`; it must end with `GUARD RESULT: PASS (phase 0)`.
+2. Run `bash archive/plans/261003-1645-webui-v1-implementation/guard/guard.sh check 0`; it must end with `GUARD RESULT: PASS (phase 0)`.
 3. Record outside the repository the two hashes it prints first (baseline commit and guard commit). Every later guard run prints them again; if either differs, the guard was tampered with and the executor's results must be discarded.
 
 ## Acceptance criteria (whole plan)

@@ -5,12 +5,12 @@ status: done
 
 # Phase 12: WebUI hardening and release
 
-<!-- Moved from plans/261003-1645-webui-v1-implementation phase 6 (tasks 6.1–6.4, 6.6) on 2026-10-05; its documentation task moved to phase 13 -->
+<!-- Moved from archive/plans/261003-1645-webui-v1-implementation phase 6 (tasks 6.1–6.4, 6.6) on 2026-10-05; its documentation task moved to phase 13 -->
 
 ## Context
 
 - Plan: [plan.md](./plan.md). Depends on phases 9–11 (every WebUI screen is shipped).
-- Origin: the closed WebUI plan's phase 6 (`plans/261003-1645-webui-v1-implementation/phase-06-hardening-docs-release.md`), adapted to the screens actually shipped after the runtime plan and this plan: Skill Detail has Usage, Runtime, and Sources tabs; `/sources` is the grouped view; there is no Watch page.
+- Origin: the closed WebUI plan's phase 6 (`archive/plans/261003-1645-webui-v1-implementation/phase-06-hardening-docs-release.md`), adapted to the screens actually shipped after the runtime plan and this plan: Skill Detail has Usage, Runtime, and Sources tabs; `/sources` is the grouped view; there is no Watch page.
 - Read first: `web/e2e/support/{server,seed-workspace}.ts`, `web/e2e/*.spec.ts`, `web/src/routes.tsx`, `web/src/design-system/PATCHES.md`, `web/src/design-system/fonts/`, `web/package.json`, `web/package-lock.json`, `.github/workflows/release.yml` (job `web` near line 187, job `smoke` near line 635, Unix and Windows steps), `docs/use-cases/04-webui-user-flows-and-screen-specs.md` §3.
 - Facts verified on 2026-10-05: no `web/THIRD_PARTY_NOTICES.md`, no `web/scripts/`, no `Vietnamese coverage` table in `PATCHES.md`, and `release.yml` has a `web` build job but no `serve web` smoke step.
 

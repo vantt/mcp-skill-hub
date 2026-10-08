@@ -32,7 +32,7 @@ dependencies: []
 - Goal: confirm the baseline is green before any change.
 - Target files: none.
 - Steps:
-  1. Run `bash plans/261003-1645-webui-v1-implementation/guard/guard.sh check 0`.
+  1. Run `bash archive/plans/261003-1645-webui-v1-implementation/guard/guard.sh check 0`.
 - Success criteria: guard passes on the untouched tree.
 - Verify: the last line printed is exactly `GUARD RESULT: PASS (phase 0)` and the exit code is 0.
 
@@ -147,11 +147,11 @@ dependencies: []
 
 ### Task 1.9 — Phase close
 - Goal: prove the phase is complete and record it.
-- Target files: create `plans/261003-1645-webui-v1-implementation/reports/phase-01-report.md`.
+- Target files: create `archive/plans/261003-1645-webui-v1-implementation/reports/phase-01-report.md`.
 - Steps:
   1. Run `make check`.
-  2. Run `bash plans/261003-1645-webui-v1-implementation/guard/guard.sh check 1`.
-  3. Write the report: full guard output (including the two hashes it prints first), `git diff --stat $(cat plans/261003-1645-webui-v1-implementation/guard/baseline/base_commit.txt)`, every deviation from this file with its reason, every Failure Protocol event, open questions.
+  2. Run `bash archive/plans/261003-1645-webui-v1-implementation/guard/guard.sh check 1`.
+  3. Write the report: full guard output (including the two hashes it prints first), `git diff --stat $(cat archive/plans/261003-1645-webui-v1-implementation/guard/baseline/base_commit.txt)`, every deviation from this file with its reason, every Failure Protocol event, open questions.
   4. Commit with a conventional message (for example `feat(web): add local HTTP adapter and serve web command`); no AI attribution.
 - Success criteria: guard passes and the report exists.
 - Verify: `make check` exits 0; the guard's last line is exactly `GUARD RESULT: PASS (phase 1)`.
@@ -170,7 +170,7 @@ dependencies: []
 
 ## Failure Protocol
 If any Verify step does not meet its stated pass condition:
-1. You may make **one** fix attempt for that task. Change only the task's target files. Never edit a test's assertions to make it pass, never edit golden files by hand, never touch `plans/261003-1645-webui-v1-implementation/guard/`, `.golangci.yml`, or CI files unless the task lists them.
+1. You may make **one** fix attempt for that task. Change only the task's target files. Never edit a test's assertions to make it pass, never edit golden files by hand, never touch `archive/plans/261003-1645-webui-v1-implementation/guard/`, `.golangci.yml`, or CI files unless the task lists them.
 2. Re-run exactly the same Verify command.
 3. If it still fails, STOP this phase. Do not try a second fix and do not reason around the failure.
 4. If a `kongming` subagent can be spawned, give it: the phase and task id, the steps you ran, both Verify commands with their full output, and the pass condition. Apply its guidance, then re-run Verify once.

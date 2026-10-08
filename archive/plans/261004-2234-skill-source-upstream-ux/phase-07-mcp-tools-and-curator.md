@@ -10,7 +10,7 @@ status: done
 ## Context
 
 - Plan: [plan.md](./plan.md) (D10, D11). Depends on phases 3–5.
-- Read first: `internal/delivery/mcpserver/server.go:305-330` (`registerTools`, `addTool`) and `:515` (`annotations`), `internal/delivery/mcpserver/source_tools.go`, `source_watch_tools.go`, `source_import_tools.go`, `skill_add_tools.go`, `types.go`, `server_test.go:48-73` (`expectedToolAnnotations`), `internal/systemskills/embed.go:10-64`, `internal/systemskills/embed_test.go:100-180`, `system-skills/curator/SKILL.md` (identical copy at `internal/systemskills/curator/SKILL.md`), `plans/261004-1547-skill-execution-measurement-routing/phase-05b-runtime-hardening.md` (R2: unapproved third-party content never reaches agents).
+- Read first: `internal/delivery/mcpserver/server.go:305-330` (`registerTools`, `addTool`) and `:515` (`annotations`), `internal/delivery/mcpserver/source_tools.go`, `source_watch_tools.go`, `source_import_tools.go`, `skill_add_tools.go`, `types.go`, `server_test.go:48-73` (`expectedToolAnnotations`), `internal/systemskills/embed.go:10-64`, `internal/systemskills/embed_test.go:100-180`, `system-skills/curator/SKILL.md` (identical copy at `internal/systemskills/curator/SKILL.md`), `archive/plans/261004-1547-skill-execution-measurement-routing/phase-05b-runtime-hardening.md` (R2: unapproved third-party content never reaches agents).
 
 ## Overview
 

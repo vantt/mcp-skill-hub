@@ -184,12 +184,12 @@ web-dev:
 
 ### Task 2.13 — Phase close
 - Goal: prove completion and record measurements.
-- Target files: create `plans/261003-1645-webui-v1-implementation/reports/phase-02-report.md` and `plans/261003-1645-webui-v1-implementation/reports/screenshots/phase-02/*.png`.
+- Target files: create `archive/plans/261003-1645-webui-v1-implementation/reports/phase-02-report.md` and `archive/plans/261003-1645-webui-v1-implementation/reports/screenshots/phase-02/*.png`.
 - Steps:
   1. Record: the version table from task 2.1; `du -sh internal/delivery/web/dist`; the binary size with the built UI minus the size with only `.gitkeep` in `dist` (two `go build -o` runs into a temp directory); the total size of `.woff2` files in `dist`.
   2. Save screenshots of `/` and `/skills` at widths 1440, 1024 and 390 in light and dark, named `<route>-<width>-<scheme>.png`. They are for later review, not a gate.
   3. Write the mockup-parity checklist: each element in mockup lines 31–178 is marked done, or dropped with the reason (no field in spec 04 §1.3).
-  4. Run `bash plans/261003-1645-webui-v1-implementation/guard/guard.sh check 2`, paste its full output into the report, and commit.
+  4. Run `bash archive/plans/261003-1645-webui-v1-implementation/guard/guard.sh check 2`, paste its full output into the report, and commit.
 - Success criteria: guard passes.
 - Verify: the guard's last line is exactly `GUARD RESULT: PASS (phase 2)`.
 
@@ -211,7 +211,7 @@ web-dev:
 
 ## Failure Protocol
 If any Verify step does not meet its stated pass condition:
-1. You may make **one** fix attempt for that task. Change only the task's target files. Never edit a test's assertions to make it pass, never edit golden files by hand, never touch `plans/261003-1645-webui-v1-implementation/guard/`, `.golangci.yml`, or CI files unless the task lists them.
+1. You may make **one** fix attempt for that task. Change only the task's target files. Never edit a test's assertions to make it pass, never edit golden files by hand, never touch `archive/plans/261003-1645-webui-v1-implementation/guard/`, `.golangci.yml`, or CI files unless the task lists them.
 2. Re-run exactly the same Verify command.
 3. If it still fails, STOP this phase. Do not try a second fix and do not reason around the failure.
 4. If a `kongming` subagent can be spawned, give it: the phase and task id, the steps you ran, both Verify commands with their full output, and the pass condition. Apply its guidance, then re-run Verify once.

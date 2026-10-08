@@ -8,7 +8,7 @@ dependencies: [3]
 ---
 
 <!-- Updated: Validation Session 1 - rewritten as an executor handover; paging helpers move fully to internal/delivery/paging with MCP tests updated (user decision); decisions send no idempotency key; cursors compared by content, not bytes -->
-> **Moved 2026-10-05** to `plans/261004-2234-skill-source-upstream-ux/phase-11-inbox-insight-patch-composer.md`. Do not execute this file.
+> **Moved 2026-10-05** to `archive/plans/261004-2234-skill-source-upstream-ux/phase-11-inbox-insight-patch-composer.md`. Do not execute this file.
 
 
 # Phase 5: Inbox, Insight, Patch Composer
@@ -103,11 +103,11 @@ The improvement loop: the paged Inbox, Insight Detail with decisions, and the Pa
 
 ### Task 5.7 — Phase close
 - Goal: prove completion.
-- Target files: create `plans/261003-1645-webui-v1-implementation/reports/phase-05-report.md` and screenshots under `reports/screenshots/phase-05/`.
+- Target files: create `archive/plans/261003-1645-webui-v1-implementation/reports/phase-05-report.md` and screenshots under `reports/screenshots/phase-05/`.
 - Steps:
   1. Include the before/after MCP test outputs from task 5.1.
   2. Mockup-parity checklist for lines 447–552.
-  3. Run `bash plans/261003-1645-webui-v1-implementation/guard/guard.sh check 5`, paste its full output, commit.
+  3. Run `bash archive/plans/261003-1645-webui-v1-implementation/guard/guard.sh check 5`, paste its full output, commit.
 - Success criteria: guard passes.
 - Verify: the guard's last line is exactly `GUARD RESULT: PASS (phase 5)`.
 
@@ -123,7 +123,7 @@ The improvement loop: the paged Inbox, Insight Detail with decisions, and the Pa
 
 ## Failure Protocol
 If any Verify step does not meet its stated pass condition:
-1. You may make **one** fix attempt for that task. Change only the task's target files. Never edit a test's assertions to make it pass, never edit golden files by hand, never touch `plans/261003-1645-webui-v1-implementation/guard/`, `.golangci.yml`, or CI files unless the task lists them.
+1. You may make **one** fix attempt for that task. Change only the task's target files. Never edit a test's assertions to make it pass, never edit golden files by hand, never touch `archive/plans/261003-1645-webui-v1-implementation/guard/`, `.golangci.yml`, or CI files unless the task lists them.
 2. Re-run exactly the same Verify command.
 3. If it still fails, STOP this phase. Do not try a second fix and do not reason around the failure.
 4. If a `kongming` subagent can be spawned, give it: the phase and task id, the steps you ran, both Verify commands with their full output, and the pass condition. Apply its guidance, then re-run Verify once.

@@ -23,7 +23,7 @@ A source becomes an attribute of a skill, in one of two roles:
 
 `skill add` and `source import` from a repository attach the repository's source automatically (one repository and ref equals one source, many skills). Existing skills are attached by an explicit `skillhub source backfill`. Every new source has at least one linked skill or stays pending in the intake queue.
 
-Since 2026-10-05 this plan also owns the rest of the WebUI v1. The WebUI plan `plans/261003-1645-webui-v1-implementation/` is closed: its phases 1–3 shipped; its phase 4 Sources/Watch work is replaced by phases 8–9 here; its remaining Handoff/Runs, Inbox/Insight/Composer, hardening/release, and documentation work moved to phases 10–13 (see "Plan amendment 2026-10-05").
+Since 2026-10-05 this plan also owns the rest of the WebUI v1. The WebUI plan `archive/plans/261003-1645-webui-v1-implementation/` is closed: its phases 1–3 shipped; its phase 4 Sources/Watch work is replaced by phases 8–9 here; its remaining Handoff/Runs, Inbox/Insight/Composer, hardening/release, and documentation work moved to phases 10–13 (see "Plan amendment 2026-10-05").
 
 ## Verified starting facts (2026-10-04)
 
@@ -94,10 +94,10 @@ confirm ─► mutation (files + meta origin.commit/folder_digest/files_digest) 
 
 ## Cross-plan dependency
 
-- The runtime plan `plans/261004-1547-skill-execution-measurement-routing` is complete and merged into `main` (`338eff5`). Its WebUI contracts must be kept: Skill Detail reads trust from `GET /api/v1/skills/{id}/review`, runtime from `/runtime`, usage from `/usage`; `ContentTrustCard.tsx`, `RuntimeTab.tsx`, and the Usage tab stay as they are. The one deliberate change is phase 9's correction of the TypeScript `SkillProvenance` type to the flat Go JSON.
+- The runtime plan `archive/plans/261004-1547-skill-execution-measurement-routing` is complete and merged into `main` (`338eff5`). Its WebUI contracts must be kept: Skill Detail reads trust from `GET /api/v1/skills/{id}/review`, runtime from `/runtime`, usage from `/usage`; `ContentTrustCard.tsx`, `RuntimeTab.tsx`, and the Usage tab stay as they are. The one deliberate change is phase 9's correction of the TypeScript `SkillProvenance` type to the flat Go JSON.
 - Ownership kept from the runtime plan: resolver, telemetry, catalog schema version, `content_trust` types. This plan adds no telemetry event types and never edits `quality.content_reviewed_digest`.
-- The WebUI plan `plans/261003-1645-webui-v1-implementation/` is closed and absorbed (phases 10–13). Its earlier user decisions still apply where the moved phases cite them; its guard script is retired (user decision 2026-10-05) and replaced by this plan's gates and executor rules.
-- Evidence for the reconciliation: `plans/261003-1645-webui-v1-implementation/reports/261005-o-a-b-compatibility-review.md`.
+- The WebUI plan `archive/plans/261003-1645-webui-v1-implementation/` is closed and absorbed (phases 10–13). Its earlier user decisions still apply where the moved phases cite them; its guard script is retired (user decision 2026-10-05) and replaced by this plan's gates and executor rules.
+- Evidence for the reconciliation: `archive/plans/261003-1645-webui-v1-implementation/reports/261005-o-a-b-compatibility-review.md`.
 
 ## Backwards compatibility
 
@@ -185,7 +185,7 @@ Also applied without a finding number: dropped `CommitTime`/commit dates (unrequ
 - **Claims checked:** 143 by the planner (32 `file:line` citations, 89 existing file paths of 116 cited — the other 27 are files to create —, 22 helper symbols), plus about 95 by the Fact Checker and 26 traced flows by the Flow Tracer.
 - **Verified:** all remaining claims after fixes. **Failed (all corrected in the plan):** 3 off-by-a-few line citations in plan.md; `ResolveRefCommit` described as a cheap probe; `sameRepository` spec vs its test; empty `BeforeDigest` semantics; generic confirm paths assumed kind-aware; `termui.Table` assumed to truncate; `source_security_test.go` missing from Phase 5. **Unverified:** 0 (the earlier unverified library API was removed by Validation Session 1; the merge engine is now `git merge-file`, whose exit-code semantics were confirmed by research).
 - Baseline on 2026-10-04: `go build ./...` ok; `go test ./... -count=1` 1202 passed in 24 packages; `cd web && npm test` 36 passed.
-- `ak plan validate plans/261004-2234-skill-source-upstream-ux`: valid.
+- `ak plan validate archive/plans/261004-2234-skill-source-upstream-ux`: valid.
 
 ### Whole-Plan Consistency Sweep
 - Files reread: plan.md and all 10 phase files after red-team edits.

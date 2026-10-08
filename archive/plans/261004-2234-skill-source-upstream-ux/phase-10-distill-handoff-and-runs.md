@@ -5,12 +5,12 @@ status: done
 
 # Phase 10: Distill handoff and runs
 
-<!-- Moved from plans/261003-1645-webui-v1-implementation phase 4 (handoff and run part) on 2026-10-05; adapted to the skill-centric Sources screen of phase 9 -->
+<!-- Moved from archive/plans/261003-1645-webui-v1-implementation phase 4 (handoff and run part) on 2026-10-05; adapted to the skill-centric Sources screen of phase 9 -->
 
 ## Context
 
 - Plan: [plan.md](./plan.md). Depends on phase 9 (grouped `/sources` screen, `SourceSummary` distill fields from phase 5 Requirement 5).
-- Origin: the Handoff/Runs part of the closed WebUI plan's phase 4 (`plans/261003-1645-webui-v1-implementation/phase-04-sources-handoff-runs.md`). Its standalone Sources table and Watch screen are not built: phase 9 owns `/sources`, and watching without a skill is refused (D11).
+- Origin: the Handoff/Runs part of the closed WebUI plan's phase 4 (`archive/plans/261003-1645-webui-v1-implementation/phase-04-sources-handoff-runs.md`). Its standalone Sources table and Watch screen are not built: phase 9 owns `/sources`, and watching without a skill is refused (D11).
 - Behavior authority: spec 04 §2.6 "Curator Agent Distill Handoff" and "Distill Run Return" (including "Resume payload" and the run-state table), §3.5, §6. Visual authority: `docs/design/webui-mockup/` lines 386–408 (Distill) and 409–446 (Run).
 - Read first: `internal/app/distill.go` (`DistillService` fields, `readRun` near line 1102, `GetDistillRun`, `CancelDistillRun`), `internal/app/distill_test.go` (`revisionAdapter`, `newDistillWorkspace`, `writeDistillSource`, `prepareAndStart`, `validSubmission`), `internal/source/types.go` (`Adapter`), `schemas/distill-submission.schema.json`, `internal/delivery/web/server.go` (`registerRoutes`, `Server.distill`), `internal/delivery/web/routes_sources.go` (phase 8), `internal/delivery/web/fixtures_test.go`, `web/src/screens/sources/SourcesScreen.tsx` (phase 9), `web/src/state/local-store.ts`, `web/src/state/drafts.ts`, `web/e2e/support/server.ts`, `internal/delivery/cli/help.go` (`distill` usage).
 - Facts verified on 2026-10-05:

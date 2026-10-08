@@ -178,7 +178,7 @@ Each phase is one or more focused commits; revert with `git revert`. Disposable 
 - **File ownership:** no two phases edit the same file in parallel; shared files are listed under the phase table with their owning order.
 - **Frontmatter of 5a/5b:** `effort` added (10h, 8h) to match the table.
 - **Executability:** every pending phase now has checkbox steps with a mechanical pass condition, a file list, acceptance tests, risks, rollback, and a failure protocol; pending phases contain no stale runtime vocabulary (scripted scan for `scripts_reviewed|approve-scripts|.restricted|withheld|scripts_review_required|LiveCheck|IsExecutableResource` returned nothing outside superseded notes and this log).
-- **`ak plan validate`:** exit 0, `[OK] plans/261004-1547-skill-execution-measurement-routing is a valid plan directory` (before and after the revision). `ak plan status` after the revision: `5/13 phases done, 36% complete (28/76 tasks)`. The CLI counts integer phases only; lettered phases (5a, 5b, 12a) are invisible to its parser, a tool limitation rather than a plan defect, so 12a status is tracked by hand (see Executor notes).
+- **`ak plan validate`:** exit 0, `[OK] archive/plans/261004-1547-skill-execution-measurement-routing is a valid plan directory` (before and after the revision). `ak plan status` after the revision: `5/13 phases done, 36% complete (28/76 tasks)`. The CLI counts integer phases only; lettered phases (5a, 5b, 12a) are invisible to its parser, a tool limitation rather than a plan defect, so 12a status is tracked by hand (see Executor notes).
 
 ### Validation Interview (2026-10-04)
 User accepted all recommended options; phase files already encode them:

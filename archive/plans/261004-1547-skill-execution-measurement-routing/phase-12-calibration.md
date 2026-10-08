@@ -33,7 +33,7 @@ Decide, from a recorded grid search, whether any routing policy parameter should
 ## Files
 
 Create:
-- `plans/261004-1547-skill-execution-measurement-routing/reports/routing-calibration-report.md`
+- `archive/plans/261004-1547-skill-execution-measurement-routing/reports/routing-calibration-report.md`
 - `internal/app/routing_calibration_test.go` (grid runner behind `SKILLHUB_CALIBRATE=1`, skipped otherwise; prints the report table)
 
 Modify (only if a change is applied):

@@ -57,7 +57,7 @@ Do not modify any other file.
 
 ### Task 1.0 — Confirm the runtime plan is complete or does not overlap
 - Goal: never edit a file a pending runtime phase still owns.
-- Steps: run `grep -nE "\| (Pending|In progress) \|" plans/261004-1547-skill-execution-measurement-routing/plan.md`. If it prints nothing, continue. If it prints rows, collect the files of the pending runtime phases with `grep -ohE "(internal|schemas|web|system-skills|docs)/[A-Za-z0-9_./-]+\.(go|json|ts|tsx|md)" plans/261004-1547-skill-execution-measurement-routing/phase-*.md | sort -u > /tmp/runtime-files.txt` and compare them with every file this plan's phases 1–5 modify: `grep -nF -f /tmp/runtime-files.txt plans/261004-2234-skill-source-upstream-ux/phase-0[1-5]-*.md`.
+- Steps: run `grep -nE "\| (Pending|In progress) \|" archive/plans/261004-1547-skill-execution-measurement-routing/plan.md`. If it prints nothing, continue. If it prints rows, collect the files of the pending runtime phases with `grep -ohE "(internal|schemas|web|system-skills|docs)/[A-Za-z0-9_./-]+\.(go|json|ts|tsx|md)" archive/plans/261004-1547-skill-execution-measurement-routing/phase-*.md | sort -u > /tmp/runtime-files.txt` and compare them with every file this plan's phases 1–5 modify: `grep -nF -f /tmp/runtime-files.txt archive/plans/261004-2234-skill-source-upstream-ux/phase-0[1-5]-*.md`.
 - Verify: either the first command prints nothing, or the last command prints nothing. Any match is a failure (Failure Protocol).
 
 ### Task 1.1 — Canonical field

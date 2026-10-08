@@ -8,9 +8,9 @@ dependencies: [3]
 ---
 
 <!-- Updated: Validation Session 1 - rewritten as an executor handover; watch confirm checks ApplicationCommand; run-not-found sentinel; concrete test seeding recipes -->
-> **Moved 2026-10-05:** Handoff, Run Return, run API, run sentinel, route safety, and seeds now live in `plans/261004-2234-skill-source-upstream-ux/phase-10-distill-handoff-and-runs.md` (adapted to the skill-centric Sources screen). Do not execute this file.
+> **Moved 2026-10-05:** Handoff, Run Return, run API, run sentinel, route safety, and seeds now live in `archive/plans/261004-2234-skill-source-upstream-ux/phase-10-distill-handoff-and-runs.md` (adapted to the skill-centric Sources screen). Do not execute this file.
 >
-> **Archived / Superseded:** This phase implemented standalone source monitoring and orphan watch flows (`/sources/watch`, `/sources/distill`). The architecture has transitioned to a **Skill-Centric Sources model** defined in `plans/261004-2234-skill-source-upstream-ux/` (where sources are strictly attached to skills as Upstream or Learning References, with drift checking and 3-way merge updates). The UI and API work for sources is now owned by Phases 8 & 9 of `plans/261004-2234-skill-source-upstream-ux/`.
+> **Archived / Superseded:** This phase implemented standalone source monitoring and orphan watch flows (`/sources/watch`, `/sources/distill`). The architecture has transitioned to a **Skill-Centric Sources model** defined in `archive/plans/261004-2234-skill-source-upstream-ux/` (where sources are strictly attached to skills as Upstream or Learning References, with drift checking and 3-way merge updates). The UI and API work for sources is now owned by Phases 8 & 9 of `archive/plans/261004-2234-skill-source-upstream-ux/`.
 
 
 # Phase 4: Sources, Handoff, Runs
@@ -116,10 +116,10 @@ Source monitoring and the Curator Agent handoff loop: Sources with checks, Watch
 
 ### Task 4.8 — Phase close
 - Goal: prove completion.
-- Target files: create `plans/261003-1645-webui-v1-implementation/reports/phase-04-report.md` and screenshots under `reports/screenshots/phase-04/`.
+- Target files: create `archive/plans/261003-1645-webui-v1-implementation/reports/phase-04-report.md` and screenshots under `reports/screenshots/phase-04/`.
 - Steps:
   1. Mockup-parity checklist for lines 322–446.
-  2. Run `bash plans/261003-1645-webui-v1-implementation/guard/guard.sh check 4`, paste its full output, commit.
+  2. Run `bash archive/plans/261003-1645-webui-v1-implementation/guard/guard.sh check 4`, paste its full output, commit.
 - Success criteria: guard passes.
 - Verify: the guard's last line is exactly `GUARD RESULT: PASS (phase 4)`.
 
@@ -136,7 +136,7 @@ Source monitoring and the Curator Agent handoff loop: Sources with checks, Watch
 
 ## Failure Protocol
 If any Verify step does not meet its stated pass condition:
-1. You may make **one** fix attempt for that task. Change only the task's target files. Never edit a test's assertions to make it pass, never edit golden files by hand, never touch `plans/261003-1645-webui-v1-implementation/guard/`, `.golangci.yml`, or CI files unless the task lists them.
+1. You may make **one** fix attempt for that task. Change only the task's target files. Never edit a test's assertions to make it pass, never edit golden files by hand, never touch `archive/plans/261003-1645-webui-v1-implementation/guard/`, `.golangci.yml`, or CI files unless the task lists them.
 2. Re-run exactly the same Verify command.
 3. If it still fails, STOP this phase. Do not try a second fix and do not reason around the failure.
 4. If a `kongming` subagent can be spawned, give it: the phase and task id, the steps you ran, both Verify commands with their full output, and the pass condition. Apply its guidance, then re-run Verify once.

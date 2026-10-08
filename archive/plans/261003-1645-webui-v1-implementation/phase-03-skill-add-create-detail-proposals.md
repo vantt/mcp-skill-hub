@@ -114,11 +114,11 @@ The skill authoring and lifecycle screens (Add from GitHub, Create, Skill Detail
 
 ### Task 3.8 — Phase close
 - Goal: prove completion.
-- Target files: create `plans/261003-1645-webui-v1-implementation/reports/phase-03-report.md` and screenshots under `reports/screenshots/phase-03/` (each new screen and the modal and drawer, at 1440, 1024 and 390 in light and dark).
+- Target files: create `archive/plans/261003-1645-webui-v1-implementation/reports/phase-03-report.md` and screenshots under `reports/screenshots/phase-03/` (each new screen and the modal and drawer, at 1440, 1024 and 390 in light and dark).
 - Steps:
   1. Write the mockup-parity checklist for mockup lines 179–321 and 553–614 (done or dropped with reason).
   2. Record the code returned for the stale-confirm case of task 3.2.
-  3. Run `bash plans/261003-1645-webui-v1-implementation/guard/guard.sh check 3`, paste its full output, commit.
+  3. Run `bash archive/plans/261003-1645-webui-v1-implementation/guard/guard.sh check 3`, paste its full output, commit.
 - Success criteria: guard passes.
 - Verify: the guard's last line is exactly `GUARD RESULT: PASS (phase 3)`.
 
@@ -135,7 +135,7 @@ The skill authoring and lifecycle screens (Add from GitHub, Create, Skill Detail
 
 ## Failure Protocol
 If any Verify step does not meet its stated pass condition:
-1. You may make **one** fix attempt for that task. Change only the task's target files. Never edit a test's assertions to make it pass, never edit golden files by hand, never touch `plans/261003-1645-webui-v1-implementation/guard/`, `.golangci.yml`, or CI files unless the task lists them.
+1. You may make **one** fix attempt for that task. Change only the task's target files. Never edit a test's assertions to make it pass, never edit golden files by hand, never touch `archive/plans/261003-1645-webui-v1-implementation/guard/`, `.golangci.yml`, or CI files unless the task lists them.
 2. Re-run exactly the same Verify command.
 3. If it still fails, STOP this phase. Do not try a second fix and do not reason around the failure.
 4. If a `kongming` subagent can be spawned, give it: the phase and task id, the steps you ran, both Verify commands with their full output, and the pass condition. Apply its guidance, then re-run Verify once.
