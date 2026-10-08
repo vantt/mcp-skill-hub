@@ -129,7 +129,7 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 
 	boundHost, _, _ := net.SplitHostPort(addr)
 	if cfg.dev {
-		fmt.Fprintf(stdout, "Skill Hub web UI (dev): http://127.0.0.1:5421/#token=%s\n", token)
+		termui.New(stdout).Raw(fmt.Sprintf("Skill Hub web UI (dev): http://127.0.0.1:5421/#token=%s\n", token))
 	} else {
 		web.WriteStartup(stdout, boundHost, port, token, ifaces)
 	}
@@ -161,6 +161,6 @@ func openBrowser(targetURL string, stderr io.Writer) {
 		cmd = exec.Command("xdg-open", targetURL)
 	}
 	if err := cmd.Start(); err != nil {
-		fmt.Fprintf(stderr, "notice: could not open browser: %v\n", err)
+		termui.New(stderr).Warning(fmt.Sprintf("Could not open browser: %v", err))
 	}
 }

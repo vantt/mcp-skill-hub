@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
 )
 
 type routingEvalFlags struct {
@@ -160,41 +161,52 @@ func runEvaluationRouting(ctx context.Context, args []string, stdout, stderr io.
 	}
 
 	// Human output
-	fmt.Fprintf(stdout, "Routing Evaluation Summary:\n")
-	fmt.Fprintf(stdout, "  Total cases:        %d\n", report.TotalCases)
-	fmt.Fprintf(stdout, "  Positive cases (P): %d\n", report.PositiveCases)
-	fmt.Fprintf(stdout, "  Counter cases (N):  %d\n", report.CounterCases)
-	fmt.Fprintf(stdout, "  No-skill cases (Z): %d\n", report.NoSkillCases)
-	fmt.Fprintf(stdout, "\nMetrics:\n")
-	fmt.Fprintf(stdout, "  Precision@1:        %s\n", formatRate(report.Precision))
-	fmt.Fprintf(stdout, "  Recall:             %s\n", formatRate(report.Recall))
-	fmt.Fprintf(stdout, "  No-Skill Recall:    %s\n", formatRate(report.NoSkillRecall))
-	fmt.Fprintf(stdout, "  No-Skill Precision: %s\n", formatRate(report.NoSkillPrecision))
-	fmt.Fprintf(stdout, "  False Positive Rate:%s\n", formatRate(report.FalsePositiveRate))
+	p := termui.New(stdout)
+	p.Line("Routing Evaluation Summary:")
+	p.Fields(
+		termui.Field{Label: "Total cases", Value: strconv.Itoa(report.TotalCases)},
+		termui.Field{Label: "Positive cases (P)", Value: strconv.Itoa(report.PositiveCases)},
+		termui.Field{Label: "Counter cases (N)", Value: strconv.Itoa(report.CounterCases)},
+		termui.Field{Label: "No-skill cases (Z)", Value: strconv.Itoa(report.NoSkillCases)},
+	)
+	p.Heading("Metrics:")
+	p.Fields(
+		termui.Field{Label: "Precision@1", Value: formatRate(report.Precision)},
+		termui.Field{Label: "Recall", Value: formatRate(report.Recall)},
+		termui.Field{Label: "No-Skill Recall", Value: formatRate(report.NoSkillRecall)},
+		termui.Field{Label: "No-Skill Precision", Value: formatRate(report.NoSkillPrecision)},
+		termui.Field{Label: "False Positive Rate", Value: formatRate(report.FalsePositiveRate)},
+	)
 
 	if len(report.SkillMetrics) > 0 {
-		fmt.Fprintf(stdout, "\nPer-Skill Recall:\n")
+		p.Heading("Per-Skill Recall:")
+		rows := make([][]string, 0, len(report.SkillMetrics))
 		for _, sm := range report.SkillMetrics {
-			fmt.Fprintf(stdout, "  %-30s %d/%d (%s)\n", sm.SkillID, sm.Correct, sm.Total, formatRate(sm.Recall))
+			rows = append(rows, []string{sm.SkillID, fmt.Sprintf("%d/%d", sm.Correct, sm.Total), formatRate(sm.Recall)})
 		}
+		p.Table([]string{"SKILL", "CORRECT", "RECALL"}, rows)
 	}
 
 	if len(report.Failures) > 0 {
-		fmt.Fprintf(stdout, "\nFailures (%d):\n", len(report.Failures))
+		p.Heading(fmt.Sprintf("Failures (%d):", len(report.Failures)))
+		items := make([]string, 0, len(report.Failures))
 		for _, f := range report.Failures {
-			if f.Kind == "no_skill" {
-				fmt.Fprintf(stdout, "  [no_skill] #%d: %q (got status=%s, primary=%s)\n", f.Index, f.Phrase, f.GotStatus, f.GotPrimary)
-			} else {
-				fmt.Fprintf(stdout, "  [%s] %s #%d: %q (got status=%s, primary=%s)\n", f.Kind, f.SkillID, f.Index, f.Phrase, f.GotStatus, f.GotPrimary)
+			label := "[" + f.Kind + "]"
+			if f.Kind != "no_skill" {
+				label += " " + f.SkillID
 			}
+			items = append(items, fmt.Sprintf("%s #%d: %q (got status=%s, primary=%s)", label, f.Index, f.Phrase, f.GotStatus, f.GotPrimary))
 		}
+		p.Bullets(items...)
+	}
+	if p.Err() != nil {
+		return 1
 	}
 
 	if thresholdFailed {
-		fmt.Fprintf(stderr, "\nEvaluation failed quality thresholds:\n")
-		for _, r := range failedReasons {
-			fmt.Fprintf(stderr, "  - %s\n", r)
-		}
+		pErr := termui.New(stderr)
+		pErr.Heading("Evaluation failed quality thresholds:")
+		pErr.Bullets(failedReasons...)
 		return 1
 	}
 
