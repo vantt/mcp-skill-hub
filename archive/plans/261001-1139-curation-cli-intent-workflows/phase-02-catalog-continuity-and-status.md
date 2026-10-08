@@ -12,8 +12,8 @@ dependencies: []
 ## Context Links
 
 - [BUG-07, BUG-08, BUG-13](./reports/bug-ledger-261001-1702-curation-cli-defects-found-in-evaluation.md)
-- [Resolver design](../../docs/design/03-resolver-design.md)
-- [Storage authority hierarchy](../../docs/design/07-storage-and-mutation-model.md#3-authority-hierarchy)
+- [Resolver design](../../../docs/design/03-resolver-design.md)
+- [Storage authority hierarchy](../../../docs/design/07-storage-and-mutation-model.md#3-authority-hierarchy)
 
 ## Objective
 

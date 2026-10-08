@@ -9,7 +9,8 @@
 - [Telemetry, reproducibility và evaluation](04-telemetry-reproducibility-evaluation.md)
 - [Curation lifecycle](05-curation-lifecycle.md)
 - [Source learning và distillation](06-source-learning-and-distillation.md)
-- [Quyết định kiến trúc](../../final.md)
+- [Storage và mutation model](07-storage-and-mutation-model.md)
+- [Bản chốt hướng kiến trúc ban đầu (lưu trữ)](../../archive/final.md)
 
 ## 1. Mục tiêu kiến trúc
 
@@ -556,7 +557,7 @@ Không coi tên dependency là quyết định vĩnh viễn trước prototype/l
 - Marketplace/public federation.
 - Tự execute skill scripts.
 - Tự merge upstream.
-- Universal control đối với native/local skills của mọi client.
+- Universal control đối với native/local skills của mọi client. Quét local skills (`doctor --scan-local`) chỉ là cải tiến opt-in sau V1, không tự xóa hay migrate.
 - Generated multi-skill procedural package.
 - Server-side LLM bật mặc định.
 

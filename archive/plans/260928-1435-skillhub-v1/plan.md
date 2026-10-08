@@ -18,7 +18,7 @@ created: 2026-09-28
 
 Build Skill Hub V1 as a single Go binary that manages a Git-first curated skill workspace, exposes CLI and MCP stdio surfaces, distributes skills through the official MCP skills extension, and provides evidence-first skill resolution without requiring Node, Python, cloud infrastructure, or a web UI.
 
-This plan converts the roadmap in [`../skillhub-v1-implementation-plan.md`](../skillhub-v1-implementation-plan.md) into CK-valid phase files suitable for `/ak:cook`. The architecture authority is [`../../docs/PRD.md`](../../docs/PRD.md), [`../../final.md`](../../final.md), and [`../../docs/design/`](../../docs/design/).
+This plan converts the roadmap in [`../skillhub-v1-implementation-plan.md`](../skillhub-v1-implementation-plan.md) into CK-valid phase files suitable for `/ak:cook`. The architecture authority is [`docs/PRD.md`](../../../docs/PRD.md), [`archive/final.md`](../../final.md) (historical), and [`docs/design/`](../../../docs/design/).
 
 ## Product boundary
 

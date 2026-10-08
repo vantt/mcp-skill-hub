@@ -1,6 +1,6 @@
 # Quyết định kiến trúc cuối cùng — Curated Skill Hub
 
-**Trạng thái:** Chốt hướng kiến trúc; schema chi tiết và ngưỡng routing cần kiểm chứng bằng prototype.
+**Trạng thái:** Lưu trữ (historical). Bản chốt hướng kiến trúc ngày 2026-09-29, trước khi triển khai V1. Nguồn có thẩm quyền hiện tại là [`docs/design/01..07`](../docs/design/01-system-architecture.md); khi khác nhau, tài liệu thiết kế thắng.
 
 ## 1. Quyết định tổng thể
 
@@ -266,17 +266,17 @@ Enum, payload budget, score thresholds, embedding model và target latency sẽ 
 
 ## Tài liệu thiết kế
 
-- [Kiến trúc hệ thống tổng thể](docs/design/01-system-architecture.md)
-- [Giao tiếp Agent ↔ Skill Hub](docs/design/02-agent-hub-protocol.md)
-- [Thiết kế Resolver](docs/design/03-resolver-design.md)
-- [Telemetry, reproducibility và evaluation](docs/design/04-telemetry-reproducibility-evaluation.md)
-- [Curation lifecycle](docs/design/05-curation-lifecycle.md)
-- [Source learning và distillation](docs/design/06-source-learning-and-distillation.md)
-- [Git-first storage, mutation và database model](docs/design/07-storage-and-mutation-model.md)
+- [Kiến trúc hệ thống tổng thể](../docs/design/01-system-architecture.md)
+- [Giao tiếp Agent ↔ Skill Hub](../docs/design/02-agent-hub-protocol.md)
+- [Thiết kế Resolver](../docs/design/03-resolver-design.md)
+- [Telemetry, reproducibility và evaluation](../docs/design/04-telemetry-reproducibility-evaluation.md)
+- [Curation lifecycle](../docs/design/05-curation-lifecycle.md)
+- [Source learning và distillation](../docs/design/06-source-learning-and-distillation.md)
+- [Git-first storage, mutation và database model](../docs/design/07-storage-and-mutation-model.md)
 
 ## Kế hoạch triển khai
 
-- [Skill Hub V1 — phased implementation plan](archive/plans/skillhub-v1-implementation-plan.md)
+- [Skill Hub V1 — phased implementation plan](plans/skillhub-v1-implementation-plan.md)
 
 ## Tài liệu nguồn
 

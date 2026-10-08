@@ -41,7 +41,7 @@ Expose resolver, curation and progressive resource loading through MCP stdio.
 ## Dependencies
 
 - Phase 11 must be complete unless this phase is explicitly split into a smaller accepted cook scope.
-- Preserve authority from `docs/PRD.md`, `docs/design/*`, `final.md`, and the V1 product boundary in `plan.md`.
+- Preserve authority from `docs/PRD.md`, `docs/design/*`, `archive/final.md`, and the V1 product boundary in `plan.md`.
 
 ## Related files
 

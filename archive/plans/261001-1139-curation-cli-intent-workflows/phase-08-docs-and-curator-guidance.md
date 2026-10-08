@@ -11,9 +11,9 @@ dependencies: [6, 7]
 
 ## Context Links
 
-- [Current curation guide](../../docs/curating-skills.md)
-- [Current user guide](../../docs/user-guide.md)
-- [System curator](../../system-skills/curator/SKILL.md)
+- [Current curation guide](../../../docs/curating-skills.md)
+- [Current user guide](../../../docs/user-guide.md)
+- [System curator](../../../system-skills/curator/SKILL.md)
 - [Accepted redesign synthesis](./reports/curation-ux-cli-simplification-report.md)
 
 ## Objective

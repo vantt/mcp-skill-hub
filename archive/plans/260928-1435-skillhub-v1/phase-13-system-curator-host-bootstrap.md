@@ -42,7 +42,7 @@ Make the UX usable through ordinary Agent Hosts without requiring command memori
 ## Dependencies
 
 - Phase 12 must be complete unless this phase is explicitly split into a smaller accepted cook scope.
-- Preserve authority from `docs/PRD.md`, `docs/design/*`, `final.md`, and the V1 product boundary in `plan.md`.
+- Preserve authority from `docs/PRD.md`, `docs/design/*`, `archive/final.md`, and the V1 product boundary in `plan.md`.
 
 ## Related files
 

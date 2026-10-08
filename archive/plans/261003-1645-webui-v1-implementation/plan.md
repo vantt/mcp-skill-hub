@@ -17,7 +17,7 @@ created: 2026-10-03
 
 ## Overview
 
-Deliver the WebUI described by the behavior spec ([04](../../docs/use-cases/04-webui-user-flows-and-screen-specs.md)) and the visual brief ([05](../../docs/use-cases/05-webui-design-brief.md)), matching the Claude Design mockup kept at [`docs/design/webui-mockup/`](../../docs/design/webui-mockup/README.md). The command is `skillhub serve web` (alias `skillhub web`). The WebUI calls the same `internal/app` services as the CLI and MCP server and adds no business logic of its own.
+Deliver the WebUI described by the behavior spec ([04](../../../docs/use-cases/04-webui-user-flows-and-screen-specs.md)) and the visual brief ([05](../../../docs/use-cases/05-webui-design-brief.md)), matching the Claude Design mockup kept at [`docs/design/webui-mockup/`](../../../docs/design/webui-mockup/README.md). The command is `skillhub serve web` (alias `skillhub web`). The WebUI calls the same `internal/app` services as the CLI and MCP server and adds no business logic of its own.
 
 **This plan is written for a separate executor model (Google Gemini).** Every phase file is a sequence of tasks, each with exact target files, ordered steps, success criteria and a mechanical Verify command, followed by a literal Failure Protocol. A guard script checks every phase. There are no human approval gates between phases (user decision, 2026-10-04).
 

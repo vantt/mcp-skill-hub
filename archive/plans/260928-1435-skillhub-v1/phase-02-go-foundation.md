@@ -12,7 +12,7 @@ Create the minimal dependency-disciplined Go project skeleton for a single `skil
 ## Dependencies
 
 - Phase 01 UX contracts exist and define public result/error shape.
-- Final technical choices must preserve V1 constraints from `final.md`: local-first, Go binary, no required Node/Python runtime, SQLite derived state, and CLI/MCP adapters over shared application services.
+- Final technical choices must preserve V1 constraints from `archive/final.md`: local-first, Go binary, no required Node/Python runtime, SQLite derived state, and CLI/MCP adapters over shared application services.
 
 ## Related files
 

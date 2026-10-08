@@ -13,8 +13,8 @@ dependencies: [6, 7, 8]
 
 - [Plan acceptance criteria](./plan.md#global-acceptance-criteria)
 - [Full defect ledger](./reports/bug-ledger-261001-1702-curation-cli-defects-found-in-evaluation.md)
-- [Existing CI workflow](../../.github/workflows/ci.yml)
-- [Release runbook](../../docs/release-runbook.md)
+- [Existing CI workflow](../../../.github/workflows/ci.yml)
+- [Release runbook](../../../docs/release-runbook.md)
 
 ## Objective
 

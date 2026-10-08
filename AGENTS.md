@@ -9,7 +9,9 @@ over the generic Engineering Rules.
 - Go module: binary in `cmd/skillhub`, application services in `internal/app`,
   delivery surfaces in `internal/delivery/{cli,mcpserver,web}`; the React UI
   lives in `web/` and is embedded from `internal/delivery/web/dist`.
-- Architecture decisions: `final.md` and `docs/design/01..07` (Vietnamese).
+- Architecture decisions: `docs/design/01..07` (Vietnamese), entry point
+  `docs/design/01-system-architecture.md`. `archive/final.md` is the
+  historical pre-V1 decision record, not authority.
   Public contracts: `docs/contracts/` and JSON schemas in `schemas/`.
 - Bundled curator skill: `system-skills/curator/SKILL.md`.
 - Active plans go in `plans/`; completed plans move to `archive/plans/`.

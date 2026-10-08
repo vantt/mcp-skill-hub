@@ -1902,6 +1902,28 @@ separation between search index and upstream fetch
 
 Extend it substantially for curated-state management.
 
+## Dicklesworthstone/meta_skill
+
+Source: https://github.com/Dicklesworthstone/meta_skill
+
+Borrow concepts:
+
+```text
+Git archive as audit history, SQLite rebuilt from it
+hybrid lexical + embedding search merged by rank fusion
+context-aware suggestion from project signals
+token-budgeted loading levels and reusable pack presets
+prune proposals (merge, deprecate, split)
+evidence linking skills back to source sessions
+outcome feedback and A/B experiments on skill quality
+bundle checksums and local-modification checks before update
+machine-readable (JSON) output for every command
+```
+
+Distill against the existing resolver, curation and telemetry designs before
+adopting. Do not let adaptive ranking (bandit learning) change routing without
+explainable, reproducible evaluation.
+
 ---
 
 # 57. Key Architectural Decision
