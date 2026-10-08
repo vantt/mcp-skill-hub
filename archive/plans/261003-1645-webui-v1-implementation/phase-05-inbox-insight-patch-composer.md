@@ -1,7 +1,7 @@
 ---
 phase: 5
 title: "Inbox, Insight, Patch Composer"
-status: moved
+status: superseded
 priority: P1
 effort: 40h
 dependencies: [3]

@@ -1,7 +1,7 @@
 ---
 phase: 6
 title: "Hardening, docs, release"
-status: moved
+status: superseded
 priority: P1
 effort: 28h
 dependencies: [5]

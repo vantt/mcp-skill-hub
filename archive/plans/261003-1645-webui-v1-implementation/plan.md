@@ -30,9 +30,9 @@ Supporting records: [decisions.md](./decisions.md) (all architecture decisions a
 | 1 | [Web adapter foundation (Go)](./phase-01-web-adapter-foundation.md) | — | 32h | Complete |
 | 2 | [Frontend foundation, Home, Skills catalog](./phase-02-frontend-foundation-home-skills.md) | 1 | 38h | Complete |
 | 3 | [Add, Create, Skill Detail, proposals](./phase-03-skill-add-create-detail-proposals.md) | 2 | 46h | Complete |
-| 4 | [Sources, Handoff, Runs](./phase-04-sources-handoff-runs.md) | 3 | 34h | Moved: Sources → plans/261004-2234-skill-source-upstream-ux phases 8–9; Handoff/Runs → phase 10 |
-| 5 | [Inbox, Insight, Patch Composer](./phase-05-inbox-insight-patch-composer.md) | 3 | 40h | Moved → plans/261004-2234-skill-source-upstream-ux phase 11 |
-| 6 | [Hardening, docs, release](./phase-06-hardening-docs-release.md) | 5 | 28h | Moved → plans/261004-2234-skill-source-upstream-ux phases 12–13 |
+| 4 | [Sources, Handoff, Runs](./phase-04-sources-handoff-runs.md) | 3 | 34h | Superseded by Sources → plans/261004-2234-skill-source-upstream-ux phases 8–9; Handoff/Runs → phase 10 |
+| 5 | [Inbox, Insight, Patch Composer](./phase-05-inbox-insight-patch-composer.md) | 3 | 40h | Superseded by plans/261004-2234-skill-source-upstream-ux phase 11 |
+| 6 | [Hardening, docs, release](./phase-06-hardening-docs-release.md) | 5 | 28h | Superseded by plans/261004-2234-skill-source-upstream-ux phases 12–13 |
 
 Phases 4–6 moved to the skill-centric sources plan on 2026-10-05; see the closing note above.
 
@@ -67,6 +67,10 @@ A previous executor in this repository satisfied checks without satisfying requi
 3. Record outside the repository the two hashes it prints first (baseline commit and guard commit). Every later guard run prints them again; if either differs, the guard was tampered with and the executor's results must be discarded.
 
 ## Acceptance criteria (whole plan)
+
+> Phases 4–6 are superseded. The criteria below that phases 1–3 did not close were carried into [`261004-2234-skill-source-upstream-ux`](../261004-2234-skill-source-upstream-ux/plan.md) (phases 8–13, all Done) and are tracked there, so the boxes stay unticked here.
+>
+> Re-verified 2026-10-08 against the shipped code: `make check`, `make web-check` and `make web-e2e` (19 specs) pass; the web adapter has no run start, retry or submit path; session-token, Host and Origin checks, throttling and listen selection live in `internal/delivery/web/{security,throttle,listen}.go`; the a11y spec sweeps every route; README and docs no longer claim "no Web UI". The golden-fixture criterion was not re-checked, and the CLI `--json` freeze was dropped on purpose by the sources plan.
 
 - [ ] `skillhub serve web` (alias `skillhub web`) serves all 13 mockup routes against a real workspace, with loading, empty, error and success states per spec 04 §5.
 - [ ] Every mutation goes Preview → Confirm with all three pins and handles `stale_proposal`; no force overwrite exists.
