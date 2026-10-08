@@ -31,21 +31,28 @@ COMMIT_WHERE_RE = re.compile(r"^([a-z0-9-]+)@([0-9a-f]{7,40})$")
 PATH_WHERE_RE = re.compile(r"^([a-z0-9-]+)@([0-9a-f]{7,40}):([^#\s]+)(?:#L(\d+)(?:-L(\d+))?)?$")
 ALSO_FITS_RE = re.compile(r"^(hub|new-skill:[a-z0-9-]+|[a-z0-9]+(?:-[a-z0-9]+)*)$")
 STATUS_RE = re.compile(r"^(removed|superseded-by:[a-z0-9-]+)$")
-SCORE_RANGES = {"relevance": (0, 3), "impact": (0, 3), "evidence": (1, 3), "effort": (1, 3)}
+SCORE_RANGES = {"relevance": (0, 3), "evidence": (1, 3), "effort": (1, 3)}
+IMPACT_FACTS = ["a", "b", "c", "d", "e"]
 
 TOP_ORDER = ["goal", "cursors", "coverage", "lessons"]
 GOAL_ORDER = ["status", "purpose", "in_scope", "out_of_scope", "failures_it_prevents"]
 LESSON_ORDER = ["key", "layer", "what", "notable", "where", "contrast", "score",
                 "final_score", "also_fits", "status", "found_by", "decision"]
-SCORE_ORDER = ["relevance", "impact", "evidence", "effort", "why"]
+SCORE_ORDER = ["relevance", "facts", "impact", "evidence", "effort", "why"]
 DECISION_ORDER = ["state", "reason", "at"]
 
 
 # ---------- validation ----------
 
+def impact_of(score: dict) -> int:
+    """Impact (0-5) is the number of facts that hold; without fact a it is 0."""
+    facts = score.get("facts") or []
+    return len(facts) if "a" in facts else 0
+
+
 def final_score(lesson: dict) -> float:
     s = lesson["score"]
-    return round(s["relevance"] * s["impact"] * s["evidence"] / s["effort"], 2)
+    return round(s["relevance"] * impact_of(s) * s["evidence"] / s["effort"], 2)
 
 
 def sort_key(lesson: dict):
@@ -120,6 +127,12 @@ def validate(data, errors: list[str]) -> None:
                 value = score.get(name)
                 if not (isinstance(value, int) and not isinstance(value, bool) and low <= value <= high):
                     errors.append(f"{where}: score.{name} must be an integer {low}-{high}")
+            facts = score.get("facts")
+            if not (isinstance(facts, list) and len(set(facts)) == len(facts)
+                    and all(f in IMPACT_FACTS for f in facts)):
+                errors.append(f"{where}: score.facts must be a list of distinct letters from a-e")
+            elif facts and "a" not in facts:
+                errors.append(f"{where}: score.facts without fact a count for nothing; add a or clear the list")
             if not _text(score.get("why")):
                 errors.append(f"{where}: score.why must explain the weights")
             for name in score:
@@ -208,6 +221,10 @@ class _Flow(dict):
     """A mapping written inline, e.g. score and decision."""
 
 
+class _FlowList(list):
+    """A short list written inline, e.g. impact facts."""
+
+
 class _Folded(str):
     """Long prose written as a folded block."""
 
@@ -219,6 +236,7 @@ def _represent_str(dumper, value):
 _Dumper.add_representer(_Folded, lambda d, v: d.represent_scalar("tag:yaml.org,2002:str", str(v), style=">"))
 _Dumper.add_representer(_Flow, lambda d, v: d.represent_mapping("tag:yaml.org,2002:map", v.items(), flow_style=True))
 _Dumper.add_representer(str, _represent_str)
+_Dumper.add_representer(_FlowList, lambda d, v: d.represent_sequence("tag:yaml.org,2002:seq", list(v), flow_style=True))
 
 
 def _ordered(mapping: dict, order: list[str]) -> dict:
@@ -240,6 +258,9 @@ def canonical(data: dict) -> str:
         item["final_score"] = final_score(lesson)
         item["what"] = _prose(item["what"])
         item["notable"] = _prose(item["notable"])
+        item["score"] = dict(item["score"])
+        item["score"]["facts"] = _FlowList(sorted(item["score"].get("facts") or []))
+        item["score"]["impact"] = impact_of(item["score"])
         item["score"] = _ordered(item["score"], SCORE_ORDER)
         item["score"]["why"] = _prose(item["score"]["why"])
         item["decision"] = _Flow(_ordered(item["decision"], DECISION_ORDER))
@@ -251,7 +272,8 @@ def canonical(data: dict) -> str:
     out["lessons"] = lessons
     header = (
         "# Written by distill-lab/scripts/distill.py. Edit freely, then run `distill.py format`.\n"
-        "# final_score = relevance x impact x evidence / effort; lessons are sorted by it,\n"
+        "# impact = number of facts (a-e, a required); final_score = relevance x impact x evidence / effort;\n"
+        "# lessons are sorted by it,\n"
         "# then by layer rank, then by key.\n"
     )
     body = yaml.dump(out, Dumper=_Dumper, sort_keys=False, allow_unicode=True, width=88, indent=2)
@@ -271,6 +293,15 @@ def load(path: Path):
 def hub_of(path: Path) -> Path:
     # <hub>/skills/<collection>/<skill-id>/.meta/distill.yaml
     return path.resolve().parents[4]
+
+
+def _drop_derived(data) -> None:
+    """final_score and impact are always recomputed; hand-written values are ignored."""
+    for lesson in data.get("lessons") or [] if isinstance(data, dict) else []:
+        if isinstance(lesson, dict):
+            lesson.pop("final_score", None)
+            if isinstance(lesson.get("score"), dict):
+                lesson["score"].pop("impact", None)
 
 
 def run_checks(path: Path, data, with_where: bool) -> list[str]:
@@ -306,7 +337,8 @@ def cmd_check(args) -> None:
     if errors:
         fail(errors)
     ordered = [l["key"] for l in sorted(data["lessons"], key=sort_key)]
-    stale = [l["key"] for l in data["lessons"] if l.get("final_score") != final_score(l)]
+    stale = [l["key"] for l in data["lessons"]
+             if l.get("final_score") != final_score(l) or l["score"].get("impact") != impact_of(l["score"])]
     if [l["key"] for l in data["lessons"]] != ordered or stale:
         print("WARN: order or final_score is out of date; run `distill.py format`")
     print(f"OK: {len(data['lessons'])} lessons, goal {data['goal']['status']}")
@@ -314,9 +346,7 @@ def cmd_check(args) -> None:
 
 def cmd_format(args) -> None:
     data = load(args.file)
-    for lesson in data.get("lessons") or []:
-        if isinstance(lesson, dict):
-            lesson.pop("final_score", None)
+    _drop_derived(data)
     errors = run_checks(args.file, data, not args.no_where)
     if errors:
         fail(errors)
@@ -335,9 +365,7 @@ def cmd_list(args) -> None:
 
 def cmd_decide(args) -> None:
     data = load(args.file)
-    for lesson in data.get("lessons") or []:
-        if isinstance(lesson, dict):
-            lesson.pop("final_score", None)
+    _drop_derived(data)
     errors = run_checks(args.file, data, with_where=False)
     if errors:
         fail(errors)

@@ -237,15 +237,35 @@ sentence in `score.why` that explains the two weights that drive the priority.
 - 0: outside the goal; it is recorded for completeness and usually has an
   `also_fits` home.
 
-**Impact (0-3): how much would it advance the goal if adopted?** This is a
-prediction. Base it on three things and name them in `why`: which failure in
-`failures_it_prevents` the lesson stops, how often that failure happens, and how
-directly the lesson acts on it. A check that enforces a rule acts more directly
-than a sentence that recommends it.
-- 3: stops a frequent failure from the goal, directly (usually by enforcement).
-- 2: stops a goal failure, but less often or less directly.
-- 1: a small or indirect improvement.
-- 0: no effect on the goal.
+**Impact (0-5): count the facts that hold.** Impact is a prediction, so it is
+built from facts a second reader can check, not from a feeling of "medium" or
+"high". List the facts that hold in `score.facts`; the script sets `impact` to
+their number. Name each fact in `why` with the evidence for it.
+
+- **a, a concrete failure today.** You can write "the target skill lets X
+  happen, and the result is wrong because Y", naming a failure from
+  `failures_it_prevents` or one plainly inside the goal. **Required**: without
+  fact a, impact is 0 and no other fact counts, so a lesson whose failure is
+  outside the goal (flaky-test triage for a skill about test value) scores 0
+  however strong it is.
+- **b, a real gap.** The target skill does not cover it today (`contrast:
+  new`), or it is `extends` and you can quote the skill line and show what it
+  lacks. An `already-covered` lesson never has fact b; leave its facts empty.
+- **c, it recurs.** You can point to two or more places in the sources (code,
+  tests, history, incidents) where the failure occurs, or it applies to every
+  run of the skill's main procedure, such as every authoring decision.
+- **d, enforceable.** Adopted, it becomes a check, a required field, a gate
+  question or a script, not advice prose. This overlaps the enforcement layer
+  on purpose: a lesson that can enforce itself acts more directly on the
+  failure.
+- **e, silent or proven.** The failure passes unnoticed while wrong, or a
+  source shows a commit, incident or number that fixed it.
+
+Why counted facts instead of a 0-3 judgement: on a 3-point scale most lessons
+in the first two passes landed on 1 or 2 and five tied at the same score.
+Counting facts spreads the scale and makes every point auditable: a reviewer
+who disagrees names the fact they dispute. The same rubric is used by the
+standalone `distill` skill, so scores from both are comparable.
 
 **Evidence (1-3): how strong is the source's support?**
 - 1: one source states it.
@@ -258,9 +278,10 @@ than a sentence that recommends it.
 - 2: a new step, check, or section.
 - 3: restructures the skill.
 
-**Priority** is `final_score = relevance × impact × evidence / effort`. Never
-compute or write it by hand: `scripts/distill.py format` computes it, stores it
-as `final_score` on each lesson, and sorts the lessons by it. Ties are broken by
+**Priority** is `final_score = relevance × impact × evidence / effort`, from 0
+to 135. Never compute or write `impact` or `final_score` by hand:
+`scripts/distill.py format` computes both, stores them on each lesson
+(`score.impact` and `final_score`), and sorts the lessons by `final_score`. Ties are broken by
 layer rank, then by key.
 Score each lesson once, when it is created; re-score only when new evidence
 arrives or the goal changes. All scores are predictions until the user records
@@ -310,7 +331,7 @@ lessons:
       - openclaw@9cc306d:.agents/skills/test-audit/SKILL.md#L40-L62
       - openclaw@be05282                  # a commit alone, when the evidence is its message
     contrast: extends                     # new | extends | contradicts | already-covered
-    score: {relevance: 3, impact: 2, evidence: 1, effort: 1, why: "..."}
+    score: {relevance: 3, facts: [a, b, d], evidence: 1, effort: 1, why: "a: ...; b: ...; d: ..."}  # impact is written by the script
     also_fits: []                         # other homes: <skill-id> | new-skill:<name> | hub
     decision: {state: candidate}          # candidate | planned | ported | rejected
 ```
