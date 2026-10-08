@@ -9,8 +9,15 @@ const TITLE_RECOMMENDATIONS = 'Recommendations & Activations';
 const TITLE_LOADS = 'Content loads';
 const TITLE_OUTCOMES = 'Health & Feedback';
 const TITLE_DOCTOR = 'Doctor checks';
+const TITLE_CHAIN_QUALITY = 'Chain Quality';
 
 const CAPTION_SERVER_OBSERVED = 'Basis: server-observed';
+const CAPTION_SERVER_CHAINS = 'Basis: server-observed chains';
+const LABEL_TOTAL_CHAINS = 'Total Chains';
+const LABEL_CHAIN_ACCEPTANCE = 'Chain Acceptance';
+const LABEL_OVERRIDE_RATE = 'Override Rate';
+const LABEL_IGNORE_RATE = 'Ignore Rate';
+const LABEL_REFORMULATION_RATE = 'Reformulation Rate';
 const CAPTION_HOST_REPORTED = 'Basis: host-reported';
 const CAPTION_TERMINAL = 'Basis: terminal';
 
@@ -275,6 +282,40 @@ export function UsagePanel({ skillId }: UsagePanelProps) {
               value={formatRate(skill.doctor_failure_rate)}
             />
           </section>
+
+          {/* Group 5: Chain Quality (O5) */}
+          {skill.chain_metrics && (
+            <section
+              className="fg-card"
+              style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <div className="fg-card__title">
+                  <span>{TITLE_CHAIN_QUALITY}</span>
+                </div>
+                <span className="t-caption" style={{ color: 'var(--color-text-subtle)' }}>
+                  <span>{CAPTION_SERVER_CHAINS}</span>
+                </span>
+              </div>
+              <StatRow label={LABEL_TOTAL_CHAINS} value={skill.chain_metrics.total_chains} />
+              <StatRow
+                label={LABEL_CHAIN_ACCEPTANCE}
+                value={`${formatRate(skill.chain_metrics.acceptance_rate.rate)} (${skill.chain_metrics.acceptance_rate.numerator}/${skill.chain_metrics.acceptance_rate.denominator})`}
+              />
+              <StatRow
+                label={LABEL_OVERRIDE_RATE}
+                value={`${formatRate(skill.chain_metrics.override_rate.rate)} (${skill.chain_metrics.override_rate.numerator}/${skill.chain_metrics.override_rate.denominator})`}
+              />
+              <StatRow
+                label={LABEL_IGNORE_RATE}
+                value={skill.chain_metrics.ignore_rate.status === 'unknown' ? 'unknown' : `${formatRate(skill.chain_metrics.ignore_rate.rate)} (${skill.chain_metrics.ignore_rate.numerator}/${skill.chain_metrics.ignore_rate.denominator})`}
+              />
+              <StatRow
+                label={LABEL_REFORMULATION_RATE}
+                value={`${formatRate(skill.chain_metrics.reformulation_rate.rate)} (${skill.chain_metrics.reformulation_rate.numerator}/${skill.chain_metrics.reformulation_rate.denominator})`}
+              />
+            </section>
+          )}
         </div>
       )}
     </div>

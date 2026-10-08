@@ -4,7 +4,7 @@
     "until": "2026-10-04",
     "days": 31
   },
-  "raw_retention_days": 14,
+  "raw_retention_days": 30,
   "rollup_retention_days": 180,
   "metric_basis": {
     "acceptance_rate": "server-observed",
@@ -69,7 +69,73 @@
       "setup_failed_rate": 0.1,
       "negative_feedback": 1,
       "negative_after_load": 1,
-      "transcripts": {}
+      "transcripts": {},
+      "chain_metrics": {
+        "total_chains": 0,
+        "chains_resolved": 0,
+        "chains_no_skill": 0,
+        "chains_needs_context": 0,
+        "chains_already_covered": 0,
+        "chains_failed": 0,
+        "acceptance_rate": {
+          "rate": null,
+          "numerator": 0,
+          "denominator": 0,
+          "status": "unknown"
+        },
+        "override_rate": {
+          "rate": null,
+          "numerator": 0,
+          "denominator": 0,
+          "status": "unknown"
+        },
+        "false_no_skill_rate": {
+          "rate": null,
+          "numerator": 0,
+          "denominator": 0,
+          "status": "unknown"
+        },
+        "true_no_skill": {
+          "rate": null,
+          "numerator": 0,
+          "denominator": 0,
+          "status": "unknown"
+        },
+        "reformulation_rate": {
+          "rate": null,
+          "numerator": 0,
+          "denominator": 0,
+          "status": "unknown"
+        },
+        "ignore_rate": {
+          "rate": null,
+          "numerator": 0,
+          "denominator": 0,
+          "status": "unknown"
+        },
+        "needs_context_answer_rate": {
+          "rate": null,
+          "numerator": 0,
+          "denominator": 0,
+          "status": "unknown"
+        },
+        "bypass_rate": {
+          "rate": null,
+          "numerator": 0,
+          "denominator": 0,
+          "status": "unknown"
+        },
+        "negative_after_load": {
+          "rate": null,
+          "numerator": 1,
+          "denominator": 0,
+          "status": "unknown"
+        },
+        "first_valid_day": {
+          "load": "2026-10-04",
+          "negative_after_load": "2026-10-04"
+        }
+      }
     }
   ],
   "skill": {
@@ -113,7 +179,73 @@
     "setup_failed_rate": 0.1,
     "negative_feedback": 1,
     "negative_after_load": 1,
-    "transcripts": {}
+    "transcripts": {},
+    "chain_metrics": {
+      "total_chains": 0,
+      "chains_resolved": 0,
+      "chains_no_skill": 0,
+      "chains_needs_context": 0,
+      "chains_already_covered": 0,
+      "chains_failed": 0,
+      "acceptance_rate": {
+        "rate": null,
+        "numerator": 0,
+        "denominator": 0,
+        "status": "unknown"
+      },
+      "override_rate": {
+        "rate": null,
+        "numerator": 0,
+        "denominator": 0,
+        "status": "unknown"
+      },
+      "false_no_skill_rate": {
+        "rate": null,
+        "numerator": 0,
+        "denominator": 0,
+        "status": "unknown"
+      },
+      "true_no_skill": {
+        "rate": null,
+        "numerator": 0,
+        "denominator": 0,
+        "status": "unknown"
+      },
+      "reformulation_rate": {
+        "rate": null,
+        "numerator": 0,
+        "denominator": 0,
+        "status": "unknown"
+      },
+      "ignore_rate": {
+        "rate": null,
+        "numerator": 0,
+        "denominator": 0,
+        "status": "unknown"
+      },
+      "needs_context_answer_rate": {
+        "rate": null,
+        "numerator": 0,
+        "denominator": 0,
+        "status": "unknown"
+      },
+      "bypass_rate": {
+        "rate": null,
+        "numerator": 0,
+        "denominator": 0,
+        "status": "unknown"
+      },
+      "negative_after_load": {
+        "rate": null,
+        "numerator": 1,
+        "denominator": 0,
+        "status": "unknown"
+      },
+      "first_valid_day": {
+        "load": "2026-10-04",
+        "negative_after_load": "2026-10-04"
+      }
+    }
   }
 }
 

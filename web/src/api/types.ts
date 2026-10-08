@@ -185,6 +185,51 @@ export interface SkillAddResult {
 
 export type FunnelSince = '7d' | '30d' | '90d' | '180d';
 
+export interface RateMetric {
+  rate: number | null;
+  numerator: number;
+  denominator: number;
+  status?: string;
+}
+
+export interface ChainMetrics {
+  total_chains: number;
+  chains_resolved: number;
+  chains_no_skill: number;
+  chains_needs_context: number;
+  chains_already_covered: number;
+  chains_failed: number;
+  acceptance_rate: RateMetric;
+  override_rate: RateMetric;
+  false_no_skill_rate: RateMetric;
+  true_no_skill: RateMetric;
+  reformulation_rate: RateMetric;
+  ignore_rate: RateMetric;
+  needs_context_answer_rate: RateMetric;
+  bypass_rate: RateMetric;
+  negative_after_load: RateMetric;
+  first_valid_day?: Record<string, string>;
+}
+
+export interface FunnelCut {
+  key: string;
+  metrics: ChainMetrics;
+}
+
+export interface DisagreementChain {
+  chain_id: string;
+  session_hash: string;
+  resolution_id: string;
+  event_id: string;
+  occurred_at: string;
+  kind: string;
+  client: string;
+  operation?: string;
+  recommended_skill?: string;
+  loaded_skill?: string;
+  reason_codes?: string[];
+}
+
 export interface FunnelWindow {
   since: string;
   until: string;
@@ -215,6 +260,7 @@ export interface SkillFunnel {
   negative_feedback: number;
   negative_after_load: number;
   transcripts: Record<string, number>;
+  chain_metrics?: ChainMetrics;
 }
 
 export interface FunnelReport {
@@ -224,6 +270,7 @@ export interface FunnelReport {
   metric_basis: Record<string, string>;
   skills?: SkillFunnel[];
   skill?: SkillFunnel;
+  cuts?: FunnelCut[];
   dead_skills?: string[];
   recommended_never_activated?: string[];
   blocked_by_review?: string[];
