@@ -4,9 +4,12 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"os"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 func TestCuratorSkillIsEmbeddedAndVersioned(t *testing.T) {
@@ -183,5 +186,45 @@ func TestCuratorGuidanceRequiresPreviewBeforeConfirm(t *testing.T) {
 		if !strings.Contains(normalizedSkill, prohibited) {
 			t.Errorf("missing no-bypass instruction %q", prohibited)
 		}
+	}
+}
+
+// The curator's SKILL.md is served verbatim, so its frontmatter is where the
+// compatibility contract lives; this keeps it equal to CuratorMetadata.
+func TestCuratorFrontmatterDeclaresCompatibilityMetadata(t *testing.T) {
+	t.Parallel()
+
+	end := strings.Index(CuratorSkill[4:], "\n---\n")
+	if !strings.HasPrefix(CuratorSkill, "---\n") || end < 0 {
+		t.Fatal("CuratorSkill has no frontmatter")
+	}
+	var frontmatter struct {
+		Name                       string   `yaml:"name"`
+		Version                    string   `yaml:"version"`
+		ContractVersion            string   `yaml:"contract-version"`
+		ActivationPolicy           string   `yaml:"activation-policy"`
+		CoordinationBoundary       string   `yaml:"coordination-boundary"`
+		InstructionOnly            bool     `yaml:"instruction-only"`
+		BestEffortCoordination     bool     `yaml:"best-effort-coordination"`
+		RequiresApplicationService bool     `yaml:"requires-application-service"`
+		CompatibleTools            []string `yaml:"compatible-tools"`
+	}
+	if err := yaml.Unmarshal([]byte(CuratorSkill[4:4+end]), &frontmatter); err != nil {
+		t.Fatalf("parse frontmatter: %v", err)
+	}
+	metadata := CuratorMetadata()
+	got := CompatibilityMetadata{
+		SkillID:                    frontmatter.Name,
+		SkillVersion:               frontmatter.Version,
+		ContractVersion:            frontmatter.ContractVersion,
+		ActivationPolicy:           frontmatter.ActivationPolicy,
+		CoordinationBoundary:       frontmatter.CoordinationBoundary,
+		CompatibleTools:            frontmatter.CompatibleTools,
+		InstructionOnly:            frontmatter.InstructionOnly,
+		BestEffortCoordination:     frontmatter.BestEffortCoordination,
+		RequiresApplicationService: frontmatter.RequiresApplicationService,
+	}
+	if !reflect.DeepEqual(got, metadata) {
+		t.Fatalf("SKILL.md frontmatter = %#v\nCuratorMetadata  = %#v", got, metadata)
 	}
 }

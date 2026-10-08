@@ -503,15 +503,12 @@ func buildBundledCuratorSkill() (DistributedSkill, error) {
 	if err != nil {
 		return DistributedSkill{}, fmt.Errorf("bundled skill %s is not distributable: %w", metadata.SkillID, err)
 	}
-	frontmatter["name"] = metadata.SkillID
-	frontmatter["version"] = metadata.SkillVersion
-	frontmatter["contract-version"] = metadata.ContractVersion
-	frontmatter["activation-policy"] = metadata.ActivationPolicy
-	frontmatter["coordination-boundary"] = metadata.CoordinationBoundary
-	frontmatter["compatible-tools"] = append([]string(nil), metadata.CompatibleTools...)
-	frontmatter["instruction-only"] = metadata.InstructionOnly
-	frontmatter["best-effort-coordination"] = metadata.BestEffortCoordination
-	frontmatter["requires-application-service"] = metadata.RequiresApplicationService
+	// The skills extension requires the listed frontmatter to equal the
+	// SKILL.md a client fetches, so the compatibility contract lives in that
+	// file and is served verbatim, never added here.
+	if frontmatter["name"] != metadata.SkillID {
+		return DistributedSkill{}, fmt.Errorf("bundled skill %s declares name %v", metadata.SkillID, frontmatter["name"])
+	}
 
 	resource := struct {
 		Path   string `json:"path"`

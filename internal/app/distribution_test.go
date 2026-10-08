@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/vantt/mcp-skill-hub/internal/catalog"
 	"github.com/vantt/mcp-skill-hub/internal/skill"
 	"github.com/vantt/mcp-skill-hub/internal/systemskills"
 )
@@ -43,9 +44,19 @@ func TestDistributionServesBundledSystemCurator(t *testing.T) {
 			t.Errorf("frontmatter[%q] = %#v, want %#v", key, got, want)
 		}
 	}
-	tools, ok := curator.Frontmatter["compatible-tools"].([]string)
+	listed, ok := curator.Frontmatter["compatible-tools"].([]any)
+	tools := make([]string, 0, len(listed))
+	for _, tool := range listed {
+		name, isString := tool.(string)
+		ok = ok && isString
+		tools = append(tools, name)
+	}
 	if !ok || !reflect.DeepEqual(tools, systemskills.CuratorMetadata().CompatibleTools) {
 		t.Fatalf("compatible tools = %#v", curator.Frontmatter["compatible-tools"])
+	}
+	served, err := catalog.ParseSkillFrontmatter([]byte(systemskills.CuratorSkill))
+	if err != nil || !reflect.DeepEqual(curator.Frontmatter, served) {
+		t.Fatalf("listed frontmatter must equal the served SKILL.md frontmatter: listed %#v, file %#v, err %v", curator.Frontmatter, served, err)
 	}
 
 	lookedUp, lookupSnapshot, err := service.LookupSkills(t.Context(), root, []string{systemskills.CuratorSkillID, systemskills.CuratorSkillID})
