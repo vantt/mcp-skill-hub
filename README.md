@@ -100,7 +100,7 @@ Skill Hub web UI: http://127.0.0.1:7421/#token=36dee9ed...
 ## Development
 
 ```bash
-make check      # go vet + golangci-lint (new issues since origin/main) + full test suite
+make check      # gofmt check + go vet + golangci-lint (new issues since origin/main) + full test suite
 make test-race  # full suite with the race detector
 make lint-all   # every lint finding, including existing debt
 go run ./cmd/skillhub help

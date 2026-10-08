@@ -2,7 +2,7 @@ GOLANGCI_LINT ?= go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v
 # Lint only issues introduced after this revision; existing findings are tracked debt.
 LINT_BASE ?= origin/main
 
-.PHONY: test test-race test-perf lint lint-all fmt vet check web-install web-build web-test web-check web-e2e web-dev
+.PHONY: test test-race test-perf lint lint-all fmt fmt-check vet check web-install web-build web-test web-check web-e2e web-dev
 
 ## test: full suite, same as CI
 test:
@@ -24,14 +24,21 @@ lint:
 lint-all:
 	$(GOLANGCI_LINT) run --max-issues-per-linter=0 --max-same-issues=0 ./...
 
+GO_DIRS := cmd internal schemas
+
 fmt:
-	gofmt -w cmd internal
+	gofmt -w $(GO_DIRS)
+
+## fmt-check: fail when any Go file is not gofmt-formatted, same as CI
+fmt-check:
+	@unformatted="$$(gofmt -l $(GO_DIRS))"; \
+	if [ -n "$$unformatted" ]; then echo "gofmt needed (run make fmt):"; echo "$$unformatted"; exit 1; fi
 
 vet:
 	go vet ./...
 
 ## check: what to run before committing
-check: vet lint test
+check: fmt-check vet lint test
 
 web-install:
 	cd web && npm ci
