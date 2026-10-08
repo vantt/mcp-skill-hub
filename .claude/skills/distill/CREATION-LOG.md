@@ -56,3 +56,44 @@ scale) — revisit only on proven friction per the growth rule. Validation:
 reasoning-tested against the session's own retrieval failures (vocabulary
 mismatch); NOT yet dogfooded on a real feature design — first real consult
 is the acceptance test. Same Iron Law debt: no RED pressure scenario.
+
+## 2026-10-08 — 0.2: YAML lessons weighed against a goal (from distill-lab)
+
+Brought back what the experimental `distill-lab` skill proved, translated from
+"one hub skill" to "the host project", and kept standalone (node only;
+js-yaml 4.3.2 vendored under `scripts/vendor/`, MIT).
+
+- Layout: `distill.yaml` (goal, domains with definitions, sources with cursor,
+  derived_from and coverage, intake) + `lessons/<primary-domain>.yaml`. One
+  lesson per mechanism; several sources = several `where` (convergence), so
+  the comparison matrix became optional. Decisions live on the lesson; the
+  porting log and its R/E/F were retired (reach dropped; E/F map to evidence
+  and effort). `move` and the forgent-only state migration were removed
+  (they imported `forgent/state/porting-store`).
+- Scoring: relevance 0-3, impact 0-5 = number of facts a-e that hold (a
+  required), evidence 1-3 with an independence rule, effort 1-3. Lessons
+  outside the goal, already covered, unscored or retired are recorded but not
+  ranked. Decided with the human; impact widened on advice after test-audit
+  showed 16/42 lessons at impact 0 and 16 at 1.
+- Integrity: `format` validates everything (schema, every `where` resolved at
+  its pinned commit with line ranges), sorts and rewrites one layout, or
+  writes nothing; `seal` additionally requires coverage stamped with the
+  commit read before it moves the cursor.
+- Migration: `migrate` converts a 0.1 markdown area. Tested on a copy of four
+  forgent sources (53 entries, 125 porting rows → 161 lessons, 11 decisions
+  kept; a second `format` changes nothing).
+
+Validation run (this repository, draft goal): skills-mcp@dc3dda4f8660 and
+meta-skill@e999668e8d8c, 32 lessons. Observed while running:
+- The validator caught the author's own wrong line numbers (taken from a
+  concatenated `cat -n`), and the zsh `$sha:a.md` modifier trap produced an
+  absolute path that `format` refused. Both stay as rules in pass-protocol.md.
+- It verifies that a line range exists, not that it shows the claim; a wrong
+  range inside the file passes. Spot-check top lessons by hand.
+- Fact a ("a concrete failure today") is strict: 11 of 19 ranked lessons got
+  impact 0, including a lesson backed by a measured incident whose host
+  channel is designed but disabled. Revisit with the human's scores.
+
+Known debt: same Iron Law debt as 0.1 (no RED pressure scenarios); living-doc
+and paper flows are sandbox-only; consult and deep-dive not yet dogfooded on
+the YAML layout.
