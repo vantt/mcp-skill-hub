@@ -1,7 +1,7 @@
 ---
 phase: 3
 title: "Proposal confirmation helper and service splitting"
-status: pending
+status: completed
 priority: P2
 effort: "7h"
 dependencies: [2]

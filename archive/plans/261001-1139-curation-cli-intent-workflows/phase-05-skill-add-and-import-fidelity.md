@@ -11,8 +11,8 @@ dependencies: [1, 3, 4]
 
 ## Context Links
 
-- [BUG-04, BUG-11, BUG-16](../reports/bug-ledger-261001-1702-curation-cli-defects-found-in-evaluation.md)
-- [Accepted add semantics](../reports/curation-ux-cli-independent-evaluation.md#5-input-resolution-and-normalization)
+- [BUG-04, BUG-11, BUG-16](./reports/bug-ledger-261001-1702-curation-cli-defects-found-in-evaluation.md)
+- [Accepted add semantics](./reports/curation-ux-cli-independent-evaluation.md#5-input-resolution-and-normalization)
 - [Existing curation guide import flow](../../docs/curating-skills.md#import-existing-skills-as-drafts)
 
 ## Objective

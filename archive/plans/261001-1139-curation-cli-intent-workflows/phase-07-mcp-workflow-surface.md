@@ -13,7 +13,7 @@ dependencies: [1, 2, 3, 4, 5]
 
 - [Curation lifecycle shared-service requirement](../../docs/design/05-curation-lifecycle.md#1-product-decision)
 - [Current MCP compatibility matrix](../../docs/mcp-compatibility-matrix.json)
-- [Independent CLI-to-web mapping](../reports/curation-ux-cli-independent-evaluation.md#8-cli-mcp-and-future-web-mapping)
+- [Independent CLI-to-web mapping](./reports/curation-ux-cli-independent-evaluation.md#8-cli-mcp-and-future-web-mapping)
 
 ## Objective
 

@@ -11,8 +11,8 @@ dependencies: []
 
 ## Context Links
 
-- [BUG-01, BUG-10, BUG-11](../reports/bug-ledger-261001-1702-curation-cli-defects-found-in-evaluation.md)
-- [Independent locator contract](../reports/independent-evaluation-261001-1651-curation-cli-redesign-report.md#61-github-url-and-ref-resolution)
+- [BUG-01, BUG-10, BUG-11](./reports/bug-ledger-261001-1702-curation-cli-defects-found-in-evaluation.md)
+- [Independent locator contract](./reports/independent-evaluation-261001-1651-curation-cli-redesign-report.md#61-github-url-and-ref-resolution)
 - [Source learning design](../../docs/design/06-source-learning-and-distillation.md)
 
 ## Objective

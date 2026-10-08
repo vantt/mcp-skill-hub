@@ -14,7 +14,7 @@ dependencies: []
 Every command finds the right workspace (flag → `SKILLHUB_WORKSPACE` → current project's connection file → upward discovery), reports "not found" plainly, never creates a workspace except `init`, and surfaces real argument errors before workspace errors.
 
 ## Context
-- UX audit P0-3, P0-4, P1 "Generic FIX lines", "Exit codes" ([report](../reports/code-reviewer-260930-1045-ux-surface-audit.md)).
+- UX audit P0-3, P0-4, P1 "Generic FIX lines", "Exit codes" ([report](./reports/code-reviewer-260930-1045-ux-surface-audit.md)).
 - Current code: `internal/delivery/cli/workspace_env.go` (`defaultWorkspace`), `internal/delivery/cli/workspace.go` (`workspaceFlag`, `writeInvalidWorkspace`), `internal/app/workspace.go:41-54` (doctor treats a missing path as "will be created"), `internal/app/connect.go` (good "no workspace" wording to reuse).
 
 ## Files to Create / Modify

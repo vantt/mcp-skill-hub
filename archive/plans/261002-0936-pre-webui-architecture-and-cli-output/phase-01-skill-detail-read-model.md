@@ -1,7 +1,7 @@
 ---
 phase: 1
 title: "Skill detail read model in app"
-status: pending
+status: completed
 priority: P1
 effort: "3h"
 dependencies: [0]

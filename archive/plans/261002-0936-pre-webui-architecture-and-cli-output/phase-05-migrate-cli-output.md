@@ -1,7 +1,7 @@
 ---
 phase: 5
 title: "Migrate CLI commands to the renderer"
-status: pending
+status: completed
 priority: P1
 effort: "8h"
 dependencies: [2, 4]

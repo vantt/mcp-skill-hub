@@ -1,6 +1,6 @@
 # Skill Hub V1 — Phased Implementation Plan
 
-**Trạng thái:** Proposed execution baseline  
+**Trạng thái:** Completed (Đã chuyển thành plans/260928-1435-skillhub-v1 và triển khai hoàn tất)  
 **Loại repository hiện tại:** Greenfield/documentation-first  
 **Design sources:** [final decision](../final.md), [architecture](../docs/design/01-system-architecture.md), [protocol](../docs/design/02-agent-hub-protocol.md), [resolver](../docs/design/03-resolver-design.md), [telemetry/evaluation](../docs/design/04-telemetry-reproducibility-evaluation.md), [curation UX](../docs/design/05-curation-lifecycle.md), [source learning](../docs/design/06-source-learning-and-distillation.md), [storage/mutation](../docs/design/07-storage-and-mutation-model.md)
 

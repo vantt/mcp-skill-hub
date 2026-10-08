@@ -11,9 +11,9 @@ dependencies: [1, 2, 3, 4, 5]
 
 ## Context Links
 
-- [Accepted command grammar](../reports/curation-ux-cli-independent-evaluation.md#5-input-resolution-and-normalization)
-- [CLI conventions evidence](../reports/researcher-261001-1644-cli-conventions-evidence.md)
-- [BUG-03, BUG-08, BUG-12, BUG-14, BUG-15, BUG-17](../reports/bug-ledger-261001-1702-curation-cli-defects-found-in-evaluation.md)
+- [Accepted command grammar](./reports/curation-ux-cli-independent-evaluation.md#5-input-resolution-and-normalization)
+- [CLI conventions evidence](./reports/researcher-261001-1644-cli-conventions-evidence.md)
+- [BUG-03, BUG-08, BUG-12, BUG-14, BUG-15, BUG-17](./reports/bug-ledger-261001-1702-curation-cli-defects-found-in-evaluation.md)
 
 ## Objective
 

@@ -17,7 +17,7 @@ created: 2026-10-01
 
 Deliver the accepted Design A grammar on a sound engine: `skill add <locator>` adopts a draft; `source watch <locator>` registers upstream monitoring; `skill review <id>` reports readiness without implying approval. Existing advanced commands remain compatible. No command auto-activates, auto-watches, overwrites an existing skill, executes imported files, commits Git changes, or installs hooks.
 
-Evidence: [bug ledger](../reports/bug-ledger-261001-1702-curation-cli-defects-found-in-evaluation.md), [independent evaluation 1](../reports/independent-evaluation-261001-1651-curation-cli-redesign-report.md), [independent evaluation 2](../reports/curation-ux-cli-independent-evaluation.md), [initial simplification report](../reports/curation-ux-cli-simplification-report.md), and [CLI conventions research](../reports/researcher-261001-1644-cli-conventions-evidence.md).
+Evidence: [bug ledger](./reports/bug-ledger-261001-1702-curation-cli-defects-found-in-evaluation.md), [independent evaluation 1](./reports/independent-evaluation-261001-1651-curation-cli-redesign-report.md), [independent evaluation 2](./reports/curation-ux-cli-independent-evaluation.md), [initial simplification report](./reports/curation-ux-cli-simplification-report.md), and [CLI conventions research](./reports/researcher-261001-1644-cli-conventions-evidence.md).
 
 ## Fixed Decisions
 

@@ -276,10 +276,10 @@ Enum, payload budget, score thresholds, embedding model và target latency sẽ 
 
 ## Kế hoạch triển khai
 
-- [Skill Hub V1 — phased implementation plan](plans/skillhub-v1-implementation-plan.md)
+- [Skill Hub V1 — phased implementation plan](archive/plans/skillhub-v1-implementation-plan.md)
 
 ## Tài liệu nguồn
 
 - `docs/PRD.md`
-- `plans/reports/architecture-review-260928-1312-agent-skill-server-resolution-report.md`
+- `archive/plans/260928-1435-skillhub-v1/reports/architecture-review-260928-1312-agent-skill-server-resolution-report.md`
 - `docs/brainstorm/2026-09-28-g6a--01a0e68b-routing-report.md`

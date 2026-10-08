@@ -1,7 +1,7 @@
 ---
 phase: 0
 title: "Guard verification and baseline"
-status: pending
+status: completed
 priority: P1
 effort: "0.5h"
 dependencies: []

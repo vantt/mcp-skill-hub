@@ -11,9 +11,9 @@ dependencies: []
 
 ## Context Links
 
-- [BUG-04, BUG-05, BUG-06](../reports/bug-ledger-261001-1702-curation-cli-defects-found-in-evaluation.md)
+- [BUG-04, BUG-05, BUG-06](./reports/bug-ledger-261001-1702-curation-cli-defects-found-in-evaluation.md)
 - [Storage and mutation model](../../docs/design/07-storage-and-mutation-model.md)
-- [CLI conventions: staged validation](../reports/researcher-261001-1644-cli-conventions-evidence.md)
+- [CLI conventions: staged validation](./reports/researcher-261001-1644-cli-conventions-evidence.md)
 
 ## Objective
 

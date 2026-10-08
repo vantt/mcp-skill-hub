@@ -17,7 +17,7 @@ created: 2026-09-30
 
 A newcomer must be able to install Skill Hub without cloning (`curl -fsSL .../install.sh | sh` on Linux/macOS, `irm .../install.ps1 | iex` on Windows), connect a project, and then do everyday work by talking to their agent or with clear CLI commands. Priorities: user ease first, then simplicity and few dependencies.
 
-Source inventory (authoritative scope + user decisions): [issue-inventory-260930-1054-ux-release-install.md](../reports/issue-inventory-260930-1054-ux-release-install.md). Evidence: [UX audit](../reports/code-reviewer-260930-1045-ux-surface-audit.md), [release/install research](../reports/researcher-260930-1040-release-install-pipeline.md). Reference installers: `~/projects/herdr-gateway` (install.sh, install.ps1, smoke tests), `~/projects/herdr`, `~/projects/forgentX`.
+Source inventory (authoritative scope + user decisions): [issue-inventory-260930-1054-ux-release-install.md](./reports/issue-inventory-260930-1054-ux-release-install.md). Evidence: [UX audit](./reports/code-reviewer-260930-1045-ux-surface-audit.md), [release/install research](./reports/researcher-260930-1040-release-install-pipeline.md). Reference installers: `~/projects/herdr-gateway` (install.sh, install.ps1, smoke tests), `~/projects/herdr`, `~/projects/forgentX`.
 
 ## Decisions (user, 2026-09-30)
 

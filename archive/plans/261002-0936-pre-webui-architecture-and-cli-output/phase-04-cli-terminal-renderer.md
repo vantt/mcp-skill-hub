@@ -1,7 +1,7 @@
 ---
 phase: 4
 title: "CLI terminal renderer package"
-status: pending
+status: completed
 priority: P1
 effort: "5h"
 dependencies: [0]

@@ -11,8 +11,8 @@ dependencies: [1, 2]
 
 ## Context Links
 
-- [BUG-02, BUG-03, BUG-09, BUG-12, BUG-13](../reports/bug-ledger-261001-1702-curation-cli-defects-found-in-evaluation.md)
-- [Independent edit/review contract](../reports/curation-ux-cli-independent-evaluation.md#7-editreviewgovernance-contract)
+- [BUG-02, BUG-03, BUG-09, BUG-12, BUG-13](./reports/bug-ledger-261001-1702-curation-cli-defects-found-in-evaluation.md)
+- [Independent edit/review contract](./reports/curation-ux-cli-independent-evaluation.md#7-editreviewgovernance-contract)
 - [Curation lifecycle design](../../docs/design/05-curation-lifecycle.md)
 
 ## Objective

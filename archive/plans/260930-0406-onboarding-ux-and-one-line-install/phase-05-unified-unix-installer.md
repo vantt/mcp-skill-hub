@@ -14,7 +14,7 @@ dependencies: []
 One standalone `install.sh` installs, upgrades (re-run) and uninstalls (`--uninstall`) Skill Hub on Linux/macOS (amd64 + arm64) without a clone, verifies SHA-256 always and cosign when available, and puts `skillhub` on PATH by editing the user's shell profile.
 
 ## Context
-- Research Part A (A1, A2, A4, A5, A7, A9) and Part C target design ([report](../reports/researcher-260930-1040-release-install-pipeline.md)); decisions 1, 3, 4.
+- Research Part A (A1, A2, A4, A5, A7, A9) and Part C target design ([report](./reports/researcher-260930-1040-release-install-pipeline.md)); decisions 1, 3, 4.
 - Current: `scripts/install.sh` (version required at :75, cosign mandatory at :169, refuses existing target :360, platforms :49-54), `scripts/upgrade.sh` (rollback logic :82-111), `scripts/uninstall.sh`, `scripts/lib/installer-common.sh`, `scripts/test-installer-lifecycle.sh` (fake curl/cosign fixtures).
 - Reference: `~/projects/herdr-gateway/install.sh` (`--uninstall`, latest default), `~/projects/forgentX/install.sh`, uv installer (profile edits for bash/zsh/fish).
 
