@@ -278,8 +278,8 @@ type workspaceDiffInput struct {
 }
 
 type workspaceDiffResult struct {
-	Kind      string                     `json:"kind"`
-	GitDirty  bool                       `json:"git_dirty,omitempty"`
+	Kind      string                            `json:"kind"`
+	GitDirty  bool                              `json:"git_dirty,omitempty"`
 	Files     *paging.Page[app.DiffFile]        `json:"files,omitempty"`
 	Operation *paging.Page[app.OperationChange] `json:"operation_changes,omitempty"`
 }
@@ -310,7 +310,6 @@ type toolOutcome[T any] struct {
 	Result        *T         `json:"result,omitempty"`
 	Error         *toolError `json:"error,omitempty"`
 }
-
 
 type runStartItem struct {
 	SourceID string                  `json:"source_id"`

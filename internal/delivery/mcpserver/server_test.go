@@ -55,7 +55,7 @@ func expectedToolAnnotations() map[string][4]bool {
 		"source_watch_preview": {false, false, false, true}, "source_watch_confirm": {false, true, true, false},
 		"source_link_preview": {false, false, false, true}, "source_unwatch_preview": {false, false, false, false},
 		"skill_upstream_status": {true, false, false, false},
-		"curation_run_start": {false, false, true, true}, "curation_run_submit": {false, false, false, false},
+		"curation_run_start":    {false, false, true, true}, "curation_run_submit": {false, false, false, false},
 		"curation_run_get": {true, false, true, false}, "curation_run_retry": {false, false, false, false},
 		"curation_run_cancel": {false, false, false, false}, "observation_list": {true, false, false, false},
 		"comparison_get": {true, false, false, false}, "inbox_list": {true, false, false, false},
@@ -564,7 +564,6 @@ func TestSafeErrorMappingDoesNotLeakUnknownDetails(t *testing.T) {
 		t.Fatalf("stderr diagnostics are unsafe or uncorrelated: %q", diagnostics.String())
 	}
 }
-
 
 func findSkillEntryByName(t *testing.T, entries []skillEntry, name string) skillEntry {
 	t.Helper()

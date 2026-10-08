@@ -16,9 +16,9 @@ import (
 
 type sourceFlags struct {
 	workspace, reason, status, decision, sourceID, adapter, ref, sourcePath, license, trust, cadence, skillID, newSkillID string
-	proposalID, proposalDigest, baseVersion, idempotencyKey                                                            string
-	jsonOutput, monitoring, yes, all                                                                                    bool
-	skills                                                                                                              []string
+	proposalID, proposalDigest, baseVersion, idempotencyKey                                                               string
+	jsonOutput, monitoring, yes, all                                                                                      bool
+	skills                                                                                                                []string
 }
 
 func runSource(ctx context.Context, args []string, stdout, stderr io.Writer) int {

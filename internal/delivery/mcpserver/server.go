@@ -51,7 +51,6 @@ type Server struct {
 var activeDiagnostics atomic.Pointer[slog.Logger]
 var correlationSequence atomic.Uint64
 
-
 // New constructs one stateless server surface for a configured workspace.
 func New(workspacePath string, diagnostics io.Writer) (*Server, *mcp.Server, error) {
 	root, err := workspace.Discover(workspacePath)
@@ -645,7 +644,6 @@ func correlationID() string {
 	}
 	return hex.EncodeToString(value[:])
 }
-
 
 func applicationError(value any) *app.Error {
 	_ = errorEnvelope{}

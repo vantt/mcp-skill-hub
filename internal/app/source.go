@@ -67,7 +67,7 @@ type SourceListResult struct {
 
 type SourceTriageInput struct {
 	CandidateID, Decision, DecisionReason, SourceID, Adapter, Ref, SourcePath, License, Trust, Cadence, SkillID, NewSkillID, IdempotencyKey string
-	MonitoringEnabled                                                                                                           bool
+	MonitoringEnabled                                                                                                                       bool
 }
 
 type SourceDiff struct {
