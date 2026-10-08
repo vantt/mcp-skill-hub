@@ -15,6 +15,9 @@ type SkillLoad struct {
 	Attribution     string
 	ResolutionID    string
 	SessionIDHash   string
+	CatalogSnapshot string
+	PolicyRevision  string
+	Client          telemetry.Client
 	FirstActivation bool
 	Blocked         bool
 	ReasonCodes     []string
@@ -47,6 +50,11 @@ func RecordSkillLoad(ctx context.Context, sink TelemetrySink, workspacePath stri
 	event := curationTelemetryEvent(telemetry.EventSkillLoaded, payload)
 	event.ResolutionID = load.ResolutionID
 	event.SessionIDHash = load.SessionIDHash
+	event.CatalogSnapshot = load.CatalogSnapshot
+	event.PolicyRevision = load.PolicyRevision
+	if load.Client.Name != "" {
+		event.Client = load.Client
+	}
 
 	recordCurationTelemetry(ctx, sink, workspacePath, event)
 }

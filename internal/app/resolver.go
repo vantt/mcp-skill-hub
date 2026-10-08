@@ -41,17 +41,18 @@ func (service ResolverService) Resolve(ctx context.Context, path string, request
 		if !telemetryStarted {
 			return
 		}
-		payload := resolutionTelemetryPayload(request, response, time.Since(startedAt))
+		payload := resolutionTelemetryPayload(ctx, request, response, time.Since(startedAt))
+		scope := resolutionScope{Snapshot: catalogSnapshot, Policy: policyRevision}
 		eventType := telemetry.EventResolutionCompleted
 		if resultErr != nil {
 			eventType = telemetry.EventResolutionFailed
 			payload["status"] = "failed"
 			payload["error_code"] = stage + "_failed"
 		} else if response.Primary != nil {
-			recommended := telemetryEvent(telemetry.EventResolutionRecommended, request, response, catalogSnapshot, policyRevision, payload)
+			recommended := telemetryEvent(ctx, telemetry.EventResolutionRecommended, request, response, scope, payload)
 			safeRecordTelemetry(service.Telemetry, recommended)
 		}
-		safeRecordTelemetry(service.Telemetry, telemetryEvent(eventType, request, response, catalogSnapshot, policyRevision, payload))
+		safeRecordTelemetry(service.Telemetry, telemetryEvent(ctx, eventType, request, response, scope, payload))
 	}()
 
 	root, err := workspace.Discover(path)
@@ -84,7 +85,7 @@ func (service ResolverService) Resolve(ctx context.Context, path string, request
 	}
 	policyRevision = policy.Revision
 	telemetryStarted = true
-	safeRecordTelemetry(service.Telemetry, telemetryEvent(telemetry.EventResolutionStarted, request, response, catalogSnapshot, policyRevision, resolutionStartPayload(request)))
+	safeRecordTelemetry(service.Telemetry, telemetryEvent(ctx, telemetry.EventResolutionStarted, request, response, resolutionScope{Snapshot: catalogSnapshot, Policy: policyRevision}, resolutionStartPayload(ctx, request)))
 
 	stage = "resolution"
 	response, resultErr = service.resolveWithin(ctx, root, handle, request, nil)
@@ -198,17 +199,17 @@ func (view excludingCatalog) Skills(ctx context.Context) ([]resolverpkg.Skill, e
 	return kept, nil
 }
 
-func resolutionStartPayload(request resolverpkg.Request) map[string]any {
+func resolutionStartPayload(ctx context.Context, request resolverpkg.Request) map[string]any {
 	payload := map[string]any{
 		"status":           "started",
 		"constraint_count": len(request.Task.Constraints),
 		"fact_keys":        telemetryFactKeys(request.Context.Facts),
 	}
-	addRequestTelemetry(payload, request)
+	addRequestTelemetry(ctx, payload, request)
 	return payload
 }
 
-func resolutionTelemetryPayload(request resolverpkg.Request, response resolverpkg.Response, duration time.Duration) map[string]any {
+func resolutionTelemetryPayload(ctx context.Context, request resolverpkg.Request, response resolverpkg.Response, duration time.Duration) map[string]any {
 	status := string(response.Status)
 	if status == "" {
 		status = "unknown"
@@ -238,16 +239,24 @@ func resolutionTelemetryPayload(request resolverpkg.Request, response resolverpk
 			payload["setup_state"] = response.Primary.Setup.State
 		}
 	}
-	addRequestTelemetry(payload, request)
+	addRequestTelemetry(ctx, payload, request)
 	return payload
 }
 
-func addRequestTelemetry(payload map[string]any, request resolverpkg.Request) {
+func addRequestTelemetry(ctx context.Context, payload map[string]any, request resolverpkg.Request) {
 	if safeTelemetryToken(request.Operation) {
 		payload["operation"] = request.Operation
 	}
 	if request.Context.ActiveArtifact != nil && safeTelemetryToken(request.Context.ActiveArtifact.Kind) {
 		payload["artifact_kind"] = request.Context.ActiveArtifact.Kind
+	}
+	if request.Prior != nil && safeTelemetryToken(request.Prior.ResolutionID) {
+		payload["prior_resolution_id"] = request.Prior.ResolutionID
+		if safeTelemetryToken(request.Prior.Kind) {
+			payload["prior_kind"] = request.Prior.Kind
+		}
+		caller := CallerFromContext(ctx)
+		payload["prior_verified"] = caller.VerifyPrior(request.Prior.ResolutionID)
 	}
 }
 
@@ -267,10 +276,23 @@ func telemetryFactKeys(facts []resolverpkg.Fact) []string {
 	return keys
 }
 
-func telemetryEvent(eventType string, request resolverpkg.Request, response resolverpkg.Response, snapshot, policy string, payload map[string]any) telemetry.Event {
+type resolutionScope struct {
+	Snapshot string
+	Policy   string
+}
+
+func telemetryEvent(ctx context.Context, eventType string, request resolverpkg.Request, response resolverpkg.Response, scope resolutionScope, payload map[string]any) telemetry.Event {
+	caller := CallerFromContext(ctx)
+	client := telemetry.Client{Name: "skillhub"}
+	if caller.Client.Name != "" {
+		client = caller.Client
+	}
 	event := telemetry.Event{
-		Type: eventType, CatalogSnapshot: snapshot, PolicyRevision: policy,
-		Client: telemetry.Client{Name: "skillhub"}, Payload: payload,
+		Type: eventType, CatalogSnapshot: scope.Snapshot, PolicyRevision: scope.Policy,
+		Client: client, Payload: payload,
+	}
+	if safeTelemetryToken(caller.SessionHash) {
+		event.SessionIDHash = caller.SessionHash
 	}
 	if safeTelemetryToken(request.RequestID) {
 		event.RequestID = request.RequestID

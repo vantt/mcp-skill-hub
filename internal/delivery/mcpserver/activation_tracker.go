@@ -9,6 +9,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	resolverpkg "github.com/vantt/mcp-skill-hub/internal/resolver"
+	"github.com/vantt/mcp-skill-hub/internal/telemetry"
 )
 
 const (
@@ -18,11 +19,14 @@ const (
 )
 
 type notedResolution struct {
-	resolutionID  string
-	status        string
-	primaryID     string
-	supportingIDs []string
-	at            time.Time
+	resolutionID    string
+	status          string
+	primaryID       string
+	supportingIDs   []string
+	catalogSnapshot string
+	policyRevision  string
+	client          telemetry.Client
+	at              time.Time
 }
 
 type sessionState struct {
@@ -97,7 +101,7 @@ func (t *activationTracker) sessionState(session *mcp.ServerSession) *sessionSta
 	return state
 }
 
-func (t *activationTracker) noteResolution(session *mcp.ServerSession, response resolverpkg.Response) {
+func (t *activationTracker) noteResolution(session *mcp.ServerSession, response resolverpkg.Response, client ...telemetry.Client) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -105,6 +109,11 @@ func (t *activationTracker) noteResolution(session *mcp.ServerSession, response 
 	now := t.now()
 	state.lastSeen = now
 	state.pruneResolutions(now.Add(-resolutionTTL))
+
+	var c telemetry.Client
+	if len(client) > 0 {
+		c = client[0]
+	}
 
 	primaryID := ""
 	if response.Primary != nil {
@@ -118,18 +127,46 @@ func (t *activationTracker) noteResolution(session *mcp.ServerSession, response 
 	}
 
 	state.resolutions = append(state.resolutions, notedResolution{
-		resolutionID:  response.ResolutionID,
-		status:        string(response.Status),
-		primaryID:     primaryID,
-		supportingIDs: supportingIDs,
-		at:            now,
+		resolutionID:    response.ResolutionID,
+		status:          string(response.Status),
+		primaryID:       primaryID,
+		supportingIDs:   supportingIDs,
+		catalogSnapshot: response.CatalogSnapshot,
+		policyRevision:  response.PolicyRevision,
+		client:          c,
+		at:              now,
 	})
 	if len(state.resolutions) > maxResolutionsPerSession {
 		state.resolutions = state.resolutions[len(state.resolutions)-maxResolutionsPerSession:]
 	}
 }
 
+func (t *activationTracker) hasResolution(session *mcp.ServerSession, resolutionID string) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if resolutionID == "" {
+		return false
+	}
+	state := t.sessionState(session)
+	now := t.now()
+	state.lastSeen = now
+	state.pruneResolutions(now.Add(-resolutionTTL))
+
+	for _, r := range state.resolutions {
+		if r.resolutionID == resolutionID {
+			return true
+		}
+	}
+	return false
+}
+
 func (t *activationTracker) attribute(session *mcp.ServerSession, skillID string) (string, string) {
+	resID, attr, _, _, _ := t.attributeDetails(session, skillID)
+	return resID, attr
+}
+
+func (t *activationTracker) attributeDetails(session *mcp.ServerSession, skillID string) (resolutionID, attribution, snapshot, policy string, client telemetry.Client) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -139,30 +176,32 @@ func (t *activationTracker) attribute(session *mcp.ServerSession, skillID string
 	state.pruneResolutions(now.Add(-resolutionTTL))
 
 	if len(state.resolutions) == 0 {
-		return "", "unsolicited"
+		return "", "unsolicited", "", "", telemetry.Client{Name: "skillhub"}
 	}
 
 	for i := len(state.resolutions) - 1; i >= 0; i-- {
 		r := state.resolutions[i]
 		if r.primaryID == skillID {
-			return r.resolutionID, "recommended"
+			return r.resolutionID, "recommended", r.catalogSnapshot, r.policyRevision, r.client
 		}
 		if slices.Contains(r.supportingIDs, skillID) {
-			return r.resolutionID, "supporting"
+			return r.resolutionID, "supporting", r.catalogSnapshot, r.policyRevision, r.client
 		}
 	}
 
 	newest := state.resolutions[len(state.resolutions)-1]
+	var attr string
 	switch newest.status {
 	case string(resolverpkg.StatusResolved), string(resolverpkg.StatusAlreadyCovered):
-		return newest.resolutionID, "override"
+		attr = "override"
 	case string(resolverpkg.StatusNoSkill):
-		return newest.resolutionID, "after_no_skill"
+		attr = "after_no_skill"
 	case string(resolverpkg.StatusNeedsContext):
-		return newest.resolutionID, "after_needs_context"
+		attr = "after_needs_context"
 	default:
-		return newest.resolutionID, "override"
+		attr = "override"
 	}
+	return newest.resolutionID, attr, newest.catalogSnapshot, newest.policyRevision, newest.client
 }
 
 func (t *activationTracker) markActivation(session *mcp.ServerSession, resolutionID, skillID string) bool {

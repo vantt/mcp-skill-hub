@@ -57,13 +57,14 @@ func IsFeedbackReasonCode(value string) bool { return feedbackReasonCodes[value]
 // Catalog, policy, and client identity are intentionally not accepted here;
 // RecordFeedback derives them from the validated resolver envelope.
 type Feedback struct {
-	EventID      string
-	ResolutionID string
-	Outcome      string
-	ReasonCode   string
-	SkillID      string
-	Utility      string
-	Basis        string
+	EventID       string
+	ResolutionID  string
+	Outcome       string
+	ReasonCode    string
+	SkillID       string
+	Utility       string
+	Basis         string
+	SessionIDHash string
 }
 
 // FeedbackResult reports whether an identical semantic report already existed.
@@ -256,9 +257,14 @@ func buildFeedbackEvents(config Config, feedback Feedback, source storedEnvelope
 	}
 	eventType := feedbackEventTypes[feedback.Outcome]
 	occurredAt := config.Clock().UTC()
+	sessionHash := feedback.SessionIDHash
+	if sessionHash == "" {
+		sessionHash = source.SessionIDHash
+	}
 	primary, err := validateAndBuild(Event{
 		ID: feedback.EventID, Type: eventType, OccurredAt: occurredAt,
-		ResolutionID: feedback.ResolutionID, CatalogSnapshot: source.CatalogSnapshot,
+		SessionIDHash: sessionHash,
+		ResolutionID:  feedback.ResolutionID, CatalogSnapshot: source.CatalogSnapshot,
 		PolicyRevision: source.PolicyRevision, Client: source.Client, Payload: payload,
 	}, config.ContentMode, occurredAt, feedback.EventID)
 	if err != nil {
@@ -281,7 +287,8 @@ func buildFeedbackEvents(config Config, feedback Feedback, source storedEnvelope
 	utilityID := feedback.EventID + ":utility"
 	utility, err := validateAndBuild(Event{
 		ID: utilityID, Type: EventSkillUtilityReported, OccurredAt: occurredAt,
-		ResolutionID: feedback.ResolutionID, CatalogSnapshot: source.CatalogSnapshot,
+		SessionIDHash: sessionHash,
+		ResolutionID:  feedback.ResolutionID, CatalogSnapshot: source.CatalogSnapshot,
 		PolicyRevision: source.PolicyRevision, Client: source.Client, Payload: utilityPayload,
 	}, config.ContentMode, occurredAt, utilityID)
 	if err != nil {

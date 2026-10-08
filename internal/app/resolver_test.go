@@ -147,13 +147,13 @@ func TestResolutionTelemetryPayloadRetainsPrimaryAndSupportingRecommendationIDs(
 		Primary:    &resolverpkg.Recommendation{ID: "primary-skill", Confidence: "high"},
 		Supporting: []resolverpkg.Supporting{{ID: "supporting-one"}, {ID: "supporting-two"}},
 	}
-	payload := resolutionTelemetryPayload(resolverpkg.Request{}, response, time.Millisecond)
+	payload := resolutionTelemetryPayload(t.Context(), resolverpkg.Request{}, response, time.Millisecond)
 	got, ok := payload["recommended_skill_ids"].([]string)
 	if !ok || !reflect.DeepEqual(got, []string{"primary-skill", "supporting-one", "supporting-two"}) {
 		t.Fatalf("recommended_skill_ids = %#v", payload["recommended_skill_ids"])
 	}
 
-	withoutRecommendation := resolutionTelemetryPayload(resolverpkg.Request{}, resolverpkg.Response{Status: resolverpkg.StatusNoSkill}, 0)
+	withoutRecommendation := resolutionTelemetryPayload(t.Context(), resolverpkg.Request{}, resolverpkg.Response{Status: resolverpkg.StatusNoSkill}, 0)
 	got, ok = withoutRecommendation["recommended_skill_ids"].([]string)
 	if !ok || len(got) != 0 {
 		t.Fatalf("no-skill recommended_skill_ids = %#v", withoutRecommendation["recommended_skill_ids"])
@@ -459,5 +459,88 @@ func TestResolverAnnotatesUnapprovedThirdPartySkillAsReviewRequired(t *testing.T
 	before, after := withoutSetup(response).Primary, withoutSetup(approved).Primary
 	if before.ID != after.ID || before.Version != after.Version || before.URI != after.URI || before.Applicability != after.Applicability || before.Confidence != after.Confidence {
 		t.Fatalf("approval changed the recommendation:\n%#v\n%#v", before, after)
+	}
+}
+
+func TestResolverCallerContextAndPriorVerification(t *testing.T) {
+	t.Parallel()
+	root := newResolverWorkspace(t)
+	request := privateResolverRequest()
+	request.Prior = &resolverpkg.Prior{
+		ResolutionID:    "res_valid_prior",
+		ContextRevision: 1,
+		Kind:            "rejected",
+	}
+
+	sink := &captureTelemetrySink{}
+	caller := CallerContext{
+		SessionHash: "sess_test_123",
+		Client:      telemetry.Client{Name: "claude-code", Version: "1.2"},
+		PriorVerifier: func(resID string) bool {
+			return resID == "res_valid_prior"
+		},
+	}
+	ctx := WithCallerContext(t.Context(), caller)
+
+	service := ResolverService{Cache: resolverpkg.NewCache(8), Telemetry: sink}
+	_, err := service.Resolve(ctx, root, request)
+	if err != nil {
+		t.Fatalf("resolve failed: %v", err)
+	}
+
+	if len(sink.events) < 2 {
+		t.Fatalf("expected at least 2 events, got %d", len(sink.events))
+	}
+	completed := sink.events[len(sink.events)-1]
+	if completed.SessionIDHash != "sess_test_123" {
+		t.Fatalf("session_id_hash = %q, want sess_test_123", completed.SessionIDHash)
+	}
+	if completed.Client.Name != "claude-code" || completed.Client.Version != "1.2" {
+		t.Fatalf("client = %+v, want claude-code:1.2", completed.Client)
+	}
+	if completed.Payload["prior_resolution_id"] != "res_valid_prior" {
+		t.Fatalf("prior_resolution_id = %v", completed.Payload["prior_resolution_id"])
+	}
+	if completed.Payload["prior_kind"] != "rejected" {
+		t.Fatalf("prior_kind = %v", completed.Payload["prior_kind"])
+	}
+	if completed.Payload["prior_verified"] != true {
+		t.Fatalf("prior_verified = %v, want true", completed.Payload["prior_verified"])
+	}
+
+	// Forged prior: verifier returns false
+	forgedSink := &captureTelemetrySink{}
+	forgedRequest := privateResolverRequest()
+	forgedRequest.Prior = &resolverpkg.Prior{
+		ResolutionID:    "res_forged_prior",
+		ContextRevision: 1,
+		Kind:            "rejected",
+	}
+	forgedService := ResolverService{Cache: resolverpkg.NewCache(8), Telemetry: forgedSink}
+	_, err = forgedService.Resolve(ctx, root, forgedRequest)
+	if err != nil {
+		t.Fatalf("resolve with forged prior failed: %v", err)
+	}
+	forgedCompleted := forgedSink.events[len(forgedSink.events)-1]
+	if forgedCompleted.Payload["prior_verified"] != false {
+		t.Fatalf("forged prior_verified = %v, want false", forgedCompleted.Payload["prior_verified"])
+	}
+
+	// CLI-origin: no CallerContext in ctx
+	cliSink := &captureTelemetrySink{}
+	cliService := ResolverService{Cache: resolverpkg.NewCache(8), Telemetry: cliSink}
+	_, err = cliService.Resolve(t.Context(), root, request)
+	if err != nil {
+		t.Fatalf("resolve without CallerContext failed: %v", err)
+	}
+	cliCompleted := cliSink.events[len(cliSink.events)-1]
+	if cliCompleted.SessionIDHash != "" {
+		t.Fatalf("cli session_id_hash = %q, want empty", cliCompleted.SessionIDHash)
+	}
+	if cliCompleted.Client.Name != "skillhub" {
+		t.Fatalf("cli client = %+v, want skillhub", cliCompleted.Client)
+	}
+	if cliCompleted.Payload["prior_verified"] != false {
+		t.Fatalf("cli prior_verified = %v, want false", cliCompleted.Payload["prior_verified"])
 	}
 }

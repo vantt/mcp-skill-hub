@@ -20,23 +20,51 @@ func recordCurationTelemetry(ctx context.Context, sink TelemetrySink, root strin
 	}
 	defer func() { _ = recover() }()
 
-	handle, err := catalog.OpenCurrent(ctx, root)
-	if err != nil {
-		return
-	}
-	defer func() { _ = handle.Close() }()
-	policy, err := resolverpkg.LoadPolicy(ctx, handle.DB)
-	if err != nil || policy.Revision == "" {
-		return
-	}
+	var handle *catalog.Handle
+	var policyRevision string
 	for _, event := range events {
 		event.Version = telemetry.EventVersion
-		event.CatalogSnapshot = handle.Pointer.CatalogSnapshot
-		event.PolicyRevision = policy.Revision
-		if event.Client.Name == "" {
-			event.Client = telemetry.Client{Name: "skillhub"}
+		if event.CatalogSnapshot != "" && event.PolicyRevision != "" {
+			if event.Client.Name == "" {
+				event.Client = telemetry.Client{Name: "skillhub"}
+			}
+			safeRecordTelemetry(sink, event)
+			continue
 		}
-		safeRecordTelemetry(sink, event)
+		if handle == nil {
+			var err error
+			handle, err = catalog.OpenCurrent(ctx, root)
+			if err != nil {
+				handle, err = catalog.OpenWithFallback(ctx, root)
+			}
+			if err == nil {
+				defer handle.Close()
+				if p, pErr := resolverpkg.LoadPolicy(ctx, handle.DB); pErr == nil {
+					policyRevision = p.Revision
+				}
+			}
+		}
+		if handle != nil && policyRevision != "" {
+			event.CatalogSnapshot = handle.Pointer.CatalogSnapshot
+			event.PolicyRevision = policyRevision
+			if event.Client.Name == "" {
+				event.Client = telemetry.Client{Name: "skillhub"}
+			}
+			safeRecordTelemetry(sink, event)
+			continue
+		}
+		if event.Type == telemetry.EventSkillLoaded {
+			if event.CatalogSnapshot == "" {
+				event.CatalogSnapshot = "unknown"
+			}
+			if event.PolicyRevision == "" {
+				event.PolicyRevision = "unknown"
+			}
+			if event.Client.Name == "" {
+				event.Client = telemetry.Client{Name: "skillhub"}
+			}
+			safeRecordTelemetry(sink, event)
+		}
 	}
 }
 

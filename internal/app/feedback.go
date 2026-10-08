@@ -59,9 +59,10 @@ func (service FeedbackService) Record(ctx context.Context, path string, input Fe
 		defer closeTelemetryRecorder(recorder, &resultErr)
 	}
 
+	caller := CallerFromContext(ctx)
 	feedback := telemetry.Feedback{
 		EventID: input.EventID, ResolutionID: input.ResolutionID, Outcome: input.Outcome,
-		SkillID: input.SelectedSkill,
+		SkillID: input.SelectedSkill, SessionIDHash: caller.SessionHash,
 	}
 	if input.ReasonCode != nil {
 		feedback.ReasonCode = *input.ReasonCode

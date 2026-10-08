@@ -19,16 +19,19 @@ func (adapter *Server) registerResolverTools(server *mcp.Server) {
 		if _, err := resolverpkg.NormalizeRequest(request); err != nil {
 			return failure[resolveResult](err)
 		}
+		var session *mcp.ServerSession
+		if req != nil {
+			session = req.Session
+		}
+		caller := adapter.callerContext(session)
+		ctx = app.WithCallerContext(ctx, caller)
+
 		response, err := adapter.resolver.Resolve(ctx, adapter.workspace, request)
 		if err != nil {
 			return failure[resolveResult](err)
 		}
 		if adapter.tracker != nil {
-			var session *mcp.ServerSession
-			if req != nil {
-				session = req.Session
-			}
-			adapter.tracker.noteResolution(session, response)
+			adapter.tracker.noteResolution(session, response, caller.Client)
 		}
 		trueValue := true
 		return success(resolveResult{
@@ -41,10 +44,17 @@ func (adapter *Server) registerResolverTools(server *mcp.Server) {
 		Name: "skill_feedback", Title: "Record skill feedback",
 		Description: "Record a bounded, deduplicated runtime outcome for a prior resolution. event_id is required. Feedback never mutates routing policy.",
 		Annotations: annotations(false, false, true, false),
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, input feedbackInput) (*mcp.CallToolResult, toolOutcome[app.FeedbackResult], error) {
+	}, func(ctx context.Context, req *mcp.CallToolRequest, input feedbackInput) (*mcp.CallToolResult, toolOutcome[app.FeedbackResult], error) {
 		if input.SchemaVersion != SchemaVersion || input.ResolutionID == "" || input.EventID == "" || input.Outcome == "" {
 			return failure[app.FeedbackResult](fmt.Errorf("schema_version, resolution_id, event_id, and outcome are required"))
 		}
+		var session *mcp.ServerSession
+		if req != nil {
+			session = req.Session
+		}
+		caller := adapter.callerContext(session)
+		ctx = app.WithCallerContext(ctx, caller)
+
 		return appResult(adapter.feedback.Record(ctx, adapter.workspace, app.FeedbackInput{
 			SchemaVersion: input.SchemaVersion, ResolutionID: input.ResolutionID, EventID: input.EventID,
 			Outcome: input.Outcome, ReasonCode: input.ReasonCode, SelectedSkill: input.SelectedSkill,

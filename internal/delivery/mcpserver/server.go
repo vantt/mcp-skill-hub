@@ -299,13 +299,35 @@ func (adapter *Server) recordLoad(ctx context.Context, session *mcp.ServerSessio
 	}
 	load.Attribution = "unsolicited"
 	if adapter.tracker != nil {
-		load.ResolutionID, load.Attribution = adapter.tracker.attribute(session, load.SkillID)
+		load.ResolutionID, load.Attribution, load.CatalogSnapshot, load.PolicyRevision, load.Client = adapter.tracker.attributeDetails(session, load.SkillID)
 		load.SessionIDHash = adapter.tracker.sessionHash(session)
 		if !load.Blocked && load.ResourceKind == "entrypoint" {
 			load.FirstActivation = adapter.tracker.markActivation(session, load.ResolutionID, load.SkillID)
 		}
 	}
 	app.RecordSkillLoad(ctx, adapter.telemetry, adapter.workspace, load)
+}
+
+func (adapter *Server) callerContext(session *mcp.ServerSession) app.CallerContext {
+	sessionHash := ""
+	client := telemetry.Client{Name: "other"}
+	if session != nil {
+		if params := session.InitializeParams(); params != nil && params.ClientInfo != nil {
+			client = NormalizeClient(params.ClientInfo.Name, params.ClientInfo.Version)
+		}
+	}
+	var verifier func(string) bool
+	if adapter.tracker != nil && session != nil {
+		sessionHash = adapter.tracker.sessionHash(session)
+		verifier = func(resID string) bool {
+			return adapter.tracker.hasResolution(session, resID)
+		}
+	}
+	return app.CallerContext{
+		SessionHash:   sessionHash,
+		Client:        client,
+		PriorVerifier: verifier,
+	}
 }
 
 // localResourceMeta maps a verified resource URI to its file in the local

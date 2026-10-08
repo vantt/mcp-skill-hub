@@ -7,6 +7,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	resolverpkg "github.com/vantt/mcp-skill-hub/internal/resolver"
+	"github.com/vantt/mcp-skill-hub/internal/telemetry"
 )
 
 func TestActivationTrackerAttributionClasses(t *testing.T) {
@@ -254,5 +255,49 @@ func TestActivationTrackerNilSessionHandling(t *testing.T) {
 	hash := tracker.sessionHash(nil)
 	if len(hash) != 32 {
 		t.Fatalf("expected 32-hex session hash, got %q", hash)
+	}
+}
+
+func TestActivationTrackerHasResolutionAndDetails(t *testing.T) {
+	t.Parallel()
+
+	tracker := newActivationTracker(nil)
+	sessionA := &mcp.ServerSession{}
+	sessionB := &mcp.ServerSession{}
+
+	clientA := telemetry.Client{Name: "claude-code", Version: "1.2"}
+	tracker.noteResolution(sessionA, resolverpkg.Response{
+		ResolutionID:    "res-session-a",
+		Status:          resolverpkg.StatusResolved,
+		CatalogSnapshot: "sha256:snapshot-a",
+		PolicyRevision:  "sha256:policy-a",
+		Primary:         &resolverpkg.Recommendation{ID: "skill-1"},
+	}, clientA)
+
+	// HasResolution on sessionA should be true
+	if !tracker.hasResolution(sessionA, "res-session-a") {
+		t.Fatal("expected hasResolution(sessionA, res-session-a) to be true")
+	}
+
+	// Forged prior: sessionB checking res-session-a should be false
+	if tracker.hasResolution(sessionB, "res-session-a") {
+		t.Fatal("expected hasResolution(sessionB, res-session-a) to be false (different session)")
+	}
+
+	// Unknown resolution should be false
+	if tracker.hasResolution(sessionA, "res-unknown") {
+		t.Fatal("expected hasResolution(sessionA, res-unknown) to be false")
+	}
+
+	// attributeDetails preserves snapshot, policy, and client
+	resID, attr, snapshot, policy, client := tracker.attributeDetails(sessionA, "skill-1")
+	if resID != "res-session-a" || attr != "recommended" {
+		t.Fatalf("attributeDetails resID=%q attr=%q", resID, attr)
+	}
+	if snapshot != "sha256:snapshot-a" || policy != "sha256:policy-a" {
+		t.Fatalf("attributeDetails snapshot=%q policy=%q", snapshot, policy)
+	}
+	if client.Name != "claude-code" || client.Version != "1.2" {
+		t.Fatalf("attributeDetails client=%+v", client)
 	}
 }
