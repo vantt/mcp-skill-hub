@@ -168,6 +168,13 @@ sibling skills it routes to, the repository's agent instructions, and the code
 those documents name. Follow those links from the source scope; record the
 paths you add in the source's `learn_paths`.
 
+**Stay on the target's subject.** Every layer is read *within the target
+skill's subject*. Craft and wording lessons come from how the source writes the
+skills and documents on that subject, not from the source's general manual on
+writing skills, its style guide, or its contribution rules. A general manual
+applies to every skill, so its lessons belong to a hub-level pass: list it in
+`coverage.not_read` with that reason instead of reading it for this skill.
+
 ## Record everything, then weigh it
 
 `distill.yaml` is the complete record of what the source does, as far as the
