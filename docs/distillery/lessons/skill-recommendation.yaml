@@ -1,0 +1,275 @@
+# Lessons whose primary domain is "skill-recommendation". Written by distill.mjs: edit freely, then run
+# `distill.mjs format`. final_score = relevance × impact × evidence / effort (impact = number of
+# facts); ranked lessons come first by final_score, then unranked ones by key.
+lessons:
+
+  - key: semantic-admission-gate
+    domains:
+      - skill-recommendation
+    layer: history
+    what: >-
+      Before rank fusion, meta_skill drops vector candidates with similarity <= 0 and lets a
+      lexical (feature-hash) embedder only re-rank documents BM25 already matched, never add
+      new ones. The fix followed an incident: once embeddings were persisted, RRF gave every
+      stored vector a positive contribution and `ms search rust` returned Testing Best
+      Practices and Git Workflow.
+    notable: >-
+      RRF scores by rank alone, so any channel that always returns k results injects noise
+      into the fused list. The admission rule keeps the cheap channel from introducing
+      unrelated skills while still letting it re-order. The host's vector channel is off and
+      doc 03 §13 requires a held-out gain before enabling it; this adds the concrete rule
+      the design lacks for when it is enabled.
+    where:
+      - meta-skill@e999668e8d8c:src/search/hybrid.rs#L158-L172
+      - meta-skill@50b6a3ca457e
+    contrast: extends
+    host: docs/design/03-resolver-design.md
+    score:
+      relevance: 3
+      facts:
+        - a
+        - b
+        - e
+      impact: 3
+      evidence: 2
+      effort: 1
+      why: >-
+        Core of the goal (no wrong skill surfaced). a: doc 03 §13 plans a vector channel
+        fused with BM25 and no rule that keeps unrelated vector hits out; b: §13 lists
+        pinning, degrade and an eval gate but no admission rule; e: the source measured the
+        failure (ms search rust returned Testing Best Practices). One source with a measured
+        incident; one rule to add to the design.
+    final_score: 18
+    decision: {state: candidate}
+
+  - key: model-callable-list-needs-guard
+    domains:
+      - skill-recommendation
+      - skill-over-mcp
+    layer: wording
+    what: >-
+      tech-leads-club's list_skills requires the literal argument explicit_request: true and
+      says "Only when the user explicitly asks to see every skill", returning one short
+      sentence per skill, so an agent does not pull the whole catalog into context instead
+      of searching.
+    notable: >-
+      A schema-level guard turns a wording rule into one the model cannot skip by accident.
+      The host's model-callable skill_list takes only an optional state filter, has no limit
+      or guard, and its description does not steer the agent to skill_resolve; on a hub with
+      hundreds of skills one call floods the context the goal protects.
+    where:
+      - tech-leads-club@120b67676388:packages/mcp/src/tools/list-tool.ts#L7-L37
+    contrast: new
+    host: internal/delivery/mcpserver/skill_tools.go
+    score:
+      relevance: 3
+      facts:
+        - a
+        - b
+        - d
+      impact: 3
+      evidence: 1
+      effort: 1
+      why: >-
+        Core of the goal (load only what the task needs). a: skill_list returns the catalog
+        with no limit or guard; b: nothing steers listing to explicit requests; d: a literal
+        guard in the input schema enforces it. One source; small change.
+    final_score: 9
+    decision: {state: candidate}
+
+  - key: project-signal-detector
+    domains:
+      - skill-recommendation
+      - host-integration
+    layer: content
+    what: >-
+      `ms load --auto` detects the project type from marker files (Cargo.toml 1.0,
+      package.json 0.9, go.mod 1.0, ...) plus recent files and tools, and scores skills with
+      fixed weights: project type 0.40, file patterns 0.25, tools 0.20, signals 0.10,
+      history 0.05.
+    notable: >-
+      The server derives context itself instead of trusting the agent to send it. The
+      trade-off is that it must read the workspace. The host resolves from facts the agent
+      supplies; its own FactProvider for workspace facts is designed (doc 03 §12) but not
+      built.
+    where:
+      - meta-skill@e999668e8d8c:src/context/detector.rs#L297-L312
+      - meta-skill@e999668e8d8c:src/context/scoring.rs#L87-L112
+    contrast: extends
+    host: docs/design/03-resolver-design.md
+    score:
+      relevance: 3
+      facts:
+        - a
+        - b
+        - c
+      impact: 3
+      evidence: 1
+      effort: 2
+      why: >-
+        Core of the goal (the right skill). a: when the agent sends no facts the resolver
+        cannot use obvious project context and picks or asks wrongly; b: FactProvider not
+        built; c: applies to every resolve call. One source.
+    final_score: 4.5
+    decision: {state: candidate}
+
+  - key: regex-domain-classifier
+    domains:
+      - skill-recommendation
+      - skill-sources
+    layer: content
+    what: >-
+      skills-mcp tags each skill with up to 20 domains by regex keyword lists over name,
+      description and id; the first match is the primary tag, "other" the fallback; the same
+      rules are shared with a second tool.
+    notable: >-
+      Cheap facets for browsing thousands of skills, but keyword regexes mis-tag freely and
+      nothing reviews them. The host routes on curated triggers instead of categories.
+    where:
+      - skills-mcp@dc3dda4f8660:scripts/classify.mjs#L1-L24
+      - skills-mcp@dc3dda4f8660:scripts/build-catalog.mjs#L243-L252
+    contrast: new
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 2
+      why: >-
+        peripheral: browsing facets; the host recommends from curated triggers, not
+        categories. No host failure it prevents.
+    final_score: 0
+    decision: {state: candidate}
+
+  - key: rrf-hybrid-fusion
+    domains:
+      - skill-recommendation
+    layer: content
+    what: >-
+      meta_skill fuses Tantivy BM25 and embedding results with reciprocal rank fusion, k=60,
+      weights 1.0 each, configurable in config.
+    notable: >-
+      RRF needs no score calibration between channels, unlike the host's linear sum of
+      lexical, trigger, artifact and fact scores, but it discards score magnitude. Useful
+      only if the host adds a second retrieval channel.
+    where:
+      - meta-skill@e999668e8d8c:src/search/hybrid.rs#L1-L37
+    contrast: contradicts
+    host: internal/resolver/policy.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 2
+      why: >-
+        In scope. peripheral: RRF only matters once the host adds a second retrieval
+        channel; no current failure comes from linear weighting. One source.
+    final_score: 0
+    decision: {state: candidate}
+
+  - key: bandit-adaptive-ranking
+    domains:
+      - skill-recommendation
+      - evaluation
+    layer: content
+    what: >-
+      Suggestions combine 0.7 × contextual score with 0.3 × a Thompson sample from a
+      per-skill Beta posterior, plus a UCB-style exploration bonus after a cold start;
+      feedback updates the bandit best-effort.
+    notable: >-
+      It adapts ranking to observed use, at the cost of non-reproducible results. The host's
+      PRD §56 already says not to let bandit learning change routing without explainable,
+      reproducible evaluation, and the resolver pins a policy_revision.
+    where:
+      - meta-skill@e999668e8d8c:src/suggestions/bandit/contextual.rs#L204-L233
+    contrast: contradicts
+    host: docs/PRD.md
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 3
+      why: >-
+        peripheral: the host refuses adaptive routing on purpose (PRD §56) and pins a
+        policy_revision. Recorded for completeness.
+    final_score: 0
+    decision: {state: candidate}
+
+  - key: fuzzy-search-as-recommendation
+    domains:
+      - skill-recommendation
+    layer: content
+    what: >-
+      skills-mcp's `recommend_skills` is the same Fuse.js fuzzy search as `search_skills`
+      (weighted name 2, description 1.5, tags 1, threshold 0.32) run on the task text, with
+      no no-skill decision beyond an empty result.
+    notable: >-
+      Shows the floor the host is designed above: the host resolver has explicit no_skill,
+      needs_context and ambiguity outcomes with reason codes.
+    where:
+      - skills-mcp@dc3dda4f8660:src/search.ts#L6-L22
+      - skills-mcp@dc3dda4f8660:src/index.ts#L246-L280
+    contrast: already-covered
+    host: internal/resolver/types.go
+    score:
+      relevance: 3
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered by the host resolver outcomes.
+    decision: {state: candidate}
+
+  - key: intent-phrase-search
+    domains:
+      - skill-recommendation
+    layer: history
+    what: >-
+      tech-leads-club's search used Fuse extended search, which made every word a mandatory
+      AND, so "react component testing" matched nothing and only callers who knew a skill
+      name found anything; it switched to per-token search and recalibrated its score bands.
+    notable: >-
+      The host already ORs FTS terms (sqlite_catalog.go:106), the safe choice for intent
+      phrases.
+    where:
+      - tech-leads-club@1b20d1577ea6
+      - tech-leads-club@120b67676388:packages/mcp/src/registry.ts#L111-L126
+    contrast: already-covered
+    host: internal/resolver/sqlite_catalog.go
+    score:
+      relevance: 3
+      facts: []
+      impact: 0
+      evidence: 2
+      effort: 1
+      why: Already covered (FTS terms joined with OR).
+    decision: {state: candidate}
+
+  - key: lexical-channel-silently-degraded
+    domains:
+      - skill-recommendation
+      - evaluation
+    layer: history
+    what: >-
+      meta_skill dropped its SQLite FTS5 path because fsqlite does not plan FTS5 MATCH, and
+      lexical search fell back to a substring scan; a later commit restored Tantivy BM25
+      because the "lexical" half "carried no real BM25 signal".
+    notable: >-
+      A ranking channel can degrade to near-noise with every command still succeeding. The
+      host guards this with routing evals and a CI gate on precision, which is the mechanism
+      that would catch it.
+    where:
+      - meta-skill@7650d0b9dd9e
+      - meta-skill@73020b1efa2b
+    contrast: already-covered
+    host: .github/workflows/evaluation.yml
+    score:
+      relevance: 3
+      facts: []
+      impact: 0
+      evidence: 2
+      effort: 1
+      why: Already covered by the host routing eval gate.
+    decision: {state: candidate}

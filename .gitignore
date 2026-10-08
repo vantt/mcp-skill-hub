@@ -25,3 +25,6 @@ web/node_modules/
 web/test-results/
 web/playwright-report/
 web/.e2e/
+# DISTILL:START
+/upstreams/
+# DISTILL:END

@@ -1,0 +1,167 @@
+# Lessons whose primary domain is "skill-sources". Written by distill.mjs: edit freely, then run
+# `distill.mjs format`. final_score = relevance × impact × evidence / effort (impact = number of
+# facts); ranked lessons come first by final_score, then unranked ones by key.
+lessons:
+
+  - key: scheduled-refresh-commits-diff
+    domains:
+      - skill-sources
+    layer: enforcement
+    what: >-
+      skills-mcp runs its catalog build in a daily GitHub Actions cron (06:00 UTC, manual
+      dispatch with --force), diffs the output, and commits only when it changed.
+    notable: >-
+      Freshness becomes automatic rather than a command someone must remember, and the
+      commit is the audit record of each change. Its own history shows the cost: the job
+      staged only one of two outputs and froze the sidecar for 16 days. The host stores a
+      watch cadence and next_check_at and has `source check --all-due`, but nothing runs it
+      on a schedule.
+    where:
+      - skills-mcp@dc3dda4f8660:.github/workflows/refresh-catalog.yml#L1-L72
+      - skills-mcp@9f51399
+    contrast: extends
+    host: internal/source/operational_store.go
+    score:
+      relevance: 2
+      facts:
+        - a
+        - b
+        - d
+        - e
+      impact: 4
+      evidence: 1
+      effort: 2
+      why: >-
+        In scope (upstream tracking). a: upstream changes go unnoticed until someone runs
+        check; b: no scheduler exists; d: lands as a scheduled job; e: staleness is silent.
+        One source.
+    final_score: 4
+    decision: {state: candidate}
+
+  - key: declarative-sources-with-globs
+    domains:
+      - skill-sources
+    layer: content
+    what: >-
+      sources.json declares each upstream with key, owner, repo, optional branch, label, a
+      tier (Official, Framework, Curated, Mega bundle), include/exclude globs, and
+      skipByDefault for a 227k-file aggregator.
+    notable: >-
+      A tier label gives agents and humans a coarse trust/quality signal per source, and
+      globs scope ingestion. The host has scoped source records but no per-source tier; PRD
+      §44 plans quality/trust metadata.
+    where:
+      - skills-mcp@dc3dda4f8660:sources.json#L1-L40
+    contrast: extends
+    host: internal/source/records.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: In scope, but no concrete host failure from the missing tier today.
+    final_score: 0
+    decision: {state: candidate}
+
+  - key: clone-free-trees-api-ingestion
+    domains:
+      - skill-sources
+      - storage
+    layer: history
+    what: >-
+      skills-mcp replaced a build that needed all 17 upstream repos cloned (~5 GB) with the
+      GitHub Trees API plus raw file fetches, so a full refresh needs no disk and runs in CI
+      unattended; output parity was checked (6,998 skills).
+    notable: >-
+      Trades Git semantics (history, diffs, offline work) for zero local state and easy CI.
+      The host keeps bare go-git mirrors because it needs commits and diffs for provenance
+      and 3-way updates, so the trade-off goes the other way for its goal.
+    where:
+      - skills-mcp@8a87dd8
+      - skills-mcp@dc3dda4f8660:scripts/build-catalog.mjs#L1-L27
+    contrast: contradicts
+    host: internal/source/git_repository.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 2
+      effort: 3
+      why: In scope, but the host needs history the API does not give; no failure it prevents.
+    final_score: 0
+    decision: {state: candidate}
+
+  - key: partial-failure-report
+    domains:
+      - skill-sources
+      - ux
+    layer: craft
+    what: >-
+      The skills-mcp builder never aborts on one bad file: it collects per-path failures,
+      warns when a tree listing is truncated, and prints a per-source breakdown with
+      --report.
+    notable: Keeps a 9,000-skill build moving while still showing what was lost.
+    where:
+      - skills-mcp@dc3dda4f8660:scripts/build-catalog.mjs#L163-L191
+      - skills-mcp@dc3dda4f8660:scripts/build-catalog.mjs#L454-L470
+    contrast: new
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Adjacent build ergonomics.
+    final_score: 0
+    decision: {state: candidate}
+
+  - key: head-sha-repo-cache
+    domains:
+      - skill-sources
+    layer: content
+    what: >-
+      skills-mcp caches each source's skill rows in .cache/<key>.json keyed by the repo's
+      HEAD commit; an unchanged repo costs one API call on refresh, a changed one is
+      re-listed and every SKILL.md fetched again.
+    notable: >-
+      Coarse but cheap change detection. The host is finer: its revision digest is the Git
+      tree or blob hash of the scoped path, so a commit elsewhere in the repo does not mark
+      a skill changed.
+    where:
+      - skills-mcp@dc3dda4f8660:scripts/build-catalog.mjs#L297-L318
+    contrast: already-covered
+    host: internal/source/git_repository.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered, more precisely, by scoped tree hashes.
+    decision: {state: candidate}
+
+  - key: orphan-origin-tracking
+    domains:
+      - skill-sources
+      - curation
+    layer: history
+    what: >-
+      After its two-phase commit pointed skills.source_path at the archive copy, meta_skill
+      could no longer tell when a skill's original markdown was renamed or removed; it added
+      a skill_origins table and `ms prune stale-sources`.
+    notable: >-
+      Provenance must point at the upstream location, not the local copy. The host keeps
+      provenance in source records and reports removed/unavailable upstream state per skill.
+    where:
+      - meta-skill@e999668e8d8c:migrations/014_add_skill_origins.sql#L1-L25
+    contrast: already-covered
+    host: internal/app/upstream.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered by the host's upstream state model.
+    decision: {state: candidate}

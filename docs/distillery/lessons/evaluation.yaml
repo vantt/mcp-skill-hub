@@ -1,0 +1,125 @@
+# Lessons whose primary domain is "evaluation". Written by distill.mjs: edit freely, then run
+# `distill.mjs format`. final_score = relevance × impact × evidence / effort (impact = number of
+# facts); ranked lessons come first by final_score, then unranked ones by key.
+lessons:
+
+  - key: test-the-claim-not-the-doc
+    domains:
+      - evaluation
+      - storage
+      - host-integration
+    layer: validation
+    what: >-
+      Both sources found that a documented promise about their own system was false until
+      someone executed it. meta_skill's README promises that a corrupt database "can be
+      rebuilt from Git", but no code rebuilds from the archive; doctor only diffs the two id
+      sets and tells the user to re-index from the original source roots. skills-mcp's
+      documented `claude mcp add` command "has never worked" and was "found by actually
+      running the documented command instead of trusting it"; its stats sidecar silently
+      froze for 16 days because the workflow staged only one of the two files the builder
+      writes. A third source, the MCP skills working group, found that a VS Code client
+      parser written to the draft matched zero entries on a real server, and that none of
+      three defects were caught by type-checking or unit tests, only by running against a
+      real server. A fourth, tech-leads-club, still documents its MCP server as having no
+      local filesystem access after a tool that writes a cache directory was added.
+    notable: >-
+      The mechanism is to turn every operational promise (rebuild from Git, install command,
+      advertised counts) into something executed: a test or CI job that clones, rebuilds and
+      checks, or a value generated from the system instead of typed. The trade-off is CI
+      time and a fixture hub. For the goal this is the guard on "a fresh clone on a new
+      machine cannot rebuild a working hub": the host already simulates a clone with absent
+      empty directories in tests, but not an end-to-end clone + rebuild of a hub with skills
+      and lessons, which is exactly the claim that failed on 2026-10-08.
+    where:
+      - meta-skill@e999668e8d8c:README.md#L94-L99
+      - meta-skill@e999668e8d8c:src/cli/commands/doctor.rs#L365-L414
+      - skills-mcp@0e36f49
+      - skills-mcp@9f51399
+      - ext-skills@167da6c0d42c:docs/archive/experimental-findings.md#L19-L36
+      - tech-leads-club@120b67676388:SECURITY.md#L172-L172
+    contrast: extends
+    host: internal/workspace/workspace_test.go
+    score:
+      relevance: 3
+      facts:
+        - a
+        - d
+        - e
+      impact: 3
+      evidence: 3
+      effort: 2
+      why: >-
+        Core of the goal (git clone rebuilds the hub). a: the clone+rebuild promise broke on
+        2026-10-08 and current tests cover only absent directories; d: lands as a CI job; e:
+        both sources show the claim failing silently. Two independent sources converge. Four
+        independent sources agree.
+    final_score: 13.5
+    decision: {state: candidate}
+
+  - key: graded-implicit-rewards
+    domains:
+      - evaluation
+      - skill-recommendation
+    layer: content
+    what: >-
+      meta_skill turns usage into graded rewards for its suggestion bandit: explicit helpful
+      1.0, used over five minutes 0.8, loaded only 0.3, ignored 0.1, unloaded quickly or not
+      helpful 0.0, star ratings scaled, task completion 0.7-0.9.
+    notable: >-
+      It gets a learning signal without asking the user every time, at the price of treating
+      dwell time as usefulness. The host deliberately refuses this: outcome_record "never
+      infers usefulness from activation or use". Recorded as a contradiction for the human
+      to weigh, not as a gap.
+    where:
+      - meta-skill@e999668e8d8c:src/suggestions/bandit/rewards.rs#L94-L130
+    contrast: contradicts
+    host: internal/delivery/mcpserver/insight_tools.go
+    score:
+      relevance: 2
+      facts:
+        - a
+        - b
+      impact: 2
+      evidence: 1
+      effort: 2
+      why: >-
+        In scope (evaluation). a: explicit outcomes are rare, so the host often cannot tell
+        whether a skill helped; b: no implicit signal by design. Contradicts a deliberate
+        host choice; one source.
+    final_score: 2
+    decision: {state: candidate}
+
+  - key: ab-experiment-on-skill-variants
+    domains:
+      - evaluation
+      - curation
+    layer: validation
+    what: >-
+      `ms experiment` assigns skill or slice variants (uniform, weighted or Thompson
+      sampling), records task_success outcomes per variant, and reports a two-proportion
+      z-test; "appears better" only at p <= 0.05, otherwise "No significant difference yet".
+      Conclude records the winner without applying it.
+    notable: >-
+      It measures whether a skill change helped instead of assuming it, and keeps the human
+      in charge (no auto-apply). The trade-off: it needs enough outcomes per variant, which
+      a personal hub may never reach. The host compares routing variants but has no utility
+      experiment for a curated skill edit (doc 04 §8.4 designed, not built).
+    where:
+      - meta-skill@e999668e8d8c:src/cli/commands/experiment.rs#L1003-L1050
+    contrast: new
+    host: docs/design/04-telemetry-reproducibility-evaluation.md
+    score:
+      relevance: 2
+      facts:
+        - a
+        - b
+        - e
+      impact: 3
+      evidence: 1
+      effort: 3
+      why: >-
+        In scope (feedback that proves improvement). a: a curated skill edit ships with no
+        measure of whether it helped; b: no skill-level experiment exists; e: the failure is
+        silent. One source, and a new subsystem.
+    final_score: 2
+    decision: {state: candidate}

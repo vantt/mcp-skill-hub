@@ -1,0 +1,54 @@
+# Lessons whose primary domain is "storage". Written by distill.mjs: edit freely, then run
+# `distill.mjs format`. final_score = relevance × impact × evidence / effort (impact = number of
+# facts); ranked lessons come first by final_score, then unranked ones by key.
+lessons:
+
+  - key: stubs-removed-not-shipped
+    domains:
+      - storage
+      - ux
+    layer: history
+    what: >-
+      meta_skill deleted registry and updater modules that were stubs always returning
+      Ok(None) or NotImplemented, and an evidence store that is written as "{}" with no
+      production caller is still present.
+    notable: >-
+      A stub that looks like a feature misleads users and agents. The host's disabled vector
+      and LLM channels fail loudly in Validate() instead.
+    where:
+      - meta-skill@2b333b54b71c
+    contrast: already-covered
+    host: internal/resolver/policy.go
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered by explicit "disabled" errors.
+    decision: {state: candidate}
+
+  - key: two-phase-commit-git-sqlite
+    domains:
+      - storage
+    layer: content
+    what: >-
+      Every meta_skill write runs four phases: a tx record, SQLite pending, a Git commit,
+      SQLite committed; incomplete tx_log rows are replayed on startup under a global lock.
+    notable: >-
+      Prevents split-brain between the two stores at the cost of a transaction log. The host
+      has its own write-ahead log and receipts, and its simplification plan asks whether one
+      operation should simply be one Git commit.
+    where:
+      - meta-skill@e999668e8d8c:src/storage/tx.rs#L1-L5
+      - meta-skill@e999668e8d8c:src/storage/tx.rs#L499-L522
+    contrast: already-covered
+    host: internal/mutation/transaction.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered by the host's WAL; relevant to plan open decision 1.
+    decision: {state: candidate}

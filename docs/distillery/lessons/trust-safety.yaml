@@ -1,0 +1,147 @@
+# Lessons whose primary domain is "trust-safety". Written by distill.mjs: edit freely, then run
+# `distill.mjs format`. final_score = relevance × impact × evidence / effort (impact = number of
+# facts); ranked lessons come first by final_score, then unranked ones by key.
+lessons:
+
+  - key: content-scan-before-review
+    domains:
+      - trust-safety
+      - curation
+    layer: enforcement
+    what: >-
+      meta_skill scans untrusted skill content for prompt-injection phrases ("ignore
+      previous instructions", "exfiltrate", "reveal system prompt") and secrets (AWS keys,
+      GitHub tokens, private keys...), quarantines hits with a replay command, and its lint
+      rules no-secrets and no-injection are errors that block indexing. tech-leads-club
+      independently gates every release on an agent-security scan of each skill, failing on
+      critical or high findings, with an allowlist whose entries carry reason, approver and
+      an expiry.
+    notable: >-
+      The human reviewer gets machine-flagged risks instead of reading every line. The
+      regexes are simple keyword matches, so this is a net for obvious cases, not a defence.
+      The host gates third-party content on a human-approved digest but runs no scan to help
+      that review.
+    where:
+      - meta-skill@e999668e8d8c:src/security/acip.rs#L13-L45
+      - meta-skill@e999668e8d8c:src/lint/rules/security.rs#L400-L440
+      - tech-leads-club@120b67676388:packages/skills-catalog/src/scan-skills.ts#L361-L385
+      - >-
+        tech-leads-club@120b67676388:packages/skills-catalog/security-scan-allowlist.yaml#L1-L19
+    contrast: extends
+    host: internal/skillruntime/trust.go
+    score:
+      relevance: 2
+      facts:
+        - a
+        - b
+        - d
+        - e
+      impact: 4
+      evidence: 3
+      effort: 2
+      why: >-
+        In scope (human approval of third-party content). a: a reviewer can approve a skill
+        with an injected instruction or a secret because nothing flags it; b: no scan
+        exists; d: lands as a lint/check; e: the failure is silent. Two independent sources
+        converge.
+    final_score: 12
+    decision: {state: candidate}
+
+  - key: deny-unknown-dependency-sources
+    domains:
+      - trust-safety
+    layer: enforcement
+    what: >-
+      meta_skill's CI runs cargo deny with unknown registries and git sources denied, a
+      license allow-list, and each ignored advisory annotated with its reason, plus cargo
+      audit.
+    notable: Supply-chain policy for the tool's own dependencies, enforced in CI.
+    where:
+      - meta-skill@e999668e8d8c:deny.toml#L195-L205
+    contrast: new
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Adjacent (the hub binary's own dependencies), not the skill flow.
+    final_score: 0
+    also_fits:
+      - upstream
+    decision: {state: candidate}
+
+  - key: signed-bundles-refuse-unsigned
+    domains:
+      - trust-safety
+      - skill-over-mcp
+    layer: enforcement
+    what: >-
+      meta_skill bundles carry a SHA-256 checksum and an Ed25519 signature; install refuses
+      an unsigned bundle unless --no-verify, and releases are checked with minisign and
+      pinned asset digests.
+    notable: >-
+      Supply-chain integrity for packaged distribution. The host distributes over MCP from
+      its own Git repository with per-file digests; signing is planned "when infrastructure
+      allows".
+    where:
+      - meta-skill@e999668e8d8c:src/bundler/install.rs#L69-L100
+    contrast: new
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 3
+      why: Adjacent; the host has no bundle distribution.
+    final_score: 0
+    decision: {state: candidate}
+
+  - key: license-retained-note
+    domains:
+      - trust-safety
+      - skill-sources
+    layer: wording
+    what: >-
+      skills-mcp states that indexed skills keep their upstream licenses and that
+      Anthropic's document skills are source-available rather than MIT, "check before
+      redistributing".
+    notable: >-
+      The host already detects license files and shows license warnings before adding a
+      skill.
+    where:
+      - skills-mcp@dc3dda4f8660:README.md#L390-L392
+    contrast: already-covered
+    host: internal/app/skill_discovery.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered at add time.
+    decision: {state: candidate}
+
+  - key: pin-content-never-latest
+    domains:
+      - trust-safety
+      - skill-sources
+    layer: history
+    what: >-
+      tech-leads-club stopped resolving skill content through the mutable @latest CDN tag,
+      pins the catalog version once per process, and checks every download against the
+      registry's contentHash (issue #114).
+    notable: The host already pins commits and per-file digests.
+    where:
+      - tech-leads-club@e091b637ea89
+      - tech-leads-club@120b67676388:packages/mcp/src/cdn.ts#L21-L59
+    contrast: already-covered
+    host: internal/app/distribution.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 2
+      effort: 1
+      why: Already covered.
+    decision: {state: candidate}

@@ -1,0 +1,262 @@
+# distill learning area: goal, domains, sources (cursor + coverage) and intake.
+# Written by distill.mjs; comments are not kept, so put reasons in fields. Lessons live in lessons/<domain>.yaml.
+goal:
+  status: draft
+  purpose: >-
+    Any MCP-capable agent, in any project, gets the right curated skill from one
+    Git-owned library and loads only what its task needs, while the human keeps curated
+    skills under their own control as upstream sources change.
+  core_domains:
+    - skill-over-mcp
+    - skill-recommendation
+  in_scope:
+    - >-
+      one curated skill library in Git, with provenance of every skill (repo, path,
+      commit)
+    - >-
+      distribution over MCP with the official skills extension and progressive
+      disclosure
+    - server-side resolution and recommendation of the right skill for a task
+    - upstream tracking, change detection, and learning from sources into curated skills
+    - curation lifecycle with human approval of third-party content
+    - runtime state (database, indexes, caches) rebuilt from the Git repository
+    - feedback and telemetry that make resolution measurably better
+  out_of_scope:
+    - a public marketplace
+    - executing upstream code automatically
+    - auto-merging upstream changes into curated skills
+    - replacing Git with a database server, or requiring a cloud service
+    - installing skills into each IDE or project by copying
+    - general-purpose agent orchestration
+  failures_it_prevents:
+    - skills copied into each project drift apart and go stale
+    - an upstream change silently alters curated knowledge
+    - the agent loads the wrong skill, or too much catalog and content, into its context
+    - adding skills grows the agent's base context
+    - a fresh clone on a new machine cannot rebuild a working hub
+    - >-
+      lessons from sources are lost, repeated, or applied without a record of what was
+      incorporated
+    - third-party skill content is served or run without the human's approval
+    - nobody can tell whether a resolution or a skill change actually helped
+
+domains:
+  - name: skill-over-mcp
+    definition: >-
+      serving skills to agents over MCP: the skills extension (skills/list, skills/get,
+      resources/read), manifests, digests, progressive loading of content and the
+      context budget it costs
+  - name: skill-recommendation
+    definition: >-
+      choosing the right skill for a task: retrieval, ranking, resolve outcomes
+      (resolved, needs_context, no_skill), the explanation of why, and the context
+      signals used
+  - name: skill-sources
+    definition: >-
+      bringing skills in and keeping them current: source registry, ingestion, indexing,
+      duplicates and upstream change detection
+  - name: curation
+    definition: >-
+      the lifecycle of a curated skill: add, edit, review and approve, versions,
+      preview/confirm mutations
+  - name: source-learning
+    definition: >-
+      learning from upstream and reference sources: distillation, lessons, decisions and
+      their application
+  - name: storage
+    definition: >-
+      Git as the durable database: repository layout, derived runtime state, rebuild and
+      portability
+  - name: evaluation
+    definition: >-
+      proving it works: usage feedback, outcomes, telemetry, metrics, evals and
+      experiments
+  - name: trust-safety
+    definition: >-
+      what may run or be served: untrusted content, approval, sandboxing, secrets and
+      supply chain
+  - name: host-integration
+    definition: >-
+      connecting agents and hosts: install, configuration, agent instructions and
+      per-host adapters
+  - name: ux
+    definition: >-
+      how people and agents operate it: CLI, web UI, output formats, errors and
+      documentation
+
+sources:
+  - name: skills-mcp
+    type: git-repo
+    url: https://github.com/gengirish/skills-mcp
+    cursor: dc3dda4f8660
+    analyzed: '2026-10-08'
+    domains_covered:
+      - skill-over-mcp
+      - skill-recommendation
+      - skill-sources
+      - curation
+      - source-learning
+      - storage
+      - evaluation
+      - trust-safety
+      - host-integration
+      - ux
+    coverage:
+      at: dc3dda4f8660
+      read:
+        - README.md
+        - CHANGELOG.md
+        - sources.json
+        - src/ (all 4 files)
+        - scripts/build-catalog.mjs
+        - scripts/classify.mjs (header and rules)
+        - scripts/smoke-test.mjs
+        - scripts/test-install.mjs (header)
+        - .github/workflows/refresh-catalog.yml
+        - full commit history (9 non-bot commits, bodies of 4)
+      not_read:
+        - path: web/
+          reason: marketing landing page (Next.js), outside the goal
+        - path: scripts/make-demo.mjs, scripts/make-social.mjs
+          reason: demo and social-card generators, outside the goal
+        - path: data/catalog.json
+          reason: generated output (6.7 MB), not a mechanism
+        - path: assets/
+          reason: images and video
+  - name: meta-skill
+    type: git-repo
+    url: https://github.com/Dicklesworthstone/meta_skill
+    cursor: e999668e8d8c
+    analyzed: '2026-10-08'
+    domains_covered:
+      - skill-over-mcp
+      - skill-recommendation
+      - skill-sources
+      - curation
+      - source-learning
+      - storage
+      - evaluation
+      - trust-safety
+      - host-integration
+      - ux
+    coverage:
+      at: e999668e8d8c
+      read:
+        - README.md (storage section)
+        - src/storage/ (mod, tx, git, tombstone)
+        - src/search/ (hybrid, embeddings)
+        - src/context/ (detector, scoring, collector)
+        - src/suggestions/bandit/
+        - src/core/ (disclosure, packing, pack_contracts, skill slices)
+        - >-
+          src/cli/commands/ (prune, doctor, search, load, experiment, outcome, feedback,
+          bundle, evidence)
+        - src/bundler/ (package, manifest, install, local_safety)
+        - src/security/ (acip, secret_scanner, path_policy, command_safety)
+        - src/lint/rules/
+        - src/cli/output.rs, src/main.rs, src/error/codes.rs
+        - migrations/
+        - .github/workflows/
+        - deny.toml
+        - commit history (keyword scan of 598 subjects, bodies of 6 commits)
+      not_read:
+        - path: src/cass/, src/sync/, src/import/, src/meta_skills/
+          reason: >-
+            session mining, sync and import; not reached in this pass (the largest gap: CASS
+            evidence may feed provenance)
+        - path: src/tui/, src/graph/, RICH_INTEGRATION_PLAN.md, docs/RICH_OUTPUT.md
+          reason: terminal UI rendering, outside the goal
+        - path: BEST_PRACTICES_FOR_WRITING_AND_USING_SKILLS_MD_FILES.md
+          reason: general manual for writing any skill; not this host's subject
+        - path: AGENTS.md, CONTRIBUTING.md
+          reason: the repository's own agent and contribution rules; not this host's subject
+        - path: PLAN_TO_MAKE_METASKILL_CLI*.md
+          reason: 29k lines of original design plan; mechanisms were read in code instead
+        - path: tests/
+          reason: 147 test files; only names scanned
+        - path: skills/, .ms/meta-skills/
+          reason: sample skills, content not mechanism
+  - name: ext-skills
+    type: git-repo
+    url: https://github.com/modelcontextprotocol/ext-skills
+    cursor: 167da6c0d42c
+    analyzed: '2026-10-08'
+    domains_covered:
+      - skill-over-mcp
+      - skill-recommendation
+      - skill-sources
+      - curation
+      - source-learning
+      - storage
+      - evaluation
+      - trust-safety
+      - host-integration
+      - ux
+    coverage:
+      at: 167da6c0d42c
+      read:
+        - README.md
+        - >-
+          specification/stable/skills.mdx (capability, entries, frontmatter, names,
+          resources, limits, integrity, errors, security)
+        - docs/rationale.md
+        - docs/decisions.md (headings; 2026-06-09 and 2026-07-16 entries)
+        - >-
+          docs/archive/experimental-findings.md (VS Code findings, reliability and
+          adherence)
+      not_read:
+        - path: >-
+            specification/stable/skills.mdx (listing/get/directory request-response schemas,
+            example flow)
+          reason: >-
+            wire detail the host already implements; read only where a host requirement was
+            in question
+        - path: 'docs/archive/ (other 13 files: SEP draft, threat model, URI scheme, use cases)'
+          reason: frozen pre-release drafts superseded by the stable spec
+        - path: .vitepress/, index.md, public/
+          reason: documentation site
+        - path: CONTRIBUTING.md, AGENTS.md
+          reason: the working group process, not this host subject
+  - name: tech-leads-club
+    type: git-repo
+    url: https://github.com/tech-leads-club/agent-skills
+    cursor: 120b67676388
+    analyzed: '2026-10-08'
+    domains_covered:
+      - skill-over-mcp
+      - skill-recommendation
+      - skill-sources
+      - curation
+      - source-learning
+      - storage
+      - evaluation
+      - trust-safety
+      - host-integration
+      - ux
+    coverage:
+      at: 120b67676388
+      read:
+        - packages/mcp/src/ (tools, registry, cdn, integrity, staging, resources)
+        - >-
+          packages/skills-catalog/src/ (generate-registry, utils, scan-skills header and
+          gates)
+        - >-
+          packages/skills-catalog/skills/deprecated.yaml, security-scan-allowlist.yaml
+          (format)
+        - libs/core/src/lib/services/ (installer, lockfile, registry, update)
+        - packages/cli/src/index.ts
+        - tools/validate-skills.ts
+        - .github/workflows/release.yml
+        - SECURITY.md, CONTRIBUTING.md (skill rules), AGENTS.md (skill rules)
+        - commit history (keyword and path filters, about 25 commit bodies)
+      not_read:
+        - path: packages/skills-catalog/skills/ (779 files of 92 skills)
+          reason: skill content, not mechanism
+        - path: packages/marketplace/
+          reason: website UI; its search scorer read only in its header
+        - path: packages/mcp/src/prompts.ts beyond L60, scan-skills.ts L204-L360
+          reason: not reached in this pass
+        - path: skills/(creation)/skill-architect and the style guides
+          reason: general skill-writing and style manuals; not this host subject
+
+intake: []

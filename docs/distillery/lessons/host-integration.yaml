@@ -1,0 +1,95 @@
+# Lessons whose primary domain is "host-integration". Written by distill.mjs: edit freely, then run
+# `distill.mjs format`. final_score = relevance × impact × evidence / effort (impact = number of
+# facts); ranked lessons come first by final_score, then unranked ones by key.
+lessons:
+
+  - key: models-ignore-available-skills
+    domains:
+      - host-integration
+      - skill-recommendation
+      - evaluation
+    layer: validation
+    what: >-
+      The working group recorded independent reports that models often do not load or follow
+      skills even when they are preloaded, that adherence decays as context grows and
+      compaction happens, and that it is model-specific; workarounds were hooks that remind
+      the model and wrapping skills in a similarly named subagent.
+    notable: >-
+      The hub's delivery depends on the agent calling skill_resolve because a bootstrap
+      block in CLAUDE.md or AGENTS.md tells it to. If that instruction decays, the right
+      skill is never requested, and nothing in the hub notices. The host's usage funnel can
+      measure it; an enforcement (a hook-based reminder at task start) would act on it.
+    where:
+      - ext-skills@167da6c0d42c:docs/archive/experimental-findings.md#L423-L445
+    contrast: extends
+    host: internal/hostintegration/bootstrap.go
+    score:
+      relevance: 3
+      facts:
+        - a
+        - b
+        - c
+        - e
+      impact: 4
+      evidence: 2
+      effort: 2
+      why: >-
+        Core of the goal (the agent gets the right skill). a: delivery depends on an
+        instruction models follow unreliably; b: no reminder or enforcement exists; c: every
+        session; e: silent. Several independent reports in one source.
+    final_score: 12
+    decision: {state: candidate}
+
+  - key: native-and-mcp-same-name
+    domains:
+      - host-integration
+      - trust-safety
+    layer: content
+    what: >-
+      The spec makes skill names per-origin: a host must not let an MCP-served skill
+      silently shadow or be substituted for a same-named skill from another origin,
+      including the host's own filesystem skills, and should surface the collision to the
+      user.
+    notable: >-
+      The hub installs system-curator as a native skill in each host's skills folder and
+      also serves system-curator over MCP, so every connected host sees the same name from
+      two origins, possibly at different versions.
+    where:
+      - ext-skills@167da6c0d42c:specification/stable/skills.mdx#L852-L858
+    contrast: contradicts
+    host: internal/hostintegration/integration.go
+    score:
+      relevance: 2
+      facts:
+        - a
+        - b
+      impact: 2
+      evidence: 1
+      effort: 1
+      why: >-
+        In scope (host integration). a: integration.go:33-35 installs it natively while
+        distribution serves it too; b: nothing prevents the collision. One source; small
+        change.
+    final_score: 4
+    decision: {state: candidate}
+
+  - key: install-by-copying
+    domains:
+      - host-integration
+      - skill-over-mcp
+    layer: ecosystem
+    what: >-
+      skills-mcp's install_skill downloads a skill folder from GitHub into the IDE's skills
+      directory (~/.cursor/skills, ~/.claude/skills, ~/.codex/skills, ...).
+    notable: The copy-per-project model the host exists to replace; recorded as outside the goal.
+    where:
+      - skills-mcp@dc3dda4f8660:src/fetcher.ts#L74-L116
+    contrast: contradicts
+    score:
+      relevance: 0
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Out of scope (installing skills by copying).
+    decision: {state: candidate}

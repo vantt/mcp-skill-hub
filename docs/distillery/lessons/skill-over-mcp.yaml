@@ -1,0 +1,440 @@
+# Lessons whose primary domain is "skill-over-mcp". Written by distill.mjs: edit freely, then run
+# `distill.mjs format`. final_score = relevance × impact × evidence / effort (impact = number of
+# facts); ranked lessons come first by final_score, then unranked ones by key.
+lessons:
+
+  - key: tools-list-is-a-fixed-cost
+    domains:
+      - skill-over-mcp
+      - host-integration
+    layer: history
+    what: >-
+      tech-leads-club treats tool descriptions as a fixed context cost "the client loads
+      into context every session, whether or not any tool is called": it cut them from 719
+      to 385 tokens (tools/list 1505 → 1173) keeping only trigger, input shape and follow-up
+      call, and checked that search quality did not move (1 of 10 real queries empty, 0 of 5
+      unanswerable ones leaking).
+    notable: >-
+      The cost of an MCP server to every agent is its tools/list, not only the skills it
+      serves. Measured on this host (skillhub mcp serve, 2026-10-08): 43 tools, 243 KB of
+      JSON, about 60k tokens, of which 194 KB are outputSchemas and 2k tokens descriptions;
+      source_triage alone is 15 KB. A client without tool deferral pays that in every
+      session, and most of it is curation tooling an ordinary task never calls.
+    where:
+      - tech-leads-club@85dd32647899
+      - tech-leads-club@120b67676388:packages/mcp/src/tools/search-tool.ts#L7-L10
+    contrast: new
+    host: internal/delivery/mcpserver/server.go
+    score:
+      relevance: 3
+      facts:
+        - a
+        - b
+        - c
+        - d
+        - e
+      impact: 5
+      evidence: 2
+      effort: 2
+      why: >-
+        Core of the goal (adding capability must not grow the agent's base context). a:
+        measured 60k-token tools/list today; b: no budget or test on it; c: every session of
+        every agent; d: lands as a size-budget test and a separate curation profile; e:
+        silent, and the source measured its own fix. One source with measurements; a medium
+        change.
+    final_score: 15
+    decision: {state: candidate}
+
+  - key: listing-frontmatter-verbatim
+    domains:
+      - skill-over-mcp
+    layer: content
+    what: >-
+      The skills extension requires the listing's frontmatter to be identical in content to
+      the SKILL.md it describes, and requires hosts to parse the fetched SKILL.md and
+      compare it field by field; any discrepancy is a verification failure and the skill
+      must not be loaded.
+    notable: >-
+      What the user approves from the listing is then exactly what the model receives. The
+      host serves its bundled system-curator with frontmatter it adds at serve time
+      (activation-policy, coordination-boundary, compatible-tools, instruction-only,
+      best-effort-coordination, requires-application-service) that are not in that SKILL.md,
+      so a conforming client must refuse to load it. Fix by putting those fields in the
+      SKILL.md itself or in _meta.
+    where:
+      - ext-skills@167da6c0d42c:specification/stable/skills.mdx#L200-L206
+      - ext-skills@167da6c0d42c:specification/stable/skills.mdx#L461-L466
+    contrast: contradicts
+    host: internal/systemskills/curator/SKILL.md
+    score:
+      relevance: 3
+      facts:
+        - a
+        - b
+        - d
+        - e
+      impact: 4
+      evidence: 1
+      effort: 1
+      why: >-
+        Core of the goal (serving skills over MCP). a: distribution.go:506-514 adds fields
+        the curator SKILL.md does not have, so a conforming client must refuse it; b:
+        nothing checks listing against file; d: a conformance test catches it; e: it fails
+        only on strict clients, silently today. Normative spec, one source; a small change.
+    final_score: 12
+    decision:
+      state: ported
+      reason: >-
+        fixed on the human's instruction: the contract moved into SKILL.md and is served
+        verbatim, with a test that listing equals file
+      at: 167da6c0d42c
+      local: curator compatibility frontmatter
+
+  - key: directory-read-for-deferred-files
+    domains:
+      - skill-over-mcp
+    layer: content
+    what: >-
+      resources/directory/read is a scoped, paginated readdir for skill directories, enabled
+      by directoryRead: true, because skills routinely defer the choice of file to the agent
+      ("use the template in templates/ that matches the document type").
+    notable: >-
+      Without it an agent following such a skill over MCP cannot see which files exist. The
+      host declares directoryRead: false, so skills written for the filesystem that say
+      "pick a file in this folder" cannot be followed through the hub.
+    where:
+      - ext-skills@167da6c0d42c:docs/rationale.md#L53-L61
+      - ext-skills@167da6c0d42c:docs/decisions.md#L252-L256
+    contrast: new
+    host: internal/delivery/mcpserver/server.go
+    score:
+      relevance: 3
+      facts:
+        - a
+        - b
+        - c
+      impact: 3
+      evidence: 1
+      effort: 2
+      why: >-
+        Core of the goal. a: server.go:75 declares directoryRead false, so folder-deferred
+        instructions fail; b: not implemented; c: any skill with such instructions. One
+        source (normative); one method to add.
+    final_score: 4.5
+    decision: {state: candidate}
+
+  - key: token-budget-disclosure-levels
+    domains:
+      - skill-over-mcp
+      - skill-recommendation
+    layer: content
+    what: >-
+      meta_skill loads a skill at a disclosure level with a token budget: Minimal ~100,
+      Overview ~500, Standard ~1500, Full, Complete (with scripts and references). `--pack
+      <tokens>` packs typed slices (rule, command, example, pitfall, policy...) under the
+      budget with coverage quotas, task presets (debug, refactor, learn...), and policy
+      slices that are never dropped.
+    notable: >-
+      Context cost becomes a parameter the server enforces instead of a property of how long
+      the author wrote SKILL.md. The trade-off is a slice structure every skill must carry.
+      The host discloses by file (manifest, then SKILL.md, then one resource at a time) but
+      always serves a whole SKILL.md.
+    where:
+      - meta-skill@e999668e8d8c:src/core/disclosure.rs#L20-L50
+      - meta-skill@e999668e8d8c:src/core/packing.rs#L10-L50
+    contrast: extends
+    host: internal/delivery/mcpserver/server.go
+    score:
+      relevance: 3
+      facts:
+        - a
+        - b
+        - c
+        - d
+      impact: 4
+      evidence: 1
+      effort: 3
+      why: >-
+        Core of the goal (load only what the task needs). a: a long SKILL.md is loaded whole
+        even when a section suffices; b: no token budget exists; c: every skill load; d: the
+        server can enforce the budget. One source; restructures the skill format.
+    final_score: 4
+    decision: {state: candidate}
+
+  - key: stable-skill-uri-for-recovery
+    domains:
+      - skill-over-mcp
+    layer: content
+    what: >-
+      When a read fails verification because a skill changed, the spec's recovery is to call
+      skills/get for that skill and continue from the current entry; skills/get exists so a
+      change costs one entry instead of re-enumerating a catalog of thousands. A skill's
+      identity across hosts is server plus uri.
+    notable: >-
+      That recovery assumes the skill keeps its URI across versions. The host puts the
+      manifest digest in the URI (skill://skillhub/<manifest>/<name>/SKILL.md) and answers
+      skills/get for an old URI with snapshot_expired, so a client must re-list everything,
+      and every version is a new identity in its registry and approvals. The trade-off is
+      the host's snapshot pinning, which the human may prefer to keep.
+    where:
+      - ext-skills@167da6c0d42c:specification/stable/skills.mdx#L447-L452
+      - ext-skills@167da6c0d42c:docs/rationale.md#L35-L43
+    contrast: contradicts
+    host: internal/app/distribution.go
+    score:
+      relevance: 3
+      facts:
+        - a
+        - b
+        - c
+      impact: 3
+      evidence: 1
+      effort: 3
+      why: >-
+        Core of the goal. a: distribution.go:166-190 rejects skills/get on an old URI, so
+        the spec's recovery path fails after any update; b: no stable alias; c: every skill
+        update. Contradicts a deliberate pinning design; a URI scheme change.
+    final_score: 3
+    decision: {state: candidate}
+
+  - key: bounded-file-fetch
+    domains:
+      - skill-over-mcp
+    layer: history
+    what: >-
+      tech-leads-club bounded fetch_skill_files to 5 paths and a 50,000-character response
+      that names what it truncated, because one unbounded call "could exceed the ~25k-token
+      cap agents apply to tool responses and cost the turn"; it also strips frontmatter from
+      read_skill because search already delivered it.
+    notable: >-
+      Stripping frontmatter is not open to the host: the skills extension requires verbatim
+      bytes so clients can verify digests. The bound matters only if a host serves large
+      references; one file per resources/read and a 16 MiB skill cap make it unmeasured
+      here.
+    where:
+      - tech-leads-club@568582cae974
+      - tech-leads-club@120b67676388:packages/mcp/src/tools/core/fetcher.ts#L9-L12
+    contrast: contradicts
+    host: internal/app/distribution.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 2
+      effort: 1
+      why: >-
+        In scope. peripheral: the host serves one verified file per read as the spec
+        requires; no measured oversized read. Measured in the source.
+    final_score: 0
+    decision: {state: candidate}
+
+  - key: registry-file-list-is-the-contract
+    domains:
+      - skill-over-mcp
+    layer: history
+    what: >-
+      tech-leads-club's MCP served only files under scripts/, references/ and assets/, while
+      the registry declared more: 76 files in 5 skills (59 in one) were unreachable over MCP
+      although the CLI installed them. The fix: a bundled file is anything the registry
+      declares, "a folder-name convention is not the contract".
+    notable: >-
+      Two consumers of one catalog must agree on what a skill contains. The host builds its
+      resources set from the files it indexes; this pass did not verify which files it
+      excludes.
+    where:
+      - tech-leads-club@4805b5e60654
+      - tech-leads-club@120b67676388:packages/mcp/src/utils.ts#L5-L16
+    contrast: new
+    score:
+      relevance: 3
+      facts: []
+      impact: 0
+      evidence: 2
+      effort: 1
+      why: >-
+        Core domain, but the host's inclusion rule was not verified in this pass (no fact
+        a).
+    final_score: 0
+    decision: {state: candidate}
+
+  - key: handshake-reads-sidecar
+    domains:
+      - skill-over-mcp
+      - host-integration
+    layer: craft
+    what: >-
+      skills-mcp writes a 120-byte catalog-meta.json next to its 6.7 MB catalog; the MCP
+      handshake and catalog_stats read only the sidecar and the full catalog is parsed on
+      the first tool call that needs it (cold start ~750 ms → ~525 ms). The same release
+      measured npx at ~13 s to ready versus ~0.5 s for an installed binary, longer than some
+      clients' connect timeout.
+    notable: >-
+      Clients give the handshake a short window, so startup work is a reliability issue, not
+      only speed. The host runs EnsureCatalog (rebuild if missing or stale) before accepting
+      stdio frames; on a healthy generation that is cheap, and no slow start is measured
+      yet.
+    where:
+      - skills-mcp@dc3dda4f8660:src/catalog.ts#L54-L80
+      - skills-mcp@0e36f49
+    contrast: new
+    host: internal/delivery/mcpserver/server.go
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 2
+      effort: 1
+      why: >-
+        peripheral: startup speed, not what is served; no measured slow host start, so no
+        fact a. Measured in the source.
+    final_score: 0
+    decision: {state: candidate}
+
+  - key: archives-and-index-resource-dropped
+    domains:
+      - skill-over-mcp
+    layer: history
+    what: >-
+      v1 dropped archives (a client that reads resources skipped 17 of 25 archive-only
+      skills on a live server) and replaced the skill://index.json resource with skills/list
+      and skills/get, for pagination, base-protocol caching and discoverability.
+    notable: >-
+      The host already implements the v1 shape (skills/list, skills/get, per-file resources,
+      no archives).
+    where:
+      - ext-skills@167da6c0d42c:docs/decisions.md#L304-L306
+      - ext-skills@167da6c0d42c:docs/rationale.md#L45-L47
+    contrast: already-covered
+    host: internal/delivery/mcpserver/server.go
+    score:
+      relevance: 3
+      facts: []
+      impact: 0
+      evidence: 2
+      effort: 1
+      why: Already covered by the host's v1 implementation.
+    decision: {state: candidate}
+
+  - key: fetch-by-branch-unpinned
+    domains:
+      - skill-over-mcp
+      - trust-safety
+    layer: content
+    what: >-
+      skills-mcp records each source's commit in the catalog, but get_skill and
+      install_skill fetch from the branch name (falling back to master and main), so the
+      content served can differ from what was indexed, with no digest check.
+    notable: >-
+      Shows why the host pins: it serves manifest-versioned, per-file digested content and
+      refuses a digest mismatch.
+    where:
+      - skills-mcp@dc3dda4f8660:src/catalog.ts#L96-L104
+      - skills-mcp@dc3dda4f8660:src/fetcher.ts#L18-L33
+    contrast: already-covered
+    host: internal/app/distribution.go
+    score:
+      relevance: 3
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered by digest-pinned distribution.
+    decision: {state: candidate}
+
+  - key: local-index-no-network-search
+    domains:
+      - skill-over-mcp
+      - skill-recommendation
+    layer: craft
+    what: >-
+      Both sources search a local index with no network round-trip and fetch content only on
+      demand: skills-mcp ships its catalog inside the npm package; meta_skill indexes into
+      Tantivy and SQLite.
+    notable: Independent agreement with the host's derived SQLite catalog served from the runtime.
+    where:
+      - skills-mcp@dc3dda4f8660:src/catalog.ts#L82-L90
+      - meta-skill@e999668e8d8c:src/cli/commands/search.rs#L121-L150
+    contrast: already-covered
+    host: internal/catalog/open.go
+    score:
+      relevance: 3
+      facts: []
+      impact: 0
+      evidence: 3
+      effort: 1
+      why: Already covered; two sources agree.
+    decision: {state: candidate}
+
+  - key: per-file-digests-cover-supporting-files
+    domains:
+      - skill-over-mcp
+      - trust-safety
+    layer: history
+    what: >-
+      An earlier revision carried one digest covering only SKILL.md; a server could get
+      approval for a benign skill and then rotate references/GUIDE.md. The spec moved to a
+      complete, per-file resources set, and approval binds to it and is revoked when it
+      changes.
+    notable: >-
+      Agrees with the host: per-file digests, a manifest over all files, approval bound to a
+      content digest over every file.
+    where:
+      - ext-skills@167da6c0d42c:docs/rationale.md#L67-L71
+      - ext-skills@167da6c0d42c:specification/stable/skills.mdx#L869-L876
+    contrast: already-covered
+    host: internal/skillruntime/trust.go
+    score:
+      relevance: 3
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered by digest-bound approval.
+    decision: {state: candidate}
+
+  - key: per-skill-size-limits
+    domains:
+      - skill-over-mcp
+    layer: content
+    what: >-
+      The spec fixes per-skill limits every host must accept: 512 resources and 16 MiB
+      total; servers should not serve skills above them.
+    notable: The host already caps a distributed skill at 16 MiB.
+    where:
+      - ext-skills@167da6c0d42c:specification/stable/skills.mdx#L227-L241
+    contrast: already-covered
+    host: internal/catalog/servable.go
+    score:
+      relevance: 3
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered (16 MiB cap; the resource count was not checked in this pass).
+    decision: {state: candidate}
+
+  - key: stage-verified-files-for-execution
+    domains:
+      - skill-over-mcp
+      - trust-safety
+    layer: content
+    what: >-
+      prepare_skill_files writes a skill's verified files to
+      ~/.cache/agent-skills-mcp/<skill>/ <hash12>/ with mode 0600 and returns file:// links,
+      because fetched text cannot be run as a script; old revisions are pruned.
+    notable: >-
+      Agrees with the host's read-only local snapshots under
+      runtime/cache/skills/<id>@<digest>/.
+    where:
+      - tech-leads-club@21520a7916c4
+      - tech-leads-club@120b67676388:packages/mcp/src/staging.ts#L8-L24
+    contrast: already-covered
+    host: internal/app/skill_snapshot.go
+    score:
+      relevance: 3
+      facts: []
+      impact: 0
+      evidence: 2
+      effort: 1
+      why: Already covered; two sources agree on staging verified copies.
+    decision: {state: candidate}

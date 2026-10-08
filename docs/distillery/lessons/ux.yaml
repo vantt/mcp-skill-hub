@@ -1,0 +1,53 @@
+# Lessons whose primary domain is "ux". Written by distill.mjs: edit freely, then run
+# `distill.mjs format`. final_score = relevance × impact × evidence / effort (impact = number of
+# facts); ranked lessons come first by final_score, then unranked ones by key.
+lessons:
+
+  - key: derive-published-values
+    domains:
+      - ux
+      - skill-over-mcp
+    layer: wording
+    what: >-
+      skills-mcp's counts in README, demo, social card and the MCP instructions said ~7,000
+      while the catalog held 9,238, and the reported version was a stale hard-coded 0.1.0;
+      both are now generated from the catalog and package.json.
+    notable: >-
+      Values an agent reads (instructions, versions) should be derived, never typed. Small
+      for the host, whose version comes from the build.
+    where:
+      - skills-mcp@f1c5e8d
+      - skills-mcp@dc3dda4f8660:src/index.ts#L22-L40
+    contrast: new
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Adjacent wording hygiene.
+    final_score: 0
+    decision: {state: candidate}
+
+  - key: structured-error-envelope
+    domains:
+      - ux
+    layer: wording
+    what: >-
+      meta_skill's machine errors carry code, numeric_code, message, suggestion,
+      recoverable, category and help_url; but a JSON error is printed only under the
+      deprecated --robot flag, not under -m or -O json.
+    notable: 'The host already has one output path: JSON or ERROR/WHY/FIX with stable codes.'
+    where:
+      - meta-skill@e999668e8d8c:src/cli/output.rs#L88-L123
+      - meta-skill@e999668e8d8c:src/main.rs#L12-L38
+    contrast: already-covered
+    host: internal/delivery/cli/output.go
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered.
+    decision: {state: candidate}

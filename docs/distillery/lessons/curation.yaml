@@ -1,0 +1,167 @@
+# Lessons whose primary domain is "curation". Written by distill.mjs: edit freely, then run
+# `distill.mjs format`. final_score = relevance × impact × evidence / effort (impact = number of
+# facts); ranked lessons come first by final_score, then unranked ones by key.
+lessons:
+
+  - key: deprecation-names-alternatives
+    domains:
+      - curation
+      - skill-recommendation
+    layer: content
+    what: >-
+      tech-leads-club keeps a deprecated.yaml with name, message and alternatives per
+      retired skill; the generator copies it into the registry and the CLI update view shows
+      it.
+    notable: >-
+      A retired skill points its users at the replacement instead of just vanishing. The
+      host's lifecycle has a deprecated state but no successor field, so an agent or user
+      that hits a deprecated skill learns nothing about what to use instead.
+    where:
+      - tech-leads-club@120b67676388:packages/skills-catalog/skills/deprecated.yaml#L1-L12
+      - >-
+        tech-leads-club@120b67676388:packages/skills-catalog/src/generate-registry.ts#L99-L118
+    contrast: extends
+    host: internal/skill/lifecycle.go
+    score:
+      relevance: 2
+      facts:
+        - a
+        - b
+      impact: 2
+      evidence: 1
+      effort: 1
+      why: >-
+        In scope (curation lifecycle). a: deprecating a skill leaves no pointer to its
+        replacement; b: no successor field. One source; small change.
+    final_score: 4
+    decision: {state: candidate}
+
+  - key: prune-proposals-human-approved
+    domains:
+      - curation
+      - skill-recommendation
+    layer: content
+    what: >-
+      `ms prune analyze` finds low-usage (fewer than 5 uses in 30 days), low-quality (<
+      0.3), near-duplicate (embedding cosine >= 0.85), toolchain-mismatched and oversized
+      skills and emits merge, deprecate and split proposals; `ms prune apply` refuses
+      without --approve or --dry-run, and merge/split write drafts instead of editing
+      skills.
+    notable: >-
+      Catalog hygiene becomes a periodic proposal the human reviews, not a manual hunt. The
+      trade-off is thresholds that need usage data. The host lints near_duplicate and
+      trigger_collision and supports manual deprecation, but never proposes deprecations or
+      merges from usage.
+    where:
+      - meta-skill@e999668e8d8c:src/cli/commands/prune.rs#L41-L115
+      - meta-skill@e999668e8d8c:src/cli/commands/prune.rs#L843-L849
+    contrast: extends
+    host: internal/resolver/lint.go
+    score:
+      relevance: 2
+      facts:
+        - a
+        - b
+        - c
+      impact: 3
+      evidence: 1
+      effort: 2
+      why: >-
+        In scope (curation lifecycle). a: unused and overlapping skills accumulate and widen
+        routing ambiguity; b: nothing proposes deprecation from usage; c: grows with every
+        added skill. One source.
+    final_score: 3
+    decision: {state: candidate}
+
+  - key: description-trigger-and-scope-gate
+    domains:
+      - curation
+      - skill-recommendation
+    layer: enforcement
+    what: >-
+      tech-leads-club's CI fails a skill whose description lacks trigger guidance ("use
+      when", "use for", ...) or negative scope ("do not use", "not for"), is over 1,024
+      characters, or contains < or >.
+    notable: >-
+      Routing quality is enforced at the source of the text routers read. The host routes on
+      structured triggers and not_for fields and lints generic or colliding triggers, so the
+      description rule is mostly covered by its own data model.
+    where:
+      - tech-leads-club@120b67676388:tools/validate-skills.ts#L146-L177
+    contrast: already-covered
+    host: internal/resolver/lint.go
+    score:
+      relevance: 3
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered by structured routing fields and lint.
+    decision: {state: candidate}
+
+  - key: install-overwrites-local-edits
+    domains:
+      - curation
+    layer: content
+    what: >-
+      tech-leads-club's installer deletes the target directory and copies the skill again on
+      install and update, with no local-modification check.
+    notable: The failure the host prevents with local status and a 3-way merge.
+    where:
+      - tech-leads-club@120b67676388:libs/core/src/lib/services/installer.service.ts#L55-L59
+    contrast: already-covered
+    host: internal/app/upstream_update.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered.
+    decision: {state: candidate}
+
+  - key: local-modification-conflict-abort
+    domains:
+      - curation
+    layer: content
+    what: >-
+      Before a bundle update meta_skill hashes each installed file against the bundle's
+      expected hashes (Clean, Modified, New, Deleted, Conflict); the default strategy is
+      Abort, and --force backs up modified files before overwriting.
+    notable: >-
+      Agrees with the host's design: local status clean/modified and a 3-way merge with
+      per-file choices before any upstream update.
+    where:
+      - meta-skill@e999668e8d8c:src/bundler/local_safety.rs#L25-L62
+    contrast: already-covered
+    host: internal/app/upstream_update.go
+    score:
+      relevance: 3
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered by the host's upstream update flow.
+    decision: {state: candidate}
+
+  - key: tombstone-restore
+    domains:
+      - curation
+      - storage
+    layer: content
+    what: >-
+      Files meta_skill would delete in its managed directories are moved to a tombstone area
+      and can be listed, purged or restored (`ms prune list/purge/restore`).
+    notable: Undo without Git. The host relies on Git history and the archived lifecycle state.
+    where:
+      - meta-skill@e999668e8d8c:src/storage/tombstone.rs#L1-L20
+    contrast: already-covered
+    host: internal/skill/lifecycle.go
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered by Git history and archiving.
+    decision: {state: candidate}
