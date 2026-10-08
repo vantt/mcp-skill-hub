@@ -15,7 +15,7 @@ var closeQueueBlocked = func() {}
 
 const (
 	defaultBufferSize       = 256
-	defaultRetention        = 14 * 24 * time.Hour
+	defaultRetention        = 30 * 24 * time.Hour
 	defaultRollupRetention  = 180 * 24 * time.Hour
 	defaultMaxSize          = int64(100 << 20)
 	defaultOperationTimeout = 5 * time.Second
@@ -60,6 +60,7 @@ const (
 	opRecordFeedback
 	opRecordCurationSession
 	opRollups
+	opRawEvents
 	opHealth
 	opClose
 )
@@ -84,6 +85,7 @@ type response struct {
 	feedbackResult        FeedbackResult
 	curationSessionResult CurationSessionResult
 	rollups               []RollupRow
+	rawEvents             []Event
 	err                   error
 }
 
@@ -229,6 +231,15 @@ func (r *Recorder) Rollups(ctx context.Context, from, to string) ([]RollupRow, e
 	}
 	result := r.admin(ctx, request{op: opRollups, from: from, to: to})
 	return result.rollups, result.err
+}
+
+// RawEvents synchronously queries retained raw events within the bounded window.
+func (r *Recorder) RawEvents(ctx context.Context, from, to string) ([]Event, error) {
+	if r == nil {
+		return []Event{}, nil
+	}
+	result := r.admin(ctx, request{op: opRawEvents, from: from, to: to})
+	return result.rawEvents, result.err
 }
 
 // PromotionDraft locates one exact resolution and returns a sanitized,
@@ -436,6 +447,8 @@ func (r *Recorder) handleOperation(item request) bool {
 		result.curationSessionResult, result.err = recordCurationSessionStore(item.ctx, r.config, item.curationSession)
 	case opRollups:
 		result.rollups, result.err = rollupsStore(item.ctx, r.config, item.from, item.to)
+	case opRawEvents:
+		result.rawEvents, result.err = rawEventsStore(item.ctx, r.config, item.from, item.to)
 	case opHealth:
 		result.err = maintainStore(item.ctx, r.config)
 		if result.err == nil {

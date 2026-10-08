@@ -115,6 +115,8 @@ var tokenPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:@+\-]{0,255}$`)
 var commonRouting = fields(
 	"status", kindToken, "operation", kindToken, "artifact_kind", kindToken,
 	"constraint_count", kindCount, "fact_keys", kindTokens, "candidate_count", kindCount,
+	"retrieval_candidate_count", kindCount,
+	"prior_resolution_id", kindToken, "prior_kind", kindToken, "prior_verified", kindBool,
 	"top_skill_id", kindToken, "skill_id", kindToken, "confidence_band", kindToken,
 	"reason_codes", kindTokens, "recommended_skill_ids", kindTokens, "channels", kindTokens, "stage_ms", kindStageMillis,
 	"duration_ms", kindMillis, "error_code", kindToken, "basis", kindToken, "setup_state", kindToken,

@@ -115,26 +115,26 @@ func TestRollupsOutliveRawRetentionAndExpireAfterRollupRetention(t *testing.T) {
 	now := time.Date(2026, 10, 4, 9, 0, 0, 0, time.UTC)
 	var mu sync.Mutex
 	clock := now
-	recorder := newTestRecorder(t, Config{Clock: func() time.Time { mu.Lock(); defer mu.Unlock(); return clock }, RollupRetention: 30 * 24 * time.Hour})
+	recorder := newTestRecorder(t, Config{Clock: func() time.Time { mu.Lock(); defer mu.Unlock(); return clock }, RollupRetention: 50 * 24 * time.Hour})
 
 	stale := validEvent(EventResolutionFailed)
-	stale.ID, stale.OccurredAt = "evt_twenty_days", now.Add(-20*24*time.Hour)
+	stale.ID, stale.OccurredAt = "evt_thirty_five_days", now.Add(-35*24*time.Hour)
 	stale.Payload = map[string]any{"status": "failed", "recommended_skill_ids": []string{}}
 	expired := stale
-	expired.ID, expired.OccurredAt = "evt_forty_days", now.Add(-40*24*time.Hour)
+	expired.ID, expired.OccurredAt = "evt_sixty_days", now.Add(-60*24*time.Hour)
 	recorder.Record(stale)
 	recorder.Record(expired)
 	mustFlush(t, recorder)
 
-	if count := rawEventCount(t, recorder.config, "evt_twenty_days"); count != 0 {
+	if count := rawEventCount(t, recorder.config, "evt_thirty_five_days"); count != 0 {
 		t.Fatalf("raw event older than raw retention was kept: %d", count)
 	}
-	assertCounts(t, rollupCounts(t, recorder, "", ""), map[string]int64{"2026-09-14||resolution:failed": 1})
+	assertCounts(t, rollupCounts(t, recorder, "", ""), map[string]int64{"2026-08-30||resolution:failed": 1})
 
 	// Advancing the clock past the rollup retention prunes the aggregate on the
 	// next maintenance pass.
 	mu.Lock()
-	clock = now.Add(15 * 24 * time.Hour)
+	clock = now.Add(20 * 24 * time.Hour)
 	mu.Unlock()
 	mustFlush(t, recorder)
 	assertCounts(t, rollupCounts(t, recorder, "", ""), map[string]int64{})
