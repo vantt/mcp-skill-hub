@@ -3,6 +3,7 @@ package migration
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -339,5 +340,44 @@ decision_rationale: Rejected by curator because sleep creates flake
 		if l.Key == "accepted-item" && l.Decision.Status != "candidate" {
 			t.Fatalf("re-applying with new evidence did not reopen to candidate: %s", l.Decision.Status)
 		}
+	}
+}
+
+func TestGarbledInsightFileFailsClosedV4Preview(t *testing.T) {
+	t.Parallel()
+
+	root := filepath.Join(t.TempDir(), "workspace")
+	if _, err := workspace.Apply(root); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(filepath.Join(root, ".skillhub", "schema-version"), []byte("3\n"), 0o644)
+
+	skillDir := filepath.Join(root, "skills", "default", "sample-skill")
+	_ = os.MkdirAll(filepath.Join(skillDir, ".meta"), 0o755)
+	_ = os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("# Sample Skill\n\nSample description.\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(skillDir, ".meta", "skill.yaml"), []byte("schema_version: 1\nid: sample-skill\nstatus: active\nrouting:\n  triggers: [sample]\n  not_for: [other]\n  min_scope: single_step\n"), 0o644)
+
+	// Create garbled insight file
+	insightsDir := filepath.Join(root, "distill", "insights")
+	_ = os.MkdirAll(insightsDir, 0o755)
+	badFile := filepath.Join(insightsDir, "garbled-insight.yaml")
+	_ = os.WriteFile(badFile, []byte("[unterminated yaml: {oops\n"), 0o644)
+
+	reg := DefaultRegistry()
+	_, err := reg.Preview(root, CurrentVersion)
+	if err == nil {
+		t.Fatal("expected error previewing v4 migration with garbled insight file, got nil")
+	}
+	if !strings.Contains(err.Error(), "garbled-insight.yaml") {
+		t.Fatalf("expected error to name garbled-insight.yaml, got %v", err)
+	}
+
+	// Verify workspace is unchanged
+	ver, err := DetectVersion(root)
+	if err != nil || ver != 3 {
+		t.Fatalf("workspace version changed: ver=%d, err=%v", ver, err)
+	}
+	if _, err := os.Stat(filepath.Join(skillDir, ".meta", "distill.yaml")); !os.IsNotExist(err) {
+		t.Fatal("workspace was modified: distill.yaml was created despite preview failure")
 	}
 }

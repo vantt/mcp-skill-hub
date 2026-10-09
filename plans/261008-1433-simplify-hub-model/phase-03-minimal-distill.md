@@ -187,3 +187,7 @@ Status for every public interface affected by Phase 3:
 5. Telemetry event types and `EventVersion: "1"` remain untouched.
 6. Public contract table is recorded in `docs/design/07` alongside code removal.
 7. `make check` is green with all tests passing.
+
+## Recorded Deviations
+
+1. **Pathless commit evidence normalization:** In Phase-0 `test-audit/.meta/distill.yaml`, some commit-level history evidence entries lacked a `:path` component (e.g. `superpowers@e8a9748a3fa9`). The schema and new lesson validation (`EvidencePattern`) strictly enforce `repo@<40-hex-sha>:path[#Lx-Ly]`. Migration `planV3ToV4` normalized these pathless citations by defaulting the missing path to `:SKILL.md` (e.g. `superpowers@<40-hex-sha>:SKILL.md`), preserving the strict schema invariant while successfully migrating legacy findings.

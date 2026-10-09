@@ -72,12 +72,13 @@ func expandEvidence(raw string, cursors []distill.Cursor) string {
 		path = remainder[colonIdx+1:]
 	} else {
 		commit = remainder
+		path = "SKILL.md"
+	}
+	if path == "" {
+		path = "SKILL.md"
 	}
 	expandedCommit := expandShortCommit(commit, cursors)
-	if path != "" {
-		return fmt.Sprintf("%s@%s:%s", repo, expandedCommit, path)
-	}
-	return fmt.Sprintf("%s@%s", repo, expandedCommit)
+	return fmt.Sprintf("%s@%s:%s", repo, expandedCommit, path)
 }
 
 func convertGoal(raw any, defaultID string) string {
@@ -345,27 +346,34 @@ func collectExistingSkillDistillDocs(root string) (map[string]*distill.Document,
 	skillDocs := make(map[string]*distill.Document)
 	existingBytes := make(map[string][]byte)
 	skillsDir := filepath.Join(root, "skills")
-	err := filepath.WalkDir(skillsDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
+	if _, statErr := os.Stat(skillsDir); errors.Is(statErr, os.ErrNotExist) {
+		return skillDocs, existingBytes, nil
+	}
+	err := filepath.WalkDir(skillsDir, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return fmt.Errorf("walk skills %s: %w", path, walkErr)
+		}
+		if d.IsDir() {
 			return nil
 		}
 		if filepath.Base(path) == "distill.yaml" && filepath.Base(filepath.Dir(path)) == ".meta" {
 			rel, relErr := filepath.Rel(root, path)
 			if relErr != nil {
-				return nil
+				return fmt.Errorf("rel path %s: %w", path, relErr)
 			}
 			rel = filepath.ToSlash(rel)
 			data, readErr := os.ReadFile(path)
 			if readErr != nil {
-				return nil
+				return fmt.Errorf("read %s: %w", rel, readErr)
 			}
 			skillDir := filepath.Dir(filepath.Dir(rel))
 			skillID := filepath.Base(skillDir)
 			doc, convErr := ConvertSkillDistillYAML(data, skillID)
-			if convErr == nil && doc != nil {
-				skillDocs[skillDir] = doc
-				existingBytes[skillDir] = data
+			if convErr != nil {
+				return fmt.Errorf("convert %s: %w", rel, convErr)
 			}
+			skillDocs[skillDir] = doc
+			existingBytes[skillDir] = data
 		}
 		return nil
 	})
@@ -437,18 +445,24 @@ func deleteLegacyDistillDirs(root string) ([]mutation.Change, []FileDiff, error)
 
 	for _, lDir := range legacyDirs {
 		fullPath := filepath.Join(root, filepath.FromSlash(lDir))
-		_ = filepath.WalkDir(fullPath, func(path string, d os.DirEntry, walkErr error) error {
-			if walkErr != nil || d.IsDir() {
+		if _, statErr := os.Stat(fullPath); errors.Is(statErr, os.ErrNotExist) {
+			continue
+		}
+		err := filepath.WalkDir(fullPath, func(path string, d os.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return fmt.Errorf("walk legacy %s: %w", path, walkErr)
+			}
+			if d.IsDir() {
 				return nil
 			}
 			rel, relErr := filepath.Rel(root, path)
 			if relErr != nil {
-				return nil
+				return fmt.Errorf("rel path %s: %w", path, relErr)
 			}
 			rel = filepath.ToSlash(rel)
 			data, readErr := os.ReadFile(path)
 			if readErr != nil {
-				return nil
+				return fmt.Errorf("read legacy %s: %w", rel, readErr)
 			}
 			sum := sha256.Sum256(data)
 			changes = append(changes, mutation.Change{
@@ -464,6 +478,9 @@ func deleteLegacyDistillDirs(root string) ([]mutation.Change, []FileDiff, error)
 			})
 			return nil
 		})
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 	return changes, diffs, nil
 }
@@ -504,13 +521,19 @@ func planV3ToV4(root string) ([]mutation.Change, []FileDiff, error) {
 
 func harvestInsights(root string, ensureDoc func(string) *distill.Document) error {
 	insightsDir := filepath.Join(root, "distill", "insights")
+	if _, statErr := os.Stat(insightsDir); errors.Is(statErr, os.ErrNotExist) {
+		return nil
+	}
 	return filepath.WalkDir(insightsDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() || !strings.HasSuffix(d.Name(), ".yaml") {
+		if err != nil {
+			return fmt.Errorf("walk insights %s: %w", path, err)
+		}
+		if d.IsDir() || !strings.HasSuffix(d.Name(), ".yaml") {
 			return nil
 		}
 		data, readErr := os.ReadFile(path)
 		if readErr != nil {
-			return nil
+			return fmt.Errorf("read insight %s: %w", path, readErr)
 		}
 		var ins struct {
 			ID                string `yaml:"id"`
@@ -521,8 +544,11 @@ func harvestInsights(root string, ensureDoc func(string) *distill.Document) erro
 			Rationale         string `yaml:"rationale"`
 			DecisionRationale string `yaml:"decision_rationale"`
 		}
-		if yaml.Unmarshal(data, &ins) != nil || ins.SkillID == "" {
-			return nil
+		if unmarshalErr := yaml.Unmarshal(data, &ins); unmarshalErr != nil {
+			return fmt.Errorf("parse insight %s: %w", path, unmarshalErr)
+		}
+		if strings.TrimSpace(ins.SkillID) == "" {
+			return fmt.Errorf("parse insight %s: missing skill_id", path)
 		}
 		doc := ensureDoc(ins.SkillID)
 		key := strings.ToLower(strings.ReplaceAll(ins.StableKey, "_", "-"))
@@ -553,26 +579,34 @@ func harvestInsights(root string, ensureDoc func(string) *distill.Document) erro
 			decision.SeenWhere = append([]string{}, where...)
 		}
 
-		_ = doc.ApplyLesson(distill.Lesson{
+		if applyErr := doc.ApplyLesson(distill.Lesson{
 			Key:      key,
 			What:     what,
 			Notable:  notable,
 			Where:    where,
 			Decision: decision,
-		}, time.Now().UTC())
+		}, time.Now().UTC()); applyErr != nil {
+			return fmt.Errorf("apply insight lesson %s (%s): %w", path, key, applyErr)
+		}
 		return nil
 	})
 }
 
 func harvestObservations(root string, skillDocs map[string]*distill.Document, ensureDoc func(string) *distill.Document) error {
 	sourcesDir := filepath.Join(root, "distill", "sources")
+	if _, statErr := os.Stat(sourcesDir); errors.Is(statErr, os.ErrNotExist) {
+		return nil
+	}
 	return filepath.WalkDir(sourcesDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() || !strings.HasSuffix(d.Name(), ".yaml") {
+		if err != nil {
+			return fmt.Errorf("walk sources %s: %w", path, err)
+		}
+		if d.IsDir() || !strings.HasSuffix(d.Name(), ".yaml") {
 			return nil
 		}
 		data, readErr := os.ReadFile(path)
 		if readErr != nil {
-			return nil
+			return fmt.Errorf("read observation %s: %w", path, readErr)
 		}
 		var obs struct {
 			ID        string `yaml:"id"`
@@ -588,8 +622,11 @@ func harvestObservations(root string, skillDocs map[string]*distill.Document, en
 				} `yaml:"revision"`
 			} `yaml:"evidence"`
 		}
-		if yaml.Unmarshal(data, &obs) != nil || obs.SourceID == "" {
-			return nil
+		if unmarshalErr := yaml.Unmarshal(data, &obs); unmarshalErr != nil {
+			return fmt.Errorf("parse observation %s: %w", path, unmarshalErr)
+		}
+		if strings.TrimSpace(obs.SourceID) == "" {
+			return fmt.Errorf("parse observation %s: missing source_id", path)
 		}
 
 		var targetDoc *distill.Document
@@ -651,26 +688,34 @@ func harvestObservations(root string, skillDocs map[string]*distill.Document, en
 			decision.SeenWhere = append([]string{}, whereList...)
 		}
 
-		_ = targetDoc.ApplyLesson(distill.Lesson{
+		if applyErr := targetDoc.ApplyLesson(distill.Lesson{
 			Key:      key,
 			What:     what,
 			Notable:  notable,
 			Where:    whereList,
 			Decision: decision,
-		}, time.Now().UTC())
+		}, time.Now().UTC()); applyErr != nil {
+			return fmt.Errorf("apply observation lesson %s (%s): %w", path, key, applyErr)
+		}
 		return nil
 	})
 }
 
 func harvestRuns(root string, skillDocs map[string]*distill.Document) error {
 	runsDir := filepath.Join(root, "distill", "runs")
+	if _, statErr := os.Stat(runsDir); errors.Is(statErr, os.ErrNotExist) {
+		return nil
+	}
 	return filepath.WalkDir(runsDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() || !strings.HasSuffix(d.Name(), ".yaml") {
+		if err != nil {
+			return fmt.Errorf("walk runs %s: %w", path, err)
+		}
+		if d.IsDir() || !strings.HasSuffix(d.Name(), ".yaml") {
 			return nil
 		}
 		data, readErr := os.ReadFile(path)
 		if readErr != nil {
-			return nil
+			return fmt.Errorf("read run %s: %w", path, readErr)
 		}
 		var run struct {
 			Coverage []struct {
@@ -680,8 +725,8 @@ func harvestRuns(root string, skillDocs map[string]*distill.Document) error {
 				Blocking bool   `yaml:"blocking"`
 			} `yaml:"coverage"`
 		}
-		if yaml.Unmarshal(data, &run) != nil {
-			return nil
+		if unmarshalErr := yaml.Unmarshal(data, &run); unmarshalErr != nil {
+			return fmt.Errorf("parse run %s: %w", path, unmarshalErr)
 		}
 		for _, cov := range run.Coverage {
 			status := strings.ToLower(cov.Status)
