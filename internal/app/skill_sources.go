@@ -5,9 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/vantt/mcp-skill-hub/internal/distill"
 
 	"github.com/vantt/mcp-skill-hub/internal/skill"
 	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
@@ -78,6 +81,7 @@ func (service SourceService) SkillSources(ctx context.Context, path, skillID str
 	for _, cs := range checkStates {
 		checkStatesByID[cs.SourceID] = cs
 	}
+	totalPending, pendingBySource := countCandidateLessonsForSkill(root, skillID)
 
 	learning := []LearningReference{}
 	for _, l := range links {
@@ -118,14 +122,15 @@ func (service SourceService) SkillSources(ctx context.Context, path, skillID str
 		}
 
 		learning = append(learning, LearningReference{
-			SourceID:      l.SourceID,
-			Locator:       locator,
-			Ref:           ref,
-			Path:          path,
-			Role:          l.Role,
-			Monitoring:    monitoring,
-			LastCheckedAt: lastChecked,
-			Availability:  availability,
+			SourceID:        l.SourceID,
+			Locator:         locator,
+			Ref:             ref,
+			Path:            path,
+			Role:            l.Role,
+			Monitoring:      monitoring,
+			LastCheckedAt:   lastChecked,
+			Availability:    availability,
+			PendingInsights: pendingBySource[l.SourceID],
 		})
 	}
 
@@ -135,10 +140,38 @@ func (service SourceService) SkillSources(ctx context.Context, path, skillID str
 
 	summary := fmt.Sprintf("Sources for %s.", skillID)
 	result := SkillSourcesResult{
-		Result:   NewResult(StatusOK, summary),
-		SkillID:  skillID,
-		Upstream: upstream,
-		Learning: learning,
+		Result:          NewResult(StatusOK, summary),
+		SkillID:         skillID,
+		Upstream:        upstream,
+		Learning:        learning,
+		PendingInsights: totalPending,
 	}
 	return result, nil
+}
+
+func countCandidateLessonsForSkill(root, skillID string) (int, map[string]int) {
+	totalPending := 0
+	pendingBySource := make(map[string]int)
+	pattern := filepath.Join(root, "skills", "*", skillID, ".meta", "distill.yaml")
+	matches, err := filepath.Glob(pattern)
+	if err != nil || len(matches) == 0 {
+		return 0, pendingBySource
+	}
+	doc, err := distill.LoadDocument(matches[0])
+	if err != nil {
+		return 0, pendingBySource
+	}
+	for _, l := range doc.Lessons {
+		if l.Decision.State == "candidate" {
+			totalPending++
+			for _, w := range l.Where {
+				atIdx := strings.Index(w, "@")
+				if atIdx > 0 {
+					srcID := w[:atIdx]
+					pendingBySource[srcID]++
+				}
+			}
+		}
+	}
+	return totalPending, pendingBySource
 }

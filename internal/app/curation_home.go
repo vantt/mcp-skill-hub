@@ -5,12 +5,15 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/vantt/mcp-skill-hub/internal/canonical"
 	"github.com/vantt/mcp-skill-hub/internal/catalog"
+	"github.com/vantt/mcp-skill-hub/internal/distill"
+
 	"github.com/vantt/mcp-skill-hub/internal/hostintegration"
 	"github.com/vantt/mcp-skill-hub/internal/mutation"
 	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
@@ -287,6 +290,9 @@ func readHomeCounts(ctx context.Context, root string, state *homeState) (resultE
 	}
 	state.Summary.SourcesDue = state.DueSources
 	state.Summary.UnavailableSources = state.UnavailableSources
+	candLessons, candHighValue := countCandidateLessons(root)
+	state.Summary.PendingInsights = candLessons
+	state.Summary.PendingHighValueInsights = candHighValue
 	setCategoryCount(state.Categories, "interrupted_runs", state.Summary.FailedOrInterruptedRuns)
 	setCategoryCount(state.Categories, "source_unavailable", state.UnavailableSources)
 	setCategoryCount(state.Categories, "changed_sources", state.ChangedSources)
@@ -303,6 +309,30 @@ func readHomeCounts(ctx context.Context, root string, state *homeState) (resultE
 		state.Summary.UpstreamUpdates = count
 	}
 	return nil
+}
+
+func countCandidateLessons(root string) (int, int) {
+	totalCandidate := 0
+	totalHighValue := 0
+	matches, err := filepath.Glob(filepath.Join(root, "skills", "*", "*", ".meta", "distill.yaml"))
+	if err != nil {
+		return 0, 0
+	}
+	for _, match := range matches {
+		doc, err := distill.LoadDocument(match)
+		if err != nil {
+			continue
+		}
+		for _, l := range doc.Lessons {
+			if l.Decision.State == "candidate" {
+				totalCandidate++
+				if l.Score.Relevance >= 3 && l.Score.Impact >= 4 {
+					totalHighValue++
+				}
+			}
+		}
+	}
+	return totalCandidate, totalHighValue
 }
 
 func setCategoryCount(categories []ActionCategory, kind string, count int) {
@@ -426,6 +456,14 @@ func deriveCurationHome(state homeState) CurationHome {
 	if state.Summary.PendingInsights > 0 {
 		home.HomeSummary.OptionalItems += state.Summary.PendingInsights
 		home.HomeSummary.AttentionItems += state.Summary.PendingInsights
+		if home.Status == StatusOK {
+			home.Status = StatusActionRequired
+		}
+		summary := fmt.Sprintf("%d candidate lesson(s) need review", state.Summary.PendingInsights)
+		if state.Summary.PendingHighValueInsights > 0 {
+			summary = fmt.Sprintf("%d candidate lesson(s) need review; %d are high-value", state.Summary.PendingInsights, state.Summary.PendingHighValueInsights)
+		}
+		home.Actions = append(home.Actions, ActionItem{Kind: "review_insights", Count: state.Summary.PendingInsights, Priority: 40, Summary: summary, Command: "skill_list"})
 	}
 	if state.GitDirty {
 		home.HomeSummary.AttentionItems++
@@ -479,6 +517,8 @@ func deriveCurationHome(state homeState) CurationHome {
 			home.Summary = fmt.Sprintf("%d skill(s) have upstream changes to review.", recommended.Count)
 		case "distill_changed_sources":
 			home.Summary = fmt.Sprintf("%d source(s) are ready to distill.", recommended.Count)
+		case "review_insights":
+			home.Summary = fmt.Sprintf("%d candidate lesson(s) are waiting for review.", recommended.Count)
 		case "review_git_changes":
 			home.Summary = "Git has uncommitted canonical changes."
 		case "first_run_commit":
@@ -512,6 +552,7 @@ func recommendationLabel(kind string) string {
 		"retry_unavailable_sources": "Retry unavailable source checks",
 		"review_upstream_updates":   "Review upstream updates with skillhub skill outdated",
 		"distill_changed_sources":   "Distill changed sources",
+		"review_insights":           "Review candidate lessons",
 		"check_due_sources":         "Check all due sources",
 		"review_git_changes":        "Review uncommitted changes",
 		"first_run_commit":          "Commit the new workspace, then run `skillhub connect` in your project",

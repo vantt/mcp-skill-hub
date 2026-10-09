@@ -11,7 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vantt/mcp-skill-hub/internal/catalog"
 	"github.com/vantt/mcp-skill-hub/internal/mutation"
+	"github.com/vantt/mcp-skill-hub/internal/skill"
 	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
 	"gopkg.in/yaml.v3"
 )
@@ -496,5 +498,110 @@ provenance:
 	}
 	if len(homeAfter.SuggestedActions) == 0 || homeAfter.SuggestedActions[0].Label != "Review upstream updates with skillhub skill outdated" {
 		t.Fatalf("expected recommended label 'Review upstream updates with skillhub skill outdated', got %#v", homeAfter.SuggestedActions)
+	}
+}
+
+func TestCandidateLessonsCountedInHomeAndSkillSources(t *testing.T) {
+	t.Parallel()
+
+	root := newSourceWorkspace(t)
+	ctx := context.Background()
+
+	// Create a skill
+	skillService := SkillService{}
+	created, err := skillService.PreviewCreate(ctx, root, skill.CreateInput{
+		ID: "candidate-skill", Collection: "default", Name: "Candidate Skill", Description: "Testing candidate counts",
+		Routing: skill.RoutingInput{Operations: []string{"review"}, Triggers: []string{"test"}, NotFor: []string{"other"}, MinScope: "single_step"},
+	}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := skillService.ConfirmSkillMutation(ctx, root, created, created.Confirmation.Confirmation.Pins); err != nil {
+		t.Fatal(err)
+	}
+
+	// Add a learning source and link
+	_ = os.MkdirAll(filepath.Join(root, "sources", "skills"), 0o755)
+	_ = os.WriteFile(filepath.Join(root, "sources", "skills", "LINK-candidate-skill--src-test.yaml"), []byte("schema_version: 1\nid: LINK-candidate-skill--src-test\nskill_id: candidate-skill\nsource_id: src-test\nrole: learning-source\n"), 0o644)
+	_ = os.MkdirAll(filepath.Join(root, "sources", "catalog"), 0o755)
+	_ = os.WriteFile(filepath.Join(root, "sources", "catalog", "src-test.yaml"), []byte("schema_version: 1\nid: src-test\nadapter: git\nstatus: watching\nidentity:\n  name: src-test\nlocator:\n  repository: https://example.com/src-test.git\nmonitoring:\n  enabled: true\n  cadence: manual\nlimits:\n  max_bytes: 10485760\n  max_files: 1000\n  max_file_bytes: 1048576\n  timeout_seconds: 30\n"), 0o644)
+
+	srcService := SourceService{}
+
+	// Initially 0 candidate lessons
+	sourcesRes, err := srcService.SkillSources(ctx, root, "candidate-skill")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sourcesRes.PendingInsights != 0 {
+		t.Fatalf("expected 0 pending insights initially, got %d", sourcesRes.PendingInsights)
+	}
+
+	// Write a distill.yaml with 2 candidate lessons and 1 planned lesson
+	metaDir := filepath.Join(root, "skills", "default", "candidate-skill", ".meta")
+	distillDoc := `goal:
+  status: draft
+  purpose: Test counting
+  in_scope: [test]
+  out_of_scope: [other]
+  failures_it_prevents: [regression]
+cursors:
+  src-test: 3f9c2a1b4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a
+lessons:
+  - key: lesson-one
+    layer: content
+    what: First lesson
+    notable: Notable one
+    where: [src-test@3f9c2a1b4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a:file.go]
+    contrast: new
+    score: {relevance: 3, facts: [a, b], impact: 2, evidence: 2, effort: 1, why: test}
+    decision: {state: candidate}
+  - key: lesson-two
+    layer: validation
+    what: Second lesson
+    notable: Notable two
+    where: [src-test@3f9c2a1b4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a:other.go]
+    contrast: extends
+    score: {relevance: 3, facts: [a, b, c, d], impact: 4, evidence: 3, effort: 1, why: test}
+    decision: {state: candidate}
+  - key: lesson-three
+    layer: craft
+    what: Third lesson
+    notable: Notable three
+    where: [src-test@3f9c2a1b4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a:third.go]
+    contrast: new
+    score: {relevance: 1, facts: [a], impact: 1, evidence: 1, effort: 2, why: test}
+    decision: {state: planned}
+`
+	if err := os.WriteFile(filepath.Join(metaDir, "distill.yaml"), []byte(distillDoc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify SkillSources now reports 2 pending insights (candidates)
+	sourcesRes2, err := srcService.SkillSources(ctx, root, "candidate-skill")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sourcesRes2.PendingInsights != 2 {
+		t.Fatalf("expected 2 pending insights from candidate lessons, got %d", sourcesRes2.PendingInsights)
+	}
+	if len(sourcesRes2.Learning) != 1 || sourcesRes2.Learning[0].PendingInsights != 2 {
+		t.Fatalf("expected learning ref to have 2 pending insights, got %#v", sourcesRes2.Learning)
+	}
+	if _, buildErr := catalog.BuildCatalogGeneration(ctx, root, catalog.BuildOptions{}); buildErr != nil {
+		t.Fatalf("build catalog error: %v", buildErr)
+	}
+
+	// Verify CurationHome now counts 2 candidate lessons and 1 high-value lesson
+	homeSvc := CurationService{}
+	homeRes, err := homeSvc.GetCurationHome(ctx, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if homeRes.HomeSummary.PendingInsights != 2 {
+		t.Fatalf("expected home pending_insights 2, got %d", homeRes.HomeSummary.PendingInsights)
+	}
+	if homeRes.HomeSummary.PendingHighValueInsights != 1 {
+		t.Fatalf("expected home pending_high_value_insights 1, got %d", homeRes.HomeSummary.PendingHighValueInsights)
 	}
 }
