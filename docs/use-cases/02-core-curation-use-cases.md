@@ -268,22 +268,16 @@ Nhóm này bao gồm 4 nghiệp vụ con liên kết tuần tự:
 
 #### UC-07C: Chắt lọc Kiến thức từ Thay đổi (Distill Learnings)
 * **Quy trình:**
-  1. Chuẩn bị lượt chắt lọc (`distill prepare`) cho các nguồn có thay đổi.
-  2. Agent/Hệ thống phân tích sự khác biệt (Diff analysis) giữa revision cũ và mới của upstream.
-  3. Trích xuất các bài học thực tiễn, mẫu thiết kế mới, hoặc kỹ thuật hữu ích thành các bản ghi quan sát (`observations`) và phát hiện (`findings`).
-  4. Đóng gói các phát hiện có giá trị ứng dụng thành các đề xuất cải tiến cụ thể (**Insights**) và đẩy vào Hộp thư đến (Inbox).
+  1. Chắt lọc bài học bằng skill distill-lab ghi trực tiếp vào `.meta/distill.yaml` của skill.
+  2. Phân tích khác biệt (Diff analysis) giữa revision cũ và mới của upstream.
+  3. Trích xuất bài học và căn cứ (`where`) theo format chuẩn của distill-lab.
+  4. Lưu trữ trạng thái quyết định (`candidate`, `planned`, `ported`, `rejected`) inline trong file `.meta/distill.yaml`.
 
-#### UC-07D: Xem xét & Áp dụng Đề xuất Cải tiến (Inbox & Apply Insights)
+#### UC-07D: Xem xét & Đưa Bài học vào Nội dung Skill (Port Lessons via skill_update)
 * **Quy trình:**
-  1. Người dùng mở Hộp thư đến (`inbox`) để xem danh sách các Insights đang chờ, được xếp hạng theo mức độ ảnh hưởng và nhóm theo từng skill liên quan.
-  2. Người dùng xem chi tiết 1 insight (`insight show`), bao gồm: Căn cứ phát hiện từ nguồn nào, bài học rút ra là gì, và đề xuất sửa đổi cụ thể vào file nào.
-  3. **Ra quyết định (Decide):**
-     - `plan`: Đồng ý đưa vào kế hoạch nâng cấp.
-     - `reject`: Từ chối áp dụng (kèm lý do ghi nhận lại để không đề xuất lại).
-     - `obsolete`: Đánh dấu đề xuất không còn giá trị.
-  4. **Áp dụng Đề xuất (Apply):**
-     - Sinh Proposal Preview thể hiện chi tiết bản vá (patch diff) sẽ áp dụng vào skill tương ứng.
-     - Người dùng bấm xác nhận (Confirm) $\rightarrow$ Nội dung mới được merge có kiểm soát vào file canonical của skill.
+  1. Người dùng/Agent kiểm tra các bài học trong `.meta/distill.yaml`.
+  2. Cập nhật nội dung skill (`SKILL.md`, scripts) thông qua `skill_update` preview/confirm.
+  3. Chuyển trạng thái bài học thành `ported` sau khi tích hợp thành công.
 * **Bất biến:** Upstream không bao giờ tự động ghi đè. Mọi sự tiếp thu kiến thức đều phải qua bước phê duyệt có chủ đích của con người.
 
 ---

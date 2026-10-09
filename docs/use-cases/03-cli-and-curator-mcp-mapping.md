@@ -273,16 +273,11 @@ skillhub source check --all-due
 # Hoặc dùng alias tương đương:
 skillhub check --all-due
 ```
-# 7C: Chuẩn bị và thực hiện chắt lọc bài học từ các nguồn có commit mới
-skillhub distill prepare --all-changed
-skillhub distill start RUN-01
+# 7C: Chắt lọc bài học qua distill-lab
+# Chạy skill distill-lab từ terminal/agent để phân tích commit mới và ghi vào .meta/distill.yaml
 
-# 7D: Kiểm tra Hộp thư đến và duyệt Insight
-skillhub inbox
-skillhub insight show INS-101
-skillhub insight decide INS-101 --decision plan --reason "Useful pattern for error handling"
-skillhub insight apply INS-101 --proposal-file ./patch.json
-skillhub insight confirm --proposal PROP-99 --proposal-digest sha256:... --base-version sha256:...
+# 7D: Đưa bài học vào nội dung skill
+# Xem xét bài học trong .meta/distill.yaml và cập nhật qua skill_update preview/confirm
 ```
 
 #### 2. Curator MCP Tools
@@ -385,8 +380,8 @@ Bảng tổng hợp đối chiếu trực tiếp giữa Core Use Case, lệnh CL
 | **UC-06: Lifecycle** | `skillhub skill activate\|deprecate\|archive` | `skill_transition_preview` | `skill_transition_confirm` | CLI: `--yes` hoặc Short ID<br/>MCP: Đủ 3 pins | Kích hoạt tự động rebuild SQLite catalog |
 | **UC-07A: Source Watch** | `skillhub source watch <url> --skill-id <id>` | `source_watch_preview` | `source_watch_confirm` | CLI: `--yes` hoặc Short ID<br/>MCP: Đủ 3 pins | Bắt buộc gắn với skill (No orphan); không chạy daemon ngầm |
 | **UC-07B: Source Check** | `skillhub source check` / `check` | `source_check` | *(Read-only)* | Không cần confirm | Thăm dò Git commit hash, không sửa file skill |
-| **UC-07C: Distill** | `skillhub distill prepare\|start` | `curation_run_start` | `curation_run_submit` | Bounded submission package | Phân tích bài học, không ghi đè tự động |
-| **UC-07D: Insights** | `skillhub inbox` / `insight apply` | `insight_apply_preview` | `insight_apply_confirm` | CLI: Pin flags<br/>MCP: Đủ 3 pins | Đề xuất sửa đổi phải được con người phê duyệt |
+| **UC-07C: Distill** | `distill-lab` skill | *(Read-only)* `skills/{id}/distill` | *(distill-lab format)* | Ghi file `.meta/distill.yaml` | Chắt lọc bài học chuẩn hóa theo distill-lab |
+| **UC-07D: Port Lessons** | `skillhub skill update` | `skill_update_preview` | `skill_update_confirm` | CLI: `--yes`<br/>MCP: Đủ 3 pins | Cập nhật nội dung skill với human review |
 | **UC-08: Upstream Drift & Merge** | `skillhub skill outdated`<br/>`skillhub skill update` | *(Read-only)* `skill_upstream_status` | *(Không có)* | CLI: `--yes` hoặc Short ID<br/>MCP: **Không hỗ trợ apply** | Agent chỉ đọc metadata drift; apply là quyết định con người qua CLI/WebUI |
 | **UC-09: Learning References** | `skillhub source attach\|detach\|unwatch` | `source_watch_preview` | `source_watch_confirm` | CLI: `--yes`<br/>MCP: Đủ 3 pins | Quản lý quan hệ học tập; ngăn source mồ côi |
 | **Workspace Maintenance** | `skillhub validate [--staged]`<br/>`skillhub diff` | `workspace_validate`<br/>`workspace_diff` | *(Read-only)* | Không cần confirm | `validate --staged` đọc trực tiếp Git index blob |

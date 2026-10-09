@@ -757,7 +757,7 @@ func writeSourceImportResult(stdout, stderr io.Writer, jsonOutput bool, result a
 func writeSourceMutation(stdout, stderr io.Writer, jsonOutput bool, result app.SourceMutationResult) int {
 	return writeResult(stdout, stderr, jsonOutput, result, func(p *termui.Printer) {
 		if result.SourceID != "" {
-			p.Line(fmt.Sprintf("Watching %s. First analysis is ready: ask your agent 'distill new sources' or run `skillhub distill prepare %s`.\nWatching does not auto-import skills; accepted insights can create draft skills.", result.SourceID, result.SourceID))
+			p.Line(fmt.Sprintf("Watching %s. Distill with distill-lab to write .meta/distill.yaml; porting lessons to skill content uses skill_update.\nWatching does not auto-import skills.", result.SourceID))
 			return
 		}
 		p.Line(result.Summary)

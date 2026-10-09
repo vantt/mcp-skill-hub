@@ -608,11 +608,8 @@ skillhub source show <id>
 skillhub source triage <id>             # advanced intake: triage candidate
 skillhub source import <id>             # advanced intake: import discovered skills
 
-skillhub distill prepare|start|submit   # granular distillation steps
-skillhub inbox                          # review insight proposals
-skillhub insight show <id>
-skillhub insight decide <id>
-skillhub insight apply <id>             # preview + interactive confirm
+# Distillation is executed via distill-lab writing .meta/distill.yaml
+# Porting lessons into skill content uses skill_update preview/confirm
 
 skillhub validate [--staged]            # validate working tree or staged index
 skillhub rebuild                        # rebuild search catalog
@@ -620,7 +617,7 @@ skillhub diff                           # show uncommitted changes
 skillhub doctor [--fix]                 # diagnose and repair
 ```
 
-Distillation semantic work is primarily Agent-executed. CLI commands expose each step for automation, scripting, and recovery.
+Distillation semantic work is executed with the distill-lab skill writing directly to .meta/distill.yaml.
 
 ### 16.1 CLI output rules
 
