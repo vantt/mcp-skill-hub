@@ -166,6 +166,18 @@ Step 1: Do something useful.
 		return nil
 	})
 
+	// 5. Verify local skill is NOT third-party and requires NO content review
+	trust, err := (SkillService{}).ContentTrustFor(context.Background(), root, "external-skill")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if trust.ThirdParty {
+		t.Fatalf("local skill must not be third-party: %#v", trust)
+	}
+	if trust.RequiresReview() {
+		t.Fatalf("local skill must not require review: %#v", trust)
+	}
+
 	// 5. Verify NO source candidate, source record, or source link files created
 	for _, dir := range []string{
 		filepath.Join(root, "sources", "intake"),

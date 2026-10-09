@@ -317,6 +317,11 @@ func mergeSources(oldMap, existingMap map[string]any, defaultID string) []any {
 	}
 	sourceID, _ := prov["source_id"].(string)
 	origin, _ := prov["origin"].(map[string]any)
+	if origin != nil {
+		if k, ok := origin["kind"].(string); ok && k == "local" {
+			return sources
+		}
+	}
 	if origin == nil && sourceID == "" {
 		return sources
 	}

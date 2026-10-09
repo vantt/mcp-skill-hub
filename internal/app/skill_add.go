@@ -602,43 +602,45 @@ func buildSkillAddChanges(selected []DiscoveredSkillItem, collection string, cap
 			}
 		}
 
-		srcID := captured.sourceID
-		if srcID == "" {
-			srcID = targetID
+		var src map[string]any
+		if captured.origin.Kind != "local" {
+			srcID := captured.sourceID
+			if srcID == "" {
+				srcID = targetID
+			}
+			src = map[string]any{
+				"id":    srcID,
+				"roles": []string{"upstream"},
+			}
+			if skillOrigin.Kind != "" {
+				src["kind"] = skillOrigin.Kind
+			}
+			if skillOrigin.Repository != "" {
+				src["repo"] = skillOrigin.Repository
+			}
+			if skillOrigin.Ref != "" {
+				src["ref"] = skillOrigin.Ref
+			}
+			if skillOrigin.Commit != "" {
+				src["commit"] = skillOrigin.Commit
+				src["synced"] = skillOrigin.Commit
+			}
+			if skillOrigin.Path != "" {
+				src["path"] = skillOrigin.Path
+			}
+			if skillOrigin.FilesDigest != "" {
+				src["files_digest"] = skillOrigin.FilesDigest
+			}
+			if skillOrigin.FolderDigest != "" {
+				src["folder_digest"] = skillOrigin.FolderDigest
+			}
+			if len(skillOrigin.Transformations) > 0 {
+				src["transformations"] = skillOrigin.Transformations
+			}
+			if skillOrigin.AddedAt != "" {
+				src["added_at"] = skillOrigin.AddedAt
+			}
 		}
-		src := map[string]any{
-			"id":    srcID,
-			"roles": []string{"upstream"},
-		}
-		if skillOrigin.Kind != "" {
-			src["kind"] = skillOrigin.Kind
-		}
-		if skillOrigin.Repository != "" {
-			src["repo"] = skillOrigin.Repository
-		}
-		if skillOrigin.Ref != "" {
-			src["ref"] = skillOrigin.Ref
-		}
-		if skillOrigin.Commit != "" {
-			src["commit"] = skillOrigin.Commit
-			src["synced"] = skillOrigin.Commit
-		}
-		if skillOrigin.Path != "" {
-			src["path"] = skillOrigin.Path
-		}
-		if skillOrigin.FilesDigest != "" {
-			src["files_digest"] = skillOrigin.FilesDigest
-		}
-		if skillOrigin.FolderDigest != "" {
-			src["folder_digest"] = skillOrigin.FolderDigest
-		}
-		if len(skillOrigin.Transformations) > 0 {
-			src["transformations"] = skillOrigin.Transformations
-		}
-		if skillOrigin.AddedAt != "" {
-			src["added_at"] = skillOrigin.AddedAt
-		}
-
 		metaBytes, yErr := buildInitialSkillMetaYAML(targetID, item.Name, item.Description, normMD, src)
 		if yErr != nil {
 			return nil, nil, nil, nil, yErr

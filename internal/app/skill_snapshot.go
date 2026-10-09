@@ -283,6 +283,7 @@ type contentTrustDocument struct {
 	Sources []struct {
 		ID    string   `json:"id" yaml:"id"`
 		Roles []string `json:"roles" yaml:"roles"`
+		Kind  string   `json:"kind" yaml:"kind"`
 	} `json:"sources" yaml:"sources"`
 	Provenance struct {
 		SourceID string `json:"source_id" yaml:"source_id"`
@@ -299,8 +300,16 @@ func (document contentTrustDocument) provenance() skillruntime.Provenance {
 	if len(document.Sources) > 0 {
 		hasUpstream := false
 		for _, s := range document.Sources {
+			isUpstream := false
 			for _, r := range s.Roles {
 				if r == "upstream" {
+					isUpstream = true
+					break
+				}
+			}
+			if isUpstream {
+				// third-party = upstream role AND (git/github kind or a registered source_id)
+				if s.Kind == "git" || s.Kind == "github" || (s.ID != "" && s.Kind != "local") {
 					hasUpstream = true
 					break
 				}

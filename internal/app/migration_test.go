@@ -214,3 +214,58 @@ func TestMigrationServiceV2ToV3(t *testing.T) {
 		t.Fatalf("marker after migration = %q, %v", string(data), err)
 	}
 }
+
+func TestLocalSkillMigrationKeepsThirdPartyFalse(t *testing.T) {
+	t.Parallel()
+	root := filepath.Join(t.TempDir(), "workspace")
+	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(root, ".skillhub", "schema-version")
+	if err := os.WriteFile(marker, []byte("2\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	skillDir := filepath.Join(root, "skills", "default", "local-authored")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("# Local Authored\n\nSelf-authored skill.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	v2Meta := `schema_version: 1
+id: local-authored
+status: active
+provenance:
+  origin:
+    kind: local
+routing:
+  triggers: [local]
+  not_for: [other]
+  min_scope: single_step
+`
+	if err := os.WriteFile(filepath.Join(skillDir, "skill.meta.yaml"), []byte(v2Meta), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	service := MigrationService{}
+	applied, err := service.Migrate(t.Context(), root, 4, true)
+	if err != nil {
+		t.Fatalf("migration failed: %v", err)
+	}
+	if applied.Status != StatusApplied {
+		t.Fatalf("migration status = %s", applied.Status)
+	}
+
+	skillService := SkillService{}
+	trust, err := skillService.ContentTrustFor(t.Context(), root, "local-authored")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if trust.ThirdParty {
+		t.Fatalf("migrated local skill must not be third-party: %#v", trust)
+	}
+	if trust.RequiresReview() {
+		t.Fatalf("migrated local skill must not require review: %#v", trust)
+	}
+}
