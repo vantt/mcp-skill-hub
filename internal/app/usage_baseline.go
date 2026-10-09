@@ -153,6 +153,14 @@ func parseBaselineBucketCounts(rawEvents []telemetry.Event) (map[bucketKey]map[s
 			snap = "unknown"
 		}
 		client := event.Client.Name
+		if event.Type == telemetry.EventTranscriptToolObserved {
+			if src, ok := event.Payload["source"].(string); ok {
+				switch src {
+				case "claude", "claude-code":
+					client = "claude-code"
+				}
+			}
+		}
 		if client == "" {
 			client = "skillhub"
 		}
@@ -311,12 +319,6 @@ func (service UsageService) compileBaseline(rawEvents []telemetry.Event, since, 
 	totalLoads, unsolicitedLoads := parseBaselineLoads(rawEvents)
 	bucketCounts, bucketFirstValid := parseBaselineBucketCounts(rawEvents)
 	groupedChains, snapshotLatestTime := groupBaselineChains(allChains, totalLoads)
-
-	for bk := range bucketCounts {
-		if _, exists := groupedChains[bk]; !exists {
-			groupedChains[bk] = []*rawEventChain{}
-		}
-	}
 
 	var activeSnapshot string
 	var latestTime time.Time

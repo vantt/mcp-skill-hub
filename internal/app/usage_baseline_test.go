@@ -577,3 +577,73 @@ func TestBaselinePerBucketCountsAndRatesNoClamping(t *testing.T) {
 		}
 	}
 }
+
+func TestBaselineTranscriptEventsAttributedToClaudeCodeClient(t *testing.T) {
+	service := UsageService{}
+	now := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
+	snap := "sha256:snap_transcript_attr"
+
+	events := []telemetry.Event{
+		// Chain from Claude Code client
+		{
+			ID:              "evt_res_claude",
+			Type:            telemetry.EventResolutionCompleted,
+			OccurredAt:      now.Add(-2 * time.Hour),
+			CatalogSnapshot: snap,
+			Client:          telemetry.Client{Name: "claude-code"},
+			ResolutionID:    "res_claude_1",
+			SessionIDHash:   "sess_claude",
+			Payload:         map[string]any{"status": "resolved", "top_skill_id": "skill-1"},
+		},
+		// Transcript event 1: written by transcript_import with Client{Name: "skillhub"} and source="claude"
+		{
+			ID:              "evt_trans_1",
+			Type:            telemetry.EventTranscriptToolObserved,
+			OccurredAt:      now.Add(-90 * time.Minute),
+			CatalogSnapshot: snap,
+			Client:          telemetry.Client{Name: "skillhub"},
+			Payload: map[string]any{
+				"source":          telemetry.TranscriptSourceClaude,
+				"basis":           telemetry.TranscriptBasis,
+				"resolved_before": false,
+				"tool":            "read_file",
+			},
+		},
+		// Transcript event 2: source="claude", resolved_before=true
+		{
+			ID:              "evt_trans_2",
+			Type:            telemetry.EventTranscriptToolObserved,
+			OccurredAt:      now.Add(-80 * time.Minute),
+			CatalogSnapshot: snap,
+			Client:          telemetry.Client{Name: "skillhub"},
+			Payload: map[string]any{
+				"source":          telemetry.TranscriptSourceClaude,
+				"basis":           telemetry.TranscriptBasis,
+				"resolved_before": true,
+				"tool":            "write_file",
+			},
+		},
+	}
+
+	report := service.compileBaseline(events, now.Add(-24*time.Hour), now, 5, rawRetentionInfo{retention: 30 * 24 * time.Hour})
+
+	// Assert only the claude-code bucket exists, and no "skillhub" bucket exists
+	if len(report.Buckets) != 1 {
+		t.Fatalf("expected exactly 1 bucket, got %d", len(report.Buckets))
+	}
+	b := report.Buckets[0]
+	if b.Client != "claude-code" {
+		t.Fatalf("expected bucket client 'claude-code', got %q", b.Client)
+	}
+
+	// Verify bypass_rate is known in that bucket: 1 native_no_resolve / 2 transcript uses = 0.5
+	if b.Metrics.BypassRate.Status != "ok" || b.Metrics.BypassRate.Rate == nil {
+		t.Fatalf("expected bypass_rate to be known (status ok), got status=%q rate=%v", b.Metrics.BypassRate.Status, b.Metrics.BypassRate.Rate)
+	}
+	if *b.Metrics.BypassRate.Rate != 0.5 {
+		t.Errorf("expected bypass_rate = 0.5, got %f", *b.Metrics.BypassRate.Rate)
+	}
+	if b.Metrics.BypassRate.Numerator != 1 || b.Metrics.BypassRate.Denominator != 2 {
+		t.Errorf("expected bypass_rate counts 1/2, got %d/%d", b.Metrics.BypassRate.Numerator, b.Metrics.BypassRate.Denominator)
+	}
+}
