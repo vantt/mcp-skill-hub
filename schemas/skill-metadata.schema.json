@@ -4,7 +4,7 @@
   "title": "Curated skill metadata",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "id", "name", "status", "description", "routing"],
+  "required": ["schema_version", "id", "status", "routing"],
   "properties": {
     "schema_version": {"const": 1},
     "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"},
@@ -18,6 +18,10 @@
     "topics": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
     "technologies": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
     "content": {"type": "object"},
+    "sources": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/skillSource"}
+    },
     "routing": {
       "type": "object",
       "additionalProperties": false,
@@ -39,7 +43,11 @@
         "supporting": {"type": "array", "items": {"$ref": "#/$defs/supportRelationship"}},
         "equivalent_to": {"type": "array", "items": {"$ref": "#/$defs/equivalentRelationship"}, "uniqueItems": true},
         "examples": {"$ref": "#/$defs/routingExamples"},
-        "counter_examples": {"$ref": "#/$defs/routingExamples"}
+        "counter_examples": {"$ref": "#/$defs/routingExamples"},
+        "aliases": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "domain": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "topics": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "technologies": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}
       }
     },
     "runtime": {
@@ -104,6 +112,30 @@
     "updated_at": {"type": "string", "format": "date-time"}
   },
   "$defs": {
+    "skillSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "roles"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "roles": {
+          "type": "array",
+          "items": {"enum": ["upstream", "learning"]},
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "kind": {"enum": ["github", "git", "local"]},
+        "repository": {"type": "string"},
+        "ref": {"type": "string"},
+        "commit": {"type": "string"},
+        "path": {"type": "string"},
+        "files_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "folder_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "transformations": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "synced": {"type": "string"},
+        "added_at": {"type": "string", "format": "date-time"}
+      }
+    },
     "routingExamples": {"type": "array", "maxItems": 10, "items": {"type": "string", "minLength": 1, "maxLength": 300, "pattern": "\\S"}, "uniqueItems": true},
     "runtimeBinName": {"type": "string", "pattern": "^[A-Za-z0-9._+-]{1,64}$"},
     "runtimeBin": {

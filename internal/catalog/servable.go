@@ -189,10 +189,10 @@ func AssessSkillStateWhileLocked(ctx context.Context, root, id string) (SkillSta
 			if !coll.IsDir() {
 				continue
 			}
-			metaPath := filepath.Join(skillsDir, coll.Name(), id, "skill.meta.yaml")
+			metaPath := filepath.Join(skillsDir, coll.Name(), id, ".meta", "skill.yaml")
 			metaBytes, readErr := os.ReadFile(metaPath)
 			if readErr != nil {
-				metaPath = filepath.Join(skillsDir, coll.Name(), id, ".meta", "skill.yaml")
+				metaPath = filepath.Join(skillsDir, coll.Name(), id, "skill.meta.yaml")
 				metaBytes, readErr = os.ReadFile(metaPath)
 			}
 			if readErr == nil {

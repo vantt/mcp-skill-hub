@@ -121,6 +121,10 @@ func readInput(root string) (buildInput, error) {
 	}
 	input.ProjectionInputDigest = aggregate(input.Files, func(inputFile) bool { return true })
 	input.CatalogSnapshot = aggregate(input.Files, func(file inputFile) bool { return catalogAffecting(file.Path) })
+	fileMap := make(map[string][]byte, len(input.Files))
+	for _, f := range input.Files {
+		fileMap[f.Path] = f.Bytes
+	}
 	for _, file := range input.Files {
 		if file.Path == ".skillhub/schema-version" {
 			version, err := strconv.Atoi(strings.TrimSpace(string(file.Bytes)))
@@ -130,7 +134,7 @@ func readInput(root string) (buildInput, error) {
 			input.CanonicalSchemaVersion = version
 		}
 		if isCanonicalEntityPath(file.Path) {
-			item, ok, err := parseEntity(file)
+			item, ok, err := parseEntity(file, fileMap)
 			if err != nil {
 				return buildInput{}, err
 			}
@@ -186,7 +190,7 @@ func readCanonicalInput(root *os.Root, path string) ([]byte, error) {
 	return contents, nil
 }
 
-func parseEntity(file inputFile) (entity, bool, error) {
+func parseEntity(file inputFile, fileMap map[string][]byte) (entity, bool, error) {
 	decoder := yaml.NewDecoder(bytes.NewReader(file.Bytes))
 	var document map[string]any
 	if err := decoder.Decode(&document); err != nil {
@@ -196,14 +200,89 @@ func parseEntity(file inputFile) (entity, bool, error) {
 	if id == "" {
 		return entity{}, false, nil
 	}
+	kind := classifyEntity(file.Path)
+	if kind == "skill" {
+		skillDir := filepath.Dir(file.Path)
+		if filepath.Base(skillDir) == ".meta" {
+			skillDir = filepath.Dir(skillDir)
+		}
+		skillMDPath := filepath.ToSlash(filepath.Join(skillDir, "SKILL.md"))
+		if mdBytes, exists := fileMap[skillMDPath]; exists {
+			name, desc := extractSkillMDNameAndDesc(mdBytes, id)
+			if document["name"] == nil || document["name"] == "" {
+				document["name"] = name
+			}
+			if document["description"] == nil || document["description"] == "" {
+				document["description"] = desc
+			}
+		}
+		if routing, ok := document["routing"].(map[string]any); ok {
+			for _, key := range []string{"aliases", "topics", "technologies", "domain"} {
+				if document[key] == nil && routing[key] != nil {
+					document[key] = routing[key]
+				}
+			}
+		}
+	}
 	encoded, err := jsonMarshalStable(document)
 	if err != nil {
 		return entity{}, false, fmt.Errorf("normalize %s: %w", file.Path, err)
 	}
 	return entity{
-		ID: id, Path: file.Path, Kind: classifyEntity(file.Path), SchemaVersion: scalarString(document["schema_version"]),
+		ID: id, Path: file.Path, Kind: kind, SchemaVersion: scalarString(document["schema_version"]),
 		Digest: file.Digest, Document: document, JSON: string(encoded), SearchText: flattenText(document),
 	}, true, nil
+}
+
+func extractSkillMDNameAndDesc(contents []byte, defaultID string) (string, string) {
+	fmName, fmDesc := "", ""
+	lines := strings.Split(string(contents), "\n")
+	bodyStart := 0
+	if len(lines) > 0 && strings.TrimSpace(lines[0]) == "---" {
+		for i := 1; i < len(lines); i++ {
+			trimmed := strings.TrimSpace(lines[i])
+			if trimmed == "---" {
+				bodyStart = i + 1
+				break
+			}
+			if strings.HasPrefix(trimmed, "name:") {
+				fmName = strings.Trim(strings.TrimSpace(strings.TrimPrefix(trimmed, "name:")), `"'`)
+			}
+			if strings.HasPrefix(trimmed, "description:") {
+				fmDesc = strings.Trim(strings.TrimSpace(strings.TrimPrefix(trimmed, "description:")), `"'`)
+			}
+		}
+	}
+	name, desc := "", fmDesc
+	bodyLines := lines[bodyStart:]
+	for _, line := range bodyLines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "# ") {
+			heading := strings.TrimSpace(strings.TrimPrefix(trimmed, "# "))
+			if heading != "" && !strings.EqualFold(heading, "when to use this skill") {
+				name = heading
+				break
+			}
+		}
+	}
+	if name == "" {
+		if fmName != "" {
+			name = fmName
+		} else {
+			name = defaultID
+		}
+	}
+	for _, line := range bodyLines {
+		trimmed := strings.TrimSpace(line)
+		if desc == "" && trimmed != "" && !strings.HasPrefix(trimmed, "#") {
+			desc = trimmed
+			break
+		}
+	}
+	if desc == "" {
+		desc = name
+	}
+	return name, desc
 }
 
 func jsonMarshalStable(value any) ([]byte, error) {
@@ -339,6 +418,9 @@ func validateEntities(entities []entity) error {
 		expected := strings.TrimSuffix(filepath.Base(item.Path), filepath.Ext(item.Path))
 		if item.Kind == "skill" {
 			expected = filepath.Base(filepath.Dir(item.Path))
+			if expected == ".meta" {
+				expected = filepath.Base(filepath.Dir(filepath.Dir(item.Path)))
+			}
 		}
 		if item.ID != expected {
 			return fmt.Errorf("%s: id %q does not match path identity %q", item.Path, item.ID, expected)

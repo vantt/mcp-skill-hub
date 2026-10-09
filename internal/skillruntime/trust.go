@@ -23,13 +23,19 @@ func IsHubMeta(relPath string) bool {
 
 // Provenance is the subset of manifest provenance that decides trust.
 type Provenance struct {
-	OriginKind string
-	SourceID   string
+	OriginKind  string
+	SourceID    string
+	HasUpstream bool
 }
 
 // IsThirdParty reports whether the skill was imported from a remote origin or
 // a registered source, as opposed to authored or added from a local folder.
+// A skill is third-party if and only if it has a source with role "upstream".
+// The "learning" role never makes a skill third-party.
 func IsThirdParty(p Provenance) bool {
+	if p.HasUpstream {
+		return true
+	}
 	return p.OriginKind == "github" || p.OriginKind == "git" || p.SourceID != ""
 }
 

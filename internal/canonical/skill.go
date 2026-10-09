@@ -117,7 +117,7 @@ func validateSkillMetadata(path string, contents []byte) (skillMetadata, []Issue
 		return item, []Issue{{Path: path, Message: "skill metadata must be one YAML mapping"}}
 	}
 	root := document.Content[0]
-	allowed := stringSet("schema_version", "id", "name", "status", "description", "collection_id", "collection", "aliases", "domain", "topics", "technologies", "content", "routing", "runtime", "quality", "provenance", "history", "created_at", "updated_at")
+	allowed := stringSet("schema_version", "id", "name", "status", "description", "collection_id", "collection", "aliases", "domain", "topics", "technologies", "content", "routing", "runtime", "quality", "provenance", "history", "created_at", "updated_at", "sources")
 	values, err := mappingValues(root, allowed)
 	if err != nil {
 		return item, []Issue{{Path: path, Message: "invalid skill metadata: " + err.Error()}}
@@ -144,9 +144,12 @@ func validateSkillMetadata(path string, contents []byte) (skillMetadata, []Issue
 	if item.ID != filepath.Base(item.Directory) {
 		add(fmt.Sprintf("skill id %q does not match directory %q", item.ID, filepath.Base(item.Directory)))
 	}
+	isDotMeta := strings.HasSuffix(filepath.ToSlash(path), "/.meta/skill.yaml") || filepath.ToSlash(path) == ".meta/skill.yaml"
 	for _, field := range []string{"name", "description"} {
 		if strings.TrimSpace(scalar(values[field])) == "" {
-			add(field+" must be a non-empty string", values[field])
+			if !isDotMeta {
+				add(field+" must be a non-empty string", values[field])
+			}
 		}
 	}
 	item.Status = scalar(values["status"])
@@ -229,6 +232,41 @@ func validateSkillMetadata(path string, contents []byte) (skillMetadata, []Issue
 			}
 		}
 	}
+	if sourcesNode := values["sources"]; sourcesNode != nil {
+		if sourcesNode.Kind != yaml.SequenceNode {
+			add("sources must be a sequence", sourcesNode)
+		} else {
+			for _, itemNode := range sourcesNode.Content {
+				if itemNode.Kind != yaml.MappingNode {
+					add("source entry must be a mapping", itemNode)
+					continue
+				}
+				sVals, sErr := mappingValues(itemNode, stringSet("id", "roles", "kind", "repository", "ref", "commit", "path", "files_digest", "folder_digest", "transformations", "synced", "added_at"))
+				if sErr != nil {
+					add("invalid source entry: "+sErr.Error(), itemNode)
+					continue
+				}
+				if sID := scalar(sVals["id"]); sID == "" {
+					add("source id must be a non-empty string", itemNode)
+				}
+				roles, rErr := stringSequence(sVals["roles"])
+				if rErr != nil || len(roles) == 0 {
+					add("source roles must be a non-empty list", itemNode)
+				} else {
+					for _, r := range roles {
+						if r != "upstream" && r != "learning" {
+							add(fmt.Sprintf("invalid source role %q (must be upstream or learning)", r), sVals["roles"])
+						}
+					}
+				}
+				for _, digestField := range []string{"files_digest", "folder_digest"} {
+					if d := scalar(sVals[digestField]); d != "" && !isValidDigest(d) {
+						add("source "+digestField+" must be a lowercase SHA-256 digest (e.g. sha256:<hex>)", sVals[digestField])
+					}
+				}
+			}
+		}
+	}
 	if runtimeNode := values["runtime"]; runtimeNode != nil {
 		if err := validateRuntime(runtimeNode); err != nil {
 			add("runtime "+err.Error(), runtimeNode)
@@ -256,7 +294,7 @@ func validateSkillMetadata(path string, contents []byte) (skillMetadata, []Issue
 		add("routing must be a mapping")
 		return item, issues
 	}
-	routingValues, err := mappingValues(routing, stringSet("operations", "triggers", "not_for", "min_scope", "requirements", "boosts", "distinguish_from", "supporting", "equivalent_to", "examples", "counter_examples"))
+	routingValues, err := mappingValues(routing, stringSet("operations", "triggers", "not_for", "min_scope", "requirements", "boosts", "distinguish_from", "supporting", "equivalent_to", "examples", "counter_examples", "aliases", "domain", "topics", "technologies"))
 	if err != nil {
 		add("invalid routing metadata: " + err.Error())
 		return item, issues
@@ -271,6 +309,13 @@ func validateSkillMetadata(path string, contents []byte) (skillMetadata, []Issue
 	}
 	if _, err := stringSequence(routingValues["operations"]); err != nil {
 		add("routing.operations " + err.Error())
+	}
+	for _, field := range []string{"aliases", "domain", "topics", "technologies"} {
+		if routingValues[field] != nil {
+			if _, err := stringSequence(routingValues[field]); err != nil {
+				add("routing." + field + " " + err.Error())
+			}
+		}
 	}
 	for _, field := range []string{"examples", "counter_examples"} {
 		if err := validateRoutingExamples(routingValues[field]); err != nil {
