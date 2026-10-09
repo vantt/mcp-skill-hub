@@ -7,7 +7,6 @@ interface NavItem {
   path: string;
   labelKey: string;
   icon: string;
-  showBadge?: boolean;
 }
 
 export function NavRail() {
@@ -15,10 +14,6 @@ export function NavRail() {
   const location = useLocation();
   const { data: home } = useHome();
 
-  const isHealthy = home?.workspace?.health === 'valid' && home?.workspace?.index === 'current';
-  const pendingCount = isHealthy
-    ? (home?.categories?.find((c) => c.kind === 'pending_insights')?.count ?? 0)
-    : 0;
 
   const navItems: NavItem[] = [
     { id: 'home', path: '/', labelKey: 'nav.home', icon: '⌂' },
@@ -69,21 +64,6 @@ export function NavRail() {
               <span className="fg-nav__label" style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 <span>{label}</span>
               </span>
-              {item.showBadge && pendingCount > 0 && (
-                <span
-                  className="fg-nav__badge"
-                  style={{
-                    padding: '2px 6px',
-                    borderRadius: '999px',
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    background: 'var(--color-action)',
-                    color: 'var(--color-on-action)',
-                  }}
-                >
-                  <span>{String(pendingCount)}</span>
-                </span>
-              )}
             </Link>
           );
         })}

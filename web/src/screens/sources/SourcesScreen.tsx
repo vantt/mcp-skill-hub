@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   checkSources,
@@ -7,7 +7,6 @@ import {
   confirmSourceProposal,
   previewSourceImport,
   previewUnwatchSource,
-  useSession,
   useSources,
 } from '../../api/queries';
 import type { DiscoveredImportSkill, SourceImportProposal, SourceSummary } from '../../api/types';
@@ -15,7 +14,6 @@ import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Skeleton } from '../../components/Skeleton';
 import { StatusBadge } from '../../components/StatusBadge';
 import { distillLabel } from '../../domain/source-distill';
-import { listRecentRuns, removeRecentRun } from '../../state/recent-runs';
 
 const TITLE_SOURCES = 'Sources';
 const BTN_CHECK_ALL = 'Check all';
@@ -42,11 +40,6 @@ const BTN_CANCEL = 'Cancel';
 const BTN_IMPORT = 'Import';
 const BTN_IMPORTING = 'Importing…';
 const LABEL_RETRY = 'Retry';
-const TITLE_OPEN_RUN = 'Open a run';
-const BTN_OPEN_RUN = 'Open run';
-const TITLE_RECENT_RUNS = 'Recent runs on this browser (not a full workspace history)';
-const LABEL_NO_RECENT_RUNS = 'No runs opened on this browser yet.';
-const BTN_REMOVE = 'Remove';
 const LABEL_LPAREN = ' (';
 const LABEL_RPAREN = ')';
 const LABEL_DISCOVERED = 'Discovered ';
@@ -58,12 +51,9 @@ const LABEL_ALREADY_IMPORTED = 'already imported';
 
 export function SourcesScreen() {
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const filterReady = searchParams.get('filter') === 'ready';
 
-  const { data: session } = useSession();
-  const workspaceId = session?.workspace_id || 'default';
 
   const { data, isLoading, error, refetch } = useSources();
 
@@ -73,10 +63,6 @@ export function SourcesScreen() {
   const [actionError, setActionError] = useState<string | null>(null);
 
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
-  const [openRunId, setOpenRunId] = useState('');
-
-  const [, setRecentRunsVersion] = useState(0);
-  const recentRuns = listRecentRuns(workspaceId);
 
   const [unwatchSourceId, setUnwatchSourceId] = useState<string | null>(null);
   const [unwatching, setUnwatching] = useState(false);
@@ -184,19 +170,6 @@ export function SourcesScreen() {
     } finally {
       setConfirmingImport(false);
     }
-  };
-
-  const handleOpenRun = (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = openRunId.trim();
-    if (trimmed) {
-      navigate(`/sources/runs/${encodeURIComponent(trimmed)}`);
-    }
-  };
-
-  const handleRemoveRecentRun = (runId: string) => {
-    removeRecentRun(workspaceId, runId);
-    setRecentRunsVersion((v) => v + 1);
   };
 
   if (isLoading) {
@@ -460,85 +433,6 @@ export function SourcesScreen() {
         ))
       )}
 
-      {/* Open a run */}
-      <section className="fg-card" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-        <div className="fg-card__title">
-          <span style={{ fontSize: '15px', fontWeight: 600 }}>{TITLE_OPEN_RUN}</span>
-        </div>
-        <form onSubmit={handleOpenRun} style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center', flexWrap: 'wrap' }}>
-          <input
-            type="text"
-            className="fg-input"
-            style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', width: '280px' }}
-            placeholder="RUN-…"
-            value={openRunId}
-            onChange={(e) => setOpenRunId(e.target.value)}
-            aria-label="Run ID"
-          />
-          <button
-            type="submit"
-            className="fg-btn fg-btn--secondary"
-            disabled={!openRunId.trim()}
-          >
-            <span>{BTN_OPEN_RUN}</span>
-          </button>
-        </form>
-      </section>
-
-      {/* Recent runs on this browser */}
-      <section className="fg-card" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-        <div className="fg-card__title">
-          <span style={{ fontSize: '15px', fontWeight: 600 }}>{TITLE_RECENT_RUNS}</span>
-        </div>
-        {recentRuns.length === 0 ? (
-          <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>
-            {LABEL_NO_RECENT_RUNS}
-          </span>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-            {recentRuns.map((r) => (
-              <div
-                key={r.runId}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: 'var(--space-2) var(--space-3)',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: 'var(--radius-sm)',
-                  gap: 'var(--space-3)',
-                  flexWrap: 'wrap',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
-                  <Link
-                    to={`/sources/runs/${encodeURIComponent(r.runId)}`}
-                    style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', color: 'var(--color-primary)', textDecoration: 'none', fontWeight: 600 }}
-                  >
-                    <span>{r.runId}</span>
-                  </Link>
-                  <span style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>
-                    {r.sourceId}
-                  </span>
-                  <StatusBadge
-                    variant="chip"
-                    tone={r.state === 'finalized' ? 'success' : r.state === 'failed' ? 'danger' : r.state === 'in_progress' ? 'info' : 'neutral'}
-                    label={r.state}
-                  />
-                </div>
-                <button
-                  type="button"
-                  className="fg-btn fg-btn--ghost fg-btn--small"
-                  onClick={() => handleRemoveRecentRun(r.runId)}
-                  aria-label={`Remove run ${r.runId}`}
-                >
-                  <span>{BTN_REMOVE}</span>
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
 
       {/* Unwatch Confirm Dialog */}
       {unwatchSourceId && (

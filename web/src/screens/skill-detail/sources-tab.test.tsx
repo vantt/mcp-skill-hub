@@ -64,7 +64,6 @@ describe('SourcesTab', () => {
       skill_id: 'local-skill',
       upstream: null,
       learning: [],
-      pending_insights: 0,
     };
     queryClient.setQueryData(['skill-sources', 'local-skill'], data);
 
@@ -102,7 +101,6 @@ describe('SourcesTab', () => {
         next_action: 'skillhub skill update my-skill',
       },
       learning: [],
-      pending_insights: 0,
     };
     queryClient.setQueryData(['skill-sources', 'my-skill'], data);
 
@@ -328,7 +326,6 @@ describe('LearningSection', () => {
         locator: 'https://github.com/example/docs',
         role: 'learning-source',
         monitoring: { enabled: true, cadence: 'weekly' },
-        pending_insights: 3,
       },
     ];
 
@@ -340,9 +337,8 @@ describe('LearningSection', () => {
       </QueryClientProvider>,
     );
 
-    // Assert existing reference and pending insights link
+    // Assert existing reference
     expect(screen.getByText('src-docs')).toBeInTheDocument();
-    expect(screen.getByText('3 pending insight(s)')).toBeInTheDocument();
 
     // Attach new reference
     const input = screen.getByPlaceholderText('https://github.com/owner/repo');

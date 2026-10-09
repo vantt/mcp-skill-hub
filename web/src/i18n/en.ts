@@ -4,7 +4,6 @@ export const en = {
   'nav.home': 'Home',
   'nav.skills': 'Skills',
   'nav.sources': 'Sources',
-  'nav.inbox': 'Inbox',
   'nav.skip_to_main': 'Skip to main content',
 
   // Appearance
@@ -63,8 +62,6 @@ export const en = {
   'action.copy_command': 'Copy command',
   'action.copied': 'Copied',
   'action.open_sources': 'Open sources',
-  'action.open_run': 'Open run',
-  'action.open_inbox': 'Open Inbox',
   'action.check_all_sources': 'Check all sources',
   'action.check_due_sources': 'Check due sources',
   'action.add_from_github': 'Add from GitHub',
@@ -82,9 +79,6 @@ export const en = {
   'action.link_orphan_sources': 'Open sources →',
   'action.distill_with_curator': 'Distill with Curator Agent',
   'action.copy_handoff': 'Copy handoff',
-  'action.copy_resume_handoff': 'Copy resume handoff',
-  'action.open_runs': 'Open runs',
-  'action.cancel_run': 'Cancel run',
   'action.refresh_status': 'Refresh status',
   // Home Screen
   'home.title': 'Home',
@@ -95,16 +89,10 @@ export const en = {
   'home.degraded_body': 'Catalog is stale. Run skillhub rebuild, then reload.',
   'home.summary_title': 'Overview',
   'home.action_categories': 'Action categories',
-  'home.pending_insights.one': '{count} pending insight',
-  'home.pending_insights.other': '{count} pending insights',
   'home.changed_sources.one': '{count} changed source',
   'home.changed_sources.other': '{count} changed sources',
   'home.unreachable_sources.one': '{count} unreachable source',
   'home.unreachable_sources.other': '{count} unreachable sources',
-  'home.interrupted_runs.one': '{count} interrupted run',
-  'home.interrupted_runs.other': '{count} interrupted runs',
-  'home.and_other_runs.one': 'and {count} other run',
-  'home.and_other_runs.other': 'and {count} other runs',
 
   // Skills Screen
   'skills.title': 'Skills',

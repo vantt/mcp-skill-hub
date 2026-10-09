@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Link } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   confirmSourceProposal,
@@ -14,7 +13,6 @@ const TITLE_LEARNING = 'Learning references';
 const LABEL_NO_LEARNING =
   'No learning references yet. Link a repository or document whose ideas should improve this skill.';
 const LABEL_LAST_CHECKED = 'Last checked: ';
-const LABEL_PENDING_SUFFIX = ' pending insight(s)';
 const BTN_UNLINK = 'Unlink';
 const BTN_ADD = 'Add learning reference';
 const BTN_ADDING = 'Adding…';
@@ -155,14 +153,6 @@ export function LearningSection({ skillId, learning }: LearningSectionProps) {
                   </span>
                   <div style={{ display: 'flex', gap: 'var(--space-3)', fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
                     <span>{LABEL_LAST_CHECKED}{lastChecked}</span>
-                    {ref.pending_insights > 0 && (
-                      <Link
-                        to="/inbox"
-                        style={{ color: 'var(--color-primary)', textDecoration: 'underline' }}
-                      >
-                        <span>{ref.pending_insights}{LABEL_PENDING_SUFFIX}</span>
-                      </Link>
-                    )}
                   </div>
                 </div>
 

@@ -9,13 +9,13 @@ describe('i18n catalog', () => {
 
   it('replaces placeholders', () => {
     const t = useT();
-    expect(t('home.pending_insights.one', { count: 1 })).toBe('1 pending insight');
+    expect(t('home.unreachable_sources.one', { count: 1 })).toBe('1 unreachable source');
   });
 
   it('selects plural suffixes .one and .other based on count', () => {
     const t = useT();
-    expect(t('home.pending_insights', { count: 1 })).toBe('1 pending insight');
-    expect(t('home.pending_insights', { count: 2 })).toBe('2 pending insights');
+    expect(t('home.unreachable_sources', { count: 1 })).toBe('1 unreachable source');
+    expect(t('home.unreachable_sources', { count: 2 })).toBe('2 unreachable sources');
     expect(t('home.changed_sources', { count: 1 })).toBe('1 changed source');
     expect(t('home.changed_sources', { count: 5 })).toBe('5 changed sources');
   });

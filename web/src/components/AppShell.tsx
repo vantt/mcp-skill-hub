@@ -52,23 +52,6 @@ export function AppShell({ children }: AppShellProps) {
     pageTitle = 'Distill with Curator Agent';
     parentLabel = t('nav.sources');
     parentPath = '/sources';
-  } else if (path.startsWith('/sources/runs/')) {
-    pageTitle = 'Run';
-    parentLabel = t('nav.sources');
-    parentPath = '/sources';
-  } else if (path === '/inbox') {
-    pageTitle = t('nav.inbox');
-  } else if (path.startsWith('/inbox/')) {
-    if (path.endsWith('/apply')) {
-      const insightId = path.split('/')[2] ?? '';
-      pageTitle = 'Compose patch';
-      parentLabel = 'Insight';
-      parentPath = `/inbox/${encodeURIComponent(insightId)}`;
-    } else {
-      pageTitle = 'Insight';
-      parentLabel = t('nav.inbox');
-      parentPath = '/inbox';
-    }
   }
 
   useEffect(() => {

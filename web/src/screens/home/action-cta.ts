@@ -25,16 +25,6 @@ export function resolveActionCta(action?: ActionInput): CtaResult {
         command: action.command || 'skillhub doctor --fix',
         label: 'Copy command',
       };
-    case 'resume_run': {
-      const runId = action.id ?? '';
-      const count = action.count ?? 1;
-      return {
-        type: 'link',
-        to: `/sources/runs/${encodeURIComponent(runId)}`,
-        label: 'Open run →',
-        note: count > 1 ? `and ${count - 1} other runs` : undefined,
-      };
-    }
     case 'rebuild_index':
       return {
         type: 'command',
@@ -58,12 +48,6 @@ export function resolveActionCta(action?: ActionInput): CtaResult {
         type: 'link',
         to: '/sources?filter=ready',
         label: 'Open sources →',
-      };
-    case 'review_insights':
-      return {
-        type: 'link',
-        to: '/inbox',
-        label: 'Open Inbox →',
       };
     case 'first_run_commit':
       return {

@@ -7,10 +7,6 @@ import { CreateSkillScreen } from './screens/skill-create/CreateSkillScreen';
 import { SkillDetailScreen } from './screens/skill-detail/SkillDetailScreen';
 import { SourcesScreen } from './screens/sources/SourcesScreen';
 import { DistillHandoffScreen } from './screens/distill/DistillHandoffScreen';
-import { RunScreen } from './screens/run/RunScreen';
-import { InboxScreen } from './screens/inbox/InboxScreen';
-import { InsightDetailScreen } from './screens/insight/InsightDetailScreen';
-import { PatchComposerScreen } from './screens/composer/PatchComposerScreen';
 export const routes: RouteObject[] = [
   {
     path: '/',
@@ -39,22 +35,6 @@ export const routes: RouteObject[] = [
   {
     path: '/sources/distill',
     Component: DistillHandoffScreen,
-  },
-  {
-    path: '/sources/runs/:id',
-    Component: RunScreen,
-  },
-  {
-    path: '/inbox',
-    Component: InboxScreen,
-  },
-  {
-    path: '/inbox/:id',
-    Component: InsightDetailScreen,
-  },
-  {
-    path: '/inbox/:id/apply',
-    Component: PatchComposerScreen,
   },
   {
     path: '*',

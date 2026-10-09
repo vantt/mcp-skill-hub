@@ -1,8 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { DistillRunResult, SessionResponse, SourceListResult } from '../../api/types';
+import type { SessionResponse, SourceListResult } from '../../api/types';
 import { loadGolden } from '../../test/golden';
 import { DistillHandoffScreen } from './DistillHandoffScreen';
 
@@ -120,95 +120,4 @@ describe('DistillHandoffScreen', () => {
     expect(preAgain.textContent).toContain(`idempotency_key: "${key}"`);
   });
 
-  it('pasted run IDs show per-ID results', async () => {
-    const goldenSession = loadGolden<SessionResponse>('session');
-    queryClient.setQueryData(['session'], goldenSession);
-
-    const goldenSources = loadGolden<SourceListResult>('sources');
-    const sourcesData: SourceListResult = {
-      ...goldenSources,
-      groups: [
-        {
-          repository: 'https://github.com/example/repo',
-          sources: [
-            {
-              id: 'source-a',
-              status: 'changed',
-              role: 'learning-source',
-              referencing_skills: ['skill-1'],
-              skills_vendored_count: 0,
-              importable_count: 0,
-              ready_to_distill: true,
-            },
-          ],
-        },
-      ],
-    };
-    queryClient.setQueryData(['sources'], sourcesData);
-    const goldenRun = loadGolden<DistillRunResult>('run');
-
-    vi.spyOn(global, 'fetch').mockImplementation(async (input) => {
-      const url = String(input);
-      if (url.includes('/api/v1/sources')) {
-        return new Response(JSON.stringify(sourcesData), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
-      if (url.includes('/api/v1/session')) {
-        return new Response(JSON.stringify(goldenSession), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
-      if (url.includes('/api/v1/runs/RUN-OK1')) {
-        return new Response(
-          JSON.stringify({
-            ...goldenRun,
-            run: {
-              ...goldenRun.run,
-              id: 'RUN-OK1',
-              source_id: 'source-a',
-              state: 'in_progress',
-            },
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } },
-        );
-      }
-      return new Response(
-        JSON.stringify({
-          schema_version: '1',
-          status: 'error',
-          error: {
-            code: 'invalid_request',
-            render: { ERROR: 'Run not found' },
-          },
-        }),
-        { status: 404, headers: { 'Content-Type': 'application/json' } },
-      );
-    });
-
-    render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={['/sources/distill?source=source-a']}>
-          <DistillHandoffScreen />
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
-
-    const textarea = screen.getByLabelText('Paste run IDs returned by agent');
-    fireEvent.change(textarea, { target: { value: 'RUN-OK1\nRUN-FAIL2' } });
-
-    const openRunsBtn = screen.getByRole('button', { name: 'Open runs' });
-    fireEvent.click(openRunsBtn);
-
-    // Assert RUN-OK1 displays success with link
-    const runLink = await screen.findByRole('link', { name: 'RUN-OK1' });
-    expect(runLink).toBeInTheDocument();
-    expect(runLink).toHaveAttribute('href', '/sources/runs/RUN-OK1');
-
-    // Assert RUN-FAIL2 displays error
-    expect(await screen.findByText('Run not found')).toBeInTheDocument();
-    expect(screen.getByText('RUN-FAIL2')).toBeInTheDocument();
-  });
 });

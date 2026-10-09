@@ -1,14 +1,12 @@
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { apiFetch } from '../../api/client';
 import { useSession, useSources } from '../../api/queries';
-import type { DistillRun, DistillRunResult, SourceSummary } from '../../api/types';
+import type { SourceSummary } from '../../api/types';
 import { Skeleton } from '../../components/Skeleton';
 import { StatusBadge } from '../../components/StatusBadge';
 import { buildHandoffBrief } from '../../domain/handoff-brief';
 import { distillLabel } from '../../domain/source-distill';
 import { loadDraft, saveDraft } from '../../state/drafts';
-import { addRecentRun } from '../../state/recent-runs';
 
 const TITLE_DISTILL = 'Distill with Curator Agent';
 const LABEL_SELECTED_SOURCES = 'Selected sources';
@@ -17,13 +15,7 @@ const BTN_BACK_SOURCES = 'Back to Sources';
 const TITLE_BRIEF_BAR = 'Handoff for your Curator Agent';
 const BTN_COPY_HANDOFF = 'Copy handoff';
 const LABEL_COPIED = 'Copied';
-const LABEL_PASTE_RUNS = 'Paste run IDs returned by agent';
-const PLACEHOLDER_PASTE_RUNS = 'RUN-…  one per line';
-const HINT_WEBUI_NEVER_STARTS = 'ⓘ The WebUI never starts a run. Your agent does.';
-const BTN_OPEN_RUNS = 'Open runs';
-const BTN_OPENING_RUNS = 'Opening runs…';
 const LABEL_ARROW = ' ← ';
-const LABEL_OPENING = 'Opening…';
 const LABEL_LPAREN = ' (';
 const LABEL_RPAREN = ')';
 
@@ -44,11 +36,11 @@ export function DistillHandoffScreen() {
   const { data: sourcesData, isLoading, error: sourcesError } = useSources();
 
   const [copied, setCopied] = useState(false);
-  const [pastedRunIds, setPastedRunIds] = useState('');
-  const [openingRuns, setOpeningRuns] = useState(false);
-  const [runResults, setRunResults] = useState<
-    Array<{ id: string; status: 'loading' | 'success' | 'error'; run?: DistillRun; error?: string }>
-  >([]);
+  const [randomId] = useState(() =>
+    typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : 'hnd-' + Math.random().toString(36).substring(2, 12),
+  );
 
   if (requestedSourceIds.length === 0) {
     return (
@@ -157,10 +149,7 @@ export function DistillHandoffScreen() {
     if (existingDraft?.value?.handoff_request_id) {
       handoffRequestId = existingDraft.value.handoff_request_id;
     } else {
-      handoffRequestId =
-        typeof crypto !== 'undefined' && crypto.randomUUID
-          ? crypto.randomUUID()
-          : 'hnd-' + Math.random().toString(36).substring(2, 12);
+      handoffRequestId = randomId;
       saveDraft(workspaceId, 'distill-handoff', draftId, '', {
         handoff_request_id: handoffRequestId,
       });
@@ -182,46 +171,6 @@ export function DistillHandoffScreen() {
     }
   };
 
-  const handleOpenRuns = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const ids = pastedRunIds
-      .split('\n')
-      .map((s) => s.trim())
-      .filter(Boolean);
-    if (ids.length === 0) return;
-
-    setOpeningRuns(true);
-    setRunResults(ids.map((id) => ({ id, status: 'loading' })));
-
-    for (const id of ids) {
-      try {
-        const res = await apiFetch<DistillRunResult>(`/runs/${encodeURIComponent(id)}`);
-        setRunResults((prev) =>
-          prev.map((r) => (r.id === id ? { id, status: 'success', run: res.run } : r)),
-        );
-        addRecentRun(workspaceId, {
-          runId: res.run.id,
-          sourceId: res.run.source_id,
-          state: res.run.state,
-          idempotencyKey: handoffRequestId || undefined,
-          openedAt: Date.now(),
-        });
-      } catch (err: unknown) {
-        setRunResults((prev) =>
-          prev.map((r) =>
-            r.id === id
-              ? {
-                  id,
-                  status: 'error',
-                  error: err instanceof Error && err.message ? err.message : 'Run not found',
-                }
-              : r,
-          ),
-        );
-      }
-    }
-    setOpeningRuns(false);
-  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
@@ -342,93 +291,6 @@ export function DistillHandoffScreen() {
         </section>
       )}
 
-      {/* Paste run IDs */}
-      <section className="fg-card" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-        <form onSubmit={handleOpenRuns} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-          <div className="fg-field">
-            <label className="fg-field__label t-label" htmlFor="paste-run-ids" style={{ fontWeight: 600, fontSize: '13px' }}>
-              {LABEL_PASTE_RUNS}
-            </label>
-            <textarea
-              id="paste-run-ids"
-              className="fg-input fg-input--area"
-              style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', minHeight: '80px', width: '100%' }}
-              placeholder={PLACEHOLDER_PASTE_RUNS}
-              value={pastedRunIds}
-              onChange={(e) => setPastedRunIds(e.target.value)}
-            />
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 'var(--space-3)' }}>
-            <span className="t-caption" style={{ color: 'var(--color-text-subtle)', flex: 1 }}>
-              {HINT_WEBUI_NEVER_STARTS}
-            </span>
-            <button
-              type="submit"
-              className="fg-btn fg-btn--primary"
-              disabled={openingRuns || !pastedRunIds.trim()}
-              onClick={(e) => void handleOpenRuns(e)}
-            >
-              <span>{openingRuns ? BTN_OPENING_RUNS : BTN_OPEN_RUNS}</span>
-            </button>
-          </div>
-        </form>
-
-        {/* Per-ID results */}
-        {runResults.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
-            {runResults.map((res) => (
-              <div
-                key={res.id}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: 'var(--space-2) var(--space-3)',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: 'var(--radius-sm)',
-                  fontSize: '13px',
-                  backgroundColor: res.status === 'error' ? 'var(--color-surface-sunken)' : 'transparent',
-                }}
-              >
-                {res.status === 'loading' ? (
-                  <>
-                    <span style={{ fontFamily: 'var(--font-mono)' }}>{res.id}</span>
-                    <span style={{ color: 'var(--color-text-muted)' }}>{LABEL_OPENING}</span>
-                  </>
-                ) : res.status === 'success' ? (
-                  <>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                      <Link
-                        to={`/sources/runs/${encodeURIComponent(res.id)}`}
-                        style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-primary)', textDecoration: 'none', fontWeight: 600 }}
-                      >
-                        <span>{res.id}</span>
-                      </Link>
-                      <span style={{ color: 'var(--color-text-muted)' }}>{res.run?.source_id}</span>
-                    </div>
-                    <StatusBadge
-                      variant="chip"
-                      tone={
-                        res.run?.state === 'finalized'
-                          ? 'success'
-                          : res.run?.state === 'failed'
-                            ? 'danger'
-                            : 'info'
-                      }
-                      label={res.run?.state || ''}
-                    />
-                  </>
-                ) : (
-                  <>
-                    <span style={{ fontFamily: 'var(--font-mono)' }}>{res.id}</span>
-                    <span style={{ color: 'var(--color-danger, #dc2626)' }}>{res.error}</span>
-                  </>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
     </div>
   );
 }

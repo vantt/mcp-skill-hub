@@ -49,12 +49,10 @@ describe('HomeScreen', () => {
     const kinds: Array<{ kind: string; id?: string; count?: number; wantType: string; wantText?: string }> = [
       { kind: 'repair_workspace', wantType: 'command', wantText: 'skillhub doctor --fix' },
       { kind: 'recover_workspace', wantType: 'command', wantText: 'skillhub doctor --fix' },
-      { kind: 'resume_run', id: 'RUN-123', count: 3, wantType: 'link', wantText: '/sources/runs/RUN-123' },
       { kind: 'rebuild_index', wantType: 'command', wantText: 'skillhub rebuild' },
       { kind: 'retry_unavailable_sources', wantType: 'link', wantText: '/sources' },
       { kind: 'check_due_sources', wantType: 'link', wantText: '/sources' },
       { kind: 'distill_changed_sources', wantType: 'link', wantText: '/sources?filter=ready' },
-      { kind: 'review_insights', wantType: 'link', wantText: '/inbox' },
       { kind: 'first_run_commit', wantType: 'command', wantText: 'git commit -m "feat: initial skillhub workspace"' },
       { kind: 'review_git_changes', wantType: 'command', wantText: 'git status' },
       { kind: 'review_upstream_updates', wantType: 'link', wantText: '/skills?upstream=updates' },
@@ -114,17 +112,16 @@ describe('HomeScreen', () => {
       ...base,
       actions: [
         {
-          kind: 'resume_run',
-          id: 'RUN-ABC',
-          count: 2,
+          kind: 'retry_unavailable_sources',
           priority: 1,
-          summary: 'Resume run needed',
+          summary: 'Retry sources needed',
+          count: 1,
         },
       ],
     };
     renderHomeScreen(linkBase);
-    expect(screen.getByText('Resume run needed')).toBeInTheDocument();
-    expect(screen.getByText('Open run →')).toBeInTheDocument();
+    expect(screen.getByText('Retry sources needed')).toBeInTheDocument();
+    expect(screen.getByText('Open sources →')).toBeInTheDocument();
   });
 
   it('renders Unavailable and no digit for degraded workspace (health: invalid, index: stale)', () => {
@@ -141,7 +138,7 @@ describe('HomeScreen', () => {
       },
       actions: [],
       categories: [
-        { kind: 'pending_insights', count: 5, availability: 'available' },
+        { kind: 'attention_items', count: 5, availability: 'available' },
         { kind: 'changed_sources', count: 3, availability: 'available' },
       ],
     };
