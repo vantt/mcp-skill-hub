@@ -156,3 +156,37 @@ func TestValidateWorkspaceAddsNoRuleBeyondCanonicalValidate(t *testing.T) {
 		t.Fatalf("expected StatusError, got %s", res.Status)
 	}
 }
+
+func TestWorkspaceServiceGetOperationDiff(t *testing.T) {
+	t.Parallel()
+	root := filepath.Join(t.TempDir(), "workspace")
+	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+		t.Fatal(err)
+	}
+	opDir := filepath.Join(root, "history", "operations", "2026", "10")
+	if err := os.MkdirAll(opDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	opReceipt := `id: op_test_123
+changes:
+  - path: skills/default/sample/SKILL.md
+    before: ""
+    after: "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    before_content: ""
+    after_content: "# Sample\n"
+    content_available: true
+`
+	if err := os.WriteFile(filepath.Join(opDir, "op_test_123.yaml"), []byte(opReceipt), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	diffRes, err := (WorkspaceService{}).GetOperationDiff(context.Background(), root, "op_test_123")
+	if err != nil {
+		t.Fatalf("GetOperationDiff failed: %v", err)
+	}
+	if diffRes.OperationID != "op_test_123" || len(diffRes.Changes) != 1 {
+		t.Fatalf("unexpected diff result: %#v", diffRes)
+	}
+	if !diffRes.Changes[0].DiffAvailable {
+		t.Fatalf("expected DiffAvailable true")
+	}
+}

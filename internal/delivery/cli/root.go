@@ -56,12 +56,6 @@ func RunContext(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		return runSkill(ctx, args[1:], stdout, stderr)
 	case "source":
 		return runSource(ctx, args[1:], stdout, stderr)
-	case "distill":
-		return runDistill(ctx, args[1:], stdout, stderr)
-	case "inbox":
-		return runInbox(ctx, args[1:], stdout, stderr)
-	case "insight":
-		return runInsight(ctx, args[1:], stdout, stderr)
 	case "check":
 		return runCheck(ctx, args[1:], stdout, stderr)
 	case "resolve":

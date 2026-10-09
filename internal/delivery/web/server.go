@@ -44,8 +44,6 @@ type Server struct {
 	skills       app.SkillService
 	skillAdd     app.SkillAddService
 	sources      app.SourceService
-	distill      app.DistillService
-	insights     app.InsightService
 	upstream     app.UpstreamService
 	sourceImport app.SourceImportService
 	throttle     *authThrottle
@@ -120,8 +118,6 @@ func New(opts Options) (*Server, error) {
 	}
 	_ = srv.skillAdd
 	_ = srv.sources
-	_ = srv.distill
-	_ = srv.insights
 	return srv, nil
 }
 

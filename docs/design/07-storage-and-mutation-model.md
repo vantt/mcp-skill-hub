@@ -987,7 +987,7 @@ Every case must recover to exactly old or intended new valid state, never an acc
 | **MCP Tool** | `source_triage` | Removed | Intake directory deleted. |
 | **MCP Tool** | `source_link_preview` | Removed | Sources declared directly in `.meta/skill.yaml`. |
 | **MCP Tool** | `source_unwatch_preview` | Removed | Sources detached in `.meta/skill.yaml`. |
-| **MCP Tool** | `source_list` | Kept | Unchanged. |
+| **MCP Tool** | `source_list` | Added | Replaces the removed `sources/intake` and `distill/sources` exploration paths. |
 | **MCP Tool** | `source_check` | Kept | Checks sources for upstream changes. |
 | **MCP Tool** | `source_diff` | Kept | Unchanged. |
 | **MCP Tool** | `source_import_preview` | Kept | Unchanged. |
@@ -1022,6 +1022,9 @@ Every case must recover to exactly old or intended new valid state, never an acc
 | **Web Route** | `/api/v1/skills/{id}/distill` | Added | GET/POST for `.meta/distill.yaml`. |
 | **Web Route** | `/api/v1/skills/*` | Kept | Detail, runtime, review, usage routes kept. |
 | **Web Route** | `/api/v1/sources/*` | Kept | Source routes kept. |
+| **CLI Command** | `skillhub distill` | Removed | Distill run state machine and subcommands removed in favor of direct `.meta/distill.yaml` knowledge model. |
+| **CLI Command** | `skillhub inbox` | Removed | Inbox removed in favor of per-skill `.meta/distill.yaml` lessons. |
+| **CLI Command** | `skillhub insight` | Removed | Insight decision/application lifecycle removed in favor of standard skill updates and inline lesson decisions. |
 | **JSON Schema** | `schemas/distill.schema.json` | Added | Schema for `.meta/distill.yaml`. |
 | **JSON Schema** | `schemas/distill-submission.schema.json` | Removed | Superseded by `distill.schema.json`. |
 | **JSON Schema** | `schemas/insight.schema.json` | Removed | Entity removed. |

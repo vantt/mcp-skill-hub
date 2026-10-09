@@ -1,16 +1,18 @@
 package distill
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
-	insightpkg "github.com/vantt/mcp-skill-hub/internal/insight"
 	"github.com/vantt/mcp-skill-hub/internal/source"
 	"gopkg.in/yaml.v3"
 )
@@ -39,8 +41,8 @@ func ValidateWorkspace(root string) error {
 	observations := map[string]Observation{}
 	comparisons := map[string]Comparison{}
 	insights := map[string]Insight{}
-	proposals := map[string]insightpkg.ApplicationProposal{}
-	incorporations := map[string]insightpkg.Incorporation{}
+	proposals := map[string]legacyApplicationProposal{}
+	incorporations := map[string]legacyIncorporation{}
 	receiptAfter := map[string]map[string]string{}
 	walk := func(relative string, visit func(string, []byte) error) error {
 		base := filepath.Join(root, filepath.FromSlash(relative))
@@ -125,14 +127,14 @@ func ValidateWorkspace(root string) error {
 				insights[item.ID] = item
 			}
 		case strings.Contains(slash, "/proposals/"):
-			var item insightpkg.ApplicationProposal
-			item, err = insightpkg.ParseApplicationProposal(data)
+			var item legacyApplicationProposal
+			item, err = parseLegacyApplicationProposal(data)
 			if err == nil {
 				proposals[item.ID] = item
 			}
 		case strings.Contains(slash, "/incorporations/"):
-			var item insightpkg.Incorporation
-			item, err = insightpkg.ParseIncorporation(data)
+			var item legacyIncorporation
+			item, err = parseLegacyIncorporation(data)
 			if err == nil {
 				incorporations[item.ID] = item
 			}
@@ -258,7 +260,7 @@ func ValidateWorkspace(root string) error {
 		if !operationExists && !skipRuntimePackages {
 			return fmt.Errorf("incorporation %s references missing operation %s", incorporation.ID, incorporation.OperationID)
 		}
-		pins := make(map[string]insightpkg.PathPin, len(proposal.PathPins))
+		pins := make(map[string]legacyPathPin, len(proposal.PathPins))
 		for _, pin := range proposal.PathPins {
 			if operationExists && operationChanges[pin.Path] != pin.After {
 				return fmt.Errorf("incorporation %s target digest is not recorded by its operation", incorporation.ID)
@@ -303,7 +305,7 @@ func ValidateWorkspace(root string) error {
 		if len(coveredObservations) != len(expectedObservations) || len(coveredTargets) != len(proposal.ChangedFiles) || len(incorporation.Targets) != len(proposal.ChangedFiles) {
 			return fmt.Errorf("incorporation %s does not fully cover evidence and changed artifacts", incorporation.ID)
 		}
-		if proposal.Digest != insightpkg.ProposalDigest(item.ID, proposal.BaseCatalogVersion, incorporation.OperationID, proposal.PathPins, incorporation.SourceToLocal) {
+		if proposal.Digest != legacyProposalDigest(item.ID, proposal.BaseCatalogVersion, incorporation.OperationID, proposal.PathPins, incorporation.SourceToLocal) {
 			return fmt.Errorf("incorporation %s does not match proposal digest", incorporation.ID)
 		}
 	}
@@ -366,4 +368,77 @@ func containsID(values []string, id string) bool {
 		}
 	}
 	return false
+}
+
+type legacyPathPin struct {
+	Path   string `yaml:"path" json:"path"`
+	Before string `yaml:"before,omitempty" json:"before,omitempty"`
+	After  string `yaml:"after,omitempty" json:"after,omitempty"`
+}
+
+type legacySourceToLocalMapping struct {
+	ObservationID string `yaml:"observation_id" json:"observation_id"`
+	ArtifactPath  string `yaml:"artifact_path" json:"artifact_path"`
+	Concept       string `yaml:"concept" json:"concept"`
+}
+
+type legacyApplicationProposal struct {
+	SchemaVersion      int             `yaml:"schema_version" json:"schema_version"`
+	ID                 string          `yaml:"id" json:"id"`
+	InsightID          string          `yaml:"insight_id" json:"insight_id"`
+	BaseCatalogVersion string          `yaml:"base_catalog_version" json:"base_catalog_version"`
+	Digest             string          `yaml:"digest" json:"digest"`
+	Status             string          `yaml:"status" json:"status"`
+	ChangedFiles       []string        `yaml:"changed_files" json:"changed_files"`
+	PathPins           []legacyPathPin `yaml:"path_pins" json:"path_pins"`
+	CreatedAt          string          `yaml:"created_at" json:"created_at"`
+}
+
+type legacyIncorporation struct {
+	SchemaVersion  int                          `yaml:"schema_version" json:"schema_version"`
+	ID             string                       `yaml:"id" json:"id"`
+	InsightID      string                       `yaml:"insight_id" json:"insight_id"`
+	ProposalID     string                       `yaml:"proposal_id" json:"proposal_id"`
+	OperationID    string                       `yaml:"operation_id" json:"operation_id"`
+	State          string                       `yaml:"state" json:"state"`
+	Targets        []string                     `yaml:"targets" json:"targets"`
+	SourceToLocal  []legacySourceToLocalMapping `yaml:"source_to_local" json:"source_to_local"`
+	IncorporatedAt string                       `yaml:"incorporated_at" json:"incorporated_at"`
+}
+
+func parseLegacyApplicationProposal(data []byte) (legacyApplicationProposal, error) {
+	var value legacyApplicationProposal
+	err := strict(data, &value)
+	return value, err
+}
+
+func parseLegacyIncorporation(data []byte) (legacyIncorporation, error) {
+	var value legacyIncorporation
+	err := strict(data, &value)
+	return value, err
+}
+
+func legacyProposalDigest(insightID, base, operationID string, pins []legacyPathPin, mappings []legacySourceToLocalMapping) string {
+	pins = append([]legacyPathPin(nil), pins...)
+	mappings = append([]legacySourceToLocalMapping(nil), mappings...)
+	sort.Slice(pins, func(i, j int) bool { return pins[i].Path < pins[j].Path })
+	sort.Slice(mappings, func(i, j int) bool {
+		if mappings[i].ObservationID != mappings[j].ObservationID {
+			return mappings[i].ObservationID < mappings[j].ObservationID
+		}
+		if mappings[i].ArtifactPath != mappings[j].ArtifactPath {
+			return mappings[i].ArtifactPath < mappings[j].ArtifactPath
+		}
+		return mappings[i].Concept < mappings[j].Concept
+	})
+	var builder strings.Builder
+	builder.WriteString(insightID + "\n" + base + "\n" + operationID + "\n")
+	for _, pin := range pins {
+		builder.WriteString(pin.Path + ":" + pin.Before + "->" + pin.After + "\n")
+	}
+	for _, mapping := range mappings {
+		builder.WriteString(mapping.ObservationID + "->" + mapping.ArtifactPath + "#" + mapping.Concept + "\n")
+	}
+	sum := sha256.Sum256([]byte(builder.String()))
+	return "sha256:" + hex.EncodeToString(sum[:])
 }

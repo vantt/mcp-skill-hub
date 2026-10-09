@@ -40,7 +40,6 @@ type Server struct {
 	resolver     app.ResolverService
 	feedback     app.FeedbackService
 	source       app.SourceService
-	distill      app.DistillService
 	curationUX   app.CurationTelemetryService
 	snapshots    app.SnapshotService
 	telemetry    app.TelemetrySink
@@ -112,7 +111,6 @@ func Serve(ctx context.Context, workspacePath string, diagnostics io.Writer) err
 		adapter.resolver.Telemetry = recorder
 		adapter.feedback.Recorder = recorder
 		adapter.source.Telemetry = recorder
-		adapter.distill.Telemetry = recorder
 		adapter.curationUX.Recorder = recorder
 		defer closeServeTelemetry(recorder, adapter.logger)
 	}

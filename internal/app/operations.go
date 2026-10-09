@@ -5,14 +5,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
 	"github.com/vantt/mcp-skill-hub/internal/canonical"
+	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
 	"github.com/vantt/mcp-skill-hub/internal/workspace"
+	"gopkg.in/yaml.v3"
 )
 
 // ValidateWorkspace is the application contract behind CLI and future tool adapters.
@@ -423,3 +427,171 @@ func parsePorcelainSummary(output []byte) (GitPathSummary, error) {
 	summary.Dirty = len(summary.Staged) > 0 || len(summary.Unstaged) > 0 || len(summary.Untracked) > 0 || len(summary.Unmerged) > 0
 	return summary, nil
 }
+
+type OperationChange struct {
+	Path                string `json:"path"`
+	BeforeDigest        string `json:"before_digest"`
+	AfterDigest         string `json:"after_digest"`
+	Before              string `json:"before,omitempty"`
+	After               string `json:"after,omitempty"`
+	Diff                string `json:"diff,omitempty"`
+	DiffAvailable       bool   `json:"diff_available"`
+	DigestOnlyMetadata  bool   `json:"digest_only_metadata"`
+	CurrentMatchesAfter bool   `json:"current_matches_after"`
+}
+
+type OperationDiffResult struct {
+	Result
+	OperationID     string            `json:"operation_id"`
+	Changes         []OperationChange `json:"changes"`
+	ReviewCommand   string            `json:"review_command"`
+	RestoreGuidance []string          `json:"restore_guidance"`
+	Warning         string            `json:"warning"`
+}
+
+var operationIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*$`)
+
+func (WorkspaceService) GetOperationDiff(ctx context.Context, path, operationID string) (OperationDiffResult, error) {
+	root, err := workspace.Discover(path)
+	if err != nil {
+		return OperationDiffResult{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return OperationDiffResult{}, err
+	}
+	if !operationIDPattern.MatchString(operationID) {
+		return OperationDiffResult{}, NewInvalidRequestError("invalid operation ID", "Pass an operation ID returned by the workspace.")
+	}
+	type receiptChange struct {
+		Path             string `yaml:"path"`
+		BeforeDigest     string `yaml:"before"`
+		AfterDigest      string `yaml:"after"`
+		BeforeContent    string `yaml:"before_content"`
+		AfterContent     string `yaml:"after_content"`
+		ContentAvailable bool   `yaml:"content_available"`
+	}
+	var document struct {
+		ID      string          `yaml:"id"`
+		Changes []receiptChange `yaml:"changes"`
+	}
+	found := false
+	err = walkOperationsYAML(root, "history/operations", func(_ string, data []byte) error {
+		var header struct {
+			ID string `yaml:"id"`
+		}
+		if yaml.Unmarshal(data, &header) != nil || header.ID != operationID {
+			return nil
+		}
+		if found {
+			return errors.New("duplicate operation ID")
+		}
+		found = true
+		return yaml.Unmarshal(data, &document)
+	})
+	if err != nil {
+		return OperationDiffResult{}, err
+	}
+	if !found {
+		return OperationDiffResult{}, errors.New("operation not found")
+	}
+	paths := []string{}
+	changes := make([]OperationChange, 0, len(document.Changes))
+	for _, stored := range document.Changes {
+		paths = append(paths, stored.Path)
+		currentDigest, digestErr := workspacePathDigest(root, stored.Path)
+		if digestErr != nil {
+			return OperationDiffResult{}, digestErr
+		}
+		change := OperationChange{Path: stored.Path, BeforeDigest: stored.BeforeDigest, AfterDigest: stored.AfterDigest, CurrentMatchesAfter: currentDigest == stored.AfterDigest}
+		if stored.ContentAvailable {
+			change.Before, change.After = stored.BeforeContent, stored.AfterContent
+			change.Diff = renderBoundedOperationDiff(stored.Path, stored.BeforeContent, stored.AfterContent)
+			change.DiffAvailable = true
+		} else {
+			change.DigestOnlyMetadata = true
+		}
+		changes = append(changes, change)
+	}
+	sort.Strings(paths)
+	quoted := make([]string, len(paths))
+	for index, value := range paths {
+		quoted[index] = shellQuote(value)
+	}
+	result := OperationDiffResult{Result: NewResult(StatusOK, "Operation history loaded; retained content is shown as a bounded before/after diff and older entries are labeled digest-only metadata."), OperationID: operationID, Changes: changes, ReviewCommand: "git diff -- " + strings.Join(quoted, " "), Warning: "Skill Hub only inspects Git and never runs restore, remove, reset, checkout, or revert. Recheck current digests immediately before any manual undo."}
+	for _, change := range changes {
+		tracked, headDigest := inspectGitPath(root, change.Path)
+		switch {
+		case !change.CurrentMatchesAfter:
+			result.RestoreGuidance = append(result.RestoreGuidance, fmt.Sprintf("%s: no automatic guidance; current bytes no longer match operation after-digest %s.", change.Path, change.AfterDigest))
+		case tracked && change.BeforeDigest != "" && headDigest == change.BeforeDigest:
+			result.RestoreGuidance = append(result.RestoreGuidance, fmt.Sprintf("%s: tracked restore candidate; current after-digest and HEAD before-digest were verified. Recheck both before manually restoring this path.", change.Path))
+		case !tracked && change.BeforeDigest == "":
+			result.RestoreGuidance = append(result.RestoreGuidance, fmt.Sprintf("%s: untracked creation removal candidate; current after-digest was verified. Recheck it before manually removing only this path.", change.Path))
+		default:
+			result.RestoreGuidance = append(result.RestoreGuidance, fmt.Sprintf("%s: use a reviewed compensating edit from retained content or Git history; no safe direct restore/removal was established.", change.Path))
+		}
+	}
+	return result, nil
+}
+
+func walkOperationsYAML(root, relative string, visit func(string, []byte) error) error {
+	base := filepath.Join(root, filepath.FromSlash(relative))
+	return filepath.WalkDir(base, func(path string, entry fs.DirEntry, err error) error {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".yaml") {
+			return nil
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		return visit(path, data)
+	})
+}
+
+func workspacePathDigest(root, path string) (string, error) {
+	data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+	if errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("read current operation path %s: %w", path, err)
+	}
+	return sourcepkg.Digest(data), nil
+}
+
+func renderBoundedOperationDiff(path, before, after string) string {
+	var out strings.Builder
+	fmt.Fprintf(&out, "--- before/%s\n+++ after/%s\n", path, path)
+	for _, line := range strings.Split(strings.TrimSuffix(before, "\n"), "\n") {
+		if before != "" {
+			out.WriteString("-" + line + "\n")
+		}
+	}
+	for _, line := range strings.Split(strings.TrimSuffix(after, "\n"), "\n") {
+		if after != "" {
+			out.WriteString("+" + line + "\n")
+		}
+	}
+	return out.String()
+}
+
+func inspectGitPath(root, path string) (bool, string) {
+	tracked := exec.Command("git", "-C", root, "ls-files", "--error-unmatch", "--", path)
+	if tracked.Run() != nil {
+		return false, ""
+	}
+	show := exec.Command("git", "-C", root, "show", "HEAD:"+path)
+	data, err := show.Output()
+	if err != nil {
+		return true, ""
+	}
+	return true, sourcepkg.Digest(data)
+}
+
+func shellQuote(value string) string { return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'" }

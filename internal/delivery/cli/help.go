@@ -28,9 +28,6 @@ Skills:
 Sources & learning:
   source    Repositories and documents your skills come from or learn from
   check     Check sources for updates
-  distill   Turn changed sources into skill proposals
-  inbox     List insights waiting for review
-  insight   Review, apply, or dismiss an insight
 
 Agent:
   resolve   Pick the best skill for a request
@@ -189,56 +186,6 @@ check also reports per-skill drift.
   <source-id>...    Check the named sources
 
 Example: skillhub check --all-due
-`,
-	"distill": `Usage: skillhub distill <subcommand> [--workspace <path>] [--json]
-
-Turn changed sources into skill proposals. Normally your agent runs this; the
-CLI exposes each step.
-
-Subcommands:
-  prepare <source-id>... | --all-changed   Create analysis runs for changed sources
-  start <run-id>                           Start a prepared run
-  submit <run-id> --submission <file>      Submit findings and insights (JSON file)
-  get <run-id>                             Show a run
-  retry <run-id> | cancel <run-id>         Retry or cancel a run
-  findings | comparisons | insights [--source-id <id>] [--skill-id <id>]
-                                           Query the recorded results
-
-Other flag: --idempotency-key <key>.
-
-Example: skillhub distill prepare --all-changed
-`,
-	"inbox": `Usage: skillhub inbox [--workspace <path>] [--json]
-
-List insights waiting for review, grouped by skill and ranked. Use
-` + "`skillhub insight show <id>`" + ` to read one.
-
-Example: skillhub inbox
-`,
-	"insight": `Usage: skillhub insight <subcommand> [--workspace <path>] [--json]
-
-Review, apply, or dismiss an insight from the inbox.
-
-Subcommands:
-  show <id>                                   Show an insight and its findings
-  decide <id> --decision plan|reject|obsolete|reopen --reason <text>
-  plan|reject|obsolete|reopen <id> --reason <text>
-                                              Shorthand for decide
-  apply <id> --proposal-file <file>           Preview applying an insight (never applies;
-                                              does not accept --yes). The proposal file is a
-                                              JSON file specifying changes ([{path, contents}])
-                                              and mappings ([{observation_id, artifact_path, concept}]).
-  confirm --proposal <id> --proposal-digest <d> --base-version <v>
-                                              Apply the previewed proposal
-  outcome <incorporation-id> --state <s> --note <t> --evidence <e>...
-                                              Record what happened after applying
-  provenance --artifact <path>                Which insights touched a file
-  impact --finding <id>                       Insights affected by a finding
-  operation-diff <operation-id>               Show what an operation changed
-
-Other flag: --idempotency-key <key>.
-
-Example: skillhub insight decide INS-123 --decision reject --reason "already covered"
 `,
 	"resolve": `Usage: skillhub resolve --request <request.json> [--workspace <path>] [--json]
 

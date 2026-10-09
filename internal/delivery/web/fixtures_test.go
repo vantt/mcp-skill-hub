@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
-	"github.com/vantt/mcp-skill-hub/internal/distill"
 	"github.com/vantt/mcp-skill-hub/internal/skill"
 	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
 	"github.com/vantt/mcp-skill-hub/internal/telemetry"
@@ -515,108 +514,4 @@ func writeSourceRecord(t *testing.T, root, id, adapter string, from, to *sourcep
 	if err := os.WriteFile(filepath.Join(root, "sources", "catalog", id+".yaml"), data, 0o644); err != nil {
 		t.Fatal(err)
 	}
-}
-
-func seedRun(t *testing.T, root string, adapter fakeSourceAdapter) string {
-	t.Helper()
-	r1Rev := revisionForWebDistill("r1", adapter.files["r1"])
-	r2Rev := revisionForWebDistill("r2", adapter.files["r2"])
-	writeSourceRecord(t, root, "source-a", "filesystem", &r1Rev, &r2Rev)
-	if _, err := (app.CatalogService{}).BuildCatalogGeneration(context.Background(), root); err != nil {
-		t.Fatal(err)
-	}
-	service := app.DistillService{
-		Clock:    app.SystemClock{},
-		Adapters: map[string]sourcepkg.Adapter{"filesystem": adapter},
-	}
-	prep, err := service.PrepareDistillRuns(context.Background(), root, app.DistillPrepareInput{SourceIDs: []string{"source-a"}})
-	if err != nil || prep.Prepared != 1 {
-		t.Fatalf("prepare failed: %v, %#v", err, prep)
-	}
-	runID := prep.Results[0].Run.ID
-	started, err := service.StartDistillRun(context.Background(), root, runID)
-	if err != nil {
-		t.Fatalf("start failed: %v", err)
-	}
-	return started.Run.ID
-}
-
-func seedFinalizedRun(t *testing.T, root string, adapter fakeSourceAdapter) string {
-	t.Helper()
-	runID := seedRun(t, root, adapter)
-	service := app.DistillService{
-		Clock:    app.SystemClock{},
-		Adapters: map[string]sourcepkg.Adapter{"filesystem": adapter},
-	}
-	runRes, err := service.GetDistillRun(context.Background(), root, runID)
-	if err != nil {
-		t.Fatalf("get run failed: %v", err)
-	}
-	run := runRes.Run
-	sub := app.DistillSubmission{
-		Coverage: []distill.CoverageEntry{
-			{Resource: "SKILL.md", Status: "analyzed", Reason: "Read target."},
-		},
-		Findings: []app.FindingSubmission{
-			{
-				StableKey:  "retry-review",
-				Status:     "active",
-				What:       "The source reviews retries.",
-				Vocabulary: []string{"retry"},
-				Evidence: []distill.Evidence{
-					{
-						Revision:      distill.IdentityOf(run.ToRevision),
-						RunID:         run.ID,
-						PackageDigest: run.PackageDigest,
-						Path:          "SKILL.md",
-						Locator:       "SKILL.md",
-						Digest:        sourcepkg.Digest(adapter.files["r2"]["SKILL.md"]),
-					},
-				},
-			},
-		},
-		Insights: []app.InsightSubmission{
-			{
-				StableKey:      "retry-review-concept",
-				SkillID:        "review-skill",
-				Recommendation: "Add retry guidance to code review.",
-				ObservationIDs: []string{distill.ObservationID("source-a", "retry-review")},
-				Category:       "reliability",
-				Priority:       "high",
-				Rationale:      "Improves reliability.",
-			},
-		},
-	}
-	_, err = service.SubmitDistillRun(context.Background(), root, runID, sub)
-	if err != nil {
-		t.Fatalf("submit failed: %v", err)
-	}
-	return runID
-}
-
-func seedPendingInsight(t *testing.T, root string) string {
-	t.Helper()
-	adapter := fakeSourceAdapter{
-		files: map[string]map[string][]byte{
-			"r1": {"SKILL.md": []byte("# Version 1\n")},
-			"r2": {"SKILL.md": []byte("# Version 2\n")},
-		},
-		fail: map[string]error{},
-	}
-	seedFinalizedRun(t, root, adapter)
-	return distill.InsightID("review-skill", "retry-review-concept")
-}
-
-func revisionForWebDistill(value string, files map[string][]byte) sourcepkg.Revision {
-	names := make([]string, 0, len(files))
-	for name := range files {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	all := []byte{}
-	for _, name := range names {
-		all = append(all, []byte(name)...)
-		all = append(all, files[name]...)
-	}
-	return sourcepkg.Revision{Kind: "declared-version", Value: value, ContentDigest: sourcepkg.Digest(all), ObservedAt: time.Date(2026, 9, 29, 3, 0, 0, 0, time.UTC)}
 }

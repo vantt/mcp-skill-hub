@@ -85,7 +85,7 @@ func TestSourceImportPreviewAndConfirmWithConflictSkipping(t *testing.T) {
 		Identity:        sourcepkg.Identity{Name: "skills", Canonical: "https://github.com/example/skills.git"},
 		Limits:          sourcepkg.Limits{TimeoutSeconds: 20, MaxBytes: sourcepkg.DefaultMaxBytes, MaxFiles: sourcepkg.DefaultMaxFiles, MaxFileBytes: sourcepkg.DefaultMaxFileSize},
 		Monitoring:      sourcepkg.Monitoring{Enabled: true, Cadence: "weekly"},
-		CurrentRevision: ptrRevision(revision("commit-123")),
+		CurrentRevision: new(revision("commit-123")),
 	}
 	srcBytes, err := sourcepkg.MarshalCanonical(sourceRec)
 	if err != nil {
@@ -276,7 +276,7 @@ func TestSourceImportOversizeLimitError(t *testing.T) {
 		Monitoring:      sourcepkg.Monitoring{Enabled: true, Cadence: "weekly"},
 		Identity:        sourcepkg.Identity{Name: "huge", Canonical: "https://github.com/example/huge.git"},
 		Limits:          sourcepkg.Limits{TimeoutSeconds: 20, MaxBytes: sourcepkg.DefaultMaxBytes, MaxFiles: sourcepkg.DefaultMaxFiles, MaxFileBytes: sourcepkg.DefaultMaxFileSize},
-		CurrentRevision: ptrRevision(revision("commit-huge")),
+		CurrentRevision: new(revision("commit-huge")),
 	}
 	srcBytes, _ := sourcepkg.MarshalCanonical(sourceRec)
 	_ = os.WriteFile(filepath.Join(root, "sources", "catalog", "huge-source.yaml"), srcBytes, 0o644)
@@ -376,7 +376,7 @@ func TestSourceImportFolderScopedPreservesCompanionsBUG04(t *testing.T) {
 		Identity:        sourcepkg.Identity{Name: "skills", Canonical: "https://github.com/anthropics/skills.git"},
 		Limits:          sourcepkg.Limits{TimeoutSeconds: 20, MaxBytes: sourcepkg.DefaultMaxBytes, MaxFiles: sourcepkg.DefaultMaxFiles, MaxFileBytes: sourcepkg.DefaultMaxFileSize},
 		Monitoring:      sourcepkg.Monitoring{Enabled: true, Cadence: "weekly"},
-		CurrentRevision: ptrRevision(revision("commit-8a1541c")),
+		CurrentRevision: new(revision("commit-8a1541c")),
 	}
 	srcBytes, _ := sourcepkg.MarshalCanonical(sourceRec)
 	_ = os.WriteFile(filepath.Join(root, "sources", "catalog", "ap.yaml"), srcBytes, 0o644)

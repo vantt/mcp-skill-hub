@@ -62,12 +62,12 @@ func TestCommandTelemetryOpensOncePerBatchAfterArgumentsResolve(t *testing.T) {
 		return recorder, nil
 	}
 	root := newSourceCLIWorkspace(t)
-	code, _, _ := runCLIForTest([]string{"distill", "prepare", "--workspace", root, "--json"})
+	code, _, _ := runCLIForTest([]string{"source", "capture", "--workspace", root, "--json"})
 	if code != 2 || opens != 0 {
 		t.Fatalf("invalid invocation: code=%d opens=%d", code, opens)
 	}
-	code, stdout, stderr := runCLIForTest([]string{"distill", "prepare", "missing-a", "missing-b", "--workspace", root, "--json"})
-	if code != 1 || opens != 1 || recorder.flushed != 1 || recorder.closed != 1 {
+	code, stdout, stderr := runCLIForTest([]string{"check", "missing-a", "missing-b", "--workspace", root, "--json"})
+	if code != 2 || opens != 1 || recorder.flushed != 1 || recorder.closed != 1 {
 		t.Fatalf("batch lifecycle: code=%d opens=%d flush=%d close=%d stdout=%s stderr=%s", code, opens, recorder.flushed, recorder.closed, stdout, stderr)
 	}
 }

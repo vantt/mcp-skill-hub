@@ -14,7 +14,6 @@ import (
 	"strings"
 
 	distillpkg "github.com/vantt/mcp-skill-hub/internal/distill"
-	insightpkg "github.com/vantt/mcp-skill-hub/internal/insight"
 	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
 	"github.com/vantt/mcp-skill-hub/internal/workspace"
 	"gopkg.in/yaml.v3"
@@ -129,16 +128,7 @@ func ValidateWithOptions(root string, opts ValidationOptions) ([]Issue, error) {
 			shapeErr = validateSourcePolicy(contents)
 		}
 		if shapeErr == nil && strings.HasPrefix(rel, "distill/") {
-			switch {
-			case strings.Contains(rel, "/proposals/"):
-				_, shapeErr = insightpkg.ParseApplicationProposal(contents)
-			case strings.Contains(rel, "/incorporations/"):
-				_, shapeErr = insightpkg.ParseIncorporation(contents)
-			case strings.Contains(rel, "/outcomes/"):
-				_, shapeErr = insightpkg.ParseOutcome(contents)
-			default:
-				shapeErr = distillpkg.ValidateCanonical(rel, contents)
-			}
+			shapeErr = distillpkg.ValidateCanonical(rel, contents)
 		}
 		if shapeErr != nil {
 			issues = append(issues, Issue{Path: rel, Message: "invalid YAML: " + shapeErr.Error()})

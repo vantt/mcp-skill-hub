@@ -47,7 +47,7 @@ func (adapter *Server) registerWorkspaceTools(server *mcp.Server) {
 			}
 			filter := "operation_id=" + strings.TrimSpace(input.OperationID)
 			if input.OperationID != "" {
-				value, callErr := (app.InsightService{}).GetOperationDiff(ctx, adapter.workspace, input.OperationID)
+				value, callErr := (app.WorkspaceService{}).GetOperationDiff(ctx, adapter.workspace, input.OperationID)
 				if callErr != nil {
 					return failure[workspaceDiffResult](callErr)
 				}

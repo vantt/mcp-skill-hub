@@ -203,8 +203,7 @@ func TestStatusReportsStaleIndexAndRebuildAfterHandEdit(t *testing.T) {
 func TestPerCommandHelpHasRealUsage(t *testing.T) {
 	t.Parallel()
 	want := map[string][]string{
-		"check": {"--all-due", "Example"}, "distill": {"prepare", "submit", "Example"}, "inbox": {"Example"},
-		"insight": {"decide", "confirm", "Example"}, "resolve": {"--request", "Example"}, "resolution": {"replay", "--manifest"},
+		"check": {"--all-due", "Example"}, "resolve": {"--request", "Example"}, "resolution": {"replay", "--manifest"},
 		"validate": {"Example"}, "rebuild": {"Example"}, "migrate": {"--to", "--yes"}, "diff": {"Example"},
 		"telemetry": {"purge --yes", "export"}, "eval": {"manifest", "promote"}, "version": {"--json"},
 	}

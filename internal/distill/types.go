@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	insightpkg "github.com/vantt/mcp-skill-hub/internal/insight"
 	"github.com/vantt/mcp-skill-hub/internal/source"
 	"gopkg.in/yaml.v3"
 )
@@ -198,22 +197,30 @@ type Comparison struct {
 
 // Insight records what a curated skill should consider adopting.
 type Insight struct {
-	SchemaVersion          int                   `yaml:"schema_version" json:"schema_version"`
-	ID                     string                `yaml:"id" json:"id"`
-	RunID                  string                `yaml:"run_id" json:"run_id"`
-	StableKey              string                `yaml:"stable_key" json:"stable_key"`
-	SkillID                string                `yaml:"skill_id" json:"skill_id"`
-	Status                 string                `yaml:"status" json:"status"`
-	Recommendation         string                `yaml:"recommendation" json:"recommendation"`
-	ObservationIDs         []string              `yaml:"observation_ids" json:"observation_ids"`
-	ComparisonIDs          []string              `yaml:"comparison_ids,omitempty" json:"comparison_ids,omitempty"`
-	Category               string                `yaml:"category" json:"category"`
-	Priority               string                `yaml:"priority" json:"priority"`
-	Rationale              string                `yaml:"rationale" json:"rationale"`
-	EvidenceDigest         string                `yaml:"evidence_digest" json:"evidence_digest"`
-	RejectedEvidenceDigest string                `yaml:"rejected_evidence_digest,omitempty" json:"rejected_evidence_digest,omitempty"`
-	DecisionRationale      string                `yaml:"decision_rationale,omitempty" json:"decision_rationale,omitempty"`
-	DecisionHistory        []insightpkg.Decision `yaml:"decision_history,omitempty" json:"decision_history,omitempty"`
+	SchemaVersion          int                     `yaml:"schema_version" json:"schema_version"`
+	ID                     string                  `yaml:"id" json:"id"`
+	RunID                  string                  `yaml:"run_id" json:"run_id"`
+	StableKey              string                  `yaml:"stable_key" json:"stable_key"`
+	SkillID                string                  `yaml:"skill_id" json:"skill_id"`
+	Status                 string                  `yaml:"status" json:"status"`
+	Recommendation         string                  `yaml:"recommendation" json:"recommendation"`
+	ObservationIDs         []string                `yaml:"observation_ids" json:"observation_ids"`
+	ComparisonIDs          []string                `yaml:"comparison_ids,omitempty" json:"comparison_ids,omitempty"`
+	Category               string                  `yaml:"category" json:"category"`
+	Priority               string                  `yaml:"priority" json:"priority"`
+	Rationale              string                  `yaml:"rationale" json:"rationale"`
+	EvidenceDigest         string                  `yaml:"evidence_digest" json:"evidence_digest"`
+	RejectedEvidenceDigest string                  `yaml:"rejected_evidence_digest,omitempty" json:"rejected_evidence_digest,omitempty"`
+	DecisionRationale      string                  `yaml:"decision_rationale,omitempty" json:"decision_rationale,omitempty"`
+	DecisionHistory        []LegacyInsightDecision `yaml:"decision_history,omitempty" json:"decision_history,omitempty"`
+}
+
+// LegacyInsightDecision records an explicit human/authorized-agent lifecycle decision.
+type LegacyInsightDecision struct {
+	State          string `yaml:"state" json:"state"`
+	Rationale      string `yaml:"rationale" json:"rationale"`
+	EvidenceDigest string `yaml:"evidence_digest" json:"evidence_digest"`
+	DecidedAt      string `yaml:"decided_at" json:"decided_at"`
 }
 
 // OutstandingIssue is only valid for a blocking ambiguity or coverage decision.

@@ -333,9 +333,6 @@ func TestNoNonInteractiveUseWordingInAnyError(t *testing.T) {
 		{"skill", "show", "foo"},
 		{"source", "list"},
 		{"source", "capture", "https://example.com", "--reason", "test"},
-		{"distill", "prepare", "--all-changed"},
-		{"inbox"},
-		{"insight", "show", "INS-1"},
 		{"check"},
 		{"migrate"},
 		{"resolve", "--request", "req.json"},
@@ -389,28 +386,6 @@ func TestSubcommandTyposAndFlagsReportedBeforeWorkspaceError(t *testing.T) {
 		t.Fatal("expected source foo to fail")
 	}
 	if !strings.Contains(stderr.String(), "unsupported source subcommand") {
-		t.Fatalf("expected unsupported subcommand error, got:\n%s", stderr.String())
-	}
-
-	// 4. distill foo (typo) -> reports unsupported subcommand, NOT workspace error
-	stdout.Reset()
-	stderr.Reset()
-	code = Run([]string{"distill", "foo"}, &stdout, &stderr)
-	if code == 0 {
-		t.Fatal("expected distill foo to fail")
-	}
-	if !strings.Contains(stderr.String(), "unsupported distill subcommand") {
-		t.Fatalf("expected unsupported subcommand error, got:\n%s", stderr.String())
-	}
-
-	// 5. insight foo (typo) -> reports unsupported subcommand, NOT workspace error
-	stdout.Reset()
-	stderr.Reset()
-	code = Run([]string{"insight", "foo"}, &stdout, &stderr)
-	if code == 0 {
-		t.Fatal("expected insight foo to fail")
-	}
-	if !strings.Contains(stderr.String(), "unsupported insight subcommand") {
 		t.Fatalf("expected unsupported subcommand error, got:\n%s", stderr.String())
 	}
 
@@ -527,11 +502,6 @@ func TestAllCommandFailuresExitNonZero(t *testing.T) {
 		{"skill unknown subcommand", []string{"skill", "invalidsub"}},
 		{"source list missing ws", []string{"source", "list"}},
 		{"source unknown subcommand", []string{"source", "invalidsub"}},
-		{"distill prepare missing ws", []string{"distill", "prepare", "--all-changed"}},
-		{"distill unknown subcommand", []string{"distill", "invalidsub"}},
-		{"inbox missing ws", []string{"inbox"}},
-		{"insight show missing id", []string{"insight", "show"}},
-		{"insight unknown subcommand", []string{"insight", "invalidsub"}},
 		{"check missing ws", []string{"check"}},
 		{"resolve missing args", []string{"resolve"}},
 		{"eval unknown subcommand", []string{"eval", "invalidsub"}},

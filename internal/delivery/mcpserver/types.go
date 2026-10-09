@@ -57,51 +57,6 @@ type sourceCheckInput struct {
 	AllDue    bool     `json:"all_due,omitempty"`
 }
 
-type curationRunStartInput struct {
-	SourceIDs      []string `json:"source_ids,omitempty"`
-	AllChanged     bool     `json:"all_changed,omitempty"`
-	IdempotencyKey string   `json:"idempotency_key"`
-}
-
-type runIDInput struct {
-	RunID string `json:"run_id"`
-}
-
-type curationRunRetryInput struct {
-	RunID    string `json:"run_id"`
-	Decision string `json:"decision,omitempty"`
-}
-
-type curationRunSubmitInput struct {
-	RunID      string                `json:"run_id"`
-	Submission app.DistillSubmission `json:"submission"`
-}
-
-type observationListInput struct {
-	SourceID string `json:"source_id,omitempty"`
-	pageInput
-}
-
-type comparisonGetInput struct {
-	ComparisonID string `json:"comparison_id"`
-}
-
-type insightIDInput struct {
-	InsightID string `json:"insight_id"`
-}
-
-type insightDecideInput struct {
-	InsightID      string `json:"insight_id"`
-	Decision       string `json:"decision"`
-	Rationale      string `json:"rationale"`
-	IdempotencyKey string `json:"idempotency_key,omitempty"`
-}
-
-type insightApplyPreviewInput struct {
-	InsightID string                  `json:"insight_id"`
-	Input     app.PreviewInsightInput `json:"input"`
-}
-
 type confirmationInput struct {
 	ProposalID     string `json:"proposal_id"`
 	ProposalDigest string `json:"proposal_digest"`
@@ -309,20 +264,6 @@ type toolOutcome[T any] struct {
 	SchemaVersion string     `json:"schema_version"`
 	Result        *T         `json:"result,omitempty"`
 	Error         *toolError `json:"error,omitempty"`
-}
-
-type runStartItem struct {
-	SourceID string                  `json:"source_id"`
-	Prepared *app.DistillPrepareItem `json:"prepared,omitempty"`
-	Started  *app.DistillRunResult   `json:"started,omitempty"`
-	Error    *toolError              `json:"error,omitempty"`
-}
-
-type runStartResult struct {
-	Prepared int            `json:"prepared"`
-	Started  int            `json:"started"`
-	Failed   int            `json:"failed"`
-	Items    []runStartItem `json:"items"`
 }
 
 type routingEvaluationResult struct {

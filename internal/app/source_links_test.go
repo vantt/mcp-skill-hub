@@ -10,7 +10,6 @@ import (
 
 	"github.com/vantt/mcp-skill-hub/internal/canonical"
 	"github.com/vantt/mcp-skill-hub/internal/catalog"
-	"github.com/vantt/mcp-skill-hub/internal/distill"
 	"github.com/vantt/mcp-skill-hub/internal/skill"
 	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
 	"gopkg.in/yaml.v3"
@@ -137,41 +136,54 @@ func TestSourceLinks(t *testing.T) {
 		{Path: "SKILL.md", Size: int64(len(skillContent))},
 	}
 
-	distillService := DistillService{
-		Clock:    distillClock{value: now},
-		IDs:      fixedSourceID("distillrun000001"),
-		Adapters: map[string]sourcepkg.Adapter{"git": adapter},
-	}
-	run := prepareAndStart(t, root, distillService, sourceID)
-	toIdentity := distill.IdentityOf(run.ToRevision)
-
-	obsItem := distill.Observation{
-		SchemaVersion: 1,
-		ID:            distill.ObservationID(sourceID, "feature"),
-		SourceID:      sourceID,
-		RunID:         run.ID,
-		StableKey:     "feature",
-		Status:        "active",
-		What:          "Important finding",
-		FirstSeen:     toIdentity,
-		LastSeen:      toIdentity,
-		Vocabulary:    []string{"feature"},
-		Evidence: []distill.Evidence{{
-			Revision:      toIdentity,
-			RunID:         run.ID,
-			PackageDigest: run.PackageDigest,
-			Path:          "SKILL.md",
-			Locator:       "SKILL.md",
-			Digest:        sourcepkg.Digest(skillContent),
-		}},
-	}
-	obsBytes, _ := yaml.Marshal(obsItem)
+	runDir := filepath.Join(root, "distill", "sources", sourceID, "runs")
+	_ = os.MkdirAll(runDir, 0o755)
+	validRun := `schema_version: 1
+id: RUN-01
+source_id: ` + sourceID + `
+state: prepared
+package_digest: sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+prepared_at: "2026-10-09T08:00:00Z"
+attempt: 0
+to_revision:
+  kind: git-commit
+  value: abc
+  content_digest: sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  observed_at: "2026-10-09T08:00:00Z"
+finding_ids:
+  - OBS-` + sourceID + `--feature
+`
+	_ = os.WriteFile(filepath.Join(runDir, "RUN-01.yaml"), []byte(validRun), 0o644)
 	obsDir := filepath.Join(root, "distill", "sources", sourceID, "observations")
 	_ = os.MkdirAll(obsDir, 0o755)
-	run.FindingIDs = []string{obsItem.ID}
-	runBytes, _ := yaml.Marshal(run)
-	_ = os.WriteFile(filepath.Join(root, "distill", "sources", sourceID, "runs", run.ID+".yaml"), runBytes, 0o644)
-	_ = os.WriteFile(filepath.Join(obsDir, obsItem.ID+".yaml"), obsBytes, 0o644)
+	validObs := `schema_version: 1
+id: OBS-` + sourceID + `--feature
+source_id: ` + sourceID + `
+run_id: RUN-01
+stable_key: feature
+status: active
+what: Feature
+vocabulary: [feature]
+first_seen:
+  kind: git-commit
+  value: abc
+  content_digest: sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+last_seen:
+  kind: git-commit
+  value: abc
+  content_digest: sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+evidence:
+  - revision:
+      kind: git-commit
+      value: abc
+      content_digest: sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    run_id: RUN-01
+    package_digest: sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    path: SKILL.md
+    locator: SKILL.md
+    digest: sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+`
+	_ = os.WriteFile(filepath.Join(obsDir, "OBS-"+sourceID+"--feature.yaml"), []byte(validObs), 0o644)
 	commitWorkspace(t, root)
 	_, _ = catalog.BuildCatalogGeneration(ctx, root, catalog.BuildOptions{})
 
