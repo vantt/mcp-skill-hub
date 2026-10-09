@@ -53,7 +53,8 @@ func (service ResolverService) Resolve(ctx context.Context, path string, request
 			recommended := telemetryEvent(ctx, telemetry.EventResolutionRecommended, request, response, scope, payload)
 			safeRecordTelemetry(service.Telemetry, recommended)
 		}
-		safeRecordTelemetry(service.Telemetry, telemetryEvent(ctx, eventType, request, response, scope, payload))
+		resEvt := telemetryEvent(ctx, eventType, request, response, scope, payload)
+		safeRecordTelemetry(service.Telemetry, resEvt)
 
 		isDisagreement := false
 		kind := ""
@@ -103,8 +104,15 @@ func (service ResolverService) Resolve(ctx context.Context, path string, request
 				chosen = response.Primary.ID
 			}
 
+			sessionHash := ""
+			if caller := CallerFromContext(ctx); safeTelemetryToken(caller.SessionHash) {
+				sessionHash = caller.SessionHash
+			}
+
 			_ = RecordCase(ctx, service.Telemetry, telemetry.CaseRecord{
+				EventID:         resEvt.ID,
 				ResolutionID:    response.ResolutionID,
+				SessionHash:     sessionHash,
 				OccurredAt:      time.Now().UTC(),
 				Kind:            kind,
 				Client:          CallerFromContext(ctx).Client,
@@ -415,7 +423,7 @@ func telemetryEvent(ctx context.Context, eventType string, request resolverpkg.R
 		client = caller.Client
 	}
 	event := telemetry.Event{
-		Type: eventType, CatalogSnapshot: scope.Snapshot, PolicyRevision: scope.Policy,
+		ID: telemetry.NewEventID(), Type: eventType, CatalogSnapshot: scope.Snapshot, PolicyRevision: scope.Policy,
 		Client: client, Payload: payload,
 	}
 	if safeTelemetryToken(caller.SessionHash) {

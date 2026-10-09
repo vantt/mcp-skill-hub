@@ -9,6 +9,7 @@ import (
 // SkillLoad describes one server-observed load event. It contains only bounded
 // tokens and identifiers; paths, URIs, and user tasks are never included.
 type SkillLoad struct {
+	EventID         string
 	SkillID         string
 	ResourceKind    string
 	Surface         string
@@ -56,6 +57,9 @@ func RecordSkillLoad(ctx context.Context, sink TelemetrySink, workspacePath stri
 	}
 
 	event := curationTelemetryEvent(telemetry.EventSkillLoaded, payload)
+	if load.EventID != "" {
+		event.ID = load.EventID
+	}
 	event.ResolutionID = load.ResolutionID
 	event.SessionIDHash = load.SessionIDHash
 	event.CatalogSnapshot = load.CatalogSnapshot

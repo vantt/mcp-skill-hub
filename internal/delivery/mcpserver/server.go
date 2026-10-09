@@ -344,6 +344,7 @@ func (adapter *Server) recordLoad(ctx context.Context, session *mcp.ServerSessio
 		return
 	}
 	load.Attribution = "unsolicited"
+	load.EventID = telemetry.NewEventID()
 	if adapter.tracker != nil {
 		load.ResolutionID, load.Attribution, load.CatalogSnapshot, load.PolicyRevision, load.Client = adapter.tracker.attributeDetails(session, load.SkillID)
 		load.SessionIDHash = adapter.tracker.sessionHash(session)
@@ -357,6 +358,7 @@ func (adapter *Server) recordLoad(ctx context.Context, session *mcp.ServerSessio
 				load.TopKChannels = res.TopKChannels
 				if load.FirstActivation {
 					_ = app.RecordCase(ctx, adapter.telemetry, telemetry.CaseRecord{
+						EventID:         load.EventID,
 						ResolutionID:    res.ResolutionID,
 						SessionHash:     load.SessionIDHash,
 						OccurredAt:      time.Now().UTC(),

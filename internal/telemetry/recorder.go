@@ -520,3 +520,12 @@ func randomEventID() (string, error) {
 	}
 	return "evt_" + hex.EncodeToString(bytes[:]), nil
 }
+
+// NewEventID generates a random event identifier with prefix evt_.
+func NewEventID() string {
+	id, err := randomEventID()
+	if err != nil {
+		return "evt_fallback"
+	}
+	return id
+}
