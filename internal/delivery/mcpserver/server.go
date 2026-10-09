@@ -443,6 +443,18 @@ func (adapter *Server) distributionRPCError(ctx context.Context, session *mcp.Se
 		return invalidParams("skill_not_found", "The requested skill was not found.")
 	case errors.Is(err, skill.ErrSnapshotExpired):
 		app.RecordServerMetric(ctx, adapter.telemetry, adapter.workspace, app.ServerMetric{Name: "snapshot_expired_requests", Value: 1, Client: adapter.callerContext(session).Client})
+		var expiredErr *app.SnapshotExpiredError
+		if errors.As(err, &expiredErr) && expiredErr.CurrentURI != "" {
+			data, _ := json.Marshal(map[string]string{
+				"code":        "snapshot_expired",
+				"current_uri": expiredErr.CurrentURI,
+			})
+			return &jsonrpc.Error{
+				Code:    jsonrpc.CodeInvalidParams,
+				Message: fmt.Sprintf("the skill was updated; call skills/get %s", expiredErr.CurrentURI),
+				Data:    data,
+			}
+		}
 		return invalidParams("snapshot_expired", "The requested skill snapshot is unavailable; refresh the skill entry.")
 	default:
 		correlation := correlationID()

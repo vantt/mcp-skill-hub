@@ -57,6 +57,26 @@ type DistributedContent struct {
 	Path     string // relative to the skill folder
 }
 
+// SnapshotExpiredError indicates that a skill resource or entrypoint URI
+// referenced an outdated skill snapshot. If the skill still exists in the
+// current catalog, CurrentURI contains the fresh URI to reload it.
+type SnapshotExpiredError struct {
+	URI        string
+	SkillID    string
+	CurrentURI string
+}
+
+func (e *SnapshotExpiredError) Error() string {
+	if e.CurrentURI != "" {
+		return fmt.Sprintf("snapshot_expired: skill %s was updated, current URI: %s", e.SkillID, e.CurrentURI)
+	}
+	return "snapshot_expired: " + e.URI
+}
+
+func (e *SnapshotExpiredError) Unwrap() error {
+	return skill.ErrSnapshotExpired
+}
+
 // IsText reports whether the payload may be sent as JSON text without changing
 // its bytes: the type must promise text and the bytes must be valid UTF-8.
 func (content DistributedContent) IsText() bool {
@@ -185,7 +205,7 @@ func (DistributionService) GetSkill(ctx context.Context, path, uri string) (entr
 		}
 	}
 	if entry.Version != "sha256:"+manifestDigest || entry.URI != uri {
-		return DistributedSkill{}, skill.ErrSnapshotExpired
+		return DistributedSkill{}, &SnapshotExpiredError{URI: uri, SkillID: id, CurrentURI: entry.URI}
 	}
 	return entry, nil
 }
@@ -213,7 +233,7 @@ func (DistributionService) ReadResource(ctx context.Context, path, uri string) (
 		}
 	}
 	if entry.Version != "sha256:"+manifestDigest {
-		return content, skill.ErrSnapshotExpired
+		return content, &SnapshotExpiredError{URI: uri, SkillID: id, CurrentURI: entry.URI}
 	}
 	var selected *DistributedResource
 	for index := range entry.Resources {

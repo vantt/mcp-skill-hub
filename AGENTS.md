@@ -51,6 +51,8 @@ Send `task.description` in English; translate the user's request first if it is 
 
 When an activated skill response includes `local.path`, resolve the skill's relative file references (for example `scripts/…`) against that directory, and export the variables in `local.env` (`SKILLHUB_SKILL_DIR`, `SKILLHUB_STATE_DIR`, and `SKILLHUB_CONFIG_DIR`) whenever you run its `check`, `setup`, or scripts, using your shell's syntax (POSIX `export NAME=value`, PowerShell `$env:NAME = "value"`). If `local.path` no longer exists, for example in a long session, call `skill_get` again.
 
+If a skill call returns `snapshot_expired` with `current_uri`, the skill was updated; call `skills/get <current_uri>` to reload it.
+
 If `$SKILLHUB_CONFIG_DIR/env` exists, load it before running `check`, `setup`, or scripts (POSIX: `set -a; . "$SKILLHUB_CONFIG_DIR/env"; set +a`; PowerShell: set `$env:NAME` for each `NAME=value` line), and never print, echo, or log its values. If a required variable is missing, tell the user to run `skillhub skill env set <id> <NAME>`; never ask for the value in chat.
 
 If it includes `local.preflight`, run its `check` command in `working_directory` under your own permissions before using the scripts, and ask the user before running `setup`. If the skill describes installation only in prose, treat those steps as setup: ask the user first, install into `SKILLHUB_STATE_DIR`, and never install globally. Do not run `setup` for the same skill concurrently: if `$SKILLHUB_STATE_DIR/.setup.lock` exists and is recent, wait or ask the user.
