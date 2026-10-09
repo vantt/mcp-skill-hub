@@ -239,6 +239,69 @@ func (resolver *Resolver) Resolve(ctx context.Context, raw Request) (Response, e
 		return candidates[i].Skill.ID < candidates[j].Skill.ID
 	})
 
+	var topKSkillIDs []string
+	var topKMatched []string
+	var topKChannels []string
+	for i, c := range candidates {
+		if i >= 5 {
+			break
+		}
+		topKSkillIDs = append(topKSkillIDs, c.Skill.ID)
+		var isFTS, isRule bool
+		for _, h := range hits {
+			if h.SkillID == c.Skill.ID {
+				isFTS = true
+				break
+			}
+		}
+		for _, r := range rules {
+			if r.id == c.Skill.ID {
+				isRule = true
+				break
+			}
+		}
+		var chs []string
+		if isFTS {
+			chs = append(chs, "fts")
+		}
+		if isRule {
+			chs = append(chs, "rules")
+		}
+		topKChannels = append(topKChannels, strings.Join(chs, "+"))
+		rank := i + 1
+		f := c.Features
+		if f.Lexical > 0 {
+			topKMatched = append(topKMatched, fmt.Sprintf("%d:lexical", rank))
+		}
+		if f.Trigger > 0 {
+			topKMatched = append(topKMatched, fmt.Sprintf("%d:trigger", rank))
+		}
+		if f.Artifact > 0 {
+			topKMatched = append(topKMatched, fmt.Sprintf("%d:artifact", rank))
+		}
+		if f.Fact > 0 {
+			topKMatched = append(topKMatched, fmt.Sprintf("%d:fact", rank))
+		}
+		if f.Operation > 0 {
+			topKMatched = append(topKMatched, fmt.Sprintf("%d:operation", rank))
+		}
+		if f.Quality > 0 {
+			topKMatched = append(topKMatched, fmt.Sprintf("%d:quality", rank))
+		}
+		if f.NotFor > 0 {
+			topKMatched = append(topKMatched, fmt.Sprintf("%d:not_for", rank))
+		}
+		if f.Constraint > 0 {
+			topKMatched = append(topKMatched, fmt.Sprintf("%d:constraint", rank))
+		}
+		if f.Scope > 0 {
+			topKMatched = append(topKMatched, fmt.Sprintf("%d:scope", rank))
+		}
+	}
+	response.TopKSkillIDs = topKSkillIDs
+	response.TopKMatched = topKMatched
+	response.TopKChannels = topKChannels
+
 	if len(candidates) == 0 {
 		reason := "catalog_gap"
 		if hardReasons["missing_required_capability"] > 0 {

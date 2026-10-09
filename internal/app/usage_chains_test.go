@@ -317,3 +317,21 @@ func TestChainsDisagreementListing(t *testing.T) {
 		t.Fatal("expected override disagreement chain to be found")
 	}
 }
+
+func TestFunnelDenominatorsWithTopKFields(t *testing.T) {
+	events := []telemetry.Event{
+		{
+			ID: "res-1", Type: telemetry.EventResolutionCompleted, OccurredAt: time.Now(), SessionIDHash: "session-1",
+			Payload: map[string]any{
+				"status": "resolved", "operation": "test", "candidate_count": 1.0,
+				"topk_skill_ids": []any{"skill-1"},
+				"topk_matched":   []any{"1:operation"},
+				"topk_channels":  []any{"fts"},
+			},
+		},
+	}
+	chains, _, _ := UsageService{}.buildChains(events)
+	if len(chains) != 1 {
+		t.Errorf("Expected 1 chain, got %d", len(chains))
+	}
+}

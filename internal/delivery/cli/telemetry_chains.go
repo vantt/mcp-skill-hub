@@ -81,6 +81,14 @@ func parseChainsSince(sinceStr string) (time.Time, error) {
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC), nil
 }
 
+func loadedStr(ch app.DisagreementChain) string {
+	s := ch.LoadedSkill
+	if ch.TopKRank > 0 {
+		s = fmt.Sprintf("%s (rank %d: %s)", s, ch.TopKRank, ch.TopKMatched)
+	}
+	return s
+}
+
 func runTelemetryChains(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	flags, err := parseChainsFlags(args)
 	if err != nil {
@@ -130,7 +138,7 @@ func runTelemetryChains(ctx context.Context, args []string, stdout, stderr io.Wr
 			ch.Kind,
 			ch.Client,
 			ch.RecommendedSkill,
-			ch.LoadedSkill,
+			loadedStr(ch),
 			ch.OccurredAt,
 		})
 	}

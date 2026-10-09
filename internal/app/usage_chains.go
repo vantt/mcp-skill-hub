@@ -59,6 +59,8 @@ type DisagreementChain struct {
 	RecommendedSkill string   `json:"recommended_skill,omitempty"`
 	LoadedSkill      string   `json:"loaded_skill,omitempty"`
 	ReasonCodes      []string `json:"reason_codes,omitempty"`
+	TopKRank         int      `json:"topk_rank,omitempty"`
+	TopKMatched      string   `json:"topk_matched,omitempty"`
 }
 
 type chainResolution struct {
@@ -77,6 +79,8 @@ type chainResolution struct {
 	PriorKind         string
 	PriorVerified     bool
 	ReasonCodes       []string
+	TopKSkillIDs      []string
+	TopKMatched       []string
 }
 
 type chainLoad struct {
@@ -210,6 +214,24 @@ func parseChainResolution(event telemetry.Event) chainResolution {
 	}
 	if priorVer, ok := event.Payload["prior_verified"].(bool); ok {
 		res.PriorVerified = priorVer
+	}
+	if topkIDs, ok := event.Payload["topk_skill_ids"].([]any); ok {
+		for _, val := range topkIDs {
+			if str, ok := val.(string); ok {
+				res.TopKSkillIDs = append(res.TopKSkillIDs, str)
+			}
+		}
+	} else if topkIDsStr, ok := event.Payload["topk_skill_ids"].([]string); ok {
+		res.TopKSkillIDs = topkIDsStr
+	}
+	if topkMatched, ok := event.Payload["topk_matched"].([]any); ok {
+		for _, val := range topkMatched {
+			if str, ok := val.(string); ok {
+				res.TopKMatched = append(res.TopKMatched, str)
+			}
+		}
+	} else if topkMatchedStr, ok := event.Payload["topk_matched"].([]string); ok {
+		res.TopKMatched = topkMatchedStr
 	}
 	return res
 }

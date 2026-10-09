@@ -126,6 +126,9 @@ type Response struct {
 	// Observability metadata (not serialized to public JSON contract)
 	Channels                []string `json:"-"`
 	RetrievalCandidateCount int      `json:"-"`
+	TopKSkillIDs            []string `json:"-"`
+	TopKMatched             []string `json:"-"`
+	TopKChannels            []string `json:"-"`
 }
 
 type ValidFor struct {

@@ -120,6 +120,7 @@ var commonRouting = fields(
 	"prior_resolution_id", kindToken, "prior_kind", kindToken, "prior_verified", kindBool,
 	"top_skill_id", kindToken, "skill_id", kindToken, "confidence_band", kindToken,
 	"reason_codes", kindTokens, "recommended_skill_ids", kindTokens, "channels", kindTokens, "stage_ms", kindStageMillis,
+	"topk_skill_ids", kindTokens, "topk_matched", kindTokens, "topk_channels", kindTokens,
 	"duration_ms", kindMillis, "error_code", kindToken, "basis", kindToken, "setup_state", kindToken,
 )
 

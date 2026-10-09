@@ -86,6 +86,7 @@
         "top_skill_id": {"$ref": "#/$defs/token"}, "skill_id": {"$ref": "#/$defs/token"}, "confidence_band": {"$ref": "#/$defs/token"},
         "reason_codes": {"$ref": "#/$defs/tokens"}, "recommended_skill_ids": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"$ref": "#/$defs/token"}}, "channels": {"$ref": "#/$defs/tokens"}, "stage_ms": {"$ref": "#/$defs/stageMillis"},
         "duration_ms": {"$ref": "#/$defs/count"}, "error_code": {"$ref": "#/$defs/token"}, "basis": {"$ref": "#/$defs/token"},
+        "topk_skill_ids": {"$ref": "#/$defs/tokens"}, "topk_matched": {"$ref": "#/$defs/tokens"}, "topk_channels": {"$ref": "#/$defs/tokens"},
         "setup_state": {"enum": ["ready", "setup_required", "unsupported_platform", "review_required", "unknown"]}
       }
     },

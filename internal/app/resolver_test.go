@@ -544,3 +544,25 @@ func TestResolverCallerContextAndPriorVerification(t *testing.T) {
 		t.Fatalf("cli prior_verified = %v, want false", cliCompleted.Payload["prior_verified"])
 	}
 }
+
+func TestResolverEmitsTopKFieldsOnDisagreement(t *testing.T) {
+	req := resolverpkg.Request{
+		Prior: &resolverpkg.Prior{Kind: "rejected"},
+	}
+	res := resolverpkg.Response{
+		Status:       resolverpkg.StatusResolved,
+		Primary:      &resolverpkg.Recommendation{ID: "skill-1"},
+		TopKSkillIDs: []string{"skill-1", "skill-2"},
+		TopKMatched:  []string{"1:operation", "2:lexical"},
+		TopKChannels: []string{"fts", "rules"},
+	}
+
+	payload := resolutionTelemetryPayload(t.Context(), req, res, time.Second)
+
+	if len(payload["topk_skill_ids"].([]string)) != 2 {
+		t.Errorf("missing topk_skill_ids")
+	}
+	if payload["topk_matched"].([]string)[0] != "1:operation" {
+		t.Errorf("missing topk_matched")
+	}
+}
