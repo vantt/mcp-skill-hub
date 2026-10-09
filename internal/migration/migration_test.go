@@ -17,7 +17,7 @@ func TestPreviewIsReadOnlyAndPinsLegacyMarkerDiff(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if proposal.SourceVersion != 0 || proposal.TargetVersion != 3 || len(proposal.Changes) != 1 || !strings.Contains(proposal.Changes[0].Diff, "+3") {
+	if proposal.SourceVersion != 0 || proposal.TargetVersion != 4 || len(proposal.Changes) != 1 || !strings.Contains(proposal.Changes[0].Diff, "+4") {
 		t.Fatalf("proposal = %#v", proposal)
 	}
 	if _, err := os.Stat(filepath.Join(root, ".skillhub", "schema-version")); !errors.Is(err, os.ErrNotExist) {
@@ -65,7 +65,7 @@ func TestMigrationReceiptVersionsAndIdempotence(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(contents)
-	if !strings.Contains(text, "source_schema_version: 0\n") || !strings.Contains(text, "target_schema_version: 3\n") {
+	if !strings.Contains(text, "source_schema_version: 0\n") || !strings.Contains(text, "target_schema_version: 4\n") {
 		t.Fatalf("receipt lacks structured versions:\n%s", text)
 	}
 	if _, err := DefaultRegistry().Preview(root, CurrentVersion); !errors.Is(err, ErrAlreadyCurrent) {
@@ -241,11 +241,11 @@ provenance:
 		t.Fatal(err)
 	}
 
-	proposal, err := DefaultRegistry().Preview(root, 3)
+	proposal, err := DefaultRegistry().Preview(root, CurrentVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if proposal.SourceVersion != 2 || proposal.TargetVersion != 3 {
+	if proposal.SourceVersion != 2 || proposal.TargetVersion != 4 {
 		t.Fatalf("proposal versions = %d -> %d", proposal.SourceVersion, proposal.TargetVersion)
 	}
 	receipt, err := mutation.ConfirmMutation(root, proposal.Mutation, mutation.Confirmation{ProposalID: proposal.ID, ProposalDigest: proposal.Digest, BaseCatalogSnapshot: proposal.BaseSnapshot})
@@ -256,7 +256,7 @@ provenance:
 		t.Fatal("missing operation ID")
 	}
 	version, err := DetectVersion(root)
-	if err != nil || version != 3 {
+	if err != nil || version != 4 {
 		t.Fatalf("version = %d, %v", version, err)
 	}
 
@@ -277,7 +277,7 @@ provenance:
 	}
 
 	// Idempotency: running migration again reports ErrAlreadyCurrent
-	_, err = DefaultRegistry().Preview(root, 3)
+	_, err = DefaultRegistry().Preview(root, CurrentVersion)
 	if !errors.Is(err, ErrAlreadyCurrent) {
 		t.Fatalf("expected ErrAlreadyCurrent, got %v", err)
 	}
@@ -328,7 +328,7 @@ sources:
 		t.Fatal(err)
 	}
 
-	proposal, err := DefaultRegistry().Preview(root, 3)
+	proposal, err := DefaultRegistry().Preview(root, CurrentVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -363,11 +363,11 @@ func TestMigrationRejectsNewerSchema(t *testing.T) {
 	if _, err := workspace.Apply(root); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, ".skillhub", "schema-version"), []byte("4\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, ".skillhub", "schema-version"), []byte("5\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := DefaultRegistry().Preview(root, 3); err == nil {
-		t.Fatal("expected error previewing migration for newer schema 4")
+	if _, err := DefaultRegistry().Preview(root, 4); err == nil {
+		t.Fatal("expected error previewing migration for newer schema 5")
 	}
 	plan, err := workspace.Inspect(root)
 	if err != nil {
@@ -380,6 +380,6 @@ func TestMigrationRejectsNewerSchema(t *testing.T) {
 		}
 	}
 	if !hasIncompatible {
-		t.Fatal("expected canonical_schema_incompatible finding for version 4")
+		t.Fatal("expected canonical_schema_incompatible finding for version 5")
 	}
 }

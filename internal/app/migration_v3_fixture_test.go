@@ -153,13 +153,13 @@ func TestRealHubFixtureMigrationV1ToV2ToV3(t *testing.T) {
 		t.Fatalf("herdr-cook-plan description corrupted in v1: %q", beforeSnapshots["herdr-cook-plan"].Description)
 	}
 
-	// Step 1: Migrate v1 -> v3 (chains planV1ToV2 and planV2ToV3)
-	proposal, err := migration.DefaultRegistry().Preview(root, 3)
+	// Step 1: Migrate v1 -> v4 (chains planV1ToV2, planV2ToV3, and planV3ToV4)
+	proposal, err := migration.DefaultRegistry().Preview(root, 4)
 	if err != nil {
-		t.Fatalf("preview migration v1->v3: %v", err)
+		t.Fatalf("preview migration v1->v4: %v", err)
 	}
-	if proposal.SourceVersion != 1 || proposal.TargetVersion != 3 {
-		t.Fatalf("expected proposal 1 -> 3, got %d -> %d", proposal.SourceVersion, proposal.TargetVersion)
+	if proposal.SourceVersion != 1 || proposal.TargetVersion != 4 {
+		t.Fatalf("expected proposal 1 -> 4, got %d -> %d", proposal.SourceVersion, proposal.TargetVersion)
 	}
 	receipt, err := mutation.ConfirmMutation(root, proposal.Mutation, mutation.Confirmation{
 		ProposalID:          proposal.ID,
@@ -167,14 +167,14 @@ func TestRealHubFixtureMigrationV1ToV2ToV3(t *testing.T) {
 		BaseCatalogSnapshot: proposal.BaseSnapshot,
 	})
 	if err != nil {
-		t.Fatalf("confirm migration v1->v3: %v", err)
+		t.Fatalf("confirm migration v1->v4: %v", err)
 	}
 	if receipt.OperationID == "" {
-		t.Fatal("empty receipt operation ID for v1->v3")
+		t.Fatal("empty receipt operation ID for v1->v4")
 	}
-	v3Version, err := migration.DetectVersion(root)
-	if err != nil || v3Version != 3 {
-		t.Fatalf("expected version 3 after v1->v3, got %d (err: %v)", v3Version, err)
+	v4Version, err := migration.DetectVersion(root)
+	if err != nil || v4Version != 4 {
+		t.Fatalf("expected version 4 after v1->v4, got %d (err: %v)", v4Version, err)
 	}
 
 	// Step 2: Verify all 3 skills in v3 match their v1 baselines completely
