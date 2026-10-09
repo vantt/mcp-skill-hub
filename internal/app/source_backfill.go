@@ -149,6 +149,42 @@ func (service BackfillService) PreviewBackfill(ctx context.Context, path string,
 		createdBy, _ := prov["created_by"].(string)
 		origin, _ := prov["origin"].(map[string]any)
 
+		if srcs, ok := doc["sources"].([]any); ok {
+			for _, s := range srcs {
+				if sm, ok := s.(map[string]any); ok {
+					roles, _ := sm["roles"].([]any)
+					isUpstream := false
+					for _, r := range roles {
+						if r == "upstream" {
+							isUpstream = true
+							break
+						}
+					}
+					if isUpstream {
+						if sid, ok := sm["id"].(string); ok && sid != "" && sourceID == "" {
+							sourceID = sid
+						}
+						if origin == nil {
+							repo, _ := sm["repo"].(string)
+							if repo == "" {
+								repo, _ = sm["repository"].(string)
+							}
+							if repo != "" {
+								origin = map[string]any{
+									"kind":       sm["kind"],
+									"repository": repo,
+									"ref":        sm["ref"],
+									"commit":     sm["commit"],
+									"path":       sm["path"],
+								}
+							}
+						}
+						break
+					}
+				}
+			}
+		}
+
 		if sourceID == "" && origin != nil {
 			cand, chgs, added, modded, aErr := bCtx.processCandidateA(id, relDir, metaBytes, doc, prov, origin)
 			if aErr != nil {
@@ -298,12 +334,31 @@ func (bc *backfillContext) processCandidateA(id, relDir string, metaBytes []byte
 		added = append(added, sourcePath)
 	}
 
-	prov["source_id"] = matchedSourceID
-	if originPath != "" {
-		origin["path"] = originPath
+	if bc.schemaVersion >= 3 {
+		src := map[string]any{
+			"id":    matchedSourceID,
+			"roles": []string{"upstream"},
+			"kind":  kind,
+			"repo":  repo,
+			"ref":   ref,
+		}
+		if originPath != "" {
+			src["path"] = originPath
+		}
+		if commit != "" {
+			src["commit"] = commit
+			src["synced"] = commit
+		}
+		doc["sources"] = []any{src}
+		delete(doc, "provenance")
+	} else {
+		prov["source_id"] = matchedSourceID
+		if originPath != "" {
+			origin["path"] = originPath
+		}
+		prov["origin"] = origin
+		doc["provenance"] = prov
 	}
-	prov["origin"] = origin
-	doc["provenance"] = prov
 
 	updatedMetaBytes, err := yaml.Marshal(doc)
 	if err != nil {
@@ -368,19 +423,38 @@ func (bc *backfillContext) processCandidateB(id, relDir, sourceID string, metaBy
 		commit = srcRec.CurrentRevision.Value
 	}
 
-	newOrigin := map[string]any{
-		"kind":       originKind,
-		"repository": srcRec.Locator.Repository,
-		"ref":        ref,
+	if bc.schemaVersion >= 3 {
+		src := map[string]any{
+			"id":    sourceID,
+			"roles": []string{"upstream"},
+			"kind":  originKind,
+			"repo":  srcRec.Locator.Repository,
+			"ref":   ref,
+		}
+		if repoPath != "" {
+			src["path"] = repoPath
+		}
+		if commit != "" {
+			src["commit"] = commit
+			src["synced"] = commit
+		}
+		doc["sources"] = []any{src}
+		delete(doc, "provenance")
+	} else {
+		newOrigin := map[string]any{
+			"kind":       originKind,
+			"repository": srcRec.Locator.Repository,
+			"ref":        ref,
+		}
+		if repoPath != "" {
+			newOrigin["path"] = repoPath
+		}
+		if commit != "" {
+			newOrigin["commit"] = commit
+		}
+		prov["origin"] = newOrigin
+		doc["provenance"] = prov
 	}
-	if repoPath != "" {
-		newOrigin["path"] = repoPath
-	}
-	if commit != "" {
-		newOrigin["commit"] = commit
-	}
-	prov["origin"] = newOrigin
-	doc["provenance"] = prov
 
 	updatedMetaBytes, err := yaml.Marshal(doc)
 	if err != nil {

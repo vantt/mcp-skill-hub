@@ -254,8 +254,8 @@ func validateSkillMetadata(path string, contents []byte) (skillMetadata, []Issue
 					add("invalid source entry: "+sErr.Error(), itemNode)
 					continue
 				}
-				if sID := scalar(sVals["id"]); sID == "" {
-					add("source id must be a non-empty string", itemNode)
+				if sVals["id"] != nil && !stringScalar(sVals["id"]) {
+					add("source id must be a string", itemNode)
 				}
 				roles, rErr := stringSequence(sVals["roles"])
 				if rErr != nil || len(roles) == 0 {

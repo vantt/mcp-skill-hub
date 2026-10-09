@@ -205,10 +205,16 @@ func TestBackfill(t *testing.T) {
 	updatedMetaA, _ := os.ReadFile(metaPathA)
 	var verifyDocA map[string]any
 	_ = yaml.Unmarshal(updatedMetaA, &verifyDocA)
-	verifyProvA := verifyDocA["provenance"].(map[string]any)
-	createdSourceID := verifyProvA["source_id"].(string)
+	createdSourceID := ""
+	if srcs, ok := verifyDocA["sources"].([]any); ok && len(srcs) > 0 {
+		if sm, ok := srcs[0].(map[string]any); ok {
+			createdSourceID, _ = sm["id"].(string)
+		}
+	} else if verifyProvA, ok := verifyDocA["provenance"].(map[string]any); ok {
+		createdSourceID, _ = verifyProvA["source_id"].(string)
+	}
 	if createdSourceID == "" {
-		t.Fatalf("skill-a source_id was not set")
+		t.Fatalf("skill-a source_id was not set: %#v", verifyDocA)
 	}
 	if _, err := os.Stat(filepath.Join(root, "sources", "catalog", createdSourceID+".yaml")); err != nil {
 		t.Fatalf("created source file %s.yaml missing: %v", createdSourceID, err)
@@ -218,18 +224,27 @@ func TestBackfill(t *testing.T) {
 	updatedMetaB, _ := os.ReadFile(metaPathB)
 	var verifyDocB map[string]any
 	_ = yaml.Unmarshal(updatedMetaB, &verifyDocB)
-	verifyProvB := verifyDocB["provenance"].(map[string]any)
-	originB, ok := verifyProvB["origin"].(map[string]any)
-	if !ok || originB == nil {
-		t.Fatalf("skill-b origin was not populated: %#v", verifyProvB)
+	var repoB, commitB string
+	if srcs, ok := verifyDocB["sources"].([]any); ok && len(srcs) > 0 {
+		if sm, ok := srcs[0].(map[string]any); ok {
+			repoB, _ = sm["repo"].(string)
+			if repoB == "" {
+				repoB, _ = sm["repository"].(string)
+			}
+			commitB, _ = sm["commit"].(string)
+		}
+	} else if verifyProvB, ok := verifyDocB["provenance"].(map[string]any); ok {
+		if originB, ok := verifyProvB["origin"].(map[string]any); ok {
+			repoB, _ = originB["repository"].(string)
+			commitB, _ = originB["commit"].(string)
+		}
 	}
-	if originB["repository"] != "https://github.com/example/upstream-b.git" {
-		t.Fatalf("skill-b origin repository = %v", originB["repository"])
+	if repoB != "https://github.com/example/upstream-b.git" {
+		t.Fatalf("skill-b origin repository = %v", repoB)
 	}
-	if originB["commit"] != revB.Value {
-		t.Fatalf("skill-b origin commit = %v, want %s", originB["commit"], revB.Value)
+	if commitB != revB.Value {
+		t.Fatalf("skill-b origin commit = %v, want %s", commitB, revB.Value)
 	}
-
 	// 8. Verify Filesystem skill remains untouched
 	updatedMetaFS, _ := os.ReadFile(metaPathFS)
 	var verifyDocFS map[string]any

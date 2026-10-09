@@ -326,15 +326,7 @@ func mergeSources(oldMap, existingMap map[string]any, defaultID string) []any {
 		return sources
 	}
 	upstreamSrc := make(map[string]any)
-	srcID := sourceID
-	if srcID == "" {
-		if n, ok := origin["name"].(string); ok && n != "" {
-			srcID = n
-		} else {
-			srcID = defaultID
-		}
-	}
-	upstreamSrc["id"] = srcID
+	upstreamSrc["id"] = strings.TrimSpace(sourceID)
 	upstreamSrc["roles"] = []string{"upstream"}
 	if origin != nil {
 		for k, v := range origin {

@@ -119,6 +119,9 @@ func deriveUpstreamStatus(
 	if is40Hex(origin.Ref) {
 		return "pinned", local, ""
 	}
+	if sourceRec == nil && state == nil {
+		return "untracked", local, ""
+	}
 
 	if sourceRec == nil || !sameRepository(sourceRec.Locator.Repository, origin.Repository) || sourceRec.Locator.Ref != origin.Ref {
 		return "unavailable", local, "source_origin_mismatch"
@@ -235,6 +238,9 @@ func loadTrackedSkills(root string) ([]TrackedSkill, error) {
 		}
 		found := false
 		for _, s := range meta.Sources {
+			if strings.TrimSpace(s.ID) == "" {
+				continue
+			}
 			repo := s.Repository
 			if repo == "" {
 				repo = s.Repo
@@ -262,18 +268,11 @@ func loadTrackedSkills(root string) ([]TrackedSkill, error) {
 				break
 			}
 		}
-		if !found && (meta.Provenance.SourceID != "" || meta.Provenance.Origin.Repository != "") && (meta.Provenance.Origin.Kind == "github" || meta.Provenance.Origin.Kind == "git") {
-			srcID := meta.Provenance.SourceID
-			if srcID == "" {
-				srcID = meta.Provenance.Origin.Name
-				if srcID == "" {
-					srcID = id
-				}
-			}
+		if !found && strings.TrimSpace(meta.Provenance.SourceID) != "" && (meta.Provenance.Origin.Kind == "github" || meta.Provenance.Origin.Kind == "git") {
 			tracked = append(tracked, TrackedSkill{
 				SkillID:     id,
 				SkillRelDir: skillRelDir,
-				SourceID:    srcID,
+				SourceID:    strings.TrimSpace(meta.Provenance.SourceID),
 				Origin:      meta.Provenance.Origin,
 			})
 		}
@@ -711,9 +710,58 @@ func GetSkillUpstream(ctx context.Context, path, id string) (SkillUpstream, erro
 		}
 	}
 	if found == nil {
+		if _, skillRelDir, metaBytes, locErr := locateSkillDir(root, id); locErr == nil {
+			var meta struct {
+				Sources []struct {
+					ID         string   `yaml:"id"`
+					Roles      []string `yaml:"roles"`
+					Kind       string   `yaml:"kind"`
+					Repository string   `yaml:"repository"`
+					Repo       string   `yaml:"repo"`
+					Ref        string   `yaml:"ref"`
+					Commit     string   `yaml:"commit"`
+					Path       string   `yaml:"path"`
+				} `yaml:"sources"`
+				Provenance struct {
+					Origin SkillOrigin `yaml:"origin"`
+				} `yaml:"provenance"`
+			}
+			_ = yaml.Unmarshal(metaBytes, &meta)
+			origin := meta.Provenance.Origin
+			for _, s := range meta.Sources {
+				repo := s.Repository
+				if repo == "" {
+					repo = s.Repo
+				}
+				for _, r := range s.Roles {
+					if r == "upstream" && (s.Kind == "github" || s.Kind == "git" || repo != "") {
+						origin = SkillOrigin{
+							Kind:       s.Kind,
+							Repository: repo,
+							Ref:        s.Ref,
+							Commit:     s.Commit,
+							Path:       s.Path,
+						}
+						break
+					}
+				}
+			}
+			if origin.Repository != "" && (origin.Kind == "github" || origin.Kind == "git" || origin.Kind == "") {
+				localDigest := workingTreeSkillFilesDigest(root, skillRelDir)
+				return SkillUpstream{
+					SkillID:    id,
+					Repository: origin.Repository,
+					Ref:        origin.Ref,
+					Path:       origin.Path,
+					BaseCommit: origin.Commit,
+					Status:     "untracked",
+					Local:      deriveLocalStatus(origin.FilesDigest, localDigest),
+					NextAction: deriveNextAction("untracked", id, ""),
+				}, nil
+			}
+		}
 		return SkillUpstream{}, fmt.Errorf("skill %q not found or not tracked", id)
 	}
-
 	_, records, err := readSourceRecords(root)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return SkillUpstream{}, err

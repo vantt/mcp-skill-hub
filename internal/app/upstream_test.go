@@ -626,3 +626,54 @@ func TestNextAction(t *testing.T) {
 		})
 	}
 }
+
+func TestSkillWithEmptyProvenanceSourceIDRemainsUntracked(t *testing.T) {
+	t.Parallel()
+	root := filepath.Join(t.TempDir(), "workspace")
+	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+		t.Fatal(err)
+	}
+
+	skillDir := filepath.Join(root, "skills", "default", "untracked-skill")
+	if err := os.MkdirAll(filepath.Join(skillDir, ".meta"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("# Untracked\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Skill has origin with name, but provenance.source_id is empty
+	metaContent := `schema_version: 1
+id: untracked-skill
+status: active
+provenance:
+  origin:
+    kind: github
+    name: some-repo
+    repository: https://github.com/example/untracked.git
+routing:
+  triggers: [test]
+  not_for: [none]
+  min_scope: single_step
+`
+	if err := os.WriteFile(filepath.Join(skillDir, "skill.meta.yaml"), []byte(metaContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	tracked, err := loadTrackedSkills(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ts := range tracked {
+		if ts.SkillID == "untracked-skill" {
+			t.Fatalf("skill with empty provenance.source_id must not be tracked, got: %#v", ts)
+		}
+	}
+
+	info, err := GetSkillUpstream(context.Background(), root, "untracked-skill")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Status != "untracked" {
+		t.Fatalf("expected status 'untracked', got %q", info.Status)
+	}
+}
