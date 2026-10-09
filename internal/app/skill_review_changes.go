@@ -84,14 +84,29 @@ func reviewChangesSinceApproval(ctx context.Context, input approvalDiffInput) *C
 	approvalCommit, approvedMeta := "", []byte(nil)
 	runEndedInHistory := false
 	for _, commit := range commits {
-		meta, err := gitOutput(ctx, root, "show", commit+":./"+newMetaPath)
-		if err != nil {
-			meta, err = gitOutput(ctx, root, "show", commit+":./"+oldMetaPath)
+		var foundMeta []byte
+		matched := false
+
+		if metaNew, errNew := gitOutput(ctx, root, "show", commit+":./"+newMetaPath); errNew == nil {
+			var pastNew contentTrustDocument
+			if yaml.Unmarshal(metaNew, &pastNew) == nil && pastNew.Quality.ContentReviewedDigest == approved {
+				matched = true
+				foundMeta = metaNew
+			}
 		}
-		var past contentTrustDocument
-		matches := err == nil && yaml.Unmarshal(meta, &past) == nil && past.Quality.ContentReviewedDigest == approved
-		if matches {
-			approvalCommit, approvedMeta = commit, meta
+
+		if !matched {
+			if metaOld, errOld := gitOutput(ctx, root, "show", commit+":./"+oldMetaPath); errOld == nil {
+				var pastOld contentTrustDocument
+				if yaml.Unmarshal(metaOld, &pastOld) == nil && pastOld.Quality.ContentReviewedDigest == approved {
+					matched = true
+					foundMeta = metaOld
+				}
+			}
+		}
+
+		if matched {
+			approvalCommit, approvedMeta = commit, foundMeta
 			continue
 		}
 		if approvalCommit != "" {

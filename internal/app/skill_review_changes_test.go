@@ -1,12 +1,16 @@
 package app
 
 import (
+	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/vantt/mcp-skill-hub/internal/migration"
+	"github.com/vantt/mcp-skill-hub/internal/mutation"
 	"github.com/vantt/mcp-skill-hub/internal/skillruntime"
 )
 
@@ -140,5 +144,119 @@ func TestReviewApprovalHistoryIsBounded(t *testing.T) {
 	changes := reviewChangesSinceApproval(t.Context(), approvalDiffInput{Root: root, SkillRelDir: "skills/core/diff-skill", SkillMetaBytes: metaBytes, Resources: resources, Trust: review.ContentTrust, HistoryLimit: 2})
 	if changes == nil || changes.Found || !changes.HistoryTruncated {
 		t.Fatalf("a truncated walk must report it and claim nothing: %#v", changes)
+	}
+}
+
+func TestReviewApprovalInSkillMetaYAMLSurvivesMigrationAndReportsPostApprovalEdit(t *testing.T) {
+	t.Parallel()
+
+	root := filepath.Join(t.TempDir(), "workspace")
+	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(filepath.Join(root, ".skillhub", "schema-version"), []byte("2\n"), 0o644)
+	runGit(t, root, "init", "-q")
+	runGit(t, root, "config", "user.email", "test@example.com")
+	runGit(t, root, "config", "user.name", "Test User")
+
+	skillDir := filepath.Join(root, "skills", "default", "diff-skill")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("# Diff Skill\n\nContent.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	v1Meta := `schema_version: 1
+id: diff-skill
+status: active
+provenance:
+  source_id: upstream-source
+  origin:
+    kind: github
+    repository: https://github.com/example/skills
+    commit: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+routing:
+  triggers: [diff]
+  not_for: [none]
+  min_scope: single_step
+`
+	if err := os.WriteFile(filepath.Join(skillDir, "skill.meta.yaml"), []byte(v1Meta), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, root, "add", "-A")
+	runGit(t, root, "commit", "-q", "-m", "import")
+
+	// Calculate ContentDigest and approve in skill.meta.yaml
+	service := SkillService{}
+	reviewBefore, err := service.ReviewSkill(context.Background(), root, "diff-skill")
+	if err != nil {
+		t.Fatal(err)
+	}
+	v1MetaApproved := v1Meta + fmt.Sprintf(`quality:
+  reviewed: true
+  content_reviewed_digest: %s
+`, reviewBefore.ContentTrust.ContentDigest)
+	if err := os.WriteFile(filepath.Join(skillDir, "skill.meta.yaml"), []byte(v1MetaApproved), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, root, "add", "-A")
+	runGit(t, root, "commit", "-q", "-m", "approve in skill.meta.yaml")
+	approvalCommit := strings.TrimSpace(runGit(t, root, "rev-parse", "HEAD"))
+
+	// Simulate Phase-0: add .meta/skill.yaml with learning source, but NO quality block
+	_ = os.MkdirAll(filepath.Join(skillDir, ".meta"), 0o755)
+	phase0Meta := `schema_version: 1
+id: diff-skill
+status: active
+routing:
+  triggers: [diff]
+  not_for: [none]
+  min_scope: single_step
+sources:
+  - id: distill-lab-source
+    roles: [learning]
+    repo: https://github.com/example/learning-repo
+`
+	if err := os.WriteFile(filepath.Join(skillDir, ".meta", "skill.yaml"), []byte(phase0Meta), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Now edit CAMPAIGN.md
+	if err := os.WriteFile(filepath.Join(skillDir, "CAMPAIGN.md"), []byte("# Campaign Goals\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, root, "add", "-A")
+	runGit(t, root, "commit", "-q", "-m", "add phase-0 meta and edit campaign")
+
+	// Migrate workspace to v4
+	proposal, err := (migration.DefaultRegistry()).Preview(root, migration.CurrentVersion)
+	if err != nil {
+		t.Fatalf("preview migration: %v", err)
+	}
+	_, err = mutation.ConfirmMutation(root, proposal.Mutation, mutation.Confirmation{
+		ProposalID:          proposal.ID,
+		ProposalDigest:      proposal.Digest,
+		BaseCatalogSnapshot: proposal.BaseSnapshot,
+	})
+	if err != nil {
+		t.Fatalf("confirm migration: %v", err)
+	}
+
+	// Commit migration
+	runGit(t, root, "add", "-A")
+	runGit(t, root, "commit", "-q", "-m", "migrate to v4")
+
+	reviewAfter, err := service.ReviewSkill(context.Background(), root, "diff-skill")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reviewAfter.ContentTrust.ChangesSinceApproval == nil {
+		t.Fatal("expected non-nil ChangesSinceApproval")
+	}
+	if !reviewAfter.ContentTrust.ChangesSinceApproval.Found {
+		t.Fatalf("expected approval commit found (%s), got none: %#v", approvalCommit, reviewAfter.ContentTrust.ChangesSinceApproval)
+	}
+	if !slices.Contains(reviewAfter.ContentTrust.ChangesSinceApproval.Added, "CAMPAIGN.md") {
+		t.Fatalf("expected CAMPAIGN.md in added changes since approval, got %#v", reviewAfter.ContentTrust.ChangesSinceApproval)
 	}
 }
