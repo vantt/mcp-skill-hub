@@ -16,6 +16,7 @@ import (
 	"unicode"
 
 	"github.com/vantt/mcp-skill-hub/internal/canonical"
+	"github.com/vantt/mcp-skill-hub/internal/migration"
 	"github.com/vantt/mcp-skill-hub/internal/mutation"
 	"github.com/vantt/mcp-skill-hub/internal/skill"
 	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
@@ -702,9 +703,13 @@ func buildAndPlanUpstreamWriteSet(ctx context.Context, wc updateWriteContext) (m
 		return mutation.Proposal{}, skill.DiffSummary{}, ConfirmationPins{}, fmt.Errorf("update skill.meta.yaml: %w", err)
 	}
 
-	metaPath := wc.SkillRelDir + "/skill.meta.yaml"
-	if _, statErr := os.Stat(filepath.Join(wc.Root, filepath.FromSlash(wc.SkillRelDir), ".meta", "skill.yaml")); statErr == nil {
-		metaPath = wc.SkillRelDir + "/.meta/skill.yaml"
+	schemaVersion := 3
+	if v, vErr := migration.DetectVersion(wc.Root); vErr == nil && v > 0 {
+		schemaVersion = v
+	}
+	metaPath := wc.SkillRelDir + "/.meta/skill.yaml"
+	if schemaVersion < 3 {
+		metaPath = wc.SkillRelDir + "/skill.meta.yaml"
 	}
 	changes = append(changes, mutation.Change{
 		Path:         metaPath,

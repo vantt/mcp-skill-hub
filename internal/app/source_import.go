@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/vantt/mcp-skill-hub/internal/catalog"
+	"github.com/vantt/mcp-skill-hub/internal/migration"
 	"github.com/vantt/mcp-skill-hub/internal/mutation"
 	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
 	"github.com/vantt/mcp-skill-hub/internal/workspace"
@@ -216,8 +217,12 @@ func (service SourceImportService) PreviewSourceImport(ctx context.Context, path
 		revCallback = makeRevisionAtCallback(opCtx, adapter, src, currentRev.Value)
 	}
 
+	schemaVersion := 3
+	if v, vErr := migration.DetectVersion(root); vErr == nil && v > 0 {
+		schemaVersion = v
+	}
 	for _, pi := range pendingImports {
-		itemChanges, itemAdded, itemErr := buildImportItemChanges(pi, record, currentRev, revCallback, nowISO)
+		itemChanges, itemAdded, itemErr := buildImportItemChanges(schemaVersion, pi, record, currentRev, revCallback, nowISO)
 		if itemErr != nil {
 			return SourceImportProposal{}, itemErr
 		}
@@ -543,6 +548,7 @@ func listWorkspaceSkillIDs(root string) (map[string]bool, error) {
 }
 
 func buildImportItemChanges(
+	schemaVersion int,
 	pi DiscoveredSkillItem,
 	record *sourcepkg.Record,
 	currentRev sourcepkg.Revision,
@@ -561,68 +567,137 @@ func buildImportItemChanges(
 	changes = append(changes, mutation.Change{Path: skillMDTarget, Contents: files["SKILL.md"]})
 	added = append(added, skillMDTarget)
 
-	var provDoc map[string]any
-	if record.Adapter == "git" {
-		originKind := "git"
-		if u, err := url.Parse(record.Locator.Repository); err == nil && strings.ToLower(u.Host) == "github.com" {
-			originKind = "github"
+	if schemaVersion >= 3 {
+		var src map[string]any
+		if record.Adapter == "git" {
+			originKind := "git"
+			if u, err := url.Parse(record.Locator.Repository); err == nil && strings.ToLower(u.Host) == "github.com" {
+				originKind = "github"
+			}
+			capturedOrigin := SkillOrigin{
+				Kind:       originKind,
+				Repository: record.Locator.Repository,
+				Ref:        record.Locator.Ref,
+				Commit:     currentRev.Value,
+				AddedAt:    nowISO,
+			}
+			skillOrigin := buildGitOrigin(capturedOrigin, record.Locator.Path, pi.SkillDir, files, transforms, revCallback)
+			src = map[string]any{
+				"id":     record.ID,
+				"roles":  []string{"upstream"},
+				"kind":   originKind,
+				"repo":   record.Locator.Repository,
+				"ref":    record.Locator.Ref,
+				"commit": currentRev.Value,
+				"synced": currentRev.Value,
+				"path":   pi.SkillDir,
+			}
+			if skillOrigin.FilesDigest != "" {
+				src["files_digest"] = skillOrigin.FilesDigest
+			}
+			if skillOrigin.FolderDigest != "" {
+				src["folder_digest"] = skillOrigin.FolderDigest
+			}
+			if len(transforms) > 0 {
+				src["transformations"] = transforms
+			}
+			src["added_at"] = nowISO
+		} else {
+			roles := []string{"upstream"}
+			if record.Purpose == "learning" {
+				roles = []string{"learning"}
+			}
+			src = map[string]any{
+				"id":     record.ID,
+				"roles":  roles,
+				"kind":   record.Adapter,
+				"path":   pi.SkillDir,
+				"commit": currentRev.Value,
+				"synced": currentRev.Value,
+			}
+			if record.Locator.Repository != "" {
+				src["repo"] = record.Locator.Repository
+			}
+			if record.Locator.Ref != "" {
+				src["ref"] = record.Locator.Ref
+			}
+			if len(transforms) > 0 {
+				src["transformations"] = transforms
+			}
+			src["added_at"] = nowISO
 		}
-		capturedOrigin := SkillOrigin{
-			Kind:       originKind,
-			Repository: record.Locator.Repository,
-			Ref:        record.Locator.Ref,
-			Commit:     currentRev.Value,
-			AddedAt:    nowISO,
-		}
-		skillOrigin := buildGitOrigin(capturedOrigin, record.Locator.Path, pi.SkillDir, files, transforms, revCallback)
-		if skillOrigin.Name == "" {
-			skillOrigin.Name = targetID
-		}
-		provDoc = map[string]any{
-			"created_by": "source_import",
-			"source_id":  record.ID,
-			"origin":     skillOriginToMap(skillOrigin),
-		}
-	} else {
-		provDoc = map[string]any{
-			"created_by": "source_import",
-			"source_id":  record.ID,
-			"revision":   currentRev.Value,
-			"path":       pi.SkillDir,
-		}
-	}
 
-	metaDoc := map[string]any{
-		"schema_version": 1,
-		"id":             targetID,
-		"name":           pi.Name,
-		"status":         "draft",
-		"description":    pi.Description,
-		"routing": map[string]any{
-			"triggers":  []string{},
-			"not_for":   []string{},
-			"min_scope": "",
-		},
-		"quality": map[string]any{
-			"reviewed": false,
-		},
-		"provenance": provDoc,
-		"history": []any{
-			map[string]any{
-				"state":       "draft",
-				"occurred_at": nowISO,
+		metaBytes, err := buildInitialSkillMetaYAML(targetID, pi.Name, pi.Description, files["SKILL.md"], src)
+		if err != nil {
+			return nil, nil, err
+		}
+		metaTarget := "skills/default/" + targetID + "/.meta/skill.yaml"
+		changes = append(changes, mutation.Change{Path: metaTarget, Contents: metaBytes})
+		added = append(added, metaTarget)
+	} else {
+		var provDoc map[string]any
+		if record.Adapter == "git" {
+			originKind := "git"
+			if u, err := url.Parse(record.Locator.Repository); err == nil && strings.ToLower(u.Host) == "github.com" {
+				originKind = "github"
+			}
+			capturedOrigin := SkillOrigin{
+				Kind:       originKind,
+				Repository: record.Locator.Repository,
+				Ref:        record.Locator.Ref,
+				Commit:     currentRev.Value,
+				AddedAt:    nowISO,
+			}
+			skillOrigin := buildGitOrigin(capturedOrigin, record.Locator.Path, pi.SkillDir, files, transforms, revCallback)
+			if skillOrigin.Name == "" {
+				skillOrigin.Name = targetID
+			}
+			provDoc = map[string]any{
+				"created_by": "source_import",
+				"source_id":  record.ID,
+				"origin":     skillOriginToMap(skillOrigin),
+			}
+		} else {
+			provDoc = map[string]any{
+				"created_by": "source_import",
+				"source_id":  record.ID,
+				"revision":   currentRev.Value,
+				"path":       pi.SkillDir,
+			}
+		}
+
+		metaDoc := map[string]any{
+			"schema_version": 1,
+			"id":             targetID,
+			"name":           pi.Name,
+			"status":         "draft",
+			"description":    pi.Description,
+			"routing": map[string]any{
+				"triggers":  []string{},
+				"not_for":   []string{},
+				"min_scope": "",
 			},
-		},
-		"created_at": nowISO,
-		"updated_at": nowISO,
+			"quality": map[string]any{
+				"reviewed": false,
+			},
+			"provenance": provDoc,
+			"history": []any{
+				map[string]any{
+					"state":       "draft",
+					"occurred_at": nowISO,
+				},
+			},
+			"created_at": nowISO,
+			"updated_at": nowISO,
+		}
+		metaBytes, err := yaml.Marshal(metaDoc)
+		if err != nil {
+			return nil, nil, err
+		}
+		metaTarget := "skills/default/" + targetID + "/skill.meta.yaml"
+		changes = append(changes, mutation.Change{Path: metaTarget, Contents: metaBytes})
+		added = append(added, metaTarget)
 	}
-	metaBytes, err := yaml.Marshal(metaDoc)
-	if err != nil {
-		return nil, nil, err
-	}
-	metaTarget := "skills/default/" + targetID + "/skill.meta.yaml"
-	changes = append(changes, mutation.Change{Path: metaTarget, Contents: metaBytes})
-	added = append(added, metaTarget)
 
 	for _, comp := range pi.Companions {
 		compData := pi.CompanionBytes[comp.Path]

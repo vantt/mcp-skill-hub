@@ -654,22 +654,7 @@ func buildSkillAddChanges(selected []DiscoveredSkillItem, collection string, cap
 			src["added_at"] = skillOrigin.AddedAt
 		}
 
-		metaDoc := map[string]any{
-			"schema_version": 1,
-			"id":             targetID,
-			"status":         "draft",
-			"routing": map[string]any{
-				"triggers":  []string{},
-				"not_for":   []string{},
-				"min_scope": "",
-			},
-			"quality": map[string]any{
-				"reviewed": false,
-			},
-			"sources": []any{src},
-		}
-
-		metaBytes, yErr := yaml.Marshal(metaDoc)
+		metaBytes, yErr := buildInitialSkillMetaYAML(targetID, item.Name, item.Description, normMD, src)
 		if yErr != nil {
 			return nil, nil, nil, nil, yErr
 		}

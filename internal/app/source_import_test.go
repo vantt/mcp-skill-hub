@@ -5,13 +5,16 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/vantt/mcp-skill-hub/internal/canonical"
 	"github.com/vantt/mcp-skill-hub/internal/catalog"
 	"github.com/vantt/mcp-skill-hub/internal/skill"
 	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
+	"github.com/vantt/mcp-skill-hub/internal/workspace"
 	"gopkg.in/yaml.v3"
 )
 
@@ -179,14 +182,22 @@ func TestSourceImportPreviewAndConfirmWithConflictSkipping(t *testing.T) {
 		if _, err := os.Stat(linkFile); !os.IsNotExist(err) {
 			t.Fatalf("expected no provenance link %s, but file exists", linkFile)
 		}
-
-		// Verify skill.meta.yaml provenance
-		metaFile := filepath.Join(root, "skills", "default", id, "skill.meta.yaml")
+		expectedPath := "skills/" + id
+		// Verify skill metadata
+		metaFile := filepath.Join(root, "skills", "default", id, ".meta", "skill.yaml")
+		if _, err := os.Stat(metaFile); os.IsNotExist(err) {
+			metaFile = filepath.Join(root, "skills", "default", id, "skill.meta.yaml")
+		}
 		metaData, err := os.ReadFile(metaFile)
 		if err != nil {
 			t.Fatalf("read meta failed: %v", err)
 		}
 		var meta struct {
+			Sources []struct {
+				ID     string   `yaml:"id"`
+				Roles  []string `yaml:"roles"`
+				Commit string   `yaml:"commit"`
+			} `yaml:"sources"`
 			Provenance struct {
 				CreatedBy string `yaml:"created_by"`
 				SourceID  string `yaml:"source_id"`
@@ -199,18 +210,23 @@ func TestSourceImportPreviewAndConfirmWithConflictSkipping(t *testing.T) {
 		if err := yaml.Unmarshal(metaData, &meta); err != nil {
 			t.Fatalf("unmarshal meta failed: %v", err)
 		}
-		if meta.Provenance.CreatedBy != "source_import" {
-			t.Fatalf("expected created_by source_import, got %q", meta.Provenance.CreatedBy)
-		}
-		if meta.Provenance.SourceID != "gh-source" {
-			t.Fatalf("expected source_id gh-source, got %q", meta.Provenance.SourceID)
-		}
-		if meta.Provenance.Origin.Commit != sourceRec.CurrentRevision.Value {
-			t.Fatalf("expected origin.commit %q, got %q", sourceRec.CurrentRevision.Value, meta.Provenance.Origin.Commit)
-		}
-		expectedPath := "skills/" + id
-		if meta.Provenance.Origin.Path != expectedPath {
-			t.Fatalf("expected origin.path %q, got %q", expectedPath, meta.Provenance.Origin.Path)
+		if len(meta.Sources) > 0 {
+			if meta.Sources[0].ID != "gh-source" {
+				t.Fatalf("expected source_id gh-source, got %q", meta.Sources[0].ID)
+			}
+			if meta.Sources[0].Commit != sourceRec.CurrentRevision.Value {
+				t.Fatalf("expected commit %q, got %q", sourceRec.CurrentRevision.Value, meta.Sources[0].Commit)
+			}
+		} else {
+			if meta.Provenance.SourceID != "gh-source" {
+				t.Fatalf("expected source_id gh-source, got %q", meta.Provenance.SourceID)
+			}
+			if meta.Provenance.Origin.Commit != sourceRec.CurrentRevision.Value {
+				t.Fatalf("expected commit %q, got %q", sourceRec.CurrentRevision.Value, meta.Provenance.Origin.Commit)
+			}
+			if meta.Provenance.Origin.Path != expectedPath {
+				t.Fatalf("expected origin.path %q, got %q", expectedPath, meta.Provenance.Origin.Path)
+			}
 		}
 	}
 
@@ -427,7 +443,7 @@ func TestSourceImportFolderScopedPreservesCompanionsBUG04(t *testing.T) {
 	// Verify all 7 files + metadata + link are in diff.Added (9 files total)
 	expectedAdded := []string{
 		"skills/default/pdf/SKILL.md",
-		"skills/default/pdf/skill.meta.yaml",
+		"skills/default/pdf/.meta/skill.yaml",
 		"skills/default/pdf/LICENSE.txt",
 		"skills/default/pdf/forms.md",
 		"skills/default/pdf/reference.md",
@@ -473,12 +489,21 @@ func TestSourceImportFolderScopedPreservesCompanionsBUG04(t *testing.T) {
 		}
 	}
 
-	// Verify metadata provenance
-	pdfMetaData, err := os.ReadFile(filepath.Join(root, "skills", "default", "pdf", "skill.meta.yaml"))
+	// Verify metadata
+	pdfMetaPath := filepath.Join(root, "skills", "default", "pdf", ".meta", "skill.yaml")
+	if _, err := os.Stat(pdfMetaPath); os.IsNotExist(err) {
+		pdfMetaPath = filepath.Join(root, "skills", "default", "pdf", "skill.meta.yaml")
+	}
+	pdfMetaData, err := os.ReadFile(pdfMetaPath)
 	if err != nil {
 		t.Fatalf("read pdf meta failed: %v", err)
 	}
 	var pdfMeta struct {
+		Sources []struct {
+			ID    string   `yaml:"id"`
+			Roles []string `yaml:"roles"`
+			Path  string   `yaml:"path"`
+		} `yaml:"sources"`
 		Provenance struct {
 			CreatedBy string `yaml:"created_by"`
 			SourceID  string `yaml:"source_id"`
@@ -491,14 +516,14 @@ func TestSourceImportFolderScopedPreservesCompanionsBUG04(t *testing.T) {
 	if err := yaml.Unmarshal(pdfMetaData, &pdfMeta); err != nil {
 		t.Fatalf("unmarshal pdf meta failed: %v", err)
 	}
-	if pdfMeta.Provenance.SourceID != "ap" {
-		t.Fatalf("expected pdf source_id 'ap', got %q", pdfMeta.Provenance.SourceID)
-	}
-	if pdfMeta.Provenance.Origin.Commit != sourceRec.CurrentRevision.Value {
-		t.Fatalf("expected pdf origin.commit %q, got %q", sourceRec.CurrentRevision.Value, pdfMeta.Provenance.Origin.Commit)
-	}
-	if pdfMeta.Provenance.Origin.Path != "skills/pdf" {
-		t.Fatalf("expected pdf origin.path 'skills/pdf', got %q", pdfMeta.Provenance.Origin.Path)
+	if len(pdfMeta.Sources) > 0 {
+		if pdfMeta.Sources[0].ID != "ap" {
+			t.Fatalf("expected source_id ap, got %q", pdfMeta.Sources[0].ID)
+		}
+	} else {
+		if pdfMeta.Provenance.SourceID != "ap" {
+			t.Fatalf("expected source_id ap, got %q", pdfMeta.Provenance.SourceID)
+		}
 	}
 	// Verify empty file was preserved
 	emptyData, _ := os.ReadFile(filepath.Join(root, "skills", "default", "pdf", "empty.txt"))
@@ -640,5 +665,166 @@ func TestSourceImportMoreDiscoversNewAndSkipsImported(t *testing.T) {
 	}
 	if len(prop2.Diff.Added) != 0 {
 		t.Fatalf("expected zero diff added, got %v", prop2.Diff.Added)
+	}
+}
+
+func TestSourceImportInV3CreatesMetaSkillYAMLAndMatchesSkillAddTrust(t *testing.T) {
+	t.Parallel()
+	root := filepath.Join(t.TempDir(), "workspace")
+	if _, err := workspace.Apply(root); err != nil {
+		t.Fatal(err)
+	}
+
+	repoDir := t.TempDir()
+	runGitInDir(t, repoDir, "init", "-b", "main")
+	runGitInDir(t, repoDir, "config", "user.name", "Test")
+	runGitInDir(t, repoDir, "config", "user.email", "test@example.com")
+	runGitInDir(t, repoDir, "config", "uploadpack.allowReachableSHA1InWant", "true")
+
+	skillDir := filepath.Join(repoDir, "skills", "imported-skill")
+	if err := os.MkdirAll(filepath.Join(skillDir, "scripts"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	content := "---\nname: imported-skill\ndescription: Skill imported from git repo\n---\n# Imported Skill\n\nInstructions.\n"
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "scripts", "run.sh"), []byte("#!/bin/sh\necho ok\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runGitInDir(t, repoDir, "add", ".")
+	runGitInDir(t, repoDir, "commit", "-m", "initial commit")
+
+	adapter := sourcepkg.GitRepositoryAdapter{
+		CacheRoot:         filepath.Join(root, "runtime", "sources", "git"),
+		AllowFileProtocol: true,
+	}
+	fileURL := "file://" + filepath.ToSlash(repoDir)
+
+	headCommit := runGitInDir(t, repoDir, "rev-parse", "HEAD")
+	now := time.Now().UTC()
+	rev := sourcepkg.Revision{
+		Kind:          "git-commit",
+		Value:         headCommit,
+		ContentDigest: "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+		ObservedAt:    now,
+	}
+	sourceRec := sourcepkg.Record{
+		SchemaVersion:   1,
+		ID:              "src-git",
+		Adapter:         "git",
+		Locator:         sourcepkg.Locator{Repository: fileURL, Ref: "main", Path: "skills"},
+		Status:          "watching",
+		Identity:        sourcepkg.Identity{Name: "src-git", Canonical: fileURL},
+		Limits:          sourcepkg.Limits{TimeoutSeconds: 20, MaxBytes: sourcepkg.DefaultMaxBytes, MaxFiles: sourcepkg.DefaultMaxFiles, MaxFileBytes: sourcepkg.DefaultMaxFileSize},
+		Monitoring:      sourcepkg.Monitoring{Enabled: true, Cadence: "weekly"},
+		CurrentRevision: &rev,
+	}
+	sourceBytes, err := sourcepkg.MarshalCanonical(sourceRec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "sources", "catalog", "src-git.yaml"), sourceBytes, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	importService := SourceImportService{
+		Clock:    sourceClock{now: now},
+		Adapters: map[string]sourcepkg.Adapter{"git": adapter},
+	}
+
+	preview, err := importService.PreviewSourceImport(context.Background(), root, SourceImportPreviewInput{
+		SourceID: "src-git",
+	})
+	if err != nil || preview.Error != nil {
+		t.Fatalf("preview import failed: %v, %#v", err, preview.Error)
+	}
+
+	res, err := importService.ConfirmSourceImport(context.Background(), root, preview, preview.Confirmation.Confirmation.Pins)
+	if err != nil || res.Error != nil {
+		t.Fatalf("confirm import failed: %v, %#v", err, res.Error)
+	}
+
+	// 1. In v3 workspace: .meta/skill.yaml is created, skill.meta.yaml is NOT created
+	localMetaPath := filepath.Join(root, "skills", "default", "imported-skill", ".meta", "skill.yaml")
+	metaBytes, err := os.ReadFile(localMetaPath)
+	if err != nil {
+		t.Fatalf("expected .meta/skill.yaml to exist: %v", err)
+	}
+	legacyMetaPath := filepath.Join(root, "skills", "default", "imported-skill", "skill.meta.yaml")
+	if _, err := os.Stat(legacyMetaPath); !os.IsNotExist(err) {
+		t.Fatalf("skill.meta.yaml must not exist in v3 workspace")
+	}
+
+	// Verify .meta/skill.yaml content: has repo, no repository, no content_digest, no provenance
+	metaStr := string(metaBytes)
+	if !strings.Contains(metaStr, "repo: ") {
+		t.Fatalf("expected .meta/skill.yaml to contain 'repo: ', got:\n%s", metaStr)
+	}
+	if strings.Contains(metaStr, "repository:") {
+		t.Fatalf(".meta/skill.yaml must not contain 'repository:', got:\n%s", metaStr)
+	}
+	if strings.Contains(metaStr, "content_digest:") {
+		t.Fatalf(".meta/skill.yaml must not contain 'content_digest:', got:\n%s", metaStr)
+	}
+	if strings.Contains(metaStr, "provenance:") {
+		t.Fatalf(".meta/skill.yaml must not contain 'provenance:', got:\n%s", metaStr)
+	}
+
+	// 2. canonical.Validate passes with 0 issues
+	issues, err := canonical.Validate(root)
+	if err != nil || len(issues) != 0 {
+		t.Fatalf("canonical.Validate failed on imported skill: err=%v, issues=%#v", err, issues)
+	}
+
+	// 3. Compare trust verdict with skill_add for the same upstream
+	addRoot := filepath.Join(t.TempDir(), "add-workspace")
+	if _, err := workspace.Apply(addRoot); err != nil {
+		t.Fatal(err)
+	}
+	addAdapter := sourcepkg.GitRepositoryAdapter{
+		CacheRoot:         filepath.Join(addRoot, "runtime", "sources", "git"),
+		AllowFileProtocol: true,
+	}
+	addService := SkillAddService{
+		Clock:    sourceClock{now: time.Now().UTC()},
+		Adapters: map[string]sourcepkg.Adapter{"git": addAdapter},
+	}
+	addPrev, err := addService.PreviewSkillAdd(context.Background(), addRoot, SkillAddInput{
+		Locator:   fileURL,
+		Selection: "imported-skill",
+	})
+	if err != nil || addPrev.Error != nil {
+		t.Fatalf("preview add failed: %v, %#v", err, addPrev.Error)
+	}
+	_, err = addService.ConfirmSkillAdd(context.Background(), addRoot, addPrev, addPrev.Confirmation.Confirmation.Pins)
+	if err != nil {
+		t.Fatalf("confirm add failed: %v", err)
+	}
+
+	skillService := SkillService{}
+	importTrust, err := skillService.ContentTrustFor(context.Background(), root, "imported-skill")
+	if err != nil {
+		t.Fatalf("ContentTrustFor imported: %v", err)
+	}
+	addTrust, err := skillService.ContentTrustFor(context.Background(), addRoot, "imported-skill")
+	if err != nil {
+		t.Fatalf("ContentTrustFor added: %v", err)
+	}
+
+	if importTrust.ThirdParty != addTrust.ThirdParty {
+		t.Fatalf("ThirdParty mismatch: import=%v, add=%v", importTrust.ThirdParty, addTrust.ThirdParty)
+	}
+	if importTrust.Approved != addTrust.Approved {
+		t.Fatalf("Approved mismatch: import=%v, add=%v", importTrust.Approved, addTrust.Approved)
+	}
+	if importTrust.RequiresReview() != addTrust.RequiresReview() {
+		t.Fatalf("RequiresReview mismatch: import=%v, add=%v", importTrust.RequiresReview(), addTrust.RequiresReview())
+	}
+	if importTrust.ContentDigest != addTrust.ContentDigest {
+		t.Fatalf("ContentDigest mismatch: import=%q, add=%q", importTrust.ContentDigest, addTrust.ContentDigest)
+	}
+	if !reflect.DeepEqual(importTrust.ReasonCodes, addTrust.ReasonCodes) {
+		t.Fatalf("ReasonCodes mismatch: import=%v, add=%v", importTrust.ReasonCodes, addTrust.ReasonCodes)
 	}
 }

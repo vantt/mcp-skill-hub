@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vantt/mcp-skill-hub/internal/migration"
 	"github.com/vantt/mcp-skill-hub/internal/mutation"
 	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
 	"github.com/vantt/mcp-skill-hub/internal/workspace"
@@ -72,6 +73,7 @@ func (service SourceService) ApplyBackfill(ctx context.Context, path string, pre
 
 type backfillContext struct {
 	root              string
+	schemaVersion     int
 	targetSkillID     string
 	repoPathOverride  string
 	now               time.Time
@@ -109,8 +111,13 @@ func (service BackfillService) PreviewBackfill(ctx context.Context, path string,
 		sourcesByID[s.ID] = s
 	}
 
+	schemaVersion := 3
+	if v, vErr := migration.DetectVersion(root); vErr == nil && v > 0 {
+		schemaVersion = v
+	}
 	bCtx := backfillContext{
 		root:              root,
+		schemaVersion:     schemaVersion,
 		targetSkillID:     targetSkillID,
 		repoPathOverride:  input.RepoPath,
 		now:               service.Clock.Now().UTC(),
@@ -303,8 +310,17 @@ func (bc *backfillContext) processCandidateA(id, relDir string, metaBytes []byte
 		return nil, nil, nil, nil, err
 	}
 	skillMetaPath := filepath.ToSlash(filepath.Join(relDir, ".meta", "skill.yaml"))
-	if _, statErr := os.Stat(filepath.Join(bc.root, filepath.FromSlash(relDir), ".meta", "skill.yaml")); statErr != nil {
+	if bc.schemaVersion < 3 {
 		skillMetaPath = filepath.ToSlash(filepath.Join(relDir, "skill.meta.yaml"))
+	} else {
+		legacyPath := filepath.ToSlash(filepath.Join(relDir, "skill.meta.yaml"))
+		if _, statErr := os.Stat(filepath.Join(bc.root, filepath.FromSlash(legacyPath))); statErr == nil {
+			changes = append(changes, mutation.Change{
+				Path:         legacyPath,
+				Delete:       true,
+				BeforeDigest: sourcepkg.Digest(metaBytes),
+			})
+		}
 	}
 	changes = append(changes, mutation.Change{
 		Path:         skillMetaPath,
@@ -371,21 +387,31 @@ func (bc *backfillContext) processCandidateB(id, relDir, sourceID string, metaBy
 		return nil, nil, nil, err
 	}
 	skillMetaPath := filepath.ToSlash(filepath.Join(relDir, ".meta", "skill.yaml"))
-	if _, statErr := os.Stat(filepath.Join(bc.root, filepath.FromSlash(relDir), ".meta", "skill.yaml")); statErr != nil {
+	var changes []mutation.Change
+	if bc.schemaVersion < 3 {
 		skillMetaPath = filepath.ToSlash(filepath.Join(relDir, "skill.meta.yaml"))
+	} else {
+		legacyPath := filepath.ToSlash(filepath.Join(relDir, "skill.meta.yaml"))
+		if _, statErr := os.Stat(filepath.Join(bc.root, filepath.FromSlash(legacyPath))); statErr == nil {
+			changes = append(changes, mutation.Change{
+				Path:         legacyPath,
+				Delete:       true,
+				BeforeDigest: sourcepkg.Digest(metaBytes),
+			})
+		}
 	}
-	change := mutation.Change{
+	changes = append(changes, mutation.Change{
 		Path:         skillMetaPath,
 		BeforeDigest: sourcepkg.Digest(metaBytes),
 		Contents:     updatedMetaBytes,
-	}
+	})
 	return &BackfillCandidateItem{
 		SkillID:      id,
 		Kind:         BackfillKindSourceWithoutOrigin,
 		SourceID:     sourceID,
 		RepoPath:     repoPath,
 		CreateSource: false,
-	}, []mutation.Change{change}, []string{skillMetaPath}, nil
+	}, changes, []string{skillMetaPath}, nil
 }
 
 func (service BackfillService) ApplyBackfill(ctx context.Context, path string, preview BackfillPreview) (BackfillResult, error) {
