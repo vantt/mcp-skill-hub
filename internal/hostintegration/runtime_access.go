@@ -148,10 +148,27 @@ func codexWritableRoots(raw []byte) ([]string, error) {
 
 // desiredCodexConfig applies the skillhub MCP registration and the runtime
 // directory allowance to config.toml.
-func desiredCodexConfig(raw []byte, binary, workspace string) ([]byte, error) {
-	registered, err := upsertCodexTOML(raw, binary, workspace)
-	if err != nil {
-		return nil, err
+func desiredCodexConfig(raw []byte, binary, workspace string, supportsToggle bool) ([]byte, error) {
+	var registered []byte
+	var err error
+	if supportsToggle {
+		registered, err = upsertCodexTOMLTable(raw, "mcp_servers.skillhub", binary, []string{"mcp", "serve", "--profile", "runtime", "--workspace", workspace}, workspace)
+		if err != nil {
+			return nil, err
+		}
+		registered, err = upsertCodexTOMLTable(registered, "mcp_servers.skillhub-curation", binary, []string{"mcp", "serve", "--profile", "curation", "--workspace", workspace}, workspace)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		registered, err = upsertCodexTOMLTable(raw, "mcp_servers.skillhub", binary, []string{"mcp", "serve", "--workspace", workspace}, workspace)
+		if err != nil {
+			return nil, err
+		}
+		registered, err = removeCodexTOMLTable(registered, "mcp_servers.skillhub-curation")
+		if err != nil {
+			return nil, err
+		}
 	}
 	return ensureCodexWritableRoots(registered, RuntimeAccessDirs(workspace))
 }

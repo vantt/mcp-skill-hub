@@ -24,12 +24,9 @@ compatible-tools:
   - skill_transition_preview
   - skill_transition_confirm
   - skill_list
-  - skill_get
   - skill_review
   - skill_update_preview
   - skill_update_confirm
-  - skill_resolve
-  - skill_feedback
   - routing_evaluate
   - curation_session_record
   - workspace_validate
@@ -59,6 +56,10 @@ approval authority. Upstream file content is never returned by MCP tools; do
 not ask for it or reconstruct it.
 
 ## Start at Curation Home
+
+If the curation tools (such as `hub_status`, `skill_review`, `source_list`) are
+missing, tell the user to enable `skillhub-curation` or use the matching CLI
+command (such as `skillhub status`, `skillhub doctor`, or `skillhub skill ...`).
 
 For a general curation request, call `hub_status` first. It is local and offline:
 do not enumerate the catalog, fetch sources, or perform a network check to build
@@ -107,7 +108,7 @@ states, cursors, or IDs unless an ID is needed to disambiguate a selected item.
 | Activate a skill | Call `skill_transition_preview` with target `active`; show requirements or diff and require explicit approval before `skill_transition_confirm`. |
 | Deprecate or archive a skill | Call `skill_transition_preview` with target `deprecated` or `archived`; require explicit approval before `skill_transition_confirm`. |
 | List skills | Call `skill_list` with optional state filter (`active`, `draft`, `deprecated`, `archived`) to inspect available skills. |
-| Show a skill | Call `skill_get` by skill ID to inspect its content, status, and routing fields. |
+| Show a skill | Call `skill_review` to inspect diagnostic facts, or run `skillhub skill show <id>` via the CLI. |
 | Assess a routing change | Call `routing_evaluate`, summarize meaningful routing deltas, then require explicit approval through the applicable preview/confirm flow. |
 | Validate, rebuild, or show changes | Use `workspace_validate`, `workspace_rebuild`, or `workspace_diff`; show technical detail on demand. |
 
@@ -120,7 +121,7 @@ A skill that runs scripts or installs dependencies should declare a `runtime`
 block so agents check and set it up the same way every time. When a skill
 review reports `install_prose_detected` or `missing_runtime_block`:
 
-1. Read the skill's SKILL.md and README with `skill_get` and find its install
+1. Read the skill's SKILL.md and README in the workspace (or via CLI `skillhub skill show <id>`) and find its install
    prose and the interpreters and dependency files the review lists.
 2. Draft a `runtime` block: `requires.bins` (executable names, with a version
    constraint such as `>=3.10` when the prose states one), `requires.env`

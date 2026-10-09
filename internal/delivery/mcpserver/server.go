@@ -34,8 +34,17 @@ const (
 	cacheTTLMS    = 300_000
 )
 
+type Profile string
+
+const (
+	ProfileAll      Profile = "all"
+	ProfileRuntime  Profile = "runtime"
+	ProfileCuration Profile = "curation"
+)
+
 type Server struct {
 	workspace    string
+	profile      Profile
 	distribution app.DistributionService
 	resolver     app.ResolverService
 	feedback     app.FeedbackService
@@ -51,7 +60,7 @@ var activeDiagnostics atomic.Pointer[slog.Logger]
 var correlationSequence atomic.Uint64
 
 // New constructs one stateless server surface for a configured workspace.
-func New(workspacePath string, diagnostics io.Writer) (*Server, *mcp.Server, error) {
+func New(workspacePath string, diagnostics io.Writer, profiles ...Profile) (*Server, *mcp.Server, error) {
 	root, err := workspace.Discover(workspacePath)
 	if err != nil {
 		return nil, nil, err
@@ -61,8 +70,13 @@ func New(workspacePath string, diagnostics io.Writer) (*Server, *mcp.Server, err
 	}
 	logger := slog.New(slog.NewTextHandler(diagnostics, &slog.HandlerOptions{Level: slog.LevelWarn}))
 	activeDiagnostics.Store(logger)
+	profile := ProfileAll
+	if len(profiles) > 0 && profiles[0] != "" {
+		profile = profiles[0]
+	}
 	adapter := &Server{
 		workspace: root,
+		profile:   profile,
 		snapshots: app.NewSnapshotService(),
 		tracker:   newActivationTracker(nil, root),
 		logger:    logger,
@@ -90,14 +104,14 @@ func New(workspacePath string, diagnostics io.Writer) (*Server, *mcp.Server, err
 }
 
 // Serve performs startup validation/rebuild before accepting stdio frames.
-func Serve(ctx context.Context, workspacePath string, diagnostics io.Writer) error {
+func Serve(ctx context.Context, workspacePath string, diagnostics io.Writer, profiles ...Profile) error {
 	if _, err := (app.CatalogService{}).EnsureCatalog(ctx, workspacePath); err != nil {
 		if diagnostics == nil {
 			diagnostics = os.Stderr
 		}
 		fmt.Fprintf(diagnostics, "warning: catalog ensure/rebuild failed on startup: %v\n", err)
 	}
-	adapter, server, err := New(workspacePath, diagnostics)
+	adapter, server, err := New(workspacePath, diagnostics, profiles...)
 	if err != nil {
 		return err
 	}
@@ -444,16 +458,36 @@ func invalidParams(code, message string) error {
 }
 
 func (adapter *Server) registerTools(server *mcp.Server) {
+	switch adapter.profile {
+	case ProfileRuntime:
+		adapter.registerRuntimeTools(server)
+	case ProfileCuration:
+		adapter.registerCurationTools(server)
+	default:
+		adapter.registerAllTools(server)
+	}
+}
+
+func (adapter *Server) registerRuntimeTools(server *mcp.Server) {
 	adapter.registerResolverTools(server)
+	adapter.registerSkillGetTool(server)
+}
+
+func (adapter *Server) registerCurationTools(server *mcp.Server) {
 	adapter.registerSourceTools(server)
 	adapter.registerSourceImportTools(server)
 	adapter.registerSourceWatchTools(server)
 	adapter.registerUpstreamTools(server)
 	adapter.registerInsightTools(server)
-	adapter.registerSkillTools(server)
+	adapter.registerSkillCurationTools(server)
 	adapter.registerSkillAddTools(server)
 	adapter.registerSkillReviewTools(server)
 	adapter.registerWorkspaceTools(server)
+}
+
+func (adapter *Server) registerAllTools(server *mcp.Server) {
+	adapter.registerRuntimeTools(server)
+	adapter.registerCurationTools(server)
 }
 
 func addTool[In, Out any](server *mcp.Server, tool *mcp.Tool, handler mcp.ToolHandlerFor[In, toolOutcome[Out]]) {

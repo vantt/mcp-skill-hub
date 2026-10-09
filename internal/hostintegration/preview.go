@@ -38,6 +38,25 @@ func mcpChangePreview(host Host, raw, desired []byte) string {
 		builder.WriteString(" -> ")
 		builder.WriteString(sanitizeManagedValue(newValues[field]))
 	}
+	hasCuration := false
+	for _, field := range fields {
+		curKey := "skillhub-curation." + field
+		if len(oldValues[curKey]) > 0 || len(newValues[curKey]) > 0 {
+			hasCuration = true
+			break
+		}
+	}
+	if hasCuration {
+		for _, field := range fields {
+			curKey := "skillhub-curation." + field
+			builder.WriteString("\n")
+			builder.WriteString(curKey)
+			builder.WriteString(": ")
+			builder.WriteString(managedValueDescriptor(oldValues[curKey]))
+			builder.WriteString(" -> ")
+			builder.WriteString(sanitizeManagedValue(newValues[curKey]))
+		}
+	}
 	return builder.String()
 }
 
@@ -67,15 +86,21 @@ func extractManagedMCPValues(host Host, raw []byte, fields []string) map[string]
 	if json.Unmarshal(root["mcpServers"], &servers) != nil {
 		return values
 	}
-	var registration map[string]json.RawMessage
-	if json.Unmarshal(servers["skillhub"], &registration) != nil {
-		return values
-	}
-	for _, field := range fields {
-		if value, ok := registration[field]; ok {
-			compact := &bytes.Buffer{}
-			if json.Compact(compact, value) == nil {
-				values[field] = append([]byte(nil), compact.Bytes()...)
+	for _, serverName := range []string{"skillhub", "skillhub-curation"} {
+		var registration map[string]json.RawMessage
+		if json.Unmarshal(servers[serverName], &registration) != nil {
+			continue
+		}
+		prefix := ""
+		if serverName != "skillhub" {
+			prefix = serverName + "."
+		}
+		for _, field := range fields {
+			if value, ok := registration[field]; ok {
+				compact := &bytes.Buffer{}
+				if json.Compact(compact, value) == nil {
+					values[prefix+field] = append([]byte(nil), compact.Bytes()...)
+				}
 			}
 		}
 	}
@@ -88,20 +113,27 @@ func extractCodexManagedValues(raw []byte, fields []string) map[string][]byte {
 	if err != nil {
 		return values
 	}
-	inManagedTable := false
+	currentServer := ""
 	allowed := make(map[string]struct{}, len(fields))
 	for _, field := range fields {
 		allowed[field] = struct{}{}
 	}
 	for _, statement := range statements {
 		if statement.kind == 'h' {
-			inManagedTable = normalizeTOMLTable(statement.name) == "mcp_servers.skillhub"
+			switch normalizeTOMLTable(statement.name) {
+			case "mcp_servers.skillhub":
+				currentServer = "skillhub"
+			case "mcp_servers.skillhub-curation", "mcp_servers.\"skillhub-curation\"":
+				currentServer = "skillhub-curation"
+			default:
+				currentServer = ""
+			}
+			continue
+		}
+		if currentServer == "" {
 			continue
 		}
 		name := normalizeTOMLTable(statement.name)
-		if !inManagedTable {
-			continue
-		}
 		if _, ok := allowed[name]; !ok {
 			continue
 		}
@@ -110,9 +142,11 @@ func extractCodexManagedValues(raw []byte, fields []string) map[string][]byte {
 		if equals < 0 {
 			continue
 		}
-		// The descriptor hashes the complete owned value statement. This avoids
-		// exposing credentials that a user may previously have placed there.
-		values[name] = bytes.TrimSpace(line[equals+1:])
+		prefix := ""
+		if currentServer != "skillhub" {
+			prefix = currentServer + "."
+		}
+		values[prefix+name] = bytes.TrimSpace(line[equals+1:])
 	}
 	return values
 }

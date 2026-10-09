@@ -15,8 +15,19 @@ func runMCP(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return writeInvalidRequest(stdout, stderr, false, "mcp requires the serve subcommand", "Run `skillhub mcp serve --workspace <path>`.")
 	}
 	workspacePath := ""
+	profile := mcpserver.ProfileAll
 	for index := 1; index < len(args); index++ {
 		switch args[index] {
+		case "--profile":
+			if index+1 == len(args) || strings.HasPrefix(args[index+1], "-") {
+				return writeInvalidRequest(stdout, stderr, false, "--profile requires a value", "Run `skillhub mcp serve --profile runtime|curation|all`.")
+			}
+			p := mcpserver.Profile(args[index+1])
+			if p != mcpserver.ProfileRuntime && p != mcpserver.ProfileCuration && p != mcpserver.ProfileAll {
+				return writeInvalidRequest(stdout, stderr, false, fmt.Sprintf("invalid profile %q", args[index+1]), "Run `skillhub mcp serve --profile runtime|curation|all`.")
+			}
+			profile = p
+			index++
 		case "--workspace":
 			if index+1 == len(args) || strings.HasPrefix(args[index+1], "-") {
 				return writeInvalidRequest(stdout, stderr, false, "--workspace requires a path", "Run `skillhub mcp serve --workspace <path>`.")
@@ -32,7 +43,7 @@ func runMCP(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return writeWorkspaceResolutionError(stdout, stderr, false, resErr)
 	}
 	workspacePath = resolved
-	if err := mcpserver.Serve(ctx, workspacePath, stderr); err != nil {
+	if err := mcpserver.Serve(ctx, workspacePath, stderr, profile); err != nil {
 		p := termui.New(stderr)
 		p.Line("MCP server stopped because startup or transport validation failed; inspect workspace health with `skillhub doctor`.")
 		return 1

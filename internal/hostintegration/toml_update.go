@@ -14,19 +14,24 @@ type tomlStatement struct {
 }
 
 func upsertCodexTOML(raw []byte, binary, workspace string) ([]byte, error) {
+	return upsertCodexTOMLTable(raw, "mcp_servers.skillhub", binary, []string{"mcp", "serve", "--workspace", workspace}, workspace)
+}
+
+func upsertCodexTOMLTable(raw []byte, table, binary string, args []string, workspace string) ([]byte, error) {
 	newline := detectNewline(raw)
 	statements, err := scanTOMLStatements(raw)
 	if err != nil {
 		return nil, fmt.Errorf("cannot safely update Codex TOML: %w", err)
 	}
 
+	target := normalizeTOMLTable(table)
 	sectionStart, sectionEnd := -1, len(raw)
 	for index, statement := range statements {
-		if statement.kind != 'h' || normalizeTOMLTable(statement.name) != "mcp_servers.skillhub" {
+		if statement.kind != 'h' || normalizeTOMLTable(statement.name) != target {
 			continue
 		}
 		if sectionStart >= 0 {
-			return nil, fmt.Errorf("duplicate TOML table mcp_servers.skillhub")
+			return nil, fmt.Errorf("duplicate TOML table %s", table)
 		}
 		sectionStart = statement.start
 		for _, later := range statements[index+1:] {
@@ -36,7 +41,6 @@ func upsertCodexTOML(raw []byte, binary, workspace string) ([]byte, error) {
 			}
 		}
 	}
-	const target = "mcp_servers.skillhub"
 	currentTable := ""
 	for _, statement := range statements {
 		if statement.kind == 'h' {
@@ -49,18 +53,23 @@ func upsertCodexTOML(raw []byte, binary, workspace string) ([]byte, error) {
 		}
 		inTargetTable := currentTable == target || strings.HasPrefix(currentTable, target+".")
 		if full == target || (!inTargetTable && strings.HasPrefix(full, target+".")) {
-			return nil, fmt.Errorf("ambiguous TOML definition of mcp_servers.skillhub outside a [mcp_servers.skillhub] table; edit it manually")
+			return nil, fmt.Errorf("ambiguous TOML definition of %s outside a [%s] table; edit it manually", table, table)
 		}
 	}
 
+	quotedArgs := make([]string, len(args))
+	for i, a := range args {
+		quotedArgs[i] = tomlString(a)
+	}
 	managed := []string{
 		"command = " + tomlString(binary),
-		"args = [" + strings.Join([]string{tomlString("mcp"), tomlString("serve"), tomlString("--workspace"), tomlString(workspace)}, ", ") + "]",
+		"args = [" + strings.Join(quotedArgs, ", ") + "]",
 		"cwd = " + tomlString(workspace),
 		"enabled = true",
 	}
+	tableHeader := "[" + table + "]"
 	if sectionStart < 0 {
-		return appendTOMLBlock(raw, newline, "[mcp_servers.skillhub]"+newline+strings.Join(managed, newline)), nil
+		return appendTOMLBlock(raw, newline, tableHeader+newline+strings.Join(managed, newline)), nil
 	}
 
 	section := append([]byte(nil), raw[sectionStart:sectionEnd]...)
@@ -68,10 +77,10 @@ func upsertCodexTOML(raw []byte, binary, workspace string) ([]byte, error) {
 		key := line[:strings.IndexByte(line, ' ')]
 		updated, count, replaceErr := replaceTOMLKey(section, key, line)
 		if replaceErr != nil {
-			return nil, fmt.Errorf("cannot safely update %s in mcp_servers.skillhub: %w", key, replaceErr)
+			return nil, fmt.Errorf("cannot safely update %s in %s: %w", key, table, replaceErr)
 		}
 		if count > 1 {
-			return nil, fmt.Errorf("duplicate TOML key %s in mcp_servers.skillhub", key)
+			return nil, fmt.Errorf("duplicate TOML key %s in %s", key, table)
 		}
 		section = updated
 		if count == 0 {
@@ -79,6 +88,34 @@ func upsertCodexTOML(raw []byte, binary, workspace string) ([]byte, error) {
 		}
 	}
 	return splice(raw, sectionStart, sectionEnd, section), nil
+}
+
+func removeCodexTOMLTable(raw []byte, table string) ([]byte, error) {
+	statements, err := scanTOMLStatements(raw)
+	if err != nil {
+		return nil, fmt.Errorf("cannot safely update Codex TOML: %w", err)
+	}
+	target := normalizeTOMLTable(table)
+	sectionStart, sectionEnd := -1, len(raw)
+	for index, statement := range statements {
+		if statement.kind != 'h' || normalizeTOMLTable(statement.name) != target {
+			continue
+		}
+		if sectionStart >= 0 {
+			return nil, fmt.Errorf("duplicate TOML table %s", table)
+		}
+		sectionStart = statement.start
+		for _, later := range statements[index+1:] {
+			if later.kind == 'h' {
+				sectionEnd = later.start
+				break
+			}
+		}
+	}
+	if sectionStart < 0 {
+		return raw, nil
+	}
+	return splice(raw, sectionStart, sectionEnd, nil), nil
 }
 
 func normalizeTOMLTable(name string) string {

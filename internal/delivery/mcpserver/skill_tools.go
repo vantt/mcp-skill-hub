@@ -13,6 +13,11 @@ import (
 )
 
 func (adapter *Server) registerSkillTools(server *mcp.Server) {
+	adapter.registerSkillCurationTools(server)
+	adapter.registerSkillGetTool(server)
+}
+
+func (adapter *Server) registerSkillCurationTools(server *mcp.Server) {
 	addTool(server, &mcp.Tool{
 		Name:        "skill_create_preview",
 		Title:       "Preview skill creation",
@@ -131,6 +136,9 @@ func (adapter *Server) registerSkillTools(server *mcp.Server) {
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input skillListInput) (*mcp.CallToolResult, toolOutcome[app.SkillListResult], error) {
 		return appResult((app.SkillService{}).ListSkills(ctx, adapter.workspace, strings.TrimSpace(input.State)))
 	})
+}
+
+func (adapter *Server) registerSkillGetTool(server *mcp.Server) {
 
 	addTool(server, &mcp.Tool{
 		Name:        "skill_get",

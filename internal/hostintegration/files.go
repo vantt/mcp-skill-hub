@@ -227,13 +227,14 @@ func expectedDesired(change Change, raw []byte, plan PlanResult) ([]byte, error)
 		}
 		return desired, nil
 	case ChangeMCP:
+		supportsToggle := HostSupportsServerToggle(change.Host)
 		switch change.Host {
 		case HostClaude:
-			return desiredClaudeConfig(raw, plan.Binary, plan.Workspace)
+			return desiredClaudeConfig(raw, plan.Binary, plan.Workspace, supportsToggle)
 		case HostGemini:
-			return desiredGeminiConfig(raw, plan.Binary, plan.Workspace)
+			return desiredGeminiConfig(raw, plan.Binary, plan.Workspace, supportsToggle)
 		case HostCodex:
-			return desiredCodexConfig(raw, plan.Binary, plan.Workspace)
+			return desiredCodexConfig(raw, plan.Binary, plan.Workspace, supportsToggle)
 		}
 	case ChangeHostPermissions:
 		if change.Host == HostClaude {

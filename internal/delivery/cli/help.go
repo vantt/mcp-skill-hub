@@ -273,10 +273,14 @@ tree was modified.
 
 Example: skillhub version
 `,
-	"mcp": `Usage: skillhub mcp serve [--workspace <path>]
+	"mcp": `Usage: skillhub mcp serve [--workspace <path>] [--profile runtime|curation|all]
 
 Serve the workspace over MCP (stdio). Agent hosts start this for you after
 ` + "`skillhub connect`" + `; you rarely run it by hand.
+
+Options:
+  --workspace <path>             Workspace to serve
+  --profile runtime|curation|all Tool profile to expose (default: all)
 `,
 	"update": `Usage: skillhub update [--version <v>] [--check] [--json]
 

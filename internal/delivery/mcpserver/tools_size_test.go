@@ -84,7 +84,7 @@ func TestToolsListSize(t *testing.T) {
 		return stats[i].toolBytes > stats[j].toolBytes
 	})
 
-	t.Logf("=== MCP tools/list Measurement Report ===")
+	t.Logf("=== Profile %q (all) tools/list Measurement Report ===", ProfileAll)
 	t.Logf("Total tools: %d", len(listedTools.Tools))
 	t.Logf("Total payload: %d bytes (~%d tokens)", totalBytes, totalTokens)
 	t.Logf("Total outputSchema bytes: %d (%.1f%% of payload)", totalOutputBytes, float64(totalOutputBytes)/float64(totalBytes)*100.0)
@@ -95,48 +95,63 @@ func TestToolsListSize(t *testing.T) {
 		t.Logf("%-32s | %8d | %8d | %12d | %9.1f%%", s.name, s.toolBytes, s.toolTokens, s.outputBytes, s.outputShareRatio)
 	}
 
-	// Runtime set measurement
-	runtimeSet := map[string]bool{
-		"skill_resolve":  true,
-		"skill_get":      true,
-		"skill_feedback": true,
-	}
-
-	var runtimeTools []*mcp.Tool
-	var runtimeToolsNoOutput []*mcp.Tool
-	for _, tool := range listedTools.Tools {
-		if runtimeSet[tool.Name] {
-			runtimeTools = append(runtimeTools, tool)
-			stripped := *tool
-			stripped.OutputSchema = nil
-			runtimeToolsNoOutput = append(runtimeToolsNoOutput, &stripped)
+	// Measure real runtime and curation profiles
+	measureProfile := func(profile Profile) (int, int, int) {
+		_, pServer, pErr := New(root, nil, profile)
+		if pErr != nil {
+			t.Fatalf("New(%s): %v", profile, pErr)
 		}
+		pClient := mcp.NewClient(&mcp.Implementation{Name: "skillhub-measurement-" + string(profile), Version: "1"}, nil)
+		cTransport, sTransport := mcp.NewInMemoryTransports()
+		sSession, pErr := pServer.Connect(t.Context(), sTransport, nil)
+		if pErr != nil {
+			t.Fatalf("server connect (%s): %v", profile, pErr)
+		}
+		defer sSession.Close()
+		cSession, pErr := pClient.Connect(t.Context(), cTransport, nil)
+		if pErr != nil {
+			t.Fatalf("client connect (%s): %v", profile, pErr)
+		}
+		defer cSession.Close()
+		tools, pErr := cSession.ListTools(t.Context(), nil)
+		if pErr != nil {
+			t.Fatalf("list tools (%s): %v", profile, pErr)
+		}
+		rawJSON, _ := json.Marshal(tools)
+		pBytes := len(rawJSON)
+		pTokens := pBytes / 4
+		pOutputBytes := 0
+		for _, tool := range tools.Tools {
+			outJSON, _ := json.Marshal(tool.OutputSchema)
+			if string(outJSON) != "null" && len(outJSON) > 0 {
+				pOutputBytes += len(outJSON)
+			}
+		}
+		t.Logf("\n=== Profile %q tools/list Measurement Report ===", profile)
+		t.Logf("%s tools count: %d", profile, len(tools.Tools))
+		t.Logf("%s total payload: %d bytes (~%d tokens)", profile, pBytes, pTokens)
+		if pBytes > 0 {
+			t.Logf("%s outputSchema bytes: %d (%.1f%% of payload)", profile, pOutputBytes, float64(pOutputBytes)/float64(pBytes)*100.0)
+		}
+		return len(tools.Tools), pBytes, pOutputBytes
 	}
 
-	runtimeRawJSON, _ := json.Marshal(map[string]any{"tools": runtimeTools})
-	runtimeBytes := len(runtimeRawJSON)
-	runtimeTokens := runtimeBytes / 4
-
-	runtimeNoOutputJSON, _ := json.Marshal(map[string]any{"tools": runtimeToolsNoOutput})
-	runtimeNoOutputBytes := len(runtimeNoOutputJSON)
-	runtimeNoOutputTokens := runtimeNoOutputBytes / 4
-
-	t.Logf("\n=== Hypothetical Runtime Profile {skill_resolve, skill_get, skill_feedback} ===")
-	t.Logf("Runtime tools count: %d", len(runtimeTools))
-	t.Logf("Runtime total payload: %d bytes (~%d tokens)", runtimeBytes, runtimeTokens)
-	t.Logf("Runtime payload without outputSchema: %d bytes (~%d tokens)", runtimeNoOutputBytes, runtimeNoOutputTokens)
-	if runtimeBytes > 0 {
-		runtimeOutputShare := float64(runtimeBytes-runtimeNoOutputBytes) / float64(runtimeBytes) * 100.0
-		t.Logf("outputSchema share in runtime profile: %.1f%%", runtimeOutputShare)
-	}
+	runtimeCount, runtimeBytes, _ := measureProfile(ProfileRuntime)
+	curationCount, curationBytes, _ := measureProfile(ProfileCuration)
 
 	if totalBytes == 0 || len(listedTools.Tools) == 0 {
 		t.Fatal("expected tools/list payload to be non-empty")
 	}
-	if len(runtimeTools) != len(runtimeSet) {
-		t.Fatalf("expected %d runtime tools, found %d", len(runtimeSet), len(runtimeTools))
+	if runtimeCount != 3 {
+		t.Fatalf("expected 3 runtime tools, found %d", runtimeCount)
 	}
-	if len(runtimeTools) >= len(listedTools.Tools) {
-		t.Fatalf("expected runtime tools (%d) to be a strict subset of all tools (%d)", len(runtimeTools), len(listedTools.Tools))
+	if curationCount != len(listedTools.Tools)-3 {
+		t.Fatalf("expected %d curation tools, found %d", len(listedTools.Tools)-3, curationCount)
+	}
+	if runtimeBytes >= totalBytes {
+		t.Fatalf("expected runtime payload (%d) to be smaller than all tools payload (%d)", runtimeBytes, totalBytes)
+	}
+	if curationBytes >= totalBytes {
+		t.Fatalf("expected curation payload (%d) to be smaller than all tools payload (%d)", curationBytes, totalBytes)
 	}
 }

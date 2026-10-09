@@ -1,8 +1,10 @@
 package mcpserver
 
 import (
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -118,8 +120,93 @@ func TestCuratorServerBoundaryAndCompatibleTools(t *testing.T) {
 		if !registeredTools[tool] {
 			t.Errorf("curator body uses tool %q, which is not registered on the MCP server", tool)
 		}
-		if tool != "skill_resolve" && !compatibleSet[tool] {
+		if tool != "skill_resolve" && tool != "skill_feedback" && !compatibleSet[tool] {
 			t.Errorf("curator body uses tool %q, which is not listed in compatible-tools", tool)
 		}
+	}
+
+	// 7. Server-boundary profile split test (§5.1, decisions 1-5):
+	// runtime = skill_resolve, skill_get, skill_feedback, plus skills extension methods
+	// curation = every other tool
+	// compatible-tools ⊆ curationTools, runtime ∪ curation = all, no overlap except skills extension methods
+	_, runtimeServer, err := New(serverRoot, nil, ProfileRuntime)
+	if err != nil {
+		t.Fatalf("New ProfileRuntime: %v", err)
+	}
+	_, curationServer, err := New(serverRoot, nil, ProfileCuration)
+	if err != nil {
+		t.Fatalf("New ProfileCuration: %v", err)
+	}
+	_, allServer, err := New(serverRoot, nil, ProfileAll)
+	if err != nil {
+		t.Fatalf("New ProfileAll: %v", err)
+	}
+
+	runtimeSession := newClientSession(t, runtimeServer)
+	runtimeListed, err := runtimeSession.ListTools(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("runtime ListTools: %v", err)
+	}
+	curationSession := newClientSession(t, curationServer)
+	curationListed, err := curationSession.ListTools(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("curation ListTools: %v", err)
+	}
+	allSession := newClientSession(t, allServer)
+	allListed, err := allSession.ListTools(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("all ListTools: %v", err)
+	}
+
+	runtimeTools := make(map[string]bool)
+	for _, tool := range runtimeListed.Tools {
+		runtimeTools[tool.Name] = true
+	}
+	curationTools := make(map[string]bool)
+	for _, tool := range curationListed.Tools {
+		curationTools[tool.Name] = true
+	}
+	allTools := make(map[string]bool)
+	for _, tool := range allListed.Tools {
+		allTools[tool.Name] = true
+	}
+
+	wantRuntime := map[string]bool{
+		"skill_resolve":  true,
+		"skill_get":      true,
+		"skill_feedback": true,
+	}
+	if !reflect.DeepEqual(runtimeTools, wantRuntime) {
+		t.Fatalf("runtime profile tools mismatch:\ngot:  %+v\nwant: %+v", runtimeTools, wantRuntime)
+	}
+
+	for tool := range runtimeTools {
+		if curationTools[tool] {
+			t.Errorf("profile tool overlap: tool %q is in both runtime and curation profiles", tool)
+		}
+	}
+
+	combined := make(map[string]bool)
+	for tool := range runtimeTools {
+		combined[tool] = true
+	}
+	for tool := range curationTools {
+		combined[tool] = true
+	}
+	if !reflect.DeepEqual(combined, allTools) {
+		t.Fatalf("runtime ∪ curation does not equal all tools:\ncombined: %+v\nall:      %+v", combined, allTools)
+	}
+
+	for _, tool := range fm.CompatibleTools {
+		if !curationTools[tool] {
+			t.Errorf("curator compatible-tool %q is not in curation profile tools", tool)
+		}
+	}
+
+	if _, err := mcp.CallCustomMethod[*listSkillsParams, *listSkillsResult](t.Context(), runtimeSession, "skills/list", &listSkillsParams{}); err != nil {
+		t.Fatalf("runtime skills/list extension method failed: %v", err)
+	}
+	if _, err := mcp.CallCustomMethod[*listSkillsParams, *listSkillsResult](t.Context(), curationSession, "skills/list", &listSkillsParams{}); err != nil {
+		t.Fatalf("curation skills/list extension method failed: %v", err)
 	}
 }

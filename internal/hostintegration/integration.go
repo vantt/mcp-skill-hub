@@ -225,13 +225,14 @@ func prepareConfig(host Host, path, root, workspace, binary string) (preparedFil
 		return preparedFile{}, err
 	}
 	var desired []byte
+	supportsToggle := HostSupportsServerToggle(host)
 	switch host {
 	case HostClaude:
-		desired, err = desiredClaudeConfig(raw, binary, workspace)
+		desired, err = desiredClaudeConfig(raw, binary, workspace, supportsToggle)
 	case HostGemini:
-		desired, err = desiredGeminiConfig(raw, binary, workspace)
+		desired, err = desiredGeminiConfig(raw, binary, workspace, supportsToggle)
 	case HostCodex:
-		desired, err = desiredCodexConfig(raw, binary, workspace)
+		desired, err = desiredCodexConfig(raw, binary, workspace, supportsToggle)
 	default:
 		err = fmt.Errorf("unsupported host %q", host)
 	}
@@ -272,22 +273,65 @@ func preparePermissions(adapter Adapter, scope Scope, path, root, workspace stri
 	return file, nil
 }
 
-func desiredClaudeConfig(raw []byte, binary, workspace string) ([]byte, error) {
+func desiredClaudeConfig(raw []byte, binary, workspace string, supportsToggle bool) ([]byte, error) {
+	if supportsToggle {
+		runtimeServer, err := json.Marshal(claudeMCPServer{Type: "stdio", Command: binary, Args: []string{"mcp", "serve", "--profile", "runtime", "--workspace", workspace}})
+		if err != nil {
+			return nil, fmt.Errorf("encode Claude runtime MCP registration: %w", err)
+		}
+		curationServer, err := json.Marshal(claudeMCPServer{Type: "stdio", Command: binary, Args: []string{"mcp", "serve", "--profile", "curation", "--workspace", workspace}})
+		if err != nil {
+			return nil, fmt.Errorf("encode Claude curation MCP registration: %w", err)
+		}
+		updated, err := upsertJSONPath(raw, []string{"mcpServers", "skillhub"}, runtimeServer)
+		if err != nil {
+			return nil, err
+		}
+		return upsertJSONPath(updated, []string{"mcpServers", "skillhub-curation"}, curationServer)
+	}
 	encoded, err := json.Marshal(claudeMCPServer{Type: "stdio", Command: binary, Args: []string{"mcp", "serve", "--workspace", workspace}})
 	if err != nil {
 		return nil, fmt.Errorf("encode Claude MCP registration: %w", err)
 	}
-	return upsertJSONPath(raw, []string{"mcpServers", "skillhub"}, encoded)
-}
-
-func desiredGeminiConfig(raw []byte, binary, workspace string) ([]byte, error) {
-	encoded, err := json.Marshal(geminiMCPServer{Command: binary, Args: []string{"mcp", "serve", "--workspace", workspace}, CWD: workspace, Trust: false})
-	if err != nil {
-		return nil, fmt.Errorf("encode Gemini MCP registration: %w", err)
-	}
-	registered, err := upsertJSONPath(raw, []string{"mcpServers", "skillhub"}, encoded)
+	updated, err := upsertJSONPath(raw, []string{"mcpServers", "skillhub"}, encoded)
 	if err != nil {
 		return nil, err
+	}
+	return removeJSONPath(updated, []string{"mcpServers", "skillhub-curation"})
+}
+
+func desiredGeminiConfig(raw []byte, binary, workspace string, supportsToggle bool) ([]byte, error) {
+	var registered []byte
+	if supportsToggle {
+		runtimeServer, err := json.Marshal(geminiMCPServer{Command: binary, Args: []string{"mcp", "serve", "--profile", "runtime", "--workspace", workspace}, CWD: workspace, Trust: false})
+		if err != nil {
+			return nil, fmt.Errorf("encode Gemini runtime MCP registration: %w", err)
+		}
+		curationServer, err := json.Marshal(geminiMCPServer{Command: binary, Args: []string{"mcp", "serve", "--profile", "curation", "--workspace", workspace}, CWD: workspace, Trust: false})
+		if err != nil {
+			return nil, fmt.Errorf("encode Gemini curation MCP registration: %w", err)
+		}
+		updated, err := upsertJSONPath(raw, []string{"mcpServers", "skillhub"}, runtimeServer)
+		if err != nil {
+			return nil, err
+		}
+		registered, err = upsertJSONPath(updated, []string{"mcpServers", "skillhub-curation"}, curationServer)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		encoded, err := json.Marshal(geminiMCPServer{Command: binary, Args: []string{"mcp", "serve", "--workspace", workspace}, CWD: workspace, Trust: false})
+		if err != nil {
+			return nil, fmt.Errorf("encode Gemini MCP registration: %w", err)
+		}
+		updated, err := upsertJSONPath(raw, []string{"mcpServers", "skillhub"}, encoded)
+		if err != nil {
+			return nil, err
+		}
+		registered, err = removeJSONPath(updated, []string{"mcpServers", "skillhub-curation"})
+		if err != nil {
+			return nil, err
+		}
 	}
 	return desiredGeminiAllowedDirs(registered, workspace)
 }

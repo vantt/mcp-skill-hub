@@ -10,6 +10,7 @@ import (
 
 type jsonMember struct {
 	key                  string
+	keyStart             int
 	valueStart, valueEnd int
 }
 
@@ -39,6 +40,90 @@ func upsertJSONPath(raw []byte, path []string, encoded []byte) ([]byte, error) {
 		return nil, fmt.Errorf("generated invalid JSON: %w", err)
 	}
 	return updated, nil
+}
+func removeJSONPath(raw []byte, path []string) ([]byte, error) {
+	if len(path) == 0 || len(bytes.TrimSpace(raw)) == 0 {
+		return raw, nil
+	}
+	var root map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &root); err != nil {
+		return nil, fmt.Errorf("invalid JSON: %w", err)
+	}
+	updated, err := removeJSONObject(raw, 0, len(raw), path)
+	if err != nil {
+		return nil, err
+	}
+	var verification map[string]json.RawMessage
+	if err := json.Unmarshal(updated, &verification); err != nil {
+		return nil, fmt.Errorf("generated invalid JSON: %w", err)
+	}
+	return updated, nil
+}
+
+func removeJSONObject(raw []byte, start, end int, path []string) ([]byte, error) {
+	open := skipJSONSpace(raw, start, end)
+	if open >= end || raw[open] != '{' {
+		return raw, nil
+	}
+	members, closeIndex, err := parseJSONObject(raw, open, end)
+	if err != nil {
+		return nil, err
+	}
+	foundIndex := -1
+	for i := range members {
+		if members[i].key == path[0] {
+			foundIndex = i
+			break
+		}
+	}
+	if foundIndex < 0 {
+		return raw, nil
+	}
+	if len(path) > 1 {
+		return removeJSONObject(raw, members[foundIndex].valueStart, members[foundIndex].valueEnd, path[1:])
+	}
+	if len(members) == 1 {
+		inner := raw[open+1 : closeIndex]
+		if bytes.Contains(inner, []byte("\n")) {
+			newline := detectNewline(raw)
+			closingIndent := indentationBefore(raw, closeIndex)
+			return splice(raw, open+1, closeIndex, []byte(newline+closingIndent)), nil
+		}
+		return splice(raw, open+1, closeIndex, nil), nil
+	}
+	if foundIndex < len(members)-1 {
+		removeStart := members[foundIndex].keyStart
+		for removeStart > open+1 && (raw[removeStart-1] == ' ' || raw[removeStart-1] == '\t') {
+			removeStart--
+		}
+		removeEnd := members[foundIndex].valueEnd
+		for removeEnd < closeIndex && (raw[removeEnd] == ' ' || raw[removeEnd] == '\t') {
+			removeEnd++
+		}
+		if removeEnd < closeIndex && raw[removeEnd] == ',' {
+			removeEnd++
+		}
+		for removeEnd < closeIndex && (raw[removeEnd] == ' ' || raw[removeEnd] == '\t') {
+			removeEnd++
+		}
+		if removeEnd < closeIndex && raw[removeEnd] == '\r' {
+			removeEnd++
+		}
+		if removeEnd < closeIndex && raw[removeEnd] == '\n' {
+			removeEnd++
+		}
+		return splice(raw, removeStart, removeEnd, nil), nil
+	}
+	comma := members[foundIndex].keyStart - 1
+	for comma > open && isJSONSpace(raw[comma]) {
+		comma--
+	}
+	removeStart := comma
+	removeEnd := members[foundIndex].valueEnd
+	for removeEnd < closeIndex && (raw[removeEnd] == ' ' || raw[removeEnd] == '\t') {
+		removeEnd++
+	}
+	return splice(raw, removeStart, removeEnd, nil), nil
 }
 
 // upsertJSONObject sets path inside the object at raw[start:end]. prefix holds
@@ -161,7 +246,7 @@ func parseJSONObject(raw []byte, open, end int) ([]jsonMember, int, error) {
 		if err != nil {
 			return nil, 0, err
 		}
-		members = append(members, jsonMember{key: key, valueStart: valueStart, valueEnd: valueEnd})
+		members = append(members, jsonMember{key: key, keyStart: keyStart, valueStart: valueStart, valueEnd: valueEnd})
 		index = skipJSONSpace(raw, valueEnd, end)
 		if index < end && raw[index] == ',' {
 			index++
