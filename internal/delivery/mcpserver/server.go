@@ -153,9 +153,6 @@ func (adapter *Server) clientForReq(req mcp.Request) telemetry.Client {
 
 func (adapter *Server) telemetryMiddleware(next mcp.MethodHandler) mcp.MethodHandler {
 	return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
-		if strings.HasPrefix(method, "skills/") && method != "skills/list" && method != "skills/get" {
-			app.RecordServerMetric(ctx, adapter.telemetry, adapter.workspace, app.ServerMetric{Name: "unsupported_method_calls", Value: 1, Client: adapter.clientForReq(req)})
-		}
 		result, err := next(ctx, method, req)
 		if err == nil && method == "tools/list" {
 			if encoded, encErr := json.Marshal(result); encErr == nil {
@@ -293,23 +290,6 @@ func (adapter *Server) readResource(ctx context.Context, request *mcp.ReadResour
 		Surface:      "resources_read",
 	})
 
-	var unlisted bool
-	entries, _, lookupErr := adapter.distribution.LookupSkills(ctx, adapter.workspace, []string{content.SkillID})
-	if lookupErr == nil {
-		if entry, ok := entries[content.SkillID]; ok {
-			unlisted = true
-			for _, r := range entry.Resources {
-				if r.URI == request.Params.URI {
-					unlisted = false
-					break
-				}
-			}
-		}
-	}
-	if unlisted {
-		app.RecordServerMetric(ctx, adapter.telemetry, adapter.workspace, app.ServerMetric{Name: "unlisted_resource_reads", Value: 1, SkillID: content.SkillID, Client: adapter.callerContext(request.Session).Client})
-	}
-
 	resource := &mcp.ResourceContents{URI: content.URI, MIMEType: content.MIMEType}
 	if meta != nil {
 		resource.Meta = meta
@@ -445,7 +425,9 @@ func (adapter *Server) distributionRPCError(ctx context.Context, session *mcp.Se
 		return &jsonrpc.Error{Code: jsonrpc.CodeInternalError, Message: "Skill resource integrity verification failed.", Data: data}
 	case errors.Is(err, catalog.ErrCatalogUnavailable):
 		return invalidParams("index_stale", "The derived catalog is stale or unavailable; run workspace_rebuild and retry.")
-	case errors.Is(err, skill.ErrSnapshotExpired), errors.Is(err, skill.ErrNotFound):
+	case errors.Is(err, skill.ErrNotFound):
+		return invalidParams("skill_not_found", "The requested skill was not found.")
+	case errors.Is(err, skill.ErrSnapshotExpired):
 		app.RecordServerMetric(ctx, adapter.telemetry, adapter.workspace, app.ServerMetric{Name: "snapshot_expired_requests", Value: 1, Client: adapter.callerContext(session).Client})
 		return invalidParams("snapshot_expired", "The requested skill snapshot is unavailable; refresh the skill entry.")
 	default:

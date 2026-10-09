@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -658,6 +660,27 @@ func TestSkillSnapshotExpiryAndMalformedCursor(t *testing.T) {
 	var rpcErr *jsonrpc.Error
 	if !errors.As(err, &rpcErr) || rpcErr.Code != jsonrpc.CodeInvalidParams || !strings.Contains(string(rpcErr.Data), "snapshot_expired") {
 		t.Fatalf("malformed cursor error = %#v", err)
+	}
+}
+
+func TestDistributionRPCErrorSplitsNotFoundFromSnapshotExpired(t *testing.T) {
+	t.Parallel()
+
+	adapter := &Server{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}
+
+	// 1. skill.ErrNotFound returns skill_not_found code
+	errNotFound := adapter.distributionRPCError(context.Background(), nil, skill.ErrNotFound)
+	var rpcErr *jsonrpc.Error
+	if !errors.As(errNotFound, &rpcErr) || rpcErr.Code != jsonrpc.CodeInvalidParams || !strings.Contains(string(rpcErr.Data), "skill_not_found") {
+		t.Fatalf("expected skill_not_found error, got: %#v", errNotFound)
+	}
+
+	// 2. skill.ErrSnapshotExpired returns snapshot_expired code
+	errExpired := adapter.distributionRPCError(context.Background(), nil, skill.ErrSnapshotExpired)
+	if !errors.As(errExpired, &rpcErr) || rpcErr.Code != jsonrpc.CodeInvalidParams || !strings.Contains(string(rpcErr.Data), "snapshot_expired") {
+		t.Fatalf("expected snapshot_expired error, got: %#v", errExpired)
 	}
 }
 
