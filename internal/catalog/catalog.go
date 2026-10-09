@@ -35,7 +35,7 @@ const (
 
 const (
 	// DerivedSchemaVersion changes whenever the disposable SQLite schema changes.
-	DerivedSchemaVersion  = 3
+	DerivedSchemaVersion  = 4
 	defaultBuilderVersion = "dev"
 )
 

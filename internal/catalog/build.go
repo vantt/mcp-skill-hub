@@ -358,7 +358,7 @@ func verifyGeneration(ctx context.Context, path string, input buildInput, builde
 		if err := database.QueryRowContext(ctx, `SELECT count(*) FROM canonical_entities WHERE id=? AND path=? AND digest=?`, item.ID, item.Path, item.Digest).Scan(&count); err != nil || count != 1 {
 			return fmt.Errorf("catalog identity smoke query failed for %s", item.Path)
 		}
-		table := map[string]string{"skill": "skills", "source": "sources", "observation": "findings", "finding": "findings", "comparison": "comparisons", "insight": "insights", "outcome": "outcomes", "operation": "operations", "run": "provenance", "proposal": "provenance", "incorporation": "provenance", "source_candidate": "provenance", "skill_source_link": "provenance", "routing_evaluation": "provenance"}[item.Kind]
+		table := map[string]string{"skill": "skills", "source": "sources", "observation": "findings", "finding": "findings", "comparison": "comparisons", "outcome": "outcomes", "operation": "operations", "run": "provenance", "proposal": "provenance", "incorporation": "provenance", "source_candidate": "provenance", "skill_source_link": "provenance", "routing_evaluation": "provenance"}[item.Kind]
 		if table != "" && !seenKind[table] {
 			if err := database.QueryRowContext(ctx, `SELECT count(*) FROM `+table+` WHERE id=?`, item.ID).Scan(&count); err != nil || count != 1 {
 				return fmt.Errorf("catalog representative query failed for %s", table)

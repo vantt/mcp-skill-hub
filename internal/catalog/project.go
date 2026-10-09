@@ -186,9 +186,6 @@ func projectTypedEntity(ctx context.Context, tx *sql.Tx, item entity) error {
 	case "comparison":
 		_, err := tx.ExecContext(ctx, `INSERT INTO comparisons(id,path,subject,verdict,content_json) VALUES(?,?,?,?,?)`, item.ID, item.Path, stringField(item.Document, "subject"), stringField(item.Document, "verdict"), item.JSON)
 		return err
-	case "insight":
-		_, err := tx.ExecContext(ctx, `INSERT INTO insights(id,path,skill_id,status,recommendation,content_json) VALUES(?,?,?,?,?,?)`, item.ID, item.Path, stringField(item.Document, "skill_id"), stringField(item.Document, "status"), stringField(item.Document, "recommendation"), item.JSON)
-		return err
 	case "outcome":
 		evidence, _ := json.Marshal(item.Document["evidence"])
 		_, err := tx.ExecContext(ctx, `INSERT INTO outcomes(id,path,incorporation_id,state,evidence_json,content_json) VALUES(?,?,?,?,?,?)`, item.ID, item.Path, stringField(item.Document, "incorporation_id"), firstString(item.Document, "state", "status"), string(evidence), item.JSON)
@@ -372,8 +369,6 @@ func expectedRowCounts(input buildInput) map[string]int64 {
 			counts["findings"]++
 		case "comparison":
 			counts["comparisons"]++
-		case "insight":
-			counts["insights"]++
 		case "outcome":
 			counts["outcomes"]++
 		case "operation":

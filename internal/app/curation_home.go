@@ -221,8 +221,6 @@ func readHomeCounts(ctx context.Context, root string, state *homeState) (resultE
 		{`SELECT count(*) FROM canonical_entities WHERE kind='source'`, &state.TotalSources},
 		{`SELECT count(*) FROM canonical_entities WHERE kind='source' AND COALESCE(json_extract(content_json,'$.status'),'watching') IN ('watching','changed','distill_pending')`, &state.Summary.WatchingSources},
 		{`SELECT count(*) FROM provenance WHERE kind='run' AND state IN ('failed','interrupted')`, &state.Summary.FailedOrInterruptedRuns},
-		{`SELECT count(*) FROM insights WHERE status='pending'`, &state.Summary.PendingInsights},
-		{`SELECT count(*) FROM insights WHERE status='pending' AND (json_extract(content_json,'$.high_value')=1 OR json_extract(content_json,'$.priority') IN ('high','critical'))`, &state.Summary.PendingHighValueInsights},
 		{`SELECT count(*) FROM canonical_entities s WHERE s.kind='source' AND (json_extract(s.content_json,'$.status') IN ('changed', 'distill_pending') OR json_extract(s.content_json,'$.distilled_revision') IS NULL) AND NOT (COALESCE(json_extract(s.content_json,'$.purpose'), '') = 'upstream' AND NOT EXISTS (SELECT 1 FROM canonical_entities l WHERE l.kind='skill_source_link' AND json_extract(l.content_json,'$.source_id') = s.id AND json_extract(l.content_json,'$.role') IN ('learning-source','inspiration')))`, &state.ChangedSources},
 	}
 	for _, item := range queries {
@@ -428,14 +426,6 @@ func deriveCurationHome(state homeState) CurationHome {
 	if state.Summary.PendingInsights > 0 {
 		home.HomeSummary.OptionalItems += state.Summary.PendingInsights
 		home.HomeSummary.AttentionItems += state.Summary.PendingInsights
-		if home.Status == StatusOK {
-			home.Status = StatusActionRequired
-		}
-		summary := fmt.Sprintf("%d insight(s) need review", state.Summary.PendingInsights)
-		if state.Summary.PendingHighValueInsights > 0 {
-			summary = fmt.Sprintf("%d insight(s) need review; %d are high-value", state.Summary.PendingInsights, state.Summary.PendingHighValueInsights)
-		}
-		home.Actions = append(home.Actions, ActionItem{Kind: "review_insights", Count: state.Summary.PendingInsights, Priority: 40, Summary: summary, Command: "inbox_list"})
 	}
 	if state.GitDirty {
 		home.HomeSummary.AttentionItems++
@@ -489,8 +479,6 @@ func deriveCurationHome(state homeState) CurationHome {
 			home.Summary = fmt.Sprintf("%d skill(s) have upstream changes to review.", recommended.Count)
 		case "distill_changed_sources":
 			home.Summary = fmt.Sprintf("%d source(s) are ready to distill.", recommended.Count)
-		case "review_insights":
-			home.Summary = fmt.Sprintf("%d insight(s) are waiting for review.", recommended.Count)
 		case "review_git_changes":
 			home.Summary = "Git has uncommitted canonical changes."
 		case "first_run_commit":
@@ -525,7 +513,6 @@ func recommendationLabel(kind string) string {
 		"review_upstream_updates":   "Review upstream updates with skillhub skill outdated",
 		"distill_changed_sources":   "Distill changed sources",
 		"check_due_sources":         "Check all due sources",
-		"review_insights":           "Review pending insights",
 		"review_git_changes":        "Review uncommitted changes",
 		"first_run_commit":          "Commit the new workspace, then run `skillhub connect` in your project",
 	}[kind]

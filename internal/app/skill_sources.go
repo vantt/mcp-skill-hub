@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vantt/mcp-skill-hub/internal/catalog"
 	"github.com/vantt/mcp-skill-hub/internal/skill"
 	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
 	"github.com/vantt/mcp-skill-hub/internal/workspace"
@@ -80,8 +79,6 @@ func (service SourceService) SkillSources(ctx context.Context, path, skillID str
 		checkStatesByID[cs.SourceID] = cs
 	}
 
-	totalPending, pendingBySource := countPendingInsights(ctx, root, skillID)
-
 	learning := []LearningReference{}
 	for _, l := range links {
 		if l.SkillID != skillID {
@@ -120,27 +117,16 @@ func (service SourceService) SkillSources(ctx context.Context, path, skillID str
 			}
 		}
 
-		pInsights := pendingBySource[l.SourceID]
-
 		learning = append(learning, LearningReference{
-			SourceID:        l.SourceID,
-			Locator:         locator,
-			Ref:             ref,
-			Path:            path,
-			Role:            l.Role,
-			Monitoring:      monitoring,
-			LastCheckedAt:   lastChecked,
-			Availability:    availability,
-			PendingInsights: pInsights,
+			SourceID:      l.SourceID,
+			Locator:       locator,
+			Ref:           ref,
+			Path:          path,
+			Role:          l.Role,
+			Monitoring:    monitoring,
+			LastCheckedAt: lastChecked,
+			Availability:  availability,
 		})
-	}
-
-	attributedTotal := 0
-	for _, ref := range learning {
-		attributedTotal += ref.PendingInsights
-	}
-	if len(learning) > 0 && totalPending > attributedTotal {
-		learning[0].PendingInsights += (totalPending - attributedTotal)
 	}
 
 	sort.Slice(learning, func(i, j int) bool {
@@ -149,35 +135,10 @@ func (service SourceService) SkillSources(ctx context.Context, path, skillID str
 
 	summary := fmt.Sprintf("Sources for %s.", skillID)
 	result := SkillSourcesResult{
-		Result:          NewResult(StatusOK, summary),
-		SkillID:         skillID,
-		Upstream:        upstream,
-		Learning:        learning,
-		PendingInsights: totalPending,
+		Result:   NewResult(StatusOK, summary),
+		SkillID:  skillID,
+		Upstream: upstream,
+		Learning: learning,
 	}
 	return result, nil
-}
-
-func countPendingInsights(ctx context.Context, root, skillID string) (int, map[string]int) {
-	totalPending := 0
-	pendingBySource := make(map[string]int)
-	handle, cErr := catalog.OpenCurrent(ctx, root)
-	if cErr == nil {
-		defer handle.Close()
-		rows, qErr := handle.DB.QueryContext(ctx, `SELECT COALESCE(p.source_id, json_extract(i.content_json, '$.source_id'), ''), count(i.id) FROM insights i LEFT JOIN provenance p ON p.insight_id = i.id WHERE i.skill_id = ? AND i.status = 'pending' GROUP BY 1`, skillID)
-		if qErr == nil {
-			defer rows.Close()
-			for rows.Next() {
-				var srcID string
-				var cnt int
-				if err := rows.Scan(&srcID, &cnt); err == nil {
-					totalPending += cnt
-					if srcID != "" {
-						pendingBySource[srcID] += cnt
-					}
-				}
-			}
-		}
-	}
-	return totalPending, pendingBySource
 }

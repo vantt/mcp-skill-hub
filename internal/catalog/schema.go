@@ -89,20 +89,12 @@ CREATE TABLE comparisons (
   verdict TEXT NOT NULL,
   content_json TEXT NOT NULL
 ) STRICT;
-CREATE TABLE insights (
-  id TEXT PRIMARY KEY REFERENCES canonical_entities(id),
-  path TEXT NOT NULL UNIQUE,
-  skill_id TEXT NOT NULL REFERENCES skills(id) DEFERRABLE INITIALLY DEFERRED,
-  status TEXT NOT NULL,
-  recommendation TEXT NOT NULL,
-  content_json TEXT NOT NULL
-) STRICT;
 CREATE TABLE provenance (
   id TEXT PRIMARY KEY REFERENCES canonical_entities(id),
   path TEXT NOT NULL UNIQUE,
   kind TEXT NOT NULL,
   source_id TEXT REFERENCES sources(id) DEFERRABLE INITIALLY DEFERRED,
-  insight_id TEXT REFERENCES insights(id) DEFERRABLE INITIALLY DEFERRED,
+  insight_id TEXT REFERENCES canonical_entities(id) DEFERRABLE INITIALLY DEFERRED,
   proposal_id TEXT REFERENCES canonical_entities(id) DEFERRABLE INITIALLY DEFERRED,
   operation_id TEXT REFERENCES operations(id) DEFERRABLE INITIALLY DEFERRED,
   state TEXT NOT NULL,
@@ -135,6 +127,6 @@ CREATE VIRTUAL TABLE curation_fts USING fts5(entity_id UNINDEXED, kind UNINDEXED
 
 var countedTables = []string{
 	"canonical_files", "canonical_entities", "skills", "resources", "routing_metadata", "routing_documents",
-	"sources", "source_revisions", "findings", "comparisons", "insights", "provenance", "outcomes", "operations",
+	"sources", "source_revisions", "findings", "comparisons", "provenance", "outcomes", "operations",
 	"skill_fts", "resource_fts", "curation_fts",
 }
