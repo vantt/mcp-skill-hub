@@ -21,6 +21,9 @@ type SkillLoad struct {
 	FirstActivation bool
 	Blocked         bool
 	ReasonCodes     []string
+	TopKSkillIDs    []string
+	TopKMatched     []string
+	TopKChannels    []string
 }
 
 // RecordSkillLoad builds and asynchronously records one content-free skill.loaded event.
@@ -45,6 +48,11 @@ func RecordSkillLoad(ctx context.Context, sink TelemetrySink, workspacePath stri
 		payload["first_activation"] = false
 	} else {
 		payload["first_activation"] = load.FirstActivation
+	}
+	if len(load.TopKSkillIDs) > 0 {
+		payload["topk_skill_ids"] = append([]string(nil), load.TopKSkillIDs...)
+		payload["topk_matched"] = append([]string(nil), load.TopKMatched...)
+		payload["topk_channels"] = append([]string(nil), load.TopKChannels...)
 	}
 
 	event := curationTelemetryEvent(telemetry.EventSkillLoaded, payload)

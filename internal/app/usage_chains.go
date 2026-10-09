@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/vantt/mcp-skill-hub/internal/telemetry"
@@ -89,6 +90,8 @@ type chainLoad struct {
 	OccurredAt   time.Time
 	SkillID      string
 	Attribution  string
+	TopKSkillIDs []string
+	TopKMatched  []string
 }
 
 type rawEventChain struct {
@@ -244,13 +247,32 @@ func parseChainLoad(event telemetry.Event) (chainLoad, bool) {
 	}
 	skillID, _ := event.Payload["skill_id"].(string)
 	attr, _ := event.Payload["attribution"].(string)
-	return chainLoad{
+	load := chainLoad{
 		SessionHash:  event.SessionIDHash,
 		ResolutionID: event.ResolutionID,
 		OccurredAt:   event.OccurredAt,
 		SkillID:      skillID,
 		Attribution:  attr,
-	}, true
+	}
+	if topkIDs, ok := event.Payload["topk_skill_ids"].([]any); ok {
+		for _, val := range topkIDs {
+			if str, ok := val.(string); ok {
+				load.TopKSkillIDs = append(load.TopKSkillIDs, str)
+			}
+		}
+	} else if topkIDsStr, ok := event.Payload["topk_skill_ids"].([]string); ok {
+		load.TopKSkillIDs = topkIDsStr
+	}
+	if topkMatched, ok := event.Payload["topk_matched"].([]any); ok {
+		for _, val := range topkMatched {
+			if str, ok := val.(string); ok {
+				load.TopKMatched = append(load.TopKMatched, str)
+			}
+		}
+	} else if topkMatchedStr, ok := event.Payload["topk_matched"].([]string); ok {
+		load.TopKMatched = topkMatchedStr
+	}
+	return load, true
 }
 
 func linkResolutionChains(resolutions []chainResolution) ([]*rawEventChain, map[string]*rawEventChain) {
@@ -531,7 +553,7 @@ func (service UsageService) Chains(ctx context.Context, path string, since time.
 			continue
 		}
 
-		result = append(result, DisagreementChain{
+		dc := DisagreementChain{
 			ChainID:          ch.Key,
 			SessionHash:      ch.SessionHash,
 			ResolutionID:     newest.ResolutionID,
@@ -543,7 +565,35 @@ func (service UsageService) Chains(ctx context.Context, path string, since time.
 			RecommendedSkill: newest.PrimaryID,
 			LoadedSkill:      loadedSkill,
 			ReasonCodes:      newest.ReasonCodes,
-		})
+		}
+		if loadedSkill != "" {
+			topkIDs := newest.TopKSkillIDs
+			topkMatched := newest.TopKMatched
+			if len(topkIDs) == 0 {
+				for _, l := range ch.Loads {
+					if l.SkillID == loadedSkill && len(l.TopKSkillIDs) > 0 {
+						topkIDs = l.TopKSkillIDs
+						topkMatched = l.TopKMatched
+						break
+					}
+				}
+			}
+			for i, id := range topkIDs {
+				if id == loadedSkill {
+					dc.TopKRank = i + 1
+					prefix := fmt.Sprintf("%d:", dc.TopKRank)
+					var matched []string
+					for _, m := range topkMatched {
+						if strings.HasPrefix(m, prefix) {
+							matched = append(matched, strings.TrimPrefix(m, prefix))
+						}
+					}
+					dc.TopKMatched = strings.Join(matched, ",")
+					break
+				}
+			}
+		}
+		result = append(result, dc)
 	}
 
 	sort.Slice(result, func(i, j int) bool {

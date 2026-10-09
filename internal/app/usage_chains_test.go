@@ -335,3 +335,76 @@ func TestFunnelDenominatorsWithTopKFields(t *testing.T) {
 		t.Errorf("Expected 1 chain, got %d", len(chains))
 	}
 }
+
+func TestOverrideTopKFromLoadEventShowsInChains(t *testing.T) {
+	t.Parallel()
+	root := newResolverWorkspace(t)
+	createAndActivateSkill(t, SkillService{}, root)
+
+	telService := TelemetryService{}
+	recorder, err := telService.Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer recorder.Close(context.Background())
+
+	now := time.Now().UTC()
+	recorder.Record(telemetry.Event{
+		ID:              "evt_override_res",
+		Type:            telemetry.EventResolutionCompleted,
+		OccurredAt:      now.Add(-10 * time.Minute),
+		SessionIDHash:   "sess_override_topk",
+		ResolutionID:    "res_override_topk",
+		CatalogSnapshot: "sha256:snap",
+		PolicyRevision:  "sha256:pol",
+		Client:          telemetry.Client{Name: "claude-code"},
+		Payload: map[string]any{
+			"status":                "resolved",
+			"top_skill_id":          "consumer-review",
+			"recommended_skill_ids": []string{"consumer-review"},
+			"operation":             "review",
+		},
+	})
+	recorder.Record(telemetry.Event{
+		ID:              "evt_override_load",
+		Type:            telemetry.EventSkillLoaded,
+		OccurredAt:      now.Add(-5 * time.Minute),
+		SessionIDHash:   "sess_override_topk",
+		ResolutionID:    "res_override_topk",
+		CatalogSnapshot: "sha256:snap",
+		PolicyRevision:  "sha256:pol",
+		Client:          telemetry.Client{Name: "claude-code"},
+		Payload: map[string]any{
+			"skill_id":       "other-skill",
+			"surface":        "skill_get",
+			"resource_kind":  "entrypoint",
+			"basis":          telemetry.LoadBasisServerObserved,
+			"attribution":    "override",
+			"topk_skill_ids": []string{"consumer-review", "other-skill"},
+			"topk_matched":   []string{"1:operation", "2:trigger"},
+			"topk_channels":  []string{"fts", "rules"},
+		},
+	})
+	recorder.Flush(context.Background())
+
+	usage := UsageService{Telemetry: telService}
+	chains, err := usage.Chains(context.Background(), root, now.Add(-time.Hour), "")
+	if err != nil {
+		t.Fatalf("Chains failed: %v", err)
+	}
+	found := false
+	for _, c := range chains {
+		if c.Kind == "override" && c.LoadedSkill == "other-skill" {
+			found = true
+			if c.TopKRank != 2 {
+				t.Fatalf("expected TopKRank 2, got %d", c.TopKRank)
+			}
+			if c.TopKMatched != "trigger" {
+				t.Fatalf("expected TopKMatched 'trigger', got %q", c.TopKMatched)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("expected override disagreement chain with top-k to be found")
+	}
+}

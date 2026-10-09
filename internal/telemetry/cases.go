@@ -2,14 +2,24 @@ package telemetry
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 )
 
+// CaseRecord stores the rich context of a resolution disagreement.
 type CaseRecord struct {
-	ResolutionID    string         `json:"-"`
-	OccurredAt      time.Time      `json:"-"`
-	Kind            string         `json:"-"`
+	CaseID          string         `json:"case_id"`
+	OccurredAt      time.Time      `json:"occurred_at"`
+	Kind            string         `json:"kind"`
+	SessionHash     string         `json:"session_hash,omitempty"`
+	ResolutionID    string         `json:"resolution_id,omitempty"`
+	EventID         string         `json:"event_id,omitempty"`
 	Client          Client         `json:"client"`
 	CatalogSnapshot string         `json:"catalog_snapshot"`
 	PriorVerified   bool           `json:"prior_verified"`
@@ -21,47 +31,128 @@ type CaseRecord struct {
 	Followup        map[string]any `json:"followup,omitempty"`
 }
 
-func (r *Recorder) RecordCase(ctx context.Context, record CaseRecord) error {
-	if r.config.ContentMode != ContentModeRedacted {
-		return nil
+func randomCaseID() (string, error) {
+	var raw [16]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		return "", err
 	}
-	encoded, err := json.Marshal(record)
+	return "case_" + hex.EncodeToString(raw[:]), nil
+}
+
+// IsCaseJournalEnabled reports whether the case journal opt-in is active.
+func IsCaseJournalEnabled(workspaceRoot string) bool {
+	if v := os.Getenv("SKILLHUB_CASE_JOURNAL"); v != "" {
+		v = strings.ToLower(strings.TrimSpace(v))
+		if v == "1" || v == "true" || v == "yes" || v == "on" {
+			return true
+		}
+		if v == "0" || v == "false" || v == "no" || v == "off" {
+			return false
+		}
+	}
+	if workspaceRoot == "" {
+		return false
+	}
+	path := filepath.Join(workspaceRoot, "runtime", "case_journal.json")
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	var state struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := json.Unmarshal(b, &state); err != nil {
+		return false
+	}
+	return state.Enabled
+}
+
+// SetCaseJournalEnabled sets the runtime flag enabling or disabling case journal logging.
+func SetCaseJournalEnabled(workspaceRoot string, enabled bool) error {
+	if workspaceRoot == "" {
+		return errors.New("workspace root is required")
+	}
+	runtimeDir := filepath.Join(workspaceRoot, "runtime")
+	if err := os.MkdirAll(runtimeDir, 0755); err != nil {
+		return err
+	}
+	path := filepath.Join(runtimeDir, "case_journal.json")
+	state := struct {
+		Enabled bool `json:"enabled"`
+	}{Enabled: enabled}
+	b, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
 		return err
 	}
+	return os.WriteFile(path, append(b, '\n'), 0644)
+}
+
+// RecordCase records one disagreement case into the separate telemetry_cases store.
+func (r *Recorder) RecordCase(ctx context.Context, record CaseRecord) error {
 	r.gate.RLock()
 	defer r.gate.RUnlock()
 	if r.closed {
+		return errors.New("telemetry recorder is closed")
+	}
+
+	if !r.config.CaseJournalEnabled && !IsCaseJournalEnabled(r.config.WorkspaceRoot) {
 		return nil
 	}
+
 	database, err := openDatabase(ctx, r.config)
 	if err != nil {
 		return err
 	}
 	defer database.Close()
 
+	// 1. Enforce 90-day retention on record
+	cutoff := time.Now().UTC().AddDate(0, 0, -90).Format(time.RFC3339)
+	_, _ = database.ExecContext(ctx, "DELETE FROM telemetry_cases WHERE occurred_at < ?", cutoff)
+
+	// 2. Check limits: daily cap (max 50 cases per day)
+	if record.OccurredAt.IsZero() {
+		record.OccurredAt = time.Now().UTC()
+	}
 	day := record.OccurredAt.UTC().Format("2006-01-02")
-	var count int
-	err = database.QueryRowContext(ctx, "SELECT count(*) FROM telemetry_cases WHERE substr(occurred_at, 1, 10) = ?", day).Scan(&count)
-	if err == nil && count >= 50 {
-		return nil
+	var dayCount int
+	err = database.QueryRowContext(ctx, "SELECT count(*) FROM telemetry_cases WHERE substr(occurred_at, 1, 10) = ?", day).Scan(&dayCount)
+	if err == nil && dayCount >= 50 {
+		return nil // daily cap reached
 	}
 
-	err = database.QueryRowContext(ctx, "SELECT count(*) FROM telemetry_cases").Scan(&count)
-	if err == nil && count >= 500 {
-		_, _ = database.ExecContext(ctx, "DELETE FROM telemetry_cases WHERE resolution_id IN (SELECT resolution_id FROM telemetry_cases ORDER BY occurred_at ASC LIMIT 1)")
+	// 3. Check limits: total cap (max 500 cases total)
+	var totalCount int
+	err = database.QueryRowContext(ctx, "SELECT count(*) FROM telemetry_cases").Scan(&totalCount)
+	if err == nil && totalCount >= 500 {
+		_, _ = database.ExecContext(ctx, "DELETE FROM telemetry_cases WHERE case_id IN (SELECT case_id FROM telemetry_cases ORDER BY occurred_at ASC LIMIT 1)")
 	}
 
-	_, err = database.ExecContext(ctx, "INSERT OR IGNORE INTO telemetry_cases(resolution_id, occurred_at, kind, payload_json) VALUES(?, ?, ?, ?)",
-		record.ResolutionID, record.OccurredAt.UTC().Format(time.RFC3339), record.Kind, string(encoded))
+	if record.CaseID == "" {
+		id, err := randomCaseID()
+		if err != nil {
+			return err
+		}
+		record.CaseID = id
+	}
+
+	encoded, err := json.Marshal(record)
+	if err != nil {
+		return err
+	}
+
+	_, err = database.ExecContext(ctx, `INSERT INTO telemetry_cases(case_id, occurred_at, kind, session_hash, resolution_id, event_id, payload_json)
+VALUES(?, ?, ?, ?, ?, ?, ?)`,
+		record.CaseID, record.OccurredAt.UTC().Format(time.RFC3339Nano), record.Kind,
+		record.SessionHash, record.ResolutionID, record.EventID, string(encoded))
 	return err
 }
 
+// PurgeCases removes all stored cases.
 func (r *Recorder) PurgeCases(ctx context.Context) error {
 	r.gate.RLock()
 	defer r.gate.RUnlock()
 	if r.closed {
-		return nil
+		return errors.New("telemetry recorder is closed")
 	}
 	database, err := openDatabase(ctx, r.config)
 	if err != nil {
@@ -72,7 +163,13 @@ func (r *Recorder) PurgeCases(ctx context.Context) error {
 	return err
 }
 
+// PruneCases removes cases older than 90 days.
 func (r *Recorder) PruneCases(ctx context.Context) error {
+	r.gate.RLock()
+	defer r.gate.RUnlock()
+	if r.closed {
+		return errors.New("telemetry recorder is closed")
+	}
 	database, err := openDatabase(ctx, r.config)
 	if err != nil {
 		return err
@@ -83,11 +180,12 @@ func (r *Recorder) PruneCases(ctx context.Context) error {
 	return err
 }
 
+// Cases lists stored cases matching the given query parameters.
 func (r *Recorder) Cases(ctx context.Context, since time.Time, kind string) ([]CaseRecord, error) {
 	r.gate.RLock()
 	defer r.gate.RUnlock()
 	if r.closed {
-		return nil, nil
+		return nil, errors.New("telemetry recorder is closed")
 	}
 	database, err := openDatabase(ctx, r.config)
 	if err != nil {
@@ -95,11 +193,11 @@ func (r *Recorder) Cases(ctx context.Context, since time.Time, kind string) ([]C
 	}
 	defer database.Close()
 
-	query := "SELECT payload_json FROM telemetry_cases WHERE 1=1"
+	query := "SELECT case_id, occurred_at, kind, session_hash, resolution_id, event_id, payload_json FROM telemetry_cases WHERE 1=1"
 	var args []any
 	if !since.IsZero() {
 		query += " AND occurred_at >= ?"
-		args = append(args, since.UTC().Format(time.RFC3339))
+		args = append(args, since.UTC().Format(time.RFC3339Nano))
 	}
 	if kind != "" {
 		query += " AND kind = ?"
@@ -115,13 +213,29 @@ func (r *Recorder) Cases(ctx context.Context, since time.Time, kind string) ([]C
 
 	var cases []CaseRecord
 	for rows.Next() {
+		var caseID, occurredAtStr, rowKind string
+		var sessionHash, resolutionID, eventID *string
 		var payload string
-		if err := rows.Scan(&payload); err != nil {
+		if err := rows.Scan(&caseID, &occurredAtStr, &rowKind, &sessionHash, &resolutionID, &eventID, &payload); err != nil {
 			return nil, err
 		}
 		var record CaseRecord
 		if err := json.Unmarshal([]byte(payload), &record); err != nil {
 			return nil, err
+		}
+		record.CaseID = caseID
+		if parsed, err := time.Parse(time.RFC3339Nano, occurredAtStr); err == nil {
+			record.OccurredAt = parsed
+		}
+		record.Kind = rowKind
+		if sessionHash != nil {
+			record.SessionHash = *sessionHash
+		}
+		if resolutionID != nil {
+			record.ResolutionID = *resolutionID
+		}
+		if eventID != nil {
+			record.EventID = *eventID
 		}
 		cases = append(cases, record)
 	}

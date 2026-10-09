@@ -6,9 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
+	"time"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
 	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
+	"github.com/vantt/mcp-skill-hub/internal/telemetry"
 )
 
 type casesFlags struct {
@@ -23,26 +26,22 @@ func parseCasesFlags(args []string) (casesFlags, error) {
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		switch arg {
-		case "--workspace":
-			if i+1 >= len(args) {
-				return flags, fmt.Errorf("missing value for %s", arg)
-			}
-			flags.workspace = args[i+1]
-			i++
-		case "--since":
-			if i+1 >= len(args) {
-				return flags, fmt.Errorf("missing value for %s", arg)
-			}
-			flags.sinceStr = args[i+1]
-			i++
-		case "--kind":
-			if i+1 >= len(args) {
-				return flags, fmt.Errorf("missing value for %s", arg)
-			}
-			flags.kind = args[i+1]
-			i++
 		case "--json":
 			flags.jsonOutput = true
+		case "--workspace", "--since", "--kind":
+			if i+1 >= len(args) || strings.HasPrefix(args[i+1], "-") {
+				return flags, fmt.Errorf("%s requires a value", arg)
+			}
+			val := args[i+1]
+			switch arg {
+			case "--workspace":
+				flags.workspace = val
+			case "--since":
+				flags.sinceStr = val
+			case "--kind":
+				flags.kind = val
+			}
+			i++
 		default:
 			return flags, fmt.Errorf("unknown flag %q", arg)
 		}
@@ -56,18 +55,64 @@ func parseCasesFlags(args []string) (casesFlags, error) {
 }
 
 func runTelemetryCases(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	if len(args) > 0 {
+		subcommand := args[0]
+		switch subcommand {
+		case "enable":
+			flags, err := parseCasesFlags(args[1:])
+			if err != nil {
+				return writeInvalidRequest(stdout, stderr, false, err.Error(), "")
+			}
+			if err := telemetry.SetCaseJournalEnabled(flags.workspace, true); err != nil {
+				return writeInvalidRequest(stdout, stderr, false, "failed to enable case journal: "+err.Error(), "")
+			}
+			p := termui.New(stdout)
+			p.Line("Case journal enabled.")
+			return 0
+		case "disable":
+			flags, err := parseCasesFlags(args[1:])
+			if err != nil {
+				return writeInvalidRequest(stdout, stderr, false, err.Error(), "")
+			}
+			if err := telemetry.SetCaseJournalEnabled(flags.workspace, false); err != nil {
+				return writeInvalidRequest(stdout, stderr, false, "failed to disable case journal: "+err.Error(), "")
+			}
+			p := termui.New(stdout)
+			p.Line("Case journal disabled.")
+			return 0
+		case "status":
+			flags, err := parseCasesFlags(args[1:])
+			if err != nil {
+				return writeInvalidRequest(stdout, stderr, false, err.Error(), "")
+			}
+			p := termui.New(stdout)
+			if telemetry.IsCaseJournalEnabled(flags.workspace) {
+				p.Line("Case journal: enabled")
+			} else {
+				p.Line("Case journal: disabled")
+			}
+			return 0
+		case "list":
+			args = args[1:]
+		}
+	}
+
 	flags, err := parseCasesFlags(args)
 	if err != nil {
 		var resErr *WorkspaceResolutionError
 		if errors.As(err, &resErr) {
 			return writeWorkspaceResolutionError(stdout, stderr, hasJSONFlag(args), resErr)
 		}
-		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub telemetry cases [--since <Nd|YYYY-MM-DD>] [--kind override|after_no_skill|...]`.")
+		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub telemetry cases [enable|disable|status|list] [--since <Nd|YYYY-MM-DD>] [--kind override|after_no_skill|...]`.")
 	}
 
-	since, err := parseChainsSince(flags.sinceStr)
-	if err != nil {
-		return writeInvalidRequest(stdout, stderr, flags.jsonOutput, err.Error(), "Pass `--since <Nd|YYYY-MM-DD>`.")
+	var since time.Time
+	if flags.sinceStr != "" {
+		parsedSince, err := parseChainsSince(flags.sinceStr)
+		if err != nil {
+			return writeInvalidRequest(stdout, stderr, flags.jsonOutput, err.Error(), "Pass `--since <Nd|YYYY-MM-DD>`.")
+		}
+		since = parsedSince
 	}
 
 	telemetryService := app.TelemetryService{}
@@ -105,7 +150,7 @@ func runTelemetryCases(ctx context.Context, args []string, stdout, stderr io.Wri
 	}
 
 	for _, c := range cases {
-		p.Line(fmt.Sprintf("\n--- %s | %s | %s", c.OccurredAt.Format("2006-01-02 15:04:05"), c.Kind, c.Client.Name))
+		p.Line(fmt.Sprintf("\n--- %s | %s | %s (%s)", c.OccurredAt.Format("2006-01-02 15:04:05"), c.Kind, c.Client.Name, c.CaseID))
 		if c.Chosen != "" {
 			p.Line(fmt.Sprintf("Chosen: %s", c.Chosen))
 		}

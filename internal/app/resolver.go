@@ -345,7 +345,7 @@ func resolutionTelemetryPayload(ctx context.Context, request resolverpkg.Request
 	if len(response.Channels) > 0 {
 		payload["channels"] = append([]string(nil), response.Channels...)
 	}
-	if request.Prior != nil && request.Prior.Kind == "rejected" && len(response.TopKSkillIDs) > 0 {
+	if request.Prior != nil && request.Prior.Kind == "rejected" && CallerFromContext(ctx).VerifyPrior(request.Prior.ResolutionID) && len(response.TopKSkillIDs) > 0 {
 		payload["topk_skill_ids"] = append([]string(nil), response.TopKSkillIDs...)
 		payload["topk_matched"] = append([]string(nil), response.TopKMatched...)
 		payload["topk_channels"] = append([]string(nil), response.TopKChannels...)

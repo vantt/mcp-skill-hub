@@ -10,11 +10,10 @@ import (
 )
 
 const (
-	EventVersion        = "1"
-	ExportVersion       = "1"
-	RedactionVersion    = "redact-v1"
-	ContentModeNone     = "none"
-	ContentModeRedacted = "redacted"
+	EventVersion     = "1"
+	ExportVersion    = "1"
+	RedactionVersion = "redact-v1"
+	ContentModeNone  = "none"
 
 	EventResolutionStarted      = "resolution.started"
 	EventResolutionRecommended  = "resolution.recommended"
@@ -184,7 +183,7 @@ func fields(values ...any) map[string]valueKind {
 
 func skillFields() map[string]valueKind {
 	return fields("skill_id", kindToken, "status", kindToken, "reason_codes", kindTokens, "basis", kindToken, "duration_ms", kindMillis, "error_code", kindToken,
-		"resource_kind", kindToken, "surface", kindToken, "attribution", kindToken, "first_activation", kindBool, "after_load", kindBool)
+		"resource_kind", kindToken, "surface", kindToken, "attribution", kindToken, "first_activation", kindBool, "after_load", kindBool, "topk_skill_ids", kindTokens, "topk_matched", kindTokens, "topk_channels", kindTokens)
 }
 
 func curationFields() map[string]valueKind {

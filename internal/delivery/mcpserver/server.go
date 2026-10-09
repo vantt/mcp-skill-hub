@@ -350,26 +350,32 @@ func (adapter *Server) recordLoad(ctx context.Context, session *mcp.ServerSessio
 		if !load.Blocked && load.ResourceKind == "entrypoint" {
 			load.FirstActivation = adapter.tracker.markActivation(session, load.ResolutionID, load.SkillID)
 		}
-		if load.FirstActivation && (load.Attribution == "override" || load.Attribution == "after_no_skill") {
+		if load.Attribution == "override" || load.Attribution == "after_no_skill" {
 			if res, ok := adapter.tracker.resolutionData(session, load.ResolutionID); ok {
-				_ = app.RecordCase(ctx, adapter.telemetry, telemetry.CaseRecord{
-					ResolutionID:    res.ResolutionID,
-					OccurredAt:      time.Now().UTC(),
-					Kind:            load.Attribution,
-					Client:          res.Client,
-					CatalogSnapshot: res.CatalogSnapshot,
-					PriorVerified:   res.PriorVerified,
-					Task:            map[string]any{"description": res.TaskDescription},
-					Operation:       res.Operation,
-					Request:         res.Request,
-					Resolver: map[string]any{
-						"status":         res.Status,
-						"topk_skill_ids": res.TopKSkillIDs,
-						"topk_matched":   res.TopKMatched,
-						"topk_channels":  res.TopKChannels,
-					},
-					Chosen: load.SkillID,
-				})
+				load.TopKSkillIDs = res.TopKSkillIDs
+				load.TopKMatched = res.TopKMatched
+				load.TopKChannels = res.TopKChannels
+				if load.FirstActivation {
+					_ = app.RecordCase(ctx, adapter.telemetry, telemetry.CaseRecord{
+						ResolutionID:    res.ResolutionID,
+						SessionHash:     load.SessionIDHash,
+						OccurredAt:      time.Now().UTC(),
+						Kind:            load.Attribution,
+						Client:          res.Client,
+						CatalogSnapshot: res.CatalogSnapshot,
+						PriorVerified:   res.PriorVerified,
+						Task:            map[string]any{"description": res.TaskDescription},
+						Operation:       res.Operation,
+						Request:         res.Request,
+						Resolver: map[string]any{
+							"status":         res.Status,
+							"topk_skill_ids": res.TopKSkillIDs,
+							"topk_matched":   res.TopKMatched,
+							"topk_channels":  res.TopKChannels,
+						},
+						Chosen: load.SkillID,
+					})
+				}
 			}
 		}
 	}

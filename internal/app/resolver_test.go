@@ -545,10 +545,7 @@ func TestResolverCallerContextAndPriorVerification(t *testing.T) {
 	}
 }
 
-func TestResolverEmitsTopKFieldsOnDisagreement(t *testing.T) {
-	req := resolverpkg.Request{
-		Prior: &resolverpkg.Prior{Kind: "rejected"},
-	}
+func TestTopK_VerifiedAndUnverifiedRejected(t *testing.T) {
 	res := resolverpkg.Response{
 		Status:       resolverpkg.StatusResolved,
 		Primary:      &resolverpkg.Recommendation{ID: "skill-1"},
@@ -557,12 +554,31 @@ func TestResolverEmitsTopKFieldsOnDisagreement(t *testing.T) {
 		TopKChannels: []string{"fts", "rules"},
 	}
 
-	payload := resolutionTelemetryPayload(t.Context(), req, res, time.Second)
-
-	if len(payload["topk_skill_ids"].([]string)) != 2 {
-		t.Errorf("missing topk_skill_ids")
+	// 1. Verified rejected -> topk is persisted on resolution event
+	verifiedCtx := WithCallerContext(t.Context(), CallerContext{
+		PriorVerifier: func(id string) bool { return id == "res-verified" },
+	})
+	reqVerified := resolverpkg.Request{
+		Prior: &resolverpkg.Prior{ResolutionID: "res-verified", Kind: "rejected"},
 	}
-	if payload["topk_matched"].([]string)[0] != "1:operation" {
-		t.Errorf("missing topk_matched")
+	payloadVerified := resolutionTelemetryPayload(verifiedCtx, reqVerified, res, time.Second)
+	topkIDs, ok := payloadVerified["topk_skill_ids"].([]string)
+	if !ok || len(topkIDs) != 2 {
+		t.Fatalf("expected topk_skill_ids on verified rejected resolution, got %v", payloadVerified["topk_skill_ids"])
+	}
+	if payloadVerified["topk_matched"].([]string)[0] != "1:operation" {
+		t.Fatalf("expected 1:operation, got %v", payloadVerified["topk_matched"])
+	}
+
+	// 2. Unverified rejected -> topk is NOT persisted
+	unverifiedCtx := WithCallerContext(t.Context(), CallerContext{
+		PriorVerifier: func(string) bool { return false },
+	})
+	reqUnverified := resolverpkg.Request{
+		Prior: &resolverpkg.Prior{ResolutionID: "res-unverified", Kind: "rejected"},
+	}
+	payloadUnverified := resolutionTelemetryPayload(unverifiedCtx, reqUnverified, res, time.Second)
+	if payloadUnverified["topk_skill_ids"] != nil {
+		t.Fatalf("expected nil topk_skill_ids on unverified rejected resolution, got %v", payloadUnverified["topk_skill_ids"])
 	}
 }

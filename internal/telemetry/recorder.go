@@ -23,18 +23,19 @@ const (
 
 // Config controls a local, disposable telemetry recorder.
 type Config struct {
-	Path             string
-	WorkspaceRoot    string
-	BufferSize       int
-	Retention        time.Duration
-	RollupRetention  time.Duration
-	MaxSizeBytes     int64
-	ContentMode      string
-	OperationTimeout time.Duration
-	Clock            func() time.Time
-	ID               func() (string, error)
-	storeAnchor      *storeAnchor
-	storeAnchorErr   error
+	Path               string
+	WorkspaceRoot      string
+	BufferSize         int
+	Retention          time.Duration
+	RollupRetention    time.Duration
+	MaxSizeBytes       int64
+	ContentMode        string
+	CaseJournalEnabled bool
+	OperationTimeout   time.Duration
+	Clock              func() time.Time
+	ID                 func() (string, error)
+	storeAnchor        *storeAnchor
+	storeAnchorErr     error
 }
 
 // Health is a retained snapshot of recorder state and counters.
@@ -145,8 +146,8 @@ func Open(config Config) (*Recorder, error) {
 	if config.ContentMode == "" {
 		config.ContentMode = ContentModeNone
 	}
-	if config.ContentMode != ContentModeNone && config.ContentMode != ContentModeRedacted {
-		return nil, errors.New("unsupported content_mode: " + config.ContentMode)
+	if config.ContentMode != ContentModeNone {
+		return nil, errors.New("telemetry core supports only content_mode none")
 	}
 	if config.OperationTimeout <= 0 {
 		config.OperationTimeout = defaultOperationTimeout

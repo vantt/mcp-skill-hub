@@ -208,12 +208,16 @@ Content modes:
 
 | Mode | Persist |
 |---|---|
-| `none` | IDs, enums, counts, timing, reason codes |
+| `none` | IDs, enums, counts, timing, reason codes (mọi telemetry event luôn dùng mode này) |
 | `fingerprint` | Thêm keyed request fingerprint |
-| `redacted` | Thêm redacted/minimized task fields cho case journal; explicit opt-in |
+| `redacted` | Chế độ nội dung cho case journal (explicit opt-in riêng, không đổi event content_mode) |
 | `debug` | Feature/candidate traces ngắn hạn; cảnh báo rõ |
 
 Không có chế độ lưu full conversation.
+
+Case journal là cờ opt-in độc lập, lưu tại runtime state (`runtime/case_journal.json`) và điều khiển qua:
+`skillhub telemetry cases enable|disable|status` hoặc biến môi trường `SKILLHUB_CASE_JOURNAL=1`.
+Mọi telemetry event vẫn giữ `content_mode: none` để `telemetry export` luôn thành công.
 
 ### 4.2 Retention
 
