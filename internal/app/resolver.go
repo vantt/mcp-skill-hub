@@ -58,17 +58,21 @@ func (service ResolverService) Resolve(ctx context.Context, path string, request
 
 		isDisagreement := false
 		kind := ""
-		if request.Prior != nil {
-			if request.Prior.Kind == "rejected" && CallerFromContext(ctx).VerifyPrior(request.Prior.ResolutionID) {
-				isDisagreement = true
-				kind = "verified_reformulation"
-			} else if request.Prior.Kind == "needs_context" && response.Status == resolverpkg.StatusResolved {
-				isDisagreement = true
-				kind = "needs_context_resolved"
-			} else if request.Prior.Kind == "rejected" || request.Prior.Kind == "scope_mismatch" {
-				isDisagreement = true
-				kind = request.Prior.Kind
-			} else if response.Status == resolverpkg.StatusNoSkill && request.Prior.Kind == "no_skill" {
+		if resultErr == nil {
+			if request.Prior != nil {
+				if request.Prior.Kind == "clarification" && response.Status == resolverpkg.StatusResolved {
+					isDisagreement = true
+					kind = "needs_context_resolved"
+				} else if request.Prior.Kind == "rejected" {
+					isDisagreement = true
+					if CallerFromContext(ctx).VerifyPrior(request.Prior.ResolutionID) {
+						kind = "verified_reformulation"
+					} else {
+						kind = "rejected"
+					}
+				}
+			}
+			if kind == "" && response.Status == resolverpkg.StatusNoSkill && CallerFromContext(ctx).VerifyPrior(response.ResolutionID) {
 				isDisagreement = true
 				kind = "repeated_gap"
 			}
@@ -178,7 +182,12 @@ func (service ResolverService) Resolve(ctx context.Context, path string, request
 	safeRecordTelemetry(service.Telemetry, telemetryEvent(ctx, telemetry.EventResolutionStarted, request, response, resolutionScope{Snapshot: catalogSnapshot, Policy: policyRevision}, resolutionStartPayload(ctx, request)))
 
 	stage = "resolution"
-	response, resultErr = service.resolveWithin(ctx, root, handle, request, nil)
+	var normalizedRequest resolverpkg.Request
+	normalizedRequest, resultErr = resolverpkg.NormalizeRequest(request)
+	if resultErr == nil {
+		request = normalizedRequest
+		response, resultErr = service.resolveWithin(ctx, root, handle, normalizedRequest, nil)
+	}
 	return response, resultErr
 }
 

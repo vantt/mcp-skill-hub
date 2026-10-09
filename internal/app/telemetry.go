@@ -125,8 +125,10 @@ func RecordCase(ctx context.Context, sink TelemetrySink, record telemetry.CaseRe
 	if sink == nil {
 		return nil
 	}
-	if recorder, ok := sink.(*telemetry.Recorder); ok {
-		return recorder.RecordCase(ctx, record)
+	if cr, ok := sink.(interface {
+		RecordCase(context.Context, telemetry.CaseRecord) error
+	}); ok {
+		return cr.RecordCase(ctx, record)
 	}
 	return nil
 }

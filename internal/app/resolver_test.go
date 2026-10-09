@@ -32,7 +32,10 @@ func (sink fullTelemetrySink) Record(event telemetry.Event) {
 	}
 }
 
-type captureTelemetrySink struct{ events []telemetry.Event }
+type captureTelemetrySink struct {
+	events []telemetry.Event
+	cases  []telemetry.CaseRecord
+}
 
 func (sink *captureTelemetrySink) Record(event telemetry.Event) {
 	encoded, err := json.Marshal(event)
@@ -44,6 +47,11 @@ func (sink *captureTelemetrySink) Record(event telemetry.Event) {
 		panic(err)
 	}
 	sink.events = append(sink.events, copied)
+}
+
+func (sink *captureTelemetrySink) RecordCase(ctx context.Context, record telemetry.CaseRecord) error {
+	sink.cases = append(sink.cases, record)
+	return nil
 }
 
 func TestResolverResultIsIndependentOfNilFailingAndFullTelemetry(t *testing.T) {
@@ -665,4 +673,189 @@ func TestRedactRequestFactKeyAllowlistAndValues(t *testing.T) {
 			t.Errorf("fact %d: value contains unredacted secret %q: %q", i, exp.noVal, gotVal)
 		}
 	}
+}
+
+func TestResolverCaseKinds(t *testing.T) {
+	t.Parallel()
+
+	t.Run("needs_context_resolved", func(t *testing.T) {
+		root := newDistributionFixtureWorkspace(t)
+		writeDistributionFixtureSkill(t, root, "code-review", "review code changes pull requests", servableEntrypoint("code-review"), nil)
+		rebuildFixtureCatalog(t, root)
+
+		request := resolverpkg.Request{
+			SchemaVersion: resolverpkg.SchemaVersion, RequestID: "req-first",
+			Task: resolverpkg.Task{Description: "review code changes for pull requests"}, Operation: "review",
+		}
+		issued, err := (ResolverService{Cache: resolverpkg.NewCache(8)}).Resolve(t.Context(), root, request)
+		if err != nil || issued.Status != resolverpkg.StatusNeedsContext || issued.Question == nil {
+			t.Fatalf("first resolution = %#v, %v", issued, err)
+		}
+
+		sink := &captureTelemetrySink{}
+		answered := request
+		answered.RequestID = "req-second"
+		answered.Prior = &resolverpkg.Prior{
+			ResolutionID:    issued.ResolutionID,
+			ContextRevision: issued.ContextRevision,
+			Kind:            "clarification",
+			QuestionID:      issued.Question.ID,
+			Answer:          "multi_step",
+		}
+		final, err := (ResolverService{Cache: resolverpkg.NewCache(8), Telemetry: sink}).Resolve(t.Context(), root, answered)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if final.Status != resolverpkg.StatusResolved {
+			t.Fatalf("expected StatusResolved, got %v", final.Status)
+		}
+		if len(sink.cases) != 1 {
+			t.Fatalf("expected 1 case, got %d", len(sink.cases))
+		}
+		if sink.cases[0].Kind != "needs_context_resolved" {
+			t.Errorf("case kind = %q, want needs_context_resolved", sink.cases[0].Kind)
+		}
+	})
+
+	t.Run("verified_reformulation", func(t *testing.T) {
+		root := newResolverWorkspace(t)
+		createAndActivateSkill(t, SkillService{}, root)
+		sink := &captureTelemetrySink{}
+		request := privateResolverRequest()
+		request.Task.Description = "raw private task: review consumers using secret-token"
+		request.Prior = &resolverpkg.Prior{
+			ResolutionID:    "res_rej_verified",
+			ContextRevision: 1,
+			Kind:            "rejected",
+		}
+		ctx := WithCallerContext(t.Context(), CallerContext{
+			SessionHash: "sess_1",
+			PriorVerifier: func(id string) bool {
+				return id == "res_rej_verified"
+			},
+		})
+
+		_, err := (ResolverService{Cache: resolverpkg.NewCache(8), Telemetry: sink}).Resolve(ctx, root, request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(sink.cases) != 1 {
+			t.Fatalf("expected 1 case, got %d", len(sink.cases))
+		}
+		if sink.cases[0].Kind != "verified_reformulation" {
+			t.Errorf("case kind = %q, want verified_reformulation", sink.cases[0].Kind)
+		}
+		if !sink.cases[0].PriorVerified {
+			t.Errorf("expected PriorVerified to be true")
+		}
+	})
+
+	t.Run("unverified_rejected", func(t *testing.T) {
+		root := newResolverWorkspace(t)
+		createAndActivateSkill(t, SkillService{}, root)
+		sink := &captureTelemetrySink{}
+		request := privateResolverRequest()
+		request.Task.Description = "raw private task: review consumers using secret-token"
+		request.Prior = &resolverpkg.Prior{
+			ResolutionID:    "res_rej_unverified",
+			ContextRevision: 1,
+			Kind:            "rejected",
+		}
+		ctx := WithCallerContext(t.Context(), CallerContext{
+			SessionHash: "sess_1",
+			PriorVerifier: func(id string) bool {
+				return false
+			},
+		})
+
+		_, err := (ResolverService{Cache: resolverpkg.NewCache(8), Telemetry: sink}).Resolve(ctx, root, request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(sink.cases) != 1 {
+			t.Fatalf("expected 1 case, got %d", len(sink.cases))
+		}
+		if sink.cases[0].Kind != "rejected" {
+			t.Errorf("case kind = %q, want rejected", sink.cases[0].Kind)
+		}
+		if sink.cases[0].PriorVerified {
+			t.Errorf("expected PriorVerified to be false")
+		}
+	})
+
+	t.Run("mixed_case_Rejected_behaves_like_rejected", func(t *testing.T) {
+		root := newResolverWorkspace(t)
+		createAndActivateSkill(t, SkillService{}, root)
+		sink := &captureTelemetrySink{}
+		request := privateResolverRequest()
+		request.Task.Description = "raw private task: review consumers using secret-token"
+		request.Prior = &resolverpkg.Prior{
+			ResolutionID:    "res_rej_mixed",
+			ContextRevision: 1,
+			Kind:            "Rejected",
+		}
+		ctx := WithCallerContext(t.Context(), CallerContext{
+			SessionHash: "sess_1",
+			PriorVerifier: func(id string) bool {
+				return id == "res_rej_mixed"
+			},
+		})
+
+		_, err := (ResolverService{Cache: resolverpkg.NewCache(8), Telemetry: sink}).Resolve(ctx, root, request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(sink.cases) != 1 {
+			t.Fatalf("expected 1 case, got %d", len(sink.cases))
+		}
+		if sink.cases[0].Kind != "verified_reformulation" {
+			t.Errorf("case kind = %q, want verified_reformulation", sink.cases[0].Kind)
+		}
+	})
+
+	t.Run("repeated_gap", func(t *testing.T) {
+		root := newResolverWorkspace(t)
+		sink := &captureTelemetrySink{}
+		request := privateResolverRequest()
+		ctx := WithCallerContext(t.Context(), CallerContext{
+			SessionHash: "sess_1",
+			PriorVerifier: func(id string) bool {
+				return true // tracker has seen this resolution before in this session
+			},
+		})
+
+		resp, err := (ResolverService{Cache: resolverpkg.NewCache(8), Telemetry: sink}).Resolve(ctx, root, request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resp.Status != resolverpkg.StatusNoSkill {
+			t.Fatalf("expected StatusNoSkill, got %v", resp.Status)
+		}
+		if len(sink.cases) != 1 {
+			t.Fatalf("expected 1 case, got %d", len(sink.cases))
+		}
+		if sink.cases[0].Kind != "repeated_gap" {
+			t.Errorf("case kind = %q, want repeated_gap", sink.cases[0].Kind)
+		}
+	})
+
+	t.Run("no_case_on_resolution_error", func(t *testing.T) {
+		root := newResolverWorkspace(t)
+		sink := &captureTelemetrySink{}
+		request := privateResolverRequest()
+		request.SchemaVersion = "unsupported"
+		request.Prior = &resolverpkg.Prior{
+			ResolutionID:    "res_err",
+			ContextRevision: 1,
+			Kind:            "rejected",
+		}
+
+		_, err := (ResolverService{Cache: resolverpkg.NewCache(8), Telemetry: sink}).Resolve(t.Context(), root, request)
+		if err == nil {
+			t.Fatal("expected error on invalid schema version")
+		}
+		if len(sink.cases) != 0 {
+			t.Fatalf("expected 0 cases on error, got %d", len(sink.cases))
+		}
+	})
 }

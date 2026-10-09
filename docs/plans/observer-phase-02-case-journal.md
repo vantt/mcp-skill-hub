@@ -17,7 +17,7 @@ Implement a local case journal to capture detailed resolution context (task desc
 2. **Configuration**: Add an opt-in flag (off by default) to the telemetry configuration for the `redacted` content mode. Update `docs/design/04`.
 3. **Tracker RAM**: Update `notedResolution` to hold the task description, operation, and the sanitized request.
 4. **Case Store**: Implement a separate SQLite table or JSON store (e.g., `telemetry_cases`) with limits: 90 days retention, max ~500 cases total, and a daily cap. Hook this up to `skillhub telemetry purge`.
-5. **Persistence Trigger**: In the activation tracker and usage chain logic, detect disagreements (override, after_no_skill, verified reformulation, needs_context -> resolved, rejected, repeated gaps) and persist the case to the separate store. Agreeing resolutions are dropped.
+5. **Persistence Trigger**: In the activation tracker and usage chain logic, detect disagreements (override, after_no_skill, verified reformulation, needs_context -> resolved, rejected, repeated gaps) and persist the case to the separate store. Agreeing resolutions are dropped. Note: `scope_mismatch` is dropped as a distinct prior kind because it does not exist in the request model (in the agent-hub protocol it is a reason code under `kind: "rejected"`, recorded as `rejected` or `verified_reformulation`).
 6. **CLI Viewing**: Implement `skillhub telemetry cases [--since] [--kind] [--json]` to view the cases.
 7. **Isolation**: Verify case text does *not* leak into `skillhub telemetry export` or web JSON responses.
 
