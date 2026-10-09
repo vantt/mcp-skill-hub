@@ -52,7 +52,7 @@ lessons:
 1. **`notable`:** A short text explaining why the lesson matters (its significance, failure mode prevented, or operational benefit). It is **not** a boolean or score.
 2. **Experimental Scorecard Fields:** `contrast` and R/E/F scores (`relevance`, `evidence_quality`, `fit`) remain **optional, experimental fields**. They are not required in the schema until Phase 0's scorecard establishes empirical keep/drop thresholds.
 3. **`where` Evidence & Convergence:**
-   - Git source evidence requires a **full 40-hex SHA**: `repo@<40-hex-sha>:path[#Lx-Ly]` (D2).
+   - Git source evidence requires a **full 40-hex SHA**: `repo@<40-hex-sha>:path[#Lx-Ly]` for file evidence, or `repo@<40-hex-sha>` for commit-level citations (D2).
    - Observer usage evidence uses `where: usage:<case_id>` while candidate, promoted to Git routing eval case path on decision (observer §3.1).
    - Multiple `where` entries within a single lesson indicate cross-source convergence.
 4. **Reopen on New Evidence (D7, S9):**
@@ -190,4 +190,4 @@ Status for every public interface affected by Phase 3:
 
 ## Recorded Deviations
 
-1. **Pathless commit evidence normalization:** In Phase-0 `test-audit/.meta/distill.yaml`, some commit-level history evidence entries lacked a `:path` component (e.g. `superpowers@e8a9748a3fa9`). The schema and new lesson validation (`EvidencePattern`) strictly enforce `repo@<40-hex-sha>:path[#Lx-Ly]`. Migration `planV3ToV4` normalized these pathless citations by defaulting the missing path to `:SKILL.md` (e.g. `superpowers@<40-hex-sha>:SKILL.md`), preserving the strict schema invariant while successfully migrating legacy findings.
+1. **Commit-level citations:** In Phase-0 `test-audit/.meta/distill.yaml`, 11 commit-level history evidence entries cite the commit itself without a file path (e.g. `openclaw@777421df553`, `superpowers@e8a9748a3fa9`). `EvidencePattern` and `distill.schema.json` explicitly support this commit-level form (`repo@<40-hex-sha>`) alongside file-level evidence (`repo@<40-hex-sha>:path[#Lx-Ly]`). Migration `planV3ToV4` expands short SHAs to full 40-hex commits and preserves pathless citations without inventing paths.

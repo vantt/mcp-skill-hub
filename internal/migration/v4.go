@@ -72,13 +72,12 @@ func expandEvidence(raw string, cursors []distill.Cursor) string {
 		path = remainder[colonIdx+1:]
 	} else {
 		commit = remainder
-		path = "SKILL.md"
-	}
-	if path == "" {
-		path = "SKILL.md"
 	}
 	expandedCommit := expandShortCommit(commit, cursors)
-	return fmt.Sprintf("%s@%s:%s", repo, expandedCommit, path)
+	if path != "" {
+		return fmt.Sprintf("%s@%s:%s", repo, expandedCommit, path)
+	}
+	return fmt.Sprintf("%s@%s", repo, expandedCommit)
 }
 
 func convertGoal(raw any, defaultID string) string {

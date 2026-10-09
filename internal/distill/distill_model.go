@@ -15,7 +15,7 @@ import (
 )
 
 var (
-	EvidencePattern  = regexp.MustCompile(`^(?:[A-Za-z0-9_./:-]+@[0-9a-f]{40}:[^#\s]+(?:#L\d+(?:-L\d+)?)?|usage:[A-Za-z0-9_-]+)$`)
+	EvidencePattern  = regexp.MustCompile(`^(?:[A-Za-z0-9_./:-]+@[0-9a-f]{40}(?::[^#\s]+(?:#L\d+(?:-L\d+)?)?)?|usage:[A-Za-z0-9_-]+)$`)
 	LessonKeyPattern = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 )
 

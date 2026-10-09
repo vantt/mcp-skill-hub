@@ -74,7 +74,7 @@
             "uniqueItems": true,
             "items": {
               "type": "string",
-              "pattern": "^(?:[A-Za-z0-9_./:-]+@[0-9a-f]{40}:[^#\\s]+(?:#L\\d+(?:-L\\d+)?)?|usage:[A-Za-z0-9_-]+)$"
+              "pattern": "^(?:[A-Za-z0-9_./:-]+@[0-9a-f]{40}(?::[^#\\s]+(?:#L\\d+(?:-L\\d+)?)?)?|usage:[A-Za-z0-9_-]+)$"
             }
           },
           "decision": {
