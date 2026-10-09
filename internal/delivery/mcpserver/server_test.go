@@ -684,6 +684,51 @@ func TestDistributionRPCErrorSplitsNotFoundFromSnapshotExpired(t *testing.T) {
 	}
 }
 
+func TestGetSkillAndReadResourceInvalidURI(t *testing.T) {
+	t.Parallel()
+
+	adapter := &Server{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}
+
+	// 1. getSkill with nil params
+	_, err := adapter.getSkill(context.Background(), nil, nil)
+	var rpcErr *jsonrpc.Error
+	if !errors.As(err, &rpcErr) || rpcErr.Code != jsonrpc.CodeInvalidParams || !strings.Contains(string(rpcErr.Data), "invalid_uri") {
+		t.Fatalf("expected invalid_uri for nil params, got: %#v", err)
+	}
+
+	// 2. getSkill with empty URI
+	_, err = adapter.getSkill(context.Background(), nil, &getSkillParams{URI: ""})
+	if !errors.As(err, &rpcErr) || rpcErr.Code != jsonrpc.CodeInvalidParams || !strings.Contains(string(rpcErr.Data), "invalid_uri") {
+		t.Fatalf("expected invalid_uri for empty URI, got: %#v", err)
+	}
+
+	// 3. getSkill with oversized URI (>4096 bytes)
+	_, err = adapter.getSkill(context.Background(), nil, &getSkillParams{URI: strings.Repeat("x", 4097)})
+	if !errors.As(err, &rpcErr) || rpcErr.Code != jsonrpc.CodeInvalidParams || !strings.Contains(string(rpcErr.Data), "invalid_uri") {
+		t.Fatalf("expected invalid_uri for oversized URI, got: %#v", err)
+	}
+
+	// 4. readResource with nil request
+	_, err = adapter.readResource(context.Background(), nil)
+	if !errors.As(err, &rpcErr) || rpcErr.Code != jsonrpc.CodeInvalidParams || !strings.Contains(string(rpcErr.Data), "invalid_uri") {
+		t.Fatalf("expected invalid_uri for nil ReadResourceRequest, got: %#v", err)
+	}
+
+	// 5. readResource with empty URI
+	_, err = adapter.readResource(context.Background(), &mcp.ReadResourceRequest{Params: &mcp.ReadResourceParams{URI: ""}})
+	if !errors.As(err, &rpcErr) || rpcErr.Code != jsonrpc.CodeInvalidParams || !strings.Contains(string(rpcErr.Data), "invalid_uri") {
+		t.Fatalf("expected invalid_uri for empty URI, got: %#v", err)
+	}
+
+	// 6. readResource with oversized URI
+	_, err = adapter.readResource(context.Background(), &mcp.ReadResourceRequest{Params: &mcp.ReadResourceParams{URI: strings.Repeat("y", 4097)}})
+	if !errors.As(err, &rpcErr) || rpcErr.Code != jsonrpc.CodeInvalidParams || !strings.Contains(string(rpcErr.Data), "invalid_uri") {
+		t.Fatalf("expected invalid_uri for oversized URI, got: %#v", err)
+	}
+}
+
 func newMCPWorkspace(t *testing.T) string {
 	t.Helper()
 	root := filepath.Join(t.TempDir(), "workspace")

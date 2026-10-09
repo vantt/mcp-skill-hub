@@ -213,7 +213,7 @@ func (adapter *Server) listSkills(ctx context.Context, session *mcp.ServerSessio
 
 func (adapter *Server) getSkill(ctx context.Context, session *mcp.ServerSession, params *getSkillParams) (*getSkillResult, error) {
 	if params == nil || params.URI == "" || len(params.URI) > 4096 {
-		return nil, invalidParams("snapshot_expired", "A bounded skill SKILL.md URI is required.")
+		return nil, invalidParams("invalid_uri", "A bounded skill SKILL.md URI is required.")
 	}
 	entry, err := adapter.distribution.GetSkill(ctx, adapter.workspace, params.URI)
 	if err != nil {
@@ -257,8 +257,8 @@ func (adapter *Server) localSkill(ctx context.Context, skillID, lifecycleState s
 }
 
 func (adapter *Server) readResource(ctx context.Context, request *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
-	if request == nil || request.Params == nil || len(request.Params.URI) > 4096 {
-		return nil, invalidParams("snapshot_expired", "A bounded skill resource URI is required.")
+	if request == nil || request.Params == nil || request.Params.URI == "" || len(request.Params.URI) > 4096 {
+		return nil, invalidParams("invalid_uri", "A bounded skill resource URI is required.")
 	}
 	content, err := adapter.distribution.ReadResource(ctx, adapter.workspace, request.Params.URI)
 	if err != nil {
