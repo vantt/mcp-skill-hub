@@ -448,3 +448,112 @@ func TestNewEventIDUniqueness(t *testing.T) {
 		t.Fatalf("unexpected fallback event ID format: %q, %q", fb1, fb2)
 	}
 }
+
+func TestConcurrentRecordCaseDailyCap(t *testing.T) {
+	temp := t.TempDir()
+	const dailyLimit = 5
+	config := Config{
+		Path:               filepath.Join(temp, "telemetry.db"),
+		WorkspaceRoot:      temp,
+		CaseJournalEnabled: true,
+		CaseDailyLimit:     dailyLimit,
+		BufferSize:         256,
+	}
+	recorder, err := Open(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer recorder.Close(context.Background())
+
+	now := time.Now().UTC()
+	const goroutines = 30
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for i := range goroutines {
+		go func(id int) {
+			defer wg.Done()
+			_ = recorder.RecordCase(context.Background(), CaseRecord{
+				OccurredAt:   now,
+				Kind:         "override",
+				EventID:      fmt.Sprintf("evt_cap_%d", id),
+				ResolutionID: fmt.Sprintf("res_cap_%d", id),
+				Client:       Client{Name: "client"},
+				Task:         map[string]any{"description": "cap check task"},
+				Chosen:       "skill",
+			})
+		}(i)
+	}
+	wg.Wait()
+
+	cases, err := recorder.Cases(t.Context(), time.Time{}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cases) > dailyLimit {
+		t.Fatalf("cases count %d exceeded daily cap %d", len(cases), dailyLimit)
+	}
+	if len(cases) != dailyLimit {
+		t.Fatalf("expected exactly daily cap %d cases, got %d", dailyLimit, len(cases))
+	}
+}
+
+func TestPurgeDuringRecordCaseLeavesNoCases(t *testing.T) {
+	temp := t.TempDir()
+	config := Config{
+		Path:               filepath.Join(temp, "telemetry.db"),
+		WorkspaceRoot:      temp,
+		CaseJournalEnabled: true,
+		BufferSize:         256,
+	}
+	recorder, err := Open(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer recorder.Close(context.Background())
+
+	stop := make(chan struct{})
+	var wg sync.WaitGroup
+	const writers = 8
+	wg.Add(writers)
+	for i := range writers {
+		go func(wID int) {
+			defer wg.Done()
+			seq := 0
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+					seq++
+					_ = recorder.RecordCase(context.Background(), CaseRecord{
+						OccurredAt:   time.Now().UTC(),
+						Kind:         "override",
+						EventID:      fmt.Sprintf("evt_purge_race_%d_%d", wID, seq),
+						ResolutionID: "res_purge",
+						Client:       Client{Name: "client"},
+						Task:         map[string]any{"description": "race task"},
+					})
+				}
+			}
+		}(i)
+	}
+
+	// Let writers submit records
+	time.Sleep(10 * time.Millisecond)
+
+	// Stop writers and simultaneously purge
+	close(stop)
+	wg.Wait()
+
+	if err := recorder.Purge(t.Context()); err != nil {
+		t.Fatalf("purge failed: %v", err)
+	}
+
+	cases, err := recorder.Cases(t.Context(), time.Time{}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cases) != 0 {
+		t.Fatalf("expected 0 cases after purge, got %d", len(cases))
+	}
+}

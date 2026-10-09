@@ -71,6 +71,11 @@ const (
 	opRawEvents
 	opHealth
 	opClose
+	opRecordCase
+	opCases
+	opOldestRawEventTime
+	opPurgeCases
+	opPruneCases
 )
 
 type request struct {
@@ -83,6 +88,9 @@ type request struct {
 	to              string
 	feedback        Feedback
 	curationSession CurationSession
+	caseRecord      *CaseRecord
+	caseSince       time.Time
+	caseKind        string
 	response        chan response
 }
 
@@ -94,6 +102,9 @@ type response struct {
 	curationSessionResult CurationSessionResult
 	rollups               []RollupRow
 	rawEvents             []Event
+	cases                 []CaseRecord
+	oldestTime            time.Time
+	hasOldest             bool
 	err                   error
 }
 
@@ -117,6 +128,8 @@ type Recorder struct {
 	// persisted holds cumulative counters from earlier recorders, loaded by a
 	// health check. Only this instance's own counters are written back on Close.
 	persisted [len(counterMetaKeys)]uint64
+
+	caseEventIDs sync.Map
 }
 
 // Open validates configuration and workspace confinement before starting the
@@ -232,7 +245,18 @@ func (r *Recorder) Record(event Event) {
 func (r *Recorder) Flush(ctx context.Context) error { return r.admin(ctx, request{op: opFlush}).err }
 
 // Purge immediately removes all events and recreates an empty WAL database.
-func (r *Recorder) Purge(ctx context.Context) error { return r.admin(ctx, request{op: opPurge}).err }
+func (r *Recorder) Purge(ctx context.Context) error {
+	r.gate.Lock()
+	defer r.gate.Unlock()
+	if r.closed {
+		return errors.New("telemetry recorder is closed")
+	}
+	res := r.sendLocked(ctx, request{op: opPurge})
+	if res.err == nil {
+		r.caseEventIDs = sync.Map{}
+	}
+	return res.err
+}
 
 // Preview returns sanitized deterministic JSONL without writing a file.
 func (r *Recorder) Preview(ctx context.Context, limit int) (Preview, error) {
@@ -283,12 +307,8 @@ func (r *Recorder) OldestRawEventTime(ctx context.Context) (time.Time, bool, err
 	if r == nil {
 		return time.Time{}, false, nil
 	}
-	r.gate.RLock()
-	defer r.gate.RUnlock()
-	if r.closed {
-		return time.Time{}, false, errors.New("telemetry recorder is closed")
-	}
-	return oldestRawEventStore(ctx, r.config)
+	result := r.admin(ctx, request{op: opOldestRawEventTime})
+	return result.oldestTime, result.hasOldest, result.err
 }
 
 // PromotionDraft locates one exact resolution and returns a sanitized,
@@ -516,6 +536,24 @@ func (r *Recorder) handleOperation(item request) bool {
 		if closeErr := r.config.storeAnchor.close(); result.err == nil {
 			result.err = closeErr
 		}
+	case opRecordCase:
+		if item.caseRecord != nil {
+			opTimeout := r.config.OperationTimeout
+			if opTimeout <= 0 {
+				opTimeout = defaultOperationTimeout
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+			result.err = recordCaseStore(ctx, r.config, *item.caseRecord)
+			cancel()
+		}
+	case opCases:
+		result.cases, result.err = casesStore(item.ctx, r.config, item.caseSince, item.caseKind)
+	case opOldestRawEventTime:
+		result.oldestTime, result.hasOldest, result.err = oldestRawEventStore(item.ctx, r.config)
+	case opPurgeCases:
+		result.err = purgeCasesStore(item.ctx, r.config)
+	case opPruneCases:
+		result.err = pruneCasesStore(item.ctx, r.config)
 	}
 	if result.err != nil {
 		r.recordFailure(result.err.Error())
@@ -527,7 +565,9 @@ func (r *Recorder) handleOperation(item request) bool {
 		item.response <- result
 		return true
 	}
-	item.response <- result
+	if item.response != nil {
+		item.response <- result
+	}
 	return false
 }
 
@@ -544,6 +584,7 @@ func (r *Recorder) resetCounters() {
 	r.stateMu.Lock()
 	r.persisted = [len(counterMetaKeys)]uint64{}
 	r.stateMu.Unlock()
+	r.caseEventIDs = sync.Map{}
 }
 
 func (r *Recorder) recordFailure(message string) { r.errors.Add(1); r.setError(message, true) }

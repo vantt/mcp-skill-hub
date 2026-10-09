@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -91,40 +92,110 @@ func SetCaseJournalEnabled(workspaceRoot string, enabled bool) error {
 	return os.WriteFile(path, append(b, '\n'), 0644)
 }
 
-// RecordCase records one disagreement case into the separate telemetry_cases store.
+// RecordCase enqueues one disagreement case onto the worker queue without blocking the request.
 func (r *Recorder) RecordCase(ctx context.Context, record CaseRecord) error {
+	if r == nil {
+		return nil
+	}
+	if !r.config.CaseJournalEnabled && !IsCaseJournalEnabled(r.config.WorkspaceRoot) {
+		return nil
+	}
+
+	if record.EventID != "" {
+		if _, loaded := r.caseEventIDs.LoadOrStore(record.EventID, struct{}{}); loaded {
+			return ErrCaseConflict
+		}
+	}
+
 	r.gate.RLock()
 	defer r.gate.RUnlock()
 	if r.closed {
 		return errors.New("telemetry recorder is closed")
 	}
 
-	if !r.config.CaseJournalEnabled && !IsCaseJournalEnabled(r.config.WorkspaceRoot) {
+	req := request{
+		op:         opRecordCase,
+		ctx:        ctx,
+		caseRecord: &record,
+	}
+	select {
+	case r.queue <- req:
+		r.accepted.Add(1)
+		return nil
+	default:
+		r.dropped.Add(1)
 		return nil
 	}
+}
 
-	database, err := openDatabase(ctx, r.config)
+// PurgeCases removes all stored cases through the worker.
+func (r *Recorder) PurgeCases(ctx context.Context) error {
+	if r == nil {
+		return nil
+	}
+	result := r.admin(ctx, request{op: opPurgeCases})
+	return result.err
+}
+
+// PruneCases removes cases older than 90 days through the worker.
+func (r *Recorder) PruneCases(ctx context.Context) error {
+	if r == nil {
+		return nil
+	}
+	result := r.admin(ctx, request{op: opPruneCases})
+	return result.err
+}
+
+// Cases lists stored cases matching the given query parameters through the worker.
+func (r *Recorder) Cases(ctx context.Context, since time.Time, kind string) ([]CaseRecord, error) {
+	if r == nil {
+		return nil, nil
+	}
+	result := r.admin(ctx, request{op: opCases, caseSince: since, caseKind: kind})
+	return result.cases, result.err
+}
+
+func recordCaseStore(ctx context.Context, config Config, record CaseRecord) error {
+	database, err := openDatabase(ctx, config)
 	if err != nil {
 		return err
 	}
 	defer database.Close()
 
-	caseRetention := r.config.CaseRetention
+	caseRetention := config.CaseRetention
 	if caseRetention <= 0 {
 		caseRetention = DefaultCaseRetention
 	}
-	caseDailyLimit := r.config.CaseDailyLimit
+	caseDailyLimit := config.CaseDailyLimit
 	if caseDailyLimit <= 0 {
 		caseDailyLimit = DefaultCaseDailyLimit
 	}
-	caseTotalLimit := r.config.CaseTotalLimit
+	caseTotalLimit := config.CaseTotalLimit
 	if caseTotalLimit <= 0 {
 		caseTotalLimit = DefaultCaseTotalLimit
 	}
 
+	conn, err := database.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	if _, err := conn.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
+		return err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_, _ = conn.ExecContext(ctx, "ROLLBACK")
+		}
+	}()
+
 	// 1. Enforce retention on record
 	cutoff := time.Now().UTC().Add(-caseRetention).Format(time.RFC3339)
-	_, _ = database.ExecContext(ctx, "DELETE FROM telemetry_cases WHERE occurred_at < ?", cutoff)
+	if _, err := conn.ExecContext(ctx, "DELETE FROM telemetry_cases WHERE occurred_at < ?", cutoff); err != nil {
+		return err
+	}
 
 	// 2. Check limits: daily cap
 	if record.OccurredAt.IsZero() {
@@ -132,21 +203,35 @@ func (r *Recorder) RecordCase(ctx context.Context, record CaseRecord) error {
 	}
 	day := record.OccurredAt.UTC().Format("2006-01-02")
 	var dayCount int
-	err = database.QueryRowContext(ctx, "SELECT count(*) FROM telemetry_cases WHERE substr(occurred_at, 1, 10) = ?", day).Scan(&dayCount)
-	if err == nil && dayCount >= caseDailyLimit {
+	err = conn.QueryRowContext(ctx, "SELECT count(*) FROM telemetry_cases WHERE substr(occurred_at, 1, 10) = ?", day).Scan(&dayCount)
+	if err != nil {
+		return fmt.Errorf("query daily case count: %w", err)
+	}
+	if dayCount >= caseDailyLimit {
+		if _, err := conn.ExecContext(ctx, "COMMIT"); err != nil {
+			return err
+		}
+		committed = true
 		return nil // daily cap reached
 	}
 
-	// 3. Check limits: total cap
+	// 3. Check limits: total cap - eviction removes count - limit + 1 rows
 	var totalCount int
-	err = database.QueryRowContext(ctx, "SELECT count(*) FROM telemetry_cases").Scan(&totalCount)
-	if err == nil && totalCount >= caseTotalLimit {
-		_, _ = database.ExecContext(ctx, "DELETE FROM telemetry_cases WHERE case_id IN (SELECT case_id FROM telemetry_cases ORDER BY occurred_at ASC LIMIT 1)")
+	err = conn.QueryRowContext(ctx, "SELECT count(*) FROM telemetry_cases").Scan(&totalCount)
+	if err != nil {
+		return fmt.Errorf("query total case count: %w", err)
+	}
+	if totalCount >= caseTotalLimit {
+		toRemove := totalCount - caseTotalLimit + 1
+		_, err = conn.ExecContext(ctx, "DELETE FROM telemetry_cases WHERE case_id IN (SELECT case_id FROM telemetry_cases ORDER BY occurred_at ASC LIMIT ?)", toRemove)
+		if err != nil {
+			return fmt.Errorf("evict oldest cases: %w", err)
+		}
 	}
 
 	if record.EventID != "" {
 		var exists int
-		err = database.QueryRowContext(ctx, "SELECT 1 FROM telemetry_cases WHERE event_id = ?", record.EventID).Scan(&exists)
+		err = conn.QueryRowContext(ctx, "SELECT 1 FROM telemetry_cases WHERE event_id = ?", record.EventID).Scan(&exists)
 		if err == nil && exists == 1 {
 			return ErrCaseConflict
 		}
@@ -170,21 +255,23 @@ func (r *Recorder) RecordCase(ctx context.Context, record CaseRecord) error {
 		return err
 	}
 
-	_, err = database.ExecContext(ctx, `INSERT INTO telemetry_cases(case_id, occurred_at, kind, session_hash, resolution_id, event_id, payload_json)
+	_, err = conn.ExecContext(ctx, `INSERT INTO telemetry_cases(case_id, occurred_at, kind, session_hash, resolution_id, event_id, payload_json)
 VALUES(?, ?, ?, ?, ?, ?, ?)`,
 		record.CaseID, record.OccurredAt.UTC().Format(time.RFC3339Nano), record.Kind,
 		record.SessionHash, record.ResolutionID, record.EventID, string(encoded))
-	return err
+	if err != nil {
+		return err
+	}
+
+	if _, err := conn.ExecContext(ctx, "COMMIT"); err != nil {
+		return err
+	}
+	committed = true
+	return nil
 }
 
-// PurgeCases removes all stored cases.
-func (r *Recorder) PurgeCases(ctx context.Context) error {
-	r.gate.RLock()
-	defer r.gate.RUnlock()
-	if r.closed {
-		return errors.New("telemetry recorder is closed")
-	}
-	database, err := openDatabase(ctx, r.config)
+func purgeCasesStore(ctx context.Context, config Config) error {
+	database, err := openDatabase(ctx, config)
 	if err != nil {
 		return err
 	}
@@ -193,19 +280,13 @@ func (r *Recorder) PurgeCases(ctx context.Context) error {
 	return err
 }
 
-// PruneCases removes cases older than 90 days.
-func (r *Recorder) PruneCases(ctx context.Context) error {
-	r.gate.RLock()
-	defer r.gate.RUnlock()
-	if r.closed {
-		return errors.New("telemetry recorder is closed")
-	}
-	database, err := openDatabase(ctx, r.config)
+func pruneCasesStore(ctx context.Context, config Config) error {
+	database, err := openDatabase(ctx, config)
 	if err != nil {
 		return err
 	}
 	defer database.Close()
-	caseRetention := r.config.CaseRetention
+	caseRetention := config.CaseRetention
 	if caseRetention <= 0 {
 		caseRetention = DefaultCaseRetention
 	}
@@ -214,14 +295,8 @@ func (r *Recorder) PruneCases(ctx context.Context) error {
 	return err
 }
 
-// Cases lists stored cases matching the given query parameters.
-func (r *Recorder) Cases(ctx context.Context, since time.Time, kind string) ([]CaseRecord, error) {
-	r.gate.RLock()
-	defer r.gate.RUnlock()
-	if r.closed {
-		return nil, errors.New("telemetry recorder is closed")
-	}
-	database, err := openDatabase(ctx, r.config)
+func casesStore(ctx context.Context, config Config, since time.Time, kind string) ([]CaseRecord, error) {
+	database, err := openDatabase(ctx, config)
 	if err != nil {
 		return nil, err
 	}
