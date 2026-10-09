@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	SchemaVersion = "2"
+	SchemaVersion = "3"
 
 	// V1 canonical workspaces are deliberately bounded so inventory, validation,
 	// and catalog builds cannot consume unbounded memory from workspace content.

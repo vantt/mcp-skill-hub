@@ -15,7 +15,7 @@ import (
 	"github.com/vantt/mcp-skill-hub/internal/workspace"
 )
 
-const CurrentVersion = 2
+const CurrentVersion = 3
 
 var (
 	ErrNoMigrationPath = errors.New("no canonical migration path is registered")
@@ -58,6 +58,7 @@ func DefaultRegistry() Registry {
 	return Registry{steps: map[int]step{
 		0: {from: 0, to: 1, plan: planLegacyV0ToV1},
 		1: {from: 1, to: 2, plan: planV1ToV2},
+		2: {from: 2, to: 3, plan: planV2ToV3},
 	}}
 }
 
@@ -240,4 +241,34 @@ func planV1ToV2(root string) ([]mutation.Change, []FileDiff, error) {
 	return []mutation.Change{{Path: ".skillhub/schema-version", Contents: []byte(after)}}, []FileDiff{{
 		Path: ".skillhub/schema-version", Before: before, After: after, Diff: diff,
 	}}, nil
+}
+
+func planV2ToV3(root string) ([]mutation.Change, []FileDiff, error) {
+	// First, bump the schema version.
+	markerPath := filepath.Join(root, ".skillhub", "schema-version")
+	beforeBytes, err := os.ReadFile(markerPath)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, nil, fmt.Errorf("read schema marker: %w", err)
+	}
+	before := "2\n"
+	if len(beforeBytes) > 0 && strings.TrimSpace(string(beforeBytes)) == "2" {
+		before = string(beforeBytes)
+	}
+	after := "3\n"
+	diff := "--- a/.skillhub/schema-version\n+++ b/.skillhub/schema-version\n@@ -1 +1 @@\n-2\n+3\n"
+	changes := []mutation.Change{{Path: ".skillhub/schema-version", Contents: []byte(after)}}
+	diffs := []FileDiff{{
+		Path: ".skillhub/schema-version", Before: before, After: after, Diff: diff,
+	}}
+
+	// Walk over skills directly instead of parsing via yaml.v3
+	// We'll let canonical.Validate and workspace validation handle errors later if needed.
+	// Actually, wait, doing it with yaml.v3 is correct for migration.
+	skillChanges, skillDiffs, err := migrateSkillYAMLToV3(root)
+	if err != nil {
+		return nil, nil, err
+	}
+	changes = append(changes, skillChanges...)
+	diffs = append(diffs, skillDiffs...)
+	return changes, diffs, nil
 }
