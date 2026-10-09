@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillhub.local/schemas/distill.schema.json",
+  "title": "Skill distillation document",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["goal"],
+  "properties": {
+    "goal": {
+      "type": "string",
+      "minLength": 1
+    },
+    "cursors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_id"],
+        "properties": {
+          "source_id": {"type": "string", "minLength": 1},
+          "commit": {"type": "string"},
+          "synced_at": {"type": "string", "format": "date-time"}
+        }
+      }
+    },
+    "coverage": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["resource", "status"],
+        "properties": {
+          "resource": {"type": "string", "minLength": 1},
+          "status": {"enum": ["analyzed", "deferred", "skipped"]},
+          "reason": {"type": "string"},
+          "blocking": {"type": "boolean"}
+        }
+      }
+    },
+    "lessons": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key", "what", "notable", "where"],
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "what": {
+            "type": "string",
+            "minLength": 1
+          },
+          "notable": {
+            "type": "string",
+            "minLength": 1
+          },
+          "contrast": {
+            "type": "string"
+          },
+          "scores": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "relevance": {"type": "number", "minimum": 0, "maximum": 1},
+              "evidence_quality": {"type": "number", "minimum": 0, "maximum": 1},
+              "fit": {"type": "number", "minimum": 0, "maximum": 1}
+            }
+          },
+          "where": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^(?:[A-Za-z0-9_./:-]+@[0-9a-f]{40}:[^#\\s]+(?:#L\\d+(?:-L\\d+)?)?|usage:[A-Za-z0-9_-]+)$"
+            }
+          },
+          "decision": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["status"],
+            "properties": {
+              "status": {
+                "enum": ["candidate", "planned", "ported", "rejected"]
+              },
+              "reason": {
+                "type": "string"
+              },
+              "at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "seen_where": {
+                "type": "array",
+                "items": {"type": "string"}
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
