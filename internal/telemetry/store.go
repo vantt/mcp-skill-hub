@@ -138,8 +138,14 @@ func openDatabase(ctx context.Context, config Config) (*sql.DB, error) {
 	}
 	database.SetMaxOpenConns(1)
 	closeOnError := func(cause error) (*sql.DB, error) { _ = database.Close(); return nil, cause }
-	if _, err := database.ExecContext(ctx, `PRAGMA busy_timeout=5000; PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;`); err != nil {
-		return closeOnError(err)
+	for _, pragma := range []string{
+		"PRAGMA busy_timeout=5000",
+		"PRAGMA journal_mode=WAL",
+		"PRAGMA synchronous=NORMAL",
+	} {
+		if _, err := database.ExecContext(ctx, pragma); err != nil {
+			return closeOnError(err)
+		}
 	}
 	var check string
 	if err := database.QueryRowContext(ctx, `PRAGMA quick_check`).Scan(&check); err != nil {
@@ -448,7 +454,11 @@ func sqliteURL(path string) string {
 	if !strings.HasPrefix(p, "/") {
 		p = "/" + p
 	}
-	return (&url.URL{Scheme: "file", Path: p}).String()
+	return (&url.URL{
+		Scheme:   "file",
+		Path:     p,
+		RawQuery: "_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)",
+	}).String()
 }
 
 func writeEvents(ctx context.Context, config Config, events []storedEnvelope) error {

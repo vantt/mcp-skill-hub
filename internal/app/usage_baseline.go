@@ -51,6 +51,11 @@ type BaselineReport struct {
 	Buckets            []BaselineBucket `json:"buckets"`
 }
 
+type rawRetentionInfo struct {
+	retention  time.Duration
+	oldestTime time.Time
+	hasOldest  bool
+}
 type bucketKey struct {
 	snapshot string
 	client   string
@@ -86,7 +91,7 @@ func (service UsageService) Baseline(ctx context.Context, path string, q Baselin
 		since = until.Add(-30 * 24 * time.Hour)
 	}
 
-	recorder, err := (TelemetryService{}).Open(root)
+	recorder, err := service.Telemetry.Open(root)
 	if err != nil {
 		return BaselineReport{}, err
 	}
@@ -98,8 +103,14 @@ func (service UsageService) Baseline(ctx context.Context, path string, q Baselin
 	if err != nil {
 		return BaselineReport{}, err
 	}
-
-	report := service.compileBaseline(rawEvents, since, until, minChains)
+	retention := recorder.Retention()
+	oldestTime, hasOldest, _ := recorder.OldestRawEventTime(ctx)
+	rInfo := rawRetentionInfo{
+		retention:  retention,
+		oldestTime: oldestTime,
+		hasOldest:  hasOldest,
+	}
+	report := service.compileBaseline(rawEvents, since, until, minChains, rInfo)
 	return report, nil
 }
 
@@ -233,7 +244,7 @@ func (bc *baselineContext) buildBucket(bk bucketKey, bChains []*rawEventChain) B
 	}
 }
 
-func (service UsageService) compileBaseline(rawEvents []telemetry.Event, since, until time.Time, minChains int) BaselineReport {
+func (service UsageService) compileBaseline(rawEvents []telemetry.Event, since, until time.Time, minChains int, rInfo rawRetentionInfo) BaselineReport {
 	allChains, counts, firstValid := service.buildChains(rawEvents)
 	totalLoads, unsolicitedLoads := parseBaselineLoads(rawEvents)
 	groupedChains, snapshotLatestTime := groupBaselineChains(allChains, totalLoads)
@@ -278,9 +289,7 @@ func (service UsageService) compileBaseline(rawEvents []telemetry.Event, since, 
 	})
 
 	now := time.Now().UTC()
-	const defaultRetentionDuration = 30 * 24 * time.Hour
-	isPruned := now.Sub(since) > defaultRetentionDuration+24*time.Hour || until.Sub(since) > defaultRetentionDuration+24*time.Hour
-
+	isPruned := isWindowRetentionPruned(since, until, now, rInfo)
 	return BaselineReport{
 		Since:              since.UTC().Format(time.RFC3339),
 		Until:              until.UTC().Format(time.RFC3339),
@@ -290,4 +299,20 @@ func (service UsageService) compileBaseline(rawEvents []telemetry.Event, since, 
 		ActiveSnapshot:     activeSnapshot,
 		Buckets:            buckets,
 	}
+}
+
+func isWindowRetentionPruned(since, until, now time.Time, rInfo rawRetentionInfo) bool {
+	if rInfo.retention <= 0 {
+		return false
+	}
+	if now.Sub(since) > rInfo.retention {
+		return true
+	}
+	if until.Sub(since) > rInfo.retention {
+		return true
+	}
+	if rInfo.hasOldest && since.Before(rInfo.oldestTime) && now.Sub(rInfo.oldestTime) >= rInfo.retention {
+		return true
+	}
+	return false
 }

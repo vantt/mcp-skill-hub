@@ -2,6 +2,7 @@ package telemetry
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"time"
 )
@@ -70,4 +71,29 @@ ORDER BY occurred_at,id`, fromBound, fromBound, toBound, toBound)
 		return nil, err
 	}
 	return result, nil
+}
+
+func oldestRawEventStore(ctx context.Context, config Config) (time.Time, bool, error) {
+	if err := maintainStore(ctx, config); err != nil {
+		return time.Time{}, false, err
+	}
+	database, err := openDatabase(ctx, config)
+	if err != nil {
+		return time.Time{}, false, err
+	}
+	defer database.Close()
+
+	var occurredAt sql.NullString
+	err = database.QueryRowContext(ctx, `SELECT MIN(occurred_at) FROM telemetry_events`).Scan(&occurredAt)
+	if err != nil || !occurredAt.Valid || occurredAt.String == "" {
+		return time.Time{}, false, nil
+	}
+	t, err := time.Parse(time.RFC3339Nano, occurredAt.String)
+	if err != nil {
+		t, err = time.Parse(time.RFC3339, occurredAt.String)
+		if err != nil {
+			return time.Time{}, false, err
+		}
+	}
+	return t, true, nil
 }

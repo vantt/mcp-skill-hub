@@ -47,7 +47,8 @@ func TestBaselineSufficiencyTransition(t *testing.T) {
 		},
 	})
 
-	report := service.compileBaseline(events, now.Add(-24*time.Hour), now, minChains)
+	testRetention := rawRetentionInfo{retention: 30 * 24 * time.Hour}
+	report := service.compileBaseline(events, now.Add(-24*time.Hour), now, minChains, testRetention)
 	if len(report.Buckets) != 1 {
 		t.Fatalf("expected 1 bucket, got %d", len(report.Buckets))
 	}
@@ -91,7 +92,7 @@ func TestBaselineSufficiencyTransition(t *testing.T) {
 		})
 	}
 
-	report2 := service.compileBaseline(events, now.Add(-24*time.Hour), now, minChains)
+	report2 := service.compileBaseline(events, now.Add(-24*time.Hour), now, minChains, testRetention)
 	if len(report2.Buckets) != 1 {
 		t.Fatalf("expected 1 bucket, got %d", len(report2.Buckets))
 	}
@@ -130,7 +131,7 @@ func TestBaselineSnapshotChangeResetsBaseline(t *testing.T) {
 		},
 	}
 
-	report := service.compileBaseline(events, t0.Add(-24*time.Hour), t1.Add(time.Hour), 5)
+	report := service.compileBaseline(events, t0.Add(-24*time.Hour), t1.Add(time.Hour), 5, rawRetentionInfo{retention: 30 * 24 * time.Hour})
 	if report.ActiveSnapshot != "sha256:snapshot_v2" {
 		t.Fatalf("expected active snapshot 'sha256:snapshot_v2', got %q", report.ActiveSnapshot)
 	}
@@ -176,7 +177,7 @@ func TestBaselineUnknownVsZero(t *testing.T) {
 		},
 	}
 
-	report := service.compileBaseline(events, now.Add(-24*time.Hour), now, 5)
+	report := service.compileBaseline(events, now.Add(-24*time.Hour), now, 5, rawRetentionInfo{retention: 30 * 24 * time.Hour})
 	b := report.Buckets[0]
 
 	// acceptance_rate denominator is 0 (since 0 resolved chains)
@@ -237,7 +238,7 @@ func TestBaselineUnsolicitedShare(t *testing.T) {
 		},
 	}
 
-	report := service.compileBaseline(events, now.Add(-24*time.Hour), now, 5)
+	report := service.compileBaseline(events, now.Add(-24*time.Hour), now, 5, rawRetentionInfo{retention: 30 * 24 * time.Hour})
 	b := report.Buckets[0]
 
 	if b.TotalLoads != 2 {
@@ -254,16 +255,98 @@ func TestBaselineUnsolicitedShare(t *testing.T) {
 func TestBaselineRawRetentionPruned(t *testing.T) {
 	service := UsageService{}
 	now := time.Now().UTC()
+	rInfo := rawRetentionInfo{retention: 30 * 24 * time.Hour}
 
 	// Window of 7 days -> not pruned
-	rep1 := service.compileBaseline(nil, now.Add(-7*24*time.Hour), now, 30)
+	rep1 := service.compileBaseline(nil, now.Add(-7*24*time.Hour), now, 30, rInfo)
 	if rep1.RawRetentionPruned {
 		t.Fatal("expected RawRetentionPruned to be false for 7d window")
 	}
 
 	// Window of 45 days -> pruned (retention is 30d)
-	rep2 := service.compileBaseline(nil, now.Add(-45*24*time.Hour), now, 30)
+	rep2 := service.compileBaseline(nil, now.Add(-45*24*time.Hour), now, 30, rInfo)
 	if !rep2.RawRetentionPruned {
 		t.Fatal("expected RawRetentionPruned to be true for 45d window")
+	}
+}
+
+func TestBaselineCustomRetentionPrunedAndFullWindow(t *testing.T) {
+	temp := t.TempDir()
+	if _, err := (WorkspaceService{}).Init(temp, true); err != nil {
+		t.Fatal(err)
+	}
+
+	shortRetention := 2 * time.Hour
+	telService := TelemetryService{
+		Config: telemetry.Config{
+			Retention: shortRetention,
+		},
+	}
+	recorder, err := telService.Open(temp)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Now().UTC()
+	snap := "sha256:custom_retention_snap"
+	client := "claude-code"
+
+	// 1. Record an old event 3h ago (beyond 2h retention)
+	recorder.Record(telemetry.Event{
+		Version:         telemetry.EventVersion,
+		ID:              "evt_old_3h",
+		Type:            telemetry.EventResolutionCompleted,
+		OccurredAt:      now.Add(-3 * time.Hour),
+		CatalogSnapshot: snap,
+		PolicyRevision:  "sha256:policy",
+		Client:          telemetry.Client{Name: client},
+		ResolutionID:    "res_old",
+		Payload:         map[string]any{"status": "resolved", "top_skill_id": "skill-1"},
+	})
+
+	// 2. Record a fresh event 30m ago (inside 2h retention)
+	recorder.Record(telemetry.Event{
+		Version:         telemetry.EventVersion,
+		ID:              "evt_fresh_30m",
+		Type:            telemetry.EventResolutionCompleted,
+		OccurredAt:      now.Add(-30 * time.Minute),
+		CatalogSnapshot: snap,
+		PolicyRevision:  "sha256:policy",
+		Client:          telemetry.Client{Name: client},
+		ResolutionID:    "res_fresh",
+		Payload:         map[string]any{"status": "resolved", "top_skill_id": "skill-2"},
+	})
+
+	if err := recorder.Flush(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	recorder.Close(t.Context())
+
+	service := UsageService{Telemetry: telService}
+
+	// Test A: Query with since = now - 3h (older than retention and pruned old events) -> true
+	repPruned, err := service.Baseline(t.Context(), temp, BaselineQuery{
+		Since:     now.Add(-3 * time.Hour),
+		Until:     now,
+		MinChains: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !repPruned.RawRetentionPruned {
+		t.Errorf("expected RawRetentionPruned == true for window covering pruned events")
+	}
+
+	// Test B: Query with full window: since = now - 45m (within 2h retention, covers all retained events) -> false
+	repFull, err := service.Baseline(t.Context(), temp, BaselineQuery{
+		Since:     now.Add(-45 * time.Minute),
+		Until:     now,
+		MinChains: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if repFull.RawRetentionPruned {
+		t.Errorf("expected RawRetentionPruned == false for full window within retention")
 	}
 }

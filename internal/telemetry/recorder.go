@@ -268,6 +268,29 @@ func (r *Recorder) RawEvents(ctx context.Context, from, to string) ([]Event, err
 	return result.rawEvents, result.err
 }
 
+// Retention returns the recorder's configured retention duration for raw events.
+func (r *Recorder) Retention() time.Duration {
+	if r == nil {
+		return defaultRetention
+	}
+	r.gate.RLock()
+	defer r.gate.RUnlock()
+	return r.config.Retention
+}
+
+// OldestRawEventTime returns the timestamp of the oldest raw event stored in the database.
+func (r *Recorder) OldestRawEventTime(ctx context.Context) (time.Time, bool, error) {
+	if r == nil {
+		return time.Time{}, false, nil
+	}
+	r.gate.RLock()
+	defer r.gate.RUnlock()
+	if r.closed {
+		return time.Time{}, false, errors.New("telemetry recorder is closed")
+	}
+	return oldestRawEventStore(ctx, r.config)
+}
+
 // PromotionDraft locates one exact resolution and returns a sanitized,
 // deliberately incomplete evaluation-case draft for human review.
 func (r *Recorder) PromotionDraft(ctx context.Context, resolutionID string) (PromotionDraft, error) {
