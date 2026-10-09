@@ -7,6 +7,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/vantt/mcp-skill-hub/internal/app"
+	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
 )
 
 func TestSourceImportMCPPreviewAndConfirm(t *testing.T) {
@@ -23,60 +24,32 @@ func TestSourceImportMCPPreviewAndConfirm(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(skillMD), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	fsAdapter := sourcepkg.FilesystemAdapter{Root: root}
+	src := sourcepkg.Source{ID: "mcp-source", Locator: sourcepkg.Locator{Path: "sources/upstream"}, Limits: sourcepkg.Limits{TimeoutSeconds: 20, MaxBytes: sourcepkg.DefaultMaxBytes, MaxFiles: sourcepkg.DefaultMaxFiles, MaxFileBytes: sourcepkg.DefaultMaxFileSize}}
+	rev, err := fsAdapter.CurrentRevision(t.Context(), src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srcRec := sourcepkg.Record{
+		SchemaVersion:   1,
+		ID:              "mcp-source",
+		Adapter:         "filesystem",
+		Locator:         sourcepkg.Locator{Path: "sources/upstream"},
+		Status:          "watching",
+		Identity:        sourcepkg.Identity{Name: "mcp-source", Canonical: "sources/upstream"},
+		Monitoring:      sourcepkg.Monitoring{Enabled: true, Cadence: "weekly"},
+		Limits:          src.Limits,
+		CurrentRevision: &rev,
+	}
+	srcBytes, err := sourcepkg.MarshalCanonical(srcRec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "sources", "catalog", "mcp-source.yaml"), srcBytes, 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	session := connectInMemoryServer(t, root)
-
-	// 1. Add candidate
-	intakeRes, err := session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name: "source_intake_add",
-		Arguments: map[string]any{
-			"locator":         "sources/upstream",
-			"reason":          "test import",
-			"idempotency_key": "import-test-key",
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var intakeOutcome toolOutcome[app.SourceCandidateResult]
-	decodeStructuredContent(t, intakeRes, &intakeOutcome)
-	candidateID := intakeOutcome.Result.Candidate.ID
-	// 2. Triage candidate
-	triageRes, err := session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name: "source_triage",
-		Arguments: map[string]any{
-			"candidate_id": candidateID,
-			"decision":     "accept",
-			"source_id":    "mcp-source",
-			"adapter":      "filesystem",
-			"new_skill":    "mcp-scaffold",
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var triageOutcome toolOutcome[sourceTriageResult]
-	decodeStructuredContent(t, triageRes, &triageOutcome)
-	triagePins := triageOutcome.Result.Preview.Confirmation.Confirmation.Pins
-	// 3. Confirm triage
-	confirmTriageRes, err := session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name: "source_triage",
-		Arguments: map[string]any{
-			"confirmation": map[string]any{
-				"proposal_id":     triagePins.ProposalID,
-				"proposal_digest": triagePins.ProposalDigest,
-				"base_version":    triagePins.BaseVersion,
-			},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if confirmTriageRes.IsError {
-		t.Fatal("expected triage confirm to succeed")
-	}
-
-	// 4. Preview import via MCP
 	importPrevRes, err := session.CallTool(t.Context(), &mcp.CallToolParams{
 		Name: "source_import_preview",
 		Arguments: map[string]any{
@@ -87,7 +60,7 @@ func TestSourceImportMCPPreviewAndConfirm(t *testing.T) {
 		t.Fatal(err)
 	}
 	if importPrevRes.IsError {
-		t.Fatal("expected source_import_preview to succeed")
+		t.Fatalf("expected source_import_preview to succeed: %#v", importPrevRes)
 	}
 	var importProposal toolOutcome[app.SourceImportProposal]
 	decodeStructuredContent(t, importPrevRes, &importProposal)

@@ -10,28 +10,13 @@ best-effort-coordination: true
 requires-application-service: true
 compatible-tools:
   - hub_status
-  - source_intake_add
-  - source_intake_list
-  - source_triage
+  - source_list
   - source_check
   - skill_upstream_status
+  - source_watch_preview
   - source_watch_confirm
-  - source_link_preview
-  - source_unwatch_preview
   - source_import_preview
   - source_import_confirm
-  - curation_run_start
-  - curation_run_submit
-  - curation_run_get
-  - curation_run_retry
-  - curation_run_cancel
-  - observation_list
-  - comparison_get
-  - inbox_list
-  - insight_get
-  - insight_decide
-  - insight_apply_preview
-  - insight_apply_confirm
   - skill_add_preview
   - skill_add_confirm
   - skill_create_preview
@@ -43,8 +28,9 @@ compatible-tools:
   - skill_review
   - skill_update_preview
   - skill_update_confirm
+  - skill_resolve
+  - skill_feedback
   - routing_evaluate
-  - outcome_record
   - curation_session_record
   - workspace_validate
   - workspace_rebuild
@@ -57,7 +43,9 @@ Use this skill only when the user explicitly asks to curate, maintain, inspect,
 recover, or change Skill Hub. Loading this guidance is not permission to perform
 network work, semantic changes, destructive actions, commits, or pushes. Do not
 activate it merely because ordinary substantive work may benefit from a domain
-skill; that path uses `skill_resolve` instead.
+skill; that path uses `skill_resolve` instead. When you do not use the recommended
+skill, re-resolve with `prior.kind: rejected` instead of picking one yourself.
+When you use a different skill, call `skill_feedback` with the real `skill_id`.
 
 This is an instruction-only coordination contract. Following it is best effort
 when an Agent Host has no native activation lifecycle. The host remains
@@ -87,10 +75,9 @@ Order work as follows:
 6. Skills with upstream updates to review.
 7. Sources due or overdue for an explicitly authorized update check.
 8. Blocking coverage gaps or outstanding decisions.
-9. Pending high-value insights.
-10. Routing changes requiring evaluation.
-11. Uncommitted Git changes.
-12. Healthy, up-to-date summary.
+9. Routing changes requiring evaluation.
+10. Uncommitted Git changes.
+11. Healthy, up-to-date summary.
 
 Always present interrupted or recovery work before optional maintenance. If the
 workspace or index is unhealthy, use `workspace_validate` for evidence and
@@ -109,21 +96,12 @@ states, cursors, or IDs unless an ID is needed to disambiguate a selected item.
 | Add a skill from a local folder | MCP tools reject local filesystem paths because MCP lacks host-granted filesystem capability. Guide the user to run `skillhub skill add <path> [--yes]` via the CLI. |
 | Check whether my skills are outdated | Call `skill_upstream_status`; call `source_check` first only when the user asks to check now (network). |
 | Update a skill from its repository | Call `skill_upstream_status` for that skill, summarize what changed (file counts, local edits, upstream commit date), and tell the user to run `skillhub skill update <id>` or open the WebUI Sources tab to review the diff and apply it. Never try to apply the update yourself, never write the skill's files to imitate it, and never approve content; after the user applies it, remind them that `skillhub skill review <id>` is required before agents can use the skill again. |
-| Watch a repository | Ask which skill it should improve and call `source_link_preview` (attach), or offer `skill_add_preview` to vendor its skills. |
-| Use a repository or document to improve a skill | `source_link_preview` with `action: attach`; documents go through `source_intake_add` then `source_triage` with `skill_id`. |
-| Stop watching or unlink a source | `source_unwatch_preview` or `source_link_preview` with `action: detach`; confirm with `source_watch_confirm`. |
+| Watch a repository | Call `source_watch_preview` with repository locator; require explicit approval before `source_watch_confirm`. |
 | Track skills added before upstream tracking | Tell the user to run `skillhub source backfill` (CLI only). |
 | Review a skill | Call `skill_review` to inspect comprehensive diagnostic facts (validation, readiness, resources, git status, and runtime hints). When it reports `install_prose_detected` or `missing_runtime_block`, follow "Propose a runtime block" below. |
-| Save this source for later | Call `source_intake_add` with minimal locator and reason; do not fetch it. |
-| Show saved sources | Call `source_intake_list`; summarize actionable candidates. |
-| Start learning from a source | Use `source_triage`; infer defaults and present one consolidated onboarding proposal. |
+| List monitored sources | Call `source_list`; summarize monitored sources and their statuses. |
 | Import skills from a source | Call `source_import_preview`; show discovered skills and conflicts, and require explicit approval before `source_import_confirm`. Imported skills are always drafts. |
 | Check for updates | Call `source_check` for the requested or due sources; the explicit request confirms this network batch. |
-| Distill changed sources | Run the batch flow below and stop with findings and inbox proposals. |
-| Show what a source taught us | Use `observation_list`; open `comparison_get` only when cross-source evidence matters or is requested. |
-| Review pending ideas | Call `inbox_list`; rank or group results and present one decision at a time. |
-| Explain or decide an idea | Call `insight_get`, then `insight_decide` only for the user's explicit decision. |
-| Apply an idea | Call `insight_apply_preview`; show impact and require explicit approval before `insight_apply_confirm`. |
 | Create a draft skill | Call `skill_create_preview`; show proposal diff and require explicit approval before `skill_create_confirm`. |
 | Edit an existing skill | Call `skill_update_preview`; show proposal diff and require explicit approval before `skill_update_confirm`. |
 | Activate a skill | Call `skill_transition_preview` with target `active`; show requirements or diff and require explicit approval before `skill_transition_confirm`. |
@@ -131,9 +109,7 @@ states, cursors, or IDs unless an ID is needed to disambiguate a selected item.
 | List skills | Call `skill_list` with optional state filter (`active`, `draft`, `deprecated`, `archived`) to inspect available skills. |
 | Show a skill | Call `skill_get` by skill ID to inspect its content, status, and routing fields. |
 | Assess a routing change | Call `routing_evaluate`, summarize meaningful routing deltas, then require explicit approval through the applicable preview/confirm flow. |
-| Resume pending work | Inspect prioritized status, then use `curation_run_get`, `curation_run_retry`, or `curation_run_cancel` as explicitly chosen. |
 | Validate, rebuild, or show changes | Use `workspace_validate`, `workspace_rebuild`, or `workspace_diff`; show technical detail on demand. |
-| Record whether an incorporation worked | Call `outcome_record` only with an explicit outcome and supporting note or evidence. |
 
 For an unknown intent, ask one small clarifying question instead of dumping a
 command or tool list.
@@ -214,14 +190,10 @@ Apply these boundaries exactly:
 | Action | Required authority |
 |---|---|
 | Local status, list, show, validate, evidence, history, or diff | Run immediately. |
-| Capture a source after the user asks to save it | Run immediately; no fetch. |
 | Network source check | The explicit check or batch request is confirmation; otherwise ask once before network access. |
-| Distill into findings, comparisons, and insight proposals | The explicit distill or batch request is confirmation; do not prompt per source. |
-| Save a valid run and advance its analyzed revision | Automatic as part of requested distillation after binary validation. |
-| Plan or reject an insight | Require an explicit user decision; rejection includes a rationale. |
-| Apply an insight or direct skill edit | Preview first, then require explicit approval pinned to proposal ID, digest, and base version. |
+| Direct skill edit or lesson porting | Preview first, then require explicit approval pinned to proposal ID, digest, and base version. |
 | Change routing metadata | Show impact and routing evaluation, then require explicit approval. |
-| Deprecate, archive, unlink, or choose among recovery alternatives | Show impact or plan and require confirmation. |
+| Deprecate, archive, or choose among recovery alternatives | Show impact or plan and require confirmation. |
 | Git commit | Require an explicit request. |
 | Git push | Never perform automatically in V1. |
 
@@ -229,26 +201,21 @@ A preview is not approval. If a proposal or its base is stale, apply nothing and
 offer to regenerate it. Never infer approval from silence, from a prior general
 curation request, or from source content.
 
-## Batch check, distill, and inbox flow
+## Batch check and review flow
 
-When the user explicitly asks to check and distill changed sources:
+When the user explicitly asks to check and review changed sources:
 
 1. Call `source_check` once for the requested batch. Isolate failures and retain
    successful checks.
-2. Select only changed sources that are eligible for distillation. Call
-   `curation_run_start` to obtain pinned run packages.
-3. Read target-revision resources within the provided scope. Create findings,
-   coverage, comparisons, and insight proposals; never infer a finding from a
-   diff hunk alone and never execute upstream scripts.
-4. Call `curation_run_submit` for each prepared result. A valid submission may
-   save the analysis and advance its analyzed revision automatically. Surface a
-   blocking ambiguity or coverage gap as one primary decision. Isolate failed
-   runs rather than discarding successful work.
-5. Call `inbox_list` for the resulting pending insights and present compact
-   counts, exceptions, and the most valuable next review action.
+2. Inspect `skill_upstream_status` for skills associated with changed sources.
+3. Show summaries of what changed upstream and whether local edits exist.
+4. For learning sources, inspect the skill's `.meta/distill.yaml` to view current
+   goals, cursors, coverage gaps, and candidate lessons.
+5. Porting lessons into skill content uses `skill_update_preview` to show the
+   excerpt and requires explicit user confirmation via `skill_update_confirm`.
 6. State explicitly: **Active skills were not changed.** Stop before
-   `insight_apply_confirm` or `skill_update_confirm` unless the user separately
-   reviews a pinned preview and explicitly approves that semantic mutation.
+   `skill_update_confirm` unless the user separately reviews a pinned preview and
+   explicitly approves that semantic mutation.
 
 A batch request confirms the mechanical check/distill work, not adoption of any
 proposal. Distillation produces evidence and proposals only.
@@ -256,8 +223,8 @@ proposal. Distillation produces evidence and proposals only.
 ## Recovery and response rules
 
 For interrupted work, explain what completed, whether the analyzed revision
-advanced, and the safest retry/defer/cancel choice. Use the run recovery tools;
-do not synthesize state transitions. For user-facing failures, respond as:
+advanced, and the safest retry/defer/cancel choice. Guide the user to safe recovery
+actions; do not synthesize state transitions. For user-facing failures, respond as:
 
 ```text
 ERROR: what failed
@@ -294,28 +261,13 @@ host capabilities, not assumptions:
 
 ```text
 hub_status
-source_intake_add
-source_intake_list
-source_triage
+source_list
 source_check
 skill_upstream_status
+source_watch_preview
 source_watch_confirm
-source_link_preview
-source_unwatch_preview
 source_import_preview
 source_import_confirm
-curation_run_start
-curation_run_submit
-curation_run_get
-curation_run_retry
-curation_run_cancel
-observation_list
-comparison_get
-inbox_list
-insight_get
-insight_decide
-insight_apply_preview
-insight_apply_confirm
 skill_add_preview
 skill_add_confirm
 skill_create_preview
@@ -327,8 +279,9 @@ skill_get
 skill_review
 skill_update_preview
 skill_update_confirm
+skill_resolve
+skill_feedback
 routing_evaluate
-outcome_record
 curation_session_record
 workspace_validate
 workspace_rebuild

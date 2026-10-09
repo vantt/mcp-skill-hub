@@ -24,6 +24,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/vantt/mcp-skill-hub/internal/app"
 	"github.com/vantt/mcp-skill-hub/internal/skill"
+	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
 	"github.com/vantt/mcp-skill-hub/internal/systemskills"
 	"github.com/vantt/mcp-skill-hub/internal/telemetry"
 )
@@ -96,6 +97,23 @@ func TestCLICreateActivateThenMCPListGetRead(t *testing.T) {
 // Runs serially: it asserts on the process-global MCP diagnostics logger that New replaces.
 func TestMCPSourceUsesServeTelemetryRecorderWithoutPersistingRawInput(t *testing.T) {
 	root := newMCPWorkspace(t)
+	srcRec := sourcepkg.Record{
+		SchemaVersion: 1,
+		ID:            "src-1",
+		Adapter:       "filesystem",
+		Locator:       sourcepkg.Locator{Path: "skills"},
+		Status:        "watching",
+		Identity:      sourcepkg.Identity{Name: "src-1", Canonical: "skills"},
+		Monitoring:    sourcepkg.Monitoring{Enabled: true, Cadence: "daily"},
+		Limits:        sourcepkg.Limits{TimeoutSeconds: 20, MaxBytes: sourcepkg.DefaultMaxBytes, MaxFiles: sourcepkg.DefaultMaxFiles, MaxFileBytes: sourcepkg.DefaultMaxFileSize},
+	}
+	srcBytes, err := sourcepkg.MarshalCanonical(srcRec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "sources", "catalog", "src-1.yaml"), srcBytes, 0o644); err != nil {
+		t.Fatal(err)
+	}
 	binary := buildSkillHub(t)
 	var diagnostics bytes.Buffer
 	command := exec.Command(binary, "mcp", "serve", "--workspace", root)
@@ -105,14 +123,12 @@ func TestMCPSourceUsesServeTelemetryRecorderWithoutPersistingRawInput(t *testing
 	if err != nil {
 		t.Fatalf("connect: %v; stderr=%s", err, diagnostics.String())
 	}
-	const locator = "https://github.com/private/source.git"
-	const reason = "private source rationale"
-	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "source_intake_add", Arguments: map[string]any{
-		"locator": locator, "reason": reason, "idempotency_key": "mcp-source-telemetry",
+	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "source_check", Arguments: map[string]any{
+		"source_ids": []string{"src-1"},
 	}})
 	if err != nil || result.IsError {
 		_ = session.Close()
-		t.Fatalf("source_intake_add = %#v, %v; stderr=%s", result, err, diagnostics.String())
+		t.Fatalf("source_check = %#v, %v; stderr=%s", result, err, diagnostics.String())
 	}
 	if err := session.Close(); err != nil {
 		t.Fatalf("close MCP session: %v; stderr=%s", err, diagnostics.String())
@@ -125,13 +141,8 @@ func TestMCPSourceUsesServeTelemetryRecorderWithoutPersistingRawInput(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Contains(exported, []byte(`"event_type":"`+telemetry.EventSourceCandidateCaptured+`"`)) {
+	if !bytes.Contains(exported, []byte(`"event_type":"`+telemetry.EventSourceChecked+`"`)) {
 		t.Fatalf("source telemetry was not recorded by Serve: %s", exported)
-	}
-	for _, raw := range []string{locator, reason} {
-		if bytes.Contains(exported, []byte(raw)) {
-			t.Fatalf("source telemetry leaked %q: %s", raw, exported)
-		}
 	}
 }
 

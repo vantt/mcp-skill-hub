@@ -48,29 +48,32 @@ func findPropertySchema(schema *jsonschema.Schema, name string) *jsonschema.Sche
 func expectedToolAnnotations() map[string][4]bool {
 	// Values are readOnly, destructive, idempotent, openWorld.
 	return map[string][4]bool{
-		"skill_resolve": {true, false, true, false}, "skill_feedback": {false, false, true, false},
-		"source_intake_add": {false, false, true, false}, "source_intake_list": {true, false, false, false},
-		"source_triage": {false, false, false, true}, "source_check": {false, false, false, true},
-		"source_import_preview": {false, false, false, false}, "source_import_confirm": {false, true, true, false},
-		"source_watch_preview": {false, false, false, true}, "source_watch_confirm": {false, true, true, false},
-		"source_link_preview": {false, false, false, true}, "source_unwatch_preview": {false, false, false, false},
-		"skill_upstream_status": {true, false, false, false},
-		"curation_run_start":    {false, false, true, true}, "curation_run_submit": {false, false, false, false},
-		"curation_run_get": {true, false, true, false}, "curation_run_retry": {false, false, false, false},
-		"curation_run_cancel": {false, false, false, false}, "observation_list": {true, false, false, false},
-		"comparison_get": {true, false, false, false}, "inbox_list": {true, false, false, false},
-		"insight_get": {true, false, false, false}, "insight_decide": {false, false, false, false},
-		"insight_apply_preview": {false, false, false, false}, "insight_apply_confirm": {false, true, true, false},
-		"skill_create_preview": {false, false, false, false}, "skill_create_confirm": {false, true, true, false},
-		"skill_transition_preview": {false, false, false, false}, "skill_transition_confirm": {false, true, true, false},
-		"skill_list": {true, false, false, false}, "skill_get": {true, false, false, false},
-		"skill_add_preview": {false, false, false, true}, "skill_add_confirm": {false, true, true, false},
-		"skill_review":         {true, false, false, false},
-		"skill_update_preview": {false, false, false, false}, "skill_update_confirm": {false, true, true, false},
-		"routing_evaluate": {true, false, true, false}, "outcome_record": {false, false, true, false},
-		"curation_session_record": {false, false, true, false},
-		"hub_status":              {true, false, false, false}, "workspace_validate": {true, false, false, false},
-		"workspace_rebuild": {false, false, false, false}, "workspace_diff": {true, false, false, false},
+		"skill_resolve":            {true, false, true, false},
+		"skill_feedback":           {false, false, true, false},
+		"source_list":              {true, false, false, false},
+		"source_check":             {false, false, false, true},
+		"source_import_preview":    {false, false, false, false},
+		"source_import_confirm":    {false, true, true, false},
+		"source_watch_preview":     {false, false, false, true},
+		"source_watch_confirm":     {false, true, true, false},
+		"skill_upstream_status":    {true, false, false, false},
+		"skill_create_preview":     {false, false, false, false},
+		"skill_create_confirm":     {false, true, true, false},
+		"skill_transition_preview": {false, false, false, false},
+		"skill_transition_confirm": {false, true, true, false},
+		"skill_list":               {true, false, false, false},
+		"skill_get":                {true, false, false, false},
+		"skill_add_preview":        {false, false, false, true},
+		"skill_add_confirm":        {false, true, true, false},
+		"skill_review":             {true, false, false, false},
+		"skill_update_preview":     {false, false, false, false},
+		"skill_update_confirm":     {false, true, true, false},
+		"routing_evaluate":         {true, false, true, false},
+		"curation_session_record":  {false, false, true, false},
+		"hub_status":               {true, false, false, false},
+		"workspace_validate":       {true, false, false, false},
+		"workspace_rebuild":        {false, false, false, false},
+		"workspace_diff":           {true, false, false, false},
 	}
 }
 
@@ -132,10 +135,12 @@ func TestModernAndLegacySDKContracts(t *testing.T) {
 				t.Fatal(err)
 			}
 			wantAnnotations := expectedToolAnnotations()
-			if len(wantAnnotations) != 43 {
-				t.Fatalf("expectedToolAnnotations count = %d, want 43", len(wantAnnotations))
-			}
 			if len(listedTools.Tools) != len(wantAnnotations) {
+				for _, tool := range listedTools.Tools {
+					if _, ok := wantAnnotations[tool.Name]; !ok {
+						t.Logf("EXTRA TOOL: %s", tool.Name)
+					}
+				}
 				t.Fatalf("tool count = %d, want %d", len(listedTools.Tools), len(wantAnnotations))
 			}
 			for _, tool := range listedTools.Tools {
@@ -366,15 +371,15 @@ func TestPaginationAndConfirmationBoundaries(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = session.Close() })
 
-	oversizedPage, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "inbox_list", Arguments: map[string]any{"limit": paging.MaximumLimit + 1}})
+	oversizedPage, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "source_list", Arguments: map[string]any{"limit": paging.MaximumLimit + 1}})
 	if err != nil || !oversizedPage.IsError {
 		t.Fatalf("oversized page = %#v, %v", oversizedPage, err)
 	}
-	stalePage, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "inbox_list", Arguments: map[string]any{"cursor": paging.EncodeCursor("stale", "inbox", "last")}})
+	stalePage, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "source_list", Arguments: map[string]any{"cursor": paging.EncodeCursor("stale", "source_list", "last")}})
 	if err != nil || !stalePage.IsError {
 		t.Fatalf("stale page = %#v, %v", stalePage, err)
 	}
-	var staleOutcome toolOutcome[paging.Page[app.InsightInboxGroup]]
+	var staleOutcome toolOutcome[paging.Page[app.SourceListItem]]
 	decodeStructuredContent(t, stalePage, &staleOutcome)
 	if staleOutcome.Error == nil || staleOutcome.Error.Code != "snapshot_expired" {
 		t.Fatalf("stale cursor outcome = %#v", staleOutcome)

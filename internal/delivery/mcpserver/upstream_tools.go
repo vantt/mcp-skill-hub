@@ -45,53 +45,6 @@ func (adapter *Server) registerUpstreamTools(server *mcp.Server) {
 		})
 	})
 
-	addTool(server, &mcp.Tool{
-		Name:        "source_link_preview",
-		Title:       "Preview source link attachment or detachment",
-		Description: "Preview attaching a source to a skill as a learning reference, or detaching an existing learning reference link. Returns a source proposal with confirmation pins.",
-		Annotations: annotations(false, false, false, true),
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, input sourceLinkPreviewInput) (*mcp.CallToolResult, toolOutcome[app.SourceProposal], error) {
-		action := strings.ToLower(strings.TrimSpace(input.Action))
-		skillID := strings.TrimSpace(input.SkillID)
-		if skillID == "" {
-			return failure[app.SourceProposal](app.NewInvalidRequestError("skill_id is required", "Provide a target skill ID."))
-		}
-		service := app.SourceService{}
-		switch action {
-		case "attach":
-			return appResult(service.PreviewAttach(ctx, adapter.workspace, app.SourceAttachInput{
-				SkillID:        skillID,
-				SourceID:       strings.TrimSpace(input.SourceID),
-				Locator:        strings.TrimSpace(input.Locator),
-				Ref:            strings.TrimSpace(input.Ref),
-				Path:           strings.TrimSpace(input.Path),
-				Cadence:        strings.TrimSpace(input.Cadence),
-				IdempotencyKey: strings.TrimSpace(input.IdempotencyKey),
-			}))
-		case "detach":
-			sourceID := strings.TrimSpace(input.SourceID)
-			if sourceID == "" {
-				return failure[app.SourceProposal](app.NewInvalidRequestError("source_id is required for detach", "Provide source_id."))
-			}
-			return appResult(service.PreviewDetach(ctx, adapter.workspace, skillID, sourceID))
-		default:
-			return failure[app.SourceProposal](app.NewInvalidRequestError("action must be attach or detach", "Pass action: attach or action: detach."))
-		}
-	})
-
-	addTool(server, &mcp.Tool{
-		Name:        "source_unwatch_preview",
-		Title:       "Preview unwatch source",
-		Description: "Preview stopping watching a source and deleting its catalog record if unreferenced. Returns a source proposal with confirmation pins.",
-		Annotations: annotations(false, false, false, false),
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, input sourceUnwatchPreviewInput) (*mcp.CallToolResult, toolOutcome[app.SourceProposal], error) {
-		sourceID := strings.TrimSpace(input.SourceID)
-		if sourceID == "" {
-			return failure[app.SourceProposal](app.NewInvalidRequestError("source_id is required", "Provide source_id."))
-		}
-		service := app.SourceService{}
-		return appResult(service.PreviewUnwatch(ctx, adapter.workspace, sourceID))
-	})
 }
 
 func toSkillUpstreamItem(sk app.SkillUpstream) SkillUpstreamItem {

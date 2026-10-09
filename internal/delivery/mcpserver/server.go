@@ -469,7 +469,6 @@ func (adapter *Server) registerTools(server *mcp.Server) {
 	adapter.registerSourceImportTools(server)
 	adapter.registerSourceWatchTools(server)
 	adapter.registerUpstreamTools(server)
-	adapter.registerCurationRunTools(server)
 	adapter.registerInsightTools(server)
 	adapter.registerSkillTools(server)
 	adapter.registerSkillAddTools(server)
