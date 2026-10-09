@@ -47,6 +47,8 @@ func migrateSkillYAMLToV3(root string) ([]mutation.Change, []FileDiff, error) {
 		var skillMDBytes []byte
 		if data, err := os.ReadFile(skillMDPath); err == nil {
 			skillMDBytes = data
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("read %s: %w", skillMDPath, err)
 		}
 
 		newRelPath := filepath.ToSlash(filepath.Join(filepath.Dir(relPath), ".meta", "skill.yaml"))
@@ -55,6 +57,8 @@ func migrateSkillYAMLToV3(root string) ([]mutation.Change, []FileDiff, error) {
 		var existingContents []byte
 		if data, err := os.ReadFile(targetAbsPath); err == nil {
 			existingContents = data
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("read %s: %w", targetAbsPath, err)
 		}
 
 		newContents, err := transformSkillMetaToV3(oldContents, existingContents, skillMDBytes, relPath, newRelPath)
