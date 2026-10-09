@@ -62,8 +62,8 @@ type bucketKey struct {
 }
 
 type baselineContext struct {
-	counts           map[string]int64
-	firstValid       map[string]string
+	bucketCounts     map[bucketKey]map[string]int64
+	bucketFirstValid map[bucketKey]map[string]string
 	totalLoads       map[string]int64
 	unsolicitedLoads map[string]int64
 	activeSnapshot   string
@@ -143,6 +143,66 @@ func parseBaselineLoads(rawEvents []telemetry.Event) (map[string]int64, map[stri
 	return totalLoads, unsolicitedLoads
 }
 
+func parseBaselineBucketCounts(rawEvents []telemetry.Event) (map[bucketKey]map[string]int64, map[bucketKey]map[string]string) {
+	bucketCounts := make(map[bucketKey]map[string]int64)
+	bucketFirstValid := make(map[bucketKey]map[string]string)
+
+	for _, event := range rawEvents {
+		snap := event.CatalogSnapshot
+		if snap == "" {
+			snap = "unknown"
+		}
+		client := event.Client.Name
+		if client == "" {
+			client = "skillhub"
+		}
+		bk := bucketKey{snapshot: snap, client: client}
+
+		recordFirstValid := func(metric string, t time.Time) {
+			fv, ok := bucketFirstValid[bk]
+			if !ok {
+				fv = make(map[string]string)
+				bucketFirstValid[bk] = fv
+			}
+			day := t.Format("2006-01-02")
+			if cur, ok := fv[metric]; !ok || day < cur {
+				fv[metric] = day
+			}
+		}
+
+		counts, ok := bucketCounts[bk]
+		if !ok {
+			counts = make(map[string]int64)
+			bucketCounts[bk] = counts
+		}
+
+		switch event.Type {
+		case telemetry.EventClarificationRequested:
+			counts["clarification_requested"]++
+			recordFirstValid("needs_context_answer_rate", event.OccurredAt)
+		case telemetry.EventClarificationAnswered:
+			counts["clarification_answered"]++
+			recordFirstValid("needs_context_answer_rate", event.OccurredAt)
+		case telemetry.EventTranscriptToolObserved:
+			counts["transcript_skill_uses"]++
+			if resolvedBefore, ok := event.Payload["resolved_before"].(bool); ok && !resolvedBefore {
+				counts["native_no_resolve"]++
+			}
+			recordFirstValid("bypass_rate", event.OccurredAt)
+		case telemetry.EventSkillUtilityReported, telemetry.EventTaskOutcomeReported:
+			if afterLoad, ok := event.Payload["after_load"].(bool); ok && afterLoad {
+				utility, _ := event.Payload["utility"].(string)
+				status, _ := event.Payload["status"].(string)
+				if utility == "harmful" || status == "failed" || status == "rejected" {
+					counts["negative_after_load"]++
+					recordFirstValid("negative_after_load", event.OccurredAt)
+				}
+			}
+		}
+	}
+	return bucketCounts, bucketFirstValid
+}
+
 func groupBaselineChains(allChains []*rawEventChain, totalLoads map[string]int64) (map[bucketKey][]*rawEventChain, map[string]time.Time) {
 	groupedChains := make(map[bucketKey][]*rawEventChain)
 	snapshotLatestTime := make(map[string]time.Time)
@@ -185,7 +245,9 @@ func groupBaselineChains(allChains []*rawEventChain, totalLoads map[string]int64
 }
 
 func (bc *baselineContext) buildBucket(bk bucketKey, bChains []*rawEventChain) BaselineBucket {
-	bucketMetrics := calculateChainMetrics(bChains, bc.counts, bc.firstValid, bc.until, "")
+	bCounts := bc.bucketCounts[bk]
+	bFirstValid := bc.bucketFirstValid[bk]
+	bucketMetrics := calculateChainMetrics(bChains, bCounts, bFirstValid, bc.until, "")
 	resolved := bucketMetrics.ChainsResolved
 	noSkill := bucketMetrics.ChainsNoSkill
 
@@ -245,9 +307,16 @@ func (bc *baselineContext) buildBucket(bk bucketKey, bChains []*rawEventChain) B
 }
 
 func (service UsageService) compileBaseline(rawEvents []telemetry.Event, since, until time.Time, minChains int, rInfo rawRetentionInfo) BaselineReport {
-	allChains, counts, firstValid := service.buildChains(rawEvents)
+	allChains, _, _ := service.buildChains(rawEvents)
 	totalLoads, unsolicitedLoads := parseBaselineLoads(rawEvents)
+	bucketCounts, bucketFirstValid := parseBaselineBucketCounts(rawEvents)
 	groupedChains, snapshotLatestTime := groupBaselineChains(allChains, totalLoads)
+
+	for bk := range bucketCounts {
+		if _, exists := groupedChains[bk]; !exists {
+			groupedChains[bk] = []*rawEventChain{}
+		}
+	}
 
 	var activeSnapshot string
 	var latestTime time.Time
@@ -259,8 +328,8 @@ func (service UsageService) compileBaseline(rawEvents []telemetry.Event, since, 
 	}
 
 	bCtx := baselineContext{
-		counts:           counts,
-		firstValid:       firstValid,
+		bucketCounts:     bucketCounts,
+		bucketFirstValid: bucketFirstValid,
 		totalLoads:       totalLoads,
 		unsolicitedLoads: unsolicitedLoads,
 		activeSnapshot:   activeSnapshot,

@@ -350,3 +350,230 @@ func TestBaselineCustomRetentionPrunedAndFullWindow(t *testing.T) {
 		t.Errorf("expected RawRetentionPruned == false for full window within retention")
 	}
 }
+
+func TestBaselinePerBucketCountsAndRatesNoClamping(t *testing.T) {
+	service := UsageService{}
+	now := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
+	snap := "sha256:snap_multi_bucket"
+
+	clientA := "client-a"
+	clientB := "client-b"
+
+	var events []telemetry.Event
+
+	// Bucket A: 1 resolution, 1 load, 1 clarification requested, 1 answered,
+	// 2 transcript tool observed (1 native_no_resolve), 1 negative feedback after load.
+	events = append(events,
+		telemetry.Event{
+			ID:              "evt_res_a1",
+			Type:            telemetry.EventResolutionCompleted,
+			OccurredAt:      now.Add(-2 * time.Hour),
+			CatalogSnapshot: snap,
+			Client:          telemetry.Client{Name: clientA},
+			ResolutionID:    "res_a1",
+			SessionIDHash:   "sess_a",
+			Payload:         map[string]any{"status": "resolved", "top_skill_id": "skill-1"},
+		},
+		telemetry.Event{
+			ID:              "evt_load_a1",
+			Type:            telemetry.EventSkillLoaded,
+			OccurredAt:      now.Add(-90 * time.Minute),
+			CatalogSnapshot: snap,
+			Client:          telemetry.Client{Name: clientA},
+			ResolutionID:    "res_a1",
+			SessionIDHash:   "sess_a",
+			Payload: map[string]any{
+				"basis":       telemetry.LoadBasisServerObserved,
+				"skill_id":    "skill-1",
+				"attribution": "recommended",
+			},
+		},
+		telemetry.Event{
+			ID:              "evt_clar_req_a",
+			Type:            telemetry.EventClarificationRequested,
+			OccurredAt:      now.Add(-80 * time.Minute),
+			CatalogSnapshot: snap,
+			Client:          telemetry.Client{Name: clientA},
+		},
+		telemetry.Event{
+			ID:              "evt_clar_ans_a",
+			Type:            telemetry.EventClarificationAnswered,
+			OccurredAt:      now.Add(-75 * time.Minute),
+			CatalogSnapshot: snap,
+			Client:          telemetry.Client{Name: clientA},
+		},
+		telemetry.Event{
+			ID:              "evt_transcript_a1",
+			Type:            telemetry.EventTranscriptToolObserved,
+			OccurredAt:      now.Add(-70 * time.Minute),
+			CatalogSnapshot: snap,
+			Client:          telemetry.Client{Name: clientA},
+			Payload:         map[string]any{"resolved_before": false},
+		},
+		telemetry.Event{
+			ID:              "evt_transcript_a2",
+			Type:            telemetry.EventTranscriptToolObserved,
+			OccurredAt:      now.Add(-65 * time.Minute),
+			CatalogSnapshot: snap,
+			Client:          telemetry.Client{Name: clientA},
+			Payload:         map[string]any{"resolved_before": true},
+		},
+		telemetry.Event{
+			ID:              "evt_util_a",
+			Type:            telemetry.EventSkillUtilityReported,
+			OccurredAt:      now.Add(-60 * time.Minute),
+			CatalogSnapshot: snap,
+			Client:          telemetry.Client{Name: clientA},
+			Payload:         map[string]any{"after_load": true, "utility": "harmful"},
+		},
+	)
+
+	// Bucket B: 2 resolutions, 2 loads, 2 clarification requested, 0 answered,
+	// 1 transcript tool observed (0 native_no_resolve), 0 negative feedback.
+	events = append(events,
+		telemetry.Event{
+			ID:              "evt_res_b1",
+			Type:            telemetry.EventResolutionCompleted,
+			OccurredAt:      now.Add(-2 * time.Hour),
+			CatalogSnapshot: snap,
+			Client:          telemetry.Client{Name: clientB},
+			ResolutionID:    "res_b1",
+			SessionIDHash:   "sess_b1",
+			Payload:         map[string]any{"status": "resolved", "top_skill_id": "skill-2"},
+		},
+		telemetry.Event{
+			ID:              "evt_load_b1",
+			Type:            telemetry.EventSkillLoaded,
+			OccurredAt:      now.Add(-90 * time.Minute),
+			CatalogSnapshot: snap,
+			Client:          telemetry.Client{Name: clientB},
+			ResolutionID:    "res_b1",
+			SessionIDHash:   "sess_b1",
+			Payload: map[string]any{
+				"basis":       telemetry.LoadBasisServerObserved,
+				"skill_id":    "skill-2",
+				"attribution": "recommended",
+			},
+		},
+		telemetry.Event{
+			ID:              "evt_res_b2",
+			Type:            telemetry.EventResolutionCompleted,
+			OccurredAt:      now.Add(-85 * time.Minute),
+			CatalogSnapshot: snap,
+			Client:          telemetry.Client{Name: clientB},
+			ResolutionID:    "res_b2",
+			SessionIDHash:   "sess_b2",
+			Payload:         map[string]any{"status": "resolved", "top_skill_id": "skill-2"},
+		},
+		telemetry.Event{
+			ID:              "evt_load_b2",
+			Type:            telemetry.EventSkillLoaded,
+			OccurredAt:      now.Add(-80 * time.Minute),
+			CatalogSnapshot: snap,
+			Client:          telemetry.Client{Name: clientB},
+			ResolutionID:    "res_b2",
+			SessionIDHash:   "sess_b2",
+			Payload: map[string]any{
+				"basis":       telemetry.LoadBasisServerObserved,
+				"skill_id":    "skill-2",
+				"attribution": "recommended",
+			},
+		},
+		telemetry.Event{
+			ID:              "evt_clar_req_b1",
+			Type:            telemetry.EventClarificationRequested,
+			OccurredAt:      now.Add(-75 * time.Minute),
+			CatalogSnapshot: snap,
+			Client:          telemetry.Client{Name: clientB},
+		},
+		telemetry.Event{
+			ID:              "evt_clar_req_b2",
+			Type:            telemetry.EventClarificationRequested,
+			OccurredAt:      now.Add(-70 * time.Minute),
+			CatalogSnapshot: snap,
+			Client:          telemetry.Client{Name: clientB},
+		},
+		telemetry.Event{
+			ID:              "evt_transcript_b1",
+			Type:            telemetry.EventTranscriptToolObserved,
+			OccurredAt:      now.Add(-65 * time.Minute),
+			CatalogSnapshot: snap,
+			Client:          telemetry.Client{Name: clientB},
+			Payload:         map[string]any{"resolved_before": true},
+		},
+	)
+
+	report := service.compileBaseline(events, now.Add(-24*time.Hour), now, 5, rawRetentionInfo{retention: 30 * 24 * time.Hour})
+	if len(report.Buckets) != 2 {
+		t.Fatalf("expected 2 buckets, got %d", len(report.Buckets))
+	}
+
+	var bucketA, bucketB *BaselineBucket
+	for i := range report.Buckets {
+		switch report.Buckets[i].Client {
+		case clientA:
+			bucketA = &report.Buckets[i]
+		case clientB:
+			bucketB = &report.Buckets[i]
+		}
+	}
+	if bucketA == nil || bucketB == nil {
+		t.Fatalf("expected buckets for %q and %q", clientA, clientB)
+	}
+
+	// 1. Verify rates are NOT identical across buckets:
+	// NeedsContextAnswerRate: bucketA = 1/1 = 1.0, bucketB = 0/2 = 0.0
+	if bucketA.Metrics.NeedsContextAnswerRate.Rate == nil || *bucketA.Metrics.NeedsContextAnswerRate.Rate != 1.0 {
+		t.Errorf("bucketA NeedsContextAnswerRate = %v, want 1.0", bucketA.Metrics.NeedsContextAnswerRate.Rate)
+	}
+	if bucketB.Metrics.NeedsContextAnswerRate.Rate == nil || *bucketB.Metrics.NeedsContextAnswerRate.Rate != 0.0 {
+		t.Errorf("bucketB NeedsContextAnswerRate = %v, want 0.0", bucketB.Metrics.NeedsContextAnswerRate.Rate)
+	}
+
+	// BypassRate: bucketA = 1/2 = 0.5, bucketB = 0/1 = 0.0
+	if bucketA.Metrics.BypassRate.Rate == nil || *bucketA.Metrics.BypassRate.Rate != 0.5 {
+		t.Errorf("bucketA BypassRate = %v, want 0.5", bucketA.Metrics.BypassRate.Rate)
+	}
+	if bucketB.Metrics.BypassRate.Rate == nil || *bucketB.Metrics.BypassRate.Rate != 0.0 {
+		t.Errorf("bucketB BypassRate = %v, want 0.0", bucketB.Metrics.BypassRate.Rate)
+	}
+
+	// NegativeAfterLoad: bucketA = 1/1 = 1.0, bucketB = 0/2 = 0.0
+	if bucketA.Metrics.NegativeAfterLoad.Rate == nil || *bucketA.Metrics.NegativeAfterLoad.Rate != 1.0 {
+		t.Errorf("bucketA NegativeAfterLoad = %v, want 1.0", bucketA.Metrics.NegativeAfterLoad.Rate)
+	}
+	if bucketB.Metrics.NegativeAfterLoad.Rate == nil || *bucketB.Metrics.NegativeAfterLoad.Rate != 0.0 {
+		t.Errorf("bucketB NegativeAfterLoad = %v, want 0.0", bucketB.Metrics.NegativeAfterLoad.Rate)
+	}
+
+	// 2. Assert every rate in every bucket is in [0, 1] without clamping (numerator <= denominator)
+	for _, b := range []*BaselineBucket{bucketA, bucketB} {
+		rates := []struct {
+			name string
+			rm   RateMetric
+		}{
+			{"AcceptanceRate", b.Metrics.AcceptanceRate},
+			{"OverrideRate", b.Metrics.OverrideRate},
+			{"FalseNoSkillRate", b.Metrics.FalseNoSkillRate},
+			{"TrueNoSkill", b.Metrics.TrueNoSkill},
+			{"ReformulationRate", b.Metrics.ReformulationRate},
+			{"IgnoreRate", b.Metrics.IgnoreRate},
+			{"NeedsContextAnswerRate", b.Metrics.NeedsContextAnswerRate},
+			{"BypassRate", b.Metrics.BypassRate},
+			{"NegativeAfterLoad", b.Metrics.NegativeAfterLoad},
+		}
+		for _, r := range rates {
+			if r.rm.Rate != nil {
+				if r.rm.Numerator > r.rm.Denominator {
+					t.Errorf("bucket %s metric %s: numerator (%d) > denominator (%d), clamped!", b.Client, r.name, r.rm.Numerator, r.rm.Denominator)
+				}
+				if r.rm.Status == "overflow" {
+					t.Errorf("bucket %s metric %s: reported overflow!", b.Client, r.name)
+				}
+				if *r.rm.Rate < 0.0 || *r.rm.Rate > 1.0 {
+					t.Errorf("bucket %s metric %s: rate %f out of [0, 1]!", b.Client, r.name, *r.rm.Rate)
+				}
+			}
+		}
+	}
+}

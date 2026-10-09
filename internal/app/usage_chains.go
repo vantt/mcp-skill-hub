@@ -106,11 +106,13 @@ func makeRate(num, den int64) RateMetric {
 	if den <= 0 {
 		return RateMetric{Rate: nil, Numerator: num, Denominator: den, Status: "unknown"}
 	}
+	if num > den {
+		r := float64(num) / float64(den)
+		return RateMetric{Rate: &r, Numerator: num, Denominator: den, Status: "overflow"}
+	}
 	r := float64(num) / float64(den)
 	if r < 0.0 {
 		r = 0.0
-	} else if r > 1.0 {
-		r = 1.0
 	}
 	return RateMetric{Rate: &r, Numerator: num, Denominator: den, Status: "ok"}
 }
