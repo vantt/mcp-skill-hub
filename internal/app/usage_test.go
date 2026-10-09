@@ -353,3 +353,55 @@ func TestUsageServiceFunnel(t *testing.T) {
 		t.Fatal("expected error for non-existent skill query")
 	}
 }
+
+func TestFunnelSkillsListExcludesClientNames(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "workspace")
+	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+		t.Fatal(err)
+	}
+	createTestSkill(t, root, "real-skill", "Real Skill", true)
+
+	now := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
+	recorder, err := (TelemetryService{Config: telemetry.Config{Clock: func() time.Time { return now }}}).Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Record a tools_list_bytes metric for client claude-code
+	recorder.Record(telemetry.Event{
+		Version:         telemetry.EventVersion,
+		ID:              "evt_tlb_1",
+		Type:            telemetry.EventServerMetric,
+		OccurredAt:      now,
+		CatalogSnapshot: "test-snapshot",
+		PolicyRevision:  "test-policy",
+		Client:          telemetry.Client{Name: "claude-code"},
+		Payload: map[string]any{
+			"metric_name":  "tools_list_bytes",
+			"metric_value": float64(15000),
+		},
+	})
+
+	if err := recorder.Flush(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	recorder.Close(t.Context())
+
+	service := UsageService{}
+	report, err := service.Funnel(t.Context(), root, FunnelQuery{Since: now.Add(-24 * time.Hour), Until: now.Add(24 * time.Hour)})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Overall should reflect tools_list_bytes
+	if report.Overall == nil || report.Overall.ToolsListBytes != 15000 {
+		t.Fatalf("expected overall tools_list_bytes=15000, got %+v", report.Overall)
+	}
+
+	// Skills list must NOT contain "claude-code"
+	for _, s := range report.Skills {
+		if s.SkillID == "claude-code" || s.Name == "claude-code" {
+			t.Fatalf("found client name in skills list: %+v", s)
+		}
+	}
+}

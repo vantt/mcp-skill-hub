@@ -232,7 +232,7 @@ func (a *accumulator) add(metric string, count int64) {
 		a.unsupportedMethodCalls += count
 	case metric == "snapshot_expired_requests":
 		a.snapshotExpiredRequests += count
-	case metric == "tools_list_bytes":
+	case strings.HasPrefix(metric, "tools_list_bytes"):
 		if count > a.toolsListBytes {
 			a.toolsListBytes = count
 		}

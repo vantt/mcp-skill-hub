@@ -595,12 +595,12 @@ func TestToolsListBytesRollupMaxPerClient(t *testing.T) {
 
 	counts := rollupCounts(t, recorder, "", "")
 	day := "2026-10-09"
-	// client-a should be max (2500), not sum (5000)
-	if got := counts[day+"|client-a|tools_list_bytes"]; got != 2500 {
+	// client-a should be max (2500), not sum (5000), under empty skill_id
+	if got := counts[day+"||tools_list_bytes:client-a"]; got != 2500 {
 		t.Fatalf("expected client-a tools_list_bytes = 2500, got %d (all: %v)", got, counts)
 	}
-	// client-b should be 3000
-	if got := counts[day+"|client-b|tools_list_bytes"]; got != 3000 {
+	// client-b should be 3000, under empty skill_id
+	if got := counts[day+"||tools_list_bytes:client-b"]; got != 3000 {
 		t.Fatalf("expected client-b tools_list_bytes = 3000, got %d (all: %v)", got, counts)
 	}
 }
