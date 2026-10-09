@@ -65,6 +65,12 @@ func TestRealHubFixtureMigrationV1ToV2ToV3(t *testing.T) {
 	}
 
 	skillIDs := []string{"test-audit", "markdown-to-epub", "herdr-cook-plan"}
+	type routingSnapshot struct {
+		Operations []string `yaml:"operations"`
+		Triggers   []string `yaml:"triggers"`
+		NotFor     []string `yaml:"not_for"`
+		MinScope   string   `yaml:"min_scope"`
+	}
 	type skillFactSnapshot struct {
 		ThirdParty     bool
 		Approved       bool
@@ -74,6 +80,10 @@ func TestRealHubFixtureMigrationV1ToV2ToV3(t *testing.T) {
 		UpstreamStatus string
 		UpstreamRepo   string
 		Name           string
+		Description    string
+		Status         string
+		Routing        routingSnapshot
+		Resources      []ResourceItem
 	}
 
 	ctx := context.Background()
@@ -86,6 +96,19 @@ func TestRealHubFixtureMigrationV1ToV2ToV3(t *testing.T) {
 			t.Fatalf("ReviewSkill(%s) in v1: %v", id, err)
 		}
 		up, _ := service.GetSkillUpstream(ctx, root, id)
+		_, _, metaBytes, _ := locateSkillDir(root, id)
+		var metaDoc struct {
+			Routing routingSnapshot `yaml:"routing"`
+		}
+		_ = yaml.Unmarshal(metaBytes, &metaDoc)
+
+		var cleanResources []ResourceItem
+		for _, r := range review.ResourceStatus.Resources {
+			if !workspace.IsHubMeta(r.Path) {
+				cleanResources = append(cleanResources, r)
+			}
+		}
+
 		beforeSnapshots[id] = skillFactSnapshot{
 			ThirdParty:     review.ContentTrust.ThirdParty,
 			Approved:       review.ContentTrust.Approved,
@@ -95,14 +118,22 @@ func TestRealHubFixtureMigrationV1ToV2ToV3(t *testing.T) {
 			UpstreamStatus: up.Status,
 			UpstreamRepo:   up.Repository,
 			Name:           review.Name,
+			Description:    review.Description,
+			Status:         review.LifecycleState,
+			Routing:        metaDoc.Routing,
+			Resources:      cleanResources,
 		}
 	}
 
 	// Verify v1 baseline expectations:
-	// test-audit is third-party (from openclaw.git), reviewed: true
+	// test-audit is third-party (from openclaw.git), reviewed: true, name is "test-audit"
 	if !beforeSnapshots["test-audit"].ThirdParty {
 		t.Fatalf("test-audit must be third-party in v1: %+v", beforeSnapshots["test-audit"])
 	}
+	if beforeSnapshots["test-audit"].Name != "test-audit" {
+		t.Fatalf("test-audit name in v1 = %q, want %q", beforeSnapshots["test-audit"].Name, "test-audit")
+	}
+
 	// markdown-to-epub is local authoring (created_by: skillhub, no origin), name is "Markdown to Epub"
 	if beforeSnapshots["markdown-to-epub"].ThirdParty {
 		t.Fatalf("markdown-to-epub must be local in v1: %+v", beforeSnapshots["markdown-to-epub"])
@@ -110,9 +141,16 @@ func TestRealHubFixtureMigrationV1ToV2ToV3(t *testing.T) {
 	if beforeSnapshots["markdown-to-epub"].Name != "Markdown to Epub" {
 		t.Fatalf("markdown-to-epub name in v1 = %q, want %q", beforeSnapshots["markdown-to-epub"].Name, "Markdown to Epub")
 	}
-	// herdr-cook-plan is third-party (from herdr-cook-plan.git)
+
+	// herdr-cook-plan is third-party (from herdr-cook-plan.git), name is "herdr-cook-plan"
 	if !beforeSnapshots["herdr-cook-plan"].ThirdParty {
 		t.Fatalf("herdr-cook-plan must be third-party in v1: %+v", beforeSnapshots["herdr-cook-plan"])
+	}
+	if beforeSnapshots["herdr-cook-plan"].Name != "herdr-cook-plan" {
+		t.Fatalf("herdr-cook-plan name in v1 = %q, want %q", beforeSnapshots["herdr-cook-plan"].Name, "herdr-cook-plan")
+	}
+	if !strings.HasPrefix(beforeSnapshots["herdr-cook-plan"].Description, "Run an existing AgentKit plan") {
+		t.Fatalf("herdr-cook-plan description corrupted in v1: %q", beforeSnapshots["herdr-cook-plan"].Description)
 	}
 
 	// Step 1: Migrate v1 -> v3 (chains planV1ToV2 and planV2ToV3)
@@ -139,13 +177,26 @@ func TestRealHubFixtureMigrationV1ToV2ToV3(t *testing.T) {
 		t.Fatalf("expected version 3 after v1->v3, got %d (err: %v)", v3Version, err)
 	}
 
-	// Step 3: Verify all 3 skills in v3 match their v1 baselines
+	// Step 2: Verify all 3 skills in v3 match their v1 baselines completely
 	for _, id := range skillIDs {
 		review, err := service.ReviewSkill(ctx, root, id)
 		if err != nil {
 			t.Fatalf("ReviewSkill(%s) in v3: %v", id, err)
 		}
 		up, _ := service.GetSkillUpstream(ctx, root, id)
+		_, _, metaBytes, _ := locateSkillDir(root, id)
+		var metaDoc struct {
+			Routing routingSnapshot `yaml:"routing"`
+		}
+		_ = yaml.Unmarshal(metaBytes, &metaDoc)
+
+		var cleanResources []ResourceItem
+		for _, r := range review.ResourceStatus.Resources {
+			if !workspace.IsHubMeta(r.Path) {
+				cleanResources = append(cleanResources, r)
+			}
+		}
+
 		afterSnapshot := skillFactSnapshot{
 			ThirdParty:     review.ContentTrust.ThirdParty,
 			Approved:       review.ContentTrust.Approved,
@@ -155,9 +206,28 @@ func TestRealHubFixtureMigrationV1ToV2ToV3(t *testing.T) {
 			UpstreamStatus: up.Status,
 			UpstreamRepo:   up.Repository,
 			Name:           review.Name,
+			Description:    review.Description,
+			Status:         review.LifecycleState,
+			Routing:        metaDoc.Routing,
+			Resources:      cleanResources,
 		}
 
 		before := beforeSnapshots[id]
+		if afterSnapshot.Name != before.Name {
+			t.Errorf("skill %s: Name changed from %q to %q", id, before.Name, afterSnapshot.Name)
+		}
+		if afterSnapshot.Description != before.Description {
+			t.Errorf("skill %s: Description changed from %q to %q", id, before.Description, afterSnapshot.Description)
+		}
+		if afterSnapshot.Status != before.Status {
+			t.Errorf("skill %s: Status changed from %q to %q", id, before.Status, afterSnapshot.Status)
+		}
+		if !reflect.DeepEqual(afterSnapshot.Routing, before.Routing) {
+			t.Errorf("skill %s: Routing changed from %+v to %+v", id, before.Routing, afterSnapshot.Routing)
+		}
+		if !reflect.DeepEqual(afterSnapshot.Resources, before.Resources) {
+			t.Errorf("skill %s: Resources changed from %+v to %+v", id, before.Resources, afterSnapshot.Resources)
+		}
 		if afterSnapshot.ThirdParty != before.ThirdParty {
 			t.Errorf("skill %s: ThirdParty changed from %v to %v", id, before.ThirdParty, afterSnapshot.ThirdParty)
 		}
@@ -175,15 +245,6 @@ func TestRealHubFixtureMigrationV1ToV2ToV3(t *testing.T) {
 		}
 		if afterSnapshot.UpstreamStatus != before.UpstreamStatus {
 			t.Errorf("skill %s: UpstreamStatus changed from %q to %q", id, before.UpstreamStatus, afterSnapshot.UpstreamStatus)
-		}
-		if id == "markdown-to-epub" && afterSnapshot.Name != "Markdown to Epub" {
-			t.Errorf("markdown-to-epub must preserve custom name 'Markdown to Epub', got %q", afterSnapshot.Name)
-		}
-		if id == "test-audit" && afterSnapshot.Name != "Test Audit" {
-			t.Errorf("test-audit must derive 'Test Audit' from SKILL.md H1, got %q", afterSnapshot.Name)
-		}
-		if id == "herdr-cook-plan" && afterSnapshot.Name != "Herdr Cook Plan" {
-			t.Errorf("herdr-cook-plan must derive 'Herdr Cook Plan' from SKILL.md H1, got %q", afterSnapshot.Name)
 		}
 	}
 
@@ -241,6 +302,14 @@ func TestRealHubFixtureMigrationV1ToV2ToV3(t *testing.T) {
 	if openclawSrc == nil {
 		t.Fatal("openclaw source not found in merged test-audit")
 	}
+	// Item 3: Sources write exactly one key, repo (D2), never repository
+	if openclawSrc.Repo != "https://github.com/openclaw/openclaw" {
+		t.Fatalf("openclaw repo = %q, want https://github.com/openclaw/openclaw", openclawSrc.Repo)
+	}
+	if openclawSrc.Repository != "" {
+		t.Fatalf("openclaw must not write duplicate repository key; got %q", openclawSrc.Repository)
+	}
+
 	hasUpstream, hasLearning := false, false
 	for _, r := range openclawSrc.Roles {
 		if r == "upstream" {
@@ -265,6 +334,12 @@ func TestRealHubFixtureMigrationV1ToV2ToV3(t *testing.T) {
 	}
 	if len(superpowersSrc.Roles) != 1 || superpowersSrc.Roles[0] != "learning" {
 		t.Fatalf("superpowers roles = %v, want [learning]", superpowersSrc.Roles)
+	}
+	if superpowersSrc.Repo != "https://github.com/obra/superpowers" {
+		t.Fatalf("superpowers repo = %q, want https://github.com/obra/superpowers", superpowersSrc.Repo)
+	}
+	if superpowersSrc.Repository != "" {
+		t.Fatalf("superpowers must not write duplicate repository key; got %q", superpowersSrc.Repository)
 	}
 
 	// Verify markdown-to-epub retained its custom name

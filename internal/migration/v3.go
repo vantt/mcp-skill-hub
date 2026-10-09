@@ -43,6 +43,12 @@ func migrateSkillYAMLToV3(root string) ([]mutation.Change, []FileDiff, error) {
 			return err
 		}
 
+		skillMDPath := filepath.Join(filepath.Dir(path), "SKILL.md")
+		var skillMDBytes []byte
+		if data, err := os.ReadFile(skillMDPath); err == nil {
+			skillMDBytes = data
+		}
+
 		newRelPath := filepath.ToSlash(filepath.Join(filepath.Dir(relPath), ".meta", "skill.yaml"))
 		targetAbsPath := filepath.Join(root, filepath.FromSlash(newRelPath))
 
@@ -51,7 +57,7 @@ func migrateSkillYAMLToV3(root string) ([]mutation.Change, []FileDiff, error) {
 			existingContents = data
 		}
 
-		newContents, err := transformSkillMetaToV3(oldContents, existingContents, relPath, newRelPath)
+		newContents, err := transformSkillMetaToV3(oldContents, existingContents, skillMDBytes, relPath, newRelPath)
 		if err != nil {
 			return err
 		}
@@ -106,7 +112,7 @@ func migrateSkillYAMLToV3(root string) ([]mutation.Change, []FileDiff, error) {
 	return changes, diffs, err
 }
 
-func transformSkillMetaToV3(oldContents, existingContents []byte, oldRelPath, newRelPath string) ([]byte, error) {
+func transformSkillMetaToV3(oldContents, existingContents, skillMDBytes []byte, oldRelPath, newRelPath string) ([]byte, error) {
 	var oldMap map[string]any
 	if err := yaml.Unmarshal(oldContents, &oldMap); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", oldRelPath, err)
@@ -139,9 +145,16 @@ func transformSkillMetaToV3(oldContents, existingContents []byte, oldRelPath, ne
 	merged["schema_version"] = 1
 	merged["id"] = oldID
 
-	// Preserve custom name if it differs from the ID (Item 5 decision)
+	// Name order (Item 2 & 5):
+	// an explicit meta name is kept by migration only when it differs from the SKILL.md frontmatter name
 	oldName, _ := oldMap["name"].(string)
-	if oldName != "" && oldName != oldID {
+	fmName := ""
+	if fm, _ := parseSkillMD(skillMDBytes); fm != nil {
+		if fn, ok := fm["name"].(string); ok {
+			fmName = strings.TrimSpace(fn)
+		}
+	}
+	if oldName != "" && (fmName == "" || oldName != fmName) {
 		merged["name"] = oldName
 	}
 
@@ -184,6 +197,27 @@ func transformSkillMetaToV3(oldContents, existingContents []byte, oldRelPath, ne
 	_ = enc.Close()
 
 	return buf.Bytes(), nil
+}
+
+func parseSkillMD(contents []byte) (map[string]any, []byte) {
+	norm := bytes.ReplaceAll(contents, []byte("\r\n"), []byte("\n"))
+	if !bytes.HasPrefix(norm, []byte("---\n")) {
+		return nil, norm
+	}
+	end := bytes.Index(norm[4:], []byte("\n---\n"))
+	if end < 0 {
+		if bytes.HasSuffix(norm, []byte("\n---")) {
+			end = len(norm[4:]) - 4
+		} else {
+			return nil, norm
+		}
+	}
+	var fm map[string]any
+	if err := yaml.Unmarshal(norm[4:4+end], &fm); err == nil && fm != nil {
+		body := norm[4+end+4:]
+		return fm, body
+	}
+	return nil, norm
 }
 
 func mergeRouting(oldMap, existingMap map[string]any) map[string]any {
@@ -238,32 +272,45 @@ func normalizeRepoURL(raw string) string {
 	raw = strings.TrimSuffix(raw, ".git")
 	raw = strings.TrimSuffix(raw, "/")
 	if u, err := url.Parse(raw); err == nil && u.Host != "" {
-		u.Host = strings.ToLower(u.Host)
-		u.Path = strings.TrimSuffix(u.Path, ".git")
-		u.Path = strings.TrimSuffix(u.Path, "/")
-		return strings.TrimSuffix(u.String(), "/")
+		host := strings.ToLower(u.Host)
+		path := strings.TrimSuffix(u.Path, ".git")
+		path = strings.TrimSuffix(path, "/")
+		scheme := strings.ToLower(u.Scheme)
+		if scheme == "" {
+			scheme = "https"
+		}
+		return scheme + "://" + host + path
 	}
 	return strings.ToLower(raw)
 }
 
-func mergeSources(oldMap, existingMap map[string]any, defaultID string) []any {
+func cloneAndNormalizeSources(existingMap map[string]any) []any {
 	var sources []any
-	if existingMap != nil {
-		if srcs, ok := existingMap["sources"].([]any); ok {
-			for _, s := range srcs {
-				if sMap, ok := s.(map[string]any); ok {
-					cloned := make(map[string]any, len(sMap)+2)
-					for k, v := range sMap {
-						cloned[k] = v
-					}
-					if cloned["repository"] == nil && cloned["repo"] != nil {
-						cloned["repository"] = cloned["repo"]
-					}
-					sources = append(sources, cloned)
-				}
+	if existingMap == nil {
+		return sources
+	}
+	srcs, ok := existingMap["sources"].([]any)
+	if !ok {
+		return sources
+	}
+	for _, s := range srcs {
+		if sMap, ok := s.(map[string]any); ok {
+			cloned := make(map[string]any, len(sMap)+2)
+			for k, v := range sMap {
+				cloned[k] = v
 			}
+			if cloned["repo"] == nil && cloned["repository"] != nil {
+				cloned["repo"] = cloned["repository"]
+			}
+			delete(cloned, "repository") // Write exactly one key, repo (D2)
+			sources = append(sources, cloned)
 		}
 	}
+	return sources
+}
+
+func mergeSources(oldMap, existingMap map[string]any, defaultID string) []any {
+	sources := cloneAndNormalizeSources(existingMap)
 	prov, _ := oldMap["provenance"].(map[string]any)
 	if prov == nil {
 		return sources
@@ -286,7 +333,7 @@ func mergeSources(oldMap, existingMap map[string]any, defaultID string) []any {
 	upstreamSrc["roles"] = []string{"upstream"}
 	if origin != nil {
 		for k, v := range origin {
-			if k != "added_at" && k != "content_digest" && k != "name" {
+			if k != "added_at" && k != "content_digest" && k != "name" && k != "repository" {
 				upstreamSrc[k] = v
 			}
 		}
@@ -303,14 +350,18 @@ func mergeSources(oldMap, existingMap map[string]any, defaultID string) []any {
 			upstreamRepo = normalizeRepoURL(r)
 		}
 	}
+	if upstreamRepo != "" {
+		upstreamSrc["repo"] = upstreamRepo
+	}
+	delete(upstreamSrc, "repository") // Write exactly one key, repo (D2)
 
 	foundUpstream := false
 	for i, s := range sources {
 		if sMap, ok := s.(map[string]any); ok {
 			existingRepo := ""
-			if r, ok := sMap["repository"].(string); ok && r != "" {
+			if r, ok := sMap["repo"].(string); ok && r != "" {
 				existingRepo = normalizeRepoURL(r)
-			} else if r, ok := sMap["repo"].(string); ok && r != "" {
+			} else if r, ok := sMap["repository"].(string); ok && r != "" {
 				existingRepo = normalizeRepoURL(r)
 			}
 
@@ -344,7 +395,7 @@ func mergeSources(oldMap, existingMap map[string]any, defaultID string) []any {
 				sMap["roles"] = roles
 
 				for k, v := range upstreamSrc {
-					if k == "roles" || k == "learn_paths" {
+					if k == "roles" || k == "learn_paths" || k == "repository" {
 						continue
 					}
 					if k == "synced" && sMap["synced"] != nil && sMap["synced"] != "" {
@@ -356,6 +407,7 @@ func mergeSources(oldMap, existingMap map[string]any, defaultID string) []any {
 						sMap[k] = v
 					}
 				}
+				delete(sMap, "repository") // Write exactly one key, repo (D2)
 				sources[i] = sMap
 				break
 			}

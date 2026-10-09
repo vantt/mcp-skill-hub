@@ -207,15 +207,12 @@ func parseEntity(file inputFile, fileMap map[string][]byte) (entity, bool, error
 			skillDir = filepath.Dir(skillDir)
 		}
 		skillMDPath := filepath.ToSlash(filepath.Join(skillDir, "SKILL.md"))
-		if mdBytes, exists := fileMap[skillMDPath]; exists {
-			name, desc := extractSkillMDNameAndDesc(mdBytes, id)
-			if document["name"] == nil || document["name"] == "" {
-				document["name"] = name
-			}
-			if document["description"] == nil || document["description"] == "" {
-				document["description"] = desc
-			}
-		}
+		mdBytes := fileMap[skillMDPath]
+		metaName, _ := document["name"].(string)
+		metaDesc, _ := document["description"].(string)
+		name, desc := DeriveSkillNameAndDesc(mdBytes, metaName, metaDesc, id)
+		document["name"] = name
+		document["description"] = desc
 		if routing, ok := document["routing"].(map[string]any); ok {
 			for _, key := range []string{"aliases", "topics", "technologies", "domain"} {
 				if document[key] == nil && routing[key] != nil {
@@ -234,54 +231,71 @@ func parseEntity(file inputFile, fileMap map[string][]byte) (entity, bool, error
 	}, true, nil
 }
 
-func extractSkillMDNameAndDesc(contents []byte, defaultID string) (string, string) {
-	fmName, fmDesc := "", ""
-	lines := strings.Split(string(contents), "\n")
-	bodyStart := 0
-	if len(lines) > 0 && strings.TrimSpace(lines[0]) == "---" {
-		for i := 1; i < len(lines); i++ {
-			trimmed := strings.TrimSpace(lines[i])
-			if trimmed == "---" {
-				bodyStart = i + 1
-				break
-			}
-			if strings.HasPrefix(trimmed, "name:") {
-				fmName = strings.Trim(strings.TrimSpace(strings.TrimPrefix(trimmed, "name:")), `"'`)
-			}
-			if strings.HasPrefix(trimmed, "description:") {
-				fmDesc = strings.Trim(strings.TrimSpace(strings.TrimPrefix(trimmed, "description:")), `"'`)
-			}
+func ParseSkillMD(contents []byte) (map[string]any, []byte) {
+	norm := bytes.ReplaceAll(contents, []byte("\r\n"), []byte("\n"))
+	if !bytes.HasPrefix(norm, []byte("---\n")) {
+		return nil, norm
+	}
+	end := bytes.Index(norm[4:], []byte("\n---\n"))
+	if end < 0 {
+		if bytes.HasSuffix(norm, []byte("\n---")) {
+			end = len(norm[4:]) - 4
+		} else {
+			return nil, norm
 		}
 	}
-	name, desc := "", fmDesc
-	bodyLines := lines[bodyStart:]
-	for _, line := range bodyLines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "# ") {
-			heading := strings.TrimSpace(strings.TrimPrefix(trimmed, "# "))
-			if heading != "" && !strings.EqualFold(heading, "when to use this skill") {
-				name = heading
-				break
+	var fm map[string]any
+	if err := yaml.Unmarshal(norm[4:4+end], &fm); err == nil && fm != nil {
+		body := norm[4+end+4:]
+		return fm, body
+	}
+	return nil, norm
+}
+
+func DeriveSkillNameAndDesc(contents []byte, metaName, metaDesc, defaultID string) (string, string) {
+	fm, body := ParseSkillMD(contents)
+
+	name := strings.TrimSpace(metaName)
+	if name == "" && fm != nil {
+		if fn, ok := fm["name"].(string); ok && strings.TrimSpace(fn) != "" {
+			name = strings.TrimSpace(fn)
+		}
+	}
+	if name == "" {
+		for _, line := range strings.Split(string(body), "\n") {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "# ") {
+				h := strings.TrimSpace(strings.TrimPrefix(trimmed, "# "))
+				if h != "" && !strings.EqualFold(h, "when to use this skill") {
+					name = h
+					break
+				}
 			}
 		}
 	}
 	if name == "" {
-		if fmName != "" {
-			name = fmName
-		} else {
-			name = defaultID
+		name = defaultID
+	}
+
+	desc := strings.TrimSpace(metaDesc)
+	if desc == "" && fm != nil {
+		if fd, ok := fm["description"].(string); ok && strings.TrimSpace(fd) != "" {
+			desc = strings.TrimSpace(fd)
 		}
 	}
-	for _, line := range bodyLines {
-		trimmed := strings.TrimSpace(line)
-		if desc == "" && trimmed != "" && !strings.HasPrefix(trimmed, "#") {
-			desc = trimmed
-			break
+	if desc == "" {
+		for _, line := range strings.Split(string(body), "\n") {
+			trimmed := strings.TrimSpace(line)
+			if trimmed != "" && !strings.HasPrefix(trimmed, "#") {
+				desc = trimmed
+				break
+			}
 		}
 	}
 	if desc == "" {
 		desc = name
 	}
+
 	return name, desc
 }
 

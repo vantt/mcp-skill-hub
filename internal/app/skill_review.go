@@ -129,15 +129,7 @@ func (SkillService) ReviewSkill(ctx context.Context, path, id string) (SkillRevi
 
 	metaDoc := parseSkillReviewMeta(skillMetaBytes)
 	entrypointRelPath, entrypointDigest, entrypointBytes := inspectCanonicalEntrypoint(root, skillRelDir)
-	if (metaDoc.Name == "" || metaDoc.Description == "") && entrypointBytes != nil {
-		epName, epDesc := extractEntrypointTitleAndDescription(entrypointBytes, id)
-		if metaDoc.Name == "" {
-			metaDoc.Name = epName
-		}
-		if metaDoc.Description == "" {
-			metaDoc.Description = epDesc
-		}
-	}
+	metaDoc.Name, metaDoc.Description = catalog.DeriveSkillNameAndDesc(entrypointBytes, metaDoc.Name, metaDoc.Description, id)
 	canonicalIssues, valid := checkCanonicalIssues(root, skillRelDir)
 	readiness, isScaffold, missingFields := checkActivationReadiness(entrypointBytes, metaDoc, valid)
 	if handle, err := catalog.OpenCurrentLocked(ctx, root); err == nil {
@@ -526,57 +518,6 @@ func extractSkillProvenance(metaDoc skillReviewMeta) *SkillProvenance {
 		SourceRevision: sourceRevision,
 		UpstreamPath:   upstreamPath,
 	}
-}
-
-func extractEntrypointTitleAndDescription(contents []byte, defaultID string) (string, string) {
-	fmName, fmDesc := "", ""
-	lines := strings.Split(string(contents), "\n")
-	bodyStart := 0
-	if len(lines) > 0 && strings.TrimSpace(lines[0]) == "---" {
-		for i := 1; i < len(lines); i++ {
-			trimmed := strings.TrimSpace(lines[i])
-			if trimmed == "---" {
-				bodyStart = i + 1
-				break
-			}
-			if strings.HasPrefix(trimmed, "name:") {
-				fmName = strings.Trim(strings.TrimSpace(strings.TrimPrefix(trimmed, "name:")), `"'`)
-			}
-			if strings.HasPrefix(trimmed, "description:") {
-				fmDesc = strings.Trim(strings.TrimSpace(strings.TrimPrefix(trimmed, "description:")), `"'`)
-			}
-		}
-	}
-	name, desc := "", fmDesc
-	bodyLines := lines[bodyStart:]
-	for _, line := range bodyLines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "# ") {
-			heading := strings.TrimSpace(strings.TrimPrefix(trimmed, "# "))
-			if heading != "" && !strings.EqualFold(heading, "when to use this skill") {
-				name = heading
-				break
-			}
-		}
-	}
-	if name == "" {
-		if fmName != "" {
-			name = fmName
-		} else {
-			name = defaultID
-		}
-	}
-	for _, line := range bodyLines {
-		trimmed := strings.TrimSpace(line)
-		if desc == "" && trimmed != "" && !strings.HasPrefix(trimmed, "#") {
-			desc = trimmed
-			break
-		}
-	}
-	if desc == "" {
-		desc = name
-	}
-	return name, desc
 }
 
 func getSkillGitSummary(ctx context.Context, root, prefix string) SkillGitSummary {
