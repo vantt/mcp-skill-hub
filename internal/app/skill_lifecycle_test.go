@@ -129,9 +129,115 @@ func TestSkillLifecycleCreateActivateReadDeprecateArchive(t *testing.T) {
 	if metadata["status"] != "archived" {
 		t.Fatalf("archived status: %#v", metadata)
 	}
+	if _, ok := metadata["updated_at"]; ok {
+		t.Fatalf("updated_at must not be present in .meta/skill.yaml: %#v", metadata)
+	}
+	if _, ok := metadata["history"]; ok {
+		t.Fatalf("history must not be present in .meta/skill.yaml: %#v", metadata)
+	}
+	if _, ok := metadata["created_at"]; ok {
+		t.Fatalf("created_at must not be present in .meta/skill.yaml: %#v", metadata)
+	}
 	receipts, err := filepath.Glob(filepath.Join(root, "history", "operations", "*", "*", "*.yaml"))
 	if err != nil || len(receipts) != 4 {
 		t.Fatalf("operation receipts = %#v, %v", receipts, err)
+	}
+}
+
+func TestSkillUpdateAndTransitionDropTimestampsAndHistory(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	root := newSkillWorkspace(t)
+	service := SkillService{}
+
+	// 1. Create a draft skill
+	created, err := service.PreviewCreate(ctx, root, skill.CreateInput{
+		ID: "timestamp-test", Collection: "default", Name: "Timestamp Test",
+		Description: "Test timestamps.", Content: []byte("# Timestamp Test\n"),
+		Routing: skill.RoutingInput{Triggers: []string{"test"}, NotFor: []string{"other"}, MinScope: "single_step"},
+	}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.ConfirmSkillMutation(ctx, root, created, created.Confirmation.Confirmation.Pins); err != nil {
+		t.Fatal(err)
+	}
+
+	skillMetaPath := filepath.Join(root, "skills", "default", "timestamp-test", ".meta", "skill.yaml")
+	// Manually inject legacy timestamps and history
+	legacyContent := []byte(`schema_version: 1
+id: timestamp-test
+status: draft
+created_at: "2026-09-01T00:00:00Z"
+updated_at: "2026-09-01T00:00:00Z"
+history:
+  - state: draft
+    occurred_at: "2026-09-01T00:00:00Z"
+routing:
+  triggers: [test]
+  not_for: [other]
+  min_scope: single_step
+`)
+	if err := os.WriteFile(skillMetaPath, legacyContent, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. Preview and confirm update
+	desc := "Updated description without timestamps."
+	updated, err := service.PreviewSkillUpdate(ctx, root, "timestamp-test", skill.UpdateInput{
+		Description: &desc,
+	}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.ConfirmSkillMutation(ctx, root, updated, updated.Confirmation.Confirmation.Pins); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify updated_at, created_at, history are dropped
+	metaData, err := os.ReadFile(skillMetaPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var metaMap map[string]any
+	if err := yaml.Unmarshal(metaData, &metaMap); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := metaMap["updated_at"]; ok {
+		t.Fatalf("updated_at was not dropped after update: %#v", metaMap)
+	}
+	if _, ok := metaMap["created_at"]; ok {
+		t.Fatalf("created_at was not dropped after update: %#v", metaMap)
+	}
+	if _, ok := metaMap["history"]; ok {
+		t.Fatalf("history was not dropped after update: %#v", metaMap)
+	}
+
+	// 3. Preview and confirm transition (activate)
+	activated, err := service.PreviewActivate(ctx, root, "timestamp-test", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.ConfirmSkillMutation(ctx, root, activated, activated.Confirmation.Confirmation.Pins); err != nil {
+		t.Fatal(err)
+	}
+
+	metaData, err = os.ReadFile(skillMetaPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	metaMap = nil
+	if err := yaml.Unmarshal(metaData, &metaMap); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := metaMap["updated_at"]; ok {
+		t.Fatalf("updated_at was not dropped after activate: %#v", metaMap)
+	}
+	if _, ok := metaMap["created_at"]; ok {
+		t.Fatalf("created_at was not dropped after activate: %#v", metaMap)
+	}
+	if _, ok := metaMap["history"]; ok {
+		t.Fatalf("history was not dropped after activate: %#v", metaMap)
 	}
 }
 

@@ -20,7 +20,7 @@
     },
     {
       "id": "resources",
-      "summary": "3 canonical file(s), 567 bytes.",
+      "summary": "3 canonical file(s), 423 bytes.",
       "impact": "Disk resource inventory."
     },
     {
@@ -53,12 +53,12 @@
     "entrypoint_path": "skills/core/review-skill/SKILL.md",
     "entrypoint_digest": "<DIGEST>",
     "resource_count": 3,
-    "total_bytes": 567,
+    "total_bytes": 423,
     "resources": [
       {
         "path": "skills/core/review-skill/.meta/skill.yaml",
         "digest": "<DIGEST>",
-        "size_bytes": 429
+        "size_bytes": 285
       },
       {
         "path": "skills/core/review-skill/SKILL.md",

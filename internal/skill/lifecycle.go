@@ -290,7 +290,9 @@ func (manager Manager) PreviewUpdate(ctx context.Context, root, id string, input
 		quality["content_reviewed_digest"] = strings.TrimSpace(*input.ContentReviewedDigest)
 		document["quality"] = quality
 	}
-	document["updated_at"] = manager.now().Format(time.RFC3339Nano)
+	delete(document, "updated_at")
+	delete(document, "created_at")
+	delete(document, "history")
 	afterMetadata, err := marshalMetadata(document)
 	if err != nil {
 		return Proposal{}, err
@@ -409,12 +411,10 @@ func (manager Manager) PreviewTransition(ctx context.Context, root, id, target s
 	if !allowed {
 		return Proposal{}, fmt.Errorf("%w: %s -> %s", ErrInvalidTransition, current, target)
 	}
-	now := manager.now().Format(time.RFC3339Nano)
 	document["status"] = target
-	document["updated_at"] = now
-	history, _ := document["history"].([]any)
-	history = append(history, map[string]any{"from": current, "state": target, "occurred_at": now})
-	document["history"] = history
+	delete(document, "updated_at")
+	delete(document, "created_at")
+	delete(document, "history")
 	if target == "active" {
 		quality := mapValue(document, "quality")
 		quality["reviewed"] = true
