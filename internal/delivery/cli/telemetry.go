@@ -51,6 +51,9 @@ func runTelemetry(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	if subcommand == "import-transcripts" {
 		return runTelemetryImportTranscripts(ctx, args[1:], stdout, stderr)
 	}
+	if subcommand == "baseline" {
+		return runTelemetryBaseline(ctx, args[1:], stdout, stderr)
+	}
 	workspacePath, outputPath, jsonOutput, yes, err := telemetryFlags(subcommand, args[1:])
 	if err != nil {
 		var resErr *WorkspaceResolutionError
