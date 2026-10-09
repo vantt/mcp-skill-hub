@@ -82,6 +82,60 @@ done`,
 			contains: "~/.config and <repo>/internal/telemetry",
 			notCont:  home,
 		},
+		{
+			name:     "access_token",
+			input:    "access_token=abc123secret",
+			contains: "access_token=[REDACTED]",
+			notCont:  "abc123secret",
+		},
+		{
+			name:     "db_password",
+			input:    "DB_PASSWORD=p4ss",
+			contains: "DB_PASSWORD=[REDACTED]",
+			notCont:  "p4ss",
+		},
+		{
+			name:     "github_token_assignment",
+			input:    "GITHUB_TOKEN=...",
+			contains: "GITHUB_TOKEN=[REDACTED]",
+			notCont:  "...",
+		},
+		{
+			name:     "client_secret",
+			input:    "client_secret: zzz",
+			contains: "client_secret:[REDACTED]",
+			notCont:  "zzz",
+		},
+		{
+			name:     "aws_secret_access_key",
+			input:    "AWS_SECRET_ACCESS_KEY=...",
+			contains: "AWS_SECRET_ACCESS_KEY=[REDACTED]",
+			notCont:  "...",
+		},
+		{
+			name:     "api_key_hyphen",
+			input:    "api-key: k1",
+			contains: "api-key:[REDACTED]",
+			notCont:  "k1",
+		},
+		{
+			name:     "x_api_key",
+			input:    "x-api-key=foo",
+			contains: "x-api-key=[REDACTED]",
+			notCont:  "foo",
+		},
+		{
+			name:     "authorization_basic",
+			input:    "Authorization: Basic ...",
+			contains: "Authorization: [TOKEN]",
+			notCont:  "Basic ...",
+		},
+		{
+			name:     "sk_proj_token",
+			input:    "sk-proj-abc...",
+			contains: "[TOKEN]",
+			notCont:  "sk-proj-abc",
+		},
 	}
 
 	for _, tt := range tests {
@@ -94,6 +148,27 @@ done`,
 				t.Errorf("expected output to NOT contain %q, got %q", tt.notCont, got)
 			}
 		})
+	}
+}
+
+func TestRedactorDoNotOverRedactOrdinaryWords(t *testing.T) {
+	r := NewRedactor("/tmp/test")
+	words := []string{
+		"tokenizer",
+		"secretary",
+		"the tokenizer is fast",
+		"the secretary answered the phone",
+		"tokenizer = BertTokenizer()",
+		"secretary = 'Alice'",
+		"primary_key = 1",
+		"foreign_key = 2",
+	}
+
+	for _, w := range words {
+		got := r.Redact(w)
+		if got != w {
+			t.Errorf("expected %q to remain unredacted, got %q", w, got)
+		}
 	}
 }
 

@@ -27,12 +27,12 @@ func NewRedactor(workspacePath string) *Redactor {
 var (
 	pemKeyRegex       = regexp.MustCompile(`(?s)-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----`)
 	urlCredsRegex     = regexp.MustCompile(`(?i)(https?|ftp)://[^:/\s]+:[^@/\s]+@`)
-	assignmentRegex   = regexp.MustCompile(`(?i)\b(api_?key|password|passwd|secret|token)\s*([:=])\s*([^\s,;]+)`)
+	assignmentRegex   = regexp.MustCompile(`(?i)([A-Za-z0-9_-]*(?:api[_-]?key|password|passwd|secret|token)(?:[_-][A-Za-z0-9_-]+)*)\s*([:=])\s*([^\s,;]+)`)
 	jwtRegex          = regexp.MustCompile(`\beyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]+\b`)
 	awsKeyRegex       = regexp.MustCompile(`\bAKIA[0-9A-Z]{16}\b`)
 	githubTokenRegex  = regexp.MustCompile(`\b(?:ghp_[a-zA-Z0-9]{36}|github_pat_[a-zA-Z0-9_]{82}|gho_[a-zA-Z0-9]{36}|ghs_[a-zA-Z0-9]{36}|ghu_[a-zA-Z0-9]{36})\b`)
 	slackTokenRegex   = regexp.MustCompile(`\bxox[abpr]-[0-9a-zA-Z-]+\b`)
-	genericTokenRegex = regexp.MustCompile(`(?i)\b(?:sk-[a-zA-Z0-9]{20,}|Bearer\s+[a-zA-Z0-9\-\._~+/]+=*)\b`)
+	genericTokenRegex = regexp.MustCompile(`(?i)\b(?:sk-[a-zA-Z0-9_-]{8,}|Bearer\s+[a-zA-Z0-9\-\._~+/]+=*|Basic\s+\S+)`)
 	emailRegex        = regexp.MustCompile(`(?i)[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}`)
 )
 
