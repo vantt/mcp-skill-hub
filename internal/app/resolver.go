@@ -76,28 +76,7 @@ func (service ResolverService) Resolve(ctx context.Context, path string, request
 
 		if isDisagreement {
 			redactor := telemetry.NewRedactor(path)
-			// Redact request before saving
-			redactedRequest := map[string]any{
-				"operation": request.Operation,
-				"task": map[string]any{
-					"description": redactor.Redact(request.Task.Description),
-					"scope":       request.Task.Scope,
-				},
-			}
-			if request.Prior != nil {
-				redactedRequest["prior"] = map[string]any{
-					"resolution_id":    request.Prior.ResolutionID,
-					"context_revision": request.Prior.ContextRevision,
-					"kind":             request.Prior.Kind,
-					"question_id":      request.Prior.QuestionID,
-					"answer":           redactor.Redact(request.Prior.Answer),
-				}
-			}
-			facts := make([]map[string]any, len(request.Context.Facts))
-			for i, fact := range request.Context.Facts {
-				facts[i] = map[string]any{"key": fact.Key, "value": redactor.Redact(fact.Value)}
-			}
-			redactedRequest["context"] = map[string]any{"facts": facts}
+			redactedRequest := RedactRequest(redactor, request)
 
 			var chosen string
 			if response.Primary != nil {
@@ -460,4 +439,35 @@ func safeRecordTelemetry(sink TelemetrySink, event telemetry.Event) {
 	}
 	defer func() { _ = recover() }()
 	sink.Record(event)
+}
+
+// RedactRequest builds a sanitized request payload for case recording, applying the
+// safe fact key allowlist (lowercase [a-z0-9_.-], max 64 chars; non-conforming -> "other")
+// and running all text values through the redactor.
+func RedactRequest(redactor *telemetry.Redactor, req resolverpkg.Request) map[string]any {
+	out := map[string]any{
+		"operation": req.Operation,
+		"task": map[string]any{
+			"description": redactor.Redact(req.Task.Description),
+			"scope":       req.Task.Scope,
+		},
+	}
+	if req.Prior != nil {
+		out["prior"] = map[string]any{
+			"resolution_id":    req.Prior.ResolutionID,
+			"context_revision": req.Prior.ContextRevision,
+			"kind":             req.Prior.Kind,
+			"question_id":      req.Prior.QuestionID,
+			"answer":           redactor.Redact(req.Prior.Answer),
+		}
+	}
+	facts := make([]map[string]any, len(req.Context.Facts))
+	for i, f := range req.Context.Facts {
+		facts[i] = map[string]any{
+			"key":   telemetry.SanitizeFactKey(f.Key),
+			"value": redactor.Redact(f.Value),
+		}
+	}
+	out["context"] = map[string]any{"facts": facts}
+	return out
 }

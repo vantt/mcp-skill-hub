@@ -92,3 +92,20 @@ func (r *Redactor) Redact(text string) string {
 
 	return text
 }
+
+// SanitizeFactKey verifies a fact key against the allowlist of known safe tokens:
+// lowercase alphanumeric characters, underscore, dot, and hyphen ([a-z0-9_.-]),
+// with a maximum length of 64 characters. Any key that fails or is empty becomes "other".
+func SanitizeFactKey(key string) string {
+	if len(key) == 0 || len(key) > 64 {
+		return "other"
+	}
+	for i := range len(key) {
+		c := key[i]
+		if (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '.' || c == '-' {
+			continue
+		}
+		return "other"
+	}
+	return key
+}

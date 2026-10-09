@@ -19,6 +19,10 @@ const (
 	defaultRollupRetention  = 180 * 24 * time.Hour
 	defaultMaxSize          = int64(100 << 20)
 	defaultOperationTimeout = 5 * time.Second
+
+	DefaultCaseDailyLimit = 50
+	DefaultCaseTotalLimit = 500
+	DefaultCaseRetention  = 90 * 24 * time.Hour
 )
 
 // Config controls a local, disposable telemetry recorder.
@@ -31,6 +35,9 @@ type Config struct {
 	MaxSizeBytes       int64
 	ContentMode        string
 	CaseJournalEnabled bool
+	CaseDailyLimit     int
+	CaseTotalLimit     int
+	CaseRetention      time.Duration
 	OperationTimeout   time.Duration
 	Clock              func() time.Time
 	ID                 func() (string, error)
@@ -151,6 +158,24 @@ func Open(config Config) (*Recorder, error) {
 	}
 	if config.OperationTimeout <= 0 {
 		config.OperationTimeout = defaultOperationTimeout
+	}
+	if config.CaseDailyLimit < 0 {
+		return nil, errors.New("case daily limit cannot be negative")
+	}
+	if config.CaseDailyLimit == 0 {
+		config.CaseDailyLimit = DefaultCaseDailyLimit
+	}
+	if config.CaseTotalLimit < 0 {
+		return nil, errors.New("case total limit cannot be negative")
+	}
+	if config.CaseTotalLimit == 0 {
+		config.CaseTotalLimit = DefaultCaseTotalLimit
+	}
+	if config.CaseRetention < 0 {
+		return nil, errors.New("case retention cannot be negative")
+	}
+	if config.CaseRetention == 0 {
+		config.CaseRetention = DefaultCaseRetention
 	}
 	if config.Clock == nil {
 		config.Clock = time.Now
@@ -521,11 +546,20 @@ func randomEventID() (string, error) {
 	return "evt_" + hex.EncodeToString(bytes[:]), nil
 }
 
+var fallbackEventIDCounter uint64
+
+func fallbackEventID() string {
+	seq := atomic.AddUint64(&fallbackEventIDCounter, 1)
+	return fmt.Sprintf("evt_fb_%x_%x", time.Now().UTC().UnixNano(), seq)
+}
+
 // NewEventID generates a random event identifier with prefix evt_.
+// If cryptographic randomness fails, it falls back to a time and counter based identifier
+// that remains unique across calls.
 func NewEventID() string {
 	id, err := randomEventID()
 	if err != nil {
-		return "evt_fallback"
+		return fallbackEventID()
 	}
 	return id
 }

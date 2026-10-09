@@ -195,7 +195,7 @@ func ensureResolutionColumn(ctx context.Context, database *sql.DB) error {
 		return err
 	}
 	if !hasColumn {
-		if _, err := database.ExecContext(ctx, `ALTER TABLE telemetry_events ADD COLUMN resolution_id TEXT`); err != nil {
+		if _, err := database.ExecContext(ctx, `ALTER TABLE telemetry_events ADD COLUMN resolution_id TEXT`); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
 			return err
 		}
 		// Older rows remain disposable telemetry, but valid envelopes can still be

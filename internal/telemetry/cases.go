@@ -3,6 +3,7 @@ package telemetry
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -11,6 +12,9 @@ import (
 	"strings"
 	"time"
 )
+
+// ErrCaseConflict indicates an event_id was already used for a case record.
+var ErrCaseConflict = errors.New("event_id was already used for a case record")
 
 // CaseRecord stores the rich context of a resolution disagreement.
 type CaseRecord struct {
@@ -105,26 +109,52 @@ func (r *Recorder) RecordCase(ctx context.Context, record CaseRecord) error {
 	}
 	defer database.Close()
 
-	// 1. Enforce 90-day retention on record
-	cutoff := time.Now().UTC().AddDate(0, 0, -90).Format(time.RFC3339)
+	caseRetention := r.config.CaseRetention
+	if caseRetention <= 0 {
+		caseRetention = DefaultCaseRetention
+	}
+	caseDailyLimit := r.config.CaseDailyLimit
+	if caseDailyLimit <= 0 {
+		caseDailyLimit = DefaultCaseDailyLimit
+	}
+	caseTotalLimit := r.config.CaseTotalLimit
+	if caseTotalLimit <= 0 {
+		caseTotalLimit = DefaultCaseTotalLimit
+	}
+
+	// 1. Enforce retention on record
+	cutoff := time.Now().UTC().Add(-caseRetention).Format(time.RFC3339)
 	_, _ = database.ExecContext(ctx, "DELETE FROM telemetry_cases WHERE occurred_at < ?", cutoff)
 
-	// 2. Check limits: daily cap (max 50 cases per day)
+	// 2. Check limits: daily cap
 	if record.OccurredAt.IsZero() {
 		record.OccurredAt = time.Now().UTC()
 	}
 	day := record.OccurredAt.UTC().Format("2006-01-02")
 	var dayCount int
 	err = database.QueryRowContext(ctx, "SELECT count(*) FROM telemetry_cases WHERE substr(occurred_at, 1, 10) = ?", day).Scan(&dayCount)
-	if err == nil && dayCount >= 50 {
+	if err == nil && dayCount >= caseDailyLimit {
 		return nil // daily cap reached
 	}
 
-	// 3. Check limits: total cap (max 500 cases total)
+	// 3. Check limits: total cap
 	var totalCount int
 	err = database.QueryRowContext(ctx, "SELECT count(*) FROM telemetry_cases").Scan(&totalCount)
-	if err == nil && totalCount >= 500 {
+	if err == nil && totalCount >= caseTotalLimit {
 		_, _ = database.ExecContext(ctx, "DELETE FROM telemetry_cases WHERE case_id IN (SELECT case_id FROM telemetry_cases ORDER BY occurred_at ASC LIMIT 1)")
+	}
+
+	if record.EventID != "" {
+		var exists int
+		err = database.QueryRowContext(ctx, "SELECT 1 FROM telemetry_cases WHERE event_id = ?", record.EventID).Scan(&exists)
+		if err == nil && exists == 1 {
+			return ErrCaseConflict
+		}
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+	} else {
+		record.EventID = NewEventID()
 	}
 
 	if record.CaseID == "" {
@@ -175,7 +205,11 @@ func (r *Recorder) PruneCases(ctx context.Context) error {
 		return err
 	}
 	defer database.Close()
-	cutoff := time.Now().UTC().AddDate(0, 0, -90).Format(time.RFC3339)
+	caseRetention := r.config.CaseRetention
+	if caseRetention <= 0 {
+		caseRetention = DefaultCaseRetention
+	}
+	cutoff := time.Now().UTC().Add(-caseRetention).Format(time.RFC3339)
 	_, err = database.ExecContext(ctx, "DELETE FROM telemetry_cases WHERE occurred_at < ?", cutoff)
 	return err
 }

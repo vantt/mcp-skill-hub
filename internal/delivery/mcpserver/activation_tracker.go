@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/vantt/mcp-skill-hub/internal/app"
 	resolverpkg "github.com/vantt/mcp-skill-hub/internal/resolver"
 	"github.com/vantt/mcp-skill-hub/internal/telemetry"
 )
@@ -150,7 +151,7 @@ func (t *activationTracker) noteResolution(session *mcp.ServerSession, request r
 		PriorVerified:   priorVerified,
 		TaskDescription: t.redactor.Redact(request.Task.Description),
 		Operation:       request.Operation,
-		Request:         redactRequest(t.redactor, request),
+		Request:         app.RedactRequest(t.redactor, request),
 	})
 	if len(state.resolutions) > maxResolutionsPerSession {
 		state.resolutions = state.resolutions[len(state.resolutions)-maxResolutionsPerSession:]
@@ -246,31 +247,6 @@ func (t *activationTracker) sessionHash(session *mcp.ServerSession) string {
 	state := t.sessionState(session)
 	state.lastSeen = t.now()
 	return state.hash
-}
-
-func redactRequest(redactor *telemetry.Redactor, req resolverpkg.Request) map[string]any {
-	out := map[string]any{
-		"operation": req.Operation,
-		"task": map[string]any{
-			"description": redactor.Redact(req.Task.Description),
-			"scope":       req.Task.Scope,
-		},
-	}
-	if req.Prior != nil {
-		out["prior"] = map[string]any{
-			"resolution_id":    req.Prior.ResolutionID,
-			"context_revision": req.Prior.ContextRevision,
-			"kind":             req.Prior.Kind,
-			"question_id":      req.Prior.QuestionID,
-			"answer":           redactor.Redact(req.Prior.Answer),
-		}
-	}
-	facts := make([]map[string]any, len(req.Context.Facts))
-	for i, f := range req.Context.Facts {
-		facts[i] = map[string]any{"key": f.Key, "value": redactor.Redact(f.Value)}
-	}
-	out["context"] = map[string]any{"facts": facts}
-	return out
 }
 
 func (t *activationTracker) resolutionData(session *mcp.ServerSession, resolutionID string) (notedResolution, bool) {

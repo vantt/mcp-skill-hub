@@ -3,9 +3,12 @@ package telemetry
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -271,5 +274,177 @@ func TestSetCaseJournalEnabled(t *testing.T) {
 		// disabled
 	} else {
 		t.Fatal("expected case journal to be disabled after SetCaseJournalEnabled(false)")
+	}
+}
+
+func TestCaseLimitsConfigurable(t *testing.T) {
+	temp := t.TempDir()
+	config := Config{
+		Path:               filepath.Join(temp, "telemetry.db"),
+		WorkspaceRoot:      temp,
+		ContentMode:        ContentModeNone,
+		CaseJournalEnabled: true,
+		CaseDailyLimit:     2,
+		CaseTotalLimit:     3,
+		CaseRetention:      48 * time.Hour,
+	}
+	recorder, err := Open(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer recorder.Close(context.Background())
+
+	now := time.Now().UTC()
+	day1 := now.Add(-24 * time.Hour)
+
+	// 1. Test CaseDailyLimit: record 3 cases on day1, only 2 should be saved
+	for i := range 3 {
+		err := recorder.RecordCase(t.Context(), CaseRecord{
+			OccurredAt:   day1.Add(time.Duration(i) * time.Minute),
+			Kind:         "override",
+			EventID:      fmt.Sprintf("evt_d1_%d", i),
+			ResolutionID: "res_day1",
+			Client:       Client{Name: "claude-code"},
+			Task:         map[string]any{"description": "day 1 task"},
+			Chosen:       "skill-1",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	cases, err := recorder.Cases(t.Context(), time.Time{}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cases) != 2 {
+		t.Fatalf("expected daily limit 2 to cap day 1 cases, got %d", len(cases))
+	}
+
+	// 2. Test CaseTotalLimit: record 2 cases on day 2.
+	// Total attempted = 2 (day1) + 2 (day2) = 4. Total cap is 3, so oldest is pruned.
+	day2 := now
+	for i := range 2 {
+		err := recorder.RecordCase(t.Context(), CaseRecord{
+			OccurredAt:   day2.Add(time.Duration(i) * time.Minute),
+			Kind:         "override",
+			EventID:      fmt.Sprintf("evt_d2_%d", i),
+			ResolutionID: "res_day2",
+			Client:       Client{Name: "claude-code"},
+			Task:         map[string]any{"description": "day 2 task"},
+			Chosen:       "skill-2",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	cases, err = recorder.Cases(t.Context(), time.Time{}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cases) != 3 {
+		t.Fatalf("expected total limit 3, got %d", len(cases))
+	}
+
+	// 3. Test CaseRetention pruning
+	// Insert a case older than 48h directly, then call PruneCases
+	oldDay := now.Add(-72 * time.Hour)
+	// Temporarily bypass RecordCase retention by recording on an old timestamp
+	_ = recorder.RecordCase(t.Context(), CaseRecord{
+		OccurredAt:   oldDay,
+		Kind:         "override",
+		EventID:      "evt_old_prune",
+		ResolutionID: "res_old",
+		Client:       Client{Name: "claude-code"},
+		Task:         map[string]any{"description": "old task"},
+		Chosen:       "skill-old",
+	})
+	if err := recorder.PruneCases(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	cases, err = recorder.Cases(t.Context(), time.Time{}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range cases {
+		if c.EventID == "evt_old_prune" {
+			t.Fatal("expected case older than 48h retention to be pruned")
+		}
+	}
+}
+
+func TestCaseDuplicateEventIDRejected(t *testing.T) {
+	temp := t.TempDir()
+	config := Config{
+		Path:               filepath.Join(temp, "telemetry.db"),
+		WorkspaceRoot:      temp,
+		ContentMode:        ContentModeNone,
+		CaseJournalEnabled: true,
+	}
+	recorder, err := Open(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer recorder.Close(context.Background())
+
+	err = recorder.RecordCase(t.Context(), CaseRecord{
+		OccurredAt:   time.Now().UTC(),
+		Kind:         "override",
+		EventID:      "evt_dup_check",
+		ResolutionID: "res_1",
+		Client:       Client{Name: "claude-code"},
+		Task:         map[string]any{"description": "task 1"},
+		Chosen:       "skill-1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Recording with same EventID must fail with ErrCaseConflict
+	err = recorder.RecordCase(t.Context(), CaseRecord{
+		OccurredAt:   time.Now().UTC(),
+		Kind:         "override",
+		EventID:      "evt_dup_check",
+		ResolutionID: "res_2",
+		Client:       Client{Name: "claude-code"},
+		Task:         map[string]any{"description": "task 2"},
+		Chosen:       "skill-2",
+	})
+	if !errors.Is(err, ErrCaseConflict) {
+		t.Fatalf("expected ErrCaseConflict on duplicate event_id, got %v", err)
+	}
+}
+
+func TestNewEventIDUniqueness(t *testing.T) {
+	const count = 5000
+	seen := sync.Map{}
+	var wg sync.WaitGroup
+	wg.Add(count)
+	for range count {
+		go func() {
+			defer wg.Done()
+			id := NewEventID()
+			if !strings.HasPrefix(id, "evt_") {
+				t.Errorf("expected evt_ prefix, got %q", id)
+			}
+			if id == "evt_fallback" {
+				t.Errorf("NewEventID must never return constant evt_fallback")
+			}
+			if _, loaded := seen.LoadOrStore(id, true); loaded {
+				t.Errorf("collision detected on event id: %q", id)
+			}
+		}()
+	}
+	wg.Wait()
+
+	// Also test fallbackEventID directly
+	fb1 := fallbackEventID()
+	fb2 := fallbackEventID()
+	if fb1 == fb2 {
+		t.Fatalf("fallbackEventID produced duplicate: %q == %q", fb1, fb2)
+	}
+	if !strings.HasPrefix(fb1, "evt_fb_") || !strings.HasPrefix(fb2, "evt_fb_") {
+		t.Fatalf("unexpected fallback event ID format: %q, %q", fb1, fb2)
 	}
 }

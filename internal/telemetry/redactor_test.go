@@ -112,3 +112,33 @@ func TestRedactorRuneBoundaryTruncation(t *testing.T) {
 		t.Fatalf("expected truncated string to end with '...': %q", got)
 	}
 }
+
+func TestSanitizeFactKey(t *testing.T) {
+	cases := []struct {
+		key  string
+		want string
+	}{
+		{"os", "os"},
+		{"arch", "arch"},
+		{"go_version", "go_version"},
+		{"runner.type-01", "runner.type-01"},
+		{"v1.0.0-rc_1", "v1.0.0-rc_1"},
+		{"a", "a"},
+		{strings.Repeat("a", 64), strings.Repeat("a", 64)},
+		{"", "other"},
+		{strings.Repeat("a", 65), "other"},
+		{"OS", "other"},
+		{"Go_Version", "other"},
+		{"has space", "other"},
+		{"colon:key", "other"},
+		{"slash/key", "other"},
+		{"at@sign", "other"},
+		{"secret$val", "other"},
+	}
+
+	for _, tc := range cases {
+		if got := SanitizeFactKey(tc.key); got != tc.want {
+			t.Errorf("SanitizeFactKey(%q) = %q, want %q", tc.key, got, tc.want)
+		}
+	}
+}

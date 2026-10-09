@@ -582,3 +582,87 @@ func TestTopK_VerifiedAndUnverifiedRejected(t *testing.T) {
 		t.Fatalf("expected nil topk_skill_ids on unverified rejected resolution, got %v", payloadUnverified["topk_skill_ids"])
 	}
 }
+
+func TestRedactRequestFactKeyAllowlistAndValues(t *testing.T) {
+	t.Parallel()
+	redactor := telemetry.NewRedactor("/home/user/workspace")
+
+	req := resolverpkg.Request{
+		Operation: "debug",
+		Task: resolverpkg.Task{
+			Description: "investigate issue with token sk-1234567890abcdef1234567890abcdef",
+			Scope:       "single_step",
+		},
+		Prior: &resolverpkg.Prior{
+			ResolutionID:    "res_prev",
+			ContextRevision: 1,
+			Kind:            "clarification",
+			QuestionID:      "q_1",
+			Answer:          "my secret password: superSecretPassword123",
+		},
+		Context: resolverpkg.RequestContext{
+			Facts: []resolverpkg.Fact{
+				{Key: "os", Value: "linux", Basis: "user"},
+				{Key: "arch_type.64-bit", Value: "x86_64", Basis: "user"},
+				{Key: "UPPERCASE", Value: "contact test@example.com", Basis: "user"},
+				{Key: "has space", Value: "token: ghp_123456789012345678901234567890123456", Basis: "user"},
+				{Key: "colon:key", Value: "normal_val", Basis: "user"},
+				{Key: strings.Repeat("k", 65), Value: "too_long", Basis: "user"},
+				{Key: "", Value: "empty_key", Basis: "user"},
+			},
+		},
+	}
+
+	redacted := RedactRequest(redactor, req)
+
+	if redacted["operation"] != "debug" {
+		t.Errorf("expected operation 'debug', got %v", redacted["operation"])
+	}
+
+	taskMap, ok := redacted["task"].(map[string]any)
+	if !ok || strings.Contains(taskMap["description"].(string), "sk-1234567890abcdef") {
+		t.Errorf("task description was not properly redacted: %v", taskMap)
+	}
+
+	priorMap, ok := redacted["prior"].(map[string]any)
+	if !ok || strings.Contains(priorMap["answer"].(string), "superSecretPassword123") {
+		t.Errorf("prior answer was not properly redacted: %v", priorMap)
+	}
+
+	contextMap, ok := redacted["context"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected context map in redacted request")
+	}
+	facts, ok := contextMap["facts"].([]map[string]any)
+	if !ok {
+		t.Fatalf("expected facts slice in context map")
+	}
+
+	expected := []struct {
+		key   string
+		noVal string
+	}{
+		{"os", ""},
+		{"arch_type.64-bit", ""},
+		{"other", "test@example.com"},
+		{"other", "ghp_"},
+		{"other", ""},
+		{"other", ""},
+		{"other", ""},
+	}
+
+	if len(facts) != len(expected) {
+		t.Fatalf("expected %d facts, got %d", len(expected), len(facts))
+	}
+
+	for i, exp := range expected {
+		gotKey := facts[i]["key"].(string)
+		gotVal := facts[i]["value"].(string)
+		if gotKey != exp.key {
+			t.Errorf("fact %d: key = %q, want %q", i, gotKey, exp.key)
+		}
+		if exp.noVal != "" && strings.Contains(gotVal, exp.noVal) {
+			t.Errorf("fact %d: value contains unredacted secret %q: %q", i, exp.noVal, gotVal)
+		}
+	}
+}
