@@ -25,15 +25,18 @@ func NewRedactor(workspacePath string) *Redactor {
 }
 
 var (
-	pemKeyRegex       = regexp.MustCompile(`(?s)-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----`)
-	urlCredsRegex     = regexp.MustCompile(`(?i)(https?|ftp)://[^:/\s]+:[^@/\s]+@`)
-	assignmentRegex   = regexp.MustCompile(`(?i)([A-Za-z0-9_-]*(?:api[_-]?key|password|passwd|secret|token)(?:[_-][A-Za-z0-9_-]+)*)\s*([:=])\s*([^\s,;]+)`)
-	jwtRegex          = regexp.MustCompile(`\beyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]+\b`)
-	awsKeyRegex       = regexp.MustCompile(`\bAKIA[0-9A-Z]{16}\b`)
-	githubTokenRegex  = regexp.MustCompile(`\b(?:ghp_[a-zA-Z0-9]{36}|github_pat_[a-zA-Z0-9_]{82}|gho_[a-zA-Z0-9]{36}|ghs_[a-zA-Z0-9]{36}|ghu_[a-zA-Z0-9]{36})\b`)
-	slackTokenRegex   = regexp.MustCompile(`\bxox[abpr]-[0-9a-zA-Z-]+\b`)
-	genericTokenRegex = regexp.MustCompile(`(?i)\b(?:sk-[a-zA-Z0-9_-]{8,}|Bearer\s+[a-zA-Z0-9\-\._~+/]+=*|Basic\s+\S+)`)
-	emailRegex        = regexp.MustCompile(`(?i)[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}`)
+	pemKeyRegex      = regexp.MustCompile(`(?s)-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----`)
+	urlCredsRegex    = regexp.MustCompile(`(?i)(https?|ftp)://[^:/\s]+:[^@/\s]+@`)
+	assignmentRegex  = regexp.MustCompile(`(?i)([A-Za-z0-9_-]*(?:api[_-]?key|password|passwd|secret|token)(?:[_-][A-Za-z0-9_-]+)*)\s*([:=])\s*([^\s,;]+)`)
+	jwtRegex         = regexp.MustCompile(`\beyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]+\b`)
+	awsKeyRegex      = regexp.MustCompile(`\bAKIA[0-9A-Z]{16}\b`)
+	githubTokenRegex = regexp.MustCompile(`\b(?:ghp_[a-zA-Z0-9]{36}|github_pat_[a-zA-Z0-9_]{82}|gho_[a-zA-Z0-9]{36}|ghs_[a-zA-Z0-9]{36}|ghu_[a-zA-Z0-9]{36})\b`)
+	slackTokenRegex  = regexp.MustCompile(`\bxox[abpr]-[0-9a-zA-Z-]+\b`)
+	authHeaderRegex  = regexp.MustCompile(`(?i)\bAuthorization:\s*(?:Basic|Bearer)\s+\S+`)
+	basicTokenRegex  = regexp.MustCompile(`\bBasic\s+[A-Za-z0-9+/=]{8,}`)
+	bearerTokenRegex = regexp.MustCompile(`\bBearer\s+([a-zA-Z0-9\-\._~+/]{16,})`)
+	skTokenRegex     = regexp.MustCompile(`\bsk-([a-zA-Z0-9_-]{20,})`)
+	emailRegex       = regexp.MustCompile(`(?i)[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}`)
 )
 
 // Redact applies secret removal, path normalization, and length capping.
@@ -63,9 +66,23 @@ func (r *Redactor) Redact(text string) string {
 	// 7. Slack tokens
 	text = slackTokenRegex.ReplaceAllString(text, "[SLACK TOKEN]")
 
-	// 8. Generic tokens (Bearer, sk-...)
-	text = genericTokenRegex.ReplaceAllString(text, "[TOKEN]")
-
+	// 8. Generic tokens (Bearer, Basic, sk-...)
+	text = authHeaderRegex.ReplaceAllString(text, "Authorization: [TOKEN]")
+	text = basicTokenRegex.ReplaceAllString(text, "[TOKEN]")
+	text = bearerTokenRegex.ReplaceAllStringFunc(text, func(match string) string {
+		sub := bearerTokenRegex.FindStringSubmatch(match)
+		if len(sub) > 1 && strings.ContainsAny(sub[1], "0123456789") {
+			return "[TOKEN]"
+		}
+		return match
+	})
+	text = skTokenRegex.ReplaceAllStringFunc(text, func(match string) string {
+		sub := skTokenRegex.FindStringSubmatch(match)
+		if len(sub) > 1 && strings.ContainsAny(sub[1], "0123456789") {
+			return "[TOKEN]"
+		}
+		return match
+	})
 	// 9. Emails
 	text = emailRegex.ReplaceAllString(text, "[EMAIL]")
 

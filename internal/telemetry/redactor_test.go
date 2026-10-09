@@ -132,7 +132,7 @@ done`,
 		},
 		{
 			name:     "sk_proj_token",
-			input:    "sk-proj-abc...",
+			input:    "sk-proj-abc1234567890abcdef1234567890abcdef",
 			contains: "[TOKEN]",
 			notCont:  "sk-proj-abc",
 		},
@@ -162,6 +162,10 @@ func TestRedactorDoNotOverRedactOrdinaryWords(t *testing.T) {
 		"secretary = 'Alice'",
 		"primary_key = 1",
 		"foreign_key = 2",
+		"Write a basic example for the API",
+		"Basic usage of the tool",
+		"use sk-learn-pipeline for ML",
+		"the bearer of bad news",
 	}
 
 	for _, w := range words {
