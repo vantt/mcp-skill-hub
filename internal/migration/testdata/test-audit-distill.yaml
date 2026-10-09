@@ -1,0 +1,1184 @@
+# Written by distill-lab/scripts/distill.py. Edit freely, then run `distill.py format`.
+# impact = number of facts (a-e, a required); final_score = relevance x impact x evidence / effort;
+# lessons are sorted by it,
+# then by layer rank, then by key.
+goal:
+  status: confirmed
+  purpose: >-
+    Every test justifies its maintenance cost by protecting observable behavior, a credible
+    regression, or an independently meaningful contract. The skill stops low-value tests at
+    write time and removes the ones that already exist.
+  in_scope:
+    - authoring gate for new or changed tests
+    - audits that find and remove junk, duplicate, and implementation-coupled tests
+    - removing production seams, exports and dead code that only tests need
+    - subsystem-wide pruning campaigns
+    - keeping an audit's result from eroding after it lands
+  out_of_scope:
+    - writing features or fixing non-test production bugs
+    - test-suite performance tuning and runner infrastructure
+    - CI, release and live-environment proof routing
+  failures_it_prevents:
+    - junk tests accumulate (assertion-free probes, source greps, self-comparisons, copied
+      fixtures)
+    - tests break under behavior-preserving refactoring because they assert implementation
+    - production code grows seams, exports and wrappers that only tests use
+    - the same contract is tested at several layers
+    - a test deletion silently loses the only proof of a contract
+    - mocks implement the behavior the test claims to check
+cursors:
+  openclaw: 96370cf438dc9d67d2a13b08c14eb4142fecb767
+  superpowers: 8ca22dba9a94f28898bbce59f2537ff4d87c747d
+coverage:
+  openclaw:
+    read:
+      - .agents/skills/test-audit
+      - .agents/skills/openclaw-testing
+      - .agents/skills/openclaw-test-performance
+      - .agents/skills/deslop
+      - .agents/skills/autoreview
+      - docs/help/testing/writing-tests.md
+      - test/AGENTS.md
+      - test/helpers/AGENTS.md
+      - test/helpers/promise.ts
+      - AGENTS.md (testing rules only)
+      - scripts/lib/shrink-ratchet.mts
+      - scripts/check-test-timeout-race-ratchet.mts
+      - scripts/check-test-mock-exports.mts
+      - scripts/check-assertion-safety-ratchet.mts (header only)
+      - commit history of the testing docs and ratchet scripts
+    not_read:
+      - path: src/**/*.test.ts, extensions/**/*.test.ts
+        reason: the tests themselves; the largest gap, since real tests show which rules hold
+          in practice
+      - path: .github/workflows
+        reason: CI wiring of the ratchets; only inferred from commit messages
+      - path: scripts/check-line-cap-ratchet.mts, check-max-lines-ratchet.mts, check-database-worker-ratchet.mts
+        reason: same ratchet library, other rules; listed, not read
+      - path: docs/help/testing/suites.md
+        reason: suite command reference, outside the goal
+      - path: docs/help/testing-live*, docs/ci/scope-and-routing/node-test-lanes.md
+        reason: live and CI lane routing, outside the goal
+      - path: .agents/skills/openclaw-qa-testing
+        reason: QA scenarios, outside the goal
+      - path: .agents/skills/openclaw-test-heap-leaks
+        reason: memory-leak diagnosis, outside the goal
+  superpowers:
+    read:
+      - skills/test-driven-development (SKILL.md, writing-good-tests.md)
+      - skills/systematic-debugging/condition-based-waiting.md
+      - skills/systematic-debugging/find-polluter.sh
+      - skills/verification-before-completion/SKILL.md
+      - docs/testing.md
+      - commit history of the testing skills
+    not_read:
+      - path: skills/writing-skills
+        reason: general manual for writing any skill; belongs to a hub-level pass
+      - path: docs/superpowers/specs/2026-06-10-positive-instruction-redesign-design.md
+        reason: general instruction-design spec; hub-level
+      - path: skills/systematic-debugging (other files)
+        reason: debugging procedure, outside the goal
+      - path: tests/, evals/
+        reason: the source's own test code and agent evals; not read beyond docs/testing.md
+lessons:
+
+  - key: mocks-mirror-the-real-shape
+    layer: content
+    what: >-
+      A mock reproduces the complete real shape it replaces: every documented field of a response
+      (superpowers), every export of a module (openclaw); a partial mock is a defect, not
+      a shortcut.
+    notable: >-
+      Both sources reached this independently for the same reason: partial mocks fail silently,
+      the test passes while integration breaks when downstream code reads what the mock omitted.
+      test-audit lists mocks that implement the asserted behavior, but not mocks that are
+      incomplete.
+    where:
+      - superpowers@8ca22dba9a94:skills/test-driven-development/writing-good-tests.md#L119-L122
+      - openclaw@96370cf438dc:docs/help/testing/writing-tests.md#L121-L131
+    contrast: extends
+    score:
+      relevance: 3
+      facts: [a, b, c, d, e]
+      impact: 5
+      evidence: 3
+      effort: 1
+      why: >-
+        a: partial mocks let a test pass while integration breaks; b: test-audit has no rule
+        on incomplete mocks; c: both sources hit it; d: openclaw enforces export completeness
+        with a checker; e: the failure is silent.
+    final_score: 45.0
+    also_fits: []
+    decision: {state: candidate}
+
+  - key: wait-on-owned-signal
+    layer: content
+    what: >-
+      Async tests synchronize on the state an action produces (process ready, form committed,
+      draft persisted), never on the action returning; time is controlled through an injected
+      clock at the owner, not real timers, sleeps or polling.
+    notable: >-
+      Each rule is tied to a real incident (#125441, #125456, #125548), and the forbidden
+      substitutes are listed explicitly: longer timeouts, sleeps, retry-wrapped assertions,
+      trimmed expectations. For the goal it is a junk pattern the list lacks: a test that
+      passes because it waited long enough, not because the owner signalled completion. Converges
+      with superpowers, which reached the same principle independently and measured it: 15
+      flaky tests fixed, pass rate 60% to 100%, 40% faster. The mechanisms differ: superpowers
+      polls the condition with a timeout, openclaw forbids polling and waits on the owner's
+      completion signal or an injected clock; both forbid guessing time.
+    where:
+      - openclaw@96370cf438dc:test/AGENTS.md#L4
+      - openclaw@96370cf438dc:docs/help/testing/writing-tests.md#L93-L98
+      - superpowers@8ca22dba9a94:skills/systematic-debugging/condition-based-waiting.md#L5-L7
+      - superpowers@8ca22dba9a94:skills/systematic-debugging/condition-based-waiting.md#L95-L115
+    contrast: extends
+    score:
+      relevance: 2
+      facts: [a, b, c, d, e]
+      impact: 5
+      evidence: 3
+      effort: 1
+      why: >-
+        a: a test passes because it waited long enough, not because the owner finished; b:
+        missing from the junk list; c: three incidents plus 15 flaky tests in the other source;
+        d: enforceable through the timeout ratchet; e: 60% to 100% pass rate measured.
+    final_score: 30.0
+    also_fits:
+      - new-skill:flake-triage
+    decision: {state: candidate}
+
+  - key: change-detector-test
+    layer: history
+    what: >-
+      Before writing a test, name the production change that would make it fail and ask whether
+      that change is a bug or a decision. A test that only intentional decisions can fail
+      (a constant's value, exact wording, private structure) is a change detector: test the
+      behavior that depends on the decision instead.
+    notable: >-
+      Added after a fresh-eyes review found a hole: a constant assertion can fail, uses a
+      literal, mocks nothing, and still protects nothing; it fires on redesign and sleeps
+      through bugs. test-audit's gate asks what regression makes a test fail but does not
+      separate bugs from decisions, so change detectors pass it.
+    where:
+      - superpowers@e8a9748a3fa9
+      - superpowers@8ca22dba9a94:skills/test-driven-development/writing-good-tests.md#L20-L25
+      - superpowers@8ca22dba9a94:skills/test-driven-development/writing-good-tests.md#L41-L45
+    contrast: extends
+    score:
+      relevance: 3
+      facts: [a, b, c, d, e]
+      impact: 5
+      evidence: 2
+      effort: 1
+      why: >-
+        a: constant and wording tests pass the gate yet protect nothing; b: gate question
+        2 does not separate bugs from decisions; c: applies to every authoring run; d: a gate
+        question; e: found by review and micro-tested in the source.
+    final_score: 30.0
+    also_fits: []
+    decision: {state: candidate}
+
+  - key: ratchet-over-doctrine
+    layer: enforcement
+    what: >-
+      A test-quality rule that is only written down is backed by a shrink-only ratchet: a
+      checked-in per-file baseline of existing violations, a CI check that rejects new ones,
+      and a --prune step that lowers the baseline as sites are removed. One shared library
+      owns the ratchet lifecycle, and the source reuses it for at least five rules.
+    notable: >-
+      Evidence from history: the written rule against wall-clock timeout races did not hold,
+      and call sites grew from 123 to 478 in under a month. The ratchet accepts existing debt
+      instead of demanding a big-bang cleanup and still stops the rule from eroding. Three
+      design details make it hard to evade: the baseline is compared at the branch's merge-base,
+      so unrelated cleanup on main never looks like local growth; violations are counted on
+      the syntax tree, so aliases, re-exports and local copies cannot hide one; and each grandfathered
+      site has its own fingerprint, so a new site cannot borrow an old site's allowance. For
+      the goal this closes the gap after an audit lands: test-audit removes junk but has nothing
+      that keeps it from coming back.
+    where:
+      - openclaw@be052821d69
+      - openclaw@96370cf438dc:docs/help/testing/writing-tests.md#L111-L117
+      - openclaw@96370cf438dc:scripts/lib/shrink-ratchet.mts#L6-L9
+      - openclaw@96370cf438dc:scripts/lib/shrink-ratchet.mts#L76-L82
+      - openclaw@96370cf438dc:scripts/check-test-timeout-race-ratchet.mts#L12-L19
+      - openclaw@96370cf438dc:scripts/check-test-timeout-race-ratchet.mts#L56-L58
+      - openclaw@96370cf438dc:scripts/check-test-mock-exports.mts#L24-L25
+      - openclaw@96370cf438dc:scripts/check-assertion-safety-ratchet.mts#L20-L25
+    contrast: new
+    score:
+      relevance: 3
+      facts: [a, b, c, d, e]
+      impact: 5
+      evidence: 3
+      effort: 2
+      why: >-
+        a: junk returns after an audit lands; b: test-audit has nothing that keeps it out;
+        c: the source runs five ratchets; d: it is a CI check; e: 123 to 478 sites under a
+        doc-only rule.
+    final_score: 22.5
+    also_fits:
+      - hub
+    decision: {state: planned, at: 96370cf438dc}
+
+  - key: description-trap
+    layer: craft
+    what: >-
+      A skill description that summarizes the workflow makes the agent follow the description
+      and skip the skill body; descriptions should state only when to use the skill.
+    notable: >-
+      Found by testing and applied to every skill in the source. test-audit's own description
+      includes a summary ('Authoring gate for new tests plus audit workflow for ...'), so
+      it may be exposed to the same shortcut.
+    where:
+      - superpowers@030a222af19c
+    contrast: contradicts
+    score:
+      relevance: 2
+      facts: [a, b, c, e]
+      impact: 4
+      evidence: 2
+      effort: 1
+      why: >-
+        a: test-audit's description summarizes its workflow, inviting agents to skip the body;
+        b: nothing in the skill addresses it; c: affects every activation; e: observed in
+        the source's testing. Not enforceable: it is wording.
+    final_score: 16.0
+    also_fits:
+      - hub
+    decision: {state: candidate}
+
+  - key: mock-isolation-must-be-declared
+    layer: enforcement
+    what: >-
+      Module mocks keep the real module's exports and override only what the test needs; a
+      closed mock that replaces the whole module needs a one-line `mock-isolation:` annotation
+      stating which state or initialization it isolates. A checker enforces it, with existing
+      unannotated factories held in a shrink-only baseline.
+    notable: >-
+      Turns "mocks that implement the asserted behavior" from a judgement call into a visible
+      claim a reviewer can verify: every closed mock must say what it keeps out. The same
+      "declare the exception inline" pattern guards production type assertions (`// SAFETY:`),
+      so it is a general tool, not a one-off. The source also warns that pass-through mocks
+      do not share singleton state, so export completeness is not identity.
+    where:
+      - openclaw@96370cf438dc:docs/help/testing/writing-tests.md#L119-L140
+      - openclaw@96370cf438dc:scripts/check-test-mock-exports.mts#L24-L25
+    contrast: extends
+    score:
+      relevance: 3
+      facts: [a, b, c, d, e]
+      impact: 5
+      evidence: 1
+      effort: 1
+      why: >-
+        a: closed mocks hide the behavior a test claims to check; b: the junk pattern has
+        no checkable form; c: the source uses the same inline-declaration pattern twice; d:
+        a checker enforces it; e: an unannotated closed mock passes silently.
+    final_score: 15.0
+    also_fits: []
+    decision: {state: planned, at: 96370cf438dc}
+
+  - key: mutation-check-at-authoring
+    layer: validation
+    what: >-
+      Before finishing a test file, mentally mutate the production code (wrong constant or
+      argument, wrong branch, missing side effect, empty return, missing validation); at least
+      one test should fail for each realistic mutation.
+    notable: >-
+      test-audit uses mutation only in campaigns, to prove a restored contract. Applying a
+      cheap mental mutation pass at authoring time catches tautological tests before they
+      land, which is the gate's purpose.
+    where:
+      - superpowers@8ca22dba9a94:skills/test-driven-development/writing-good-tests.md#L157-L169
+    contrast: extends
+    score:
+      relevance: 3
+      facts: [a, b, c, d, e]
+      impact: 5
+      evidence: 1
+      effort: 1
+      why: >-
+        a: tautological tests land at authoring time; b: test-audit uses mutation only in
+        campaigns; c: applies to every authoring run; d: a gate step; e: a tautological test
+        passes silently.
+    final_score: 15.0
+    also_fits: []
+    decision: {state: candidate}
+
+  - key: done-when-per-step
+    layer: craft
+    what: >-
+      Every step of the campaign procedure ends with a "Done when" criterion, and the procedure
+      says not to start the next step early.
+    notable: >-
+      The same skill uses this only in its campaign file. The audit mode in SKILL.md (discovery,
+      candidate evidence, edit shape, validation) has no completion criteria, so an agent
+      decides for itself when discovery is "enough" and when a deletion is proven. One "Done
+      when" line per audit section gives the mode the same discipline at almost no cost.
+    where:
+      - openclaw@96370cf438dc:.agents/skills/test-audit/CAMPAIGN.md#L7
+      - openclaw@96370cf438dc:.agents/skills/test-audit/CAMPAIGN.md#L16
+    contrast: extends
+    score:
+      relevance: 2
+      facts: [a, b, c, d]
+      impact: 4
+      evidence: 1
+      effort: 1
+      why: >-
+        a: an agent decides alone when discovery or proof is enough; b: audit mode has no
+        completion criteria; c: every audit run; d: each criterion is a gate.
+    final_score: 8.0
+    also_fits: []
+    decision: {state: candidate}
+
+  - key: ban-ships-with-replacement
+    layer: enforcement
+    what: >-
+      When a pattern is banned, the source ships a correct replacement helper first and names
+      it in the check's failure message: timeout races point authors to awaitGateBeforeSettlement,
+      withinTest, or fake timers driven through the owner's clock.
+    notable: >-
+      A ban without a sanctioned replacement pushes authors toward the next workaround. The
+      replacement removes the original failure mode at the root (it has no timer, so a slow
+      runner cannot lose a race against a deadline), and the failure message makes the right
+      fix the shortest path. test-audit removes junk patterns and test-only seams but never
+      asks what the author should write instead.
+    where:
+      - openclaw@96370cf438dc:test/helpers/promise.ts#L29-L46
+      - openclaw@96370cf438dc:scripts/check-test-timeout-race-ratchet.mts#L135-L139
+      - openclaw@96370cf438dc:docs/help/testing/writing-tests.md#L114-L116
+    contrast: new
+    score:
+      relevance: 2
+      facts: [a, b, d]
+      impact: 3
+      evidence: 1
+      effort: 1
+      why: >-
+        a: authors move to the next workaround after a ban; b: the skill never names what
+        to write instead; d: the replacement is named in the check's failure message. One
+        instance only.
+    final_score: 6.0
+    also_fits: []
+    decision: {state: planned, at: 96370cf438dc}
+
+  - key: no-source-text-assertions
+    layer: content
+    what: >-
+      Asserting that a script, skill or config contains an exact line proves only that the
+      source is the source; run the artifact and assert its effects. Documents for agents
+      are tested by the consuming agent's behavior; prose for humans earns no test.
+    notable: >-
+      Agrees with test-audit's junk pattern on source and string greps, but is stricter: test-audit
+      keeps source inspection when it is the cheapest independent guard, superpowers allows
+      none. A real difference to decide, not a gap.
+    where:
+      - superpowers@8ca22dba9a94:skills/test-driven-development/writing-good-tests.md#L47-L52
+    contrast: contradicts
+    score:
+      relevance: 3
+      facts: [a, b]
+      impact: 2
+      evidence: 1
+      effort: 1
+      why: >-
+        a: the source-inspection exception lets text assertions pass the gate; b: the retention
+        bar quotes that exception. A design difference, not a proven failure.
+    final_score: 6.0
+    also_fits: []
+    decision: {state: candidate}
+
+  - key: specific-doubles-per-branch
+    layer: content
+    what: >-
+      When arguments, call counts or ordering are part of the contract, assert them; give
+      each branch (success, error, malformed) its own fixture or spy, so the wrong branch
+      cannot satisfy the expectation.
+    notable: >-
+      A fake that accepts anything verifies nothing. Close to test-audit's 'one identical
+      mock standing in for different APIs', but per branch rather than per API.
+    where:
+      - superpowers@8ca22dba9a94:skills/test-driven-development/writing-good-tests.md#L114-L117
+    contrast: extends
+    score:
+      relevance: 2
+      facts: [a, b, e]
+      impact: 3
+      evidence: 1
+      effort: 1
+      why: >-
+        a: a permissive fake lets the wrong branch satisfy the test; b: the junk list covers
+        shared mocks per API, not per branch; e: the wrong branch passes silently.
+    final_score: 6.0
+    also_fits: []
+    decision: {state: candidate}
+
+  - key: your-code-not-the-framework
+    layer: content
+    what: >-
+      Test the contract your code makes at its boundaries; upstream mechanics are the upstream
+      maintainers' tests. Constructors, getters, constants and trivial forwarding earn tests
+      only when they validate, normalize, default, derive, enforce, or cause side effects.
+    notable: >-
+      A clear junk pattern test-audit lacks: tests that would still pass if only the framework
+      remained. When upstream behavior surprised you, one narrow characterization test naming
+      the assumption is the allowed exception.
+    where:
+      - superpowers@8ca22dba9a94:skills/test-driven-development/writing-good-tests.md#L54-L63
+    contrast: extends
+    score:
+      relevance: 3
+      facts: [a, b]
+      impact: 2
+      evidence: 1
+      effort: 1
+      why: >-
+        a: tests of framework mechanics pass the gate; b: missing from the junk list.
+    final_score: 6.0
+    also_fits: []
+    decision: {state: candidate}
+
+  - key: micro-test-rule-changes
+    layer: validation
+    what: >-
+      Each change to the testing skill's rules is micro-tested: a subject agent under realistic
+      pressure is given a task, and the change counts only if the subject follows the new
+      rule (for example, rejecting a constant test and testing the behavior instead).
+    notable: >-
+      Gives a concrete way to know a test-audit edit changes agent behavior, which the outcome
+      loop needs. The method itself is general, so it also belongs to the hub.
+    where:
+      - superpowers@e8a9748a3fa9
+      - superpowers@517a9c6
+    contrast: new
+    score:
+      relevance: 2
+      facts: [a, b, e]
+      impact: 3
+      evidence: 2
+      effort: 2
+      why: >-
+        a: edits to test-audit are never checked for a change in agent behavior; b: the skill
+        has no validation step for itself; e: the source micro-tested each rule change.
+    final_score: 6.0
+    also_fits:
+      - hub
+    decision: {state: candidate}
+
+  - key: inventory-regressions-at-capacity-boundary
+    layer: content
+    what: >-
+      Inventory-growth and capacity regressions pass bounded synthetic inventories and fixed
+      timing data through the real planner, with the fixture placed at the capacity boundary;
+      real-checkout inventory coverage stays in its integration tests instead of rebuilding
+      the growing plan for every variation.
+    notable: >-
+      A concrete recipe for a regression that is cheap, exercises the real owner, and does
+      not grow with the repository. It fits test-audit's authoring gate as an example of "the
+      strongest boundary" done without a copied inventory, which is one of its junk patterns.
+    where:
+      - openclaw@96370cf438dc:docs/help/testing/writing-tests.md#L194-L198
+    contrast: extends
+    score:
+      relevance: 2
+      facts: [a, b]
+      impact: 2
+      evidence: 1
+      effort: 1
+      why: >-
+        a: regressions built from copied inventories; b: the skill names the junk but gives
+        no recipe.
+    final_score: 4.0
+    also_fits: []
+    decision: {state: candidate}
+
+  - key: registry-exhaustiveness-guard
+    layer: content
+    what: >-
+      A test derives one sampled target per class from registry metadata and fails on any
+      unclassified id, so a new class cannot be added without deciding how it is guarded.
+    notable: >-
+      A test that is designed to fail on additions is a cheap, independent contract and fits
+      test-audit's retention bar; recognising this shape keeps an audit from deleting it as
+      "an inventory copy".
+    where:
+      - openclaw@96370cf438dc:docs/help/testing/writing-tests.md#L207-L209
+    contrast: extends
+    score:
+      relevance: 2
+      facts: [a, b]
+      impact: 2
+      evidence: 1
+      effort: 1
+      why: >-
+        a: an audit can delete an exhaustiveness guard as an inventory copy; b: the retention
+        bar does not name this shape.
+    final_score: 4.0
+    also_fits: []
+    decision: {state: candidate}
+
+  - key: test-cost-budget
+    layer: content
+    what: >-
+      Each new or materially changed test file states its measured cost on one worker; target
+      under 5 s per file, and above 30 s the author names the contract that needs the time
+      and why no cheaper layer proves it. Files over a job budget are split by owner boundary
+      or moved to a release-only tier.
+    notable: >-
+      Cost becomes an authoring-gate question with a number, while slowness is still not a
+      deletion reason. test-audit's purpose speaks of maintenance cost but has no way to stop
+      a new slow test, so run time grows silently.
+    where:
+      - openclaw@96370cf438dc:docs/help/testing/writing-tests.md#L72-L86
+      - openclaw@96370cf438dc:docs/help/testing/writing-tests.md#L108-L109
+      - openclaw@96370cf438dc:AGENTS.md#L76
+    contrast: extends
+    score:
+      relevance: 2
+      facts: [a, b, c, d]
+      impact: 4
+      evidence: 1
+      effort: 2
+      why: >-
+        a: slow new tests pass the gate; b: the skill only says slowness is not a deletion
+        reason; c: every authoring run; d: the measured cost is a required statement.
+    final_score: 4.0
+    also_fits:
+      - new-skill:test-performance
+    decision: {state: candidate}
+
+  - key: rationalization-table-and-red-flags
+    layer: craft
+    what: >-
+      The skill lists the excuses an agent uses to skip the discipline next to the reality
+      that answers each one, and a short red-flags list of thoughts that mean stop and start
+      over.
+    notable: >-
+      Agents skip gates by rationalizing ('too simple to test', 'I will test after'); naming
+      each excuse with its rebuttal pre-empts it. superpowers keeps folding new rebuttals
+      into the table. test-audit's authoring gate has no answer to the excuses an agent gives
+      for adding a low-value test anyway.
+    where:
+      - superpowers@8ca22dba9a94:skills/test-driven-development/SKILL.md#L222-L254
+      - superpowers@b9e75dd
+    contrast: new
+    score:
+      relevance: 2
+      facts: [a, b, c]
+      impact: 3
+      evidence: 1
+      effort: 2
+      why: >-
+        a: agents talk their way past the gate; b: no answer to their excuses; c: every authoring
+        run.
+    final_score: 3.0
+    also_fits:
+      - hub
+    decision: {state: candidate}
+
+  - key: incident-cited-rules
+    layer: wording
+    what: >-
+      Rules carry the incident that motivated them (issue or PR number) and the concrete failure
+      it caused.
+    notable: >-
+      An incident number makes a rule non-negotiable and lets a reader check that it still
+      applies; an abstract rule invites "this case is different". test-audit's junk patterns
+      are abstract except the last one.
+    where:
+      - openclaw@96370cf438dc:test/AGENTS.md#L4
+    contrast: new
+    score:
+      relevance: 2
+      facts: [a, b]
+      impact: 2
+      evidence: 1
+      effort: 2
+      why: >-
+        a: abstract rules invite 'this case is different'; b: the junk patterns carry no incidents.
+    final_score: 2.0
+    also_fits: []
+    decision: {state: candidate}
+
+  - key: leak-fails-the-producer
+    layer: enforcement
+    what: >-
+      The shared test runner closes leftover watchers after each file and fails the file that
+      leaked them, naming it, instead of letting the leak break a later, unrelated file.
+    notable: >-
+      Moves the failure to the cause: the earlier occurrence had been patched at the victim.
+      A strong reliability mechanism, adjacent to test value.
+    where:
+      - openclaw@777421df553
+      - openclaw@96370cf438dc:docs/help/testing/writing-tests.md#L165-L173
+    contrast: new
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 2
+      why: >-
+        Reliability, outside the skill's purpose; needs harness work. No fact a: the failure
+        it prevents is outside the goal.
+    final_score: 0.0
+    also_fits:
+      - new-skill:flake-triage
+    decision: {state: candidate}
+
+  - key: temp-dir-ownership-helper
+    layer: enforcement
+    what: >-
+      Test-owned temporary directories go through one shared helper whose cleanup is owned
+      by the test lifecycle; bare temp-dir creation needs an auditable allow comment, and
+      a warning-only report flags new bare uses in changed lines.
+    notable: >-
+      A warning-only signal is the gentle first step before a ratchet. For the goal it is
+      test-support hygiene rather than test value.
+    where:
+      - openclaw@96370cf438dc:docs/help/testing/writing-tests.md#L9-L44
+    contrast: new
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: >-
+        Test-support hygiene adjacent to the goal. No fact a: the failure it prevents is outside
+        the goal.
+    final_score: 0.0
+    also_fits: []
+    decision: {state: candidate}
+
+  - key: close-db-workers-before-raw-access
+    layer: content
+    what: >-
+      Tests await the state database's worker retirement before opening it raw or snapshotting
+      its files.
+    notable: Specific to the source's storage layer.
+    where:
+      - openclaw@96370cf438dc:docs/help/testing/writing-tests.md#L151-L163
+    contrast: new
+    score:
+      relevance: 0
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: >-
+        Repository-specific. No fact a: the failure it prevents is outside the goal.
+    final_score: 0.0
+    also_fits: []
+    decision: {state: candidate}
+
+  - key: close-on-exec-fixture-copy
+    layer: content
+    what: >-
+      Fixture trees that a test later executes are copied with a close-on-exec helper to avoid
+      ETXTBSY on Node 24.
+    notable: Platform quirk specific to the source's runtime.
+    where:
+      - openclaw@96370cf438dc:docs/help/testing/writing-tests.md#L46-L51
+    contrast: new
+    score:
+      relevance: 0
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: >-
+        Repository- and platform-specific. No fact a: the failure it prevents is outside the
+        goal.
+    final_score: 0.0
+    also_fits: []
+    decision: {state: candidate}
+
+  - key: compiled-subprocess-preload
+    layer: content
+    what: >-
+      Suites that reach compiled-subprocess declarations import them at collection so preparation
+      is not paid inside a test deadline.
+    notable: Specific to the source's test infrastructure.
+    where:
+      - openclaw@96370cf438dc:docs/help/testing/writing-tests.md#L99-L107
+    contrast: new
+    score:
+      relevance: 0
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: >-
+        Repository-specific. No fact a: the failure it prevents is outside the goal.
+    final_score: 0.0
+    also_fits: []
+    decision: {state: candidate}
+
+  - key: diff-scoped-slop-cleanup
+    layer: content
+    what: >-
+      A pre-review pass limited to the branch diff strips comment slop, defensive-check slop,
+      type laundering and style drift, makes no functional edits, and never replaces the correctness
+      review.
+    notable: >-
+      Strict scoping (diff only, behavior-neutral, report instead of fix when unsure) is what
+      makes an automated cleanup safe. It applies to test code too, but its subject is code
+      style, not test value.
+    where:
+      - openclaw@96370cf438dc:.agents/skills/deslop/SKILL.md#L8-L24
+    contrast: new
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 2
+      why: >-
+        Adjacent; a separate skill's job. No fact a: the failure it prevents is outside the
+        goal.
+    final_score: 0.0
+    also_fits:
+      - new-skill:deslop
+    decision: {state: candidate}
+
+  - key: expected-values-derived-independently
+    layer: content
+    what: >-
+      Use literals and hand-checked fixtures; an expectation computed by the code under test
+      or its helpers passes no matter what that code does.
+    notable: >-
+      Already in test-audit's junk list ('expected values produced by the helper or renderer
+      under test'); superpowers reached it independently.
+    where:
+      - superpowers@8ca22dba9a94:skills/test-driven-development/writing-good-tests.md#L27-L39
+    contrast: already-covered
+    score:
+      relevance: 3
+      facts: []
+      impact: 0
+      evidence: 2
+      effort: 1
+      why: >-
+        Already in the skill; adopting it adds nothing, so no impact fact holds.
+    final_score: 0.0
+    also_fits: []
+    decision: {state: candidate}
+
+  - key: fix-at-the-owner
+    layer: content
+    what: >-
+      Migrate all callers together, remove superseded code and duplicate policy, and prove
+      the user flow; fixture leaks are fixed in the fixture owner, not in the failing test.
+    notable: Already the skill's owner-boundary principle.
+    where:
+      - openclaw@96370cf438dc:AGENTS.md#L45-L46
+      - openclaw@96370cf438dc:docs/help/testing/writing-tests.md#L185-L186
+    contrast: already-covered
+    score:
+      relevance: 3
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: >-
+        Already in the skill; adopting it adds nothing, so no impact fact holds.
+    final_score: 0.0
+    also_fits: []
+    decision: {state: candidate}
+
+  - key: flake-triage-as-defect
+    layer: content
+    what: >-
+      A failure without a related change is a defect. Reproduce in the failing shard's file
+      order first, then alone; classify it as fixture (temp state, ports, cwd, env, singletons),
+      ordering (assertion before the owned completion signal) or product race; fix at the
+      owner, never in the victim test; prove with 20 clean standalone runs and 3 clean shard
+      runs.
+    notable: >-
+      Order-only failures are read as shared-state leaks from an earlier file, so the fix
+      goes to the producer, and serial configs or worker pins are refused as repairs. The
+      source names every way to conceal a failure (retries, longer timeouts, weaker assertions,
+      broader mocks, altered baselines) and closes the most common false claim in one line:
+      "Never claim a passing replay proves a fix." Measured against the goal, this is test
+      reliability, not test value, so it fits a separate skill better. superpowers ships a
+      bisection script that finds which test file creates the polluting state, the same producer-first
+      idea as openclaw's order-only rule.
+    where:
+      - openclaw@96370cf438dc:docs/help/testing/writing-tests.md#L175-L190
+      - openclaw@96370cf438dc:.agents/skills/openclaw-testing/SKILL.md#L123-L135
+      - openclaw@96370cf438dc:docs/help/testing/writing-tests.md#L96-L98
+      - superpowers@8ca22dba9a94:skills/systematic-debugging/find-polluter.sh#L1-L4
+    contrast: new
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 3
+      effort: 2
+      why: >-
+        Independent convergence (producer-first triage in both sources) lifts evidence; still
+        adjacent to the goal. No fact a: the failure it prevents is outside the goal.
+    final_score: 0.0
+    also_fits:
+      - new-skill:flake-triage
+    decision: {state: candidate}
+
+  - key: prefer-real-boundary-over-broad-mocks
+    layer: content
+    what: >-
+      Prefer dependency injection, loaded-plugin-only lookup, explicit fixtures and pure helpers
+      over broad mocks.
+    notable: >-
+      Already in the skill; superpowers independently says the same, so the rule now has outside
+      confirmation.
+    where:
+      - openclaw@96370cf438dc:.agents/skills/openclaw-test-performance/SKILL.md#L50-L51
+      - superpowers@8ca22dba9a94:skills/test-driven-development/writing-good-tests.md#L129-L133
+    contrast: already-covered
+    score:
+      relevance: 3
+      facts: []
+      impact: 0
+      evidence: 2
+      effort: 1
+      why: >-
+        Already in the skill; adopting it adds nothing, so no impact fact holds.
+    final_score: 0.0
+    also_fits: []
+    decision: {state: candidate}
+
+  - key: read-history-before-restoring
+    layer: content
+    what: >-
+      Before restoring a missing path, check why it was removed (`git log -p -S <symbol>`).
+    notable: >-
+      Already covered by the skill's "relevant history" evidence field.
+    where:
+      - openclaw@96370cf438dc:AGENTS.md#L43
+    contrast: already-covered
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: >-
+        Already in the skill; adopting it adds nothing, so no impact fact holds.
+    final_score: 0.0
+    also_fits: []
+    decision: {state: candidate}
+
+  - key: regression-fails-on-original-defect
+    layer: content
+    what: >-
+      Regressions fail on the original defect; shared-state failures use the original order.
+    notable: >-
+      Already in the skill. superpowers independently requires watching the test fail first
+      and verifying the red-green cycle, so the rule has outside confirmation.
+    where:
+      - openclaw@96370cf438dc:AGENTS.md#L73
+      - superpowers@8ca22dba9a94:skills/test-driven-development/SKILL.md#L113-L128
+      - superpowers@8ca22dba9a94:skills/verification-before-completion/SKILL.md#L46
+    contrast: already-covered
+    score:
+      relevance: 3
+      facts: []
+      impact: 0
+      evidence: 2
+      effort: 1
+      why: >-
+        Already in the skill; adopting it adds nothing, so no impact fact holds.
+    final_score: 0.0
+    also_fits: []
+    decision: {state: candidate}
+
+  - key: report-every-red-test
+    layer: content
+    what: >-
+      Before calling a change done, run the project's whole test command, not only the file
+      you touched; any failure, including one you did not cause, goes in the report by name.
+    notable: >-
+      'A red test you watched scroll past and didn't mention is a report falsified by omission.'
+      Adjacent: it is about honest verification rather than test value.
+    where:
+      - superpowers@8ca22dba9a94:skills/test-driven-development/SKILL.md#L185-L193
+    contrast: new
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: >-
+        Verification honesty, adjacent to the goal. No fact a: the failure it prevents is
+        outside the goal.
+    final_score: 0.0
+    also_fits:
+      - hub
+    decision: {state: candidate}
+
+  - key: slowness-is-not-a-deletion-reason
+    layer: content
+    what: >-
+      Slowness alone does not justify deleting coverage; consider a release-only tier instead.
+    notable: Already in the skill's retention bar.
+    where:
+      - openclaw@96370cf438dc:docs/help/testing/writing-tests.md#L85-L86
+    contrast: already-covered
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: >-
+        Already in the skill; adopting it adds nothing, so no impact fact holds.
+    final_score: 0.0
+    also_fits: []
+    decision: {state: candidate}
+
+  - key: test-only-methods-stay-in-test-utilities
+    layer: content
+    what: >-
+      Cleanup or helpers that only tests need live in test utilities, never on the production
+      class.
+    notable: >-
+      Already test-audit's rule on test-only production seams; independent confirmation.
+    where:
+      - superpowers@8ca22dba9a94:skills/test-driven-development/writing-good-tests.md#L124-L127
+    contrast: already-covered
+    score:
+      relevance: 3
+      facts: []
+      impact: 0
+      evidence: 2
+      effort: 1
+      why: >-
+        Already in the skill; adopting it adds nothing, so no impact fact holds.
+    final_score: 0.0
+    also_fits: []
+    decision: {state: candidate}
+
+  - key: test-performance-evidence-first
+    layer: content
+    what: >-
+      Test-performance work starts from a baseline metric, separates runner noise from real
+      file cost, fixes the root cause, preserves coverage shape (keep one cheap integration
+      smoke), and re-benchmarks the same command.
+    notable: >-
+      "Do not delete a slow integration proof unless the exact production composition is extracted
+      into a named helper and tested" is the performance-side twin of test-audit's retention
+      bar.
+    where:
+      - openclaw@96370cf438dc:.agents/skills/openclaw-test-performance/SKILL.md#L8-L10
+      - openclaw@96370cf438dc:.agents/skills/openclaw-test-performance/SKILL.md#L56-L62
+    contrast: new
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 3
+      why: >-
+        Performance tuning is out of scope; only the coverage-shape rule touches the goal.
+        No fact a: the failure it prevents is outside the goal.
+    final_score: 0.0
+    also_fits:
+      - new-skill:test-performance
+    decision: {state: candidate}
+
+  - key: tests-protect-behavior-not-reversible-changes
+    layer: content
+    what: >-
+      Tests protect meaningful behavior, not reversible low-impact changes that mirror the
+      implementation; proof uses the smallest meaningful check.
+    notable: Already the skill's value bar; same origin, not independent.
+    where:
+      - openclaw@96370cf438dc:AGENTS.md#L73
+      - openclaw@96370cf438dc:.agents/skills/openclaw-testing/SKILL.md#L8-L11
+    contrast: already-covered
+    score:
+      relevance: 3
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: >-
+        Already in the skill; adopting it adds nothing, so no impact fact holds.
+    final_score: 0.0
+    also_fits: []
+    decision: {state: candidate}
+
+  - key: instruction-dedup-passes
+    layer: history
+    what: >-
+      The source runs repeated cleanup passes over its agent instructions (sentence-level
+      dedup, fact-checking, slimming the root AGENTS.md).
+    notable: >-
+      Shows instructions decay and need scheduled maintenance; a hub concern.
+    where:
+      - openclaw@c9da900a961
+      - openclaw@e09a265b111
+    contrast: new
+    score:
+      relevance: 0
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: >-
+        Outside the skill's goal. No fact a: the failure it prevents is outside the goal.
+    final_score: 0.0
+    also_fits:
+      - hub
+    decision: {state: candidate}
+
+  - key: agent-reliability-eval-gaps
+    layer: validation
+    what: >-
+      The source lists what its skill evals cannot measure yet: whether the agent picks the
+      right skill, reads SKILL.md before use, and follows multi-turn workflow contracts; future
+      evals stay deterministic first.
+    notable: >-
+      A ready-made checklist for evaluating skills, which is Skill Hub's job, not test-audit's.
+      superpowers separates code tests from agent-behavior evals the same way.
+    where:
+      - openclaw@96370cf438dc:docs/help/testing/writing-tests.md#L53-L70
+      - superpowers@8ca22dba9a94:docs/testing.md#L3-L6
+    contrast: new
+    score:
+      relevance: 0
+      facts: []
+      impact: 0
+      evidence: 2
+      effort: 2
+      why: >-
+        Outside the skill's goal. No fact a: the failure it prevents is outside the goal.
+    final_score: 0.0
+    also_fits:
+      - hub
+    decision: {state: candidate}
+
+  - key: mode-router-table
+    layer: craft
+    what: >-
+      The testing skill opens with a "change or question → starting point" table and loads
+      only the route that matches.
+    notable: >-
+      A table routes faster than prose. test-audit already names its three modes in its first
+      paragraph, so the gain is small.
+    where:
+      - openclaw@96370cf438dc:.agents/skills/openclaw-testing/SKILL.md#L23-L32
+    contrast: extends
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: >-
+        Small routing gain; the modes are already stated. No fact a: no concrete failure in
+        the skill today.
+    final_score: 0.0
+    also_fits: []
+    decision: {state: candidate}
+
+  - key: positively-named-rules
+    layer: wording
+    what: >-
+      The source rewrote its testing anti-patterns as positively named rules, each leading
+      with the good example and keeping the violation as contrast, and later re-derived all
+      rules as corollaries of two principles with one gate each.
+    notable: >-
+      The opposite framing from test-audit, which leads with a list of junk patterns. The
+      rewrite was micro-tested 2 of 2 (a mock-existence assertion was rewritten citing the
+      rule). Small evidence, and openclaw's practice of naming forbidden substitutes points
+      the other way, so this is a real design choice rather than a clear win.
+    where:
+      - superpowers@e74961c11048
+      - superpowers@caa1826cbade
+      - superpowers@8ca22dba9a94:skills/test-driven-development/writing-good-tests.md#L8-L14
+    contrast: contradicts
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 3
+      why: >-
+        Would restructure the junk list; weak evidence and conflicting practice in the other
+        source. No fact a: no concrete failure in the skill today.
+    final_score: 0.0
+    also_fits:
+      - hub
+    decision: {state: candidate}
+
+  - key: per-host-agent-metadata
+    layer: ecosystem
+    what: >-
+      Skills carry a per-host metadata file (agents/openai.yaml) next to SKILL.md.
+    notable: A pattern for host-specific integration; a hub concern.
+    where:
+      - openclaw@96370cf438dc:.agents/skills/openclaw-testing/agents/openai.yaml
+    contrast: new
+    score:
+      relevance: 0
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: >-
+        Outside the skill's goal. No fact a: the failure it prevents is outside the goal.
+    final_score: 0.0
+    also_fits:
+      - hub
+    decision: {state: candidate}
+
+  - key: pointer-skill-to-canonical-upstream
+    layer: ecosystem
+    what: >-
+      A repository skill can be only a pointer to a canonical skill in a shared upstream repository
+      plus an install command; fixes land once upstream.
+    notable: >-
+      Mirrors Skill Hub's upstream model; relevant to the hub, not to test-audit.
+    where:
+      - openclaw@96370cf438dc:.agents/skills/autoreview/SKILL.md#L8-L23
+    contrast: new
+    score:
+      relevance: 0
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: >-
+        Outside the skill's goal. No fact a: the failure it prevents is outside the goal.
+    final_score: 0.0
+    also_fits:
+      - hub
+    decision: {state: candidate}
+
+  - key: untrusted-tooling-boundary
+    layer: ecosystem
+    what: >-
+      Untrusted contributor or fork tooling never executes locally; it runs in secretless
+      CI or a sanitized remote lease bound to the reviewed head SHA.
+    notable: >-
+      A trust boundary for running other people's code; relevant to Skill Hub's handling of
+      third-party scripts.
+    where:
+      - openclaw@96370cf438dc:.agents/skills/openclaw-testing/SKILL.md#L48-L62
+    contrast: new
+    score:
+      relevance: 0
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 2
+      why: >-
+        Outside the skill's goal. No fact a: the failure it prevents is outside the goal.
+    final_score: 0.0
+    also_fits:
+      - hub
+    decision: {state: candidate}

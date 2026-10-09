@@ -4,94 +4,173 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
-	"time"
 
 	"gopkg.in/yaml.v3"
 )
 
 var (
-	EvidencePattern  = regexp.MustCompile(`^(?:[A-Za-z0-9_./:-]+@[0-9a-f]{40}(?::[^#\s]+(?:#L\d+(?:-L\d+)?)?)?|usage:[A-Za-z0-9_-]+)$`)
-	LessonKeyPattern = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
+	KeyPattern         = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
+	CommitPattern      = regexp.MustCompile(`^[0-9a-f]{7,40}$`)
+	CommitWherePattern = regexp.MustCompile(`^([a-z0-9-]+)@([0-9a-f]{7,40})$`)
+	PathWherePattern   = regexp.MustCompile(`^([a-z0-9-]+)@([0-9a-f]{7,40}):([^#\s]+)(?:#L(\d+)(?:-L(\d+))?)?$`)
+	AlsoFitsPattern    = regexp.MustCompile(`^(hub|new-skill:[a-z0-9-]+|[a-z0-9]+(?:-[a-z0-9]+)*)$`)
+	StatusPattern      = regexp.MustCompile(`^(removed|superseded-by:[a-z0-9-]+)$`)
+
+	// EvidencePattern accepts either commit-level or path-level citations (7-40 hex SHA).
+	EvidencePattern  = regexp.MustCompile(`^[a-z0-9-]+@[0-9a-f]{7,40}(?::[^#\s]+(?:#L\d+(?:-L\d+)?)?)?$`)
+	LessonKeyPattern = KeyPattern
+)
+
+var (
+	ValidLayers         = []string{"enforcement", "content", "history", "validation", "craft", "wording", "ecosystem"}
+	ValidContrasts      = []string{"new", "extends", "contradicts", "already-covered"}
+	ValidDecisionStates = []string{"candidate", "planned", "ported", "rejected"}
+	ValidGoalStatuses   = []string{"draft", "confirmed"}
+	ValidImpactFacts    = []string{"a", "b", "c", "d", "e"}
 )
 
 // Document models one skill's hub-side distillation knowledge in .meta/distill.yaml.
+// The format adheres strictly to .claude/skills/distill-lab/scripts/distill.py.
 type Document struct {
-	Goal     string         `yaml:"goal" json:"goal"`
-	Cursors  []Cursor       `yaml:"cursors,omitempty" json:"cursors,omitempty"`
-	Coverage []CoverageItem `yaml:"coverage,omitempty" json:"coverage,omitempty"`
-	Lessons  []Lesson       `yaml:"lessons,omitempty" json:"lessons,omitempty"`
+	Goal     Goal                      `yaml:"goal" json:"goal"`
+	Cursors  map[string]string         `yaml:"cursors" json:"cursors"`
+	Coverage map[string]CoverageSource `yaml:"coverage,omitempty" json:"coverage,omitempty"`
+	Lessons  []Lesson                  `yaml:"lessons" json:"lessons"`
 }
 
-// Cursor tracks distillation progress against one source.
-type Cursor struct {
-	SourceID string `yaml:"source_id" json:"source_id"`
-	Commit   string `yaml:"commit,omitempty" json:"commit,omitempty"`
-	SyncedAt string `yaml:"synced_at,omitempty" json:"synced_at,omitempty"`
+// Goal defines the objective and bounds of distillation for a skill.
+type Goal struct {
+	Status             string   `yaml:"status" json:"status"`
+	Purpose            string   `yaml:"purpose" json:"purpose"`
+	InScope            []string `yaml:"in_scope" json:"in_scope"`
+	OutOfScope         []string `yaml:"out_of_scope" json:"out_of_scope"`
+	FailuresItPrevents []string `yaml:"failures_it_prevents" json:"failures_it_prevents"`
 }
 
-// CoverageItem records review status of one resource in a source.
-type CoverageItem struct {
-	Resource string `yaml:"resource" json:"resource"`
-	Status   string `yaml:"status" json:"status"` // analyzed | deferred | skipped
-	Reason   string `yaml:"reason,omitempty" json:"reason,omitempty"`
-	Blocking bool   `yaml:"blocking,omitempty" json:"blocking,omitempty"`
+// CoverageSource records read and unread resources for one source.
+type CoverageSource struct {
+	Read    []string              `yaml:"read,omitempty" json:"read,omitempty"`
+	NotRead []CoverageNotReadItem `yaml:"not_read,omitempty" json:"not_read,omitempty"`
+}
+
+// CoverageNotReadItem describes an unread resource with reason.
+type CoverageNotReadItem struct {
+	Path   string `yaml:"path" json:"path"`
+	Reason string `yaml:"reason" json:"reason"`
 }
 
 // Lesson represents one distilled knowledge item anchored to a skill.
 type Lesson struct {
-	Key      string   `yaml:"key" json:"key"`
-	What     string   `yaml:"what" json:"what"`
-	Notable  string   `yaml:"notable" json:"notable"`
-	Contrast string   `yaml:"contrast,omitempty" json:"contrast,omitempty"`
-	Scores   *Scores  `yaml:"scores,omitempty" json:"scores,omitempty"`
-	Where    []string `yaml:"where" json:"where"`
-	Decision Decision `yaml:"decision,omitempty" json:"decision,omitempty"`
+	Key        string   `yaml:"key" json:"key"`
+	Layer      string   `yaml:"layer" json:"layer"`
+	What       string   `yaml:"what" json:"what"`
+	Notable    string   `yaml:"notable" json:"notable"`
+	Where      []string `yaml:"where" json:"where"`
+	Contrast   string   `yaml:"contrast" json:"contrast"`
+	Score      Score    `yaml:"score" json:"score"`
+	FinalScore *float64 `yaml:"final_score,omitempty" json:"final_score,omitempty"`
+	AlsoFits   []string `yaml:"also_fits,omitempty" json:"also_fits,omitempty"`
+	Status     string   `yaml:"status,omitempty" json:"status,omitempty"`
+	FoundBy    string   `yaml:"found_by,omitempty" json:"found_by,omitempty"`
+	Decision   Decision `yaml:"decision" json:"decision"`
 }
 
-// Scores carries optional experimental scorecard metrics from Phase 0 discovery.
-type Scores struct {
-	Relevance       *float64 `yaml:"relevance,omitempty" json:"relevance,omitempty"`
-	EvidenceQuality *float64 `yaml:"evidence_quality,omitempty" json:"evidence_quality,omitempty"`
-	Fit             *float64 `yaml:"fit,omitempty" json:"fit,omitempty"`
+// Score contains the scorecard evaluation metrics for a lesson.
+type Score struct {
+	Relevance int      `yaml:"relevance" json:"relevance"`
+	Facts     []string `yaml:"facts" json:"facts"`
+	Impact    int      `yaml:"impact" json:"impact"`
+	Evidence  int      `yaml:"evidence" json:"evidence"`
+	Effort    int      `yaml:"effort" json:"effort"`
+	Why       string   `yaml:"why" json:"why"`
 }
 
 // Decision records the human or agent review disposition for one lesson.
 type Decision struct {
-	Status    string   `yaml:"status" json:"status"` // candidate | planned | ported | rejected
-	Reason    string   `yaml:"reason,omitempty" json:"reason,omitempty"`
-	At        string   `yaml:"at,omitempty" json:"at,omitempty"`
-	SeenWhere []string `yaml:"seen_where,omitempty" json:"seen_where,omitempty"`
+	State  string `yaml:"state" json:"state"` // candidate | planned | ported | rejected
+	Reason string `yaml:"reason,omitempty" json:"reason,omitempty"`
+	At     string `yaml:"at,omitempty" json:"at,omitempty"`
 }
 
-// ValidateDocument validates the structure and fields of a Document.
+// ImpactOf returns the impact score (0-5) based on the presence of fact 'a'.
+func ImpactOf(facts []string) int {
+	if slices.Contains(facts, "a") {
+		return len(facts)
+	}
+	return 0
+}
+
+// FinalScore computes the final score: relevance * impact * evidence / effort rounded to 2 decimals.
+func FinalScore(s Score) float64 {
+	impact := ImpactOf(s.Facts)
+	if s.Effort <= 0 {
+		return 0
+	}
+	val := float64(s.Relevance*impact*s.Evidence) / float64(s.Effort)
+	return math.Round(val*100) / 100
+}
+
+// ValidateDocument validates the structure and fields of a Document against distill.py rules.
 func ValidateDocument(doc *Document) error {
 	if doc == nil {
 		return errors.New("distill document is nil")
 	}
-	if strings.TrimSpace(doc.Goal) == "" {
-		return errors.New("distill goal is required")
+
+	// Goal validation
+	if !slices.Contains(ValidGoalStatuses, doc.Goal.Status) {
+		return fmt.Errorf("goal.status must be draft or confirmed, got %q", doc.Goal.Status)
 	}
-	for i, c := range doc.Cursors {
-		if strings.TrimSpace(c.SourceID) == "" {
-			return fmt.Errorf("cursors[%d]: source_id is required", i)
+	if strings.TrimSpace(doc.Goal.Purpose) == "" {
+		return errors.New("goal.purpose must be non-empty text")
+	}
+	if len(doc.Goal.InScope) == 0 {
+		return errors.New("goal.in_scope must be a non-empty list of text")
+	}
+	for i, s := range doc.Goal.InScope {
+		if strings.TrimSpace(s) == "" {
+			return fmt.Errorf("goal.in_scope[%d] must be non-empty text", i)
 		}
 	}
-	for i, cov := range doc.Coverage {
-		if strings.TrimSpace(cov.Resource) == "" {
-			return fmt.Errorf("coverage[%d]: resource is required", i)
-		}
-		if !slices.Contains([]string{"analyzed", "deferred", "skipped"}, cov.Status) {
-			return fmt.Errorf("coverage[%d]: invalid status %q (must be analyzed, deferred, or skipped)", i, cov.Status)
+	if len(doc.Goal.OutOfScope) == 0 {
+		return errors.New("goal.out_of_scope must be a non-empty list of text")
+	}
+	for i, s := range doc.Goal.OutOfScope {
+		if strings.TrimSpace(s) == "" {
+			return fmt.Errorf("goal.out_of_scope[%d] must be non-empty text", i)
 		}
 	}
+	if len(doc.Goal.FailuresItPrevents) == 0 {
+		return errors.New("goal.failures_it_prevents must be a non-empty list of text")
+	}
+	for i, s := range doc.Goal.FailuresItPrevents {
+		if strings.TrimSpace(s) == "" {
+			return fmt.Errorf("goal.failures_it_prevents[%d] must be non-empty text", i)
+		}
+	}
+
+	// Cursors validation
+	if len(doc.Cursors) == 0 {
+		return errors.New("cursors: must map source id to commit")
+	}
+	for src, commit := range doc.Cursors {
+		if strings.TrimSpace(src) == "" {
+			return errors.New("cursors: source id must be non-empty")
+		}
+		if !CommitPattern.MatchString(commit) {
+			return fmt.Errorf("cursors.%s: not a commit sha (%q)", src, commit)
+		}
+	}
+
+	// Lessons validation
 	seenKeys := make(map[string]bool, len(doc.Lessons))
 	for i, l := range doc.Lessons {
-		if err := ValidateLesson(&l); err != nil {
+		if err := ValidateLesson(&l, doc.Cursors); err != nil {
 			return fmt.Errorf("lessons[%d] (%s): %w", i, l.Key, err)
 		}
 		if seenKeys[l.Key] {
@@ -102,132 +181,98 @@ func ValidateDocument(doc *Document) error {
 	return nil
 }
 
-// ValidateLesson checks key format, required non-empty fields, evidence formatting, and decision status.
-func ValidateLesson(lesson *Lesson) error {
-	if !LessonKeyPattern.MatchString(lesson.Key) {
-		return fmt.Errorf("invalid lesson key %q: must be a kebab-case identifier", lesson.Key)
+// ValidateLesson checks all fields of a lesson against distill.py rules.
+func ValidateLesson(lesson *Lesson, cursors map[string]string) error {
+	if !KeyPattern.MatchString(lesson.Key) {
+		return fmt.Errorf("invalid lesson key %q: must be kebab-case", lesson.Key)
+	}
+	if !slices.Contains(ValidLayers, lesson.Layer) {
+		return fmt.Errorf("layer must be one of %s, got %q", strings.Join(ValidLayers, ", "), lesson.Layer)
 	}
 	if strings.TrimSpace(lesson.What) == "" {
-		return errors.New("what is required")
+		return errors.New("what must be non-empty text")
 	}
 	if strings.TrimSpace(lesson.Notable) == "" {
-		return errors.New("notable explanation is required")
+		return errors.New("notable must be non-empty text")
 	}
 	if len(lesson.Where) == 0 {
-		return errors.New("where evidence is required (at least one source reference)")
+		return errors.New("where must be a non-empty list")
 	}
-	seenEvidence := make(map[string]bool, len(lesson.Where))
+	seenWhere := make(map[string]bool, len(lesson.Where))
 	for _, w := range lesson.Where {
-		if !EvidencePattern.MatchString(w) {
-			return fmt.Errorf("invalid evidence reference %q: must match repo@<40-hex-sha>:path[#Lx-Ly] or usage:<case_id>", w)
+		matchCommit := CommitWherePattern.FindStringSubmatch(w)
+		matchPath := PathWherePattern.FindStringSubmatch(w)
+		if matchCommit == nil && matchPath == nil {
+			return fmt.Errorf("bad where %q", w)
 		}
-		if seenEvidence[w] {
-			return fmt.Errorf("duplicate evidence reference %q in where", w)
+		src := ""
+		if matchCommit != nil {
+			src = matchCommit[1]
+		} else if matchPath != nil {
+			src = matchPath[1]
 		}
-		seenEvidence[w] = true
-	}
-	if lesson.Decision.Status != "" {
-		if !slices.Contains([]string{"candidate", "planned", "ported", "rejected"}, lesson.Decision.Status) {
-			return fmt.Errorf("invalid decision status %q: must be candidate, planned, ported, or rejected", lesson.Decision.Status)
-		}
-	}
-	return nil
-}
-
-// ApplyLesson updates or appends a lesson, implementing D7 reopening logic:
-// If the lesson already has a decision (planned, ported, rejected) and the updated Where entries
-// include any new evidence not seen when the decision was recorded (in Decision.SeenWhere),
-// the decision status is automatically reset to "candidate".
-func (doc *Document) ApplyLesson(incoming Lesson, now time.Time) error {
-	if err := ValidateLesson(&incoming); err != nil {
-		return err
-	}
-	foundIdx := -1
-	for i, l := range doc.Lessons {
-		if l.Key == incoming.Key {
-			foundIdx = i
-			break
-		}
-	}
-
-	if foundIdx < 0 {
-		// New lesson
-		if incoming.Decision.Status == "" {
-			incoming.Decision.Status = "candidate"
-		}
-		if incoming.Decision.At == "" {
-			incoming.Decision.At = now.UTC().Format(time.RFC3339)
-		}
-		doc.Lessons = append(doc.Lessons, incoming)
-		return nil
-	}
-	existing := doc.Lessons[foundIdx]
-	// Union where entries
-	mergedWhere := append([]string{}, existing.Where...)
-	for _, w := range incoming.Where {
-		if !slices.Contains(mergedWhere, w) {
-			mergedWhere = append(mergedWhere, w)
-		}
-	}
-	slices.Sort(mergedWhere)
-
-	// Check if any evidence in mergedWhere was not in existing.Decision.SeenWhere
-	hasNewEvidence := false
-	if existing.Decision.Status != "" && existing.Decision.Status != "candidate" {
-		seenMap := make(map[string]bool, len(existing.Decision.SeenWhere))
-		for _, w := range existing.Decision.SeenWhere {
-			seenMap[w] = true
-		}
-		for _, w := range mergedWhere {
-			if !seenMap[w] {
-				hasNewEvidence = true
-				break
+		if cursors != nil {
+			if _, ok := cursors[src]; !ok {
+				return fmt.Errorf("where cites unknown source %q", src)
 			}
 		}
+		if seenWhere[w] {
+			return fmt.Errorf("duplicate where entry %q", w)
+		}
+		seenWhere[w] = true
+	}
+	if !slices.Contains(ValidContrasts, lesson.Contrast) {
+		return fmt.Errorf("contrast must be one of %s, got %q", strings.Join(ValidContrasts, ", "), lesson.Contrast)
 	}
 
-	existing.What = incoming.What
-	existing.Notable = incoming.Notable
-	if incoming.Contrast != "" {
-		existing.Contrast = incoming.Contrast
+	// Score validation
+	if lesson.Score.Relevance < 0 || lesson.Score.Relevance > 3 {
+		return fmt.Errorf("score.relevance must be an integer 0-3, got %d", lesson.Score.Relevance)
 	}
-	if incoming.Scores != nil {
-		existing.Scores = incoming.Scores
+	if lesson.Score.Evidence < 1 || lesson.Score.Evidence > 3 {
+		return fmt.Errorf("score.evidence must be an integer 1-3, got %d", lesson.Score.Evidence)
 	}
-	existing.Where = mergedWhere
-
-	if hasNewEvidence {
-		// D7: A new where entry reopens a decided lesson
-		existing.Decision.Status = "candidate"
-		existing.Decision.Reason = fmt.Sprintf("reopened: new evidence observed (%d sources)", len(mergedWhere))
-		existing.Decision.At = now.UTC().Format(time.RFC3339)
-		// Keep existing SeenWhere so human knows what was previously evaluated
-	} else if incoming.Decision.Status != "" && incoming.Decision.Status != existing.Decision.Status {
-		// Explicit new decision
-		existing.Decision.Status = incoming.Decision.Status
-		existing.Decision.Reason = incoming.Decision.Reason
-		existing.Decision.At = now.UTC().Format(time.RFC3339)
-		existing.Decision.SeenWhere = append([]string{}, mergedWhere...)
+	if lesson.Score.Effort < 1 || lesson.Score.Effort > 3 {
+		return fmt.Errorf("score.effort must be an integer 1-3, got %d", lesson.Score.Effort)
+	}
+	seenFacts := make(map[string]bool, len(lesson.Score.Facts))
+	for _, f := range lesson.Score.Facts {
+		if !slices.Contains(ValidImpactFacts, f) {
+			return fmt.Errorf("score.facts item %q must be one of a-e", f)
+		}
+		if seenFacts[f] {
+			return fmt.Errorf("score.facts has duplicate %q", f)
+		}
+		seenFacts[f] = true
+	}
+	if len(lesson.Score.Facts) > 0 && !seenFacts["a"] {
+		return errors.New("score.facts without fact a count for nothing; add a or clear the list")
+	}
+	if strings.TrimSpace(lesson.Score.Why) == "" {
+		return errors.New("score.why must explain the weights")
 	}
 
-	doc.Lessons[foundIdx] = existing
-	return nil
-}
-
-// AdvanceCursor updates or inserts a cursor for sourceID in the document.
-func (doc *Document) AdvanceCursor(sourceID, commit string, now time.Time) {
-	for i, c := range doc.Cursors {
-		if c.SourceID == sourceID {
-			doc.Cursors[i].Commit = commit
-			doc.Cursors[i].SyncedAt = now.UTC().Format(time.RFC3339)
-			return
+	// Optional fields validation
+	for _, fit := range lesson.AlsoFits {
+		if !AlsoFitsPattern.MatchString(fit) {
+			return fmt.Errorf("also_fits entry %q must be hub, new-skill:<name> or a skill id", fit)
 		}
 	}
-	doc.Cursors = append(doc.Cursors, Cursor{
-		SourceID: sourceID,
-		Commit:   commit,
-		SyncedAt: now.UTC().Format(time.RFC3339),
-	})
+	if lesson.Status != "" && !StatusPattern.MatchString(lesson.Status) {
+		return fmt.Errorf("status must be removed or superseded-by:<key>, got %q", lesson.Status)
+	}
+	if lesson.FoundBy != "" && lesson.FoundBy != "human" {
+		return fmt.Errorf("found_by may only be human, got %q", lesson.FoundBy)
+	}
+
+	// Decision validation
+	if !slices.Contains(ValidDecisionStates, lesson.Decision.State) {
+		return fmt.Errorf("decision.state must be one of %s, got %q", strings.Join(ValidDecisionStates, ", "), lesson.Decision.State)
+	}
+	if lesson.Decision.State == "rejected" && strings.TrimSpace(lesson.Decision.Reason) == "" {
+		return errors.New("a rejected decision needs a reason")
+	}
+	return nil
 }
 
 // MarshalDocument serializes a Document to YAML with 2-space indentation.

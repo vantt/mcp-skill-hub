@@ -12,54 +12,62 @@ Each skill maintains exactly one hub-side distillation document at `skills/<coll
 Per D4 and Phase 2, this file is excluded from catalog snapshots, content digests, and distributions (`IsHubMeta`).
 
 ```yaml
-goal: "Learn robust error recovery and concurrency patterns from upstream"
+goal:
+  status: confirmed # draft | confirmed
+  purpose: "Every test justifies its maintenance cost by protecting observable behavior..."
+  in_scope:
+    - authoring gate for new or changed tests
+    - audits that find and remove junk
+  out_of_scope:
+    - writing features or fixing non-test production bugs
+  failures_it_prevents:
+    - junk tests accumulate
+    - tests break under behavior-preserving refactoring
 
 cursors:
-  - source_id: openclaw
-    commit: 40-hex-sha-of-last-synced-commit
-    synced_at: "2026-10-09T08:00:00Z"
+  openclaw: 96370cf438dc9d67d2a13b08c14eb4142fecb767
+  superpowers: 8ca22dba9a94f28898bbce59f2537ff4d87c747d
 
 coverage:
-  - resource: "docs/retry.md"
-    status: analyzed # analyzed | deferred | skipped
-    reason: "Read complete retry policy documentation"
-    blocking: false
+  openclaw:
+    read:
+      - .agents/skills/test-audit
+    not_read:
+      - path: src/**/*.test.ts
+        reason: the tests themselves
 
 lessons:
-  - key: retry-storm-backoff
-    what: "Exponential backoff with full jitter prevents thundering herd on retry storms"
-    notable: "Critical difference from naive fixed retries; prevents distributed server collapse"
-    contrast: "Current skill instructs fixed 5s retries without jitter"
-    scores: # optional experimental scorecard metrics
-      relevance: 0.95
-      evidence_quality: 0.9
-      fit: 0.85
+  - key: mocks-mirror-the-real-shape
+    layer: content # enforcement | content | history | validation | craft | wording | ecosystem
+    what: "A mock reproduces the complete real shape it replaces..."
+    notable: "Both sources reached this independently for the same reason..."
     where:
-      - "github.com/openclaw/openclaw@3f9c2a1b4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a:docs/retry.md#L14-L35"
-      - "github.com/obra/superpowers@81d04be7c2aa1111222233334444555566667777:protocols/retry.go#L40-L60"
-      - "usage:cs_7f2a" # observer usage-derived lesson candidate
+      - superpowers@8ca22dba9a94:skills/test-driven-development/writing-good-tests.md#L119-L122
+      - openclaw@96370cf438dc:docs/help/testing/writing-tests.md#L121-L131
+    contrast: extends # new | extends | contradicts | already-covered
+    score:
+      relevance: 3 # 0-3
+      facts: [a, b, c, d, e] # distinct letters from a-e, requires 'a'
+      impact: 5 # len(facts) if 'a' in facts else 0
+      evidence: 2 # 1-3
+      effort: 1 # 1-3
+      why: "The mock shape failure is silent and breaks downstream integration."
+    final_score: 30.0
+    also_fits: [hub]
     decision:
-      status: candidate # candidate | planned | ported | rejected
-      reason: "Validated across multiple production implementations"
+      state: candidate # candidate | planned | ported | rejected
+      reason: "Optional explanation (required if rejected)"
       at: "2026-10-09T08:15:00Z"
-      seen_where:
-        - "github.com/openclaw/openclaw@3f9c2a1b4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a:docs/retry.md#L14-L35"
-        - "github.com/obra/superpowers@81d04be7c2aa1111222233334444555566667777:protocols/retry.go#L40-L60"
 ```
 
-### Key Lesson Rules
+### Key Lesson Rules (distill-lab format)
 
-1. **`notable`:** A short text explaining why the lesson matters (its significance, failure mode prevented, or operational benefit). It is **not** a boolean or score.
-2. **Experimental Scorecard Fields:** `contrast` and R/E/F scores (`relevance`, `evidence_quality`, `fit`) remain **optional, experimental fields**. They are not required in the schema until Phase 0's scorecard establishes empirical keep/drop thresholds.
-3. **`where` Evidence & Convergence:**
-   - Git source evidence requires a **full 40-hex SHA**: `repo@<40-hex-sha>:path[#Lx-Ly]` for file evidence, or `repo@<40-hex-sha>` for commit-level citations (D2).
-   - Observer usage evidence uses `where: usage:<case_id>` while candidate, promoted to Git routing eval case path on decision (observer §3.1).
-   - Multiple `where` entries within a single lesson indicate cross-source convergence.
-4. **Reopen on New Evidence (D7, S9):**
-   - The inline `decision` records `seen_where` (the exact list of `where` entries evaluated at decision time).
-   - When a distillation write adds a new `where` entry not present in `seen_where`, the decision automatically resets from `planned`/`ported`/`rejected` back to `candidate`.
-5. **Atomic Cursor Advancement:** The cursor in `cursors` advances in the exact same write that persists the lesson additions and modifications.
-6. **Porting to Skill Content (D9):** Applying a lesson to skill content (`SKILL.md`, scripts) occurs through a standard `skill_update` preview showing the source excerpt and requiring human confirmation.
+1. **Authority:** `.claude/skills/distill-lab/scripts/distill.py` is the authority for the format.
+2. **Scorecard Fields:** Relevance (0-3), Facts (subset of a-e, must contain a if non-empty), Impact (0-5, fact count), Evidence (1-3), Effort (1-3), Why (non-empty string), FinalScore (relevance * impact * evidence / effort).
+3. **`where` Evidence & Cursors:**
+   - References follow `repo@<commit>` or `repo@<commit>:path[#Lx-Ly]` with 7-40 hex commit SHAs.
+   - Every source cited in `where` must be declared in `cursors`.
+4. **Porting to Skill Content (D9):** Applying a lesson to skill content occurs through a standard `skill_update` preview showing the excerpt and requiring human confirmation.
 
 ## Components Kept, Removed, and Modified
 
@@ -193,4 +201,4 @@ Status for every public interface affected by Phase 3:
 
 ## Recorded Deviations
 
-1. **Commit-level citations:** In Phase-0 `test-audit/.meta/distill.yaml`, 11 commit-level history evidence entries cite the commit itself without a file path (e.g. `openclaw@777421df553`, `superpowers@e8a9748a3fa9`). `EvidencePattern` and `distill.schema.json` explicitly support this commit-level form (`repo@<40-hex-sha>`) alongside file-level evidence (`repo@<40-hex-sha>:path[#Lx-Ly]`). Migration `planV3ToV4` expands short SHAs to full 40-hex commits and preserves pathless citations without inventing paths.
+1. **distill-lab specification alignment:** Per user decision, `.meta/distill.yaml` format matches `.claude/skills/distill-lab/scripts/distill.py`. Existing `.meta/distill.yaml` files are preserved byte-identical during v3->v4 migration. The `seen_where` automatic reopening rule and `usage:<case_id>` citations are deferred until distill-lab supports them.

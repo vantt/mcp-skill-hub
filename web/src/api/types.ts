@@ -648,47 +648,59 @@ export interface SourceCheckResult {
   results: SourceCheckItem[];
   warnings?: Array<{ code: string; summary: string }>;
 }
-export interface DistillCursor {
-  source_id: string;
-  commit: string;
-  synced_at?: string;
+export interface DistillGoal {
+  status: 'draft' | 'confirmed' | string;
+  purpose: string;
+  in_scope: string[];
+  out_of_scope: string[];
+  failures_it_prevents: string[];
 }
 
-export interface DistillCoverage {
-  resource: string;
-  status: 'analyzed' | 'deferred' | 'skipped' | string;
+export interface DistillCoverageNotReadItem {
+  path: string;
   reason: string;
-  blocking?: boolean;
 }
 
-export interface DistillScores {
-  relevance?: number;
-  evidence_quality?: number;
-  fit?: number;
+export interface DistillCoverageSource {
+  read?: string[];
+  not_read?: DistillCoverageNotReadItem[];
+}
+
+export interface DistillScore {
+  relevance: number;
+  facts: string[];
+  impact: number;
+  evidence: number;
+  effort: number;
+  why: string;
 }
 
 export interface DistillDecision {
-  status: 'candidate' | 'planned' | 'ported' | 'rejected' | string;
+  state: 'candidate' | 'planned' | 'ported' | 'rejected' | string;
   reason?: string;
-  at: string;
-  seen_where?: string[];
+  at?: string;
 }
 
 export interface DistillLesson {
   key: string;
+  layer: string;
   what: string;
   notable: string;
-  contrast?: string;
-  scores?: DistillScores;
   where: string[];
+  contrast: string;
+  score: DistillScore;
+  final_score?: number;
+  also_fits?: string[];
+  status?: string;
+  found_by?: string;
   decision: DistillDecision;
 }
 
 export interface SkillDistillDocument {
-  goal: string;
-  cursors?: DistillCursor[];
-  coverage?: DistillCoverage[];
-  lessons?: DistillLesson[];
+  goal: DistillGoal;
+  cursors: Record<string, string>;
+  coverage?: Record<string, DistillCoverageSource>;
+  lessons: DistillLesson[];
 }
 
 

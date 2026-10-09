@@ -7,23 +7,26 @@ const MSG_NO_DOCUMENT = 'No distillation document (.meta/distill.yaml) recorded 
 const TITLE_GOAL = 'Distillation Goal';
 const MSG_NO_GOAL = 'No explicit distillation goal stated.';
 const MSG_NO_LESSONS = 'No lessons recorded yet.';
-const LABEL_BLOCKING = 'Blocking';
 const LABEL_WHAT = 'What: ';
 const LABEL_NOTABLE = 'Notable: ';
 const LABEL_CONTRAST = 'Contrast: ';
+const LABEL_LAYER = 'Layer: ';
 const LABEL_DECISION = 'Decision: ';
 const LABEL_REASON = 'Reason: ';
 const LABEL_RELEVANCE = 'Relevance: ';
-const LABEL_QUALITY = 'Quality: ';
-const LABEL_FIT = 'Fit: ';
+const LABEL_IMPACT = 'Impact: ';
+const LABEL_EVIDENCE = 'Evidence: ';
+const LABEL_EFFORT = 'Effort: ';
 const LABEL_TRACKED_CURSORS = 'Tracked Cursors (';
 const LABEL_COVERAGE_ANALYSIS = 'Coverage Analysis (';
 const LABEL_DISTILLED_LESSONS = 'Distilled Lessons (';
-const LABEL_EVIDENCE = 'Evidence (';
-const LABEL_LPAREN = '(';
+const LABEL_CITATIONS = 'Evidence citations (';
 const LABEL_RPAREN = ')';
 const LABEL_AT = 'at ';
+const LABEL_READ = 'read: ';
+const LABEL_NOT_READ = 'not read: ';
 
+const LABEL_FILES = ' files';
 interface DistillTabProps {
   skillId: string;
 }
@@ -54,8 +57,8 @@ export function DistillTab({ skillId }: DistillTabProps) {
     );
   }
 
-  const decisionTone = (status: string): 'success' | 'warning' | 'danger' | 'info' | 'neutral' => {
-    switch (status) {
+  const decisionTone = (state: string): 'success' | 'warning' | 'danger' | 'info' | 'neutral' => {
+    switch (state) {
       case 'ported':
         return 'success';
       case 'planned':
@@ -69,41 +72,46 @@ export function DistillTab({ skillId }: DistillTabProps) {
     }
   };
 
+  const cursorEntries = Object.entries(doc.cursors || {});
+  const coverageEntries = Object.entries(doc.coverage || {});
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
       {/* Goal */}
       <section className="fg-card" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-        <div className="fg-card__title">
-          <span>{TITLE_GOAL}</span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="fg-card__title">
+            <span>{TITLE_GOAL}</span>
+          </div>
+          {doc.goal?.status && (
+            <StatusBadge
+              label={doc.goal.status}
+              tone={doc.goal.status === 'confirmed' ? 'success' : 'neutral'}
+              variant="chip"
+            />
+          )}
         </div>
         <p style={{ margin: 0, fontSize: '14px', lineHeight: 1.5 }}>
-          <span>{doc.goal || MSG_NO_GOAL}</span>
+          <span>{doc.goal?.purpose || MSG_NO_GOAL}</span>
         </p>
       </section>
 
       {/* Cursors */}
-      {doc.cursors && doc.cursors.length > 0 && (
+      {cursorEntries.length > 0 && (
         <section className="fg-card" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
           <div className="fg-card__title">
             <span>{LABEL_TRACKED_CURSORS}</span>
-            <span>{doc.cursors.length}</span>
+            <span>{cursorEntries.length}</span>
             <span>{LABEL_RPAREN}</span>
           </div>
           <div className="fg-facts">
-            {doc.cursors.map((c) => (
-              <div key={c.source_id} className="fg-fact">
+            {cursorEntries.map(([sourceId, commit]) => (
+              <div key={sourceId} className="fg-fact">
                 <div className="fg-fact__label">
-                  <span>{c.source_id}</span>
+                  <span>{sourceId}</span>
                 </div>
                 <div className="fg-fact__value" style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
-                  <span>{c.commit}</span>
-                  {c.synced_at && (
-                    <span style={{ color: 'var(--color-text-muted)', marginLeft: 'var(--space-2)' }}>
-                      <span>{LABEL_LPAREN}</span>
-                      <span>{new Date(c.synced_at).toLocaleString()}</span>
-                      <span>{LABEL_RPAREN}</span>
-                    </span>
-                  )}
+                  <span>{commit}</span>
                 </div>
               </div>
             ))}
@@ -112,45 +120,33 @@ export function DistillTab({ skillId }: DistillTabProps) {
       )}
 
       {/* Coverage */}
-      {doc.coverage && doc.coverage.length > 0 && (
+      {coverageEntries.length > 0 && (
         <section className="fg-card" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
           <div className="fg-card__title">
             <span>{LABEL_COVERAGE_ANALYSIS}</span>
-            <span>{doc.coverage.length}</span>
+            <span>{coverageEntries.length}</span>
             <span>{LABEL_RPAREN}</span>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-            {doc.coverage.map((entry, idx) => (
-              <div
-                key={idx}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: 'var(--space-2) 0',
-                  borderBottom: idx < doc.coverage!.length - 1 ? '1px solid var(--color-border)' : 'none',
-                }}
-              >
-                <div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', fontWeight: 500 }}>
-                    <span>{entry.resource}</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+            {coverageEntries.map(([srcId, cov]) => (
+              <div key={srcId} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
+                <div style={{ fontWeight: 600, fontSize: '13px' }}>
+                  <span>{srcId}</span>
+                </div>
+                {cov.read && cov.read.length > 0 && (
+                  <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>
+                    <span>{LABEL_READ}</span>
+                    <span>{cov.read.length}</span>
+                    <span>{LABEL_FILES}</span>
                   </div>
-                  {entry.reason && (
-                    <div style={{ color: 'var(--color-text-muted)', fontSize: '12px' }}>
-                      <span>{entry.reason}</span>
-                    </div>
-                  )}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                  {entry.blocking && (
-                    <StatusBadge label={LABEL_BLOCKING} tone="warning" variant="chip" />
-                  )}
-                  <StatusBadge
-                    label={entry.status}
-                    tone={entry.status === 'analyzed' ? 'success' : 'neutral'}
-                    variant="chip"
-                  />
-                </div>
+                )}
+                {cov.not_read && cov.not_read.length > 0 && (
+                  <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>
+                    <span>{LABEL_NOT_READ}</span>
+                    <span>{cov.not_read.length}</span>
+                    <span>{LABEL_FILES}</span>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -186,14 +182,18 @@ export function DistillTab({ skillId }: DistillTabProps) {
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 'var(--space-2)' }}>
-                  <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                     <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, fontSize: '14px' }}>
                       <span>{lesson.key}</span>
                     </span>
+                    <span className="fg-chip fg-chip--neutral" style={{ fontSize: '11px', padding: '1px 6px' }}>
+                      <span>{LABEL_LAYER}</span>
+                      <span>{lesson.layer}</span>
+                    </span>
                   </div>
                   <StatusBadge
-                    label={lesson.decision?.status || 'candidate'}
-                    tone={decisionTone(lesson.decision?.status || 'candidate')}
+                    label={lesson.decision?.state || 'candidate'}
+                    tone={decisionTone(lesson.decision?.state || 'candidate')}
                     variant="chip"
                   />
                 </div>
@@ -217,33 +217,31 @@ export function DistillTab({ skillId }: DistillTabProps) {
                   </div>
                 )}
 
-                {lesson.scores && (
-                  <div style={{ display: 'flex', gap: 'var(--space-3)', fontSize: '12px', color: 'var(--color-text-muted)' }}>
-                    {lesson.scores.relevance !== undefined && (
-                      <span>
-                        <span>{LABEL_RELEVANCE}</span>
-                        <span>{lesson.scores.relevance}</span>
-                      </span>
-                    )}
-                    {lesson.scores.evidence_quality !== undefined && (
-                      <span>
-                        <span>{LABEL_QUALITY}</span>
-                        <span>{lesson.scores.evidence_quality}</span>
-                      </span>
-                    )}
-                    {lesson.scores.fit !== undefined && (
-                      <span>
-                        <span>{LABEL_FIT}</span>
-                        <span>{lesson.scores.fit}</span>
-                      </span>
-                    )}
+                {lesson.score && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)', fontSize: '12px', color: 'var(--color-text-muted)' }}>
+                    <span>
+                      <span>{LABEL_RELEVANCE}</span>
+                      <span>{lesson.score.relevance}</span>
+                    </span>
+                    <span>
+                      <span>{LABEL_IMPACT}</span>
+                      <span>{lesson.score.impact}</span>
+                    </span>
+                    <span>
+                      <span>{LABEL_EVIDENCE}</span>
+                      <span>{lesson.score.evidence}</span>
+                    </span>
+                    <span>
+                      <span>{LABEL_EFFORT}</span>
+                      <span>{lesson.score.effort}</span>
+                    </span>
                   </div>
                 )}
 
                 {lesson.where && lesson.where.length > 0 && (
                   <div style={{ marginTop: 'var(--space-1)' }}>
                     <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-muted)', marginBottom: 'var(--space-1)' }}>
-                      <span>{LABEL_EVIDENCE}</span>
+                      <span>{LABEL_CITATIONS}</span>
                       <span>{lesson.where.length}</span>
                       <span>{LABEL_RPAREN}</span>
                     </div>
@@ -261,7 +259,7 @@ export function DistillTab({ skillId }: DistillTabProps) {
                   <div style={{ marginTop: 'var(--space-1)', padding: 'var(--space-2)', backgroundColor: 'var(--color-surface)', borderRadius: 'var(--radius-sm)', fontSize: '12px' }}>
                     <div>
                       <strong><span>{LABEL_DECISION}</span></strong>
-                      <span>{lesson.decision.status}</span>
+                      <span>{lesson.decision.state}</span>
                       {lesson.decision.at && (
                         <span style={{ color: 'var(--color-text-muted)', marginLeft: 'var(--space-2)' }}>
                           <span>{LABEL_AT}</span>

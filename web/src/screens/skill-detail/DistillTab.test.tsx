@@ -40,32 +40,41 @@ describe('DistillTab', () => {
 
   it('renders goal, cursors, coverage, and lessons from document', () => {
     const mockDoc: SkillDistillDocument = {
-      goal: 'Learn robust retry and recovery patterns',
-      cursors: [
-        {
-          source_id: 'openclaw',
-          commit: '3f9c2a1b4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a',
-          synced_at: '2026-10-09T08:00:00Z',
+      goal: {
+        status: 'confirmed',
+        purpose: 'Learn robust retry and recovery patterns',
+        in_scope: ['authoring gate', 'audits'],
+        out_of_scope: ['general feature development'],
+        failures_it_prevents: ['junk tests accumulate'],
+      },
+      cursors: {
+        openclaw: '3f9c2a1b4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a',
+      },
+      coverage: {
+        openclaw: {
+          read: ['docs/retry.md'],
         },
-      ],
-      coverage: [
-        {
-          resource: 'docs/retry.md',
-          status: 'analyzed',
-          reason: 'Full retry documentation reviewed',
-          blocking: false,
-        },
-      ],
+      },
       lessons: [
         {
           key: 'retry-jitter',
+          layer: 'content',
           what: 'Exponential backoff with full jitter prevents thundering herd',
           notable: 'Prevents server collapse on retry storms',
           where: [
-            'github.com/openclaw/openclaw@3f9c2a1b4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a:docs/retry.md#L10-L20',
+            'openclaw@3f9c2a1b4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a:docs/retry.md#L10-L20',
           ],
+          contrast: 'extends',
+          score: {
+            relevance: 3,
+            facts: ['a', 'b'],
+            impact: 2,
+            evidence: 2,
+            effort: 1,
+            why: 'Crucial for reliability',
+          },
           decision: {
-            status: 'planned',
+            state: 'planned',
             reason: 'Validated pattern',
             at: '2026-10-09T09:00:00Z',
           },
@@ -84,10 +93,9 @@ describe('DistillTab', () => {
     expect(screen.getByText('Distillation Goal')).toBeInTheDocument();
     expect(screen.getByText('Learn robust retry and recovery patterns')).toBeInTheDocument();
     expect(screen.getByText(/Tracked Cursors/)).toBeInTheDocument();
-    expect(screen.getByText('openclaw')).toBeInTheDocument();
+    expect(screen.getAllByText('openclaw').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('3f9c2a1b4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a')).toBeInTheDocument();
     expect(screen.getByText(/Coverage Analysis/)).toBeInTheDocument();
-    expect(screen.getByText('docs/retry.md')).toBeInTheDocument();
     expect(screen.getByText(/Distilled Lessons/)).toBeInTheDocument();
     expect(screen.getByText('retry-jitter')).toBeInTheDocument();
     expect(screen.getAllByText('planned').length).toBeGreaterThanOrEqual(1);

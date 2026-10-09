@@ -1,31 +1,131 @@
 package distill
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 )
+
+func TestDistillValidatorAcceptsDistillLabTestAudit(t *testing.T) {
+	t.Parallel()
+
+	testdataPath := filepath.Join("..", "migration", "testdata", "test-audit-distill.yaml")
+	data, err := os.ReadFile(testdataPath)
+	if err != nil {
+		t.Fatalf("read testdata: %v", err)
+	}
+
+	doc, err := UnmarshalDocument(data)
+	if err != nil {
+		t.Fatalf("UnmarshalDocument failed: %v", err)
+	}
+
+	if doc.Goal.Status != "confirmed" {
+		t.Fatalf("expected goal.status 'confirmed', got %q", doc.Goal.Status)
+	}
+	if len(doc.Cursors) != 2 {
+		t.Fatalf("expected 2 cursors, got %d", len(doc.Cursors))
+	}
+	if doc.Cursors["openclaw"] == "" || doc.Cursors["superpowers"] == "" {
+		t.Fatalf("missing expected cursors: %#v", doc.Cursors)
+	}
+	if len(doc.Lessons) != 42 {
+		t.Fatalf("expected 42 lessons, got %d", len(doc.Lessons))
+	}
+
+	for i, l := range doc.Lessons {
+		if l.Key == "" {
+			t.Fatalf("lesson[%d] missing key", i)
+		}
+		if l.Layer == "" {
+			t.Fatalf("lesson[%d] (%s) missing layer", i, l.Key)
+		}
+		if l.Score.Why == "" {
+			t.Fatalf("lesson[%d] (%s) missing score.why", i, l.Key)
+		}
+		if l.Decision.State == "" {
+			t.Fatalf("lesson[%d] (%s) missing decision.state", i, l.Key)
+		}
+	}
+}
+
+func TestImpactOfAndFinalScore(t *testing.T) {
+	t.Parallel()
+
+	// Score without 'a' has impact 0
+	scoreNoA := Score{
+		Relevance: 3,
+		Facts:     []string{"b", "c"},
+		Evidence:  2,
+		Effort:    1,
+		Why:       "Test",
+	}
+	if got := ImpactOf(scoreNoA.Facts); got != 0 {
+		t.Fatalf("expected impact 0 without fact 'a', got %d", got)
+	}
+	if got := FinalScore(scoreNoA); got != 0 {
+		t.Fatalf("expected final score 0, got %f", got)
+	}
+
+	// Score with 'a' has impact = len(facts)
+	scoreWithA := Score{
+		Relevance: 3,
+		Facts:     []string{"a", "b", "c", "d", "e"},
+		Evidence:  2,
+		Effort:    1,
+		Why:       "Full facts",
+	}
+	if got := ImpactOf(scoreWithA.Facts); got != 5 {
+		t.Fatalf("expected impact 5, got %d", got)
+	}
+	// 3 * 5 * 2 / 1 = 30.0
+	if got := FinalScore(scoreWithA); got != 30.0 {
+		t.Fatalf("expected final score 30.0, got %f", got)
+	}
+}
 
 func TestDistillDocumentValidation(t *testing.T) {
 	t.Parallel()
 
-	validSha := strings.Repeat("a", 40)
+	sha := strings.Repeat("a", 40)
 	doc := &Document{
-		Goal: "Improve error handling",
-		Cursors: []Cursor{
-			{SourceID: "src-1", Commit: validSha, SyncedAt: "2026-10-09T08:00:00Z"},
+		Goal: Goal{
+			Status:             "draft",
+			Purpose:            "Test purpose",
+			InScope:            []string{"gate"},
+			OutOfScope:         []string{"features"},
+			FailuresItPrevents: []string{"junk"},
 		},
-		Coverage: []CoverageItem{
-			{Resource: "retry.go", Status: "analyzed", Reason: "Complete review"},
+		Cursors: map[string]string{
+			"source-a": sha,
+		},
+		Coverage: map[string]CoverageSource{
+			"source-a": {
+				Read: []string{"file1.go"},
+				NotRead: []CoverageNotReadItem{
+					{Path: "file2.go", Reason: "out of scope"},
+				},
+			},
 		},
 		Lessons: []Lesson{
 			{
-				Key:     "retry-jitter",
-				What:    "Full jitter exponential backoff",
-				Notable: "Prevents thundering herd on service recovery",
-				Where:   []string{"github.com/org/repo@" + validSha + ":retry.go#L10-L20"},
+				Key:      "sample-key",
+				Layer:    "content",
+				What:     "Sample knowledge",
+				Notable:  "Sample note",
+				Where:    []string{"source-a@" + sha[:7]},
+				Contrast: "new",
+				Score: Score{
+					Relevance: 3,
+					Facts:     []string{"a"},
+					Impact:    1,
+					Evidence:  2,
+					Effort:    1,
+					Why:       "High value",
+				},
 				Decision: Decision{
-					Status: "candidate",
+					State: "candidate",
 				},
 			},
 		},
@@ -35,160 +135,65 @@ func TestDistillDocumentValidation(t *testing.T) {
 		t.Fatalf("expected valid document, got: %v", err)
 	}
 
-	// Missing goal
-	docNoGoal := *doc
-	docNoGoal.Goal = ""
-	if err := ValidateDocument(&docNoGoal); err == nil {
-		t.Fatal("expected error on empty goal")
+	// 1. Missing goal status
+	badGoal := *doc
+	badGoal.Goal.Status = "invalid"
+	if err := ValidateDocument(&badGoal); err == nil {
+		t.Fatal("expected error on invalid goal.status")
 	}
 
-	// Invalid coverage status
-	docBadCoverage := *doc
-	docBadCoverage.Coverage = []CoverageItem{{Resource: "foo.go", Status: "unknown"}}
-	if err := ValidateDocument(&docBadCoverage); err == nil {
-		t.Fatal("expected error on invalid coverage status")
+	// 2. Empty cursors
+	badCursors := *doc
+	badCursors.Cursors = map[string]string{}
+	if err := ValidateDocument(&badCursors); err == nil {
+		t.Fatal("expected error on empty cursors")
 	}
 
-	// Short SHA evidence
-	docBadEvidence := *doc
-	docBadEvidence.Lessons = []Lesson{
+	// 3. Where cites unknown source
+	badWhere := *doc
+	badWhere.Lessons = []Lesson{
 		{
-			Key:     "bad-sha",
-			What:    "Claim",
-			Notable: "Reason",
-			Where:   []string{"repo@abc:path.go"},
+			Key:      "sample-key",
+			Layer:    "content",
+			What:     "Sample knowledge",
+			Notable:  "Sample note",
+			Where:    []string{"unknown-source@" + sha},
+			Contrast: "new",
+			Score: Score{
+				Relevance: 2,
+				Facts:     []string{"a"},
+				Evidence:  2,
+				Effort:    1,
+				Why:       "Why",
+			},
+			Decision: Decision{State: "candidate"},
 		},
 	}
-	if err := ValidateDocument(&docBadEvidence); err == nil {
-		t.Fatal("expected error on short SHA evidence")
+	if err := ValidateDocument(&badWhere); err == nil || !strings.Contains(err.Error(), "cites unknown source") {
+		t.Fatalf("expected unknown source error, got: %v", err)
 	}
 
-	// Valid usage evidence
-	docUsageEvidence := *doc
-	docUsageEvidence.Lessons = []Lesson{
+	// 4. Rejected decision requires reason
+	badDecision := *doc
+	badDecision.Lessons = []Lesson{
 		{
-			Key:     "usage-derived",
-			What:    "Observed pattern",
-			Notable: "Explanation",
-			Where:   []string{"usage:cs_7f2a"},
-		},
-	}
-	if err := ValidateDocument(&docUsageEvidence); err != nil {
-		t.Fatalf("usage:<case_id> should be valid evidence, got: %v", err)
-	}
-}
-
-func TestLessonReopenOnNewEvidence(t *testing.T) {
-	t.Parallel()
-
-	sha1 := strings.Repeat("1", 40)
-	sha2 := strings.Repeat("2", 40)
-	evidence1 := "github.com/org/repo@" + sha1 + ":docs/retry.md#L10"
-	evidence2 := "github.com/org/repo@" + sha2 + ":docs/retry.md#L20"
-
-	now := time.Date(2026, 10, 9, 8, 0, 0, 0, time.UTC)
-	doc := &Document{
-		Goal: "Test reopening",
-		Lessons: []Lesson{
-			{
-				Key:     "backoff-jitter",
-				What:    "Use jittered backoff",
-				Notable: "Stops thundering herd",
-				Where:   []string{evidence1},
-				Decision: Decision{
-					Status:    "rejected",
-					Reason:    "Not needed currently",
-					At:        now.Format(time.RFC3339),
-					SeenWhere: []string{evidence1},
-				},
+			Key:      "sample-key",
+			Layer:    "content",
+			What:     "Sample knowledge",
+			Notable:  "Sample note",
+			Where:    []string{"source-a@" + sha},
+			Contrast: "new",
+			Score: Score{
+				Relevance: 2,
+				Facts:     []string{"a"},
+				Evidence:  2,
+				Effort:    1,
+				Why:       "Why",
 			},
+			Decision: Decision{State: "rejected", Reason: ""},
 		},
 	}
-
-	// 1. Re-applying the exact same evidence leaves decision intact (rejected)
-	sameLesson := Lesson{
-		Key:     "backoff-jitter",
-		What:    "Use jittered backoff updated",
-		Notable: "Stops thundering herd",
-		Where:   []string{evidence1},
-	}
-	if err := doc.ApplyLesson(sameLesson, now.Add(time.Hour)); err != nil {
-		t.Fatal(err)
-	}
-	if doc.Lessons[0].Decision.Status != "rejected" {
-		t.Fatalf("expected decision to remain rejected, got %s", doc.Lessons[0].Decision.Status)
-	}
-
-	// 2. Applying new evidence reopens the lesson back to candidate
-	newLesson := Lesson{
-		Key:     "backoff-jitter",
-		What:    "Use jittered backoff converged",
-		Notable: "Stops thundering herd across two sources",
-		Where:   []string{evidence1, evidence2},
-	}
-	reopenTime := now.Add(2 * time.Hour)
-	if err := doc.ApplyLesson(newLesson, reopenTime); err != nil {
-		t.Fatal(err)
-	}
-	if doc.Lessons[0].Decision.Status != "candidate" {
-		t.Fatalf("expected lesson to reopen to candidate, got %s", doc.Lessons[0].Decision.Status)
-	}
-	if !strings.Contains(doc.Lessons[0].Decision.Reason, "reopened: new evidence observed") {
-		t.Fatalf("unexpected reason: %s", doc.Lessons[0].Decision.Reason)
-	}
-	if len(doc.Lessons[0].Where) != 2 {
-		t.Fatalf("expected 2 converged where entries, got %d", len(doc.Lessons[0].Where))
-	}
-}
-
-func TestDocumentRoundTripYAML(t *testing.T) {
-	t.Parallel()
-
-	validSha := strings.Repeat("f", 40)
-	rel := 0.9
-	doc := &Document{
-		Goal: "Round-trip test",
-		Cursors: []Cursor{
-			{SourceID: "src-main", Commit: validSha, SyncedAt: "2026-10-09T08:00:00Z"},
-		},
-		Coverage: []CoverageItem{
-			{Resource: "main.go", Status: "analyzed", Reason: "Inspected"},
-		},
-		Lessons: []Lesson{
-			{
-				Key:      "sample-lesson",
-				What:     "Knowledge",
-				Notable:  "Explanation of why it matters",
-				Contrast: "Contrast with old way",
-				Scores:   &Scores{Relevance: &rel},
-				Where:    []string{"github.com/org/repo@" + validSha + ":main.go#L5"},
-				Decision: Decision{
-					Status:    "planned",
-					Reason:    "High value",
-					At:        "2026-10-09T09:00:00Z",
-					SeenWhere: []string{"github.com/org/repo@" + validSha + ":main.go#L5"},
-				},
-			},
-		},
-	}
-
-	data, err := MarshalDocument(doc)
-	if err != nil {
-		t.Fatalf("MarshalDocument: %v", err)
-	}
-
-	unmarshaled, err := UnmarshalDocument(data)
-	if err != nil {
-		t.Fatalf("UnmarshalDocument: %v", err)
-	}
-
-	if unmarshaled.Goal != doc.Goal {
-		t.Errorf("goal = %q, want %q", unmarshaled.Goal, doc.Goal)
-	}
-	if len(unmarshaled.Lessons) != 1 || unmarshaled.Lessons[0].Key != "sample-lesson" {
-		t.Fatalf("lessons mismatch: %#v", unmarshaled.Lessons)
-	}
-	if unmarshaled.Lessons[0].Notable != doc.Lessons[0].Notable {
-		t.Errorf("notable = %q, want %q", unmarshaled.Lessons[0].Notable, doc.Lessons[0].Notable)
+	if err := ValidateDocument(&badDecision); err == nil || !strings.Contains(err.Error(), "rejected decision needs a reason") {
+		t.Fatalf("expected rejected decision reason error, got: %v", err)
 	}
 }

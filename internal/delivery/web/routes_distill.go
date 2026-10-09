@@ -1,7 +1,6 @@
 package web
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"os"
@@ -17,7 +16,6 @@ func init() {
 
 func (s *Server) registerDistillRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/skills/{id}/distill", s.handleGetSkillDistill)
-	mux.HandleFunc("POST /api/v1/skills/{id}/distill", s.handlePostSkillDistill)
 }
 
 func findSkillDistillPath(root, id string) (string, error) {
@@ -45,31 +43,6 @@ func (s *Server) handleGetSkillDistill(w http.ResponseWriter, r *http.Request) {
 			writeError(w, app.NewInvalidRequestError("Skill distill knowledge not found.", "Check skill ID."), true)
 			return
 		}
-		writeError(w, err, false)
-		return
-	}
-	writeJSON(w, http.StatusOK, doc)
-}
-
-func (s *Server) handlePostSkillDistill(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	path, err := findSkillDistillPath(s.workspace, id)
-	if err != nil {
-		writeError(w, app.NewInvalidRequestError("Skill not found.", "Check skill ID."), true)
-		return
-	}
-	var doc distill.Document
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&doc); err != nil {
-		writeError(w, app.NewInvalidRequestError("The request body is not valid JSON.", "Check document structure."), false)
-		return
-	}
-	if err := distill.ValidateDocument(&doc); err != nil {
-		writeError(w, app.NewInvalidRequestError("Invalid distill document: "+err.Error(), "Ensure all required fields are valid."), false)
-		return
-	}
-	if err := distill.SaveDocument(path, &doc); err != nil {
 		writeError(w, err, false)
 		return
 	}
