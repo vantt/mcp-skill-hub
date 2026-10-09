@@ -19,7 +19,7 @@ describe('ProvenanceCard', () => {
     expect(screen.getByText('Provenance')).toBeInTheDocument();
     expect(screen.getByText('https://github.com/vendor/skills')).toBeInTheDocument();
     expect(screen.getByText('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')).toBeInTheDocument();
-    expect(screen.getByText('skillhub')).toBeInTheDocument();
+    expect(screen.getByText('vendor-upstream')).toBeInTheDocument();
 
     const btn = screen.getByText('View sources →');
     fireEvent.click(btn);

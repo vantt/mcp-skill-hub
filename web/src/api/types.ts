@@ -648,6 +648,49 @@ export interface SourceCheckResult {
   results: SourceCheckItem[];
   warnings?: Array<{ code: string; summary: string }>;
 }
+export interface DistillCursor {
+  source_id: string;
+  commit: string;
+  synced_at?: string;
+}
+
+export interface DistillCoverage {
+  resource: string;
+  status: 'analyzed' | 'deferred' | 'skipped' | string;
+  reason: string;
+  blocking?: boolean;
+}
+
+export interface DistillScores {
+  relevance?: number;
+  evidence_quality?: number;
+  fit?: number;
+}
+
+export interface DistillDecision {
+  status: 'candidate' | 'planned' | 'ported' | 'rejected' | string;
+  reason?: string;
+  at: string;
+  seen_where?: string[];
+}
+
+export interface DistillLesson {
+  key: string;
+  what: string;
+  notable: string;
+  contrast?: string;
+  scores?: DistillScores;
+  where: string[];
+  decision: DistillDecision;
+}
+
+export interface SkillDistillDocument {
+  goal: string;
+  cursors?: DistillCursor[];
+  coverage?: DistillCoverage[];
+  lessons?: DistillLesson[];
+}
+
 
 export interface DistillRun {
   id: string;

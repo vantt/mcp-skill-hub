@@ -21,6 +21,7 @@ import type {
   SkillReviewResult,
   SkillRuntimeStatus,
   SkillSourcesResult,
+  SkillDistillDocument,
   SkillUpstream,
   SourceCheckResult,
   SourceImportProposal,
@@ -189,6 +190,21 @@ export function useSkillSources(id: string) {
     enabled: Boolean(id),
   });
 }
+export function useSkillDistill(id: string) {
+  return useQuery({
+    queryKey: ['skill-distill', id],
+    queryFn: () => apiFetch<SkillDistillDocument>(`/skills/${encodeURIComponent(id)}/distill`),
+    enabled: Boolean(id),
+  });
+}
+
+export async function saveSkillDistill(id: string, doc: SkillDistillDocument): Promise<SkillDistillDocument> {
+  return apiFetch<SkillDistillDocument>(`/skills/${encodeURIComponent(id)}/distill`, {
+    method: 'POST',
+    body: JSON.stringify(doc),
+  });
+}
+
 
 export function useSources() {
   return useQuery({

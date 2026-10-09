@@ -23,6 +23,7 @@ import { ReviewTab } from './ReviewTab';
 import { UsagePanel } from './UsagePanel';
 import { RuntimeTab } from './RuntimeTab';
 import { SourcesTab } from './SourcesTab';
+import { DistillTab } from './DistillTab';
 import { useT } from '../../i18n';
 
 const LABEL_TAB_REVIEW = 'Review';
@@ -31,6 +32,7 @@ const LABEL_TAB_RESOURCES = 'Resources';
 const LABEL_TAB_USAGE = 'Usage';
 const LABEL_TAB_RUNTIME = 'Runtime';
 const LABEL_TAB_SOURCES = 'Sources';
+const LABEL_TAB_DISTILL = 'Distill';
 const LABEL_ACTIVATE = 'Activate skill';
 const LABEL_DEPRECATE = 'Deprecate';
 const LABEL_ARCHIVE = 'Archive';
@@ -318,6 +320,15 @@ export function SkillDetailScreen() {
             />
           )}
         </button>
+        <button
+          type="button"
+          className={`fg-tab ${activeTab === 'distill' ? 'fg-tab--active' : ''}`}
+          role="tab"
+          aria-selected={activeTab === 'distill'}
+          onClick={() => setTab('distill')}
+        >
+          <span>{LABEL_TAB_DISTILL}</span>
+        </button>
       </div>
 
       {/* Tab Panels */}
@@ -344,6 +355,9 @@ export function SkillDetailScreen() {
       )}
       {activeTab === 'sources' && (
         <SourcesTab skillId={skill.skill_id} />
+      )}
+      {activeTab === 'distill' && (
+        <DistillTab skillId={skill.skill_id} />
       )}
       {/* Transition Proposal Preview */}
       {proposalOpen && transitionProposal && (
