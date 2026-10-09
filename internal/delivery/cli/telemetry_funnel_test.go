@@ -163,4 +163,31 @@ func TestFunnelAndBaselineRenderUnmeasurableCountersAsUnknown(t *testing.T) {
 	if !strings.Contains(baselineOut, "unlisted_resource_reads:") || !strings.Contains(baselineOut, "unknown (blocked by ReadResource; unverified against pinned manifest)") {
 		t.Errorf("baseline expected unlisted_resource_reads to be unknown, got:\n%s", baselineOut)
 	}
+
+	// Test --json output matches null and unmeasured status
+	stdout.Reset()
+	stderr.Reset()
+	if code := Run([]string{"telemetry", "funnel", "--workspace", root, "--since", "7d", "--json"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("funnel json=%d stdout=%s stderr=%s", code, stdout.String(), stderr.String())
+	}
+	var jsonMap map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &jsonMap); err != nil {
+		t.Fatalf("unmarshal json: %v", err)
+	}
+	overall, ok := jsonMap["overall"].(map[string]any)
+	if !ok || overall == nil {
+		t.Fatalf("expected overall object in json output: %s", stdout.String())
+	}
+	if overall["unlisted_resource_reads"] != nil {
+		t.Errorf("expected null unlisted_resource_reads in JSON, got %v", overall["unlisted_resource_reads"])
+	}
+	if overall["unlisted_resource_reads_status"] != "unmeasured" {
+		t.Errorf("expected unmeasured status, got %v", overall["unlisted_resource_reads_status"])
+	}
+	if overall["unsupported_method_calls"] != nil {
+		t.Errorf("expected null unsupported_method_calls in JSON, got %v", overall["unsupported_method_calls"])
+	}
+	if overall["unsupported_method_calls_status"] != "unmeasured" {
+		t.Errorf("expected unmeasured status, got %v", overall["unsupported_method_calls_status"])
+	}
 }

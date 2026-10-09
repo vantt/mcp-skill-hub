@@ -34,34 +34,36 @@ type FunnelWindow struct {
 
 // OverallFunnel aggregates telemetry metrics across the entire workspace.
 type OverallFunnel struct {
-	Resolutions               map[string]int64 `json:"resolutions"`
-	TotalResolutions          int64            `json:"total_resolutions"`
-	RecommendedPrimary        int64            `json:"recommended_primary"`
-	RecommendedSupporting     int64            `json:"recommended_supporting"`
-	Activations               map[string]int64 `json:"activations"`
-	TotalActivations          int64            `json:"total_activations"`
-	AcceptanceRate            *float64         `json:"acceptance_rate"`
-	Overrides                 int64            `json:"overrides"`
-	Misses                    int64            `json:"misses"`
-	Unsolicited               int64            `json:"unsolicited"`
-	BlockedByReview           int64            `json:"blocked_by_review"`
-	ResolutionsReviewRequired int64            `json:"resolutions_review_required"`
-	ResolutionsSetupRequired  int64            `json:"resolutions_setup_required"`
-	Loads                     map[string]int64 `json:"loads"`
-	TotalLoads                int64            `json:"total_loads"`
-	Doctor                    map[string]int64 `json:"doctor"`
-	TotalDoctor               int64            `json:"total_doctor"`
-	DoctorFailureRate         *float64         `json:"doctor_failure_rate"`
-	SetupFailed               int64            `json:"setup_failed"`
-	SetupFailedRate           *float64         `json:"setup_failed_rate"`
-	NegativeFeedback          int64            `json:"negative_feedback"`
-	NegativeAfterLoad         int64            `json:"negative_after_load"`
-	Transcripts               map[string]int64 `json:"transcripts"`
-	UnlistedResourceReads     int64            `json:"unlisted_resource_reads"`
-	UnsupportedMethodCalls    int64            `json:"unsupported_method_calls"`
-	SnapshotExpiredRequests   int64            `json:"snapshot_expired_requests"`
-	ToolsListBytes            int64            `json:"tools_list_bytes"`
-	ChainMetrics              *ChainMetrics    `json:"chain_metrics,omitempty"`
+	Resolutions                  map[string]int64 `json:"resolutions"`
+	TotalResolutions             int64            `json:"total_resolutions"`
+	RecommendedPrimary           int64            `json:"recommended_primary"`
+	RecommendedSupporting        int64            `json:"recommended_supporting"`
+	Activations                  map[string]int64 `json:"activations"`
+	TotalActivations             int64            `json:"total_activations"`
+	AcceptanceRate               *float64         `json:"acceptance_rate"`
+	Overrides                    int64            `json:"overrides"`
+	Misses                       int64            `json:"misses"`
+	Unsolicited                  int64            `json:"unsolicited"`
+	BlockedByReview              int64            `json:"blocked_by_review"`
+	ResolutionsReviewRequired    int64            `json:"resolutions_review_required"`
+	ResolutionsSetupRequired     int64            `json:"resolutions_setup_required"`
+	Loads                        map[string]int64 `json:"loads"`
+	TotalLoads                   int64            `json:"total_loads"`
+	Doctor                       map[string]int64 `json:"doctor"`
+	TotalDoctor                  int64            `json:"total_doctor"`
+	DoctorFailureRate            *float64         `json:"doctor_failure_rate"`
+	SetupFailed                  int64            `json:"setup_failed"`
+	SetupFailedRate              *float64         `json:"setup_failed_rate"`
+	NegativeFeedback             int64            `json:"negative_feedback"`
+	NegativeAfterLoad            int64            `json:"negative_after_load"`
+	Transcripts                  map[string]int64 `json:"transcripts"`
+	UnlistedResourceReads        *int64           `json:"unlisted_resource_reads"`
+	UnlistedResourceReadsStatus  string           `json:"unlisted_resource_reads_status,omitempty"`
+	UnsupportedMethodCalls       *int64           `json:"unsupported_method_calls"`
+	UnsupportedMethodCallsStatus string           `json:"unsupported_method_calls_status,omitempty"`
+	SnapshotExpiredRequests      int64            `json:"snapshot_expired_requests"`
+	ToolsListBytes               int64            `json:"tools_list_bytes"`
+	ChainMetrics                 *ChainMetrics    `json:"chain_metrics,omitempty"`
 }
 
 // SkillFunnel holds telemetry metrics for a single skill.
@@ -494,33 +496,35 @@ func (service UsageService) Funnel(ctx context.Context, path string, q FunnelQue
 	}
 	acceptRate, docFailRate, setupFailRate := calcFunnelRates(overallAcc)
 	report.Overall = &OverallFunnel{
-		Resolutions:               overallAcc.resolutions,
-		TotalResolutions:          totalRes,
-		RecommendedPrimary:        overallAcc.recommendedPrimary,
-		RecommendedSupporting:     overallAcc.recommendedSupporting,
-		Activations:               overallAcc.activations,
-		TotalActivations:          overallAcc.totalActivations,
-		AcceptanceRate:            acceptRate,
-		Overrides:                 overallAcc.overrides,
-		Misses:                    overallAcc.misses,
-		Unsolicited:               overallAcc.unsolicited,
-		BlockedByReview:           overallAcc.blockedByReview,
-		ResolutionsReviewRequired: overallAcc.resolutionsReviewRequired,
-		ResolutionsSetupRequired:  overallAcc.resolutionsSetupRequired,
-		Loads:                     overallAcc.loads,
-		TotalLoads:                overallAcc.totalLoads,
-		Doctor:                    overallAcc.doctor,
-		TotalDoctor:               overallAcc.totalDoctor,
-		DoctorFailureRate:         docFailRate,
-		SetupFailed:               overallAcc.setupFailed,
-		SetupFailedRate:           setupFailRate,
-		NegativeFeedback:          overallAcc.negativeFeedback,
-		NegativeAfterLoad:         overallAcc.negativeAfterLoad,
-		UnlistedResourceReads:     overallAcc.unlistedResourceReads,
-		UnsupportedMethodCalls:    overallAcc.unsupportedMethodCalls,
-		SnapshotExpiredRequests:   overallAcc.snapshotExpiredRequests,
-		ToolsListBytes:            overallAcc.toolsListBytes,
-		Transcripts:               overallAcc.transcripts,
+		Resolutions:                  overallAcc.resolutions,
+		TotalResolutions:             totalRes,
+		RecommendedPrimary:           overallAcc.recommendedPrimary,
+		RecommendedSupporting:        overallAcc.recommendedSupporting,
+		Activations:                  overallAcc.activations,
+		TotalActivations:             overallAcc.totalActivations,
+		AcceptanceRate:               acceptRate,
+		Overrides:                    overallAcc.overrides,
+		Misses:                       overallAcc.misses,
+		Unsolicited:                  overallAcc.unsolicited,
+		BlockedByReview:              overallAcc.blockedByReview,
+		ResolutionsReviewRequired:    overallAcc.resolutionsReviewRequired,
+		ResolutionsSetupRequired:     overallAcc.resolutionsSetupRequired,
+		Loads:                        overallAcc.loads,
+		TotalLoads:                   overallAcc.totalLoads,
+		Doctor:                       overallAcc.doctor,
+		TotalDoctor:                  overallAcc.totalDoctor,
+		DoctorFailureRate:            docFailRate,
+		SetupFailed:                  overallAcc.setupFailed,
+		SetupFailedRate:              setupFailRate,
+		NegativeFeedback:             overallAcc.negativeFeedback,
+		NegativeAfterLoad:            overallAcc.negativeAfterLoad,
+		UnlistedResourceReads:        nil,
+		UnlistedResourceReadsStatus:  "unmeasured",
+		UnsupportedMethodCalls:       nil,
+		UnsupportedMethodCallsStatus: "unmeasured",
+		SnapshotExpiredRequests:      overallAcc.snapshotExpiredRequests,
+		ToolsListBytes:               overallAcc.toolsListBytes,
+		Transcripts:                  overallAcc.transcripts,
 	}
 
 	skillsSlice := make([]SkillFunnel, 0, len(skillAccs))

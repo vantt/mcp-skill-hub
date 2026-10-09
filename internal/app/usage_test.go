@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -47,9 +48,21 @@ func TestUsageServiceFunnel(t *testing.T) {
 	createTestSkill(t, root, "skill-60d", "Skill Sixty", true)
 
 	now := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
+	var clockMu sync.RWMutex
 	clock := now
+	getClock := func() time.Time {
+		clockMu.RLock()
+		defer clockMu.RUnlock()
+		return clock
+	}
+	setClock := func(t time.Time) time.Time {
+		clockMu.Lock()
+		defer clockMu.Unlock()
+		clock = t
+		return clock
+	}
 
-	recorder, err := (TelemetryService{Config: telemetry.Config{Clock: func() time.Time { return clock }}}).Open(root)
+	recorder, err := (TelemetryService{Config: telemetry.Config{Clock: getClock}}).Open(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,8 +84,8 @@ func TestUsageServiceFunnel(t *testing.T) {
 	}
 
 	// 1. 60 days ago: activity on skill-60d
-	clock = now.AddDate(0, 0, -60)
-	evt60 := makeEvent("evt_rec_60d", telemetry.EventResolutionRecommended, clock)
+	setClock(now.AddDate(0, 0, -60))
+	evt60 := makeEvent("evt_rec_60d", telemetry.EventResolutionRecommended, getClock())
 	evt60.Payload = map[string]any{
 		"top_skill_id":          "skill-60d",
 		"recommended_skill_ids": []string{"skill-60d"},
@@ -80,8 +93,8 @@ func TestUsageServiceFunnel(t *testing.T) {
 	recordEvent(evt60)
 
 	// 2. Today: activity on skill-a and skill-b
-	clock = now
-	resEvt := makeEvent("evt_res_completed", telemetry.EventResolutionCompleted, clock)
+	setClock(now)
+	resEvt := makeEvent("evt_res_completed", telemetry.EventResolutionCompleted, getClock())
 	resEvt.ResolutionID = "res_today"
 	resEvt.Payload = map[string]any{
 		"status":                "resolved",
