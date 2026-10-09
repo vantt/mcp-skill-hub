@@ -401,8 +401,8 @@ func TestCaseDuplicateEventIDRejected(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Recording with same EventID must fail with ErrCaseConflict
-	err = recorder.RecordCase(t.Context(), CaseRecord{
+	// Recording with same EventID: enqueued to worker, worker rejects duplicate in transaction
+	_ = recorder.RecordCase(t.Context(), CaseRecord{
 		OccurredAt:   time.Now().UTC(),
 		Kind:         "override",
 		EventID:      "evt_dup_check",
@@ -411,8 +411,24 @@ func TestCaseDuplicateEventIDRejected(t *testing.T) {
 		Task:         map[string]any{"description": "task 2"},
 		Chosen:       "skill-2",
 	})
-	if !errors.Is(err, ErrCaseConflict) {
-		t.Fatalf("expected ErrCaseConflict on duplicate event_id, got %v", err)
+
+	cases, err := recorder.Cases(t.Context(), time.Time{}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cases) != 1 || cases[0].ResolutionID != "res_1" {
+		t.Fatalf("expected duplicate event_id to be rejected (only 1 case retained), got %#v", cases)
+	}
+
+	// Direct call to recordCaseStore inside BEGIN IMMEDIATE transaction returns ErrCaseConflict
+	errConflict := recordCaseStore(t.Context(), recorder.config, CaseRecord{
+		OccurredAt:   time.Now().UTC(),
+		Kind:         "override",
+		EventID:      "evt_dup_check",
+		ResolutionID: "res_3",
+	})
+	if !errors.Is(errConflict, ErrCaseConflict) {
+		t.Fatalf("expected recordCaseStore to return ErrCaseConflict, got %v", errConflict)
 	}
 }
 
@@ -537,18 +553,24 @@ func TestPurgeDuringRecordCaseLeavesNoCases(t *testing.T) {
 			}
 		}(i)
 	}
+	// Purge runs CONCURRENTLY with active RecordCase calls
+	var purgeWg sync.WaitGroup
+	purgeWg.Add(1)
+	go func() {
+		defer purgeWg.Done()
+		time.Sleep(5 * time.Millisecond)
+		if err := recorder.Purge(context.Background()); err != nil {
+			t.Errorf("concurrent purge failed: %v", err)
+		}
+	}()
 
-	// Let writers submit records
-	time.Sleep(10 * time.Millisecond)
-
-	// Stop writers and simultaneously purge
+	purgeWg.Wait()
 	close(stop)
 	wg.Wait()
 
 	if err := recorder.Purge(t.Context()); err != nil {
-		t.Fatalf("purge failed: %v", err)
+		t.Fatalf("final purge failed: %v", err)
 	}
-
 	cases, err := recorder.Cases(t.Context(), time.Time{}, "")
 	if err != nil {
 		t.Fatal(err)

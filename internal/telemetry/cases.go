@@ -101,12 +101,6 @@ func (r *Recorder) RecordCase(ctx context.Context, record CaseRecord) error {
 		return nil
 	}
 
-	if record.EventID != "" {
-		if _, loaded := r.caseEventIDs.LoadOrStore(record.EventID, struct{}{}); loaded {
-			return ErrCaseConflict
-		}
-	}
-
 	r.gate.RLock()
 	defer r.gate.RUnlock()
 	if r.closed {

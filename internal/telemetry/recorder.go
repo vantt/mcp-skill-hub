@@ -128,8 +128,6 @@ type Recorder struct {
 	// persisted holds cumulative counters from earlier recorders, loaded by a
 	// health check. Only this instance's own counters are written back on Close.
 	persisted [len(counterMetaKeys)]uint64
-
-	caseEventIDs sync.Map
 }
 
 // Open validates configuration and workspace confinement before starting the
@@ -252,9 +250,6 @@ func (r *Recorder) Purge(ctx context.Context) error {
 		return errors.New("telemetry recorder is closed")
 	}
 	res := r.sendLocked(ctx, request{op: opPurge})
-	if res.err == nil {
-		r.caseEventIDs = sync.Map{}
-	}
 	return res.err
 }
 
@@ -584,7 +579,6 @@ func (r *Recorder) resetCounters() {
 	r.stateMu.Lock()
 	r.persisted = [len(counterMetaKeys)]uint64{}
 	r.stateMu.Unlock()
-	r.caseEventIDs = sync.Map{}
 }
 
 func (r *Recorder) recordFailure(message string) { r.errors.Add(1); r.setError(message, true) }
