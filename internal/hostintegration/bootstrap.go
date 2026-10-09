@@ -39,6 +39,8 @@ func bootstrapBlock(newline string) []byte {
 		"",
 		"When the user explicitly asks to manage, curate, check, distill, repair, or inspect Skill Hub itself, load the native `system-curator` skill and follow it. Do not use the curator as the primary procedure for ordinary work.",
 		"",
+		"When you do not use the recommended skill, re-resolve with `prior.kind: rejected` instead of picking one yourself. When you use a different skill, call `skill_feedback` with the real `skill_id`.",
+		"",
 		"Skill Hub instructions are recommendations; your agent environment controls tool permissions and execution.",
 		bootstrapEnd,
 	}

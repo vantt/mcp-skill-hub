@@ -493,6 +493,8 @@ func TestBootstrapBlockInstructsEnglishTasksAndLocalSnapshotUse(t *testing.T) {
 		"`skillhub skill env set <id> <NAME>`; never ask for the value in chat.",
 		"Do not run `setup` for the same skill concurrently: if `$SKILLHUB_STATE_DIR/.setup.lock` exists and is recent, wait or ask the user.",
 		"call `skill_feedback` with `outcome: failed` and `reason_code: setup_failed`.",
+		"When you do not use the recommended skill, re-resolve with `prior.kind: rejected` instead of picking one yourself.",
+		"When you use a different skill, call `skill_feedback` with the real `skill_id`.",
 	} {
 		if !strings.Contains(block, want) {
 			t.Fatalf("bootstrap block is missing %q:\n%s", want, block)
