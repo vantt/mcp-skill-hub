@@ -219,21 +219,6 @@ func (service SkillAddService) PreviewSkillAdd(ctx context.Context, path string,
 		idempotencyKey = fmt.Sprintf("skill_add:%s:%s", primaryTargetID, strings.TrimPrefix(requestDigest, "sha256:")[:32])
 	}
 
-	if input.CandidateID != "" {
-		cand, candBytes, cErr := findCandidate(root, input.CandidateID)
-		if cErr == nil {
-			cand.Status = "accepted"
-			candAfter, _ := sourcepkg.MarshalCanonical(cand)
-			candPath := "sources/intake/" + cand.ID + ".yaml"
-			changes = append(changes, mutation.Change{
-				Path:         candPath,
-				BeforeDigest: sourcepkg.Digest(candBytes),
-				Contents:     candAfter,
-			})
-			diffAdded = append(diffAdded, candPath)
-		}
-	}
-
 	planCtx := skillAddPlanContext{
 		root:           root,
 		collection:     collection,

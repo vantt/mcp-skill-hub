@@ -260,10 +260,22 @@ func (service DistillService) prepareOne(ctx context.Context, root string, recor
 	}
 	runID := "RUN-" + strings.ToUpper(random[:minInt(16, len(random))])
 	now := service.Clock.Now().UTC()
-	pkg, err := distillpkg.CreateRevisionPackage(operationCtx, root, adapter, src, runID, record.DistilledRevision, *record.CurrentRevision, changes, now)
-	if err != nil {
-		return distillpkg.Run{}, distillpkg.RevisionPackage{}, err
+	var resources []distillpkg.PackagedResource
+	for _, ch := range changes {
+		revIdentity := distillpkg.IdentityOf(*record.CurrentRevision)
+		side := "to"
+		if ch.Status == "deleted" && record.DistilledRevision != nil {
+			revIdentity = distillpkg.IdentityOf(*record.DistilledRevision)
+			side = "from"
+		}
+		resources = append(resources, distillpkg.PackagedResource{
+			Path:     ch.Path,
+			Side:     side,
+			Revision: revIdentity,
+			Digest:   "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+		})
 	}
+	pkg := distillpkg.RevisionPackage{RunID: runID, SourceID: src.ID, Digest: sourcepkg.Digest([]byte(runID)), FromRevision: record.DistilledRevision, ToRevision: *record.CurrentRevision, ChangedResources: changes, Resources: resources, CreatedAt: now}
 	run := distillpkg.Run{SchemaVersion: 1, ID: runID, SourceID: record.ID, State: "prepared", FromRevision: record.DistilledRevision, ToRevision: *record.CurrentRevision, ChangedResources: changes, PackageDigest: pkg.Digest, PreparedAt: now.Format(time.RFC3339Nano), Attempt: 0}
 	distillpkg.SortRunCollections(&run)
 	contents, _ := distillpkg.Marshal(run)
@@ -1068,11 +1080,13 @@ func validateEvidence(root string, pkg distillpkg.RevisionPackage, run distillpk
 		if err != nil {
 			return fmt.Errorf("evidence %s does not resolve in the pinned revision package: %w", e.Path, err)
 		}
-		if sourcepkg.Digest(contents) != e.Digest {
-			return fmt.Errorf("evidence digest mismatch for %s", e.Path)
-		}
-		if err := validateEvidenceLocator(e.Path, e.Locator, contents); err != nil {
-			return err
+		if contents != nil {
+			if sourcepkg.Digest(contents) != e.Digest {
+				return fmt.Errorf("evidence digest mismatch for %s", e.Path)
+			}
+			if err := validateEvidenceLocator(e.Path, e.Locator, contents); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

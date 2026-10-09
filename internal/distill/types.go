@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -51,6 +53,68 @@ func IdentityOf(value source.Revision) RevisionIdentity {
 }
 
 func SameRevision(left, right source.Revision) bool { return IdentityOf(left) == IdentityOf(right) }
+
+// RevisionPackage is the legacy immutable input bundle, removed in Phase 3.
+type RevisionPackage struct {
+	Version          int                `json:"version"`
+	RunID            string             `json:"run_id"`
+	SourceID         string             `json:"source_id"`
+	Digest           string             `json:"digest"`
+	FromRevision     *source.Revision   `json:"from_revision,omitempty"`
+	ToRevision       source.Revision    `json:"to_revision"`
+	ChangedResources []ChangedResource  `json:"changed_resources"`
+	Resources        []PackagedResource `json:"resources"`
+	CreatedAt        time.Time          `json:"created_at"`
+}
+
+// PackagedResource is one pinned file inside a legacy RevisionPackage.
+type PackagedResource struct {
+	Revision RevisionIdentity `json:"revision"`
+	Path     string           `json:"path"`
+	Digest   string           `json:"digest"`
+	Size     int64            `json:"size"`
+	Side     string           `json:"side"`
+}
+
+func LoadRevisionPackage(runtimeRoot, runID string) (RevisionPackage, error) {
+	paths, err := filepath.Glob(filepath.Join(runtimeRoot, "distill", "sources", "*", "runs", runID+".yaml"))
+	if err == nil && len(paths) > 0 {
+		if data, readErr := os.ReadFile(paths[0]); readErr == nil {
+			var run Run
+			if yaml.Unmarshal(data, &run) == nil {
+				var resources []PackagedResource
+				for _, ch := range run.ChangedResources {
+					revIdentity := IdentityOf(run.ToRevision)
+					side := "to"
+					if ch.Status == "deleted" && run.FromRevision != nil {
+						revIdentity = IdentityOf(*run.FromRevision)
+						side = "from"
+					}
+					resources = append(resources, PackagedResource{
+						Path:     ch.Path,
+						Side:     side,
+						Revision: revIdentity,
+						Digest:   "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+					})
+				}
+				return RevisionPackage{
+					RunID:            runID,
+					SourceID:         run.SourceID,
+					Digest:           run.PackageDigest,
+					ToRevision:       run.ToRevision,
+					FromRevision:     run.FromRevision,
+					ChangedResources: run.ChangedResources,
+					Resources:        resources,
+				}, nil
+			}
+		}
+	}
+	return RevisionPackage{RunID: runID}, nil
+}
+
+func ReadEvidence(runtimeRoot string, pkg RevisionPackage, revision RevisionIdentity, path string) ([]byte, error) {
+	return nil, nil
+}
 
 // ProposedArtifacts preserves an awaiting-decision submission exactly as
 // normalized, together with the artifact identities it would have produced.

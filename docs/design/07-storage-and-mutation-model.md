@@ -72,29 +72,21 @@ SQLite không được reverse-sync vào canonical files. Nếu DB và files l�
 skillhub-workspace/
 ├── skills/<collection>/<skill>/
 │   ├── SKILL.md
-│   ├── skill.meta.yaml
+│   ├── .meta/
+│   │   ├── skill.yaml
+│   │   └── distill.yaml
 │   ├── references/
 │   ├── scripts/
 │   └── assets/
 ├── sources/
-│   ├── intake/<candidate-id>.yaml
-│   ├── catalog/<source-id>.yaml
-│   └── skills/LINK-<skill-id>--<source-id>.yaml
-│   ├── sources/<source-id>/
-│   │   ├── observations/<observation-id>.yaml
-│   │   └── runs/<run-id>.yaml
-│   ├── comparisons/<comparison-id>.yaml
-│   └── skills/<skill-id>/
-│       ├── insights/<insight-id>.yaml
-│       ├── incorporations/<incorporation-id>.yaml
-│       └── outcomes/<outcome-id>.yaml
+│   └── catalog/<source-id>.yaml
 ├── history/
 │   └── operations/<yyyy>/<mm>/<operation-id>.yaml
 ├── registry/
 ├── config/
 ├── evals/
 ├── .skillhub/
-│   ├── schema-version                 # tracked
+│   ├── schema-version                 # tracked (canonical schema "4")
 │   └── transactions/                  # gitignored recovery WAL
 │       └── <operation-id>/
 │           ├── manifest.json
@@ -106,11 +98,10 @@ skillhub-workspace/
 │   │   └── generations/<generation>.db
 │   ├── edits/                         # 24h bounded recovery artifacts (REC-*.md)
 │   ├── operational.db
-│   ├── telemetry.db
+│   ├── sources/git/                   # shared git mirror cache
+│   ├── pins/                          # preview/confirm proposal pins
 │   ├── locks/
-│   ├── cache/
-│   └── artifacts/
-├── .gitignore
+│   └── telemetry.db
 └── .git/
 ```
 
@@ -670,15 +661,12 @@ Typical mapping:
 
 | Canonical input | Derived projection |
 |---|---|
-| `skill.meta.yaml` | skill, trigger, requirement and relationship rows; `provenance.origin.files_digest` for local edit verification |
+| `.meta/skill.yaml` | skill, trigger, requirement and relationship rows; `sources[]` for origin/upstream/learning; content review digests |
 | `SKILL.md` and resources | resource manifests, paths and digests; selected searchable fields only |
 | `sources/catalog/*.yaml` | source/revision/query rows |
-| `sources/skills/LINK-*.yaml` | learning relationship links |
-| observations/comparisons | learning relationship and optional curation FTS rows |
-| insights/incorporations/outcomes | inbox, provenance and outcome rows |
+| `.meta/distill.yaml` | skill-anchored distillation state: goal, cursors, coverage gaps, lessons with decisions and evidence convergence (`where`) |
 | operation receipts | operation/idempotency lookup rows |
 | aliases/routing config | resolver lookup and compiled policy rows |
-
 Resource bodies remain canonical files. SQLite normally stores path/digest/selected extracted text, not a second authoritative copy of every resource byte.
 
 ### 15.5 Build and verify generation
@@ -882,10 +870,8 @@ Domain-specific mutation commands compose the generic mutation service with thei
 - `skill_lifecycle`: chuyển trạng thái `draft` → `active` → `deprecated` → `archived`.
 - `skill_upstream_update`: áp dụng cập nhật 3-way merge từ upstream repository vào skill với các file pins và before digests.
 - `source_backfill`: bổ sung source record và `provenance.origin.files_digest` cho các skill legacy.
-- `source_attach`: gắn learning reference vào skill (`sources/skills/LINK-*.yaml`).
-- `source_detach`: gỡ bỏ learning reference khỏi skill.
-- `source_unwatch`: ngừng theo dõi và xóa source nếu không còn skill nào tham chiếu (bảo đảm no-orphan).
-- `insight_apply`: áp dụng insight proposal vào `SKILL.md` qua patch composer.
+- `skill_update`: cập nhật nội dung skill (`SKILL.md`, scripts, metadata) với preview và confirmation (D9).
+*(Các lệnh legacy `source_attach`, `source_detach`, `source_unwatch`, `insight_apply` được loại bỏ trong Phase 3 minimal model: sources được khai báo trực tiếp trong `.meta/skill.yaml`, porting bài học dùng `skill_update` preview/confirm standard).*
 Repository adapters expose controlled operations:
 
 ```go
@@ -977,3 +963,73 @@ Every case must recover to exactly old or intended new valid state, never an acc
 13. External invalid edits are not published into a new generation.
 14. Operation response identifies changed paths, operation ID, catalog snapshot and Git status.
 15. No global `eventlog.jsonl` is required to initialize, open, rebuild or recover the workspace.
+
+## 25. Contract inventory table (Phase 3 Minimal Distill Model)
+
+| Interface Type | Identifier | Status | Notes / Replacement |
+|---|---|---|---|
+| **MCP Tool** | `inbox_list` | Removed | Replaced by reading `.meta/distill.yaml` lessons per skill. |
+| **MCP Tool** | `insight_get` | Removed | Replaced by lesson inspection in `.meta/distill.yaml`. |
+| **MCP Tool** | `insight_decide` | Removed | Replaced by updating lesson inline decision (`candidate`, `planned`, `ported`, `rejected`). |
+| **MCP Tool** | `insight_apply_preview` | Removed | Replaced by standard `skill_update_preview` showing excerpt (D9). |
+| **MCP Tool** | `insight_apply_confirm` | Removed | Replaced by standard `skill_update_confirm` (D9). |
+| **MCP Tool** | `curation_run_prepare` | Removed | Distillation operates directly against skill sources without run state machine. |
+| **MCP Tool** | `curation_run_start` | Removed | Run lifecycle removed. |
+| **MCP Tool** | `curation_run_submit` | Removed | Atomic write to `.meta/distill.yaml`. |
+| **MCP Tool** | `curation_run_get` | Removed | Read `.meta/distill.yaml` directly. |
+| **MCP Tool** | `curation_run_retry` | Removed | Run lifecycle removed. |
+| **MCP Tool** | `curation_run_cancel` | Removed | Run lifecycle removed. |
+| **MCP Tool** | `observation_list` | Removed | Lessons in `distill.yaml` are the distilled observations. |
+| **MCP Tool** | `comparison_get` | Removed | Multi-source convergence is recorded in lesson `where` entries. |
+| **MCP Tool** | `outcome_record` | Removed | Insight/incorporation lifecycle removed. |
+| **MCP Tool** | `source_intake_add` | Removed | Sources attach directly to skills (D3). |
+| **MCP Tool** | `source_intake_list` | Removed | Intake directory deleted. |
+| **MCP Tool** | `source_triage` | Removed | Intake directory deleted. |
+| **MCP Tool** | `source_link_preview` | Removed | Sources declared directly in `.meta/skill.yaml`. |
+| **MCP Tool** | `source_unwatch_preview` | Removed | Sources detached in `.meta/skill.yaml`. |
+| **MCP Tool** | `source_list` | Kept | Unchanged. |
+| **MCP Tool** | `source_check` | Kept | Checks sources for upstream changes. |
+| **MCP Tool** | `source_diff` | Kept | Unchanged. |
+| **MCP Tool** | `source_import_preview` | Kept | Unchanged. |
+| **MCP Tool** | `source_import_confirm` | Kept | Unchanged. |
+| **MCP Tool** | `source_watch_preview` | Kept | Unchanged. |
+| **MCP Tool** | `source_watch_confirm` | Kept | Unchanged. |
+| **MCP Tool** | `skill_upstream_status` | Kept | Unchanged. |
+| **MCP Tool** | `skill_resolve` | Kept | Unchanged. |
+| **MCP Tool** | `skill_feedback` | Kept | Unchanged. |
+| **MCP Tool** | `skill_list` | Kept | Unchanged. |
+| **MCP Tool** | `skill_get` | Kept | Unchanged. |
+| **MCP Tool** | `skill_review` | Kept | Unchanged. |
+| **MCP Tool** | `skill_add_preview` | Kept | Unchanged. |
+| **MCP Tool** | `skill_add_confirm` | Kept | Unchanged. |
+| **MCP Tool** | `skill_create_preview` | Kept | Unchanged. |
+| **MCP Tool** | `skill_create_confirm` | Kept | Unchanged. |
+| **MCP Tool** | `skill_transition_preview` | Kept | Unchanged. |
+| **MCP Tool** | `skill_transition_confirm` | Kept | Unchanged. |
+| **MCP Tool** | `skill_update_preview` | Kept | Used for porting learning text into skill content (D9). |
+| **MCP Tool** | `skill_update_confirm` | Kept | Used for confirming skill content updates. |
+| **MCP Tool** | `routing_evaluate` | Kept | Unchanged. |
+| **MCP Tool** | `curation_session_record` | Kept | Unchanged. |
+| **MCP Tool** | `hub_status` | Kept | Action counts updated for minimal distill model. |
+| **MCP Tool** | `workspace_validate` | Kept | Validates `.meta/distill.yaml`. |
+| **MCP Tool** | `workspace_rebuild` | Kept | Unchanged. |
+| **MCP Tool** | `workspace_diff` | Kept | Unchanged. |
+| **Web Route** | `/api/v1/inbox` | Removed | Replaced by skill distill view. |
+| **Web Route** | `/api/v1/insights/*` | Removed | Replaced by skill distill view. |
+| **Web Route** | `/api/v1/distill/runs/*` | Removed | Run state machine removed. |
+| **Web Route** | `/api/v1/distill/comparisons/*` | Removed | Comparison entities removed. |
+| **Web Route** | `/api/v1/sources/intake` | Removed | Intake layout removed. |
+| **Web Route** | `/api/v1/skills/{id}/distill` | Added | GET/POST for `.meta/distill.yaml`. |
+| **Web Route** | `/api/v1/skills/*` | Kept | Detail, runtime, review, usage routes kept. |
+| **Web Route** | `/api/v1/sources/*` | Kept | Source routes kept. |
+| **JSON Schema** | `schemas/distill.schema.json` | Added | Schema for `.meta/distill.yaml`. |
+| **JSON Schema** | `schemas/distill-submission.schema.json` | Removed | Superseded by `distill.schema.json`. |
+| **JSON Schema** | `schemas/insight.schema.json` | Removed | Entity removed. |
+| **JSON Schema** | `schemas/proposal.schema.json` | Removed | Entity removed. |
+| **JSON Schema** | `schemas/incorporation.schema.json` | Removed | Entity removed. |
+| **JSON Schema** | `schemas/source-link.schema.json` | Removed | LINK files removed. |
+| **JSON Schema** | `schemas/source-intake.schema.json` | Removed | Intake directory removed. |
+| **JSON Schema** | `schemas/comparison.schema.json` | Removed | Comparison entities removed. |
+| **JSON Schema** | `schemas/skill-metadata.schema.json` | Kept | Updated in Phase 4. |
+| **JSON Schema** | `schemas/telemetry-event-v1.schema.json` | Kept | Kept verbatim (D10). |
+| **Telemetry Event** | `eventPayloads` (all 31 event types) | Kept | **All 31 event types kept; EventVersion="1" preserved** (D10). |

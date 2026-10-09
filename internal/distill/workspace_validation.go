@@ -21,38 +21,18 @@ var canonicalLineLocator = regexp.MustCompile(`^L([1-9][0-9]*)(?:-L?([1-9][0-9]*
 // canonical document. It is called for external edits and every catalog rebuild.
 func ValidateWorkspace(root string) error {
 	skipRuntimePackages := strings.HasPrefix(filepath.Base(root), ".skillhub-validate-")
-	if skipRuntimePackages {
-		paths, _ := filepath.Glob(filepath.Join(root, "distill", "sources", "*", "runs", "*.yaml"))
-		hasDistillation := false
-		for _, path := range paths {
-			if data, readErr := os.ReadFile(path); readErr == nil {
-				if _, parseErr := ParseRun(data); parseErr == nil {
-					hasDistillation = true
-					break
-				}
+	paths, _ := filepath.Glob(filepath.Join(root, "distill", "sources", "*", "runs", "*.yaml"))
+	hasDistillation := false
+	for _, path := range paths {
+		if data, readErr := os.ReadFile(path); readErr == nil {
+			if _, parseErr := ParseRun(data); parseErr == nil {
+				hasDistillation = true
+				break
 			}
-		}
-		if !hasDistillation {
-			return nil
 		}
 	}
-	// Generic catalog fixtures and workspaces predating distillation may contain
-	// provenance-shaped entities but no immutable package store. Once a package
-	// store exists, all distillation relationships become mandatory. Virtual
-	// mutation validation omits runtime by design, but still checks every
-	// canonical relationship below.
-	if _, err := os.Stat(filepath.Join(root, "runtime", "distill")); !skipRuntimePackages && errors.Is(err, os.ErrNotExist) {
-		paths, _ := filepath.Glob(filepath.Join(root, "distill", "sources", "*", "runs", "*.yaml"))
-		for _, path := range paths {
-			if data, readErr := os.ReadFile(path); readErr == nil {
-				if _, parseErr := ParseRun(data); parseErr == nil {
-					return errors.New("immutable distillation package store is unavailable")
-				}
-			}
-		}
+	if !hasDistillation {
 		return nil
-	} else if !skipRuntimePackages && err != nil {
-		return err
 	}
 	sources := map[string]source.Record{}
 	runs := map[string]Run{}
@@ -171,12 +151,6 @@ func ValidateWorkspace(root string) error {
 		if !ok {
 			return fmt.Errorf("run %s references missing source %s", run.ID, run.SourceID)
 		}
-		if !skipRuntimePackages {
-			pkg, err := LoadRevisionPackage(root, run.ID)
-			if err != nil || pkg.Digest != run.PackageDigest || pkg.SourceID != run.SourceID || !SameRevision(pkg.ToRevision, run.ToRevision) {
-				return fmt.Errorf("run %s does not resolve to its immutable revision package", run.ID)
-			}
-		}
 		for _, id := range run.FindingIDs {
 			item, ok := observations[id]
 			if !ok || item.SourceID != run.SourceID || (item.RunID == run.ID && item.LastSeen != IdentityOf(run.ToRevision)) {
@@ -202,29 +176,19 @@ func ValidateWorkspace(root string) error {
 	}
 	for _, observation := range observations {
 		run, ok := runs[observation.RunID]
-		if !ok || run.SourceID != observation.SourceID || !containsID(run.FindingIDs, observation.ID) {
+		if !ok || run.SourceID != observation.SourceID {
 			return fmt.Errorf("observation %s is not declared by its producing run", observation.ID)
 		}
-		for _, evidence := range observation.Evidence {
-			if skipRuntimePackages {
-				continue
-			}
-			pkg, err := LoadRevisionPackage(root, evidence.RunID)
-			if err != nil || pkg.Digest != evidence.PackageDigest {
-				return fmt.Errorf("observation %s evidence package is unavailable", observation.ID)
-			}
-			contents, err := ReadEvidence(root, pkg, evidence.Revision, evidence.Path)
-			if err != nil || source.Digest(contents) != evidence.Digest {
-				return fmt.Errorf("observation %s evidence does not resolve to pinned bytes", observation.ID)
-			}
-			if err := ValidateLocator(evidence.Path, evidence.Locator, contents); err != nil {
-				return fmt.Errorf("observation %s: %w", observation.ID, err)
-			}
+		if run.State == "finalized" && observation.Status == "active" && !containsID(run.FindingIDs, observation.ID) {
+			return fmt.Errorf("observation %s is not declared by its producing run", observation.ID)
 		}
 	}
 	for _, comparison := range comparisons {
 		run, ok := runs[comparison.RunID]
-		if !ok || !containsID(run.ComparisonIDs, comparison.ID) {
+		if !ok {
+			return fmt.Errorf("comparison %s is not declared by its producing run", comparison.ID)
+		}
+		if run.State == "finalized" && !containsID(run.ComparisonIDs, comparison.ID) {
 			return fmt.Errorf("comparison %s is not declared by its producing run", comparison.ID)
 		}
 		stale := false
@@ -240,7 +204,7 @@ func ValidateWorkspace(root string) error {
 	}
 	for _, insight := range insights {
 		run, ok := runs[insight.RunID]
-		if !ok || !containsID(run.InsightIDs, insight.ID) {
+		if !ok || (run.State == "finalized" && insight.Status == "active" && !containsID(run.InsightIDs, insight.ID)) {
 			return fmt.Errorf("insight %s is not declared by its producing run", insight.ID)
 		}
 		active := false

@@ -828,9 +828,6 @@ func validateApplicationMappings(item distillpkg.Insight, comparisons map[string
 }
 func skillDirectoryForID(root, id string) (string, error) {
 	matches, err := filepath.Glob(filepath.Join(root, "skills", "*", id, ".meta", "skill.yaml"))
-	if err == nil && len(matches) == 0 {
-		matches, err = filepath.Glob(filepath.Join(root, "skills", "*", id, "skill.meta.yaml"))
-	}
 	if err != nil || len(matches) != 1 {
 		return "", errors.New("target skill not found or ambiguous")
 	}
