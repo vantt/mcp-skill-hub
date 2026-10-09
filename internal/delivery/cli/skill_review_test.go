@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
+	"gopkg.in/yaml.v3"
 )
 
 func TestSkillReviewHumanAndJSON(t *testing.T) {
@@ -102,16 +103,36 @@ func TestSkillReviewPrintsScriptApprovalCommandForThirdPartyScripts(t *testing.T
 	if err := os.WriteFile(filepath.Join(skillDir, "scripts", "run.sh"), []byte("#!/bin/sh\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	metaPath := filepath.Join(skillDir, "skill.meta.yaml")
+	metaPath := filepath.Join(skillDir, ".meta", "skill.yaml")
+	if _, err := os.Stat(metaPath); os.IsNotExist(err) {
+		metaPath = filepath.Join(skillDir, "skill.meta.yaml")
+	}
 	meta, err := os.ReadFile(metaPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	updated := strings.Replace(string(meta), "provenance:\n    created_by: skillhub\n", "provenance:\n    created_by: skillhub\n    source_id: upstream-source\n", 1)
-	if updated == string(meta) {
-		t.Fatalf("fixture metadata has an unexpected provenance block:\n%s", meta)
+	var doc map[string]any
+	if err := yaml.Unmarshal(meta, &doc); err != nil {
+		t.Fatal(err)
 	}
-	if err := os.WriteFile(metaPath, []byte(updated), 0o644); err != nil {
+	doc["sources"] = []any{
+		map[string]any{
+			"id":         "upstream-source",
+			"roles":      []string{"upstream"},
+			"kind":       "github",
+			"repository": "https://github.com/example/skills",
+			"commit":     strings.Repeat("a", 40),
+		},
+	}
+	doc["provenance"] = map[string]any{
+		"created_by": "skillhub",
+		"source_id":  "upstream-source",
+	}
+	updated, err := yaml.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(metaPath, updated, 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -166,16 +187,36 @@ func TestSkillReviewSummarizesChangesSinceApproval(t *testing.T) {
 	if err := os.WriteFile(scriptPath, []byte("#!/bin/sh\necho one\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	metaPath := filepath.Join(skillDir, "skill.meta.yaml")
+	metaPath := filepath.Join(skillDir, ".meta", "skill.yaml")
+	if _, err := os.Stat(metaPath); os.IsNotExist(err) {
+		metaPath = filepath.Join(skillDir, "skill.meta.yaml")
+	}
 	meta, err := os.ReadFile(metaPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	thirdParty := strings.Replace(string(meta), "provenance:\n    created_by: skillhub\n", "provenance:\n    created_by: skillhub\n    source_id: upstream-source\n", 1)
-	if thirdParty == string(meta) {
-		t.Fatalf("fixture metadata has an unexpected provenance block:\n%s", meta)
+	var doc map[string]any
+	if err := yaml.Unmarshal(meta, &doc); err != nil {
+		t.Fatal(err)
 	}
-	if err := os.WriteFile(metaPath, []byte(thirdParty), 0o644); err != nil {
+	doc["sources"] = []any{
+		map[string]any{
+			"id":         "upstream-source",
+			"roles":      []string{"upstream"},
+			"kind":       "github",
+			"repository": "https://github.com/example/skills",
+			"commit":     strings.Repeat("a", 40),
+		},
+	}
+	doc["provenance"] = map[string]any{
+		"created_by": "skillhub",
+		"source_id":  "upstream-source",
+	}
+	thirdParty, err := yaml.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(metaPath, thirdParty, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	git := func(args ...string) {
@@ -194,8 +235,8 @@ func TestSkillReviewSummarizesChangesSinceApproval(t *testing.T) {
 	if err := json.Unmarshal(jsonBuf.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
-	approved := strings.Replace(thirdParty, "quality:\n", "quality:\n    content_reviewed_digest: "+result.ContentTrust.ContentDigest+"\n", 1)
-	if approved == thirdParty {
+	approved := strings.Replace(string(thirdParty), "quality:\n", "quality:\n    content_reviewed_digest: "+result.ContentTrust.ContentDigest+"\n", 1)
+	if approved == string(thirdParty) {
 		t.Fatalf("fixture metadata has no quality block:\n%s", thirdParty)
 	}
 	if err := os.WriteFile(metaPath, []byte(approved), 0o644); err != nil {

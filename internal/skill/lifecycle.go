@@ -221,24 +221,23 @@ func (manager Manager) PreviewCreate(ctx context.Context, root string, input Cre
 		return manager.appliedProposal(root, input.ID, "skill_create", prior, requestDigest, idempotencyKey), nil
 	}
 	directory := skillDirectory(input.Collection, input.ID)
-	metadataPath := directory + "/skill.meta.yaml"
+	metadataPath := directory + "/.meta/skill.yaml"
 	entrypointPath := directory + "/SKILL.md"
-	if exists(root, metadataPath) || exists(root, directory+"/.meta/skill.yaml") || exists(root, entrypointPath) {
+	if exists(root, metadataPath) || exists(root, directory+"/skill.meta.yaml") || exists(root, entrypointPath) {
 		return Proposal{}, ErrAlreadyExists
 	}
-	now := manager.now().Format(time.RFC3339Nano)
 	document := map[string]any{
 		"schema_version": 1,
 		"id":             input.ID,
-		"name":           strings.TrimSpace(input.Name),
 		"status":         "draft",
-		"description":    strings.TrimSpace(input.Description),
 		"routing":        mergeRouting(nil, input.Routing),
 		"quality":        map[string]any{"reviewed": false},
-		"provenance":     map[string]any{"created_by": "skillhub"},
-		"history":        []any{map[string]any{"state": "draft", "occurred_at": now}},
-		"created_at":     now,
-		"updated_at":     now,
+	}
+	if strings.TrimSpace(input.Name) != "" {
+		document["name"] = strings.TrimSpace(input.Name)
+	}
+	if strings.TrimSpace(input.Description) != "" {
+		document["description"] = strings.TrimSpace(input.Description)
 	}
 	if strings.TrimSpace(input.Rationale) != "" {
 		document["quality"].(map[string]any)["routing_review_rationale"] = strings.TrimSpace(input.Rationale)
@@ -247,7 +246,11 @@ func (manager Manager) PreviewCreate(ctx context.Context, root string, input Cre
 	if err != nil {
 		return Proposal{}, err
 	}
-	changes := []mutation.Change{{Path: metadataPath, Contents: metadata}, {Path: entrypointPath, Contents: normalizeText(input.Content)}}
+	entrypointContent, err := ensureSkillFrontmatter(input.Content, input.ID, input.Description, nil)
+	if err != nil {
+		return Proposal{}, err
+	}
+	changes := []mutation.Change{{Path: metadataPath, Contents: metadata}, {Path: entrypointPath, Contents: entrypointContent}}
 	return manager.plan(ctx, root, input.ID, "skill_create", changes, nil, metadata, fullDiff, idempotencyKey, requestDigest)
 }
 
@@ -293,8 +296,11 @@ func (manager Manager) PreviewUpdate(ctx context.Context, root, id string, input
 		return Proposal{}, err
 	}
 	changes := []mutation.Change{{Path: metadataPath, Contents: afterMetadata}}
-	entrypointPath := filepath.ToSlash(filepath.Join(filepath.Dir(metadataPath), "SKILL.md"))
+	entrypointPath := filepath.ToSlash(filepath.Join(skillDirFromMetadataPath(metadataPath), "SKILL.md"))
 	description, _ := document["description"].(string)
+	if input.Description != nil {
+		description = *input.Description
+	}
 	if input.SetContent {
 		if len(bytes.TrimSpace(input.Content)) == 0 {
 			return Proposal{}, errors.New("SKILL.md content must not be empty")
@@ -314,6 +320,13 @@ func (manager Manager) PreviewUpdate(ctx context.Context, root, id string, input
 					Path:           entrypointPath,
 					ExpectedDigest: input.ExpectedContentDigest,
 					ActualDigest:   currentDigest,
+				}
+			}
+		}
+		if input.Description == nil && currentContent != nil {
+			if header, _, ok := splitSkillFrontmatter(normalizeText(currentContent)); ok {
+				if existingDesc := frontmatterDescription(header); existingDesc != "" {
+					description = existingDesc
 				}
 			}
 		}
@@ -382,7 +395,7 @@ func (manager Manager) PreviewTransition(ctx context.Context, root, id, target s
 		return Proposal{}, err
 	}
 	if target == "active" {
-		entrypointPath := filepath.ToSlash(filepath.Join(filepath.Dir(metadataPath), "SKILL.md"))
+		entrypointPath := filepath.ToSlash(filepath.Join(skillDirFromMetadataPath(metadataPath), "SKILL.md"))
 		content, err := readOptional(root, entrypointPath)
 		if err != nil {
 			return Proposal{}, err
@@ -786,10 +799,10 @@ func loadSkill(root, id string) (string, []byte, map[string]any, error) {
 		if directoryInfo.Mode()&os.ModeSymlink != 0 || !directoryInfo.IsDir() {
 			return "", nil, nil, fmt.Errorf("unsafe skill directory %q", directory)
 		}
-		candidate := directory + "/skill.meta.yaml"
+		candidate := directory + "/.meta/skill.yaml"
 		info, statErr := handle.Lstat(candidate)
 		if errors.Is(statErr, os.ErrNotExist) {
-			candidate = directory + "/.meta/skill.yaml"
+			candidate = directory + "/skill.meta.yaml"
 			info, statErr = handle.Lstat(candidate)
 		}
 		if errors.Is(statErr, os.ErrNotExist) {
@@ -1070,7 +1083,7 @@ func ReadEditableSkill(root, id string) (EditableContent, error) {
 	if err != nil {
 		return EditableContent{}, err
 	}
-	entrypointPath := filepath.ToSlash(filepath.Join(filepath.Dir(metadataPath), "SKILL.md"))
+	entrypointPath := filepath.ToSlash(filepath.Join(skillDirFromMetadataPath(metadataPath), "SKILL.md"))
 	contents, err := readOptionalRequired(root, entrypointPath)
 	if err != nil {
 		return EditableContent{}, err
@@ -1081,6 +1094,14 @@ func ReadEditableSkill(root, id string) (EditableContent, error) {
 		Content: contents,
 		Digest:  "sha256:" + hex.EncodeToString(sum[:]),
 	}, nil
+}
+
+func skillDirFromMetadataPath(metadataPath string) string {
+	dir := filepath.Dir(metadataPath)
+	if filepath.Base(dir) == ".meta" {
+		dir = filepath.Dir(dir)
+	}
+	return dir
 }
 
 // ReadEditableContent returns the current canonical entrypoint for a draft or

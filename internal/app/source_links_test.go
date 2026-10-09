@@ -37,7 +37,10 @@ func TestSourceLinks(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	metaPath := filepath.Join(root, "skills", "default", "test-skill", "skill.meta.yaml")
+	metaPath := filepath.Join(root, "skills", "default", "test-skill", ".meta", "skill.yaml")
+	if _, err := os.Stat(metaPath); os.IsNotExist(err) {
+		metaPath = filepath.Join(root, "skills", "default", "test-skill", "skill.meta.yaml")
+	}
 	metaBytesBefore, err := os.ReadFile(metaPath)
 	if err != nil {
 		t.Fatal(err)

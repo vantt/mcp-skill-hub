@@ -38,8 +38,14 @@ func TestProposalArtifactRoundTripIsRestrictiveAndExpires(t *testing.T) {
 	}
 	loaded, err := LoadProposal(root, proposal.ID, now.Add(time.Hour))
 	wantContent := "---\nname: roundtrip\ndescription: Roundtrip proposal.\n---\n\n# exact contents\n"
-	if err != nil || string(loaded.planned.WriteSet.Changes[0].Contents) != wantContent {
-		t.Fatalf("loaded content = %q, want %q; err=%v", loaded.planned.WriteSet.Changes[0].Contents, wantContent, err)
+	var entrypointContent string
+	for _, c := range loaded.planned.WriteSet.Changes {
+		if filepath.Base(c.Path) == "SKILL.md" {
+			entrypointContent = string(c.Contents)
+		}
+	}
+	if err != nil || entrypointContent != wantContent {
+		t.Fatalf("loaded content = %q, want %q; err=%v", entrypointContent, wantContent, err)
 	}
 	if _, err := LoadProposal(root, proposal.ID, now.Add(proposalLifetime)); err == nil {
 		t.Fatal("expired proposal was accepted")

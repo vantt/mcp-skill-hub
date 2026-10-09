@@ -33,7 +33,11 @@ func TestSkillRuntimeStatusApp(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(skillRelDir), "skill.meta.yaml"), encoded, 0o644); err != nil {
+		metaPath := filepath.Join(root, filepath.FromSlash(skillRelDir), ".meta", "skill.yaml")
+		if _, err := os.Stat(metaPath); os.IsNotExist(err) {
+			metaPath = filepath.Join(root, filepath.FromSlash(skillRelDir), "skill.meta.yaml")
+		}
+		if err := os.WriteFile(metaPath, encoded, 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}

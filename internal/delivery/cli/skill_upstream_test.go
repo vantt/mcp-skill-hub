@@ -35,7 +35,10 @@ func seedTrackedSkill(t *testing.T, root, skillID, sourceID string, origin app.S
 		t.Fatal(err)
 	}
 
-	metaPath := filepath.Join(root, "skills", "default", skillID, "skill.meta.yaml")
+	metaPath := filepath.Join(root, "skills", "default", skillID, ".meta", "skill.yaml")
+	if _, err := os.Stat(metaPath); os.IsNotExist(err) {
+		metaPath = filepath.Join(root, "skills", "default", skillID, "skill.meta.yaml")
+	}
 	metaBytes, err := os.ReadFile(metaPath)
 	if err != nil {
 		t.Fatal(err)
@@ -43,6 +46,9 @@ func seedTrackedSkill(t *testing.T, root, skillID, sourceID string, origin app.S
 	var doc map[string]any
 	if err := yaml.Unmarshal(metaBytes, &doc); err != nil {
 		t.Fatal(err)
+	}
+	if doc == nil {
+		doc = make(map[string]any)
 	}
 
 	skillMDBytes, _ := os.ReadFile(filepath.Join(root, "skills", "default", skillID, "SKILL.md"))
@@ -54,6 +60,19 @@ func seedTrackedSkill(t *testing.T, root, skillID, sourceID string, origin app.S
 		filesDigest = cleanFilesDigest
 	}
 
+	doc["sources"] = []any{
+		map[string]any{
+			"id":           sourceID,
+			"roles":        []string{"upstream"},
+			"kind":         origin.Kind,
+			"repository":   origin.Repository,
+			"ref":          origin.Ref,
+			"path":         origin.Path,
+			"commit":       origin.Commit,
+			"files_digest": filesDigest,
+			"synced":       origin.Commit,
+		},
+	}
 	doc["provenance"] = map[string]any{
 		"source_id": sourceID,
 		"origin": map[string]any{

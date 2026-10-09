@@ -497,14 +497,25 @@ func TestSourceListRolesAndReferencingSkills(t *testing.T) {
 		if _, err := skillService.ConfirmSkillMutation(context.Background(), root, prev, prev.Confirmation.Confirmation.Pins); err != nil {
 			t.Fatal(err)
 		}
-		metaPath := filepath.Join(root, "skills", "default", sk.id, "skill.meta.yaml")
+		metaPath := filepath.Join(root, "skills", "default", sk.id, ".meta", "skill.yaml")
+		if _, err := os.Stat(metaPath); os.IsNotExist(err) {
+			metaPath = filepath.Join(root, "skills", "default", sk.id, "skill.meta.yaml")
+		}
 		metaBytes, err := os.ReadFile(metaPath)
 		if err != nil {
 			t.Fatal(err)
 		}
 		var doc map[string]any
 		_ = yaml.Unmarshal(metaBytes, &doc)
-		doc["provenance"] = map[string]any{"source_id": sk.sourceID}
+		if sk.sourceID != "" {
+			doc["sources"] = []any{
+				map[string]any{
+					"id":    sk.sourceID,
+					"roles": []string{"upstream"},
+				},
+			}
+			doc["provenance"] = map[string]any{"source_id": sk.sourceID}
+		}
 		newMeta, _ := yaml.Marshal(doc)
 		_ = os.WriteFile(metaPath, newMeta, 0o644)
 	}

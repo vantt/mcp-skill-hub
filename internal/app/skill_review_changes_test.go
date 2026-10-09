@@ -128,7 +128,11 @@ func TestReviewApprovalHistoryIsBounded(t *testing.T) {
 		runGit(t, root, "add", "-A")
 		runGit(t, root, "commit", "-q", "-m", "churn")
 	}
-	metaBytes, err := os.ReadFile(filepath.Join(root, "skills", "core", "diff-skill", "skill.meta.yaml"))
+	metaPath := filepath.Join(root, "skills", "core", "diff-skill", ".meta", "skill.yaml")
+	if _, err := os.Stat(metaPath); os.IsNotExist(err) {
+		metaPath = filepath.Join(root, "skills", "core", "diff-skill", "skill.meta.yaml")
+	}
+	metaBytes, err := os.ReadFile(metaPath)
 	if err != nil {
 		t.Fatal(err)
 	}

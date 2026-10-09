@@ -20,7 +20,7 @@
     },
     {
       "id": "resources",
-      "summary": "3 canonical file(s), 720 bytes.",
+      "summary": "3 canonical file(s), 567 bytes.",
       "impact": "Disk resource inventory."
     },
     {
@@ -53,8 +53,13 @@
     "entrypoint_path": "skills/core/review-skill/SKILL.md",
     "entrypoint_digest": "<DIGEST>",
     "resource_count": 3,
-    "total_bytes": 720,
+    "total_bytes": 567,
     "resources": [
+      {
+        "path": "skills/core/review-skill/.meta/skill.yaml",
+        "digest": "<DIGEST>",
+        "size_bytes": 429
+      },
       {
         "path": "skills/core/review-skill/SKILL.md",
         "digest": "<DIGEST>",
@@ -64,11 +69,6 @@
         "path": "skills/core/review-skill/references/checks.md",
         "digest": "<DIGEST>",
         "size_bytes": 21
-      },
-      {
-        "path": "skills/core/review-skill/skill.meta.yaml",
-        "digest": "<DIGEST>",
-        "size_bytes": 582
       }
     ]
   },
@@ -93,9 +93,6 @@
     "total_bytes": 138
   },
   "diverged": false,
-  "provenance": {
-    "created_by": "skillhub"
-  },
   "git": {
     "configured": true,
     "dirty": false

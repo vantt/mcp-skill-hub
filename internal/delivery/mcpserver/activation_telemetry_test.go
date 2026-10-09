@@ -5,7 +5,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -144,8 +143,18 @@ func TestActivationTelemetryEndToEnd(t *testing.T) {
 	}
 
 	// 4. Blocked loads: unapproved third-party skill
-	setSkillMeta(t, root, func(meta string) string {
-		return strings.Replace(meta, "provenance:\n    created_by: skillhub\n", "provenance:\n    created_by: skillhub\n    origin:\n        kind: github\n        repository: https://github.com/example/skills\n", 1)
+	setSkillMeta(t, root, func(doc map[string]any) {
+		doc["sources"] = []any{
+			map[string]any{
+				"id":         "upstream-skill",
+				"roles":      []string{"upstream"},
+				"kind":       "github",
+				"repository": "https://github.com/example/skills",
+			},
+		}
+		doc["quality"] = map[string]any{
+			"reviewed": false,
+		}
 	})
 
 	session2 := newClientSession(t, server)

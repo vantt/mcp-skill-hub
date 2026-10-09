@@ -86,7 +86,10 @@ func setupUpstreamUpdateHarness(t *testing.T) (string, string, string, string, U
 	if err != nil {
 		t.Fatal(err)
 	}
-	metaPath := filepath.Join(root, "skills", "default", "my-skill", "skill.meta.yaml")
+	metaPath := filepath.Join(root, "skills", "default", "my-skill", ".meta", "skill.yaml")
+	if _, err := os.Stat(metaPath); os.IsNotExist(err) {
+		metaPath = filepath.Join(root, "skills", "default", "my-skill", "skill.meta.yaml")
+	}
 	metaData, err := os.ReadFile(metaPath)
 	if err != nil {
 		t.Fatal(err)
@@ -142,7 +145,11 @@ func TestUpstreamUpdate(t *testing.T) {
 		}
 
 		// meta origin.commit == U
-		metaData, _ := os.ReadFile(filepath.Join(root, "skills", "default", skillID, "skill.meta.yaml"))
+		skillMetaPath := filepath.Join(root, "skills", "default", skillID, ".meta", "skill.yaml")
+		if _, err := os.Stat(skillMetaPath); os.IsNotExist(err) {
+			skillMetaPath = filepath.Join(root, "skills", "default", skillID, "skill.meta.yaml")
+		}
+		metaData, _ := os.ReadFile(skillMetaPath)
 		if !strings.Contains(string(metaData), "commit: "+headU) {
 			t.Fatalf("expected origin.commit %s, got:\n%s", headU, string(metaData))
 		}
@@ -361,7 +368,10 @@ func TestUpstreamUpdate(t *testing.T) {
 		_, _ = sourceService.CheckSources(ctx, root, []string{sourceID}, false)
 
 		// Overwrite origin.files_digest with a different valid digest
-		metaPath := filepath.Join(root, "skills", "default", skillID, "skill.meta.yaml")
+		metaPath := filepath.Join(root, "skills", "default", skillID, ".meta", "skill.yaml")
+		if _, err := os.Stat(metaPath); os.IsNotExist(err) {
+			metaPath = filepath.Join(root, "skills", "default", skillID, "skill.meta.yaml")
+		}
 		metaData, _ := os.ReadFile(metaPath)
 		fakeDigest := "sha256:9999999999999999999999999999999999999999999999999999999999999999"
 		lines := strings.Split(string(metaData), "\n")
@@ -702,27 +712,23 @@ func TestUpstreamMetaCannotSelfApproveOnImportAndUpstreamUpdate(t *testing.T) {
 		t.Fatalf("confirm add failed: %v", err)
 	}
 
-	// Verify .meta/ directory was NOT created in the skill folder
+	// Verify skill is draft and NOT reviewed (upstream .meta/ was stripped, local draft metadata generated)
 	localSkillDir := filepath.Join(root, "skills", "default", "self-approve")
-	if _, err := os.Stat(filepath.Join(localSkillDir, ".meta")); !os.IsNotExist(err) {
-		t.Fatal(".meta/ directory was unexpectedly written from upstream on add")
-	}
-
-	// Verify skill is draft and NOT reviewed
-	metaBytes, err := os.ReadFile(filepath.Join(localSkillDir, "skill.meta.yaml"))
+	metaBytes, err := os.ReadFile(filepath.Join(localSkillDir, ".meta", "skill.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	var localMeta struct {
 		Status  string `yaml:"status"`
 		Quality struct {
-			Reviewed bool `yaml:"reviewed"`
+			Reviewed              bool   `yaml:"reviewed"`
+			ContentReviewedDigest string `yaml:"content_reviewed_digest"`
 		} `yaml:"quality"`
 	}
 	if err := yaml.Unmarshal(metaBytes, &localMeta); err != nil {
 		t.Fatal(err)
 	}
-	if localMeta.Quality.Reviewed {
+	if localMeta.Quality.Reviewed || localMeta.Quality.ContentReviewedDigest != "" {
 		t.Fatal("skill self-approved on add!")
 	}
 	if localMeta.Status != "draft" {
@@ -773,28 +779,24 @@ func TestUpstreamMetaCannotSelfApproveOnImportAndUpstreamUpdate(t *testing.T) {
 		t.Fatalf("confirm update failed: %v, %#v", err, confUpd.Error)
 	}
 
-	// Verify .meta still does not exist on disk
-	if _, err := os.Stat(filepath.Join(localSkillDir, ".meta")); !os.IsNotExist(err) {
-		t.Fatal(".meta/ directory was written during upstream update")
-	}
-
 	// Verify trust verdict requires review
 	if !confUpd.TrustImpact.ReviewRequiredAfterApply {
 		t.Fatal("expected ReviewRequiredAfterApply to be true after upstream update")
 	}
-	metaBytesAfter, err := os.ReadFile(filepath.Join(localSkillDir, "skill.meta.yaml"))
+	metaBytesAfter, err := os.ReadFile(filepath.Join(localSkillDir, ".meta", "skill.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	var localMetaAfter struct {
 		Quality struct {
-			Reviewed bool `yaml:"reviewed"`
+			Reviewed              bool   `yaml:"reviewed"`
+			ContentReviewedDigest string `yaml:"content_reviewed_digest"`
 		} `yaml:"quality"`
 	}
 	if err := yaml.Unmarshal(metaBytesAfter, &localMetaAfter); err != nil {
 		t.Fatal(err)
 	}
-	if localMetaAfter.Quality.Reviewed {
+	if localMetaAfter.Quality.Reviewed || localMetaAfter.Quality.ContentReviewedDigest != "" {
 		t.Fatal("skill self-approved on upstream update!")
 	}
 }

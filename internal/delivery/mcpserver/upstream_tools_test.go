@@ -44,7 +44,10 @@ func seedTrackedSkillForMCP(t *testing.T, root, skillID, sourceID string, origin
 		filesDigest = cleanFilesDigest
 	}
 
-	metaPath := filepath.Join(root, "skills", "default", skillID, "skill.meta.yaml")
+	metaPath := filepath.Join(root, "skills", "default", skillID, ".meta", "skill.yaml")
+	if _, err := os.Stat(metaPath); os.IsNotExist(err) {
+		metaPath = filepath.Join(root, "skills", "default", skillID, "skill.meta.yaml")
+	}
 	metaBytes, err := os.ReadFile(metaPath)
 	if err != nil {
 		t.Fatal(err)
@@ -53,7 +56,23 @@ func seedTrackedSkillForMCP(t *testing.T, root, skillID, sourceID string, origin
 	if err := yaml.Unmarshal(metaBytes, &doc); err != nil {
 		t.Fatal(err)
 	}
+	if doc == nil {
+		doc = make(map[string]any)
+	}
 
+	doc["sources"] = []any{
+		map[string]any{
+			"id":           sourceID,
+			"roles":        []string{"upstream"},
+			"kind":         origin.Kind,
+			"repository":   origin.Repository,
+			"ref":          origin.Ref,
+			"path":         origin.Path,
+			"commit":       origin.Commit,
+			"files_digest": filesDigest,
+			"synced":       origin.Commit,
+		},
+	}
 	doc["provenance"] = map[string]any{
 		"source_id": sourceID,
 		"origin": map[string]any{

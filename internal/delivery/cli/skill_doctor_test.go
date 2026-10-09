@@ -10,6 +10,7 @@ import (
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
 	"github.com/vantt/mcp-skill-hub/internal/skillruntime"
+	"gopkg.in/yaml.v3"
 )
 
 func createActiveDoctorSkill(t *testing.T, root, id, metaSuffix string) {
@@ -37,7 +38,10 @@ func createActiveDoctorSkill(t *testing.T, root, id, metaSuffix string) {
 // setDoctorSkillMeta replaces any runtime block with the given top-level YAML.
 func setDoctorSkillMeta(t *testing.T, root, id, metaSuffix string) {
 	t.Helper()
-	metaPath := filepath.Join(root, "skills", "core", id, "skill.meta.yaml")
+	metaPath := filepath.Join(root, "skills", "core", id, ".meta", "skill.yaml")
+	if _, err := os.Stat(metaPath); os.IsNotExist(err) {
+		metaPath = filepath.Join(root, "skills", "core", id, "skill.meta.yaml")
+	}
 	meta, err := os.ReadFile(metaPath)
 	if err != nil {
 		t.Fatal(err)
@@ -136,16 +140,35 @@ func TestSkillDoctorSkipsCheckForUnreviewedThirdPartyScripts(t *testing.T) {
 	t.Parallel()
 	root := initTestWorkspace(t)
 	createActiveDoctorSkill(t, root, "doctor-third", "runtime:\n  setup:\n    command: echo installing\n    check: echo check-ran\n")
-	metaPath := filepath.Join(root, "skills", "core", "doctor-third", "skill.meta.yaml")
+	metaPath := filepath.Join(root, "skills", "core", "doctor-third", ".meta", "skill.yaml")
+	if _, err := os.Stat(metaPath); os.IsNotExist(err) {
+		metaPath = filepath.Join(root, "skills", "core", "doctor-third", "skill.meta.yaml")
+	}
 	meta, err := os.ReadFile(metaPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	updated := strings.Replace(string(meta), "provenance:\n    created_by: skillhub\n", "provenance:\n    created_by: skillhub\n    origin:\n        kind: github\n        repository: https://github.com/example/skills\n        commit: "+strings.Repeat("a", 40)+"\n", 1)
-	if updated == string(meta) {
-		t.Fatalf("fixture metadata has an unexpected provenance block:\n%s", meta)
+	var doc map[string]any
+	if err := yaml.Unmarshal(meta, &doc); err != nil {
+		t.Fatal(err)
 	}
-	if err := os.WriteFile(metaPath, []byte(updated), 0o644); err != nil {
+	doc["sources"] = []any{
+		map[string]any{
+			"id":         "src-third",
+			"roles":      []string{"upstream"},
+			"kind":       "github",
+			"repository": "https://github.com/example/skills",
+			"commit":     strings.Repeat("a", 40),
+		},
+	}
+	doc["quality"] = map[string]any{
+		"reviewed": false,
+	}
+	encoded, err := yaml.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(metaPath, encoded, 0o644); err != nil {
 		t.Fatal(err)
 	}
 

@@ -113,29 +113,59 @@ func updateSkillMetaYAML(origBytes []byte, newCommit, folderDigest, filesDigest 
 		return nil, errors.New("invalid skill.meta.yaml root")
 	}
 	rootMap := doc.Content[0]
+	sourcesNode := findMappingValueNode(rootMap, "sources")
+	if sourcesNode != nil && sourcesNode.Kind == yaml.SequenceNode {
+		for _, item := range sourcesNode.Content {
+			if item.Kind != yaml.MappingNode {
+				continue
+			}
+			rolesNode := findMappingValueNode(item, "roles")
+			isUpstream := false
+			if rolesNode != nil && rolesNode.Kind == yaml.SequenceNode {
+				for _, r := range rolesNode.Content {
+					if r.Value == "upstream" {
+						isUpstream = true
+						break
+					}
+				}
+			}
+			if isUpstream {
+				if newCommit != "" {
+					setMappingKey(item, "commit", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: newCommit})
+					setMappingKey(item, "synced", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: newCommit})
+				}
+				if folderDigest != "" {
+					setMappingKey(item, "folder_digest", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: folderDigest})
+				}
+				if filesDigest != "" {
+					setMappingKey(item, "files_digest", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: filesDigest})
+				}
+				break
+			}
+		}
+	} else {
+		provNode := findMappingValueNode(rootMap, "provenance")
+		if provNode == nil {
+			provNode = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+			setMappingKey(rootMap, "provenance", provNode)
+		}
 
-	provNode := findMappingValueNode(rootMap, "provenance")
-	if provNode == nil {
-		provNode = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
-		setMappingKey(rootMap, "provenance", provNode)
-	}
+		originNode := findMappingValueNode(provNode, "origin")
+		if originNode == nil {
+			originNode = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+			setMappingKey(provNode, "origin", originNode)
+		}
 
-	originNode := findMappingValueNode(provNode, "origin")
-	if originNode == nil {
-		originNode = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
-		setMappingKey(provNode, "origin", originNode)
+		if newCommit != "" {
+			setMappingKey(originNode, "commit", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: newCommit})
+		}
+		if folderDigest != "" {
+			setMappingKey(originNode, "folder_digest", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: folderDigest})
+		}
+		if filesDigest != "" {
+			setMappingKey(originNode, "files_digest", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: filesDigest})
+		}
 	}
-
-	if newCommit != "" {
-		setMappingKey(originNode, "commit", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: newCommit})
-	}
-	if folderDigest != "" {
-		setMappingKey(originNode, "folder_digest", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: folderDigest})
-	}
-	if filesDigest != "" {
-		setMappingKey(originNode, "files_digest", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: filesDigest})
-	}
-
 	var buf bytes.Buffer
 	enc := yaml.NewEncoder(&buf)
 	enc.SetIndent(2)
@@ -335,22 +365,50 @@ func validateUpdatePreconditions(ctx context.Context, root string, input Upstrea
 	}
 
 	var metaDoc struct {
+		Sources []struct {
+			ID          string   `yaml:"id"`
+			Roles       []string `yaml:"roles"`
+			Kind        string   `yaml:"kind"`
+			Repository  string   `yaml:"repository"`
+			Ref         string   `yaml:"ref"`
+			Commit      string   `yaml:"commit"`
+			Path        string   `yaml:"path"`
+			FilesDigest string   `yaml:"files_digest"`
+		} `yaml:"sources"`
 		Provenance struct {
 			SourceID string      `yaml:"source_id"`
 			Origin   SkillOrigin `yaml:"origin"`
 		} `yaml:"provenance"`
 	}
 	if err := yaml.Unmarshal(metaBytes, &metaDoc); err != nil {
-		return updatePreconditions{}, nil, fmt.Errorf("parse skill.meta.yaml: %w", err)
+		return updatePreconditions{}, nil, fmt.Errorf("parse skill metadata: %w", err)
+	}
+
+	sourceID := metaDoc.Provenance.SourceID
+	origin := metaDoc.Provenance.Origin
+	for _, s := range metaDoc.Sources {
+		for _, r := range s.Roles {
+			if r == "upstream" {
+				sourceID = s.ID
+				origin = SkillOrigin{
+					Kind:        s.Kind,
+					Repository:  s.Repository,
+					Ref:         s.Ref,
+					Commit:      s.Commit,
+					Path:        s.Path,
+					FilesDigest: s.FilesDigest,
+				}
+				break
+			}
+		}
 	}
 
 	tracked := TrackedSkill{
 		SkillID:     skillID,
 		SkillRelDir: skillRelDir,
-		SourceID:    metaDoc.Provenance.SourceID,
-		Origin:      metaDoc.Provenance.Origin,
+		SourceID:    sourceID,
+		Origin:      origin,
 	}
-
 	if tracked.SourceID == "" || (tracked.Origin.Kind != "github" && tracked.Origin.Kind != "git") {
 		return updatePreconditions{}, NewInvalidRequestError(
 			fmt.Sprintf("skill %q is not tracked by an upstream repository", skillID),
@@ -640,6 +698,9 @@ func buildAndPlanUpstreamWriteSet(ctx context.Context, wc updateWriteContext) (m
 	}
 
 	metaPath := wc.SkillRelDir + "/skill.meta.yaml"
+	if _, statErr := os.Stat(filepath.Join(wc.Root, filepath.FromSlash(wc.SkillRelDir), ".meta", "skill.yaml")); statErr == nil {
+		metaPath = wc.SkillRelDir + "/.meta/skill.yaml"
+	}
 	changes = append(changes, mutation.Change{
 		Path:         metaPath,
 		BeforeDigest: sourcepkg.Digest(wc.MetaBytes),

@@ -20,7 +20,7 @@
     },
     {
       "id": "resources",
-      "summary": "4 canonical file(s), 1067 bytes.",
+      "summary": "4 canonical file(s), 1143 bytes.",
       "impact": "Disk resource inventory."
     },
     {
@@ -53,8 +53,13 @@
     "entrypoint_path": "skills/core/vendor-skill/SKILL.md",
     "entrypoint_digest": "<DIGEST>",
     "resource_count": 4,
-    "total_bytes": 1067,
+    "total_bytes": 1143,
     "resources": [
+      {
+        "path": "skills/core/vendor-skill/.meta/skill.yaml",
+        "digest": "<DIGEST>",
+        "size_bytes": 936
+      },
       {
         "path": "skills/core/vendor-skill/SKILL.md",
         "digest": "<DIGEST>",
@@ -69,11 +74,6 @@
         "path": "skills/core/vendor-skill/scripts/run.py",
         "digest": "<DIGEST>",
         "size_bytes": 39
-      },
-      {
-        "path": "skills/core/vendor-skill/skill.meta.yaml",
-        "digest": "<DIGEST>",
-        "size_bytes": 860
       }
     ]
   },
@@ -99,7 +99,7 @@
   },
   "diverged": false,
   "provenance": {
-    "created_by": "skillhub",
+    "source_id": "vendor-upstream",
     "source_locator": "https://github.com/vendor/skills",
     "source_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
   },

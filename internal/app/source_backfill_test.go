@@ -32,10 +32,16 @@ func TestBackfill(t *testing.T) {
 	if _, err := skillService.ConfirmSkillMutation(ctx, root, prevA, prevA.Confirmation.Confirmation.Pins); err != nil {
 		t.Fatal(err)
 	}
-	metaPathA := filepath.Join(root, "skills", "default", "skill-a", "skill.meta.yaml")
+	metaPathA := filepath.Join(root, "skills", "default", "skill-a", ".meta", "skill.yaml")
+	if _, err := os.Stat(metaPathA); os.IsNotExist(err) {
+		metaPathA = filepath.Join(root, "skills", "default", "skill-a", "skill.meta.yaml")
+	}
 	metaBytesA, _ := os.ReadFile(metaPathA)
 	var docA map[string]any
 	_ = yaml.Unmarshal(metaBytesA, &docA)
+	if docA == nil {
+		docA = make(map[string]any)
+	}
 	docA["provenance"] = map[string]any{
 		"created_by": "skill_add",
 		"origin": map[string]any{
@@ -78,10 +84,16 @@ func TestBackfill(t *testing.T) {
 	if _, err := skillService.ConfirmSkillMutation(ctx, root, prevB, prevB.Confirmation.Confirmation.Pins); err != nil {
 		t.Fatal(err)
 	}
-	metaPathB := filepath.Join(root, "skills", "default", "skill-b", "skill.meta.yaml")
+	metaPathB := filepath.Join(root, "skills", "default", "skill-b", ".meta", "skill.yaml")
+	if _, err := os.Stat(metaPathB); os.IsNotExist(err) {
+		metaPathB = filepath.Join(root, "skills", "default", "skill-b", "skill.meta.yaml")
+	}
 	metaBytesB, _ := os.ReadFile(metaPathB)
 	var docB map[string]any
 	_ = yaml.Unmarshal(metaBytesB, &docB)
+	if docB == nil {
+		docB = make(map[string]any)
+	}
 	docB["provenance"] = map[string]any{
 		"created_by": "source_import",
 		"source_id":  "src-git",
@@ -116,10 +128,16 @@ func TestBackfill(t *testing.T) {
 	if _, err := skillService.ConfirmSkillMutation(ctx, root, prevFS, prevFS.Confirmation.Confirmation.Pins); err != nil {
 		t.Fatal(err)
 	}
-	metaPathFS := filepath.Join(root, "skills", "default", "skill-fs", "skill.meta.yaml")
+	metaPathFS := filepath.Join(root, "skills", "default", "skill-fs", ".meta", "skill.yaml")
+	if _, err := os.Stat(metaPathFS); os.IsNotExist(err) {
+		metaPathFS = filepath.Join(root, "skills", "default", "skill-fs", "skill.meta.yaml")
+	}
 	metaBytesFS, _ := os.ReadFile(metaPathFS)
 	var docFS map[string]any
 	_ = yaml.Unmarshal(metaBytesFS, &docFS)
+	if docFS == nil {
+		docFS = make(map[string]any)
+	}
 	docFS["provenance"] = map[string]any{
 		"created_by": "source_import",
 		"source_id":  "src-fs",

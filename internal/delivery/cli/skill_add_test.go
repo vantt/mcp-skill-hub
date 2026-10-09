@@ -41,7 +41,7 @@ func TestSkillAddLocalPreviewAndConfirm(t *testing.T) {
 	}
 
 	// Verify no canonical files changed yet
-	targetMeta := filepath.Join(root, "skills", "default", "pdf-tools", "skill.meta.yaml")
+	targetMeta := filepath.Join(root, "skills", "default", "pdf-tools", ".meta", "skill.yaml")
 	if _, err := os.Stat(targetMeta); !os.IsNotExist(err) {
 		t.Fatalf("preview wrote canonical files before confirmation")
 	}

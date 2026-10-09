@@ -124,7 +124,7 @@ Step 1: Do something useful.
 	skillPath := filepath.Join(root, "skills", "default", "external-skill")
 	for _, rel := range []string{
 		"SKILL.md",
-		"skill.meta.yaml",
+		".meta/skill.yaml",
 		"LICENSE.txt",
 		"references/guide.md",
 		"scripts/run.py",
@@ -762,14 +762,53 @@ func TestSkillAddRemoteGitRealAdapter(t *testing.T) {
 	}
 	loadMeta := func(id string) metaRecord {
 		t.Helper()
-		metaPath := filepath.Join(root, "skills", "default", id, "skill.meta.yaml")
+		metaPath := filepath.Join(root, "skills", "default", id, ".meta", "skill.yaml")
+		if _, err := os.Stat(metaPath); os.IsNotExist(err) {
+			metaPath = filepath.Join(root, "skills", "default", id, "skill.meta.yaml")
+		}
 		data, err := os.ReadFile(metaPath)
 		if err != nil {
 			t.Fatalf("read %s: %v", metaPath, err)
 		}
-		var m metaRecord
-		if err := yaml.Unmarshal(data, &m); err != nil {
+		var doc struct {
+			Sources []struct {
+				ID           string   `yaml:"id"`
+				Roles        []string `yaml:"roles"`
+				Kind         string   `yaml:"kind"`
+				Repository   string   `yaml:"repository"`
+				Ref          string   `yaml:"ref"`
+				Commit       string   `yaml:"commit"`
+				Path         string   `yaml:"path"`
+				FilesDigest  string   `yaml:"files_digest"`
+				FolderDigest string   `yaml:"folder_digest"`
+			} `yaml:"sources"`
+			Provenance struct {
+				SourceID string      `yaml:"source_id"`
+				Origin   SkillOrigin `yaml:"origin"`
+			} `yaml:"provenance"`
+		}
+		if err := yaml.Unmarshal(data, &doc); err != nil {
 			t.Fatalf("unmarshal %s: %v", metaPath, err)
+		}
+		var m metaRecord
+		m.Provenance.SourceID = doc.Provenance.SourceID
+		m.Provenance.Origin = doc.Provenance.Origin
+		for _, s := range doc.Sources {
+			for _, r := range s.Roles {
+				if r == "upstream" {
+					m.Provenance.SourceID = s.ID
+					m.Provenance.Origin = SkillOrigin{
+						Kind:         s.Kind,
+						Repository:   s.Repository,
+						Ref:          s.Ref,
+						Commit:       s.Commit,
+						Path:         s.Path,
+						FilesDigest:  s.FilesDigest,
+						FolderDigest: s.FolderDigest,
+					}
+					break
+				}
+			}
 		}
 		return m
 	}

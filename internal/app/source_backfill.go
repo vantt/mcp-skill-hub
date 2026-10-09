@@ -71,6 +71,7 @@ func (service SourceService) ApplyBackfill(ctx context.Context, path string, pre
 }
 
 type backfillContext struct {
+	root              string
 	targetSkillID     string
 	repoPathOverride  string
 	now               time.Time
@@ -109,6 +110,7 @@ func (service BackfillService) PreviewBackfill(ctx context.Context, path string,
 	}
 
 	bCtx := backfillContext{
+		root:              root,
 		targetSkillID:     targetSkillID,
 		repoPathOverride:  input.RepoPath,
 		now:               service.Clock.Now().UTC(),
@@ -300,7 +302,10 @@ func (bc *backfillContext) processCandidateA(id, relDir string, metaBytes []byte
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
-	skillMetaPath := filepath.ToSlash(filepath.Join(relDir, "skill.meta.yaml"))
+	skillMetaPath := filepath.ToSlash(filepath.Join(relDir, ".meta", "skill.yaml"))
+	if _, statErr := os.Stat(filepath.Join(bc.root, filepath.FromSlash(relDir), ".meta", "skill.yaml")); statErr != nil {
+		skillMetaPath = filepath.ToSlash(filepath.Join(relDir, "skill.meta.yaml"))
+	}
 	changes = append(changes, mutation.Change{
 		Path:         skillMetaPath,
 		BeforeDigest: sourcepkg.Digest(metaBytes),
@@ -365,7 +370,10 @@ func (bc *backfillContext) processCandidateB(id, relDir, sourceID string, metaBy
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	skillMetaPath := filepath.ToSlash(filepath.Join(relDir, "skill.meta.yaml"))
+	skillMetaPath := filepath.ToSlash(filepath.Join(relDir, ".meta", "skill.yaml"))
+	if _, statErr := os.Stat(filepath.Join(bc.root, filepath.FromSlash(relDir), ".meta", "skill.yaml")); statErr != nil {
+		skillMetaPath = filepath.ToSlash(filepath.Join(relDir, "skill.meta.yaml"))
+	}
 	change := mutation.Change{
 		Path:         skillMetaPath,
 		BeforeDigest: sourcepkg.Digest(metaBytes),

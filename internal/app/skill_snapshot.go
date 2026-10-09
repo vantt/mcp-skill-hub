@@ -280,6 +280,10 @@ type snapshotMarkerFile struct {
 
 // contentTrustDocument is the subset of a skill manifest that decides trust.
 type contentTrustDocument struct {
+	Sources []struct {
+		ID    string   `json:"id" yaml:"id"`
+		Roles []string `json:"roles" yaml:"roles"`
+	} `json:"sources" yaml:"sources"`
 	Provenance struct {
 		SourceID string `json:"source_id" yaml:"source_id"`
 		Origin   struct {
@@ -292,6 +296,18 @@ type contentTrustDocument struct {
 }
 
 func (document contentTrustDocument) provenance() skillruntime.Provenance {
+	if len(document.Sources) > 0 {
+		hasUpstream := false
+		for _, s := range document.Sources {
+			for _, r := range s.Roles {
+				if r == "upstream" {
+					hasUpstream = true
+					break
+				}
+			}
+		}
+		return skillruntime.Provenance{HasUpstream: hasUpstream}
+	}
 	return skillruntime.Provenance{OriginKind: document.Provenance.Origin.Kind, SourceID: document.Provenance.SourceID}
 }
 

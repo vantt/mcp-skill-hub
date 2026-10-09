@@ -338,7 +338,10 @@ func TestUpdateRoutingPreservesStoredFieldsAndRecordsScriptsReview(t *testing.T)
 	if _, err := manager.Confirm(t.Context(), root, created); err != nil {
 		t.Fatal(err)
 	}
-	metadataPath := filepath.Join(root, "skills", "software", "merge-test", "skill.meta.yaml")
+	metadataPath := filepath.Join(root, "skills", "software", "merge-test", ".meta", "skill.yaml")
+	if _, err := os.Stat(metadataPath); os.IsNotExist(err) {
+		metadataPath = filepath.Join(root, "skills", "software", "merge-test", "skill.meta.yaml")
+	}
 	contents, err := os.ReadFile(metadataPath)
 	if err != nil {
 		t.Fatal(err)

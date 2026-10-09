@@ -22,7 +22,10 @@ import (
 // updateSkillMeta rewrites skill.meta.yaml of a core-collection skill.
 func updateSkillMeta(t *testing.T, root, id string, mutate func(map[string]any)) {
 	t.Helper()
-	metaPath := filepath.Join(root, "skills", "core", id, "skill.meta.yaml")
+	metaPath := filepath.Join(root, "skills", "core", id, ".meta", "skill.yaml")
+	if _, err := os.Stat(metaPath); os.IsNotExist(err) {
+		metaPath = filepath.Join(root, "skills", "core", id, "skill.meta.yaml")
+	}
 	data, err := os.ReadFile(metaPath)
 	if err != nil {
 		t.Fatal(err)

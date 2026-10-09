@@ -656,7 +656,9 @@ func TestSkillUpdatePreviewAcceptsRuntimeBlockOnly(t *testing.T) {
 		"requires": map[string]any{"bins": []any{"node"}},
 		"setup":    map[string]any{"check": "node --version"},
 	})
-	if result.IsError || outcome.Result == nil || !slices.ContainsFunc(outcome.Result.Diff.Modified, func(path string) bool { return strings.HasSuffix(path, "skill.meta.yaml") }) {
+	if result.IsError || outcome.Result == nil || !slices.ContainsFunc(outcome.Result.Diff.Modified, func(path string) bool {
+		return strings.HasSuffix(path, "skill.meta.yaml") || strings.HasSuffix(path, "skill.yaml")
+	}) {
 		t.Fatalf("runtime-only preview = %#v", outcome)
 	}
 	result, outcome = preview(map[string]any{"requires": map[string]any{"bins": []any{"not a bin"}}})

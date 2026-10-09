@@ -63,7 +63,10 @@ func newWebWorkspace(t *testing.T) string {
 	if err := os.WriteFile(filepath.Join(root, "skills", "core", "review-skill", "references", "checks.md"), []byte("# Checks\n\nRun tests.\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	metaPath := filepath.Join(root, "skills", "core", "review-skill", "skill.meta.yaml")
+	metaPath := filepath.Join(root, "skills", "core", "review-skill", ".meta", "skill.yaml")
+	if _, err := os.Stat(metaPath); os.IsNotExist(err) {
+		metaPath = filepath.Join(root, "skills", "core", "review-skill", "skill.meta.yaml")
+	}
 	if data, err := os.ReadFile(metaPath); err == nil {
 		fixed := regexp.MustCompile(`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z`).ReplaceAll(data, []byte("2026-10-04T12:00:00.000000000Z"))
 		if err := os.WriteFile(metaPath, fixed, 0o644); err != nil {
@@ -272,7 +275,10 @@ func newRuntimeWebWorkspace(t *testing.T) string {
 	_ = os.WriteFile(filepath.Join(vendorDir, "package.json"), []byte("{\"name\": \"vendor\"}\n"), 0o644)
 
 	// update vendor-skill metadata: provenance.origin, runtime block
-	vendorMetaPath := filepath.Join(vendorDir, "skill.meta.yaml")
+	vendorMetaPath := filepath.Join(vendorDir, ".meta", "skill.yaml")
+	if _, err := os.Stat(vendorMetaPath); os.IsNotExist(err) {
+		vendorMetaPath = filepath.Join(vendorDir, "skill.meta.yaml")
+	}
 	vendorMetaData, err := os.ReadFile(vendorMetaPath)
 	if err != nil {
 		t.Fatal(err)
@@ -280,6 +286,15 @@ func newRuntimeWebWorkspace(t *testing.T) string {
 	var vendorDoc map[string]any
 	if err := yaml.Unmarshal(vendorMetaData, &vendorDoc); err != nil {
 		t.Fatal(err)
+	}
+	vendorDoc["sources"] = []any{
+		map[string]any{
+			"id":         "vendor-upstream",
+			"roles":      []string{"upstream"},
+			"kind":       "github",
+			"repository": "https://github.com/vendor/skills",
+			"commit":     strings.Repeat("a", 40),
+		},
 	}
 	vendorDoc["provenance"] = map[string]any{
 		"created_by": "skillhub",
@@ -342,7 +357,10 @@ func newRuntimeWebWorkspace(t *testing.T) string {
 	}
 
 	approvedDir := filepath.Join(root, "skills", "core", "approved-skill")
-	apprMetaPath := filepath.Join(approvedDir, "skill.meta.yaml")
+	apprMetaPath := filepath.Join(approvedDir, ".meta", "skill.yaml")
+	if _, err := os.Stat(apprMetaPath); os.IsNotExist(err) {
+		apprMetaPath = filepath.Join(approvedDir, "skill.meta.yaml")
+	}
 	apprMetaData, err := os.ReadFile(apprMetaPath)
 	if err != nil {
 		t.Fatal(err)
@@ -350,6 +368,15 @@ func newRuntimeWebWorkspace(t *testing.T) string {
 	var apprDoc map[string]any
 	if err := yaml.Unmarshal(apprMetaData, &apprDoc); err != nil {
 		t.Fatal(err)
+	}
+	apprDoc["sources"] = []any{
+		map[string]any{
+			"id":         "approved-upstream",
+			"roles":      []string{"upstream"},
+			"kind":       "github",
+			"repository": "https://github.com/approved/skills",
+			"commit":     strings.Repeat("b", 40),
+		},
 	}
 	apprDoc["provenance"] = map[string]any{
 		"created_by": "skillhub",

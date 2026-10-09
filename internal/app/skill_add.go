@@ -625,13 +625,47 @@ func buildSkillAddChanges(selected []DiscoveredSkillItem, collection string, cap
 			provDoc["source_id"] = captured.sourceID
 		}
 
+		srcID := captured.sourceID
+		if srcID == "" {
+			srcID = targetID
+		}
+		src := map[string]any{
+			"id":    srcID,
+			"roles": []string{"upstream"},
+		}
+		if skillOrigin.Kind != "" {
+			src["kind"] = skillOrigin.Kind
+		}
+		if skillOrigin.Repository != "" {
+			src["repository"] = skillOrigin.Repository
+		}
+		if skillOrigin.Ref != "" {
+			src["ref"] = skillOrigin.Ref
+		}
+		if skillOrigin.Commit != "" {
+			src["commit"] = skillOrigin.Commit
+			src["synced"] = skillOrigin.Commit
+		}
+		if skillOrigin.Path != "" {
+			src["path"] = skillOrigin.Path
+		}
+		if skillOrigin.FilesDigest != "" {
+			src["files_digest"] = skillOrigin.FilesDigest
+		}
+		if skillOrigin.FolderDigest != "" {
+			src["folder_digest"] = skillOrigin.FolderDigest
+		}
+		if len(skillOrigin.Transformations) > 0 {
+			src["transformations"] = skillOrigin.Transformations
+		}
+		if skillOrigin.AddedAt != "" {
+			src["added_at"] = skillOrigin.AddedAt
+		}
+
 		metaDoc := map[string]any{
 			"schema_version": 1,
 			"id":             targetID,
-			"name":           item.Name,
 			"status":         "draft",
-			"description":    item.Description,
-			"collection":     collection,
 			"routing": map[string]any{
 				"triggers":  []string{},
 				"not_for":   []string{},
@@ -640,22 +674,14 @@ func buildSkillAddChanges(selected []DiscoveredSkillItem, collection string, cap
 			"quality": map[string]any{
 				"reviewed": false,
 			},
-			"provenance": provDoc,
-			"history": []any{
-				map[string]any{
-					"state":       "draft",
-					"occurred_at": nowISO,
-				},
-			},
-			"created_at": nowISO,
-			"updated_at": nowISO,
+			"sources": []any{src},
 		}
 
 		metaBytes, yErr := yaml.Marshal(metaDoc)
 		if yErr != nil {
 			return nil, nil, nil, nil, yErr
 		}
-		metaTarget := fmt.Sprintf("skills/%s/%s/skill.meta.yaml", collection, targetID)
+		metaTarget := fmt.Sprintf("skills/%s/%s/.meta/skill.yaml", collection, targetID)
 		changes = append(changes, mutation.Change{Path: metaTarget, Contents: metaBytes})
 		diffAdded = append(diffAdded, metaTarget)
 
@@ -1023,19 +1049,39 @@ func deriveUpstreamSourceFromChanges(changes []mutation.Change) *UpstreamSourceR
 	for _, c := range changes {
 		if workspace.IsHubMeta(c.Path) && (strings.HasSuffix(c.Path, "skill.meta.yaml") || strings.HasSuffix(c.Path, "skill.yaml")) {
 			var m struct {
+				Sources []struct {
+					ID    string   `yaml:"id"`
+					Roles []string `yaml:"roles"`
+				} `yaml:"sources"`
 				Provenance struct {
 					SourceID string `yaml:"source_id"`
 				} `yaml:"provenance"`
 			}
-			if yaml.Unmarshal(c.Contents, &m) == nil && m.Provenance.SourceID != "" {
-				created := false
-				for _, sc := range changes {
-					if sc.Path == "sources/catalog/"+m.Provenance.SourceID+".yaml" {
-						created = true
-						break
+			if yaml.Unmarshal(c.Contents, &m) == nil {
+				sourceID := m.Provenance.SourceID
+				if sourceID == "" && len(m.Sources) > 0 {
+					for _, s := range m.Sources {
+						for _, r := range s.Roles {
+							if r == "upstream" {
+								sourceID = s.ID
+								break
+							}
+						}
+						if sourceID != "" {
+							break
+						}
 					}
 				}
-				return &UpstreamSourceRef{SourceID: m.Provenance.SourceID, Created: created}
+				if sourceID != "" {
+					created := false
+					for _, sc := range changes {
+						if sc.Path == "sources/catalog/"+sourceID+".yaml" {
+							created = true
+							break
+						}
+					}
+					return &UpstreamSourceRef{SourceID: sourceID, Created: created}
+				}
 			}
 		}
 	}

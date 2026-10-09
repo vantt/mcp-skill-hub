@@ -548,10 +548,26 @@ func TestSourceImportMoreDiscoversNewAndSkipsImported(t *testing.T) {
 	if _, err := skillService.ConfirmSkillMutation(context.Background(), root, prev, prev.Confirmation.Confirmation.Pins); err != nil {
 		t.Fatal(err)
 	}
-	metaPath := filepath.Join(root, "skills", "default", "skill-one", "skill.meta.yaml")
+	metaPath := filepath.Join(root, "skills", "default", "skill-one", ".meta", "skill.yaml")
+	if _, err := os.Stat(metaPath); os.IsNotExist(err) {
+		metaPath = filepath.Join(root, "skills", "default", "skill-one", "skill.meta.yaml")
+	}
 	metaBytes, _ := os.ReadFile(metaPath)
 	var doc map[string]any
 	_ = yaml.Unmarshal(metaBytes, &doc)
+	if doc == nil {
+		doc = make(map[string]any)
+	}
+	doc["sources"] = []any{
+		map[string]any{
+			"id":         "src-more",
+			"roles":      []string{"upstream"},
+			"kind":       "github",
+			"path":       "skills/skill-one",
+			"commit":     currentRev.Value,
+			"repository": "https://github.com/example/repo",
+		},
+	}
 	doc["provenance"] = map[string]any{
 		"source_id": "src-more",
 		"origin": map[string]any{

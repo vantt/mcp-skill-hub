@@ -10,22 +10,31 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/vantt/mcp-skill-hub/internal/app"
 	"github.com/vantt/mcp-skill-hub/internal/skillruntime"
+	"gopkg.in/yaml.v3"
 )
 
 // setSkillMeta rewrites the review-skill manifest with replace and rebuilds
 // the catalog.
-func setSkillMeta(t *testing.T, root string, replace func(string) string) string {
+func setSkillMeta(t *testing.T, root string, mutate func(map[string]any)) string {
 	t.Helper()
-	metaPath := filepath.Join(root, "skills", "core", "review-skill", "skill.meta.yaml")
+	metaPath := filepath.Join(root, "skills", "core", "review-skill", ".meta", "skill.yaml")
+	if _, err := os.Stat(metaPath); os.IsNotExist(err) {
+		metaPath = filepath.Join(root, "skills", "core", "review-skill", "skill.meta.yaml")
+	}
 	meta, err := os.ReadFile(metaPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	updated := replace(string(meta))
-	if updated == string(meta) {
-		t.Fatalf("manifest replacement changed nothing:\n%s", meta)
+	var doc map[string]any
+	if err := yaml.Unmarshal(meta, &doc); err != nil {
+		t.Fatal(err)
 	}
-	if err := os.WriteFile(metaPath, []byte(updated), 0o644); err != nil {
+	mutate(doc)
+	updated, err := yaml.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(metaPath, updated, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := (app.CatalogService{}).BuildCatalogGeneration(t.Context(), root); err != nil {
@@ -40,9 +49,19 @@ func TestSkillGetWithholdsUnapprovedThirdPartyContentInEveryLifecycleState(t *te
 		t.Run(state, func(t *testing.T) {
 			t.Parallel()
 			root := newMCPWorkspace(t)
-			setSkillMeta(t, root, func(meta string) string {
-				meta = strings.Replace(meta, "status: active", "status: "+state, 1)
-				return strings.Replace(meta, "provenance:\n    created_by: skillhub\n", "provenance:\n    created_by: skillhub\n    origin:\n        kind: github\n        repository: https://github.com/example/skills\n", 1)
+			setSkillMeta(t, root, func(doc map[string]any) {
+				doc["status"] = state
+				doc["sources"] = []any{
+					map[string]any{
+						"id":         "upstream-skill",
+						"roles":      []string{"upstream"},
+						"kind":       "github",
+						"repository": "https://github.com/example/skills",
+					},
+				}
+				doc["quality"] = map[string]any{
+					"reviewed": false,
+				}
 			})
 			session := connectDistributionSession(t, root)
 			withheld := callSkillGet(t, session, "review-skill")
@@ -62,9 +81,19 @@ func TestSkillGetWithholdsUnapprovedThirdPartyContentInEveryLifecycleState(t *te
 func TestSkillGetServesDraftContentForApprovedAndLocalSkills(t *testing.T) {
 	t.Parallel()
 	root := newMCPWorkspace(t)
-	setSkillMeta(t, root, func(meta string) string {
-		meta = strings.Replace(meta, "status: active", "status: draft", 1)
-		return strings.Replace(meta, "provenance:\n    created_by: skillhub\n", "provenance:\n    created_by: skillhub\n    origin:\n        kind: github\n        repository: https://github.com/example/skills\n", 1)
+	setSkillMeta(t, root, func(doc map[string]any) {
+		doc["status"] = "draft"
+		doc["sources"] = []any{
+			map[string]any{
+				"id":         "upstream-skill",
+				"roles":      []string{"upstream"},
+				"kind":       "github",
+				"repository": "https://github.com/example/skills",
+			},
+		}
+		doc["quality"] = map[string]any{
+			"reviewed": false,
+		}
 	})
 	session := connectDistributionSession(t, root)
 	if got := callSkillGet(t, session, "review-skill"); got.Content != "" {
@@ -75,8 +104,11 @@ func TestSkillGetServesDraftContentForApprovedAndLocalSkills(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	setSkillMeta(t, root, func(meta string) string {
-		return strings.Replace(meta, "quality:\n", "quality:\n    content_reviewed_digest: "+review.ContentTrust.ContentDigest+"\n", 1)
+	setSkillMeta(t, root, func(doc map[string]any) {
+		doc["quality"] = map[string]any{
+			"reviewed":                true,
+			"content_reviewed_digest": review.ContentTrust.ContentDigest,
+		}
 	})
 	approved := callSkillGet(t, session, "review-skill")
 	if !strings.Contains(approved.Content, "# Review") || (approved.Local != nil && approved.Local.Status == app.LocalStatusReviewRequired) {
@@ -84,8 +116,12 @@ func TestSkillGetServesDraftContentForApprovedAndLocalSkills(t *testing.T) {
 	}
 
 	// A local-folder skill is trusted by design, so its draft is readable.
-	setSkillMeta(t, root, func(meta string) string {
-		return strings.Replace(meta, "    origin:\n        kind: github\n        repository: https://github.com/example/skills\n", "", 1)
+	setSkillMeta(t, root, func(doc map[string]any) {
+		delete(doc, "sources")
+		delete(doc, "provenance")
+		doc["quality"] = map[string]any{
+			"reviewed": false,
+		}
 	})
 	if got := callSkillGet(t, session, "review-skill"); !strings.Contains(got.Content, "# Review") {
 		t.Fatalf("local draft must return content: %#v", got)

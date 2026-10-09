@@ -38,7 +38,7 @@ func TestSkillCLIEndToEndPreviewConfirmActivateShowAndArchive(t *testing.T) {
 	if preview.Status != app.StatusActionRequired || preview.FullDiff == "" {
 		t.Fatalf("preview = %#v", preview)
 	}
-	if _, err := os.Stat(filepath.Join(root, "skills", "software", "consumer-review", "skill.meta.yaml")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(root, "skills", "software", "consumer-review", ".meta", "skill.yaml")); !os.IsNotExist(err) {
 		t.Fatalf("preview changed canonical state: %v", err)
 	}
 
@@ -103,7 +103,7 @@ func TestSkillCLIConfirmsStoredExactProposalAndRejectsInterveningEdit(t *testing
 	if code := Run(confirm, &stdout, &stderr); code != 0 {
 		t.Fatalf("confirm = %d: stdout=%s stderr=%s", code, stdout.String(), stderr.String())
 	}
-	if _, err := os.Stat(filepath.Join(root, "skills", "software", "stored-proposal", "skill.meta.yaml")); err != nil {
+	if _, err := os.Stat(filepath.Join(root, "skills", "software", "stored-proposal", ".meta", "skill.yaml")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -219,10 +219,13 @@ func TestSkillCLIRoutingExamplesAndScriptsApproval(t *testing.T) {
 	if code := run("init", root, "--yes"); code != 0 {
 		t.Fatalf("init = %d: %s", code, stderr.String())
 	}
-	metadataPath := filepath.Join(root, "skills", "software", "pr-review", "skill.meta.yaml")
 	readMetadata := func() map[string]any {
 		t.Helper()
-		contents, err := os.ReadFile(metadataPath)
+		metaPath := filepath.Join(root, "skills", "software", "pr-review", ".meta", "skill.yaml")
+		if _, err := os.Stat(metaPath); os.IsNotExist(err) {
+			metaPath = filepath.Join(root, "skills", "software", "pr-review", "skill.meta.yaml")
+		}
+		contents, err := os.ReadFile(metaPath)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -332,10 +335,13 @@ func TestSkillEditRuntimeFileSetsAndRemovesRuntimeBlock(t *testing.T) {
 	if code := run("skill", "create", "rt-edit", "--workspace", root, "--collection", "software", "--name", "RT Edit", "--description", "Runtime edit fixture", "--yes", "--json"); code != 0 {
 		t.Fatalf("create = %d: %s %s", code, stdout.String(), stderr.String())
 	}
-	metadataPath := filepath.Join(root, "skills", "software", "rt-edit", "skill.meta.yaml")
 	runtimeBlock := func() any {
 		t.Helper()
-		contents, err := os.ReadFile(metadataPath)
+		metaPath := filepath.Join(root, "skills", "software", "rt-edit", ".meta", "skill.yaml")
+		if _, err := os.Stat(metaPath); os.IsNotExist(err) {
+			metaPath = filepath.Join(root, "skills", "software", "rt-edit", "skill.meta.yaml")
+		}
+		contents, err := os.ReadFile(metaPath)
 		if err != nil {
 			t.Fatal(err)
 		}

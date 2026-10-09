@@ -70,8 +70,9 @@ func reviewChangesSinceApproval(ctx context.Context, input approvalDiffInput) *C
 	ctx, cancel := context.WithTimeout(ctx, approvalGitTimeout)
 	defer cancel()
 
-	metaPath := skillRelDir + "/" + skillManifestName
-	commits, ok := gitLines(ctx, root, "log", "--format=%H", fmt.Sprintf("--max-count=%d", historyLimit+1), "--", metaPath)
+	newMetaPath := skillRelDir + "/.meta/skill.yaml"
+	oldMetaPath := skillRelDir + "/" + skillManifestName
+	commits, ok := gitLines(ctx, root, "log", "--format=%H", fmt.Sprintf("--max-count=%d", historyLimit+1), "--", newMetaPath, oldMetaPath)
 	if !ok {
 		return nil
 	}
@@ -83,7 +84,10 @@ func reviewChangesSinceApproval(ctx context.Context, input approvalDiffInput) *C
 	approvalCommit, approvedMeta := "", []byte(nil)
 	runEndedInHistory := false
 	for _, commit := range commits {
-		meta, err := gitOutput(ctx, root, "show", commit+":./"+metaPath)
+		meta, err := gitOutput(ctx, root, "show", commit+":./"+newMetaPath)
+		if err != nil {
+			meta, err = gitOutput(ctx, root, "show", commit+":./"+oldMetaPath)
+		}
 		var past contentTrustDocument
 		matches := err == nil && yaml.Unmarshal(meta, &past) == nil && past.Quality.ContentReviewedDigest == approved
 		if matches {

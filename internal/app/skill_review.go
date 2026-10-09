@@ -129,6 +129,15 @@ func (SkillService) ReviewSkill(ctx context.Context, path, id string) (SkillRevi
 
 	metaDoc := parseSkillReviewMeta(skillMetaBytes)
 	entrypointRelPath, entrypointDigest, entrypointBytes := inspectCanonicalEntrypoint(root, skillRelDir)
+	if (metaDoc.Name == "" || metaDoc.Description == "") && entrypointBytes != nil {
+		epName, epDesc := extractEntrypointTitleAndDescription(entrypointBytes, id)
+		if metaDoc.Name == "" {
+			metaDoc.Name = epName
+		}
+		if metaDoc.Description == "" {
+			metaDoc.Description = epDesc
+		}
+	}
 	canonicalIssues, valid := checkCanonicalIssues(root, skillRelDir)
 	readiness, isScaffold, missingFields := checkActivationReadiness(entrypointBytes, metaDoc, valid)
 	if handle, err := catalog.OpenCurrentLocked(ctx, root); err == nil {
@@ -215,6 +224,18 @@ type skillReviewMeta struct {
 		Examples        []string `yaml:"examples"`
 		CounterExamples []string `yaml:"counter_examples"`
 	} `yaml:"routing"`
+	Sources []struct {
+		ID              string   `yaml:"id"`
+		Roles           []string `yaml:"roles"`
+		Kind            string   `yaml:"kind"`
+		Repository      string   `yaml:"repository"`
+		Ref             string   `yaml:"ref"`
+		Commit          string   `yaml:"commit"`
+		Path            string   `yaml:"path"`
+		FilesDigest     string   `yaml:"files_digest"`
+		Transformations []string `yaml:"transformations"`
+		Synced          string   `yaml:"synced"`
+	} `yaml:"sources"`
 	Quality struct {
 		Reviewed               bool   `yaml:"reviewed"`
 		RoutingReviewRationale string `yaml:"routing_review_rationale"`
@@ -461,6 +482,22 @@ func assessServedSkillFacts(ctx context.Context, root, id string, canonicalFacts
 }
 
 func extractSkillProvenance(metaDoc skillReviewMeta) *SkillProvenance {
+	if len(metaDoc.Sources) > 0 {
+		for i := range metaDoc.Sources {
+			for _, r := range metaDoc.Sources[i].Roles {
+				if r == "upstream" {
+					src := &metaDoc.Sources[i]
+					return &SkillProvenance{
+						SourceID:       src.ID,
+						SourceLocator:  src.Repository,
+						SourceRevision: src.Commit,
+						UpstreamPath:   src.Path,
+					}
+				}
+			}
+		}
+		return nil
+	}
 	if metaDoc.Provenance.CreatedBy == "" && metaDoc.Provenance.SourceID == "" && metaDoc.Provenance.SourceLocator == "" && metaDoc.Provenance.Origin.Repository == "" {
 		return nil
 	}
@@ -484,6 +521,57 @@ func extractSkillProvenance(metaDoc skillReviewMeta) *SkillProvenance {
 		SourceRevision: sourceRevision,
 		UpstreamPath:   upstreamPath,
 	}
+}
+
+func extractEntrypointTitleAndDescription(contents []byte, defaultID string) (string, string) {
+	fmName, fmDesc := "", ""
+	lines := strings.Split(string(contents), "\n")
+	bodyStart := 0
+	if len(lines) > 0 && strings.TrimSpace(lines[0]) == "---" {
+		for i := 1; i < len(lines); i++ {
+			trimmed := strings.TrimSpace(lines[i])
+			if trimmed == "---" {
+				bodyStart = i + 1
+				break
+			}
+			if strings.HasPrefix(trimmed, "name:") {
+				fmName = strings.Trim(strings.TrimSpace(strings.TrimPrefix(trimmed, "name:")), `"'`)
+			}
+			if strings.HasPrefix(trimmed, "description:") {
+				fmDesc = strings.Trim(strings.TrimSpace(strings.TrimPrefix(trimmed, "description:")), `"'`)
+			}
+		}
+	}
+	name, desc := "", fmDesc
+	bodyLines := lines[bodyStart:]
+	for _, line := range bodyLines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "# ") {
+			heading := strings.TrimSpace(strings.TrimPrefix(trimmed, "# "))
+			if heading != "" && !strings.EqualFold(heading, "when to use this skill") {
+				name = heading
+				break
+			}
+		}
+	}
+	if name == "" {
+		if fmName != "" {
+			name = fmName
+		} else {
+			name = defaultID
+		}
+	}
+	for _, line := range bodyLines {
+		trimmed := strings.TrimSpace(line)
+		if desc == "" && trimmed != "" && !strings.HasPrefix(trimmed, "#") {
+			desc = trimmed
+			break
+		}
+	}
+	if desc == "" {
+		desc = name
+	}
+	return name, desc
 }
 
 func getSkillGitSummary(ctx context.Context, root, prefix string) SkillGitSummary {

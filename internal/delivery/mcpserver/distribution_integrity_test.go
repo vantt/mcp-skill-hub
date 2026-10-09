@@ -13,6 +13,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/vantt/mcp-skill-hub/internal/app"
+	"gopkg.in/yaml.v3"
 )
 
 func connectDistributionSession(t *testing.T, root string) *mcp.ClientSession {
@@ -155,16 +156,34 @@ func TestResourceReadRefusesUnapprovedThirdPartyContent(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(skillDir, "notes.md"), []byte("# Notes\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	metaPath := filepath.Join(skillDir, "skill.meta.yaml")
+	metaPath := filepath.Join(skillDir, ".meta", "skill.yaml")
+	if _, err := os.Stat(metaPath); os.IsNotExist(err) {
+		metaPath = filepath.Join(skillDir, "skill.meta.yaml")
+	}
 	meta, err := os.ReadFile(metaPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	thirdParty := strings.Replace(string(meta), "provenance:\n    created_by: skillhub\n", "provenance:\n    created_by: skillhub\n    origin:\n        kind: github\n        repository: https://github.com/example/skills\n", 1)
-	if thirdParty == string(meta) {
-		t.Fatalf("fixture metadata has an unexpected provenance block:\n%s", meta)
+	var doc map[string]any
+	if err := yaml.Unmarshal(meta, &doc); err != nil {
+		t.Fatal(err)
 	}
-	if err := os.WriteFile(metaPath, []byte(thirdParty), 0o644); err != nil {
+	doc["sources"] = []any{
+		map[string]any{
+			"id":         "upstream-src",
+			"roles":      []string{"upstream"},
+			"kind":       "github",
+			"repository": "https://github.com/example/skills",
+		},
+	}
+	doc["quality"] = map[string]any{
+		"reviewed": false,
+	}
+	thirdParty, err := yaml.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(metaPath, thirdParty, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := (app.CatalogService{}).BuildCatalogGeneration(t.Context(), root); err != nil {
