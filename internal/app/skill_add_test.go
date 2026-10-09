@@ -775,6 +775,7 @@ func TestSkillAddRemoteGitRealAdapter(t *testing.T) {
 				ID           string   `yaml:"id"`
 				Roles        []string `yaml:"roles"`
 				Kind         string   `yaml:"kind"`
+				Repo         string   `yaml:"repo"`
 				Repository   string   `yaml:"repository"`
 				Ref          string   `yaml:"ref"`
 				Commit       string   `yaml:"commit"`
@@ -797,9 +798,13 @@ func TestSkillAddRemoteGitRealAdapter(t *testing.T) {
 			for _, r := range s.Roles {
 				if r == "upstream" {
 					m.Provenance.SourceID = s.ID
+					repo := s.Repo
+					if repo == "" {
+						repo = s.Repository
+					}
 					m.Provenance.Origin = SkillOrigin{
 						Kind:         s.Kind,
-						Repository:   s.Repository,
+						Repository:   repo,
 						Ref:          s.Ref,
 						Commit:       s.Commit,
 						Path:         s.Path,
@@ -875,5 +880,87 @@ func TestSkillAddRemoteGitRealAdapter(t *testing.T) {
 	}
 	if reviewResult.Provenance == nil || reviewResult.Provenance.SourceLocator == "" {
 		t.Fatalf("expected provenance locator, got %#v", reviewResult.Provenance)
+	}
+}
+
+func TestSkillAddConfirmWritesRepoWithoutRepositoryOrContentDigest(t *testing.T) {
+	t.Parallel()
+	root := newSourceWorkspace(t)
+	repoDir := t.TempDir()
+
+	runGitInDir(t, repoDir, "init", "-b", "main")
+	runGitInDir(t, repoDir, "config", "user.name", "Test")
+	runGitInDir(t, repoDir, "config", "user.email", "test@example.com")
+	runGitInDir(t, repoDir, "config", "uploadpack.allowReachableSHA1InWant", "true")
+
+	skillDir := filepath.Join(repoDir, "skills", "remote-skill")
+	if err := os.MkdirAll(skillDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	content := "---\nname: remote-skill\ndescription: Remote skill description\n---\n# Remote Skill\n\nContent.\n"
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGitInDir(t, repoDir, "add", ".")
+	runGitInDir(t, repoDir, "commit", "-m", "initial remote skill commit")
+
+	adapter := sourcepkg.GitRepositoryAdapter{
+		CacheRoot:         filepath.Join(root, "runtime", "sources", "git"),
+		AllowFileProtocol: true,
+	}
+	now := time.Now().UTC()
+	addService := SkillAddService{
+		Clock:    sourceClock{now: now},
+		Adapters: map[string]sourcepkg.Adapter{"git": adapter},
+	}
+
+	fileURL := "file://" + filepath.ToSlash(repoDir)
+	preview, err := addService.PreviewSkillAdd(context.Background(), root, SkillAddInput{
+		Locator: fileURL,
+		All:     true,
+	})
+	if err != nil || preview.Error != nil {
+		t.Fatalf("preview add failed: %v, %#v", err, preview.Error)
+	}
+
+	pins := preview.Confirmation.Confirmation.Pins
+	result, err := addService.ConfirmSkillAdd(context.Background(), root, preview, pins)
+	if err != nil || result.Error != nil {
+		t.Fatalf("confirm add failed: %v, %#v", err, result.Error)
+	}
+
+	// 1. Read resulting .meta/skill.yaml
+	metaPath := filepath.Join(root, "skills", "default", "remote-skill", ".meta", "skill.yaml")
+	metaBytes, err := os.ReadFile(metaPath)
+	if err != nil {
+		t.Fatalf("read .meta/skill.yaml: %v", err)
+	}
+	metaStr := string(metaBytes)
+
+	// Must have "repo: ", NOT "repository:", and NOT "content_digest:"
+	if !strings.Contains(metaStr, "repo: ") {
+		t.Fatalf("expected .meta/skill.yaml to contain 'repo: ', got:\n%s", metaStr)
+	}
+	if strings.Contains(metaStr, "repository:") {
+		t.Fatalf(".meta/skill.yaml must not contain 'repository:', got:\n%s", metaStr)
+	}
+	if strings.Contains(metaStr, "content_digest:") {
+		t.Fatalf(".meta/skill.yaml must not contain 'content_digest:', got:\n%s", metaStr)
+	}
+
+	// 2. Upstream trust verdict: unapproved remote skill requires review
+	skillService := SkillService{}
+	trust, err := skillService.ContentTrustFor(context.Background(), root, "remote-skill")
+	if err != nil {
+		t.Fatalf("ContentTrustFor: %v", err)
+	}
+	if !trust.ThirdParty {
+		t.Fatal("expected remote skill to be third-party")
+	}
+	if trust.Approved {
+		t.Fatal("expected remote skill to be unapproved")
+	}
+	if !trust.RequiresReview() {
+		t.Fatal("expected remote skill to require review")
 	}
 }

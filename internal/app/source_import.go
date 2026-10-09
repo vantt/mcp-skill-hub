@@ -633,3 +633,40 @@ func buildImportItemChanges(
 
 	return changes, added, nil
 }
+
+func skillOriginToMap(origin SkillOrigin) map[string]any {
+	m := map[string]any{
+		"kind": origin.Kind,
+	}
+	if origin.Repository != "" {
+		m["repository"] = origin.Repository
+	}
+	if origin.Ref != "" {
+		m["ref"] = origin.Ref
+	}
+	if origin.Commit != "" {
+		m["commit"] = origin.Commit
+	}
+	if origin.Path != "" {
+		m["path"] = origin.Path
+	}
+	if origin.Name != "" {
+		m["name"] = origin.Name
+	}
+	if origin.FolderDigest != "" {
+		m["folder_digest"] = origin.FolderDigest
+	}
+	if origin.FilesDigest != "" {
+		m["files_digest"] = origin.FilesDigest
+	}
+	if origin.ContentDigest != "" {
+		m["content_digest"] = origin.ContentDigest
+	}
+	if len(origin.Transformations) > 0 {
+		m["transformations"] = origin.Transformations
+	}
+	if origin.AddedAt != "" {
+		m["added_at"] = origin.AddedAt
+	}
+	return m
+}

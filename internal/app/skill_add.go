@@ -617,14 +617,6 @@ func buildSkillAddChanges(selected []DiscoveredSkillItem, collection string, cap
 			}
 		}
 
-		provDoc := map[string]any{
-			"created_by": "skill_add",
-			"origin":     skillOriginToMap(skillOrigin),
-		}
-		if captured.sourceID != "" {
-			provDoc["source_id"] = captured.sourceID
-		}
-
 		srcID := captured.sourceID
 		if srcID == "" {
 			srcID = targetID
@@ -637,7 +629,7 @@ func buildSkillAddChanges(selected []DiscoveredSkillItem, collection string, cap
 			src["kind"] = skillOrigin.Kind
 		}
 		if skillOrigin.Repository != "" {
-			src["repository"] = skillOrigin.Repository
+			src["repo"] = skillOrigin.Repository
 		}
 		if skillOrigin.Ref != "" {
 			src["ref"] = skillOrigin.Ref
@@ -1086,44 +1078,6 @@ func deriveUpstreamSourceFromChanges(changes []mutation.Change) *UpstreamSourceR
 		}
 	}
 	return nil
-}
-
-// Helper to convert SkillOrigin to schema-compliant map for yaml.Marshal.
-func skillOriginToMap(origin SkillOrigin) map[string]any {
-	m := map[string]any{
-		"kind": origin.Kind,
-	}
-	if origin.Repository != "" {
-		m["repository"] = origin.Repository
-	}
-	if origin.Ref != "" {
-		m["ref"] = origin.Ref
-	}
-	if origin.Commit != "" {
-		m["commit"] = origin.Commit
-	}
-	if origin.Path != "" {
-		m["path"] = origin.Path
-	}
-	if origin.Name != "" {
-		m["name"] = origin.Name
-	}
-	if origin.FolderDigest != "" {
-		m["folder_digest"] = origin.FolderDigest
-	}
-	if origin.FilesDigest != "" {
-		m["files_digest"] = origin.FilesDigest
-	}
-	if origin.ContentDigest != "" {
-		m["content_digest"] = origin.ContentDigest
-	}
-	if len(origin.Transformations) > 0 {
-		m["transformations"] = origin.Transformations
-	}
-	if origin.AddedAt != "" {
-		m["added_at"] = origin.AddedAt
-	}
-	return m
 }
 
 func isSafeRelativeSkillPath(p string) bool {
