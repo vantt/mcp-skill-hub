@@ -29,7 +29,7 @@
       "additionalProperties": false,
       "required": ["content_mode", "redaction_version"],
       "properties": {
-        "content_mode": {"const": "none"},
+        "content_mode": {"enum": ["none", "redacted"]},
         "redaction_version": {"const": "redact-v1"}
       }
     },

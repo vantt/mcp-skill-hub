@@ -145,8 +145,8 @@ func Open(config Config) (*Recorder, error) {
 	if config.ContentMode == "" {
 		config.ContentMode = ContentModeNone
 	}
-	if config.ContentMode != ContentModeNone {
-		return nil, errors.New("telemetry core supports only content_mode none")
+	if config.ContentMode != ContentModeNone && config.ContentMode != ContentModeRedacted {
+		return nil, errors.New("unsupported content_mode: " + config.ContentMode)
 	}
 	if config.OperationTimeout <= 0 {
 		config.OperationTimeout = defaultOperationTimeout

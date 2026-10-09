@@ -65,7 +65,7 @@ func New(workspacePath string, diagnostics io.Writer) (*Server, *mcp.Server, err
 	adapter := &Server{
 		workspace: root,
 		snapshots: app.NewSnapshotService(),
-		tracker:   newActivationTracker(nil),
+		tracker:   newActivationTracker(nil, root),
 		logger:    logger,
 	}
 	capabilities := &mcp.ServerCapabilities{
@@ -349,6 +349,28 @@ func (adapter *Server) recordLoad(ctx context.Context, session *mcp.ServerSessio
 		load.SessionIDHash = adapter.tracker.sessionHash(session)
 		if !load.Blocked && load.ResourceKind == "entrypoint" {
 			load.FirstActivation = adapter.tracker.markActivation(session, load.ResolutionID, load.SkillID)
+		}
+		if load.FirstActivation && (load.Attribution == "override" || load.Attribution == "after_no_skill") {
+			if res, ok := adapter.tracker.resolutionData(session, load.ResolutionID); ok {
+				_ = app.RecordCase(ctx, adapter.telemetry, telemetry.CaseRecord{
+					ResolutionID:    res.ResolutionID,
+					OccurredAt:      time.Now().UTC(),
+					Kind:            load.Attribution,
+					Client:          res.Client,
+					CatalogSnapshot: res.CatalogSnapshot,
+					PriorVerified:   res.PriorVerified,
+					Task:            map[string]any{"description": res.TaskDescription},
+					Operation:       res.Operation,
+					Request:         res.Request,
+					Resolver: map[string]any{
+						"status":         res.Status,
+						"topk_skill_ids": res.TopKSkillIDs,
+						"topk_matched":   res.TopKMatched,
+						"topk_channels":  res.TopKChannels,
+					},
+					Chosen: load.SkillID,
+				})
+			}
 		}
 	}
 	app.RecordSkillLoad(ctx, adapter.telemetry, adapter.workspace, load)

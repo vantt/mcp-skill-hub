@@ -210,7 +210,7 @@ Content modes:
 |---|---|
 | `none` | IDs, enums, counts, timing, reason codes |
 | `fingerprint` | Thêm keyed request fingerprint |
-| `redacted` | Thêm redacted/minimized task fields; explicit opt-in |
+| `redacted` | Thêm redacted/minimized task fields cho case journal; explicit opt-in |
 | `debug` | Feature/candidate traces ngắn hạn; cảnh báo rõ |
 
 Không có chế độ lưu full conversation.

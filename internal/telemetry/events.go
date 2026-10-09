@@ -10,10 +10,11 @@ import (
 )
 
 const (
-	EventVersion     = "1"
-	ExportVersion    = "1"
-	RedactionVersion = "redact-v1"
-	ContentModeNone  = "none"
+	EventVersion        = "1"
+	ExportVersion       = "1"
+	RedactionVersion    = "redact-v1"
+	ContentModeNone     = "none"
+	ContentModeRedacted = "redacted"
 
 	EventResolutionStarted      = "resolution.started"
 	EventResolutionRecommended  = "resolution.recommended"

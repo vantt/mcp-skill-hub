@@ -14,7 +14,7 @@ func TestActivationTrackerAttributionClasses(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC)
-	tracker := newActivationTracker(func() time.Time { return now })
+	tracker := newActivationTracker(func() time.Time { return now }, "")
 	session := &mcp.ServerSession{}
 
 	// Unsolicited: no resolutions noted yet
@@ -24,12 +24,12 @@ func TestActivationTrackerAttributionClasses(t *testing.T) {
 	}
 
 	// 1. Recommended
-	tracker.noteResolution(session, resolverpkg.Response{
+	tracker.noteResolution(session, resolverpkg.Request{}, resolverpkg.Response{
 		ResolutionID: "res-1",
 		Status:       resolverpkg.StatusResolved,
 		Primary:      &resolverpkg.Recommendation{ID: "skill-a"},
 		Supporting:   []resolverpkg.Supporting{{ID: "skill-b"}},
-	})
+	}, false)
 	resID, attr = tracker.attribute(session, "skill-a")
 	if resID != "res-1" || attr != "recommended" {
 		t.Fatalf("expected res-1 and recommended, got %q, %q", resID, attr)
@@ -48,31 +48,31 @@ func TestActivationTrackerAttributionClasses(t *testing.T) {
 	}
 
 	// Override with status already_covered
-	tracker.noteResolution(session, resolverpkg.Response{
+	tracker.noteResolution(session, resolverpkg.Request{}, resolverpkg.Response{
 		ResolutionID: "res-2",
 		Status:       resolverpkg.StatusAlreadyCovered,
 		Primary:      &resolverpkg.Recommendation{ID: "skill-d"},
-	})
+	}, false)
 	resID, attr = tracker.attribute(session, "skill-c")
 	if resID != "res-2" || attr != "override" {
 		t.Fatalf("expected res-2 and override, got %q, %q", resID, attr)
 	}
 
 	// 4. After no skill
-	tracker.noteResolution(session, resolverpkg.Response{
+	tracker.noteResolution(session, resolverpkg.Request{}, resolverpkg.Response{
 		ResolutionID: "res-3",
 		Status:       resolverpkg.StatusNoSkill,
-	})
+	}, false)
 	resID, attr = tracker.attribute(session, "skill-c")
 	if resID != "res-3" || attr != "after_no_skill" {
 		t.Fatalf("expected res-3 and after_no_skill, got %q, %q", resID, attr)
 	}
 
 	// 5. After needs context
-	tracker.noteResolution(session, resolverpkg.Response{
+	tracker.noteResolution(session, resolverpkg.Request{}, resolverpkg.Response{
 		ResolutionID: "res-4",
 		Status:       resolverpkg.StatusNeedsContext,
-	})
+	}, false)
 	resID, attr = tracker.attribute(session, "skill-c")
 	if resID != "res-4" || attr != "after_needs_context" {
 		t.Fatalf("expected res-4 and after_needs_context, got %q, %q", resID, attr)
@@ -89,14 +89,14 @@ func TestActivationTrackerTTLExpiry(t *testing.T) {
 	t.Parallel()
 
 	current := time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC)
-	tracker := newActivationTracker(func() time.Time { return current })
+	tracker := newActivationTracker(func() time.Time { return current }, "")
 	session := &mcp.ServerSession{}
 
-	tracker.noteResolution(session, resolverpkg.Response{
+	tracker.noteResolution(session, resolverpkg.Request{}, resolverpkg.Response{
 		ResolutionID: "res-1",
 		Status:       resolverpkg.StatusResolved,
 		Primary:      &resolverpkg.Recommendation{ID: "skill-a"},
-	})
+	}, false)
 
 	resID, attr := tracker.attribute(session, "skill-a")
 	if resID != "res-1" || attr != "recommended" {
@@ -116,7 +116,7 @@ func TestActivationTrackerLRUEviction(t *testing.T) {
 	t.Parallel()
 
 	current := time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC)
-	tracker := newActivationTracker(func() time.Time { return current })
+	tracker := newActivationTracker(func() time.Time { return current }, "")
 
 	sessions := make([]*mcp.ServerSession, 257)
 	for i := range sessions {
@@ -126,11 +126,11 @@ func TestActivationTrackerLRUEviction(t *testing.T) {
 	// Add 256 sessions
 	for i := range 256 {
 		current = current.Add(time.Second)
-		tracker.noteResolution(sessions[i], resolverpkg.Response{
+		tracker.noteResolution(sessions[i], resolverpkg.Request{}, resolverpkg.Response{
 			ResolutionID: fmt.Sprintf("res-%d", i),
 			Status:       resolverpkg.StatusResolved,
 			Primary:      &resolverpkg.Recommendation{ID: fmt.Sprintf("skill-%d", i)},
-		})
+		}, false)
 	}
 
 	// Touch sessions[0] so it's recently used
@@ -140,11 +140,11 @@ func TestActivationTrackerLRUEviction(t *testing.T) {
 	// Now sessions[1] is the oldest lastSeen.
 	// Add 257th session
 	current = current.Add(time.Second)
-	tracker.noteResolution(sessions[256], resolverpkg.Response{
+	tracker.noteResolution(sessions[256], resolverpkg.Request{}, resolverpkg.Response{
 		ResolutionID: "res-256",
 		Status:       resolverpkg.StatusResolved,
 		Primary:      &resolverpkg.Recommendation{ID: "skill-256"},
-	})
+	}, false)
 
 	// sessions[1] should have been evicted and its resolutions gone
 	resID, attr := tracker.attribute(sessions[1], "skill-1")
@@ -162,15 +162,15 @@ func TestActivationTrackerLRUEviction(t *testing.T) {
 func TestActivationTracker32ResolutionCap(t *testing.T) {
 	t.Parallel()
 
-	tracker := newActivationTracker(nil)
+	tracker := newActivationTracker(nil, "")
 	session := &mcp.ServerSession{}
 
 	for i := range 35 {
-		tracker.noteResolution(session, resolverpkg.Response{
+		tracker.noteResolution(session, resolverpkg.Request{}, resolverpkg.Response{
 			ResolutionID: fmt.Sprintf("res-%d", i),
 			Status:       resolverpkg.StatusResolved,
 			Primary:      &resolverpkg.Recommendation{ID: fmt.Sprintf("skill-%d", i)},
-		})
+		}, false)
 	}
 
 	// Oldest 3 resolutions (0, 1, 2) should be capped out
@@ -192,7 +192,7 @@ func TestActivationTracker32ResolutionCap(t *testing.T) {
 func TestActivationTrackerMarkActivationDedupe(t *testing.T) {
 	t.Parallel()
 
-	tracker := newActivationTracker(nil)
+	tracker := newActivationTracker(nil, "")
 	session1 := &mcp.ServerSession{}
 	session2 := &mcp.ServerSession{}
 
@@ -232,13 +232,13 @@ func TestActivationTrackerMarkActivationDedupe(t *testing.T) {
 func TestActivationTrackerNilSessionHandling(t *testing.T) {
 	t.Parallel()
 
-	tracker := newActivationTracker(nil)
+	tracker := newActivationTracker(nil, "")
 
-	tracker.noteResolution(nil, resolverpkg.Response{
+	tracker.noteResolution(nil, resolverpkg.Request{}, resolverpkg.Response{
 		ResolutionID: "res-nil",
 		Status:       resolverpkg.StatusResolved,
 		Primary:      &resolverpkg.Recommendation{ID: "skill-nil"},
-	})
+	}, false)
 
 	resID, attr := tracker.attribute(nil, "skill-nil")
 	if resID != "res-nil" || attr != "recommended" {
@@ -261,18 +261,18 @@ func TestActivationTrackerNilSessionHandling(t *testing.T) {
 func TestActivationTrackerHasResolutionAndDetails(t *testing.T) {
 	t.Parallel()
 
-	tracker := newActivationTracker(nil)
+	tracker := newActivationTracker(nil, "")
 	sessionA := &mcp.ServerSession{}
 	sessionB := &mcp.ServerSession{}
 
 	clientA := telemetry.Client{Name: "claude-code", Version: "1.2"}
-	tracker.noteResolution(sessionA, resolverpkg.Response{
+	tracker.noteResolution(sessionA, resolverpkg.Request{}, resolverpkg.Response{
 		ResolutionID:    "res-session-a",
 		Status:          resolverpkg.StatusResolved,
 		CatalogSnapshot: "sha256:snapshot-a",
 		PolicyRevision:  "sha256:policy-a",
 		Primary:         &resolverpkg.Recommendation{ID: "skill-1"},
-	}, clientA)
+	}, false, clientA)
 
 	// HasResolution on sessionA should be true
 	if !tracker.hasResolution(sessionA, "res-session-a") {

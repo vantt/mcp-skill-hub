@@ -54,6 +54,75 @@ func (service ResolverService) Resolve(ctx context.Context, path string, request
 			safeRecordTelemetry(service.Telemetry, recommended)
 		}
 		safeRecordTelemetry(service.Telemetry, telemetryEvent(ctx, eventType, request, response, scope, payload))
+
+		isDisagreement := false
+		kind := ""
+		if request.Prior != nil {
+			if request.Prior.Kind == "rejected" && CallerFromContext(ctx).VerifyPrior(request.Prior.ResolutionID) {
+				isDisagreement = true
+				kind = "verified_reformulation"
+			} else if request.Prior.Kind == "needs_context" && response.Status == resolverpkg.StatusResolved {
+				isDisagreement = true
+				kind = "needs_context_resolved"
+			} else if request.Prior.Kind == "rejected" || request.Prior.Kind == "scope_mismatch" {
+				isDisagreement = true
+				kind = request.Prior.Kind
+			} else if response.Status == resolverpkg.StatusNoSkill && request.Prior.Kind == "no_skill" {
+				isDisagreement = true
+				kind = "repeated_gap"
+			}
+		}
+
+		if isDisagreement {
+			redactor := telemetry.NewRedactor(path)
+			// Redact request before saving
+			redactedRequest := map[string]any{
+				"operation": request.Operation,
+				"task": map[string]any{
+					"description": redactor.Redact(request.Task.Description),
+					"scope":       request.Task.Scope,
+				},
+			}
+			if request.Prior != nil {
+				redactedRequest["prior"] = map[string]any{
+					"resolution_id":    request.Prior.ResolutionID,
+					"context_revision": request.Prior.ContextRevision,
+					"kind":             request.Prior.Kind,
+					"question_id":      request.Prior.QuestionID,
+					"answer":           redactor.Redact(request.Prior.Answer),
+				}
+			}
+			facts := make([]map[string]any, len(request.Context.Facts))
+			for i, fact := range request.Context.Facts {
+				facts[i] = map[string]any{"key": fact.Key, "value": redactor.Redact(fact.Value)}
+			}
+			redactedRequest["context"] = map[string]any{"facts": facts}
+
+			var chosen string
+			if response.Primary != nil {
+				chosen = response.Primary.ID
+			}
+
+			_ = RecordCase(ctx, service.Telemetry, telemetry.CaseRecord{
+				ResolutionID:    response.ResolutionID,
+				OccurredAt:      time.Now().UTC(),
+				Kind:            kind,
+				Client:          CallerFromContext(ctx).Client,
+				CatalogSnapshot: catalogSnapshot,
+				PriorVerified:   request.Prior != nil && CallerFromContext(ctx).VerifyPrior(request.Prior.ResolutionID),
+				Task:            map[string]any{"description": redactor.Redact(request.Task.Description)},
+				Operation:       request.Operation,
+				Request:         redactedRequest,
+				Resolver: map[string]any{
+					"status":         string(response.Status),
+					"topk_skill_ids": response.TopKSkillIDs,
+					"topk_matched":   response.TopKMatched,
+					"topk_channels":  response.TopKChannels,
+				},
+				Chosen: chosen,
+			})
+		}
+
 		if response.Status == resolverpkg.StatusNeedsContext && resultErr == nil {
 			field := "context"
 			if response.Question != nil && safeTelemetryToken(response.Question.Field) {

@@ -31,7 +31,11 @@ func (adapter *Server) registerResolverTools(server *mcp.Server) {
 			return failure[resolveResult](err)
 		}
 		if adapter.tracker != nil {
-			adapter.tracker.noteResolution(session, response, caller.Client)
+			priorVer := false
+			if request.Prior != nil {
+				priorVer = caller.VerifyPrior(request.Prior.ResolutionID)
+			}
+			adapter.tracker.noteResolution(session, request, response, priorVer, caller.Client)
 		}
 		trueValue := true
 		return success(resolveResult{

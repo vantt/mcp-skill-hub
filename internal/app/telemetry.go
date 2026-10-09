@@ -2,8 +2,10 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -48,6 +50,15 @@ func (service TelemetryService) Open(path string) (*telemetry.Recorder, error) {
 	config.WorkspaceRoot = root
 	config.Path = filepath.Join(root, "runtime", "telemetry.db")
 	config.ContentMode = telemetry.ContentModeNone
+	configPath := filepath.Join(root, "runtime", "telemetry.json")
+	if b, err := os.ReadFile(configPath); err == nil {
+		var local struct {
+			ContentMode string `json:"content_mode"`
+		}
+		if json.Unmarshal(b, &local) == nil && local.ContentMode != "" {
+			config.ContentMode = local.ContentMode
+		}
+	}
 	recorder, err := telemetry.Open(config)
 	if err != nil {
 		return nil, storeFailure(err)
@@ -119,4 +130,14 @@ func closeTelemetryRecorder(recorder *telemetry.Recorder, resultErr *error) {
 	if err := recorder.Close(ctx); *resultErr == nil && err != nil {
 		*resultErr = fmt.Errorf("close telemetry recorder: %w", err)
 	}
+}
+
+func RecordCase(ctx context.Context, sink TelemetrySink, record telemetry.CaseRecord) error {
+	if sink == nil {
+		return nil
+	}
+	if recorder, ok := sink.(*telemetry.Recorder); ok {
+		return recorder.RecordCase(ctx, record)
+	}
+	return nil
 }

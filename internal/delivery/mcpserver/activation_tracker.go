@@ -19,14 +19,21 @@ const (
 )
 
 type notedResolution struct {
-	resolutionID    string
-	status          string
-	primaryID       string
-	supportingIDs   []string
-	catalogSnapshot string
-	policyRevision  string
-	client          telemetry.Client
-	at              time.Time
+	ResolutionID    string
+	Status          string
+	PrimaryID       string
+	SupportingIDs   []string
+	CatalogSnapshot string
+	PolicyRevision  string
+	Client          telemetry.Client
+	At              time.Time
+	TopKSkillIDs    []string
+	TopKMatched     []string
+	TopKChannels    []string
+	PriorVerified   bool
+	TaskDescription string
+	Operation       string
+	Request         map[string]any
 }
 
 type sessionState struct {
@@ -38,7 +45,7 @@ type sessionState struct {
 
 func (s *sessionState) pruneResolutions(cutoff time.Time) {
 	validStart := 0
-	for validStart < len(s.resolutions) && s.resolutions[validStart].at.Before(cutoff) {
+	for validStart < len(s.resolutions) && s.resolutions[validStart].At.Before(cutoff) {
 		validStart++
 	}
 	if validStart > 0 {
@@ -63,9 +70,10 @@ type activationTracker struct {
 	now      func() time.Time
 	sessions map[*mcp.ServerSession]*sessionState
 	anon     *sessionState
+	redactor *telemetry.Redactor
 }
 
-func newActivationTracker(now func() time.Time) *activationTracker {
+func newActivationTracker(now func() time.Time, workspacePath string) *activationTracker {
 	if now == nil {
 		now = time.Now
 	}
@@ -73,6 +81,7 @@ func newActivationTracker(now func() time.Time) *activationTracker {
 		now:      now,
 		sessions: make(map[*mcp.ServerSession]*sessionState),
 		anon:     newSessionState(now()),
+		redactor: telemetry.NewRedactor(workspacePath),
 	}
 }
 
@@ -101,7 +110,7 @@ func (t *activationTracker) sessionState(session *mcp.ServerSession) *sessionSta
 	return state
 }
 
-func (t *activationTracker) noteResolution(session *mcp.ServerSession, response resolverpkg.Response, client ...telemetry.Client) {
+func (t *activationTracker) noteResolution(session *mcp.ServerSession, request resolverpkg.Request, response resolverpkg.Response, priorVerified bool, client ...telemetry.Client) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -127,14 +136,21 @@ func (t *activationTracker) noteResolution(session *mcp.ServerSession, response 
 	}
 
 	state.resolutions = append(state.resolutions, notedResolution{
-		resolutionID:    response.ResolutionID,
-		status:          string(response.Status),
-		primaryID:       primaryID,
-		supportingIDs:   supportingIDs,
-		catalogSnapshot: response.CatalogSnapshot,
-		policyRevision:  response.PolicyRevision,
-		client:          c,
-		at:              now,
+		ResolutionID:    response.ResolutionID,
+		Status:          string(response.Status),
+		PrimaryID:       primaryID,
+		SupportingIDs:   supportingIDs,
+		CatalogSnapshot: response.CatalogSnapshot,
+		PolicyRevision:  response.PolicyRevision,
+		Client:          c,
+		At:              now,
+		TopKSkillIDs:    append([]string(nil), response.TopKSkillIDs...),
+		TopKMatched:     append([]string(nil), response.TopKMatched...),
+		TopKChannels:    append([]string(nil), response.TopKChannels...),
+		PriorVerified:   priorVerified,
+		TaskDescription: t.redactor.Redact(request.Task.Description),
+		Operation:       request.Operation,
+		Request:         redactRequest(t.redactor, request),
 	})
 	if len(state.resolutions) > maxResolutionsPerSession {
 		state.resolutions = state.resolutions[len(state.resolutions)-maxResolutionsPerSession:]
@@ -154,7 +170,7 @@ func (t *activationTracker) hasResolution(session *mcp.ServerSession, resolution
 	state.pruneResolutions(now.Add(-resolutionTTL))
 
 	for _, r := range state.resolutions {
-		if r.resolutionID == resolutionID {
+		if r.ResolutionID == resolutionID {
 			return true
 		}
 	}
@@ -181,17 +197,17 @@ func (t *activationTracker) attributeDetails(session *mcp.ServerSession, skillID
 
 	for i := len(state.resolutions) - 1; i >= 0; i-- {
 		r := state.resolutions[i]
-		if r.primaryID == skillID {
-			return r.resolutionID, "recommended", r.catalogSnapshot, r.policyRevision, r.client
+		if r.PrimaryID == skillID {
+			return r.ResolutionID, "recommended", r.CatalogSnapshot, r.PolicyRevision, r.Client
 		}
-		if slices.Contains(r.supportingIDs, skillID) {
-			return r.resolutionID, "supporting", r.catalogSnapshot, r.policyRevision, r.client
+		if slices.Contains(r.SupportingIDs, skillID) {
+			return r.ResolutionID, "supporting", r.CatalogSnapshot, r.PolicyRevision, r.Client
 		}
 	}
 
 	newest := state.resolutions[len(state.resolutions)-1]
 	var attr string
-	switch newest.status {
+	switch newest.Status {
 	case string(resolverpkg.StatusResolved), string(resolverpkg.StatusAlreadyCovered):
 		attr = "override"
 	case string(resolverpkg.StatusNoSkill):
@@ -201,7 +217,7 @@ func (t *activationTracker) attributeDetails(session *mcp.ServerSession, skillID
 	default:
 		attr = "override"
 	}
-	return newest.resolutionID, attr, newest.catalogSnapshot, newest.policyRevision, newest.client
+	return newest.ResolutionID, attr, newest.CatalogSnapshot, newest.PolicyRevision, newest.Client
 }
 
 func (t *activationTracker) markActivation(session *mcp.ServerSession, resolutionID, skillID string) bool {
@@ -230,4 +246,41 @@ func (t *activationTracker) sessionHash(session *mcp.ServerSession) string {
 	state := t.sessionState(session)
 	state.lastSeen = t.now()
 	return state.hash
+}
+
+func redactRequest(redactor *telemetry.Redactor, req resolverpkg.Request) map[string]any {
+	out := map[string]any{
+		"operation": req.Operation,
+		"task": map[string]any{
+			"description": redactor.Redact(req.Task.Description),
+			"scope":       req.Task.Scope,
+		},
+	}
+	if req.Prior != nil {
+		out["prior"] = map[string]any{
+			"resolution_id":    req.Prior.ResolutionID,
+			"context_revision": req.Prior.ContextRevision,
+			"kind":             req.Prior.Kind,
+			"question_id":      req.Prior.QuestionID,
+			"answer":           redactor.Redact(req.Prior.Answer),
+		}
+	}
+	facts := make([]map[string]any, len(req.Context.Facts))
+	for i, f := range req.Context.Facts {
+		facts[i] = map[string]any{"key": f.Key, "value": redactor.Redact(f.Value)}
+	}
+	out["context"] = map[string]any{"facts": facts}
+	return out
+}
+
+func (t *activationTracker) resolutionData(session *mcp.ServerSession, resolutionID string) (notedResolution, bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	state := t.sessionState(session)
+	for _, res := range state.resolutions {
+		if res.ResolutionID == resolutionID {
+			return res, true
+		}
+	}
+	return notedResolution{}, false
 }

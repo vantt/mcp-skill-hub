@@ -25,6 +25,13 @@ CREATE TABLE IF NOT EXISTS telemetry_events (
   payload_json TEXT NOT NULL
 ) STRICT;
 CREATE INDEX IF NOT EXISTS telemetry_events_time ON telemetry_events(occurred_at, id);
+CREATE TABLE IF NOT EXISTS telemetry_cases (
+  resolution_id TEXT PRIMARY KEY,
+  occurred_at TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  payload_json TEXT NOT NULL
+) STRICT;
+CREATE INDEX IF NOT EXISTS telemetry_cases_time ON telemetry_cases(occurred_at);
 CREATE TABLE IF NOT EXISTS telemetry_meta (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
