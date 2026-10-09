@@ -156,8 +156,8 @@ func renderFunnel(stdout io.Writer, report app.FunnelReport, singleSkill bool) {
 			termui.Field{Label: "Setup Failures", Value: fmt.Sprintf("%d (%s)", o.SetupFailed, formatRateWithCounts(o.SetupFailedRate, o.SetupFailed, o.TotalActivations))},
 			termui.Field{Label: "Doctor Runs", Value: fmt.Sprintf("%d (%s failure rate)", o.TotalDoctor, formatRateWithCounts(o.DoctorFailureRate, o.Doctor["setup_required"]+o.Doctor["unsupported_platform"]+o.Doctor["failed"], o.TotalDoctor))},
 			termui.Field{Label: "Negative Feedback", Value: fmt.Sprintf("%d (%d after load)", o.NegativeFeedback, o.NegativeAfterLoad)},
-			termui.Field{Label: "Unlisted Resource Reads", Value: fmt.Sprintf("%d", o.UnlistedResourceReads)},
-			termui.Field{Label: "Unsupported Method Calls", Value: fmt.Sprintf("%d", o.UnsupportedMethodCalls)},
+			termui.Field{Label: "Unlisted Resource Reads", Value: "unknown (blocked by ReadResource; unverified against pinned manifest)"},
+			termui.Field{Label: "Unsupported Method Calls", Value: "unknown (rejected before middleware by go-sdk)"},
 			termui.Field{Label: "Snapshot Expired Requests", Value: fmt.Sprintf("%d", o.SnapshotExpiredRequests)},
 			termui.Field{Label: "Tools List Bytes", Value: fmt.Sprintf("%d", o.ToolsListBytes)},
 		)

@@ -127,3 +127,40 @@ func TestTelemetryCLIHelpIncludesFunnel(t *testing.T) {
 		t.Fatalf("help telemetry missing funnel subcommand:\n%s", stdout.String())
 	}
 }
+
+func TestFunnelAndBaselineRenderUnmeasurableCountersAsUnknown(t *testing.T) {
+	t.Parallel()
+	root, requestPath := telemetryCLIWorkspace(t)
+	var stdout, stderr bytes.Buffer
+
+	// Trigger a resolution so Overall summary renders
+	if code := Run([]string{"resolve", "--workspace", root, "--request", requestPath, "--json"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("resolve=%d stdout=%s stderr=%s", code, stdout.String(), stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if code := Run([]string{"telemetry", "funnel", "--workspace", root, "--since", "7d"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("funnel human=%d stdout=%s stderr=%s", code, stdout.String(), stderr.String())
+	}
+	funnelOut := stdout.String()
+	if !strings.Contains(funnelOut, "Unlisted Resource Reads:") || !strings.Contains(funnelOut, "unknown (blocked by ReadResource; unverified against pinned manifest)") {
+		t.Errorf("funnel expected Unlisted Resource Reads to be unknown, got:\n%s", funnelOut)
+	}
+	if !strings.Contains(funnelOut, "Unsupported Method Calls:") || !strings.Contains(funnelOut, "unknown (rejected before middleware by go-sdk)") {
+		t.Errorf("funnel expected Unsupported Method Calls to be unknown, got:\n%s", funnelOut)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if code := Run([]string{"telemetry", "baseline", "--workspace", root, "--since", "7d"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("baseline human=%d stdout=%s stderr=%s", code, stdout.String(), stderr.String())
+	}
+	baselineOut := stdout.String()
+	if !strings.Contains(baselineOut, "unsupported_method_calls:") || !strings.Contains(baselineOut, "unknown (rejected before middleware by go-sdk)") {
+		t.Errorf("baseline expected unsupported_method_calls to be unknown, got:\n%s", baselineOut)
+	}
+	if !strings.Contains(baselineOut, "unlisted_resource_reads:") || !strings.Contains(baselineOut, "unknown (blocked by ReadResource; unverified against pinned manifest)") {
+		t.Errorf("baseline expected unlisted_resource_reads to be unknown, got:\n%s", baselineOut)
+	}
+}

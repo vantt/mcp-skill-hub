@@ -196,6 +196,9 @@ func renderBaselineBucket(p *termui.Printer, b app.BaselineBucket) {
 	p.Line(fmt.Sprintf("    total_loads:              %d", b.TotalLoads))
 	p.Line(fmt.Sprintf("    unsolicited_loads:        %d", b.UnsolicitedLoads))
 	p.Line(fmt.Sprintf("    unsolicited_share:        %s", formatBaselineRate(b.UnsolicitedShare)))
+	p.Line("  Operational (O3):")
+	p.Line("    unsupported_method_calls: unknown (rejected before middleware by go-sdk)")
+	p.Line("    unlisted_resource_reads:  unknown (blocked by ReadResource; unverified against pinned manifest)")
 	if b.FirstValidDay != "" {
 		p.Line(fmt.Sprintf("  First Valid Day:            %s", b.FirstValidDay))
 	}
