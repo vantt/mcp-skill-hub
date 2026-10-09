@@ -76,7 +76,7 @@ func insertEvent(ctx context.Context, tx *sql.Tx, envelope storedEnvelope, inser
 		if val == 0 {
 			val = 1
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO telemetry_daily_rollups(day,skill_id,metric,count) VALUES(?,?,?,?) ON CONFLICT(day,skill_id,metric) DO UPDATE SET count = count + excluded.count`, day, key.skillID, key.metric, val); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO telemetry_daily_rollups(day,skill_id,metric,count) VALUES(?,?,?,?) ON CONFLICT(day,skill_id,metric) DO UPDATE SET count = CASE WHEN excluded.metric = 'tools_list_bytes' THEN MAX(count, excluded.count) ELSE count + excluded.count END`, day, key.skillID, key.metric, val); err != nil {
 			return false, err
 		}
 	}
@@ -95,7 +95,14 @@ func rollupKeys(ctx context.Context, envelope storedEnvelope, tx *sql.Tx) ([]rol
 	case EventServerMetric:
 		metricName := text("metric_name")
 		val, _ := payload["metric_value"].(float64) // JSON numbers are float64
-		return []rollupKey{{skillID: text("skill_id"), metric: metricName, count: int64(val)}}, nil
+		skillID := text("skill_id")
+		if metricName == "tools_list_bytes" && skillID == "" {
+			skillID = envelope.Client.Name
+			if skillID == "" {
+				skillID = "other"
+			}
+		}
+		return []rollupKey{{skillID: skillID, metric: metricName, count: int64(val)}}, nil
 	case EventResolutionCompleted:
 		var keys []rollupKey
 		if status := text("status"); status != "" {

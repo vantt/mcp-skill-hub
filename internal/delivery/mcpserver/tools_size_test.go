@@ -129,4 +129,14 @@ func TestToolsListSize(t *testing.T) {
 		runtimeOutputShare := float64(runtimeBytes-runtimeNoOutputBytes) / float64(runtimeBytes) * 100.0
 		t.Logf("outputSchema share in runtime profile: %.1f%%", runtimeOutputShare)
 	}
+
+	if totalBytes == 0 || len(listedTools.Tools) == 0 {
+		t.Fatal("expected tools/list payload to be non-empty")
+	}
+	if len(runtimeTools) != len(runtimeSet) {
+		t.Fatalf("expected %d runtime tools, found %d", len(runtimeSet), len(runtimeTools))
+	}
+	if len(runtimeTools) >= len(listedTools.Tools) {
+		t.Fatalf("expected runtime tools (%d) to be a strict subset of all tools (%d)", len(runtimeTools), len(listedTools.Tools))
+	}
 }

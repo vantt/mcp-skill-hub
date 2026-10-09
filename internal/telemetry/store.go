@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -606,6 +607,14 @@ func maintainStore(ctx context.Context, config Config) error {
 		return err
 	}
 	if err := pruneRollups(ctx, transaction, config); err != nil {
+		return err
+	}
+	caseRetention := config.CaseRetention
+	if caseRetention <= 0 {
+		caseRetention = DefaultCaseRetention
+	}
+	caseCutoff := config.Clock().Add(-caseRetention).UTC().Format(time.RFC3339)
+	if _, err := transaction.ExecContext(ctx, `DELETE FROM telemetry_cases WHERE occurred_at < ?`, caseCutoff); err != nil {
 		return err
 	}
 	if err := trimLogicalSize(ctx, transaction, config.MaxSizeBytes); err != nil {

@@ -301,3 +301,42 @@ func TestActivationTrackerHasResolutionAndDetails(t *testing.T) {
 		t.Fatalf("attributeDetails client=%+v", client)
 	}
 }
+
+func TestActivationTrackerResolutionDataReturnsNewest(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
+	tracker := newActivationTracker(func() time.Time { return now }, "")
+	session := &mcp.ServerSession{}
+
+	// Note first resolution with res-dup
+	tracker.noteResolution(session, resolverpkg.Request{
+		Task: resolverpkg.Task{Description: "old task description"},
+	}, resolverpkg.Response{
+		ResolutionID: "res-dup",
+		Status:       resolverpkg.StatusResolved,
+		Primary:      &resolverpkg.Recommendation{ID: "skill-old"},
+	}, false)
+
+	// Advance time slightly
+	now = now.Add(time.Minute)
+
+	// Note second resolution with same res-dup
+	tracker.noteResolution(session, resolverpkg.Request{
+		Task: resolverpkg.Task{Description: "new task description"},
+	}, resolverpkg.Response{
+		ResolutionID: "res-dup",
+		Status:       resolverpkg.StatusResolved,
+		Primary:      &resolverpkg.Recommendation{ID: "skill-new"},
+	}, false)
+
+	data, ok := tracker.resolutionData(session, "res-dup")
+	if !ok {
+		t.Fatal("expected resolutionData to find res-dup")
+	}
+	if data.PrimaryID != "skill-new" {
+		t.Fatalf("expected newest resolution (skill-new), got oldest (%s)", data.PrimaryID)
+	}
+	if data.TaskDescription != "new task description" {
+		t.Fatalf("expected newest task description, got %q", data.TaskDescription)
+	}
+}

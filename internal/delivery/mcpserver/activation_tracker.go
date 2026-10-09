@@ -253,9 +253,9 @@ func (t *activationTracker) resolutionData(session *mcp.ServerSession, resolutio
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	state := t.sessionState(session)
-	for _, res := range state.resolutions {
-		if res.ResolutionID == resolutionID {
-			return res, true
+	for i := len(state.resolutions) - 1; i >= 0; i-- {
+		if state.resolutions[i].ResolutionID == resolutionID {
+			return state.resolutions[i], true
 		}
 	}
 	return notedResolution{}, false

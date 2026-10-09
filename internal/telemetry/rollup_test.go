@@ -2,6 +2,7 @@ package telemetry
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"strings"
 	"sync"
@@ -551,5 +552,55 @@ func TestNegativeFeedbackRollupDeduplication(t *testing.T) {
 	}
 	if got := counts["2026-10-04|alpha|feedback:failed"]; got != 2 {
 		t.Fatalf("expected total feedback:failed=2, got %d", got)
+	}
+}
+
+func TestToolsListBytesRollupMaxPerClient(t *testing.T) {
+	temp := t.TempDir()
+	recorder, err := Open(Config{
+		Path:          temp + "/telemetry.db",
+		WorkspaceRoot: temp,
+		BufferSize:    256,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer recorder.Close(context.Background())
+
+	now := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
+	// Event 1: client-a reports 1000 bytes
+	e1 := validEvent(EventServerMetric)
+	e1.ID, e1.OccurredAt, e1.Client = "evt_t1", now, Client{Name: "client-a"}
+	e1.Payload = map[string]any{"metric_name": "tools_list_bytes", "metric_value": float64(1000)}
+	recorder.Record(e1)
+	// Event 2: client-a reports 2500 bytes (larger)
+	e2 := validEvent(EventServerMetric)
+	e2.ID, e2.OccurredAt, e2.Client = "evt_t2", now.Add(time.Minute), Client{Name: "client-a"}
+	e2.Payload = map[string]any{"metric_name": "tools_list_bytes", "metric_value": float64(2500)}
+	recorder.Record(e2)
+	// Event 3: client-a reports 1500 bytes (smaller - should not reduce max)
+	e3 := validEvent(EventServerMetric)
+	e3.ID, e3.OccurredAt, e3.Client = "evt_t3", now.Add(2*time.Minute), Client{Name: "client-a"}
+	e3.Payload = map[string]any{"metric_name": "tools_list_bytes", "metric_value": float64(1500)}
+	recorder.Record(e3)
+	// Event 4: client-b reports 3000 bytes
+	e4 := validEvent(EventServerMetric)
+	e4.ID, e4.OccurredAt, e4.Client = "evt_t4", now.Add(3*time.Minute), Client{Name: "client-b"}
+	e4.Payload = map[string]any{"metric_name": "tools_list_bytes", "metric_value": float64(3000)}
+	recorder.Record(e4)
+
+	if err := recorder.Flush(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	counts := rollupCounts(t, recorder, "", "")
+	day := "2026-10-09"
+	// client-a should be max (2500), not sum (5000)
+	if got := counts[day+"|client-a|tools_list_bytes"]; got != 2500 {
+		t.Fatalf("expected client-a tools_list_bytes = 2500, got %d (all: %v)", got, counts)
+	}
+	// client-b should be 3000
+	if got := counts[day+"|client-b|tools_list_bytes"]; got != 3000 {
+		t.Fatalf("expected client-b tools_list_bytes = 3000, got %d (all: %v)", got, counts)
 	}
 }

@@ -233,7 +233,9 @@ func (a *accumulator) add(metric string, count int64) {
 	case metric == "snapshot_expired_requests":
 		a.snapshotExpiredRequests += count
 	case metric == "tools_list_bytes":
-		a.toolsListBytes += count
+		if count > a.toolsListBytes {
+			a.toolsListBytes = count
+		}
 	case strings.HasPrefix(metric, "transcript:"):
 		tool := strings.TrimPrefix(metric, "transcript:")
 		a.transcripts[tool] += count
