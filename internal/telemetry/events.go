@@ -55,6 +55,7 @@ const (
 	EventIndexRebuilt           = "index.rebuilt"
 	EventCatalogChanged         = "catalog.changed"
 	EventEvaluationRunCompleted = "evaluation.run_completed"
+	EventServerMetric           = "server.metric"
 )
 
 // Client identifies the calling integration without recording request content.
@@ -168,6 +169,7 @@ var eventPayloads = map[string]map[string]valueKind{
 	EventIndexRebuilt:           fields("status", kindToken, "entity_count", kindCount, "duration_ms", kindMillis, "error_code", kindToken),
 	EventCatalogChanged:         fields("change_kind", kindToken, "entity_count", kindCount, "duration_ms", kindMillis),
 	EventEvaluationRunCompleted: fields("run_id", kindToken, "suite_id", kindToken, "variant", kindToken, "status", kindToken, "case_count", kindCount, "acceptable_count", kindCount, "no_skill_count", kindCount, "seed", kindCount, "model_id", kindToken, "duration_ms", kindMillis, "error_code", kindToken),
+	EventServerMetric:           fields("metric_name", kindToken, "metric_value", kindCount, "skill_id", kindToken),
 }
 
 func fields(values ...any) map[string]valueKind {

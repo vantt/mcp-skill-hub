@@ -82,6 +82,7 @@ func New(workspacePath string, diagnostics io.Writer) (*Server, *mcp.Server, err
 			cache.CacheScope = "private"
 		},
 	})
+	server.AddReceivingMiddleware(adapter.telemetryMiddleware)
 	if err := adapter.registerSkills(server); err != nil {
 		return nil, nil, err
 	}
@@ -140,6 +141,33 @@ func closeServeTelemetry(recorder *telemetry.Recorder, logger *slog.Logger) {
 	}
 }
 
+func (adapter *Server) clientForReq(req mcp.Request) telemetry.Client {
+	client := telemetry.Client{Name: "other"}
+	if req != nil {
+		if s, ok := req.GetSession().(*mcp.ServerSession); ok && s != nil {
+			if params := s.InitializeParams(); params != nil && params.ClientInfo != nil {
+				client = NormalizeClient(params.ClientInfo.Name, params.ClientInfo.Version)
+			}
+		}
+	}
+	return client
+}
+
+func (adapter *Server) telemetryMiddleware(next mcp.MethodHandler) mcp.MethodHandler {
+	return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+		if strings.HasPrefix(method, "skills/") && method != "skills/list" && method != "skills/get" {
+			app.RecordServerMetric(ctx, adapter.telemetry, adapter.workspace, app.ServerMetric{Name: "unsupported_method_calls", Value: 1, Client: adapter.clientForReq(req)})
+		}
+		result, err := next(ctx, method, req)
+		if err == nil && method == "tools/list" {
+			if encoded, encErr := json.Marshal(result); encErr == nil {
+				app.RecordServerMetric(ctx, adapter.telemetry, adapter.workspace, app.ServerMetric{Name: "tools_list_bytes", Value: float64(len(encoded)), Client: adapter.clientForReq(req)})
+			}
+		}
+		return result, err
+	}
+}
+
 func (adapter *Server) registerSkills(server *mcp.Server) error {
 	if err := mcp.AddReceivingCustomMethod(server, "skills/list", adapter.listSkills); err != nil {
 		return err
@@ -155,10 +183,10 @@ func (adapter *Server) registerSkills(server *mcp.Server) error {
 	return nil
 }
 
-func (adapter *Server) listSkills(ctx context.Context, _ *mcp.ServerSession, params *listSkillsParams) (*listSkillsResult, error) {
+func (adapter *Server) listSkills(ctx context.Context, session *mcp.ServerSession, params *listSkillsParams) (*listSkillsResult, error) {
 	entries, snapshot, skipped, err := adapter.distribution.ListSkillsReport(ctx, adapter.workspace)
 	if err != nil {
-		return nil, adapter.distributionRPCError(err)
+		return nil, adapter.distributionRPCError(ctx, session, err)
 	}
 	if status, inspectErr := (app.CatalogService{}).InspectCatalog(ctx, adapter.workspace); inspectErr == nil {
 		if status.ServingMode == catalog.ServingFallback || status.Warning != "" {
@@ -194,7 +222,7 @@ func (adapter *Server) getSkill(ctx context.Context, session *mcp.ServerSession,
 	}
 	entry, err := adapter.distribution.GetSkill(ctx, adapter.workspace, params.URI)
 	if err != nil {
-		return nil, adapter.distributionRPCError(err)
+		return nil, adapter.distributionRPCError(ctx, session, err)
 	}
 	result := toSkillEntry(entry)
 	result.Local = adapter.localSkill(ctx, entry.SkillID, "active")
@@ -239,7 +267,7 @@ func (adapter *Server) readResource(ctx context.Context, request *mcp.ReadResour
 	}
 	content, err := adapter.distribution.ReadResource(ctx, adapter.workspace, request.Params.URI)
 	if err != nil {
-		return nil, adapter.distributionRPCError(err)
+		return nil, adapter.distributionRPCError(ctx, request.Session, err)
 	}
 	meta, refused, reasons := adapter.localResourceMeta(ctx, content.SkillID, content.Path)
 	kind := mapResourceKind(content.Path)
@@ -266,6 +294,24 @@ func (adapter *Server) readResource(ctx context.Context, request *mcp.ReadResour
 		ResourceKind: kind,
 		Surface:      "resources_read",
 	})
+
+	var unlisted bool
+	entries, _, lookupErr := adapter.distribution.LookupSkills(ctx, adapter.workspace, []string{content.SkillID})
+	if lookupErr == nil {
+		if entry, ok := entries[content.SkillID]; ok {
+			unlisted = true
+			for _, r := range entry.Resources {
+				if r.URI == request.Params.URI {
+					unlisted = false
+					break
+				}
+			}
+		}
+	}
+	if unlisted {
+		app.RecordServerMetric(ctx, adapter.telemetry, adapter.workspace, app.ServerMetric{Name: "unlisted_resource_reads", Value: 1, SkillID: content.SkillID, Client: adapter.callerContext(request.Session).Client})
+	}
+
 	resource := &mcp.ResourceContents{URI: content.URI, MIMEType: content.MIMEType}
 	if meta != nil {
 		resource.Meta = meta
@@ -357,7 +403,7 @@ func toSkillEntry(entry app.DistributedSkill) skillEntry {
 	return skillEntry{URI: entry.URI, Frontmatter: entry.Frontmatter, Resources: entry.Resources}
 }
 
-func (adapter *Server) distributionRPCError(err error) error {
+func (adapter *Server) distributionRPCError(ctx context.Context, session *mcp.ServerSession, err error) error {
 	switch {
 	case errors.Is(err, app.ErrResourceContentUnavailable), errors.Is(err, skill.ErrResourceContentUnavailable):
 		correlation := correlationID()
@@ -372,6 +418,7 @@ func (adapter *Server) distributionRPCError(err error) error {
 	case errors.Is(err, catalog.ErrCatalogUnavailable):
 		return invalidParams("index_stale", "The derived catalog is stale or unavailable; run workspace_rebuild and retry.")
 	case errors.Is(err, skill.ErrSnapshotExpired), errors.Is(err, skill.ErrNotFound):
+		app.RecordServerMetric(ctx, adapter.telemetry, adapter.workspace, app.ServerMetric{Name: "snapshot_expired_requests", Value: 1, Client: adapter.callerContext(session).Client})
 		return invalidParams("snapshot_expired", "The requested skill snapshot is unavailable; refresh the skill entry.")
 	default:
 		correlation := correlationID()

@@ -58,3 +58,30 @@ func RecordSkillLoad(ctx context.Context, sink TelemetrySink, workspacePath stri
 
 	recordCurationTelemetry(ctx, sink, workspacePath, event)
 }
+
+type ServerMetric struct {
+	Name    string
+	Value   float64
+	SkillID string
+	Client  telemetry.Client
+}
+
+func RecordServerMetric(ctx context.Context, sink TelemetrySink, workspacePath string, metric ServerMetric) {
+	if sink == nil {
+		return
+	}
+	payload := map[string]any{
+		"metric_name":  metric.Name,
+		"metric_value": metric.Value,
+	}
+	if metric.SkillID != "" {
+		payload["skill_id"] = metric.SkillID
+	}
+	event := curationTelemetryEvent(telemetry.EventServerMetric, payload)
+	if metric.Client.Name != "" {
+		event.Client = metric.Client
+	} else {
+		event.Client = telemetry.Client{Name: "other"}
+	}
+	recordCurationTelemetry(ctx, sink, workspacePath, event)
+}

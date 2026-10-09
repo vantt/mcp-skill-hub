@@ -36,6 +36,7 @@ type RollupRow struct {
 type rollupKey struct {
 	skillID string
 	metric  string
+	count   int64
 }
 
 const (
@@ -71,7 +72,11 @@ func insertEvent(ctx context.Context, tx *sql.Tx, envelope storedEnvelope, inser
 		return false, err
 	}
 	for _, key := range keys {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO telemetry_daily_rollups(day,skill_id,metric,count) VALUES(?,?,?,1) ON CONFLICT(day,skill_id,metric) DO UPDATE SET count = count + 1`, day, key.skillID, key.metric); err != nil {
+		val := key.count
+		if val == 0 {
+			val = 1
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO telemetry_daily_rollups(day,skill_id,metric,count) VALUES(?,?,?,?) ON CONFLICT(day,skill_id,metric) DO UPDATE SET count = count + excluded.count`, day, key.skillID, key.metric, val); err != nil {
 			return false, err
 		}
 	}
@@ -87,41 +92,45 @@ func rollupKeys(ctx context.Context, envelope storedEnvelope, tx *sql.Tx) ([]rol
 	flag := func(field string) bool { value, _ := payload[field].(bool); return value }
 
 	switch envelope.Type {
+	case EventServerMetric:
+		metricName := text("metric_name")
+		val, _ := payload["metric_value"].(float64) // JSON numbers are float64
+		return []rollupKey{{skillID: text("skill_id"), metric: metricName, count: int64(val)}}, nil
 	case EventResolutionCompleted:
 		var keys []rollupKey
 		if status := text("status"); status != "" {
-			keys = append(keys, rollupKey{"", "resolution:" + status})
+			keys = append(keys, rollupKey{skillID: "", metric: "resolution:" + status})
 		}
 		if state, top := text("setup_state"), text("top_skill_id"); state != "" && top != "" {
-			keys = append(keys, rollupKey{top, "setup:" + state})
+			keys = append(keys, rollupKey{skillID: top, metric: "setup:" + state})
 		}
 		return keys, nil
 	case EventResolutionFailed:
-		return []rollupKey{{"", "resolution:failed"}}, nil
+		return []rollupKey{{skillID: "", metric: "resolution:failed"}}, nil
 	case EventResolutionRecommended:
 		top := text("top_skill_id")
 		var keys []rollupKey
 		if top != "" {
-			keys = append(keys, rollupKey{top, "recommended:primary"})
+			keys = append(keys, rollupKey{skillID: top, metric: "recommended:primary"})
 		}
 		recommended, _ := stringTokens(payload["recommended_skill_ids"])
 		for _, skillID := range recommended {
 			if skillID != top {
-				keys = append(keys, rollupKey{skillID, "recommended:supporting"})
+				keys = append(keys, rollupKey{skillID: skillID, metric: "recommended:supporting"})
 			}
 		}
 		return keys, nil
 	case EventSkillDoctorChecked:
-		return []rollupKey{{text("skill_id"), "doctor:" + text("status")}}, nil
+		return []rollupKey{{skillID: text("skill_id"), metric: "doctor:" + text("status")}}, nil
 	case EventTranscriptToolObserved:
 		tool := text("tool")
-		keys := []rollupKey{{text("skill_id"), "transcript:" + tool}}
+		keys := []rollupKey{{skillID: text("skill_id"), metric: "transcript:" + tool}}
 		if tool == "Skill" {
 			metric := "native:no_resolve"
 			if flag("resolved_before") {
 				metric = "native:resolved_before"
 			}
-			keys = append(keys, rollupKey{text("skill_id"), metric})
+			keys = append(keys, rollupKey{skillID: text("skill_id"), metric: metric})
 		}
 		return keys, nil
 	}
@@ -129,11 +138,11 @@ func rollupKeys(ctx context.Context, envelope storedEnvelope, tx *sql.Tx) ([]rol
 	if envelope.Type == EventSkillLoaded && text("basis") == LoadBasisServerObserved {
 		skillID := text("skill_id")
 		if text("status") == "review_required" {
-			return []rollupKey{{skillID, "blocked:review_required"}}, nil
+			return []rollupKey{{skillID: skillID, metric: "blocked:review_required"}}, nil
 		}
-		keys := []rollupKey{{skillID, "load:" + text("resource_kind")}}
+		keys := []rollupKey{{skillID: skillID, metric: "load:" + text("resource_kind")}}
 		if flag("first_activation") {
-			keys = append(keys, rollupKey{skillID, "activation:" + text("attribution")})
+			keys = append(keys, rollupKey{skillID: skillID, metric: "activation:" + text("attribution")})
 		}
 		return keys, nil
 	}
@@ -190,7 +199,7 @@ LIMIT 1`, primaryID).Scan(&primaryStatus)
 	}
 	keys := make([]rollupKey, len(metrics))
 	for index, metric := range metrics {
-		keys[index] = rollupKey{skillID, metric}
+		keys[index] = rollupKey{skillID: skillID, metric: metric}
 	}
 	return keys, nil
 }

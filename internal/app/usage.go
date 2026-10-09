@@ -57,6 +57,10 @@ type OverallFunnel struct {
 	NegativeFeedback          int64            `json:"negative_feedback"`
 	NegativeAfterLoad         int64            `json:"negative_after_load"`
 	Transcripts               map[string]int64 `json:"transcripts"`
+	UnlistedResourceReads     int64            `json:"unlisted_resource_reads"`
+	UnsupportedMethodCalls    int64            `json:"unsupported_method_calls"`
+	SnapshotExpiredRequests   int64            `json:"snapshot_expired_requests"`
+	ToolsListBytes            int64            `json:"tools_list_bytes"`
 	ChainMetrics              *ChainMetrics    `json:"chain_metrics,omitempty"`
 }
 
@@ -84,6 +88,8 @@ type SkillFunnel struct {
 	SetupFailedRate           *float64         `json:"setup_failed_rate"`
 	NegativeFeedback          int64            `json:"negative_feedback"`
 	NegativeAfterLoad         int64            `json:"negative_after_load"`
+	UnlistedResourceReads     int64            `json:"unlisted_resource_reads"`
+	SnapshotExpiredRequests   int64            `json:"snapshot_expired_requests"`
 	Transcripts               map[string]int64 `json:"transcripts"`
 	ChainMetrics              *ChainMetrics    `json:"chain_metrics,omitempty"`
 }
@@ -154,6 +160,10 @@ type accumulator struct {
 	setupFailed               int64
 	negativeFeedback          int64
 	negativeAfterLoad         int64
+	unlistedResourceReads     int64
+	unsupportedMethodCalls    int64
+	snapshotExpiredRequests   int64
+	toolsListBytes            int64
 	transcripts               map[string]int64
 }
 
@@ -216,6 +226,14 @@ func (a *accumulator) add(metric string, count int64) {
 		a.negativeFeedback += count
 	case metric == "feedback:negative_after_load":
 		a.negativeAfterLoad += count
+	case metric == "unlisted_resource_reads":
+		a.unlistedResourceReads += count
+	case metric == "unsupported_method_calls":
+		a.unsupportedMethodCalls += count
+	case metric == "snapshot_expired_requests":
+		a.snapshotExpiredRequests += count
+	case metric == "tools_list_bytes":
+		a.toolsListBytes += count
 	case strings.HasPrefix(metric, "transcript:"):
 		tool := strings.TrimPrefix(metric, "transcript:")
 		a.transcripts[tool] += count
@@ -296,6 +314,8 @@ func buildSkillFunnel(id, name string, acc *accumulator) SkillFunnel {
 		SetupFailedRate:           setupFailRate,
 		NegativeFeedback:          acc.negativeFeedback,
 		NegativeAfterLoad:         acc.negativeAfterLoad,
+		UnlistedResourceReads:     acc.unlistedResourceReads,
+		SnapshotExpiredRequests:   acc.snapshotExpiredRequests,
 		Transcripts:               acc.transcripts,
 	}
 }
@@ -494,6 +514,10 @@ func (service UsageService) Funnel(ctx context.Context, path string, q FunnelQue
 		SetupFailedRate:           setupFailRate,
 		NegativeFeedback:          overallAcc.negativeFeedback,
 		NegativeAfterLoad:         overallAcc.negativeAfterLoad,
+		UnlistedResourceReads:     overallAcc.unlistedResourceReads,
+		UnsupportedMethodCalls:    overallAcc.unsupportedMethodCalls,
+		SnapshotExpiredRequests:   overallAcc.snapshotExpiredRequests,
+		ToolsListBytes:            overallAcc.toolsListBytes,
 		Transcripts:               overallAcc.transcripts,
 	}
 

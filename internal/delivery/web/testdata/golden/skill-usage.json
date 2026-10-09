@@ -69,6 +69,8 @@
       "setup_failed_rate": 0.1,
       "negative_feedback": 1,
       "negative_after_load": 1,
+      "unlisted_resource_reads": 0,
+      "snapshot_expired_requests": 0,
       "transcripts": {},
       "chain_metrics": {
         "total_chains": 0,
@@ -179,6 +181,8 @@
     "setup_failed_rate": 0.1,
     "negative_feedback": 1,
     "negative_after_load": 1,
+    "unlisted_resource_reads": 0,
+    "snapshot_expired_requests": 0,
     "transcripts": {},
     "chain_metrics": {
       "total_chains": 0,
