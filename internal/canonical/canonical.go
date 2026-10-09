@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	distillpkg "github.com/vantt/mcp-skill-hub/internal/distill"
@@ -94,10 +95,17 @@ func ValidateWithOptions(root string, opts ValidationOptions) ([]Issue, error) {
 		return nil, fmt.Errorf("open canonical workspace: %w", err)
 	}
 	defer rootHandle.Close()
+	var schemaVersion int
+	if markerBytes, readErr := readCanonicalFile(rootHandle, ".skillhub/schema-version"); readErr == nil {
+		schemaVersion, _ = strconv.Atoi(strings.TrimSpace(string(markerBytes)))
+	}
 	ids := make(map[string]string)
 	refs := make([]reference, 0)
 	var totalBytes int64
 	for _, rel := range files {
+		if schemaVersion < 3 && strings.Contains(rel, "/.meta/") {
+			continue
+		}
 		if !validCanonicalPath(rel) {
 			issues = append(issues, Issue{Path: rel, Message: "path is outside the canonical workspace layout"})
 			continue
@@ -113,7 +121,7 @@ func ValidateWithOptions(root string, opts ValidationOptions) ([]Issue, error) {
 		if HasConflictMarker(string(contents)) {
 			issues = append(issues, Issue{Path: rel, Message: "unresolved Git conflict marker"})
 		}
-		if !entityPath(rel) {
+		if !entityPathForVersion(rel, schemaVersion) {
 			continue
 		}
 		parsedID, parsedRefs, shapeErr := parseYAMLIdentity(rel, contents)
@@ -136,7 +144,7 @@ func ValidateWithOptions(root string, opts ValidationOptions) ([]Issue, error) {
 			issues = append(issues, Issue{Path: rel, Message: "invalid YAML: " + shapeErr.Error()})
 			continue
 		}
-		if entityPath(rel) && parsedID == "" {
+		if entityPathForVersion(rel, schemaVersion) && parsedID == "" {
 			issues = append(issues, Issue{Path: rel, Message: "canonical entity is missing an ID"})
 		}
 		if parsedID != "" {
@@ -325,7 +333,14 @@ func validCanonicalPath(path string) bool {
 }
 
 func entityPath(path string) bool {
+	return entityPathForVersion(path, 3)
+}
+
+func entityPathForVersion(path string, schemaVersion int) bool {
 	if strings.HasPrefix(path, "skills/") {
+		if schemaVersion < 3 {
+			return strings.HasSuffix(path, "/skill.meta.yaml")
+		}
 		return strings.HasSuffix(path, "/skill.meta.yaml") || strings.HasSuffix(path, "/.meta/skill.yaml")
 	}
 	return (strings.HasPrefix(path, "sources/") || strings.HasPrefix(path, "distill/") || strings.HasPrefix(path, "history/operations/") || strings.HasPrefix(path, "registry/collections/") || strings.HasPrefix(path, "evals/routing/")) && (strings.HasSuffix(path, ".yaml") || strings.HasSuffix(path, ".yml"))

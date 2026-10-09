@@ -6,8 +6,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
@@ -117,7 +119,16 @@ func transformSkillMetaToV3(oldContents, existingContents []byte, oldRelPath, ne
 		}
 	}
 
+	skillDir := filepath.Dir(newRelPath)
+	if filepath.Base(skillDir) == ".meta" {
+		skillDir = filepath.Dir(skillDir)
+	}
+	dirID := filepath.Base(skillDir)
+
 	oldID, _ := oldMap["id"].(string)
+	if oldID == "" {
+		oldID = dirID
+	}
 	if existingMap != nil {
 		if exID, ok := existingMap["id"].(string); ok && exID != "" && oldID != "" && exID != oldID {
 			return nil, fmt.Errorf("skill ID mismatch between %s (%q) and %s (%q)", oldRelPath, oldID, newRelPath, exID)
@@ -126,11 +137,12 @@ func transformSkillMetaToV3(oldContents, existingContents []byte, oldRelPath, ne
 
 	merged := make(map[string]any)
 	merged["schema_version"] = 1
+	merged["id"] = oldID
 
-	if oldID != "" {
-		merged["id"] = oldID
-	} else if existingMap != nil {
-		merged["id"] = existingMap["id"]
+	// Preserve custom name if it differs from the ID (Item 5 decision)
+	oldName, _ := oldMap["name"].(string)
+	if oldName != "" && oldName != oldID {
+		merged["name"] = oldName
 	}
 
 	status := "draft"
@@ -220,11 +232,36 @@ func mergeQuality(oldMap, existingMap map[string]any) map[string]any {
 	return quality
 }
 
+func normalizeRepoURL(raw string) string {
+	raw = strings.TrimSpace(raw)
+	raw = strings.TrimSuffix(raw, "/")
+	raw = strings.TrimSuffix(raw, ".git")
+	raw = strings.TrimSuffix(raw, "/")
+	if u, err := url.Parse(raw); err == nil && u.Host != "" {
+		u.Host = strings.ToLower(u.Host)
+		u.Path = strings.TrimSuffix(u.Path, ".git")
+		u.Path = strings.TrimSuffix(u.Path, "/")
+		return strings.TrimSuffix(u.String(), "/")
+	}
+	return strings.ToLower(raw)
+}
+
 func mergeSources(oldMap, existingMap map[string]any, defaultID string) []any {
 	var sources []any
 	if existingMap != nil {
 		if srcs, ok := existingMap["sources"].([]any); ok {
-			sources = append(sources, srcs...)
+			for _, s := range srcs {
+				if sMap, ok := s.(map[string]any); ok {
+					cloned := make(map[string]any, len(sMap)+2)
+					for k, v := range sMap {
+						cloned[k] = v
+					}
+					if cloned["repository"] == nil && cloned["repo"] != nil {
+						cloned["repository"] = cloned["repo"]
+					}
+					sources = append(sources, cloned)
+				}
+			}
 		}
 	}
 	prov, _ := oldMap["provenance"].(map[string]any)
@@ -249,7 +286,7 @@ func mergeSources(oldMap, existingMap map[string]any, defaultID string) []any {
 	upstreamSrc["roles"] = []string{"upstream"}
 	if origin != nil {
 		for k, v := range origin {
-			if k != "added_at" && k != "content_digest" {
+			if k != "added_at" && k != "content_digest" && k != "name" {
 				upstreamSrc[k] = v
 			}
 		}
@@ -257,24 +294,69 @@ func mergeSources(oldMap, existingMap map[string]any, defaultID string) []any {
 			upstreamSrc["synced"] = c
 		}
 	}
+
+	upstreamRepo := ""
+	if origin != nil {
+		if r, ok := origin["repository"].(string); ok && r != "" {
+			upstreamRepo = normalizeRepoURL(r)
+		} else if r, ok := origin["repo"].(string); ok && r != "" {
+			upstreamRepo = normalizeRepoURL(r)
+		}
+	}
+
 	foundUpstream := false
 	for i, s := range sources {
 		if sMap, ok := s.(map[string]any); ok {
-			roles, _ := sMap["roles"].([]any)
-			for _, r := range roles {
-				if r == "upstream" {
-					foundUpstream = true
-					for k, v := range upstreamSrc {
-						if k == "synced" && sMap["synced"] != nil {
-							continue
+			existingRepo := ""
+			if r, ok := sMap["repository"].(string); ok && r != "" {
+				existingRepo = normalizeRepoURL(r)
+			} else if r, ok := sMap["repo"].(string); ok && r != "" {
+				existingRepo = normalizeRepoURL(r)
+			}
+
+			matches := false
+			if upstreamRepo != "" && existingRepo != "" && upstreamRepo == existingRepo {
+				matches = true
+			} else if sID, ok := sMap["id"].(string); ok && sID != "" && sID == upstreamSrc["id"] {
+				matches = true
+			}
+
+			if matches {
+				foundUpstream = true
+				var roles []string
+				if rList, ok := sMap["roles"].([]any); ok {
+					for _, r := range rList {
+						if str, ok := r.(string); ok && str != "" {
+							roles = append(roles, str)
 						}
+					}
+				}
+				hasUpstream := false
+				for _, r := range roles {
+					if r == "upstream" {
+						hasUpstream = true
+						break
+					}
+				}
+				if !hasUpstream {
+					roles = append([]string{"upstream"}, roles...)
+				}
+				sMap["roles"] = roles
+
+				for k, v := range upstreamSrc {
+					if k == "roles" || k == "learn_paths" {
+						continue
+					}
+					if k == "synced" && sMap["synced"] != nil && sMap["synced"] != "" {
+						continue
+					}
+					if sMap[k] == nil || sMap[k] == "" {
+						sMap[k] = v
+					} else if k == "commit" || k == "files_digest" || k == "folder_digest" {
 						sMap[k] = v
 					}
-					sources[i] = sMap
-					break
 				}
-			}
-			if foundUpstream {
+				sources[i] = sMap
 				break
 			}
 		}

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -32,6 +33,10 @@ type skillMetadata struct {
 // identity checks cannot express. Drafts may be incomplete, while active
 // skills must be independently routable and distributable.
 func validateSkills(root string, files []string) []Issue {
+	var schemaVersion int
+	if markerBytes, readErr := os.ReadFile(filepath.Join(root, ".skillhub", "schema-version")); readErr == nil {
+		schemaVersion, _ = strconv.Atoi(strings.TrimSpace(string(markerBytes)))
+	}
 	fileSet := make(map[string]struct{}, len(files))
 	for _, path := range files {
 		fileSet[path] = struct{}{}
@@ -43,11 +48,14 @@ func validateSkills(root string, files []string) []Issue {
 		if !strings.HasPrefix(path, "skills/") {
 			continue
 		}
+		if schemaVersion < 3 && strings.Contains(path, "/.meta/") {
+			continue
+		}
 		parts := strings.Split(path, "/")
 		if len(parts) >= 4 {
 			resourceDirectories[strings.Join(parts[:3], "/")] = struct{}{}
 		}
-		isMetaFile := (len(parts) == 4 && parts[3] == "skill.meta.yaml") || (len(parts) == 5 && parts[3] == ".meta" && parts[4] == "skill.yaml")
+		isMetaFile := (len(parts) == 4 && parts[3] == "skill.meta.yaml") || (schemaVersion >= 3 && len(parts) == 5 && parts[3] == ".meta" && parts[4] == "skill.yaml")
 		if isMetaFile {
 			contents, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
 			if err != nil {
@@ -241,7 +249,7 @@ func validateSkillMetadata(path string, contents []byte) (skillMetadata, []Issue
 					add("source entry must be a mapping", itemNode)
 					continue
 				}
-				sVals, sErr := mappingValues(itemNode, stringSet("id", "roles", "kind", "repository", "ref", "commit", "path", "files_digest", "folder_digest", "transformations", "synced", "added_at"))
+				sVals, sErr := mappingValues(itemNode, stringSet("id", "roles", "kind", "repository", "repo", "ref", "commit", "path", "files_digest", "folder_digest", "transformations", "synced", "learn_paths", "added_at"))
 				if sErr != nil {
 					add("invalid source entry: "+sErr.Error(), itemNode)
 					continue
@@ -257,6 +265,11 @@ func validateSkillMetadata(path string, contents []byte) (skillMetadata, []Issue
 						if r != "upstream" && r != "learning" {
 							add(fmt.Sprintf("invalid source role %q (must be upstream or learning)", r), sVals["roles"])
 						}
+					}
+				}
+				if lp := sVals["learn_paths"]; lp != nil {
+					if _, err := stringSequence(lp); err != nil {
+						add("source.learn_paths "+err.Error(), lp)
 					}
 				}
 				for _, digestField := range []string{"files_digest", "folder_digest"} {

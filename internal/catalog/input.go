@@ -124,16 +124,16 @@ func readInput(root string) (buildInput, error) {
 	fileMap := make(map[string][]byte, len(input.Files))
 	for _, f := range input.Files {
 		fileMap[f.Path] = f.Bytes
-	}
-	for _, file := range input.Files {
-		if file.Path == ".skillhub/schema-version" {
-			version, err := strconv.Atoi(strings.TrimSpace(string(file.Bytes)))
+		if f.Path == ".skillhub/schema-version" {
+			version, err := strconv.Atoi(strings.TrimSpace(string(f.Bytes)))
 			if err != nil || version <= 0 {
 				return buildInput{}, fmt.Errorf("invalid canonical schema version")
 			}
 			input.CanonicalSchemaVersion = version
 		}
-		if isCanonicalEntityPath(file.Path) {
+	}
+	for _, file := range input.Files {
+		if isCanonicalEntityPathForVersion(file.Path, input.CanonicalSchemaVersion) {
 			item, ok, err := parseEntity(file, fileMap)
 			if err != nil {
 				return buildInput{}, err
@@ -369,7 +369,14 @@ func classifyEntity(path string) string {
 }
 
 func isCanonicalEntityPath(path string) bool {
+	return isCanonicalEntityPathForVersion(path, 3)
+}
+
+func isCanonicalEntityPathForVersion(path string, schemaVersion int) bool {
 	if strings.HasPrefix(path, "skills/") {
+		if schemaVersion < 3 {
+			return strings.HasSuffix(path, "/skill.meta.yaml")
+		}
 		return strings.HasSuffix(path, "/skill.meta.yaml") || strings.HasSuffix(path, "/.meta/skill.yaml")
 	}
 	return (strings.HasPrefix(path, "sources/") || strings.HasPrefix(path, "distill/") || strings.HasPrefix(path, "history/operations/") || strings.HasPrefix(path, "registry/collections/") || strings.HasPrefix(path, "evals/routing/")) && (strings.HasSuffix(path, ".yaml") || strings.HasSuffix(path, ".yml"))

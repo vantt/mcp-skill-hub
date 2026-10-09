@@ -218,6 +218,7 @@ func loadTrackedSkills(root string) ([]TrackedSkill, error) {
 				ID          string   `yaml:"id"`
 				Roles       []string `yaml:"roles"`
 				Kind        string   `yaml:"kind"`
+				Repo        string   `yaml:"repo"`
 				Repository  string   `yaml:"repository"`
 				Ref         string   `yaml:"ref"`
 				Commit      string   `yaml:"commit"`
@@ -234,15 +235,19 @@ func loadTrackedSkills(root string) ([]TrackedSkill, error) {
 		}
 		found := false
 		for _, s := range meta.Sources {
+			repo := s.Repository
+			if repo == "" {
+				repo = s.Repo
+			}
 			for _, r := range s.Roles {
-				if r == "upstream" && (s.Kind == "github" || s.Kind == "git" || s.Repository != "") {
+				if r == "upstream" && (s.Kind == "github" || s.Kind == "git" || repo != "") {
 					tracked = append(tracked, TrackedSkill{
 						SkillID:     id,
 						SkillRelDir: skillRelDir,
 						SourceID:    s.ID,
 						Origin: SkillOrigin{
 							Kind:        s.Kind,
-							Repository:  s.Repository,
+							Repository:  repo,
 							Ref:         s.Ref,
 							Commit:      s.Commit,
 							Path:        s.Path,
@@ -257,11 +262,18 @@ func loadTrackedSkills(root string) ([]TrackedSkill, error) {
 				break
 			}
 		}
-		if !found && meta.Provenance.SourceID != "" && (meta.Provenance.Origin.Kind == "github" || meta.Provenance.Origin.Kind == "git") {
+		if !found && (meta.Provenance.SourceID != "" || meta.Provenance.Origin.Repository != "") && (meta.Provenance.Origin.Kind == "github" || meta.Provenance.Origin.Kind == "git") {
+			srcID := meta.Provenance.SourceID
+			if srcID == "" {
+				srcID = meta.Provenance.Origin.Name
+				if srcID == "" {
+					srcID = id
+				}
+			}
 			tracked = append(tracked, TrackedSkill{
 				SkillID:     id,
 				SkillRelDir: skillRelDir,
-				SourceID:    meta.Provenance.SourceID,
+				SourceID:    srcID,
 				Origin:      meta.Provenance.Origin,
 			})
 		}

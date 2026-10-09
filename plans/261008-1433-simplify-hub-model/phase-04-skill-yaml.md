@@ -13,7 +13,7 @@ Every row has been verified against the Go structs in `internal/` and `schemas/s
 | `schema_version` | `schema_version` | Kept | Kept as `1` in `.meta/skill.yaml`. (Workspace schema in `.skillhub/schema-version` is bumped from 2 to 3; document format schema version remains 1 per `canonical/skill.go:134`). |
 | `id` | `id` | Kept | Required skill identifier; validated against kebab-case pattern and skill directory name. |
 | `status` | `status` | Kept | Lifecycle state (`draft`, `active`, `deprecated`, `archived`). |
-| `name` | (Derived) | Derived | Extracted from `SKILL.md` frontmatter `name:` or top H1 title. `internal/catalog` populates it into SQLite `skills` table and `skill_fts`. Redundant in metadata. |
+| `name` | `name` / (Derived) | Kept when differs / Derived | When name differs from skill ID (e.g. "Markdown to Epub" vs "markdown-to-epub"), it is preserved in `.meta/skill.yaml` to avoid display regressions. When omitted or identical to ID, it derives from `SKILL.md` H1 heading or frontmatter. |
 | `description` | (Derived) | Derived | Extracted from `SKILL.md` frontmatter `description:` or first markdown paragraph. `internal/catalog` populates it into SQLite and resolver candidates. |
 | `collection_id` | (Derived) | Derived | Derived from parent directory name `skills/<collection>/<id>`. `catalog/project.go:60-66` already handles path derivation if missing. |
 | `collection` | (Deleted) | Deleted | Redundant with directory structure and `collection_id`. Unused by any production consumer. |

@@ -228,6 +228,7 @@ type skillReviewMeta struct {
 		ID              string   `yaml:"id"`
 		Roles           []string `yaml:"roles"`
 		Kind            string   `yaml:"kind"`
+		Repo            string   `yaml:"repo"`
 		Repository      string   `yaml:"repository"`
 		Ref             string   `yaml:"ref"`
 		Commit          string   `yaml:"commit"`
@@ -487,9 +488,13 @@ func extractSkillProvenance(metaDoc skillReviewMeta) *SkillProvenance {
 			for _, r := range metaDoc.Sources[i].Roles {
 				if r == "upstream" {
 					src := &metaDoc.Sources[i]
+					repo := src.Repository
+					if repo == "" {
+						repo = src.Repo
+					}
 					return &SkillProvenance{
 						SourceID:       src.ID,
-						SourceLocator:  src.Repository,
+						SourceLocator:  repo,
 						SourceRevision: src.Commit,
 						UpstreamPath:   src.Path,
 					}

@@ -125,6 +125,7 @@
           "uniqueItems": true
         },
         "kind": {"enum": ["github", "git", "local"]},
+        "repo": {"type": "string"},
         "repository": {"type": "string"},
         "ref": {"type": "string"},
         "commit": {"type": "string"},
@@ -133,6 +134,7 @@
         "folder_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
         "transformations": {"type": "array", "items": {"type": "string", "minLength": 1}},
         "synced": {"type": "string"},
+        "learn_paths": {"type": "array", "items": {"type": "string", "minLength": 1}},
         "added_at": {"type": "string", "format": "date-time"}
       }
     },

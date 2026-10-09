@@ -369,6 +369,7 @@ func validateUpdatePreconditions(ctx context.Context, root string, input Upstrea
 			ID          string   `yaml:"id"`
 			Roles       []string `yaml:"roles"`
 			Kind        string   `yaml:"kind"`
+			Repo        string   `yaml:"repo"`
 			Repository  string   `yaml:"repository"`
 			Ref         string   `yaml:"ref"`
 			Commit      string   `yaml:"commit"`
@@ -390,9 +391,13 @@ func validateUpdatePreconditions(ctx context.Context, root string, input Upstrea
 		for _, r := range s.Roles {
 			if r == "upstream" {
 				sourceID = s.ID
+				repo := s.Repository
+				if repo == "" {
+					repo = s.Repo
+				}
 				origin = SkillOrigin{
 					Kind:        s.Kind,
-					Repository:  s.Repository,
+					Repository:  repo,
 					Ref:         s.Ref,
 					Commit:      s.Commit,
 					Path:        s.Path,
