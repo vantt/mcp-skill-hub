@@ -23,7 +23,10 @@ type SkillListEntry struct {
 // SkillListResult lists skills from the current catalog generation.
 type SkillListResult struct {
 	Result
-	Skills []SkillListEntry `json:"skills"`
+	Skills     []SkillListEntry `json:"skills"`
+	NextCursor string           `json:"next_cursor,omitempty"`
+	HasMore    bool             `json:"has_more,omitempty"`
+	Total      int              `json:"total,omitempty"`
 }
 
 // SkillStates are the lifecycle states accepted by ListSkills filters.

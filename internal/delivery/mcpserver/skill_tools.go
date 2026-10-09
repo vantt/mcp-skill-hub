@@ -8,6 +8,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/delivery/paging"
 	"github.com/vantt/mcp-skill-hub/internal/skill"
 	"github.com/vantt/mcp-skill-hub/internal/systemskills"
 )
@@ -18,6 +19,12 @@ func (adapter *Server) registerSkillTools(server *mcp.Server) {
 }
 
 func (adapter *Server) registerSkillCurationTools(server *mcp.Server) {
+	adapter.registerSkillCreateTools(server)
+	adapter.registerSkillTransitionTools(server)
+	adapter.registerSkillListTool(server)
+}
+
+func (adapter *Server) registerSkillCreateTools(server *mcp.Server) {
 	addTool(server, &mcp.Tool{
 		Name:        "skill_create_preview",
 		Title:       "Preview skill creation",
@@ -73,6 +80,9 @@ func (adapter *Server) registerSkillCurationTools(server *mcp.Server) {
 			BaseVersion:    input.BaseVersion,
 		}))
 	})
+}
+
+func (adapter *Server) registerSkillTransitionTools(server *mcp.Server) {
 
 	addTool(server, &mcp.Tool{
 		Name:        "skill_transition_preview",
@@ -127,14 +137,50 @@ func (adapter *Server) registerSkillCurationTools(server *mcp.Server) {
 			BaseVersion:    input.BaseVersion,
 		}))
 	})
+}
+
+func (adapter *Server) registerSkillListTool(server *mcp.Server) {
 
 	addTool(server, &mcp.Tool{
 		Name:        "skill_list",
 		Title:       "List skills",
-		Description: "List skills from the current catalog generation, optionally filtered by state (draft, active, deprecated, archived).",
+		Description: "for curation; to pick a skill for a task, call skill_resolve",
 		Annotations: annotations(true, false, false, false),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input skillListInput) (*mcp.CallToolResult, toolOutcome[app.SkillListResult], error) {
-		return appResult((app.SkillService{}).ListSkills(ctx, adapter.workspace, strings.TrimSpace(input.State)))
+		limit := input.Limit
+		if limit == 0 {
+			limit = 50
+		}
+		if limit < 1 || limit > paging.MaximumLimit {
+			return failure[app.SkillListResult](fmt.Errorf("limit must be between 1 and %d", paging.MaximumLimit))
+		}
+		raw, err := (app.SkillService{}).ListSkills(ctx, adapter.workspace, strings.TrimSpace(input.State))
+		if err != nil {
+			return failure[app.SkillListResult](err)
+		}
+		filter := "state=" + strings.TrimSpace(input.State)
+		owner := paging.Owner(filter, raw.Skills)
+		lastKey, err := paging.DecodeCursor(input.Cursor, owner, filter)
+		if err != nil {
+			return failure[app.SkillListResult](fmt.Errorf("snapshot_expired: skill list cursor is invalid or expired"))
+		}
+		paged, err := paging.Make(raw.Skills, limit, lastKey, owner, filter, func(entry app.SkillListEntry) string {
+			return entry.ID
+		})
+		if err != nil {
+			return failure[app.SkillListResult](fmt.Errorf("snapshot_expired: skill list cursor is invalid or expired"))
+		}
+		result := app.SkillListResult{
+			Result:     app.NewResult(app.StatusOK, fmt.Sprintf("%d skill(s).", len(paged.Items))),
+			Skills:     paged.Items,
+			NextCursor: paged.NextCursor,
+			HasMore:    paged.HasMore,
+			Total:      paged.Total,
+		}
+		for _, entry := range paged.Items {
+			result.Items = append(result.Items, app.Item{ID: entry.ID, Summary: entry.Name, Impact: "State: " + entry.State + "; collection: " + entry.Collection + "."})
+		}
+		return success(result)
 	})
 }
 

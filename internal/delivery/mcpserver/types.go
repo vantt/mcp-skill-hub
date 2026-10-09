@@ -182,7 +182,9 @@ type skillTransitionPreviewInput struct {
 }
 
 type skillListInput struct {
-	State string `json:"state,omitempty"`
+	State  string `json:"state,omitempty" jsonschema:"Optional lifecycle state to filter by (draft, active, deprecated, archived)."`
+	Limit  int    `json:"limit,omitempty" jsonschema:"Maximum number of skills to return; defaults to 50 and cannot exceed 100."`
+	Cursor string `json:"cursor,omitempty" jsonschema:"Opaque cursor returned by the previous page."`
 }
 
 type skillGetInput struct {
