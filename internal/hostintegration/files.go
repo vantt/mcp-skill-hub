@@ -222,11 +222,6 @@ func apply(ctx context.Context, plan PlanResult, options ApplyOptions) (ApplyRes
 		} else if err := atomicWrite(root, writeRoot, write.change.Path, write.change.Desired, write.mode); err != nil {
 			return result, err
 		}
-		if write.change.Kind == ChangeNativeSkill {
-			if err := writeCuratorReceipt(root, writeRoot, write.change); err != nil {
-				return result, err
-			}
-		}
 		result.Changed = append(result.Changed, write.change)
 	}
 	return result, nil
@@ -236,16 +231,8 @@ func expectedDesired(change Change, raw []byte, plan PlanResult) ([]byte, error)
 	switch change.Kind {
 	case ChangeNativeSkill:
 		if HostSupportsSkillsExtension(change.Host) {
-			writeRoot := plan.Root
-			if writeRoot == "" {
-				writeRoot = plan.Workspace
-			}
-			owned, err := nativeCuratorOwned(change.Path, writeRoot, raw)
-			if err != nil {
-				return nil, err
-			}
-			if !owned {
-				return nil, &ConflictError{Path: change.Path, Reason: "native curator differs from the installed copy; preserve it and review manually"}
+			if !nativeCuratorOwned(raw) {
+				return nil, &ConflictError{Path: change.Path, Reason: nativeCuratorConflict}
 			}
 			return nil, nil
 		}

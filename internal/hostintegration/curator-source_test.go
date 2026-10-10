@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -57,6 +58,8 @@ func TestNativeCuratorMatrixCutover(t *testing.T) {
 			writeTestFile(t, path, edited, 0o644)
 			if _, err := Plan(context.Background(), request); !errors.Is(err, ErrConflict) {
 				t.Fatalf("edited copy: %v", err)
+			} else if !strings.Contains(err.Error(), "skillhub doctor --fix") || !strings.Contains(err.Error(), "skillhub connect") {
+				t.Fatalf("edited-copy conflict omitted restoration/cutover commands: %v", err)
 			}
 			if !bytes.Equal(readTestFile(t, path), edited) {
 				t.Fatal("user copy modified")
@@ -69,24 +72,6 @@ func TestNativeCuratorMatrixCutover(t *testing.T) {
 			install()
 			if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
 				t.Fatalf("native copy reinstalled: %v", err)
-			}
-			// A receipt proves ownership even when the embedded version changed.
-			older := []byte("previous installed curator version")
-			writeTestFile(t, path, older, 0o644)
-			writeTestFile(t, path+curatorReceiptSuffix, []byte(digest(older, true)), 0o644)
-			install()
-			if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
-				t.Fatalf("receipted older copy remains: %v", err)
-			}
-			// Legacy unreceipted versions cannot be distinguished from user edits.
-			writeTestFile(t, path, older, 0o644)
-			if _, err := Plan(context.Background(), request); !errors.Is(err, ErrConflict) {
-				t.Fatalf("unreceipted older copy: %v", err)
-			}
-			writeTestFile(t, path, bundled, 0o644)
-			install()
-			if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
-				t.Fatalf("legacy exact copy remains: %v", err)
 			}
 		})
 	}
