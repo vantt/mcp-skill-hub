@@ -1,19 +1,25 @@
 # Lead handoff, 2026-10-10
 
-State after wave 3. Read this first in a new lead session, then the two plans.
+State after wave 3, updated late 2026-10-10 (wave 4 merged, wave 5 J running). Read this first
+in a new lead session, then the plans below.
 
 ## Where things are
 
-- Repo `/home/vantt/projects/mcp-skill-hub`, main = origin/main = `d65b0e7`. No other
-  worktrees or branches.
+- Repo `/home/vantt/projects/mcp-skill-hub`, origin/main = `38bc67e`; local main has a few
+  unpushed docs commits after it. Worktree `/home/vantt/projects/mcp-skill-hub-curator-cli`
+  (branch `wave5/curator-cli`) belongs to agent J; do not touch it while J runs.
 - Live hub `/home/vantt/skill-hub`, schema **v5**, main = origin/main = `786c60e`. Local
   tags `pre-schema-v4` and `pre-schema-v5` (not pushed) mark the state before each
   migration.
-- Binary `~/.local/bin/skillhub` built from `d65b0e7`. The MCP server running in old
-  Claude Code sessions predates v5; restart Claude Code before relying on it.
+- Binary `~/.local/bin/skillhub` built from `38bc67e` (stamp the commit with
+  `-ldflags "-X github.com/vantt/mcp-skill-hub/internal/version.Commit=<sha>"`). Restart
+  Claude Code after installing so the MCP server runs it. The user's global connection
+  (`connect -g`) was outdated on 2026-10-10.
 - Case journal is **enabled** on the live hub (`runtime/case_journal.json`). The MCP server
   writes cases itself during `skill_resolve` (`internal/app/resolver.go:95`); agents do not.
-  On 2026-10-10 the store held 7 events and 0 cases.
+  On 2026-10-10 the store held 13 events and 0 cases. Cases are written only on disagreement
+  (`resolver.go:60-78`); with one active skill nearly every resolve is `catalog_gap`, so none
+  arrive. The user is adding skills (drafts `herdr-cook-plan`, `markdown-to-epub` exist).
 
 ## Plans
 
@@ -31,6 +37,24 @@ schema v5, `9b6c986`). Phase 0 (scorecard) is the user's own work with distill-l
 | Phase 3 enrichment | **deferred until there are cases.** Blocker: distill-lab rejects `where: usage:<case_id>`. Lead recommendation: when cases exist, promote confirmed cases to Git eval cases and cite them as `repo@commit:path` (option 1 in observer-handoff-G.md §2); do not change distill-lab |
 | Phase 4 resolver | waits for the baseline (`skillhub telemetry baseline`), counting since the v4/v5 migration |
 | `directoryRead` | deferred entirely (user decided 2026-10-10). Reopen only if a pure-MCP client is shown to miss files |
+
+## Wave 5: curator via CLI (approved 2026-10-10)
+
+`docs/plans/2026-10-10-curator-via-cli.md`. On shell hosts runtime stays MCP (3 tools; needed
+for session-aware cases), curation moves to the `system-curator` skill calling
+`skillhub … --json`. User answered §9: all four yes.
+
+| Step | State |
+|---|---|
+| 1–2 CLI gaps + curator rewrite | agent J running, prompt `prompt-wave5-J-curator-cli.md` |
+| 3 Claude Code permission rules | **verified** by the user (§5.2): ask beats allow, flag order does not bypass, `--approve-content` denied |
+| 4 `connect` writes the rules, drops `skillhub-curation` on Claude Code, warns about the trust dialog; fix the doctor HOME test | prompt K, write after J merges |
+| 5 real-host smoke | lead, after K |
+
+Facts learned on 2026-10-10 (also in the matrix): Claude Code `/mcp` Disable persists across
+restarts (tick = on, empty circle = off); `disabledMcpjsonServers` rejects a server instead
+of disabling it; Claude Code defers MCP tool schemas; agents do not see permission prompts,
+so trust what the user saw; the CLI rejects `--workspace` before the subcommand.
 
 ## Small open items
 
@@ -58,3 +82,5 @@ schema v5, `9b6c986`). Phase 0 (scorecard) is the user's own work with distill-l
 - Tests must not read paths outside the repo or a temp dir (fixtures live in testdata).
 - Never remove telemetry event types or change EventVersion. Use conventional commits.
 - Reply to the user in Vietnamese, as one message they can paste where needed.
+- The user's shell aliases `claude` to `--dangerously-skip-permissions` (`~/.zshrc:421`); for
+  permission tests ask them to run `command claude`. They work on this server over SSH.
