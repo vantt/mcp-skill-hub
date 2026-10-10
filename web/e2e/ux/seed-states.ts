@@ -158,13 +158,13 @@ export function externalEdit(hub: Pick<UxHub, 'runCLI'>, id: string, description
 
 // prepareHub builds the workspace the evaluation runs against. With UX_HUB_SOURCE set
 // to a Git workspace it is cloned (the source is only read); otherwise a small
-// fixture workspace is seeded. Either way HOME and XDG_* are isolated.
-export function prepareHub(): UxHub {
+// fixture workspace is seeded. Either way HOME and XDG_* are isolated. Pass '' to
+// force the fixture (the regression guards do, so they never depend on a local hub).
+export function prepareHub(source: string | undefined = process.env.UX_HUB_SOURCE): UxHub {
   resolveBinaryPath();
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'skillhub-ux-'));
   const env = isolatedEnv(root);
   const skipped: UxHub['skipped'] = [];
-  const source = process.env.UX_HUB_SOURCE;
 
   let ws: string;
   let origin: UxHub['origin'];

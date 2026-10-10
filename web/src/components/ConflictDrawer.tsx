@@ -231,11 +231,11 @@ export function ConflictDrawer({
             >
               <div>
                 <span style={{ color: 'var(--color-text-muted)' }}>{LABEL_EXPECTED}</span>
-                <span>{expectedDigest}</span>
+                <span className="app-wrap">{expectedDigest}</span>
               </div>
               <div>
                 <span style={{ color: 'var(--color-text-muted)' }}>{LABEL_LATEST}</span>
-                <span>{latestDigest}</span>
+                <span className="app-wrap">{latestDigest}</span>
               </div>
             </div>
           </details>

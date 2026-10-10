@@ -212,3 +212,41 @@ Before and after (images in `web-ux-evidence/tier3/`):
 | distill, nothing selected 1280 | ![](web-ux-evidence/tier3/before-distill-empty-1280.png) | ![](web-ux-evidence/tier3/after-distill-empty-1280.png) |
 | distill brief 1280 | ![](web-ux-evidence/tier3/before-distill-source-1280.png) | ![](web-ux-evidence/tier3/after-distill-source-1280.png) |
 | usage 390 | ![](web-ux-evidence/tier3/before-skill-tab-usage-390.png) | ![](web-ux-evidence/tier3/after-skill-tab-usage-390.png) |
+
+## Final scorecard
+
+The whole harness was run again after the last fix (`make web-ux`, a clone of the live hub, 23 captures at 1280
+and 390 px). Facts from that run: no capture error, no horizontal overflow, no clipped element and no serious or
+critical axe finding on any flow at either width, and the visible text of every flow is identical to the Tier 3
+"after" capture. Scores below are the sums of the per-tier tables above (8 criteria per flow, 2 is the best).
+
+| Tier | Flows | Before: zeros / ones / points | After: zeros / ones / points |
+|---|---|---|---|
+| 1 daily | 6 | 8 / 23 / 57 of 96 | 0 / 0 / 96 of 96 |
+| 2 weekly | 8 | 7 / 30 / 84 of 128 | 0 / 0 / 128 of 128 |
+| 3 occasional | 10 | 7 / 24 / 122 of 160 | 0 / 0 / 160 of 160 |
+
+No 0 remains in any tier. These are scores from reading screenshots and metrics; they say what is broken,
+unclear or inconsistent, not what feels pleasant. That judgement belongs to the user's walk-through
+([script and empty notes](web-ux-walkthrough.md)), which has **not happened yet**, so the plan's walk-through
+criterion is still open.
+
+### Regression guards
+
+They run in the default E2E run (`make web-ux` is not needed) on a self-contained fixture hub, over every flow in
+`web/e2e/ux/flows.ts`. Each was shown red by putting the old defect back and green again after restoring it.
+
+| Guard | Spec | Put back to see it fail |
+|---|---|---|
+| No raw API error text, internal id (snake_case) or retired feature word (insight, inbox, run) on any flow or error route; each unknown address offers a way out | `web/e2e/ux/guards.spec.ts` | Home shows the raw category id; a label reads "Pending insights" |
+| A taken skill id is refused with its reason | `web/e2e/ux/guards.spec.ts` | The server stops adding the validation message as the reason |
+| No horizontal scroll and no clipped text on any flow at 390 px | `web/e2e/ux/guards.spec.ts` | Commands scroll instead of wrapping; the conflict drawer digests cannot wrap |
+| Every copy button copies exactly the command beside it, and that command is fully visible | `web/e2e/ux/guards.spec.ts` | The copy button copies a truncated command |
+| Axe (serious and critical) on every nav item and every Tier 1 and 2 route at 360, 390, 768, 1280 and 1440 px, light and dark | `web/e2e/a11y.spec.ts` | Pale muted text colour in the light theme |
+
+Defect found by the guards: **D36 (Low)** the two sha256 digests in the editor conflict drawer's "Technical
+details" had no wrapping, so they ran past the edge at 390 px. Fixed with the shared `app-wrap` class in
+`web/src/components/ConflictDrawer.tsx`.
+
+Not verified: the CI matrix (ubuntu, macOS, Windows). Nothing was pushed in this run. The guards use no shell
+paths, only Node and Playwright APIs.

@@ -85,7 +85,7 @@ Assumption: the web UI records no usage, so the order below is reasoned from the
 | 2 | [Tier 1: daily flows, test and fix](./phase-02-tier1-daily-flows.md) | Complete | P1 |
 | 3 | [Tier 2: weekly flows, test and fix](./phase-03-tier2-weekly-flows.md) | Complete | P2 |
 | 4 | [Tier 3: occasional flows, dead screens](./phase-04-tier3-occasional-flows.md) | Complete | P2 |
-| 5 | [Regression guard and user walk-through](./phase-05-regression-and-walkthrough.md) | Pending | P2 |
+| 5 | [Regression guard and user walk-through](./phase-05-regression-and-walkthrough.md) | In progress (walk-through open) | P2 |
 | 6 | [Screenshots for README and user guide](./phase-06-screenshots-for-readme-and-guide.md) | Pending | P2 |
 
 Phases run in order so the most-used flows are fixed first. Phase 2 can ship alone. Phase 6 needs Phases 2 to 4 so the images show the fixed screens, and it can run in parallel with Phase 5.

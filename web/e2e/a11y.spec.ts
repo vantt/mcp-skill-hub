@@ -58,6 +58,7 @@ test.describe('Accessibility and Responsive Sweep (Phase 12)', () => {
     const routes = [
       '/',
       '/skills',
+      '/skills?upstream=updates',
       '/skills/add',
       '/skills/create',
       '/skills/consumer-review',
@@ -70,7 +71,8 @@ test.describe('Accessibility and Responsive Sweep (Phase 12)', () => {
       '/sources/distill?source=source-c',
     ];
 
-    const widths = [360, 768, 1280, 1440];
+    // 390 px is the phone width the UX evaluation judges; 360 keeps the narrowest common phone.
+    const widths = [360, 390, 768, 1280, 1440];
     const schemes: Array<'light' | 'dark'> = ['light', 'dark'];
 
     for (const route of routes) {
@@ -99,6 +101,30 @@ test.describe('Accessibility and Responsive Sweep (Phase 12)', () => {
           await assertA11y(page, `${route} (w=${width}, scheme=${scheme})`);
         }
       }
+    }
+  });
+
+  test('every primary navigation item opens an accessible page that fits 390 px', async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(server.url);
+    await expect(page.getByRole('heading', { name: 'Home' }).first()).toBeVisible();
+
+    const nav = page.getByRole('navigation', { name: 'Primary' });
+    // An empty list would pass vacuously, so insist on the three items the app ships.
+    const count = await nav.getByRole('link').count();
+    expect(count).toBeGreaterThanOrEqual(3);
+    for (let i = 0; i < count; i++) {
+      const link = nav.getByRole('link').nth(i);
+      const name = (await link.getAttribute('aria-label')) ?? (await link.innerText()).trim() ?? `item ${i + 1}`;
+      await link.click();
+      await page.waitForLoadState('networkidle');
+      await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+      expect(overflow, `${name} scrolls sideways at 390px`).toBeLessThanOrEqual(0);
+      await assertA11y(page, `nav item ${name} (w=390)`);
     }
   });
 

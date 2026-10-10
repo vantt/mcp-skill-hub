@@ -12,7 +12,8 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      testIgnore: /e2e[\\/]ux[\\/]/,
+      // The capture run needs a hub clone and writes screenshots; the guards in e2e/ux stay in.
+      testIgnore: /e2e[\\/]ux[\\/]capture\.spec\.ts$/,
       use: { ...devices['Desktop Chrome'] },
     },
     // Evaluation capture for the UX review, enabled only by `make web-ux` (UX_CAPTURE=1):
@@ -21,7 +22,7 @@ export default defineConfig({
       ? [
           {
             name: 'ux',
-            testMatch: /e2e[\\/]ux[\\/].*\.spec\.ts$/,
+            testMatch: /e2e[\\/]ux[\\/]capture\.spec\.ts$/,
             use: { ...devices['Desktop Chrome'] },
           },
         ]
