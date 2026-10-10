@@ -79,6 +79,14 @@ export function resolveActionCta(action?: ActionInput): CtaResult {
         to: '/sources',
         label: 'Open sources →',
       };
+    case 'review_lessons': {
+      const skillId = action.id || '';
+      return {
+        type: 'link',
+        to: skillId ? `/skills/${encodeURIComponent(skillId)}?tab=distill` : '/skills',
+        label: 'Review lessons →',
+      };
+    }
     default:
       return { type: 'none' };
   }

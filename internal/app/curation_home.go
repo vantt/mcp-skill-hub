@@ -183,6 +183,8 @@ type homeState struct {
 	UnavailableSources     int
 	Categories             []ActionCategory
 	HostIntegrationFinding *hostintegration.Finding
+	TopCandidateSkillID    string
+	TopCandidateSkillPath  string
 }
 
 func defaultCategories() []ActionCategory {
@@ -290,9 +292,11 @@ func readHomeCounts(ctx context.Context, root string, state *homeState) (resultE
 	}
 	state.Summary.SourcesDue = state.DueSources
 	state.Summary.UnavailableSources = state.UnavailableSources
-	candLessons, candHighValue := countCandidateLessons(root)
+	candLessons, candHighValue, topSkillID, topSkillPath := countCandidateLessons(root)
 	state.Summary.PendingInsights = candLessons
 	state.Summary.PendingHighValueInsights = candHighValue
+	state.TopCandidateSkillID = topSkillID
+	state.TopCandidateSkillPath = topSkillPath
 	setCategoryCount(state.Categories, "interrupted_runs", state.Summary.FailedOrInterruptedRuns)
 	setCategoryCount(state.Categories, "source_unavailable", state.UnavailableSources)
 	setCategoryCount(state.Categories, "changed_sources", state.ChangedSources)
@@ -311,28 +315,41 @@ func readHomeCounts(ctx context.Context, root string, state *homeState) (resultE
 	return nil
 }
 
-func countCandidateLessons(root string) (int, int) {
+func countCandidateLessons(root string) (int, int, string, string) {
 	totalCandidate := 0
 	totalHighValue := 0
+	topSkillID := ""
+	topSkillPath := ""
+	maxCandidates := 0
+
 	matches, err := filepath.Glob(filepath.Join(root, "skills", "*", "*", ".meta", "distill.yaml"))
 	if err != nil {
-		return 0, 0
+		return 0, 0, "", ""
 	}
 	for _, match := range matches {
 		doc, err := distill.LoadDocument(match)
 		if err != nil {
 			continue
 		}
+		skillCandidates := 0
 		for _, l := range doc.Lessons {
 			if l.Decision.State == "candidate" {
 				totalCandidate++
+				skillCandidates++
 				if l.Score.Relevance >= 3 && l.Score.Impact >= 4 {
 					totalHighValue++
 				}
 			}
 		}
+		if skillCandidates > maxCandidates {
+			maxCandidates = skillCandidates
+			skillDir := filepath.Dir(filepath.Dir(match))
+			topSkillID = filepath.Base(skillDir)
+			rel, _ := filepath.Rel(root, match)
+			topSkillPath = filepath.ToSlash(rel)
+		}
 	}
-	return totalCandidate, totalHighValue
+	return totalCandidate, totalHighValue, topSkillID, topSkillPath
 }
 
 func setCategoryCount(categories []ActionCategory, kind string, count int) {
@@ -455,15 +472,16 @@ func deriveCurationHome(state homeState) CurationHome {
 	}
 	if state.Summary.PendingInsights > 0 {
 		home.HomeSummary.OptionalItems += state.Summary.PendingInsights
-		home.HomeSummary.AttentionItems += state.Summary.PendingInsights
-		if home.Status == StatusOK {
-			home.Status = StatusActionRequired
-		}
-		summary := fmt.Sprintf("%d candidate lesson(s) need review", state.Summary.PendingInsights)
+		// Candidate lessons are optional work: do not let them alone turn home.Status into action_required
+		summary := fmt.Sprintf("%d candidate lesson(s) ready for review with distill-lab", state.Summary.PendingInsights)
 		if state.Summary.PendingHighValueInsights > 0 {
-			summary = fmt.Sprintf("%d candidate lesson(s) need review; %d are high-value", state.Summary.PendingInsights, state.Summary.PendingHighValueInsights)
+			summary = fmt.Sprintf("%d candidate lesson(s) ready for review with distill-lab; %d are high-value", state.Summary.PendingInsights, state.Summary.PendingHighValueInsights)
 		}
-		home.Actions = append(home.Actions, ActionItem{Kind: "review_insights", Count: state.Summary.PendingInsights, Priority: 40, Summary: summary, Command: "skill_list"})
+		cmd := "python3 .claude/skills/distill-lab/scripts/distill.py list"
+		if state.TopCandidateSkillPath != "" {
+			cmd += " " + state.TopCandidateSkillPath
+		}
+		home.Actions = append(home.Actions, ActionItem{Kind: "review_lessons", ID: state.TopCandidateSkillID, Count: state.Summary.PendingInsights, Priority: 40, Summary: summary, Command: cmd})
 	}
 	if state.GitDirty {
 		home.HomeSummary.AttentionItems++
@@ -517,7 +535,7 @@ func deriveCurationHome(state homeState) CurationHome {
 			home.Summary = fmt.Sprintf("%d skill(s) have upstream changes to review.", recommended.Count)
 		case "distill_changed_sources":
 			home.Summary = fmt.Sprintf("%d source(s) are ready to distill.", recommended.Count)
-		case "review_insights":
+		case "review_lessons":
 			home.Summary = fmt.Sprintf("%d candidate lesson(s) are waiting for review.", recommended.Count)
 		case "review_git_changes":
 			home.Summary = "Git has uncommitted canonical changes."
@@ -552,7 +570,7 @@ func recommendationLabel(kind string) string {
 		"retry_unavailable_sources": "Retry unavailable source checks",
 		"review_upstream_updates":   "Review upstream updates with skillhub skill outdated",
 		"distill_changed_sources":   "Distill changed sources",
-		"review_insights":           "Review candidate lessons",
+		"review_lessons":            "Review candidate lessons with distill-lab",
 		"check_due_sources":         "Check all due sources",
 		"review_git_changes":        "Review uncommitted changes",
 		"first_run_commit":          "Commit the new workspace, then run `skillhub connect` in your project",

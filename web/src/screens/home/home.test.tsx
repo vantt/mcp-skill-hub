@@ -58,6 +58,7 @@ describe('HomeScreen', () => {
       { kind: 'review_upstream_updates', wantType: 'link', wantText: '/skills?upstream=updates' },
       { kind: 'track_upstream_skills', wantType: 'command', wantText: 'skillhub source backfill' },
       { kind: 'link_orphan_sources', wantType: 'link', wantText: '/sources' },
+      { kind: 'review_lessons', id: 'sample-skill', wantType: 'link', wantText: '/skills/sample-skill?tab=distill' },
       { kind: 'future_kind', wantType: 'none' },
     ];
 

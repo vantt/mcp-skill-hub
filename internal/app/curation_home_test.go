@@ -504,7 +504,10 @@ provenance:
 func TestCandidateLessonsCountedInHomeAndSkillSources(t *testing.T) {
 	t.Parallel()
 
-	root := newSourceWorkspace(t)
+	root := filepath.Join(t.TempDir(), "workspace")
+	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+		t.Fatal(err)
+	}
 	ctx := context.Background()
 
 	// Create a skill
@@ -524,7 +527,7 @@ func TestCandidateLessonsCountedInHomeAndSkillSources(t *testing.T) {
 	_ = os.MkdirAll(filepath.Join(root, "sources", "skills"), 0o755)
 	_ = os.WriteFile(filepath.Join(root, "sources", "skills", "LINK-candidate-skill--src-test.yaml"), []byte("schema_version: 1\nid: LINK-candidate-skill--src-test\nskill_id: candidate-skill\nsource_id: src-test\nrole: learning-source\n"), 0o644)
 	_ = os.MkdirAll(filepath.Join(root, "sources", "catalog"), 0o755)
-	_ = os.WriteFile(filepath.Join(root, "sources", "catalog", "src-test.yaml"), []byte("schema_version: 1\nid: src-test\nadapter: git\nstatus: watching\nidentity:\n  name: src-test\nlocator:\n  repository: https://example.com/src-test.git\nmonitoring:\n  enabled: true\n  cadence: manual\nlimits:\n  max_bytes: 10485760\n  max_files: 1000\n  max_file_bytes: 1048576\n  timeout_seconds: 30\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(root, "sources", "catalog", "src-test.yaml"), []byte("schema_version: 1\nid: src-test\nadapter: git\nstatus: watching\nidentity:\n  name: src-test\nlocator:\n  repository: https://example.com/src-test.git\ncurrent_revision:\n  kind: git-commit\n  value: 3f9c2a1b4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a\n  observed_at: \"2026-10-09T08:00:00Z\"\n  content_digest: sha256:3f9c2a1b4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a3f9c2a1b4d5e6f7a8b9c0d1e\ndistilled_revision:\n  kind: git-commit\n  value: 3f9c2a1b4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a\n  observed_at: \"2026-10-09T08:00:00Z\"\n  content_digest: sha256:3f9c2a1b4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a3f9c2a1b4d5e6f7a8b9c0d1e\nmonitoring:\n  enabled: true\n  cadence: manual\nlimits:\n  max_bytes: 10485760\n  max_files: 1000\n  max_file_bytes: 1048576\n  timeout_seconds: 30\n"), 0o644)
 
 	srcService := SourceService{}
 
@@ -588,6 +591,7 @@ lessons:
 	if len(sourcesRes2.Learning) != 1 || sourcesRes2.Learning[0].PendingInsights != 2 {
 		t.Fatalf("expected learning ref to have 2 pending insights, got %#v", sourcesRes2.Learning)
 	}
+	commitWorkspace(t, root)
 	if _, buildErr := catalog.BuildCatalogGeneration(ctx, root, catalog.BuildOptions{}); buildErr != nil {
 		t.Fatalf("build catalog error: %v", buildErr)
 	}
@@ -603,5 +607,30 @@ lessons:
 	}
 	if homeRes.HomeSummary.PendingHighValueInsights != 1 {
 		t.Fatalf("expected home pending_high_value_insights 1, got %d", homeRes.HomeSummary.PendingHighValueInsights)
+	}
+
+	// Verify that candidate lessons alone do NOT turn home.Status into action_required
+	if homeRes.Status != StatusOK {
+		t.Fatalf("expected StatusOK for optional candidate lessons, got %s", homeRes.Status)
+	}
+	// Verify review_lessons action item points to distill-lab and the top skill
+	var reviewAction *ActionItem
+	for _, a := range homeRes.Actions {
+		if a.Kind == "review_lessons" {
+			reviewAction = &a
+			break
+		}
+	}
+	if reviewAction == nil {
+		t.Fatal("expected review_lessons action item in home.Actions")
+	}
+	if reviewAction.ID != "candidate-skill" {
+		t.Fatalf("expected review_lessons ID 'candidate-skill', got %q", reviewAction.ID)
+	}
+	if !strings.Contains(reviewAction.Command, "distill.py list") {
+		t.Fatalf("expected command to reference distill.py list, got %q", reviewAction.Command)
+	}
+	if !strings.Contains(reviewAction.Summary, "ready for review with distill-lab") {
+		t.Fatalf("expected summary to reference distill-lab, got %q", reviewAction.Summary)
 	}
 }
