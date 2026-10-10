@@ -17,6 +17,8 @@ const LABEL_SCRIPTS_CHANGED = 'scripts changed';
 const LABEL_RUNTIME_CHANGED = 'runtime changed';
 const LABEL_DEPENDENCIES_CHANGED = 'dependencies changed';
 
+const MSG_WHAT_IS_TRUST =
+  'Skills from other people can contain instructions that agents will follow. Content trust records that you read this content and approved it.';
 const MSG_AGENTS_RECEIVE = "Agents receive this skill's content.";
 const MSG_AGENTS_NO_CONTENT = 'Agents get no content and no files from this skill until it is approved.';
 const MSG_CLI_ONLY =
@@ -51,6 +53,10 @@ export function ContentTrustCard({ trust }: ContentTrustCardProps) {
         <span>{TITLE_CONTENT_TRUST}</span>
       </div>
 
+      <span className="t-caption" style={{ color: 'var(--color-text-muted)' }}>
+        <span>{MSG_WHAT_IS_TRUST}</span>
+      </span>
+
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
         <StatusBadge label={badgeLabel} tone={badgeTone} />
       </div>
@@ -59,8 +65,9 @@ export function ContentTrustCard({ trust }: ContentTrustCardProps) {
         <span className="t-caption" style={{ color: 'var(--color-text-muted)' }}>
           <span>{LABEL_CONTENT_DIGEST}</span>
         </span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 'var(--space-2)' }}>
           <code
+            className="app-wrap"
             style={{
               fontFamily: 'var(--font-mono)',
               fontSize: '12px',

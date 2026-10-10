@@ -87,36 +87,35 @@ export function AppShell({ children }: AppShellProps) {
       </a>
 
       <header
-        className="fg-shell__header"
+        className="fg-shell__header app-header"
         style={{
           height: '56px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '0 var(--space-4)',
           borderBottom: '1px solid var(--color-border)',
           background: 'var(--color-surface)',
           zIndex: 20,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', minWidth: 0, flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '200px' }}>
+          <div className="app-brand">
             <span style={{ color: 'var(--color-action)', fontSize: '18px' }}>◆</span>
-            <span className="t-heading-sm" style={{ fontWeight: 600 }}>
+            <span className="t-heading-sm app-brand__name" style={{ fontWeight: 600 }}>
               <span>{t('app.title')}</span>
             </span>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
+          <div className="app-title">
             {parentLabel && parentPath && (
-              <div className="fg-breadcrumb" style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <div className="fg-breadcrumb app-crumb">
                 <Link to={parentPath} style={{ color: 'var(--color-text-muted)', textDecoration: 'none' }}>
                   <span>{parentLabel}</span>
                 </Link>
                 <span className="fg-breadcrumb__sep" style={{ color: 'var(--color-text-muted)' }}>
                   /
                 </span>
-                <span className="fg-breadcrumb__here" style={{ color: 'var(--color-text)' }}>
+                <span className="fg-breadcrumb__here app-crumb__here" style={{ color: 'var(--color-text)' }}>
                   <span>{pageTitle}</span>
                 </span>
               </div>
@@ -151,10 +150,10 @@ export function AppShell({ children }: AppShellProps) {
         <main
           id="main"
           tabIndex={-1}
+          className="app-main"
           style={{
             flex: 1,
             overflowY: 'auto',
-            padding: 'var(--space-6) var(--space-6) var(--space-10)',
             display: 'flex',
             flexDirection: 'column',
             gap: 'var(--space-5)',

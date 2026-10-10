@@ -25,7 +25,7 @@ export function NavRail() {
 
   return (
     <aside
-      className="fg-shell__rail fg-shell__rail--left"
+      className="fg-shell__rail fg-shell__rail--left app-rail"
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -71,6 +71,7 @@ export function NavRail() {
 
       {home?.workspace && (
         <div
+          className="app-rail__status"
           style={{
             borderTop: '1px solid var(--color-border)',
             padding: 'var(--space-3)',

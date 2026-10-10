@@ -2,6 +2,7 @@ import type { SkillProvenance } from '../../api/types';
 
 const TITLE_PROVENANCE = 'Provenance';
 const BTN_VIEW_SOURCES = 'View sources →';
+const HELP_PROVENANCE = 'Where this skill came from.';
 const LABEL_NO_PROVENANCE = 'Created in this workspace';
 const LABEL_SOURCE_LOCATOR = 'Source locator';
 const LABEL_UPSTREAM_PATH = 'Upstream path';
@@ -28,7 +29,7 @@ export function ProvenanceCard({ provenance, onViewSources }: ProvenanceCardProp
 
   return (
     <section className="fg-card" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-2)' }}>
         <div className="fg-card__title">
           <span>{TITLE_PROVENANCE}</span>
         </div>
@@ -40,6 +41,10 @@ export function ProvenanceCard({ provenance, onViewSources }: ProvenanceCardProp
           <span>{BTN_VIEW_SOURCES}</span>
         </button>
       </div>
+
+      <span className="t-caption" style={{ color: 'var(--color-text-muted)' }}>
+        <span>{HELP_PROVENANCE}</span>
+      </span>
 
       {!hasProvenance ? (
         <div style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>

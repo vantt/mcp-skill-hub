@@ -1,21 +1,29 @@
 import { useSearchParams } from 'react-router';
 import type { SkillDetail, SkillReviewResult } from '../../api/types';
-import { CopyButton } from '../../components/CopyButton';
+import { CommandBlock } from '../../components/CommandBlock';
 import { StatusBadge } from '../../components/StatusBadge';
 import { ContentTrustCard } from './ContentTrustCard';
 import { ProvenanceCard } from './ProvenanceCard';
+import { activationChecklist } from './activation-checklist';
 const TITLE_VALIDITY = 'Validity';
 const TITLE_READINESS = 'Activation readiness';
 const TITLE_RESOURCES = 'Resources status';
-const TITLE_CANONICAL_SERVED = 'Canonical vs served';
+const TITLE_CANONICAL_SERVED = 'In Git vs what agents see';
 const TITLE_GIT = 'Git';
 const LABEL_STRUCTURALLY_VALID = 'Structurally valid';
-const LABEL_CANONICAL_ISSUES = '0 canonical issues';
+const LABEL_NOT_VALID = 'Not valid';
+const HELP_VALIDITY = 'Whether the skill file follows the required format.';
+const HELP_VALID_OK = 'No format problems found.';
+const HELP_VALID_BAD = 'The skill file has format problems. Fix them in the Editor tab.';
+const HELP_READINESS = 'What a draft needs before agents can use it. A skill with a missing item cannot be activated.';
+const HELP_RESOURCES = 'Files that ship with the skill.';
+const HELP_CANONICAL_SERVED =
+  'In Git files is the lifecycle stored in the skill files. Agents see is what the search index gives them. They can differ until the index is rebuilt.';
 const LABEL_MISSING = 'Missing';
 const LABEL_GO_TO_FIELD = 'Go to field';
-const LABEL_CANONICAL = 'Canonical';
-const LABEL_SERVED = 'Served';
-const WARNING_DIVERGED = 'Served catalog differs from canonical files. Rebuild to publish.';
+const LABEL_CANONICAL = 'In Git files';
+const LABEL_SERVED = 'Agents see';
+const WARNING_DIVERGED = 'What agents see differs from the skill files. Rebuild the index to publish the files.';
 const LABEL_GIT_NOTICE = 'The WebUI never commits or pushes.';
 const CMD_GIT_STATUS = 'git status';
 
@@ -39,40 +47,11 @@ export function ReviewTab({ skill, review, onGoToEditor, onViewSources }: Review
       });
     }
   };
-  const readiness = review?.activation_readiness;
-  const isUntouched = readiness?.untouched_scaffold ?? false;
-
-  const hasOperations = (skill.routing?.operations ?? []).length > 0;
-  const hasTriggers = (skill.routing?.triggers ?? []).length > 0;
-  const hasScope = Boolean(skill.routing?.min_scope);
-  const hasContent = !isUntouched && Boolean(skill.content && skill.content.trim().length > 0);
-
-  const checklist = [
-    {
-      id: 'content',
-      label: 'Instructions (SKILL.md)',
-      valid: hasContent,
-    },
-    {
-      id: 'triggers',
-      label: 'Triggers',
-      valid: hasTriggers,
-    },
-    {
-      id: 'operations',
-      label: 'Operations & Rationale',
-      valid: hasOperations || Boolean(skill.routing?.not_for),
-    },
-    {
-      id: 'scope',
-      label: 'Min scope',
-      valid: hasScope,
-    },
-  ];
+  const checklist = activationChecklist(skill, review);
 
   const totalBytes = review?.resource_status?.total_bytes ?? skill.resources?.reduce((acc, r) => acc + r.size_bytes, 0) ?? 0;
   const resourceCount = review?.resource_status?.resource_count ?? skill.resources?.length ?? 1;
-  const resourceSummaryText = `${resourceCount} file(s) · ${totalBytes} bytes`;
+  const resourceSummaryText = `${resourceCount} ${resourceCount === 1 ? 'file' : 'files'} · ${totalBytes} bytes`;
 
   return (
     <div
@@ -93,9 +72,15 @@ export function ReviewTab({ skill, review, onGoToEditor, onViewSources }: Review
         <div className="fg-card__title">
           <span>{TITLE_VALIDITY}</span>
         </div>
-        <StatusBadge label={LABEL_STRUCTURALLY_VALID} tone="success" />
+        <span className="t-caption" style={{ color: 'var(--color-text-muted)' }}>
+          <span>{HELP_VALIDITY}</span>
+        </span>
+        <StatusBadge
+          label={review && !review.valid ? LABEL_NOT_VALID : LABEL_STRUCTURALLY_VALID}
+          tone={review && !review.valid ? 'danger' : 'success'}
+        />
         <span className="t-body-sm" style={{ color: 'var(--color-text-muted)' }}>
-          <span>{LABEL_CANONICAL_ISSUES}</span>
+          <span>{review && !review.valid ? HELP_VALID_BAD : HELP_VALID_OK}</span>
         </span>
       </section>
 
@@ -104,6 +89,9 @@ export function ReviewTab({ skill, review, onGoToEditor, onViewSources }: Review
         <div className="fg-card__title">
           <span>{TITLE_READINESS}</span>
         </div>
+        <span className="t-caption" style={{ color: 'var(--color-text-muted)' }}>
+          <span>{HELP_READINESS}</span>
+        </span>
         {checklist.map((item) => (
           <div
             key={item.id}
@@ -152,6 +140,9 @@ export function ReviewTab({ skill, review, onGoToEditor, onViewSources }: Review
         <div className="fg-card__title">
           <span>{TITLE_RESOURCES}</span>
         </div>
+        <span className="t-caption" style={{ color: 'var(--color-text-muted)' }}>
+          <span>{HELP_RESOURCES}</span>
+        </span>
         <span className="t-body-sm">
           <span>{resourceSummaryText}</span>
         </span>
@@ -162,6 +153,9 @@ export function ReviewTab({ skill, review, onGoToEditor, onViewSources }: Review
         <div className="fg-card__title">
           <span>{TITLE_CANONICAL_SERVED}</span>
         </div>
+        <span className="t-caption" style={{ color: 'var(--color-text-muted)' }}>
+          <span>{HELP_CANONICAL_SERVED}</span>
+        </span>
         {skill.diverged && (
           <div className="fg-caveat fg-caveat--warn">
             <span>{WARNING_DIVERGED}</span>
@@ -195,20 +189,7 @@ export function ReviewTab({ skill, review, onGoToEditor, onViewSources }: Review
         <div className="fg-card__title">
           <span>{TITLE_GIT}</span>
         </div>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            border: '1px solid var(--color-border)',
-            background: 'var(--color-surface-sunken)',
-            borderRadius: 'var(--input-radius)',
-            padding: '4px 4px 4px 12px',
-          }}
-        >
-          <code style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', flex: 1 }}>{CMD_GIT_STATUS}</code>
-          <CopyButton text={CMD_GIT_STATUS} />
-        </div>
+        <CommandBlock command={CMD_GIT_STATUS} />
         <span className="t-caption" style={{ color: 'var(--color-text-subtle)' }}>
           <span>{LABEL_GIT_NOTICE}</span>
         </span>

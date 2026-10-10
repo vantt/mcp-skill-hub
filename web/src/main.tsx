@@ -6,6 +6,7 @@ import { App } from './App';
 import { captureTokenFromHash } from './state/session';
 import { initAppearance } from './state/appearance';
 import './design-system/styles.css';
+import './app.css';
 import './design-system/fonts/precision';
 
 captureTokenFromHash();

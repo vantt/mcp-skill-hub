@@ -122,24 +122,29 @@ export function SkillsScreen() {
           justifyContent: 'space-between',
         }}
       >
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)', alignItems: 'center', flex: 1 }}>
-          <div className="fg-search" style={{ flex: '1 1 220px', maxWidth: '340px' }}>
-            <span className="fg-search__glyph" aria-hidden="true">
-              {ICON_SEARCH}
-            </span>
-            <input
-              type="search"
-              className="fg-input"
-              placeholder={t('skills.search_placeholder')}
-              aria-label={t('skills.search_placeholder')}
-              value={queryParam}
-              onChange={(e) => updateSearch(e.target.value)}
-            />
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)', alignItems: 'flex-end', flex: 1 }}>
+          <div className="app-field app-search" style={{ flex: '1 1 220px', maxWidth: '340px' }}>
+            <label htmlFor="skills-search">{t('skills.search_label')}</label>
+            <div className="fg-search">
+              <span className="fg-search__glyph" aria-hidden="true">
+                {ICON_SEARCH}
+              </span>
+              <input
+                id="skills-search"
+                type="search"
+                className="fg-input"
+                placeholder={t('skills.search_placeholder')}
+                value={queryParam}
+                onChange={(e) => updateSearch(e.target.value)}
+              />
+            </div>
           </div>
 
-          <div className="fg-select" style={{ width: '160px' }}>
+          <div className="app-field" style={{ width: '160px' }}>
+            <label htmlFor="skills-filter-state">{t('skills.filter_lifecycle')}</label>
+            <div className="fg-select">
             <select
-              aria-label={t('skills.filter_lifecycle')}
+              id="skills-filter-state"
               value={stateParam}
               onChange={(e) => updateStateFilter(e.target.value)}
             >
@@ -152,11 +157,14 @@ export function SkillsScreen() {
             <span className="fg-select__chev" aria-hidden="true">
               ▾
             </span>
+            </div>
           </div>
 
-          <div className="fg-select" style={{ width: '170px' }}>
+          <div className="app-field" style={{ width: '170px' }}>
+            <label htmlFor="skills-filter-collection">{t('skills.filter_collection')}</label>
+            <div className="fg-select">
             <select
-              aria-label={t('skills.filter_collection')}
+              id="skills-filter-collection"
               value={colParam}
               onChange={(e) => updateColFilter(e.target.value)}
             >
@@ -170,11 +178,14 @@ export function SkillsScreen() {
             <span className="fg-select__chev" aria-hidden="true">
               ▾
             </span>
+            </div>
           </div>
 
-          <div className="fg-select" style={{ width: '160px' }}>
+          <div className="app-field" style={{ width: '160px' }}>
+            <label htmlFor="skills-filter-upstream">{t('skills.filter_upstream')}</label>
+            <div className="fg-select">
             <select
-              aria-label="Filter upstream status"
+              id="skills-filter-upstream"
               value={upstreamParam}
               onChange={(e) => updateUpstreamFilter(e.target.value)}
             >
@@ -186,6 +197,7 @@ export function SkillsScreen() {
             <span className="fg-select__chev" aria-hidden="true">
               ▾
             </span>
+            </div>
           </div>
 
           {updateCount > 0 && (
@@ -200,7 +212,7 @@ export function SkillsScreen() {
           )}
         </div>
 
-        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+        <div className="app-actions" style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
           <Link to="/skills/add" className="fg-btn fg-btn--secondary" style={{ textDecoration: 'none' }}>
             <span>{t('action.add_from_github')}</span>
           </Link>
@@ -290,7 +302,7 @@ export function SkillsScreen() {
       {/* Table / Card List */}
       {!isLoading && !error && filteredSkills.length > 0 && (
         <div className="fg-card" style={{ padding: 0, overflow: 'visible' }}>
-          <table className="fg-table fg-table--clickable" style={{ width: '100%' }}>
+          <table className="fg-table fg-table--clickable app-skills" style={{ width: '100%' }}>
             <thead>
               <tr>
                 <th>
@@ -341,10 +353,10 @@ export function SkillsScreen() {
                         <span>{s.id}</span>
                       </div>
                     </td>
-                    <td className="t-body-sm">
+                    <td className="t-body-sm" data-label={t('skills.col_collection')}>
                       <span>{s.collection}</span>
                     </td>
-                    <td>
+                    <td data-label={t('skills.col_lifecycle')}>
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-1)', flexWrap: 'wrap' }}>
                         <StatusBadge
                           variant="chip"
@@ -362,13 +374,13 @@ export function SkillsScreen() {
                         )}
                       </div>
                     </td>
-                    <td className="t-body-sm">
+                    <td className="t-body-sm" data-label={t('skills.col_routing')}>
                       <span style={{ color: s.routing_eligible ? 'var(--color-text)' : 'var(--color-text-muted)' }}>
                         <span>{s.routing_eligible ? t('routing.routable') : t('routing.not_routed')}</span>
                       </span>
                     </td>
                     <td
-                      style={{ position: 'relative' }}
+                      className="app-skills__actions"
                       onClick={(e) => {
                         e.stopPropagation();
                       }}

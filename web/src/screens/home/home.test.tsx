@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import { BrowserRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HomeScreen } from './HomeScreen';
-import { resolveActionCta } from './action-cta';
+import { actionHelp, resolveActionCta } from './action-cta';
 import { loadGolden } from '../../test/golden';
 import type { CurationHome } from '../../api/types';
 
@@ -152,5 +152,44 @@ describe('HomeScreen', () => {
     // Assert that the category counts (5 and 3) are NOT rendered anywhere
     expect(screen.queryByText('5')).toBeNull();
     expect(screen.queryByText('3')).toBeNull();
+  });
+
+  it('explains a missing host integration and offers the fix command', () => {
+    expect(resolveActionCta({ kind: 'host_integration_missing' })).toEqual({
+      type: 'command',
+      command: 'skillhub doctor --fix',
+      label: 'Copy command',
+    });
+    expect(actionHelp('host_integration_missing')?.why).toContain('cannot use your skills');
+
+    renderHomeScreen({
+      schema_version: '1',
+      status: 'action_required',
+      summary: 'host integration missing',
+      workspace: { health: 'valid', index: 'current', git_dirty: false, git_configured: true, recovery_pending: false },
+      actions: [{ kind: 'host_integration_missing', priority: 85, count: 1, summary: 'host integration missing', command: 'doctor' }],
+      categories: [],
+    });
+    expect(screen.getByText('Your coding agents are not connected to this hub')).toBeInTheDocument();
+    expect(screen.getByText(/The files that tell your coding agent/)).toBeInTheDocument();
+    expect(screen.getByText('skillhub doctor --fix')).toBeInTheDocument();
+    expect(screen.queryByText('host integration missing')).toBeNull();
+  });
+
+  it('shows each count once and marks unconfigured categories', () => {
+    renderHomeScreen({
+      schema_version: '1',
+      status: 'ok',
+      summary: 'ok',
+      workspace: { health: 'valid', index: 'current', git_dirty: false, git_configured: true, recovery_pending: false },
+      actions: [],
+      categories: [
+        { kind: 'changed_sources', count: 4, availability: 'available' },
+        { kind: 'routing_evaluations', count: 0, availability: 'not_configured' },
+      ],
+    });
+    expect(screen.getAllByText('changed sources')).toHaveLength(1);
+    expect(screen.queryByText('Action categories')).toBeNull();
+    expect(screen.getByText('Not set up')).toBeInTheDocument();
   });
 });

@@ -289,7 +289,7 @@ test.describe('Shipped User Flow Journeys (Spec 04 §3)', () => {
     if (await reasonTextarea.isVisible()) {
       await reasonTextarea.fill('Deprecating in flow 3.7.');
     }
-    await deprecateModal.getByRole('button', { name: /confirm/i }).click();
+    await deprecateModal.getByRole('button', { name: /^deprecate skill$/i }).click();
     await expect(page.getByText('Deprecated', { exact: true }).first()).toBeVisible();
 
     // 3. Archive skill
@@ -305,7 +305,7 @@ test.describe('Shipped User Flow Journeys (Spec 04 §3)', () => {
     // Transition preview modal opens
     const archiveModal = page.locator('.fg-modal');
     await expect(archiveModal).toBeVisible();
-    await archiveModal.getByRole('button', { name: /confirm/i }).click();
+    await archiveModal.getByRole('button', { name: /^archive skill$/i }).click();
 
     await expect(page.getByText('Archived', { exact: true }).first()).toBeVisible();
   });

@@ -1,0 +1,57 @@
+/* App-level rules on top of the design system: shadow tokens the contract names differently,
+   and the narrow-screen layout of the shell. */
+:root {
+  --shadow-sm: var(--elevation-sm);
+  --shadow-md: var(--elevation-md);
+  --shadow-lg: var(--elevation-lg);
+  --shadow-xl: var(--elevation-lg);
+}
+
+.app-header { padding: 0 var(--space-4); }
+.app-brand { display: flex; align-items: center; gap: 8px; width: 200px; flex: none; }
+.app-title { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.app-crumb { font-size: 12px; display: flex; align-items: center; gap: 4px; min-width: 0; white-space: nowrap; }
+.app-crumb__here { overflow: hidden; text-overflow: ellipsis; }
+.app-main { padding: var(--space-6) var(--space-6) var(--space-8); }
+
+/* Row menu anchors to its cell. */
+.app-skills__actions { position: relative; }
+
+/* Long commands and ids wrap instead of running off the card. */
+.app-wrap { overflow-wrap: anywhere; word-break: break-word; }
+
+/* A control with a visible label above it. */
+.app-field { display: flex; flex-direction: column; gap: 4px; }
+.app-field > label { font-size: 12px; color: var(--color-text-muted); }
+
+@media (max-width: 720px) {
+  .app-header { padding: 0 var(--space-3); }
+  .app-brand { width: auto; }
+  .app-brand__name { display: none; }
+  .app-main { padding: var(--space-4) var(--space-3) var(--space-8); }
+  /* Rail shrinks to an icon strip so the page keeps the width. */
+  .app-rail { width: 52px; }
+  .app-rail .fg-nav__label { display: none; }
+  .app-rail .fg-nav__item { justify-content: center; padding-left: 0; padding-right: 0; }
+  .app-rail__status { display: none !important; }
+  .app-field { width: 100%; }
+  .app-field .fg-select { width: 100% !important; }
+  .app-search { max-width: none !important; width: 100%; }
+  .app-actions { width: 100%; }
+  .app-actions > * { flex: 1 1 auto; justify-content: center; }
+  /* Skills table turns into stacked rows so every column stays reachable. */
+  .app-skills thead { display: none; }
+  .app-skills, .app-skills tbody, .app-skills tr, .app-skills td { display: block; width: 100%; box-sizing: border-box; }
+  .app-skills tr { position: relative; padding: var(--space-3); border-bottom: 1px solid var(--color-border); }
+  .app-skills td { border: 0 !important; padding: 2px 0 !important; }
+  .app-skills td[data-label]::before {
+    content: attr(data-label); display: inline-block; min-width: 88px;
+    font-size: 12px; color: var(--color-text-muted);
+  }
+  .app-skills td.app-skills__actions { position: absolute; top: var(--space-2); right: var(--space-2); width: auto; }
+}
+
+@media (max-width: 720px) {
+  /* Seven tabs wrap onto two rows instead of hiding behind a sideways scroll. */
+  .app-tabs { flex-wrap: wrap; overflow-x: visible !important; }
+}

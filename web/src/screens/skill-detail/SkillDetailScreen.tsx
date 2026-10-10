@@ -24,6 +24,7 @@ import { UsagePanel } from './UsagePanel';
 import { RuntimeTab } from './RuntimeTab';
 import { SourcesTab } from './SourcesTab';
 import { DistillTab } from './DistillTab';
+import { activationChecklist } from './activation-checklist';
 import { useT } from '../../i18n';
 
 const LABEL_TAB_REVIEW = 'Review';
@@ -43,6 +44,41 @@ const TITLE_ARCHIVE_CONFIRM = 'Archive skill?';
 const BODY_ARCHIVE_CONFIRM =
   'Archiving removes this skill from agent routing. Agents will no longer be able to select or invoke it.';
 const MSG_MISSING_REQ = 'Missing activation requirements';
+const LABEL_GO_TO_FIELDS = 'Fill in';
+const MSG_READY_TO_ACTIVATE =
+  'Ready to activate. Once active, agents can select this skill. You review what changes before it is applied.';
+
+const TRANSITION_COPY: Record<'active' | 'deprecated' | 'archived', { verb: string; impact: string }> = {
+  active: {
+    verb: 'Activate',
+    impact: 'Agents will be able to find and use this skill. Its files do not change.',
+  },
+  deprecated: {
+    verb: 'Deprecate',
+    impact: 'Agents will stop choosing this skill for new work. Its files stay in Git.',
+  },
+  archived: {
+    verb: 'Archive',
+    impact: 'The skill is removed from agent routing and becomes read-only. Its files stay in Git.',
+  },
+};
+
+// Splits `text` on backtick pairs so commands in a sentence show as code, not raw backticks.
+function InlineCode({ text }: { text: string }) {
+  return (
+    <>
+      {text.split('`').map((part, i) =>
+        i % 2 === 1 ? (
+          <code key={i} className="app-wrap" style={{ fontFamily: 'var(--font-mono)' }}>
+            {part}
+          </code>
+        ) : (
+          <span key={i}>{part}</span>
+        ),
+      )}
+    </>
+  );
+}
 
 export function SkillDetailScreen() {
   const t = useT();
@@ -140,6 +176,15 @@ export function SkillDetailScreen() {
 
   const readiness = review?.activation_readiness;
   const isReady = readiness?.ready ?? false;
+  const missingItems = activationChecklist(skill, review).filter((item) => !item.valid);
+  const isDraft = skill.lifecycle_state === 'draft';
+  const missingLead = `${MSG_MISSING_REQ}: `;
+  const missingList = `${missingItems.map((item) => item.label).join(', ')}.`;
+  const headline = isDraft
+    ? isReady
+      ? MSG_READY_TO_ACTIVATE
+      : MSG_MISSING_REQ
+    : review?.next_action || 'Skill is up to date.';
 
   const tone =
     skill.lifecycle_state === 'active'
@@ -191,25 +236,37 @@ export function SkillDetailScreen() {
             <span aria-hidden="true">{copiedId ? LABEL_COPIED : '⧉'}</span>
           </button>
 
-          <span className="fg-chip fg-chip--neutral">
-            <span>{skill.routing?.operations?.[0] || 'core'}</span>
-          </span>
+          {review?.collection && (
+            <span className="fg-chip fg-chip--neutral">
+              <span>{review.collection}</span>
+            </span>
+          )}
 
           <StatusBadge variant="chip" label={t(`lifecycle_short.${skill.lifecycle_state}`)} tone={tone} />
         </div>
 
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 'var(--space-3)' }}>
           <span className="t-body-sm" style={{ color: 'var(--color-text-muted)', flex: '1 1 260px' }}>
-            <span>{review?.next_action || 'Skill is up to date.'}</span>
+            {isDraft && !isReady && !reviewLoading ? (
+              <>
+                <span style={{ color: 'var(--color-warning)', fontWeight: 600 }}>{missingLead}</span>
+                <span>{missingList}</span>{' '}
+                <button
+                  type="button"
+                  className="fg-btn fg-btn--ghost"
+                  style={{ padding: '2px 6px', fontSize: '12px' }}
+                  onClick={() => setTab('editor')}
+                >
+                  <span>{LABEL_GO_TO_FIELDS}</span>
+                </button>
+              </>
+            ) : (
+              <InlineCode text={headline} />
+            )}
           </span>
 
-          {skill.lifecycle_state === 'draft' && (
+          {isDraft && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              {!isReady && !reviewLoading && (
-                <span className="t-caption" style={{ color: 'var(--color-warning)' }}>
-                  <span>{MSG_MISSING_REQ}</span>
-                </span>
-              )}
               <button
                 type="button"
                 className="fg-btn fg-btn--primary"
@@ -250,7 +307,7 @@ export function SkillDetailScreen() {
       </section>
 
       {/* Tabs */}
-      <div className="fg-tabs" role="tablist" style={{ overflowX: 'auto' }}>
+      <div className="fg-tabs app-tabs" role="tablist" style={{ overflowX: 'auto' }}>
         <button
           type="button"
           className={`fg-tab ${activeTab === 'review' ? 'fg-tab--active' : ''}`}
@@ -363,18 +420,22 @@ export function SkillDetailScreen() {
       {proposalOpen && transitionProposal && (
         <ProposalPreview
           open={proposalOpen}
-          title={transitionProposal.summary || 'Skill Transition'}
+          title={
+            transitionTarget
+              ? `${TRANSITION_COPY[transitionTarget].verb} ${skill.skill_id}?`
+              : transitionProposal.summary || 'Skill transition'
+          }
           target={skill.skill_id}
           fromState={transitionProposal.from_state || skill.lifecycle_state}
           toState={transitionTarget || undefined}
-          impact={transitionProposal.impact}
+          impact={transitionProposal.impact || (transitionTarget ? TRANSITION_COPY[transitionTarget].impact : undefined)}
           warning={transitionProposal.warning}
           diff={transitionProposal.diff}
           stat={transitionProposal.stat}
           proposalId={pins?.proposal_id || ''}
           proposalDigest={pins?.proposal_digest || ''}
           baseVersion={pins?.base_version || ''}
-          confirmLabel={`Confirm ${transitionTarget || 'transition'}`}
+          confirmLabel={transitionTarget ? `${TRANSITION_COPY[transitionTarget].verb} skill` : 'Confirm'}
           dangerConfirm={transitionTarget === 'archived'}
           onConfirm={handleConfirmTransition}
           onCancel={() => setProposalOpen(false)}

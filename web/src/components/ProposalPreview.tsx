@@ -6,7 +6,7 @@ import { StatusBadge } from './StatusBadge';
 const LABEL_STALE_PROPOSAL = 'This proposal is no longer current. The base changed after it was created.';
 const LABEL_CREATE_NEW_PREVIEW = 'Create new preview';
 const LABEL_AFFECTED_PATHS = 'Affected paths';
-const LABEL_ROUTING_IMPACT = 'Routing impact';
+const LABEL_ROUTING_IMPACT = 'What changes';
 const LABEL_TECH_DETAILS = 'Technical details';
 const LABEL_PROP_ID = 'proposal_id: ';
 const LABEL_PROP_DIGEST = 'proposal_digest: ';
@@ -112,6 +112,8 @@ export function ProposalPreview({
       // Ignore clipboard write error
     }
   };
+
+  const hasDiff = Array.isArray(diff) ? diff.length > 0 : typeof diff === 'string' && diff.trim() !== '';
 
   const stateTone = (state?: string) => {
     switch (state) {
@@ -272,7 +274,7 @@ export function ProposalPreview({
             </div>
           )}
 
-          <DiffView diff={diff} stat={stat} />
+          {(hasDiff || Boolean(stat)) && <DiffView diff={diff} stat={stat} />}
 
           <details className="fg-acc">
             <summary style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--color-text-muted)' }}>
@@ -290,15 +292,15 @@ export function ProposalPreview({
             >
               <div>
                 <span style={{ color: 'var(--color-text-muted)' }}>{LABEL_PROP_ID}</span>
-                <span data-testid="pin-proposal-id">{proposalId}</span>
+                <span className="app-wrap" data-testid="pin-proposal-id">{proposalId}</span>
               </div>
               <div>
                 <span style={{ color: 'var(--color-text-muted)' }}>{LABEL_PROP_DIGEST}</span>
-                <span data-testid="pin-proposal-digest">{proposalDigest}</span>
+                <span className="app-wrap" data-testid="pin-proposal-digest">{proposalDigest}</span>
               </div>
               <div>
                 <span style={{ color: 'var(--color-text-muted)' }}>{LABEL_BASE_VERSION}</span>
-                <span data-testid="pin-base-version">{baseVersion}</span>
+                <span className="app-wrap" data-testid="pin-base-version">{baseVersion}</span>
               </div>
               <button
                 type="button"

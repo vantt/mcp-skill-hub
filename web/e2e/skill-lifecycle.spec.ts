@@ -90,7 +90,7 @@ test('skill lifecycle journey: create, edit routing, activate, deprecate, and ar
   await activateBtn.click();
   const activateModal = page.locator('.fg-modal');
   await expect(activateModal).toBeVisible({ timeout: 15000 });
-  await activateModal.getByRole('button', { name: /confirm active/i }).click();
+  await activateModal.getByRole('button', { name: /^activate skill$/i }).click();
   await expect(activateModal).toBeHidden({ timeout: 10000 });
 
   // Badge should now be Active
@@ -103,7 +103,7 @@ test('skill lifecycle journey: create, edit routing, activate, deprecate, and ar
 
   const deprecateModal = page.locator('.fg-modal');
   await expect(deprecateModal).toBeVisible({ timeout: 15000 });
-  await deprecateModal.getByRole('button', { name: /confirm deprecated/i }).click();
+  await deprecateModal.getByRole('button', { name: /^deprecate skill$/i }).click();
   await expect(deprecateModal).toBeHidden({ timeout: 10000 });
 
   // Badge should now be Deprecated
@@ -122,7 +122,7 @@ test('skill lifecycle journey: create, edit routing, activate, deprecate, and ar
   // Transition preview modal opens
   const archiveModal = page.locator('.fg-modal');
   await expect(archiveModal).toBeVisible({ timeout: 15000 });
-  await archiveModal.getByRole('button', { name: /confirm archived/i }).click();
+  await archiveModal.getByRole('button', { name: /^archive skill$/i }).click();
   await expect(archiveModal).toBeHidden({ timeout: 10000 });
 
   // Badge should now be Archived and no lifecycle actions remain

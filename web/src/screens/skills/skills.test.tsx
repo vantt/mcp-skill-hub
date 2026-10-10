@@ -224,4 +224,23 @@ describe('SkillsScreen', () => {
     expect(screen.queryByText('Deprecate')).toBeNull();
     expect(screen.queryByText('Archive')).toBeNull();
   });
+
+  it('labels every filter and finds a skill by id', () => {
+    renderSkillsScreen({
+      schema_version: '1',
+      status: 'ok',
+      summary: '1 skill',
+      skills: [
+        { id: 'code-review', name: 'Quality Gate', collection: 'engineering', lifecycle_state: 'active', state: 'active', active_locally: true, routing_eligible: true },
+      ],
+    } as SkillListResult);
+
+    expect(screen.getByLabelText('Search')).toBeInTheDocument();
+    expect(screen.getByLabelText('Lifecycle')).toBeInTheDocument();
+    expect(screen.getByLabelText('Collection')).toBeInTheDocument();
+    expect(screen.getByLabelText('Upstream')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Search'), { target: { value: 'code-rev' } });
+    expect(screen.getByText('Quality Gate')).toBeInTheDocument();
+  });
 });

@@ -1,9 +1,9 @@
 import { Link } from 'react-router';
 import { useHome } from '../../api/queries';
-import { CopyButton } from '../../components/CopyButton';
 import { Skeleton } from '../../components/Skeleton';
 import { StatusBadge } from '../../components/StatusBadge';
-import { resolveActionCta } from './action-cta';
+import { actionHelp, resolveActionCta } from './action-cta';
+import { CommandBlock } from '../../components/CommandBlock';
 import { useT } from '../../i18n';
 
 export function HomeScreen() {
@@ -56,20 +56,11 @@ export function HomeScreen() {
   const actions = home.actions ?? [];
   const topAction = actions[0];
   const cta = resolveActionCta(topAction);
+  const help = actionHelp(topAction?.kind);
 
-  const formatCount = (count: number) => {
+  const formatCount = (count: number, availability?: string) => {
+    if (availability === 'not_configured') return t('home.not_configured');
     return isHealthy ? String(count) : t('workspace.unavailable');
-  };
-
-  const getAvailabilityLabel = (availability: string) => {
-    switch (availability) {
-      case 'available':
-        return t('availability.available');
-      case 'not_configured':
-        return t('availability.not_configured');
-      default:
-        return t('availability.unavailable');
-    }
   };
 
   return (
@@ -84,6 +75,7 @@ export function HomeScreen() {
         </span>
 
         {topAction ? (
+          <>
           <div
             style={{
               display: 'flex',
@@ -94,25 +86,12 @@ export function HomeScreen() {
             }}
           >
             <span className="t-subheading" style={{ flex: '1 1 280px' }}>
-              <span>{topAction.summary}</span>
+              <span>{help?.title ?? topAction.summary}</span>
             </span>
 
             {cta.type === 'command' && (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  border: '1px solid var(--color-border)',
-                  background: 'var(--color-surface-sunken)',
-                  borderRadius: 'var(--input-radius)',
-                  padding: '4px 4px 4px 12px',
-                }}
-              >
-                <code style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
-                  {cta.command}
-                </code>
-                <CopyButton text={cta.command} label={t('action.copy_command')} />
+              <div style={{ flex: '1 1 320px', maxWidth: '520px' }}>
+                <CommandBlock command={cta.command} />
               </div>
             )}
 
@@ -133,6 +112,12 @@ export function HomeScreen() {
               </div>
             )}
           </div>
+          {help && (
+            <span className="t-body-sm" style={{ color: 'var(--color-text-muted)' }}>
+              <span>{help.why}</span>
+            </span>
+          )}
+          </>
         ) : (
           <div className="t-body" style={{ color: 'var(--color-text-muted)' }}>
             <span>{t('home.nothing_needs_attention')}</span>
@@ -250,36 +235,12 @@ export function HomeScreen() {
                   fontVariantNumeric: 'tabular-nums',
                 }}
               >
-                <span>{formatCount(cat.count)}</span>
+                <span>{formatCount(cat.count, cat.availability)}</span>
               </span>
             </div>
           ))}
         </section>
       </div>
-
-      <section
-        className="fg-card"
-        style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}
-      >
-        <div className="fg-card__title">
-          <span>{t('home.action_categories')}</span>
-        </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
-          {(home.categories ?? []).map((cat) => (
-            <span
-              key={cat.kind}
-              className={`fg-chip ${cat.count > 0 && isHealthy ? 'fg-chip--info' : 'fg-chip--neutral'}`}
-              title={getAvailabilityLabel(cat.availability)}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-            >
-              <span>{cat.kind.replace(/_/g, ' ')}</span>
-              <span style={{ fontFamily: 'var(--font-mono)' }}>
-                <span>{formatCount(cat.count)}</span>
-              </span>
-            </span>
-          ))}
-        </div>
-      </section>
     </div>
   );
 }
