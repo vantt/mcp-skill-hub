@@ -1,7 +1,7 @@
 ---
 title: "Simplify the hub data model"
 description: "Make Git the database, history, audit log and integrity mechanism of the hub; keep in the binary only what Git cannot give (locks, preview/confirm pins, human content approval). Move each skill's hub-side data into skills/<collection>/<id>/.meta/, reduce distillation to lessons + repo@commit pointers + cursor + decisions, and make a fresh clone of the hub work."
-status: proposed
+status: in-progress # phases 1-5 done; phase 0 (scorecard) is the user's
 priority: P1
 effort: TBD
 branch: TBD
@@ -91,7 +91,8 @@ runtime/                                    gitignored cache: catalog.db, shared
 ## Open decisions
 
 1. ~~One operation = one Git commit versus "approved locally before commit".~~ Decided: D8.
-2. Cross-skill comparisons: keep per skill only, or add a hub-level location.
+2. ~~Cross-skill comparisons: keep per skill only, or add a hub-level location.~~ Decided
+   2026-10-10: per skill only; revisit when a real cross-skill need appears.
 3. Runtime trims (single `catalog.db` without generations and pins; serve skills
    from the checkout instead of `runtime/cache/skills` copies; cheaper staleness
    check; plain telemetry store). Each is independent and can be scheduled later,
@@ -107,7 +108,7 @@ runtime/                                    gitignored cache: catalog.db, shared
 | 2 | `IsHubMeta` predicate at every site (D4), inbound `.meta/` stripping, `.meta/distill.yaml` out of the catalog snapshot; bump the canonical schema version (`workspace.go:19`) so older binaries refuse rather than misjudge trust; record a minimum binary version | none | done (merged d115fc7) |
 | 4 | `skill.meta.yaml` → `.meta/skill.yaml` (D5, D6) with a workspace migration through the WAL and a schema bump; field destination table; trust verdict and upstream status unchanged for every existing skill (test); approval-history walk follows both paths (`internal/app/skill_review_changes.go:24,73-90`) and leaves `.meta/` out of the blob sets | 2 | done (merged d6af65f; live hub migrated 2026-10-10, ebbb739) |
 | 3 | Minimal distill model (D1-D3, D7): lessons, decisions, sources, cursor advanced in the same write as lessons; remove revision packages, run state machine, insight/incorporation entities and LINK files; keep the preview/confirm pin (`mutation.Proposal`, runtime pin store) and name exact types/paths kept and removed; migrate existing distill data (runs, insights, rejections, tombstones) into `distill.yaml` with a pre-Phase-3 fixture; contract table of every MCP tool, web route, JSON schema and telemetry event kept / renamed / removed / deprecated (AGENTS.md: preserve public contracts); keep event types (D10) | 4, findings of 0 | done (merged d6af65f, cleanup 81bbf1e; distill.yaml format = distill-lab) |
-| 5 | Receipts store digests only (D8); `workspace_diff` uses Git for committed changes | 3 | done (9b6c986; schema v5, live hub not migrated yet) |
+| 5 | Receipts store digests only (D8); `workspace_diff` uses Git for committed changes | 3 | done (9b6c986; schema v5; live hub migrated 2026-10-10, 786c60e) |
 
 Phases run in the order 0 → 1 → 2 → 4 → 3 → 5. Phase files are written before each phase starts.
 <!-- Updated: Red Team 2026-10-08 - S6 (4 before 3), S7, S8, S11, S12, S15; Validation - D8 -->
@@ -136,6 +137,14 @@ Rules for every worktree agent:
 5. Never commit in the live hub `/home/vantt/skill-hub` from a code worktree.
 
 ## Acceptance criteria
+
+Verified 2026-10-10 (lead): `git clone` of the live hub (`786c60e`) into a temp dir with
+isolated HOME/XDG, then `skillhub validate` (ok) → `rebuild` (applied) → `status` (healthy;
+only "host integration missing", fixable). The MCP server on the clone serves `test-audit`
+and `skill_resolve` returns it. Found: `rebuild` warns "skill test-audit will not be served:
+skills/default/test-audit/.meta/SKILL.md is missing" — false; `servableSkillWarnings`
+(`internal/catalog/servable.go:95`) derives the skill directory from `.meta/skill.yaml`, so it
+also skips `ValidateServableSkill` for every skill since Phase 4.
 
 - `git clone` of a hub plus `skillhub rebuild` gives a valid, healthy workspace
   on a new machine, including a hub with distilled lessons (unreachable evidence is a warning).

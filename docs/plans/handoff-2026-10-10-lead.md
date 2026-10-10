@@ -34,7 +34,7 @@ schema v5, `9b6c986`). Phase 0 (scorecard) is the user's own work with distill-l
 | §5.1 MCP profiles (runtime / curation / all) | code done; no host verified for toggling, manual check on Claude Code pending |
 | 5(a), skill_list paging | done |
 | 5(c) one curator source per client | done (H, `51cb26b`..`1fdd787`, fix `d65b0e7`); no client verified for `skills_extension`, so all native hosts keep the native copy and the server hides the MCP copy from claude-code/codex/gemini |
-| Phase 3 enrichment | **deferred until there are cases.** Blocker: distill-lab rejects `where: usage:<case_id>`. Lead recommendation: when cases exist, promote confirmed cases to Git eval cases and cite them as `repo@commit:path` (option 1 in observer-handoff-G.md §2); do not change distill-lab |
+| Phase 3 enrichment | **deferred until there are cases.** Decided 2026-10-10: option 1 (promote confirmed cases to Git eval cases, cite `repo@commit:path`; do not change distill-lab) |
 | Phase 4 resolver | waits for the baseline (`skillhub telemetry baseline`), counting since the v4/v5 migration |
 | `directoryRead` | deferred entirely (user decided 2026-10-10). Reopen only if a pure-MCP client is shown to miss files |
 
@@ -65,6 +65,11 @@ so trust what the user saw; the CLI rejects `--workspace` before the subcommand.
 - Wave 4 (2026-10-10): worktree I merged (`1ef2841`..`7cd3fb0`): telemetry help, schema `$id`
   preserved in shrink, Claude Code split profiles. Proposal pending:
   `docs/plans/2026-10-10-curator-via-cli.md` §9.
+
+- `internal/catalog/servable.go:95`: `servableSkillWarnings` takes the skill directory from
+  `.meta/skill.yaml`, so every rebuild warns "<skill>/.meta/SKILL.md is missing" and
+  `ValidateServableSkill` never runs. Skills are still served. Found in the fresh-clone check.
+- Simplify open decision 2 decided 2026-10-10: cross-skill comparisons stay per skill.
 
 ## How the user works with the lead
 

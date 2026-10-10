@@ -1,5 +1,10 @@
 # Follow-up for Worktree C: Server-Side O3 Metrics and Error Handling
 
+> **Closed 2026-10-10.** Items 1–2: the O3 counters `unsupported_method_calls` and
+> `unlisted_resource_reads` were removed (C round 3); `directoryRead` is deferred entirely.
+> Item 3: `snapshot_expired_requests` remains in `internal/app/usage.go`.
+
+
 **Worktree C is actively rewriting `internal/delivery/mcpserver/server.go`.**
 Worktree F (observer fixes) was instructed not to touch `server.go`. This document specifies the exact changes required in `server.go` for Worktree C.
 

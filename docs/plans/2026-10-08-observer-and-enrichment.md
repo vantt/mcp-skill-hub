@@ -390,7 +390,7 @@ Quyết định:
 | Phase 1 (O1–O6, O3, O4, O8) | xong (worktree A, D, E, F) |
 | O7 baseline | lệnh có; hub thật migrate lên v4 ngày 2026-10-10, bắt đầu đếm từ đó |
 | Phase 2 case journal | xong (D, F) |
-| Phase 3 | **chặn**: distill-lab không nhận `where: usage:<case_id>`; 3 hướng trong `observer-handoff-G.md` §2, chờ quyết |
+| Phase 3 | **đã quyết hướng (2026-10-10): hướng 1** — case đã xác nhận được đưa thành eval case trong Git (`evals/routing/<case_id>.json`) và lesson trích dẫn `repo@commit:path`; không sửa distill-lab. Chờ có cases (0 case ngày 2026-10-10) |
 | Phase 4 | chờ baseline |
 | §5.1 tách profile | xong (G, I `7cd3fb0`). Claude Code verified 2026-10-10: `connect` ghi `skillhub` (runtime) + `skillhub-curation` (curation) và nhắc tắt curation trong `/mcp`; Codex/Gemini vẫn một entry. Hướng tiếp: [curator qua CLI](2026-10-10-curator-via-cli.md) |
 | 5 (a) `current_uri`, phân trang `skill_list` | xong (G) |
