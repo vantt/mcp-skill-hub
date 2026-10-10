@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -21,6 +22,8 @@ func normalizeGolden(body, root string) string {
 	s = regexp.MustCompile(`gen-[A-Za-z0-9_-]+`).ReplaceAllString(s, "gen-<ID>")
 	s = regexp.MustCompile(`(OP|RUN|PROP|PRP|INS|OBS)-[A-Za-z0-9_-]+`).ReplaceAllString(s, "<PREFIX>-<ID>")
 	s = regexp.MustCompile(`"skillhub_version":\s*"[^"]*"`).ReplaceAllString(s, `"skillhub_version": "<VERSION>"`)
+	// The platform doctor check reports the host OS; keep goldens OS-independent.
+	s = strings.ReplaceAll(s, `"name": "`+runtime.GOOS+`"`, `"name": "<GOOS>"`)
 	return s
 }
 
