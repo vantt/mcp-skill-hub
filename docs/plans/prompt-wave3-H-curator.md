@@ -3,7 +3,7 @@
 Start the agent inside its worktree:
 
 ```bash
-cd /home/vantt/projects/mcp-skill-hub-curator && omp --profile=gemini-tetcu72
+cd /home/vantt/projects/mcp-skill-hub-curator && omp --profile=openai-tetcu72
 ```
 
 ```text
