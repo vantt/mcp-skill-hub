@@ -48,11 +48,37 @@ func runConnect(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		}
 		return writeWorkspaceResult(result, err, stdout, stderr, flags.json)
 	}
-	if flags.json || result.Error != nil {
+	if result.Error != nil {
 		return writeWorkspaceResult(result, err, stdout, stderr, flags.json)
+	}
+	if flags.json {
+		response := struct {
+			app.Result
+			CurationGuidance string `json:"curation_guidance,omitempty"`
+		}{Result: result, CurationGuidance: connectCurationGuidance(result)}
+		if err := writeJSON(stdout, response); err != nil {
+			p := termui.New(stderr)
+			p.Error("Unable to write the command result.", "Output destination failed.", "Check the output destination and retry.")
+			return 1
+		}
+		return 0
 	}
 	renderConnectResult(stdout, result)
 	return 0
+}
+
+// A Claude MCP change writes both entries when the matrix verifies split profiles.
+// Other changes and already-current connections must not repeat the reminder.
+func connectCurationGuidance(result app.Result) string {
+	if !hostintegration.HostSupportsServerToggle(hostintegration.HostClaude) {
+		return ""
+	}
+	for _, item := range result.Items {
+		if item.ID == "host_"+string(hostintegration.HostClaude)+"_"+string(hostintegration.ChangeMCP) {
+			return "Claude Code: open `/mcp`, select skillhub-curation, Disable it for daily work; Enable it when you want to curate."
+		}
+	}
+	return ""
 }
 
 // renderConnectResult prints one line per managed file. Full managed diffs stay
@@ -86,6 +112,10 @@ func renderConnectResult(stdout io.Writer, result app.Result) {
 	}
 	for _, warning := range result.Warnings {
 		p.Warning(warning.Summary)
+	}
+	if guidance := connectCurationGuidance(result); guidance != "" {
+		p.Blank()
+		p.Line(guidance)
 	}
 	switch result.Status {
 	case app.StatusActionRequired:

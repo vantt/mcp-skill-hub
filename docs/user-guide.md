@@ -88,6 +88,21 @@ skillhub connect -g --workspace ~/skillhub --yes
 
 The registration stores the absolute path of the `skillhub` binary and of your workspace. If you move either, run `skillhub connect` again.
 
+Claude Code uses two entries: `skillhub` runs `--profile runtime` and
+`skillhub-curation` runs `--profile curation`. Newly written entries start enabled.
+Open `/mcp`, select skillhub-curation, Disable it for daily work; Enable it when
+you want to curate. Claude Code remembers the disabled state across restarts.
+It defers MCP tool schemas until ToolSearch, so disabling curation mostly saves
+the tool-name list, not roughly 50k tokens. Codex and Gemini still use one full
+`skillhub` entry because their per-server toggles are unverified.
+
+`connect` (also available as `integrate`) shows this reminder once in preview
+and apply output only when writing the Claude Code MCP registration. With
+`--json`, the reminder is a separate optional `curation_guidance` string; existing
+result fields keep their meaning. Repeating an unchanged connection writes
+nothing and omits the reminder. An existing single full Claude Code entry remains
+valid; `doctor` may suggest re-running `connect` to update the project connection.
+
 Existing `CLAUDE.md`, `AGENTS.md`, and `GEMINI.md` files keep your own text. Skill Hub only manages the marked block.
 
 > **Caution on committing connection files:** Project connection files (`.mcp.json`, `.codex/config.toml`, `.gemini/settings.json`) contain machine-specific absolute paths to your local binary and workspace. We recommend adding `.mcp.json`, `.codex/`, and `.gemini/` to your project's `.gitignore` rather than committing them to shared repositories. Similarly, do not commit connection files that embed machine-specific paths into your canonical skills repository.
@@ -95,7 +110,7 @@ Existing `CLAUDE.md`, `AGENTS.md`, and `GEMINI.md` files keep your own text. Ski
 
 Delete what `connect` wrote:
 
-- the `skillhub` entry in the registration files above,
+- the `skillhub` entry (and `skillhub-curation` for Claude Code) in the registration files above,
 - the block between the `skillhub:bootstrap` start and end comments in the instruction files,
 - the `system-curator` skill folders.
 

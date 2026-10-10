@@ -91,8 +91,9 @@
         "reason": "Executed MCP registration and native curator load do not verify SEP-2640 skills/list and skills/get."
       },
       "server_toggle": {
-        "status": "unverified",
-        "reason": "Claude Code supports `/mcp enable|disable` interactively, but disabledMcpServers in ~/.claude.json is documented in issue #78314 as ineffective at suppressing tool loading in active sessions, and project-scoped automated toggling remains unverified."
+        "status": "verified",
+        "client_version": "2.1.296",
+        "evidence": "User observation on 2026-10-10 in Claude Code 2.1.296: an isolated project .mcp.json with both entries connected both servers at start. In `/mcp`, Disable skillhub-curation left only the 3 mcp__skillhub__* tools (skill_feedback, skill_get, skill_resolve); Enable restored 23 mcp__skillhub-curation__* tools. After /exit and reopening, skillhub-curation stayed disabled until re-enabled; MCP logs showed it was not started. Enabled servers show a tick, disabled servers an empty circle. Claude Code defers MCP tool schemas until ToolSearch, so savings here are mostly the tool-name list, not ~50k tokens."
       }
     },
     {
@@ -151,6 +152,6 @@
     "Claude Code is the only V1 stock client with executed end-to-end curation evidence. Codex and Gemini configuration projections are best-effort previews, not claimed supported until their blocked end-to-end checks pass.",
     "Curator delivery is per client: verified skills_extension clients use MCP only; other integrated hosts retain native installation. Previously installed native copies are removed only when their bytes match the installation receipt (or, for legacy copies without a receipt, the embedded curator); edits are reported and preserved.",
     "skills/list and skills/get omit system-curator for identified native-integrated Claude Code, Codex, and Gemini sessions. Other clients, Claude Desktop, and sessions without clientInfo retain MCP delivery because native installation cannot be assumed.",
-    "Per-server enable/disable toggle support is required before skillhub integrate splits profiles into dual entries (skillhub and skillhub-curation). Because no client has verified automated toggle support with verifiable source citations, all hosts keep one full entry."
+    "Per-server enable/disable toggle support is required before skillhub connect/integrate splits profiles into dual entries (skillhub and skillhub-curation). Claude Code is verified by the user-observed interactive /mcp toggle and persistence check on 2026-10-10; Codex and Gemini remain unverified and keep one full entry."
   ]
 }

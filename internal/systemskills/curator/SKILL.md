@@ -1,6 +1,6 @@
 ---
 name: system-curator
-version: 1.5.2
+version: 1.5.3
 contract-version: "2"
 description: Guide Skill Hub maintenance through the bundled, application-service-backed curation tools.
 activation-policy: explicit-only
@@ -58,8 +58,11 @@ not ask for it or reconstruct it.
 ## Start at Curation Home
 
 If the curation tools (such as `hub_status`, `skill_review`, `source_list`) are
-missing, tell the user to enable `skillhub-curation` or use the matching CLI
-command (such as `skillhub status`, `skillhub doctor`, or `skillhub skill ...`).
+missing on a host with split profiles, tell the user to enable `skillhub-curation`
+in the host's MCP server controls: where `/mcp` is available, open `/mcp`, select
+skillhub-curation, Enable it when you want to curate; Disable it for daily work.
+Otherwise use the matching CLI command (such as `skillhub status`,
+`skillhub doctor`, or `skillhub skill ...`).
 
 For a general curation request, call `hub_status` first. It is local and offline:
 do not enumerate the catalog, fetch sources, or perform a network check to build

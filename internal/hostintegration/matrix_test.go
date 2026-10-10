@@ -55,10 +55,12 @@ func TestStockClientSkillsExtensionEvidence(t *testing.T) {
 }
 
 func TestHostSupportsServerToggle(t *testing.T) {
-	// Baseline: in matrixData, all stock clients are unverified for server toggle
-	for _, host := range []Host{HostClaude, HostCodex, HostGemini} {
-		if HostSupportsServerToggle(host) {
-			t.Fatalf("expected host %s to be unverified for server toggle in matrix", host)
+	for _, tc := range []struct {
+		host Host
+		want bool
+	}{{HostClaude, true}, {HostCodex, false}, {HostGemini, false}} {
+		if got := HostSupportsServerToggle(tc.host); got != tc.want {
+			t.Fatalf("host %s server toggle = %t, want %t", tc.host, got, tc.want)
 		}
 	}
 

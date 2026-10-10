@@ -11,7 +11,7 @@ const (
 	// CuratorSkillID is the stable identity used by host and distribution code.
 	CuratorSkillID = "system-curator"
 	// CuratorSkillVersion versions the bundled instructions independently of the binary.
-	CuratorSkillVersion = "1.5.2"
+	CuratorSkillVersion = "1.5.3"
 	// CuratorContractVersion versions the compatible tool and behavior contract.
 	CuratorContractVersion = "2"
 	// CuratorActivationPolicy prevents curation guidance from becoming an implicit

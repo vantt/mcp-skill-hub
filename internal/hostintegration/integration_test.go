@@ -388,8 +388,24 @@ func assertJSONRegistration(t *testing.T, path, binary, workspace string, gemini
 	if skillhub.Command != binary {
 		t.Fatalf("%s command = %v", path, skillhub.Command)
 	}
-	if len(skillhub.Args) != 4 || skillhub.Args[0] != "mcp" || skillhub.Args[1] != "serve" || skillhub.Args[2] != "--workspace" || skillhub.Args[3] != workspace {
-		t.Fatalf("%s args = %v", path, skillhub.Args)
+	wantArgs := []string{"mcp", "serve", "--workspace", workspace}
+	if !gemini {
+		wantArgs = []string{"mcp", "serve", "--profile", "runtime", "--workspace", workspace}
+		var curation struct {
+			Command string   `json:"command"`
+			Args    []string `json:"args"`
+		}
+		if err := json.Unmarshal(root.MCPServers["skillhub-curation"], &curation); err != nil {
+			t.Fatalf("decode %s curation registration: %v", path, err)
+		}
+		if curation.Command != binary || !slices.Equal(curation.Args, []string{"mcp", "serve", "--profile", "curation", "--workspace", workspace}) {
+			t.Fatalf("%s curation registration = %+v", path, curation)
+		}
+	} else if _, exists := root.MCPServers["skillhub-curation"]; exists {
+		t.Fatalf("%s unexpectedly contains a curation entry", path)
+	}
+	if !slices.Equal(skillhub.Args, wantArgs) {
+		t.Fatalf("%s args = %v, want %v", path, skillhub.Args, wantArgs)
 	}
 	if gemini && (skillhub.Trust == nil || *skillhub.Trust || skillhub.CWD != workspace) {
 		t.Fatalf("Gemini safety fields = %+v", skillhub)
