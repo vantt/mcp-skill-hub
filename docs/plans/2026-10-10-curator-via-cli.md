@@ -99,6 +99,19 @@ của host. Đề xuất làm nó rõ ràng hơn:
    **Phải kiểm chứng** cú pháp và thứ tự ưu tiên allow/ask/deny trên Claude Code 2.1.296 bằng
    một bài thử như lần profile. Ở chế độ `--dangerously-skip-permissions` thì quyền không có tác
    dụng, chỉ còn lời dặn trong skill; vẫn như hiện nay.
+   **Đã kiểm chứng 2026-10-10** (người dùng, Claude Code 2.1.296, chế độ quyền mặc định, project
+   `.claude/settings.local.json` với allow `Bash(skillhub:*)`, ask `Bash(skillhub * --yes*)` và
+   `Bash(skillhub * confirm *)`, deny `Bash(skillhub * --approve-content*)`):
+   - `status`, `skill list`, `skill add` (preview), `cd hub && skillhub skill list`: chạy thẳng.
+   - `skill add … --yes --json`, `skill confirm PROP-…`, `skillhub --workspace hub skill add … --yes`:
+     **hỏi**, thông báo nêu đúng luật ask. Luật ask thắng allow; vị trí cờ không lách được.
+   - `skill edit … --approve-content …`: **bị chặn**, không chạy.
+   - Bản tóm tắt của agent ghi "no prompt" cho các lệnh bị hỏi: agent không thấy hộp thoại quyền,
+     nên chỉ tin điều người dùng thấy.
+   - Lần mở đầu, hộp thoại trust báo "This folder pre-approves 1 tool permission … Bash(skillhub:*)".
+     `connect` nên báo trước điều này.
+   - Phụ: CLI không nhận `--workspace` đứng trước lệnh con (`skillhub --workspace hub skill …` lỗi);
+     curator phải đặt cờ sau lệnh con. Chưa thử lệnh ghép có `--yes` (`cd x && skillhub … --yes`).
 3. Codex/Gemini: chỉ có lời dặn trong skill cho tới khi kiểm chứng được cơ chế quyền tương ứng.
 
 ## 6. Curator: một file hay hai
