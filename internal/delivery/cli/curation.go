@@ -71,11 +71,11 @@ func renderCurationHome(writer io.Writer, home app.CurationHome, workspacePath s
 		}
 	} else if home.Workspace.Index != "current" {
 		fields = append(fields, termui.Field{Label: "Inventory", Value: "Skill and source counts are unavailable until the search index is rebuilt."})
-	} else if home.CountsKnown && home.HomeSummary.ActiveSkills == 0 && home.HomeSummary.WatchingSources == 0 {
+	} else if home.CountsKnown && home.TotalSkills == 0 && home.HomeSummary.WatchingSources == 0 {
 		inv := "No skills yet.\nNext: ask your agent 'create a skill for ...' or run:\n  skillhub skill create my-skill --collection core --name \"My Skill\" --description \"Skill description\""
 		fields = append(fields, termui.Field{Label: "Inventory", Value: inv})
 	} else if home.CountsKnown {
-		inv := fmt.Sprintf("%s; %s.", termui.Plural(home.HomeSummary.ActiveSkills, "active skill", "active skills"), termui.Plural(home.HomeSummary.WatchingSources, "watched source", "watched sources"))
+		inv := fmt.Sprintf("%d active, %d draft; %s.", home.HomeSummary.ActiveSkills, home.DraftSkills, termui.Plural(home.HomeSummary.WatchingSources, "watched source", "watched sources"))
 		fields = append(fields, termui.Field{Label: "Inventory", Value: inv})
 	}
 

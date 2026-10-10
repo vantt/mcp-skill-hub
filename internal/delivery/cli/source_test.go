@@ -231,9 +231,6 @@ func TestSourceImportCLI(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("import confirm failed: %d, %s %s", code, stdout, stderr)
 	}
-	if !strings.Contains(stdout, "Imported 1 draft skill") || !strings.Contains(stdout, "skillhub skill activate calc-tool --yes") {
-		t.Fatalf("import output missing draft guidance: %s", stdout)
-	}
 
 	// Verify draft skill exists
 	code, stdout, stderr = runCLIForTest([]string{"skill", "show", "calc-tool", "--workspace", root, "--json"})

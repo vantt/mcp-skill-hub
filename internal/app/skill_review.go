@@ -600,7 +600,7 @@ func computeNextAction(id, relDir, status string, valid bool, canonicalIssues []
 		if len(missingFields) > 0 {
 			return fmt.Sprintf("Complete required activation fields (%s) with `skillhub skill edit %s`.", strings.Join(missingFields, ", "), id)
 		}
-		return fmt.Sprintf("Activate skill with `skillhub skill activate %s --yes`.", id)
+		return fmt.Sprintf("Preview activation with `skillhub skill activate %s`.", id)
 	case "active":
 		if diverged {
 			return fmt.Sprintf("Rebuild catalog with `skillhub rebuild` to publish %d modified canonical file(s).", len(changed)+len(missing))
@@ -613,7 +613,7 @@ func computeNextAction(id, relDir, status string, valid bool, canonicalIssues []
 		}
 		return "Skill is active and available for agent routing."
 	case "deprecated":
-		return fmt.Sprintf("Skill is deprecated; archive with `skillhub skill archive %s --yes` when no longer needed.", id)
+		return fmt.Sprintf("Skill is deprecated; preview archival with `skillhub skill archive %s` when no longer needed.", id)
 	case "archived":
 		return "Skill is archived."
 	default:

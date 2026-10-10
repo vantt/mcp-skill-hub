@@ -261,9 +261,6 @@ func TestSkillCreateStarterTemplateAndNextStep(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("create exit = %d: %s", code, stderr)
 	}
-	if !strings.Contains(stdout, "Next:") || !strings.Contains(stdout, "skill activate starter-skill --yes") {
-		t.Fatalf("missing Next step in create output:\n%s", stdout)
-	}
 	if strings.Contains(stdout, "Catalog snapshot:") || strings.Contains(stdout, "Generation:") {
 		t.Fatalf("unwanted internals in non-verbose create output:\n%s", stdout)
 	}

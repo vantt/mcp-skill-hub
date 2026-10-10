@@ -76,6 +76,9 @@ type CurationHome struct {
 	Categories  []ActionCategory  `json:"categories"`
 	HomeSummary CurationSummary   `json:"home_summary"`
 	CountsKnown bool              `json:"-"`
+	// Human inventory counts; existing JSON summary meanings stay unchanged.
+	DraftSkills int `json:"-"`
+	TotalSkills int `json:"-"`
 }
 
 // CurationService owns the local/offline Curation Home application query.
@@ -176,6 +179,7 @@ type homeState struct {
 	// the catalog could not be read, so a missing count is never taken for zero.
 	TotalSkills            int
 	TotalSources           int
+	DraftSkills            int
 	CountsKnown            bool
 	InterruptedID          string
 	ChangedSources         int
@@ -222,6 +226,7 @@ func readHomeCounts(ctx context.Context, root string, state *homeState) (resultE
 		target *int
 	}{
 		{`SELECT count(*) FROM skills WHERE status='active'`, &state.Summary.ActiveSkills},
+		{`SELECT count(*) FROM skills WHERE status='draft'`, &state.DraftSkills},
 		{`SELECT count(*) FROM skills`, &state.TotalSkills},
 		{`SELECT count(*) FROM canonical_entities WHERE kind='source'`, &state.TotalSources},
 		{`SELECT count(*) FROM canonical_entities WHERE kind='source' AND COALESCE(json_extract(content_json,'$.status'),'watching') IN ('watching','changed','distill_pending')`, &state.Summary.WatchingSources},
@@ -373,6 +378,7 @@ func deriveCurationHome(state homeState) CurationHome {
 		},
 		Actions: []ActionItem{}, Categories: state.Categories, HomeSummary: state.Summary,
 		CountsKnown: state.CountsKnown,
+		DraftSkills: state.DraftSkills, TotalSkills: state.TotalSkills,
 	}
 	if state.Health == "invalid" {
 		home.HomeSummary.InvalidWorkspaces = 1

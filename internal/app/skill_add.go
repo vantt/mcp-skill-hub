@@ -800,7 +800,7 @@ func planSkillAddProposal(ctx context.Context, planCtx skillAddPlanContext) (Ski
 	}
 
 	proposal := SkillAddProposal{
-		Result:          NewResult(StatusActionRequired, fmt.Sprintf("Draft skill %q ready to add. Next: confirm with `skillhub skill confirm %s --yes`.", primaryTargetID, planned.ID)),
+		Result:          NewResult(StatusActionRequired, fmt.Sprintf("Draft skill %q ready to add. Next: review proposal %s before confirmation.", primaryTargetID, planned.ID)),
 		SkillID:         primaryTargetID,
 		SkillIDs:        skillIDs,
 		Collection:      planCtx.collection,
@@ -909,7 +909,7 @@ func (service SkillAddService) ConfirmSkillAdd(ctx context.Context, path string,
 	assessment, _ := catalog.AssessSkillState(ctx, root, preview.SkillID)
 
 	return SkillAddResult{
-		Result:          NewResult(StatusOK, fmt.Sprintf("Added draft skill %q. Next: review with `skillhub skill show %s`, then activate with `skillhub skill activate %s --yes`.", preview.SkillID, preview.SkillID, preview.SkillID)),
+		Result:          NewResult(StatusOK, fmt.Sprintf("Added draft skill %q. Next: review with `skillhub skill show %s`, then preview activation with `skillhub skill activate %s`.", preview.SkillID, preview.SkillID, preview.SkillID)),
 		SkillID:         preview.SkillID,
 		SkillIDs:        preview.SkillIDs,
 		Collection:      preview.Collection,

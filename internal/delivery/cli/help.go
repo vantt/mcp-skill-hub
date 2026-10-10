@@ -151,7 +151,7 @@ Examples:
   skillhub skill upstream pdf
   skillhub skill update pdf --yes
   skillhub skill confirm PROP-123
-  skillhub skill activate my-skill --yes
+  skillhub skill activate my-skill
 `,
 	"source": `Usage: skillhub source <subcommand> [--workspace <path>] [flags]
 

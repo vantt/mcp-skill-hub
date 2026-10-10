@@ -729,7 +729,7 @@ func nextStepForSkill(result app.SkillMutationResult, workspacePath string) stri
 	summary := result.Summary
 	switch {
 	case strings.Contains(summary, "Draft skill") && strings.Contains(summary, "saved"):
-		return fmt.Sprintf("edit the instructions with `skillhub skill edit %s --editor`, then activate with `skillhub skill activate %s --yes`.", result.SkillID, result.SkillID)
+		return fmt.Sprintf("edit the instructions with `skillhub skill edit %s --editor`, then preview activation with `skillhub skill activate %s`.", result.SkillID, result.SkillID)
 	case strings.Contains(summary, "active") || strings.Contains(summary, "activated"):
 		return fmt.Sprintf("ask your agent to use it, or inspect with `skillhub skill show %s`. Commit with `git -C %s commit`.", result.SkillID, workspacePath)
 	case strings.Contains(summary, "deprecated") || strings.Contains(summary, "archived"):
@@ -775,9 +775,9 @@ func writeSkillErrorFor(id string, stdout, stderr io.Writer, jsonOutput bool, er
 		if targetID == "" {
 			targetID = id
 		}
-		fixCmd := fmt.Sprintf("skillhub skill edit %s %s --yes", targetID, strings.Join(editFlags, " "))
+		fixCmd := fmt.Sprintf("skillhub skill edit %s %s", targetID, strings.Join(editFlags, " "))
 		why = fmt.Sprintf("skill %s requires: %s", targetID, strings.Join(missingErr.Missing, ", "))
-		fix := fmt.Sprintf("Run `%s`, then retry `skillhub skill activate %s --yes`.", fixCmd, targetID)
+		fix := fmt.Sprintf("Preview the fix with `%s`, review and confirm it, then preview `skillhub skill activate %s`.", fixCmd, targetID)
 		return writeInvalidRequest(stdout, stderr, jsonOutput, why, fix)
 	}
 	if errors.Is(err, skill.ErrNotFound) || why == "skill not found" {
@@ -801,11 +801,11 @@ func skillErrorFix(err error, id string) string {
 	case errors.Is(err, skill.ErrNotFound) || message == "skill not found":
 		return "Run `skillhub skill list` to inspect available skills."
 	case strings.Contains(message, "routing.not_for") || strings.Contains(message, "routing_review_rationale"):
-		return "Add `--not-for \"<when not to use>\"`: run `skillhub skill edit " + id + " --not-for \"<when not to use>\" --yes`, then retry. If nothing applies, record why with `skillhub skill edit " + id + " --rationale \"<reason>\" --yes`."
+		return "Preview `skillhub skill edit " + id + " --not-for \"<when not to use>\"`, then review and confirm before retrying. If nothing applies, preview `skillhub skill edit " + id + " --rationale \"<reason>\"`."
 	case strings.Contains(message, "routing.min_scope"):
-		return "Add `--min-scope <single_step|multi_step|project>`: run `skillhub skill edit " + id + " --min-scope single_step --yes`, then retry."
+		return "Preview `skillhub skill edit " + id + " --min-scope single_step`, then review and confirm before retrying."
 	case strings.Contains(message, "at least one routing trigger"):
-		return "Run `skillhub skill edit " + id + " --trigger \"<when to use>\" --yes`, then retry."
+		return "Preview `skillhub skill edit " + id + " --trigger \"<when to use>\"`, then review and confirm before retrying."
 	}
 	return "Correct the skill fields or workspace state and retry."
 }
