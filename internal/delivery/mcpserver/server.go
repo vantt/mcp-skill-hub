@@ -22,6 +22,7 @@ import (
 	"github.com/vantt/mcp-skill-hub/internal/app"
 	"github.com/vantt/mcp-skill-hub/internal/catalog"
 	"github.com/vantt/mcp-skill-hub/internal/delivery/paging"
+	"github.com/vantt/mcp-skill-hub/internal/hostintegration"
 	"github.com/vantt/mcp-skill-hub/internal/skill"
 	"github.com/vantt/mcp-skill-hub/internal/systemskills"
 	"github.com/vantt/mcp-skill-hub/internal/telemetry"
@@ -205,6 +206,14 @@ func (adapter *Server) listSkills(ctx context.Context, session *mcp.ServerSessio
 	for _, item := range skipped {
 		adapter.logger.Warn("skill omitted from listing because it cannot be served", "skill_id", item.SkillID, "reason", item.Reason)
 	}
+	if nativeCuratorForSession(session) {
+		for index, entry := range entries {
+			if entry.SkillID == systemskills.CuratorSkillID {
+				entries = append(entries[:index], entries[index+1:]...)
+				break
+			}
+		}
+	}
 	filter := "skills"
 	owner := paging.Owner(filter, struct {
 		Snapshot string                 `json:"snapshot"`
@@ -233,6 +242,9 @@ func (adapter *Server) getSkill(ctx context.Context, session *mcp.ServerSession,
 	if err != nil {
 		return nil, adapter.distributionRPCError(ctx, session, err)
 	}
+	if entry.SkillID == systemskills.CuratorSkillID && nativeCuratorForSession(session) {
+		return nil, invalidParams("skill_not_found", "This client uses its native system-curator skill.")
+	}
 	result := toSkillEntry(entry)
 	result.Local = adapter.localSkill(ctx, entry.SkillID, "active")
 	blocked := result.Local != nil && result.Local.Status == app.LocalStatusReviewRequired
@@ -248,6 +260,35 @@ func (adapter *Server) getSkill(ctx context.Context, session *mcp.ServerSession,
 		ReasonCodes:  reasons,
 	})
 	return &getSkillResult{ResultType: "complete", Skill: result, TTLMS: cacheTTLMS, CacheScope: "private"}, nil
+}
+
+func nativeCuratorForSession(session *mcp.ServerSession) bool {
+	if session == nil {
+		return false
+	}
+	params := session.InitializeParams()
+	if params == nil || params.ClientInfo == nil {
+		return false
+	}
+	// Desktop has no native integration adapter, despite telemetry grouping
+	// all Claude names under claude-code.
+	if strings.Contains(strings.ToLower(params.ClientInfo.Name), "desktop") {
+		return false
+	}
+	var host hostintegration.Host
+	switch NormalizeClient(params.ClientInfo.Name, params.ClientInfo.Version).Name {
+	case "claude-code":
+		host = hostintegration.HostClaude
+	case "codex":
+		host = hostintegration.HostCodex
+	case "gemini":
+		host = hostintegration.HostGemini
+	default:
+		// Without an identifiable adapter, native installation cannot be
+		// assumed. Preserve MCP delivery rather than remove the only source.
+		return false
+	}
+	return !hostintegration.HostSupportsSkillsExtension(host)
 }
 
 // localSkill exports or reuses the local snapshot for an activated skill. The

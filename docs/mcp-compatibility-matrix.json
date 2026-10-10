@@ -150,6 +150,7 @@
     "External conformance and stock-client checks are unverified, not not_applicable.",
     "Claude Code is the only V1 stock client with executed end-to-end curation evidence. Codex and Gemini configuration projections are best-effort previews, not claimed supported until their blocked end-to-end checks pass.",
     "Curator delivery is per client: verified skills_extension clients use MCP only; other integrated hosts retain native installation. Previously installed native copies are removed only when their bytes match the installation receipt (or, for legacy copies without a receipt, the embedded curator); edits are reported and preserved.",
+    "skills/list and skills/get omit system-curator for identified native-integrated Claude Code, Codex, and Gemini sessions. Other clients, Claude Desktop, and sessions without clientInfo retain MCP delivery because native installation cannot be assumed.",
     "Per-server enable/disable toggle support is required before skillhub integrate splits profiles into dual entries (skillhub and skillhub-curation). Because no client has verified automated toggle support with verifiable source citations, all hosts keep one full entry."
   ]
 }
