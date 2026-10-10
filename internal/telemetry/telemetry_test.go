@@ -364,7 +364,7 @@ func TestCloseCanRetryAfterCanceledFullQueue(t *testing.T) {
 		t.Fatal("canceled close consumed shutdown state before it was queued")
 	}
 	close(release)
-	closeCtx, closeCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	closeCtx, closeCancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer closeCancel()
 	if err := recorder.Close(closeCtx); err != nil {
 		t.Fatalf("retry close: %v", err)

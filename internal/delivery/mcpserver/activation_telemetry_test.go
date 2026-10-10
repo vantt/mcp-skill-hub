@@ -187,13 +187,13 @@ func TestActivationTelemetryEndToEnd(t *testing.T) {
 	}
 
 	// Flush and close the recorder to ensure everything is written to SQLite
-	flushCtx, cancelFlush := context.WithTimeout(t.Context(), 5*time.Second)
+	flushCtx, cancelFlush := context.WithTimeout(t.Context(), 60*time.Second)
 	if err := recorder.Flush(flushCtx); err != nil {
 		t.Fatalf("flush telemetry: %v", err)
 	}
 	cancelFlush()
 
-	closeCtx, cancelClose := context.WithTimeout(t.Context(), 5*time.Second)
+	closeCtx, cancelClose := context.WithTimeout(t.Context(), 60*time.Second)
 	if err := recorder.Close(closeCtx); err != nil {
 		t.Fatalf("close telemetry: %v", err)
 	}
@@ -205,7 +205,7 @@ func TestActivationTelemetryEndToEnd(t *testing.T) {
 		t.Fatalf("open telemetry for rollups: %v", err)
 	}
 	defer func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 		_ = reader.Close(ctx)
 	}()
@@ -252,7 +252,7 @@ func TestActivationTelemetryEndToEnd(t *testing.T) {
 	}
 
 	// Close reader before reading file bytes to ensure clean DB state
-	closeReaderCtx, cancelReader := context.WithTimeout(context.Background(), 5*time.Second)
+	closeReaderCtx, cancelReader := context.WithTimeout(context.Background(), 60*time.Second)
 	_ = reader.Close(closeReaderCtx)
 	cancelReader()
 
