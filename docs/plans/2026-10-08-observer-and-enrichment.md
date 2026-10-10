@@ -383,6 +383,20 @@ Quyết định:
 4. Phase 2 → Phase 3 (sau simplify Phase 3) → Phase 4 theo số liệu
 5. Phase 5 / §5.1 sau simplify Phase 3 (đo lại tools/list trước)
 
+### Trạng thái (2026-10-10, main 7c8b279)
+
+| Việc | Trạng thái |
+|---|---|
+| Phase 1 (O1–O6, O3, O4, O8) | xong (worktree A, D, E, F) |
+| O7 baseline | lệnh có; hub thật migrate lên v4 ngày 2026-10-10, bắt đầu đếm từ đó |
+| Phase 2 case journal | xong (D, F) |
+| Phase 3 | **chặn**: distill-lab không nhận `where: usage:<case_id>`; 3 hướng trong `observer-handoff-G.md` §2, chờ quyết |
+| Phase 4 | chờ baseline |
+| §5.1 tách profile | xong code (G); chưa host nào verified nên `integrate` vẫn ghi một entry đủ bộ |
+| 5 (a) `current_uri`, phân trang `skill_list` | xong (G) |
+| 5 `directoryRead` | bộ đếm O3 `unsupported_method_calls`/`unlisted_resource_reads` đã bỏ vì không đo được (C round 3); cần cách đo khác hoặc hoãn hẳn |
+| 5 (c) `system-curator` native/MCP trùng tên | chưa làm |
+
 ## 9. Thực thi song song với plan simplify (worktree riêng)
 
 Mỗi phần việc do **một agent trong một git worktree riêng** (`isolation: worktree`).
