@@ -70,6 +70,70 @@ Before and after, 1280 px and 390 px (images in `web-ux-evidence/tier1/`):
 | deprecate dialog 1280 | ![](web-ux-evidence/tier1/before-lifecycle-deprecate-1280.png) | ![](web-ux-evidence/tier1/after-lifecycle-deprecate-1280.png) |
 | deprecate dialog 390 | ![](web-ux-evidence/tier1/before-lifecycle-deprecate-390.png) | ![](web-ux-evidence/tier1/after-lifecycle-deprecate-390.png) |
 
-## Tier 2 and Tier 3
+## Tier 2: weekly flows
+
+Scored the same way on the capture of the hub clone, before and after the Tier 2 fixes. "Before" is the
+state at commit `8d60581`. Upstream updates could not be captured with an update present: the hub clone has no
+upstream-tracked skills and the CLI only adds skills from a real GitHub address, so the update review screen
+was scored from its source and unit tests rather than from a screenshot.
+
+### Before
+
+| Flow | Task | Next | Wording | State | Safety | Copyable | Mobile | Access | Defects |
+|---|---|---|---|---|---|---|---|---|---|
+| editor | 1 | 1 | 1 | 2 | 2 | 2 | 1 | 2 | D20, D21, D22 |
+| editor-preview | 0 | 1 | 0 | 1 | 0 | 2 | 2 | 2 | D17, D18 |
+| editor-conflict | 1 | 1 | 1 | 1 | 0 | 2 | 2 | 2 | D19, D23 |
+| create | 1 | 1 | 1 | 2 | 2 | 2 | 1 | 2 | D20, D22, D24, D27 |
+| create-preview | 0 | 1 | 0 | 1 | 1 | 2 | 2 | 2 | D17, D24 |
+| add | 1 | 1 | 1 | 1 | 2 | 2 | 1 | 2 | D22, D25, D27 |
+| add-advanced | 1 | 1 | 1 | 1 | 2 | 2 | 1 | 2 | D25 |
+| upstream-updates | 1 | 0 | 1 | 1 | 2 | 2 | 2 | 2 | D26 |
+
+### After
+
+| Flow | Task | Next | Wording | State | Safety | Copyable | Mobile | Access | Notes |
+|---|---|---|---|---|---|---|---|---|---|
+| editor | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | Every routing field has a one-line explanation and an example; Preview changes stays off until something changed. |
+| editor-preview | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | Says in words what changes; the exact patch is one click away. |
+| editor-conflict | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | Shows what each side changed and keeps an edit made elsewhere. |
+| create | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | Says a draft is not routed yet; Preview draft is on the first screen at 1280 x 800. |
+| create-preview | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | |
+| add | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | Not captured past Discover (needs the network). The Review step is covered by unit tests. |
+| add-advanced | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | |
+| upstream-updates | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | Empty list explains why and how to check; the update review screen is scored from source and tests only. |
+
+No 0 remains on Task success, Wording or Safety. Metrics after the fixes: no cut-off element, no horizontal
+overflow and no serious or critical axe finding at 1280 or 390 px on these eight captures (same as before).
+
+### Defects found in this tier
+
+| Id | Severity | Defect | Status |
+|---|---|---|---|
+| D17 | High | The preview dialogs of Editor and Create were empty apart from a title and "Technical details". The web client read fields the API does not send (`impact`, `paths`, a text `diff`) and ignored the ones it does (`diff` as path lists, `full_diff`, `routing_impact`). | Fixed: one reader for the real fields; the dialog lists the files touched, what changes in words, and the exact patch behind a toggle. |
+| D18 | High | Editor confirm said "Skill edit is ready for review." and the button said "Review"; the result was a toast with a raw operation id. | Fixed: "Save changes to <id>?", button "Save changes", toast "Saved 1 change to <id>."; after saving the form shows the saved text. |
+| D19 | High | "Use latest as base" sent the old description back, silently undoing an edit made elsewhere; "Discard draft" reset only some fields. | Fixed: the person's edits are applied on top of the saved version and only for fields they changed; discard resets every field. Covered by unit and E2E tests. |
+| D23 | High | The conflict drawer showed the same stale text on both sides ("Latest canonical" was the version the editor opened with) and the label "digest differs". | Fixed: the latest version is fetched; the drawer lists what you changed and what changed meanwhile, warns when both touched a field, and explains both ways forward. |
+| D20 | Medium | Operations, Triggers, "Not for / Rationale" and "Min scope" had no explanation anywhere. | Fixed: one-line hint and an example on Create and Editor (shared text); scope choices say what they mean. |
+| D21 | Medium | The readiness card's "Go to field" buttons opened the Editor without focusing the field. | Fixed: the cursor lands in the field that was named. |
+| D24 | Medium | Create did not say that it makes a draft that is not routed yet, and left Description optional on the form while the server rejects an empty one. | Fixed: notes on the form and in the preview; Description is marked required and checked on the form. |
+| D27 | Medium | A taken skill id or any other server-side validation failure came back as "The request conflicts with validation rules" with no reason. | Fixed in `routes_skill_write.go`: the validation message becomes the reason for create and edit previews. |
+| D25 | Medium | Add from GitHub started with a made-up address that looked real, did not say what Discover does, and the Review step ignored the license, conflicts and files. | Fixed: empty field with an italic placeholder, a note that Discover only looks, hints under Advanced; the Review step shows the skills, revision, trust note, license warning, conflicts and files that would be written. |
+| D26 | Low | The Skills list gave no help when no skill has an upstream update. | Fixed: the empty state says why and offers `skillhub skill outdated --check`; the filter option reads "Has an update". |
+| D22 | Medium | Inputs were wider than their column (no border-box), so fields touched each other and crossed the card edge. | Fixed in the shared stylesheet; placeholders are italic so they do not pass for typed values. |
+
+### Evidence
+
+Before and after (images in `web-ux-evidence/tier2/`):
+
+| Flow | Before | After |
+|---|---|---|
+| editor preview 1280 | ![](web-ux-evidence/tier2/before-editor-preview-1280.png) | ![](web-ux-evidence/tier2/after-editor-preview-1280.png) |
+| editor conflict 1280 | ![](web-ux-evidence/tier2/before-editor-conflict-1280.png) | ![](web-ux-evidence/tier2/after-editor-conflict-1280.png) |
+| create 1280 | ![](web-ux-evidence/tier2/before-create-1280.png) | ![](web-ux-evidence/tier2/after-create-1280.png) |
+| create preview 390 | ![](web-ux-evidence/tier2/before-create-preview-390.png) | ![](web-ux-evidence/tier2/after-create-preview-390.png) |
+| add, advanced open 1280 | ![](web-ux-evidence/tier2/before-add-advanced-1280.png) | ![](web-ux-evidence/tier2/after-add-advanced-1280.png) |
+
+## Tier 3
 
 Filled in by the later phases.

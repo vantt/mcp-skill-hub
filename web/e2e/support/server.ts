@@ -15,6 +15,8 @@ export interface RunningServer {
 
 export interface StartServerOptions {
   workspace?: string;
+  // Environment for the spawned server; defaults to the current process environment.
+  env?: NodeJS.ProcessEnv;
 }
 
 export async function startServer(options?: StartServerOptions): Promise<RunningServer> {
@@ -67,7 +69,7 @@ export async function startServer(options?: StartServerOptions): Promise<Running
   const proc = spawn(
     binaryPath,
     ['serve', 'web', '--addr', '127.0.0.1:0', '--no-open', '--workspace', ws],
-    { stdio: ['ignore', 'pipe', 'pipe'] },
+    { stdio: ['ignore', 'pipe', 'pipe'], env: options?.env ?? process.env },
   );
 
   const serverInfo = await new Promise<{ url: string; origin: string }>((resolve, reject) => {

@@ -1,7 +1,7 @@
 ---
 phase: 3
 title: "Tier 2: weekly flows, test and fix"
-status: pending
+status: completed
 priority: P2
 effort: "1d"
 dependencies: [2]

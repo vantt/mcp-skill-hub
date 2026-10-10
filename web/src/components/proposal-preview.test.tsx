@@ -15,7 +15,7 @@ describe('ProposalPreview', () => {
     toState: 'draft',
     paths: ['skills/core/new-skill/SKILL.md'],
     impact: 'Created as draft.',
-    diff: '--- old\n+++ new\n@@ -1,2 +1,3 @@\n context line\n-removed line\n+added line',
+    diff: '--- a/x\n+++ b/x\n@@ -1,2 +1,3 @@\n context line\n-removed line\n+added line',
     stat: '+1 −1',
     proposalId: 'PROP-test-1234',
     proposalDigest: 'sha256:abcd1234abcd1234',
@@ -102,5 +102,46 @@ describe('ProposalPreview', () => {
     expect(onCancel).toHaveBeenCalled();
 
     opener.remove();
+  });
+});
+
+describe('ProposalPreview plain words', () => {
+  it('lists what changes in words and keeps the exact patch collapsed', () => {
+    render(
+      <ProposalPreview
+        open
+        title="Save changes to demo?"
+        target="demo"
+        changes={['Description: "Old" becomes "New".']}
+        diff={'--- a/x\n+++ b/x\n-old\n+new'}
+        proposalId="PROP-1"
+        proposalDigest="sha256:1"
+        baseVersion="b"
+        confirmLabel="Save changes"
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Description: "Old" becomes "New".')).toBeInTheDocument();
+    const summary = screen.getByText('Exact file changes').closest('details');
+    expect(summary).not.toHaveAttribute('open');
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeInTheDocument();
+  });
+
+  it('opens the patch when there is nothing else to read', () => {
+    render(
+      <ProposalPreview
+        open
+        title="t"
+        target="demo"
+        diff={'+only'}
+        proposalId="PROP-1"
+        proposalDigest="sha256:1"
+        baseVersion="b"
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Exact file changes').closest('details')).toHaveAttribute('open');
   });
 });

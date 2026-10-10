@@ -5,6 +5,8 @@ import type { SkillProposal } from '../../api/types';
 import { ApiError } from '../../api/client';
 import { ProposalPreview } from '../../components/ProposalPreview';
 import { Toast } from '../../components/Toast';
+import { proposalPatch, proposalPaths, proposalWarning } from '../../api/proposal-view';
+import { DRAFT_NOTE, ROUTING_HELP, SCOPE_OPTIONS } from '../routing-hints';
 import { useT } from '../../i18n';
 
 const LABEL_IDENTITY = 'Identity';
@@ -25,15 +27,13 @@ const LABEL_CANCEL = 'Cancel';
 const LABEL_PREVIEW_DRAFT = 'Preview draft';
 const REQ_STAR = '*';
 const COLLECTIONS = ['core', 'default', 'engineering', 'operations', 'docs'];
-const SCOPES = [
-  { value: '', label: 'Select scope' },
-  { value: 'single_step', label: 'single_step' },
-  { value: 'multi_step', label: 'multi_step' },
-  { value: 'project', label: 'project' },
-];
 const MSG_FILE_LOADED = 'File loaded successfully.';
 
-const HINT_SKILL_ID = 'Lowercase, hyphenated (e.g. release-checklist).';
+const HINT_SKILL_ID = 'Lowercase, hyphenated. It cannot be changed later (e.g. release-checklist).';
+const HINT_NAME = 'The title people see in lists.';
+const HINT_DESCRIPTION = 'One or two sentences on what the skill does. Agents read this to decide whether to load it.';
+const HINT_COLLECTION = 'The folder the skill is filed under. Pick core if unsure.';
+const HINT_ROUTING = 'Routing tells agents when to pick this skill. You can leave it empty now, but it is required before the skill can be activated.';
 const HINT_SCAFFOLD = 'A default scaffold will be used. An untouched scaffold cannot be activated.';
 const HINT_UPLOAD = 'Drop a .md file or click to browse. Max size 1 MB.';
 
@@ -73,6 +73,10 @@ export function CreateSkillScreen() {
 
     if (!name.trim()) {
       errs.name = 'Display name is required.';
+    }
+
+    if (!description.trim()) {
+      errs.description = 'Description is required.';
     }
 
     setErrors(errs);
@@ -159,9 +163,9 @@ export function CreateSkillScreen() {
 
   const handleConfirm = async (pins: { proposalId: string; proposalDigest: string; baseVersion: string }) => {
     try {
-      const res = await confirmSkillMutation(pins.proposalId, pins);
+      await confirmSkillMutation(pins.proposalId, pins);
       setPreviewOpen(false);
-      setReceiptToast(`Created · ${res.operation_id}`);
+      setReceiptToast(`Created draft ${id.trim()}. Opening it so you can finish the routing fields.`);
       setTimeout(() => {
         navigate(`/skills/${id.trim()}`);
       }, 1200);
@@ -191,6 +195,9 @@ export function CreateSkillScreen() {
       <section className="fg-card" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
         <div className="fg-card__title">
           <span>{LABEL_IDENTITY}</span>
+        </div>
+        <div className="fg-caveat fg-caveat--info">
+          <span>{DRAFT_NOTE}</span>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-4)' }}>
@@ -234,9 +241,13 @@ export function CreateSkillScreen() {
               onBlur={validate}
               aria-invalid={Boolean(errors.name)}
             />
-            {errors.name && (
+            {errors.name ? (
               <span className="fg-field__hint" style={{ color: 'var(--color-danger)' }}>
                 <span>{errors.name}</span>
+              </span>
+            ) : (
+              <span className="fg-field__hint">
+                <span>{HINT_NAME}</span>
               </span>
             )}
           </div>
@@ -244,15 +255,28 @@ export function CreateSkillScreen() {
 
         <div className="fg-field">
           <label className="fg-field__label t-label" htmlFor="create-desc">
-            <span>{LABEL_DESCRIPTION}</span>
+            <span>{LABEL_DESCRIPTION} </span>
+            <span className="fg-field__req">{REQ_STAR}</span>
           </label>
           <textarea
             id="create-desc"
             className="fg-input fg-input--area"
             style={{ minHeight: '64px' }}
+            placeholder="Checks a release branch is ready to ship."
             value={description}
             onChange={(e) => setDescription(e.target.value)}
+            onBlur={validate}
+            aria-invalid={Boolean(errors.description)}
           />
+          {errors.description ? (
+            <span className="fg-field__hint" style={{ color: 'var(--color-danger)' }}>
+              <span>{errors.description}</span>
+            </span>
+          ) : (
+            <span className="fg-field__hint">
+              <span>{HINT_DESCRIPTION}</span>
+            </span>
+          )}
         </div>
 
         <div className="fg-field" style={{ maxWidth: '240px' }}>
@@ -271,6 +295,9 @@ export function CreateSkillScreen() {
               ▾
             </span>
           </div>
+          <span className="fg-field__hint">
+            <span>{HINT_COLLECTION}</span>
+          </span>
         </div>
       </section>
 
@@ -279,6 +306,9 @@ export function CreateSkillScreen() {
         <div className="fg-card__title">
           <span>{LABEL_ROUTING}</span>
         </div>
+        <span className="t-body-sm" style={{ color: 'var(--color-text-muted)' }}>
+          {HINT_ROUTING}
+        </span>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-4)' }}>
           <div className="fg-field">
@@ -288,10 +318,13 @@ export function CreateSkillScreen() {
             <input
               id="create-ops"
               className="fg-input"
-              placeholder="write, review"
+              placeholder={ROUTING_HELP.operations.example}
               value={operations}
               onChange={(e) => setOperations(e.target.value)}
             />
+            <span className="fg-field__hint">
+              <span>{ROUTING_HELP.operations.hint}</span>
+            </span>
           </div>
 
           <div className="fg-field">
@@ -301,10 +334,13 @@ export function CreateSkillScreen() {
             <input
               id="create-trigs"
               className="fg-input"
-              placeholder="prepare a release"
+              placeholder={ROUTING_HELP.triggers.example}
               value={triggers}
               onChange={(e) => setTriggers(e.target.value)}
             />
+            <span className="fg-field__hint">
+              <span>{ROUTING_HELP.triggers.hint}</span>
+            </span>
           </div>
 
           <div className="fg-field">
@@ -314,9 +350,13 @@ export function CreateSkillScreen() {
             <input
               id="create-notfor"
               className="fg-input"
+              placeholder={ROUTING_HELP.notFor.example}
               value={notFor}
               onChange={(e) => setNotFor(e.target.value)}
             />
+            <span className="fg-field__hint">
+              <span>{ROUTING_HELP.notFor.hint}</span>
+            </span>
           </div>
 
           <div className="fg-field">
@@ -325,7 +365,7 @@ export function CreateSkillScreen() {
             </label>
             <div className="fg-select">
               <select id="create-scope" value={minScope} onChange={(e) => setMinScope(e.target.value)}>
-                {SCOPES.map((sc) => (
+                {SCOPE_OPTIONS.map((sc) => (
                   <option key={sc.value} value={sc.value}>
                     {sc.label}
                   </option>
@@ -335,6 +375,9 @@ export function CreateSkillScreen() {
                 ▾
               </span>
             </div>
+            <span className="fg-field__hint">
+              <span>{ROUTING_HELP.minScope.hint}</span>
+            </span>
           </div>
         </div>
       </section>
@@ -461,15 +504,17 @@ export function CreateSkillScreen() {
       {previewOpen && proposal && (
         <ProposalPreview
           open={previewOpen}
-          title={proposal.summary || 'Create draft skill'}
+          title={`Create draft skill ${id.trim()}?`}
           target={id.trim()}
           fromState="none"
           toState="draft"
-          paths={proposal.paths}
-          impact={proposal.impact}
-          warning={proposal.warning}
-          diff={proposal.diff}
-          stat={proposal.stat}
+          paths={proposalPaths(proposal)}
+          changes={[
+            `Adds the skill "${name.trim()}" to the ${collection.trim() || 'core'} collection as a draft.`,
+            'A draft is not routed to agents yet. Activate it from its page once it is ready.',
+          ]}
+          warning={proposalWarning(proposal)}
+          diff={proposalPatch(proposal)}
           proposalId={pins?.proposal_id || ''}
           proposalDigest={pins?.proposal_digest || ''}
           baseVersion={pins?.base_version || ''}

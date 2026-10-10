@@ -75,7 +75,7 @@ test('skill lifecycle journey: create, edit routing, activate, deprecate, and ar
 
   const updateModal = page.locator('.fg-modal');
   await expect(updateModal).toBeVisible({ timeout: 15000 });
-  await updateModal.getByRole('button', { name: /review|confirm/i }).click();
+  await updateModal.getByRole('button', { name: /save changes/i }).click();
   await expect(updateModal).toBeHidden({ timeout: 10000 });
 
   // 5. Switch back to Review tab
@@ -171,7 +171,7 @@ test('conflict journey and reload persistence', async ({ page }) => {
   await expect(drawer.getByRole('button', { name: /overwrite/i })).toBeHidden();
 
   // 4. Click "Use latest as base" -> conflict clears and preview succeeds
-  await drawer.getByRole('button', { name: 'Use latest as base' }).click();
+  await drawer.getByRole('button', { name: 'Keep my edits on the latest version' }).click();
   await expect(drawer).toBeHidden({ timeout: 10000 });
 
   const modal = page.locator('.fg-modal');

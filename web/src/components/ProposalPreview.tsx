@@ -5,7 +5,8 @@ import { StatusBadge } from './StatusBadge';
 
 const LABEL_STALE_PROPOSAL = 'This proposal is no longer current. The base changed after it was created.';
 const LABEL_CREATE_NEW_PREVIEW = 'Create new preview';
-const LABEL_AFFECTED_PATHS = 'Affected paths';
+const LABEL_AFFECTED_PATHS = 'Files touched';
+const LABEL_EXACT_CHANGES = 'Exact file changes';
 const LABEL_ROUTING_IMPACT = 'What changes';
 const LABEL_TECH_DETAILS = 'Technical details';
 const LABEL_PROP_ID = 'proposal_id: ';
@@ -24,6 +25,8 @@ export interface ProposalPreviewProps {
   toState?: string;
   paths?: string[];
   impact?: string;
+  // Plain-words sentences saying what will change, shown before the exact patch.
+  changes?: string[];
   warning?: string;
   diff?: string;
   stat?: string;
@@ -48,6 +51,7 @@ export function ProposalPreview({
   toState,
   paths = [],
   impact,
+  changes = [],
   warning,
   diff = '',
   stat,
@@ -248,14 +252,23 @@ export function ProposalPreview({
               </div>
             )}
 
-            {impact && (
+            {(impact || changes.length > 0) && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <span className="t-label" style={{ color: 'var(--color-text-muted)' }}>
                   <span>{LABEL_ROUTING_IMPACT}</span>
                 </span>
-                <span className="t-body-sm" style={{ color: 'var(--color-text)' }}>
-                  <span>{impact}</span>
-                </span>
+                {impact && (
+                  <span className="t-body-sm" style={{ color: 'var(--color-text)' }}>
+                    <span>{impact}</span>
+                  </span>
+                )}
+                {changes.length > 0 && (
+                  <ul className="t-body-sm" style={{ margin: 0, paddingLeft: 'var(--space-4)', color: 'var(--color-text)' }}>
+                    {changes.map((c, idx) => (
+                      <li key={idx}>{c}</li>
+                    ))}
+                  </ul>
+                )}
               </div>
             )}
           </div>
@@ -274,7 +287,16 @@ export function ProposalPreview({
             </div>
           )}
 
-          {(hasDiff || Boolean(stat)) && <DiffView diff={diff} stat={stat} />}
+          {(hasDiff || Boolean(stat)) && (
+            <details className="fg-acc" open={!impact && changes.length === 0}>
+              <summary style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--color-text-muted)' }}>
+                <span>{LABEL_EXACT_CHANGES}</span>
+              </summary>
+              <div style={{ paddingTop: 'var(--space-2)' }}>
+                <DiffView diff={diff} stat={stat} />
+              </div>
+            </details>
+          )}
 
           <details className="fg-acc">
             <summary style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--color-text-muted)' }}>

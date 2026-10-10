@@ -1,14 +1,24 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { confirmSkillMutation, previewSkillUpdate } from '../../api/queries';
 import type { SkillDetail, SkillProposal } from '../../api/types';
 import { ApiError, apiFetch } from '../../api/client';
+import { proposalPatch, proposalPaths, proposalWarning } from '../../api/proposal-view';
 import { ConflictDrawer } from '../../components/ConflictDrawer';
 import { Markdown } from '../../components/Markdown';
 import { ProposalPreview } from '../../components/ProposalPreview';
 import { Toast } from '../../components/Toast';
 import { clearDraft, loadDraft, saveDraft } from '../../state/drafts';
-import { useT } from '../../i18n';
+import { ROUTING_HELP, SCOPE_OPTIONS } from '../routing-hints';
+import {
+  EDIT_FIELD_LABEL,
+  changedFields,
+  describeChanges,
+  fieldsFromSkill,
+  mergeOntoLatest,
+  splitList,
+  type EditFields,
+} from './edit-fields';
 
 const TITLE_ROUTING_META = 'Routing & metadata';
 const LABEL_NAME = 'Name';
@@ -21,24 +31,21 @@ const LABEL_EDIT = 'Edit';
 const LABEL_PREVIEW = 'Preview';
 const LABEL_PREVIEW_CHANGES = 'Preview changes';
 const LABEL_REQUIRED_TRIGGER = 'Required before activation.';
-const REQ_STAR = '*';
-const SCOPES = [
-  { value: '', label: 'Select scope' },
-  { value: 'single_step', label: 'single_step' },
-  { value: 'multi_step', label: 'multi_step' },
-  { value: 'project', label: 'project' },
-];
+const LABEL_REQUIRED_SCOPE = 'Required before activation.';
+const HINT_NAME = 'The title people see in lists.';
+const HINT_DESCRIPTION = 'One or two sentences on what the skill does. Agents read this to decide whether to load it.';
 const MSG_DRAFT_SAVED = 'Draft saved in this browser';
+const MSG_NO_CHANGES = 'Nothing changed yet. Edit a field, then preview the change before it is saved.';
+const MSG_PREVIEW_NOTE = 'Preview shows what will change. Nothing is saved until you confirm.';
+const REQ_STAR = '*';
 
-interface SkillDraftData {
-  content: string;
-  name: string;
-  description: string;
-  operations: string;
-  triggers: string;
-  notFor: string;
-  minScope: string;
-}
+// Where each field of the Review checklist lives in this form.
+const FOCUS_TARGET: Record<string, string> = {
+  content: 'edit-content',
+  triggers: 'edit-trigs',
+  operations: 'edit-ops',
+  scope: 'edit-scope',
+};
 
 interface EditorTabProps {
   skill: SkillDetail;
@@ -46,19 +53,28 @@ interface EditorTabProps {
   focusField?: string | null;
 }
 
-export function EditorTab({ skill, workspaceId }: EditorTabProps) {
-  const t = useT();
+interface ConflictInfo {
+  // The version the person opened; the saved skill prop moves on once the latest is fetched.
+  base: EditFields;
+  latest: SkillDetail;
+  mine: string[];
+  theirs: string[];
+  both: string[];
+}
+
+export function EditorTab({ skill, workspaceId, focusField }: EditorTabProps) {
   const queryClient = useQueryClient();
 
-  const initialDraft = loadDraft<SkillDraftData>(workspaceId, 'skill', skill.skill_id, skill.content_digest);
+  const initialDraft = loadDraft<EditFields>(workspaceId, 'skill', skill.skill_id, skill.content_digest);
+  const initial: EditFields = initialDraft ? { ...fieldsFromSkill(skill), ...initialDraft.value } : fieldsFromSkill(skill);
 
-  const [content, setContent] = useState(initialDraft ? initialDraft.value.content : (skill.content || ''));
-  const [name, setName] = useState(initialDraft ? initialDraft.value.name : (skill.name || ''));
-  const [description, setDescription] = useState(initialDraft ? initialDraft.value.description : (skill.description || ''));
-  const [operations, setOperations] = useState(initialDraft ? initialDraft.value.operations : (skill.routing?.operations || []).join(', '));
-  const [triggers, setTriggers] = useState(initialDraft ? initialDraft.value.triggers : (skill.routing?.triggers || []).join(', '));
-  const [notFor, setNotFor] = useState(initialDraft ? initialDraft.value.notFor : (skill.routing?.not_for || []).join(', '));
-  const [minScope, setMinScope] = useState(initialDraft ? initialDraft.value.minScope : (skill.routing?.min_scope || ''));
+  const [content, setContent] = useState(initial.content);
+  const [name, setName] = useState(initial.name);
+  const [description, setDescription] = useState(initial.description);
+  const [operations, setOperations] = useState(initial.operations);
+  const [triggers, setTriggers] = useState(initial.triggers);
+  const [notFor, setNotFor] = useState(initial.notFor);
+  const [minScope, setMinScope] = useState(initial.minScope);
 
   const [activeView, setActiveView] = useState<'edit' | 'preview'>('edit');
   const [isWide, setIsWide] = useState(false);
@@ -66,10 +82,16 @@ export function EditorTab({ skill, workspaceId }: EditorTabProps) {
 
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [conflictDrawerOpen, setConflictDrawerOpen] = useState(false);
+  const [conflict, setConflict] = useState<ConflictInfo | null>(null);
   const [proposal, setProposal] = useState<SkillProposal | null>(null);
+  const [previewChanges, setPreviewChanges] = useState<string[]>([]);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const focusedFor = useRef<string | null>(null);
+
+  const mine: EditFields = { name, description, content, operations, triggers, notFor, minScope };
+  const base = fieldsFromSkill(skill);
+  const dirty = changedFields(base, mine);
 
   useEffect(() => {
     const handleResize = () => setIsWide(window.innerWidth >= 1280);
@@ -78,6 +100,16 @@ export function EditorTab({ skill, workspaceId }: EditorTabProps) {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // "Go to field" from the Review tab lands here: put the cursor in that field.
+  useEffect(() => {
+    if (!focusField || focusedFor.current === focusField) return;
+    const id = FOCUS_TARGET[focusField] ?? focusField;
+    const el = document.getElementById(id);
+    if (!el) return;
+    focusedFor.current = focusField;
+    el.scrollIntoView?.({ block: 'center' });
+    el.focus();
+  }, [focusField, isWide]);
 
   // Autosave draft on change
   useEffect(() => {
@@ -97,36 +129,62 @@ export function EditorTab({ skill, workspaceId }: EditorTabProps) {
     return () => clearTimeout(timer);
   }, [content, name, description, operations, triggers, notFor, minScope, workspaceId, skill.skill_id, skill.content_digest]);
 
+  const showError = (err: unknown) => {
+    if (err instanceof ApiError) {
+      setErrorMessage(err.render.WHY || err.render.ERROR || err.message);
+    } else if (err instanceof Error) {
+      setErrorMessage(err.message);
+    }
+  };
+
+  const requestPreview = async (against: SkillDetail, fields: EditFields) => {
+    const prop = await previewSkillUpdate(skill.skill_id, {
+      expected_content_digest: against.content_digest,
+      name: fields.name !== against.name ? fields.name : undefined,
+      description: fields.description !== against.description ? fields.description : undefined,
+      content: fields.content !== against.content ? fields.content : undefined,
+      routing: {
+        operations: splitList(fields.operations),
+        triggers: splitList(fields.triggers),
+        not_for: splitList(fields.notFor),
+        min_scope: fields.minScope,
+      },
+    });
+    setPreviewChanges(describeChanges(fieldsFromSkill(against), fields));
+    setProposal(prop);
+    setPreviewOpen(true);
+  };
+
+  const fetchLatest = () =>
+    queryClient.fetchQuery({
+      queryKey: ['skill', skill.skill_id],
+      queryFn: () => apiFetch<SkillDetail>(`/skills/${encodeURIComponent(skill.skill_id)}`),
+      staleTime: 0,
+    });
+
   const handlePreviewChanges = async () => {
     setLoading(true);
     setErrorMessage(null);
-
-    const ops = operations.split(',').map((s) => s.trim()).filter(Boolean);
-    const trigs = triggers.split(',').map((s) => s.trim()).filter(Boolean);
-    const nots = notFor.split(',').map((s) => s.trim()).filter(Boolean);
-
     try {
-      const prop = await previewSkillUpdate(skill.skill_id, {
-        expected_content_digest: skill.content_digest,
-        name: name !== skill.name ? name : undefined,
-        description: description !== skill.description ? description : undefined,
-        content: content !== skill.content ? content : undefined,
-        routing: {
-          operations: ops,
-          triggers: trigs,
-          not_for: nots,
-          min_scope: minScope,
-        },
-      });
-      setProposal(prop);
-      setPreviewOpen(true);
+      await requestPreview(skill, mine);
     } catch (err) {
       if (err instanceof ApiError && err.code === 'edit_conflict') {
-        setConflictDrawerOpen(true);
-      } else if (err instanceof ApiError) {
-        setErrorMessage(err.render.WHY || err.render.ERROR || err.message);
-      } else if (err instanceof Error) {
-        setErrorMessage(err.message);
+        try {
+          const latest = await fetchLatest();
+          const theirs = changedFields(base, fieldsFromSkill(latest));
+          const bothFields = dirty.filter((f) => theirs.includes(f)).map((f) => EDIT_FIELD_LABEL[f]);
+          setConflict({
+            base,
+            latest,
+            mine: describeChanges(base, mine),
+            theirs: describeChanges(base, fieldsFromSkill(latest)),
+            both: bothFields,
+          });
+        } catch (fetchErr) {
+          showError(fetchErr);
+        }
+      } else {
+        showError(err);
       }
     } finally {
       setLoading(false);
@@ -135,74 +193,57 @@ export function EditorTab({ skill, workspaceId }: EditorTabProps) {
 
   const handleConfirm = async (pins: { proposalId: string; proposalDigest: string; baseVersion: string }) => {
     try {
-      const res = await confirmSkillMutation(pins.proposalId, pins);
+      await confirmSkillMutation(pins.proposalId, pins);
       setPreviewOpen(false);
       clearDraft(workspaceId, 'skill', skill.skill_id);
-      setToastMessage(`Applied · ${res.operation_id}`);
+      setToastMessage(`Saved ${previewChanges.length === 1 ? '1 change' : `${previewChanges.length} changes`} to ${skill.skill_id}.`);
       queryClient.invalidateQueries({ queryKey: ['skill', skill.skill_id] });
       queryClient.invalidateQueries({ queryKey: ['skill-review', skill.skill_id] });
       queryClient.invalidateQueries({ queryKey: ['skills'] });
       queryClient.invalidateQueries({ queryKey: ['home'] });
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setErrorMessage(err.render.WHY || err.render.ERROR || err.message);
-      } else if (err instanceof Error) {
-        setErrorMessage(err.message);
+      // Saving rewrites SKILL.md (its frontmatter follows name and description), so show the saved
+      // text; otherwise the form would still count the old frontmatter as an unsaved change.
+      try {
+        applyFields(fieldsFromSkill(await fetchLatest()));
+      } catch {
+        // The saved result is already confirmed; a failed refresh only leaves the form as typed.
       }
+    } catch (err) {
+      showError(err);
     }
   };
 
+  const applyFields = (f: EditFields) => {
+    setContent(f.content);
+    setName(f.name);
+    setDescription(f.description);
+    setOperations(f.operations);
+    setTriggers(f.triggers);
+    setNotFor(f.notFor);
+    setMinScope(f.minScope);
+  };
+
   const handleDiscardConflict = () => {
+    const latest = conflict?.latest ?? skill;
     clearDraft(workspaceId, 'skill', skill.skill_id);
-    setContent(skill.content || '');
-    setName(skill.name || '');
-    setDescription(skill.description || '');
-    setConflictDrawerOpen(false);
+    applyFields(fieldsFromSkill(latest));
+    setConflict(null);
     queryClient.invalidateQueries({ queryKey: ['skill', skill.skill_id] });
   };
 
+  // Puts the person's edits on top of the saved version. A field they did not touch keeps the saved
+  // value, so an edit made elsewhere is not undone.
   const handleUseLatestAsBase = async () => {
     try {
       setLoading(true);
-      const refreshed = await queryClient.fetchQuery({
-        queryKey: ['skill', skill.skill_id],
-        queryFn: () => apiFetch<SkillDetail>(`/skills/${encodeURIComponent(skill.skill_id)}`),
-      });
-      saveDraft(workspaceId, 'skill', skill.skill_id, refreshed.content_digest, {
-        content,
-        name,
-        description,
-        operations,
-        triggers,
-        notFor,
-        minScope,
-      });
-      setConflictDrawerOpen(false);
-
-      const ops = operations.split(',').map((s) => s.trim()).filter(Boolean);
-      const trigs = triggers.split(',').map((s) => s.trim()).filter(Boolean);
-      const nots = notFor.split(',').map((s) => s.trim()).filter(Boolean);
-
-      const prop = await previewSkillUpdate(skill.skill_id, {
-        expected_content_digest: refreshed.content_digest,
-        name: name !== refreshed.name ? name : undefined,
-        description: description !== refreshed.description ? description : undefined,
-        content: content !== refreshed.content ? content : undefined,
-        routing: {
-          operations: ops,
-          triggers: trigs,
-          not_for: nots,
-          min_scope: minScope,
-        },
-      });
-      setProposal(prop);
-      setPreviewOpen(true);
+      const refreshed = conflict?.latest ?? (await fetchLatest());
+      const merged = mergeOntoLatest(conflict?.base ?? base, mine, fieldsFromSkill(refreshed));
+      applyFields(merged);
+      saveDraft(workspaceId, 'skill', skill.skill_id, refreshed.content_digest, merged);
+      setConflict(null);
+      await requestPreview(refreshed, merged);
     } catch (err) {
-      if (err instanceof ApiError) {
-        setErrorMessage(err.render.WHY || err.render.ERROR || err.message);
-      } else if (err instanceof Error) {
-        setErrorMessage(err.message);
-      }
+      showError(err);
     } finally {
       setLoading(false);
     }
@@ -267,6 +308,7 @@ export function EditorTab({ skill, workspaceId }: EditorTabProps) {
                   lineHeight: '1.55',
                   resize: 'vertical',
                 }}
+                id="edit-content"
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 aria-label="SKILL.md content"
@@ -294,6 +336,7 @@ export function EditorTab({ skill, workspaceId }: EditorTabProps) {
                 lineHeight: '1.55',
                 resize: 'vertical',
               }}
+              id="edit-content"
               value={content}
               onChange={(e) => setContent(e.target.value)}
               aria-label="SKILL.md content"
@@ -330,6 +373,9 @@ export function EditorTab({ skill, workspaceId }: EditorTabProps) {
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
+            <span className="fg-field__hint">
+              <span>{HINT_NAME}</span>
+            </span>
           </div>
 
           <div className="fg-field">
@@ -343,6 +389,9 @@ export function EditorTab({ skill, workspaceId }: EditorTabProps) {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
+            <span className="fg-field__hint">
+              <span>{HINT_DESCRIPTION}</span>
+            </span>
           </div>
 
           <div className="fg-field">
@@ -352,9 +401,13 @@ export function EditorTab({ skill, workspaceId }: EditorTabProps) {
             <input
               id="edit-ops"
               className="fg-input"
+              placeholder={ROUTING_HELP.operations.example}
               value={operations}
               onChange={(e) => setOperations(e.target.value)}
             />
+            <span className="fg-field__hint">
+              <span>{ROUTING_HELP.operations.hint}</span>
+            </span>
           </div>
 
           <div className="fg-field">
@@ -365,9 +418,13 @@ export function EditorTab({ skill, workspaceId }: EditorTabProps) {
             <input
               id="edit-trigs"
               className="fg-input"
+              placeholder={ROUTING_HELP.triggers.example}
               value={triggers}
               onChange={(e) => setTriggers(e.target.value)}
             />
+            <span className="fg-field__hint">
+              <span>{ROUTING_HELP.triggers.hint}</span>
+            </span>
             {!triggers.trim() && (
               <span className="fg-field__hint" style={{ color: 'var(--color-warning)' }}>
                 <span>{LABEL_REQUIRED_TRIGGER}</span>
@@ -382,9 +439,13 @@ export function EditorTab({ skill, workspaceId }: EditorTabProps) {
             <input
               id="edit-notfor"
               className="fg-input"
+              placeholder={ROUTING_HELP.notFor.example}
               value={notFor}
               onChange={(e) => setNotFor(e.target.value)}
             />
+            <span className="fg-field__hint">
+              <span>{ROUTING_HELP.notFor.hint}</span>
+            </span>
           </div>
 
           <div className="fg-field">
@@ -398,7 +459,7 @@ export function EditorTab({ skill, workspaceId }: EditorTabProps) {
                 value={minScope}
                 onChange={(e) => setMinScope(e.target.value)}
               >
-                {SCOPES.map((sc) => (
+                {SCOPE_OPTIONS.map((sc) => (
                   <option key={sc.value} value={sc.value}>
                     {sc.label}
                   </option>
@@ -408,6 +469,14 @@ export function EditorTab({ skill, workspaceId }: EditorTabProps) {
                 ▾
               </span>
             </div>
+            <span className="fg-field__hint">
+              <span>{ROUTING_HELP.minScope.hint}</span>
+            </span>
+            {!minScope && (
+              <span className="fg-field__hint" style={{ color: 'var(--color-warning)' }}>
+                <span>{LABEL_REQUIRED_SCOPE}</span>
+              </span>
+            )}
           </div>
         </section>
       </div>
@@ -430,13 +499,15 @@ export function EditorTab({ skill, workspaceId }: EditorTabProps) {
         }}
       >
         <span className="t-caption" style={{ color: 'var(--color-text-subtle)' }}>
-          <span>{lastSaved ? MSG_DRAFT_SAVED : ''}</span>
+          <span>
+            {dirty.length === 0 ? MSG_NO_CHANGES : lastSaved ? `${MSG_DRAFT_SAVED}. ${MSG_PREVIEW_NOTE}` : MSG_PREVIEW_NOTE}
+          </span>
         </span>
         <button
           type="button"
           className="fg-btn fg-btn--primary"
           onClick={handlePreviewChanges}
-          disabled={loading}
+          disabled={loading || dirty.length === 0}
         >
           <span>{loading ? 'Validating…' : LABEL_PREVIEW_CHANGES}</span>
         </button>
@@ -446,19 +517,17 @@ export function EditorTab({ skill, workspaceId }: EditorTabProps) {
       {previewOpen && proposal && (
         <ProposalPreview
           open={previewOpen}
-          title={proposal.summary || 'Update skill'}
+          title={`Save changes to ${skill.skill_id}?`}
           target={skill.skill_id}
-          fromState={skill.lifecycle_state}
           toState={skill.lifecycle_state}
-          paths={proposal.paths}
-          impact={proposal.impact}
-          warning={proposal.warning}
-          diff={proposal.diff}
-          stat={proposal.stat}
+          paths={proposalPaths(proposal)}
+          changes={previewChanges}
+          warning={proposalWarning(proposal)}
+          diff={proposalPatch(proposal)}
           proposalId={pins?.proposal_id || ''}
           proposalDigest={pins?.proposal_digest || ''}
           baseVersion={pins?.base_version || ''}
-          confirmLabel={t('action.review')}
+          confirmLabel="Save changes"
           onConfirm={handleConfirm}
           onCancel={() => setPreviewOpen(false)}
         />
@@ -466,14 +535,17 @@ export function EditorTab({ skill, workspaceId }: EditorTabProps) {
 
       {/* Conflict Drawer */}
       <ConflictDrawer
-        open={conflictDrawerOpen}
+        open={conflict !== null}
         draftContent={content}
-        latestContent={skill.content || ''}
+        latestContent={conflict?.latest.content ?? ''}
         expectedDigest={skill.content_digest}
-        latestDigest="latest"
+        latestDigest={conflict?.latest.content_digest ?? ''}
+        mine={conflict?.mine}
+        theirs={conflict?.theirs}
+        bothFields={conflict?.both}
         onUseLatest={handleUseLatestAsBase}
         onDiscard={handleDiscardConflict}
-        onClose={() => setConflictDrawerOpen(false)}
+        onClose={() => setConflict(null)}
       />
 
       <Toast message={toastMessage} onClose={() => setToastMessage(null)} />

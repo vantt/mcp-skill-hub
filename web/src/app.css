@@ -55,3 +55,9 @@
   /* Seven tabs wrap onto two rows instead of hiding behind a sideways scroll. */
   .app-tabs { flex-wrap: wrap; overflow-x: visible !important; }
 }
+
+/* Controls fill their column; without this their padding pushes them past the card edge. */
+.fg-input, .fg-select select { box-sizing: border-box; max-width: 100%; }
+
+/* A placeholder must not pass for a typed value. */
+.fg-input::placeholder { font-style: italic; }

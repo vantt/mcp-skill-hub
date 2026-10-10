@@ -127,18 +127,21 @@ export interface ConfirmationPins {
   base_version: string;
 }
 
+export interface DiffSummary {
+  added: string[] | null;
+  modified: string[] | null;
+  deleted: string[] | null;
+}
+
 export interface SkillProposal {
   schema_version: string;
   status: string;
   summary: string;
   skill_id?: string;
-  from_state?: string;
-  to_state?: string;
-  paths?: string[];
-  impact?: string;
-  warning?: string;
-  diff?: string;
-  stat?: string;
+  // Path lists; the patch itself is full_diff. (Older callers sent a patch string here.)
+  diff?: DiffSummary | string;
+  full_diff?: string;
+  routing_impact?: { summary: string; warnings: string[] | null } | null;
   confirmation: {
     policy_revision?: string;
     action_class?: string;
@@ -166,13 +169,37 @@ export interface SkillAddProposal {
   status: string;
   summary: string;
   candidate_id?: string;
+  skill_id?: string;
+  skill_ids?: string[];
+  collection?: string;
+  name?: string;
+  description?: string;
+  origin?: {
+    kind: string;
+    repository?: string;
+    ref?: string;
+    commit?: string;
+    path?: string;
+  };
+  license?: {
+    declared?: string;
+    license_file?: string;
+    is_unknown: boolean;
+    is_proprietary: boolean;
+    warning?: string;
+  };
+  resources?: Array<{ path: string; bytes: number }> | null;
+  total_bytes?: number;
+  diff?: DiffSummary | string;
+  full_diff?: string;
+  assessment?: { warning?: string; diverged?: boolean };
+  warnings?: string[];
   confirmation: {
     confirmation?: {
       pins: ConfirmationPins;
     };
     pins?: ConfirmationPins;
   };
-  diff?: string;
 }
 
 export interface SkillAddResult {

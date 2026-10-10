@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useSkills } from '../../api/queries';
 import type { SkillListItem } from '../../api/types';
+import { CommandBlock } from '../../components/CommandBlock';
 import { Skeleton } from '../../components/Skeleton';
 import { StatusBadge } from '../../components/StatusBadge';
 import { useT } from '../../i18n';
@@ -9,7 +10,10 @@ import { useT } from '../../i18n';
 const ICON_SEARCH = '🔍';
 const ICON_MORE = '⋯';
 const OPT_UPSTREAM_ALL = 'All';
-const OPT_UPSTREAM_UPDATES = 'Updates';
+const OPT_UPSTREAM_UPDATES = 'Has an update';
+const MSG_NO_UPDATES =
+  'No skill has an upstream update right now. Skills added from GitHub are checked for new commits; open one and use Check now, or check them all from a terminal:';
+const CMD_CHECK_ALL = 'skillhub skill outdated --check';
 const OPT_UPSTREAM_MODIFIED = 'Modified locally';
 const OPT_UPSTREAM_UNTRACKED = 'Not tracked';
 
@@ -23,6 +27,7 @@ export function SkillsScreen() {
   const stateParam = searchParams.get('state') ?? 'all';
   const colParam = searchParams.get('collection') ?? 'all';
   const upstreamParam = searchParams.get('upstream') ?? 'all';
+  const onlyUpdatesFilter = upstreamParam === 'updates' && !queryParam && stateParam === 'all' && colParam === 'all';
 
   const { data, isLoading, error } = useSkills(stateParam === 'all' ? undefined : stateParam);
 
@@ -290,8 +295,9 @@ export function SkillsScreen() {
             }}
           >
             <span className="t-body">
-              <span>{t('skills.empty_filtered')}</span>
+              <span>{onlyUpdatesFilter ? MSG_NO_UPDATES : t('skills.empty_filtered')}</span>
             </span>
+            {onlyUpdatesFilter && <CommandBlock command={CMD_CHECK_ALL} />}
             <button type="button" className="fg-btn fg-btn--secondary" onClick={clearFilters}>
               <span>{t('action.clear_filters')}</span>
             </button>

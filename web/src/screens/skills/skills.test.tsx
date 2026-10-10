@@ -89,6 +89,32 @@ describe('SkillsScreen', () => {
     expect(screen.queryByText('Docx Tool')).not.toBeInTheDocument();
   });
 
+  it('explains an empty upstream-updates list and offers the way to check', () => {
+    const data: SkillListResult = {
+      schema_version: '1',
+      status: 'ok',
+      summary: '1 skill',
+      skills: [
+        {
+          id: 'docx',
+          name: 'Docx Tool',
+          collection: 'core',
+          lifecycle_state: 'active',
+          state: 'active',
+          active_locally: true,
+          routing_eligible: true,
+          upstream_status: 'up_to_date',
+        },
+      ],
+    };
+    renderSkillsScreen(data, ['/skills?upstream=updates']);
+    expect(screen.getByText(/No skill has an upstream update right now/)).toBeInTheDocument();
+    expect(screen.getByText('skillhub skill outdated --check')).toBeInTheDocument();
+    // The filter is a visible control, so no URL has to be typed.
+    expect(screen.getByLabelText('Upstream')).toHaveValue('updates');
+    expect(screen.getByRole('option', { name: 'Has an update' })).toBeInTheDocument();
+  });
+
   it('search narrows rows', () => {
     const data: SkillListResult = {
       schema_version: '1',

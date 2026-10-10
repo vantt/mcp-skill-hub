@@ -334,3 +334,35 @@ func TestSkillConfirmRequiresAllPins(t *testing.T) {
 		})
 	}
 }
+
+func TestSkillCreatePreviewExplainsWhyItWasRejected(t *testing.T) {
+	root := newWebWorkspace(t)
+	srv := newTestServer(t, root)
+
+	create := func(id, description string) *httptest.ResponseRecorder {
+		return postJSON(t, srv, "/api/v1/skills/create/preview", skillCreatePreviewRequest{
+			ID: id, Collection: "core", Name: "Name", Description: description,
+		})
+	}
+	why := func(rec *httptest.ResponseRecorder) string {
+		var res struct {
+			Error struct {
+				Render struct {
+					Why string `json:"WHY"`
+				} `json:"render"`
+			} `json:"error"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
+			t.Fatalf("decode: %v (body %s)", err, rec.Body.String())
+		}
+		return res.Error.Render.Why
+	}
+
+	rec := create("drafted-twice", "")
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("missing description: want 400, got %d (%s)", rec.Code, rec.Body.String())
+	}
+	if got := why(rec); !strings.Contains(got, "description") {
+		t.Fatalf("missing description: WHY should name the field, got %q", got)
+	}
+}

@@ -23,6 +23,20 @@ func (s *Server) registerSkillWriteRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/skills/proposals/{proposal_id}/confirm", s.handleSkillConfirm)
 }
 
+// writePreviewError answers a create or edit preview that failed. Validation failures such as a duplicate
+// skill id arrive classified as a generic invalid request with no reason, which leaves the form with
+// nothing to show the person, so the validation message becomes the WHY.
+func writePreviewError(w http.ResponseWriter, err error, notFound bool) {
+	classified := app.ClassifyError(err)
+	if !notFound && classified.Code == app.ErrorInvalidRequest && classified.Render.Why == "" {
+		detailed := *classified
+		detailed.Render.Why = err.Error()
+		writeAppError(w, &detailed)
+		return
+	}
+	writeError(w, err, notFound)
+}
+
 func decodeJSON(r *http.Request, v any) *app.Error {
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
@@ -148,7 +162,7 @@ func (s *Server) handleSkillCreatePreview(w http.ResponseWriter, r *http.Request
 	}
 	proposal, err := s.skills.PreviewCreate(r.Context(), s.workspace, input, true)
 	if err != nil {
-		writeError(w, err, false)
+		writePreviewError(w, err, false)
 		return
 	}
 	writeJSON(w, http.StatusOK, proposal)
@@ -185,7 +199,7 @@ func (s *Server) handleSkillUpdatePreview(w http.ResponseWriter, r *http.Request
 	}
 	proposal, err := s.skills.PreviewSkillUpdate(r.Context(), s.workspace, id, input, true)
 	if err != nil {
-		writeError(w, err, errors.Is(err, skill.ErrNotFound))
+		writePreviewError(w, err, errors.Is(err, skill.ErrNotFound))
 		return
 	}
 	writeJSON(w, http.StatusOK, proposal)

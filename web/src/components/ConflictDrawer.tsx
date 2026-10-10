@@ -3,17 +3,27 @@ import { ConfirmDialog } from './ConfirmDialog';
 
 const TITLE_CONFLICT = 'SKILL.md changed since you opened it';
 const BANNER_CONFLICT =
-  'Another edit was applied (digest differs). Merge your draft onto the latest content and preview again. Your draft is kept.';
+  'This skill was changed somewhere else after you opened it, for example with the command line. Nothing was saved, and your edits are still here.';
+const LABEL_MINE = 'What you changed';
+const LABEL_THEIRS = 'What changed meanwhile';
+const LABEL_NONE = 'Nothing in the fields you can edit here.';
+const LABEL_BOTH_PREFIX = 'Both changes touch: ';
+const LABEL_BOTH_SUFFIX =
+  '. If you continue, your version of these replaces the other one. The preview shows exactly what would be saved, and nothing is written until you confirm it.';
+const LABEL_NEXT = 'What you can do';
+const LABEL_NEXT_KEEP = 'Keep my edits on the latest version: your edits are applied on top of what is saved now, then you preview the result.';
+const LABEL_NEXT_DISCARD = 'Discard my edits: your changes are dropped and the editor shows what is saved now.';
+const LABEL_COMPARE = 'Compare the full SKILL.md';
 const LABEL_YOUR_DRAFT = 'Your draft';
-const LABEL_LATEST_CANONICAL = 'Latest canonical';
+const LABEL_LATEST_SAVED = 'Saved now';
 const LABEL_TECH_DETAILS = 'Technical details';
-const LABEL_EXPECTED = 'expected: ';
-const LABEL_LATEST = 'latest: ';
+const LABEL_EXPECTED = 'you opened: ';
+const LABEL_LATEST = 'saved now: ';
 const LABEL_DOWNLOAD_DRAFT = 'Download draft (.md)';
 const LABEL_COPY_DRAFT = 'Copy draft';
 const LABEL_COPIED = 'Copied';
-const LABEL_DISCARD_RELOAD = 'Discard draft and reload';
-const LABEL_USE_LATEST = 'Use latest as base';
+const LABEL_DISCARD_RELOAD = 'Discard my edits';
+const LABEL_USE_LATEST = 'Keep my edits on the latest version';
 
 export interface ConflictDrawerProps {
   open: boolean;
@@ -21,6 +31,10 @@ export interface ConflictDrawerProps {
   latestContent: string;
   expectedDigest: string;
   latestDigest: string;
+  // Plain-words lists: edits made here, edits made elsewhere, and the fields both touched.
+  mine?: string[];
+  theirs?: string[];
+  bothFields?: string[];
   onUseLatest: () => void;
   onDiscard: () => void;
   onClose: () => void;
@@ -32,6 +46,9 @@ export function ConflictDrawer({
   latestContent,
   expectedDigest,
   latestDigest,
+  mine = [],
+  theirs = [],
+  bothFields = [],
   onUseLatest,
   onDiscard,
   onClose,
@@ -157,50 +174,46 @@ export function ConflictDrawer({
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 'var(--space-3)' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: 0 }}>
-              <span className="t-label" style={{ color: 'var(--color-text-muted)' }}>
-                <span>{LABEL_YOUR_DRAFT}</span>
-              </span>
-              <pre
-                style={{
-                  margin: 0,
-                  padding: 'var(--space-3)',
-                  background: 'var(--color-surface-sunken)',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: 'var(--radius-sm)',
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '12px',
-                  whiteSpace: 'pre-wrap',
-                  maxHeight: '260px',
-                  overflow: 'auto',
-                }}
-              >
-                {draftContent}
-              </pre>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: 0 }}>
-              <span className="t-label" style={{ color: 'var(--color-text-muted)' }}>
-                <span>{LABEL_LATEST_CANONICAL}</span>
-              </span>
-              <pre
-                style={{
-                  margin: 0,
-                  padding: 'var(--space-3)',
-                  background: 'var(--color-surface-sunken)',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: 'var(--radius-sm)',
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '12px',
-                  whiteSpace: 'pre-wrap',
-                  maxHeight: '260px',
-                  overflow: 'auto',
-                }}
-              >
-                {latestContent}
-              </pre>
-            </div>
+            <ChangeList title={LABEL_MINE} items={mine} />
+            <ChangeList title={LABEL_THEIRS} items={theirs} />
           </div>
+
+          {bothFields.length > 0 && (
+            <div className="fg-caveat fg-caveat--warn" role="note">
+              <span>
+                {LABEL_BOTH_PREFIX}
+                {bothFields.join(', ')}
+                {LABEL_BOTH_SUFFIX}
+              </span>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <span className="t-label" style={{ color: 'var(--color-text-muted)' }}>
+              <span>{LABEL_NEXT}</span>
+            </span>
+            <ul className="t-body-sm" style={{ margin: 0, paddingLeft: 'var(--space-4)' }}>
+              <li>{LABEL_NEXT_KEEP}</li>
+              <li>{LABEL_NEXT_DISCARD}</li>
+            </ul>
+          </div>
+
+          <details className="fg-acc">
+            <summary style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--color-text-muted)' }}>
+              <span>{LABEL_COMPARE}</span>
+            </summary>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                gap: 'var(--space-3)',
+                paddingTop: 'var(--space-2)',
+              }}
+            >
+              <ContentBox title={LABEL_YOUR_DRAFT} text={draftContent} />
+              <ContentBox title={LABEL_LATEST_SAVED} text={latestContent} />
+            </div>
+          </details>
 
           <details className="fg-acc">
             <summary style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--color-text-muted)' }}>
@@ -261,9 +274,9 @@ export function ConflictDrawer({
 
       <ConfirmDialog
         open={confirmDiscardOpen}
-        title="Discard draft?"
-        body="Your uncommitted draft changes will be permanently discarded and replaced with the latest canonical content."
-        confirmLabel="Discard draft"
+        title="Discard your edits?"
+        body="Your edits in this browser will be thrown away and the editor will show what is saved now."
+        confirmLabel="Discard my edits"
         danger
         onConfirm={() => {
           setConfirmDiscardOpen(false);
@@ -272,5 +285,52 @@ export function ConflictDrawer({
         onCancel={() => setConfirmDiscardOpen(false)}
       />
     </>
+  );
+}
+
+function ChangeList({ title, items }: { title: string; items: string[] }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: 0 }}>
+      <span className="t-label" style={{ color: 'var(--color-text-muted)' }}>
+        <span>{title}</span>
+      </span>
+      {items.length === 0 ? (
+        <span className="t-body-sm" style={{ color: 'var(--color-text-muted)' }}>
+          {LABEL_NONE}
+        </span>
+      ) : (
+        <ul className="t-body-sm app-wrap" style={{ margin: 0, paddingLeft: 'var(--space-4)' }}>
+          {items.map((it, idx) => (
+            <li key={idx}>{it}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function ContentBox({ title, text }: { title: string; text: string }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: 0 }}>
+      <span className="t-label" style={{ color: 'var(--color-text-muted)' }}>
+        <span>{title}</span>
+      </span>
+      <pre
+        style={{
+          margin: 0,
+          padding: 'var(--space-3)',
+          background: 'var(--color-surface-sunken)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 'var(--radius-sm)',
+          fontFamily: 'var(--font-mono)',
+          fontSize: '12px',
+          whiteSpace: 'pre-wrap',
+          maxHeight: '260px',
+          overflow: 'auto',
+        }}
+      >
+        {text}
+      </pre>
+    </div>
   );
 }

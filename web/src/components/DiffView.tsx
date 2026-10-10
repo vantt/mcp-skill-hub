@@ -22,12 +22,16 @@ export function parseDiff(raw: string): DiffLine[] {
   let oldLine = 1;
   let newLine = 1;
 
+  // File headers ("--- a/x", "+++ b/x") are not content: a removed line "---" (a frontmatter fence)
+  // is written "----", so only the header shape is skipped.
+  const isFileHeader = (line: string) => /^(---|\+\+\+) [ab]\//.test(line) || line === '--- /dev/null' || line === '+++ /dev/null';
+
   for (const line of lines) {
-    if (line.startsWith('@@')) {
+    if (line.startsWith('@@') || isFileHeader(line)) {
       result.push({ type: 'meta', text: line });
-    } else if (line.startsWith('+') && !line.startsWith('+++')) {
+    } else if (line.startsWith('+')) {
       result.push({ type: 'add', text: line.slice(1), lineNew: newLine++ });
-    } else if (line.startsWith('-') && !line.startsWith('---')) {
+    } else if (line.startsWith('-')) {
       result.push({ type: 'del', text: line.slice(1), lineOld: oldLine++ });
     } else {
       const text = line.startsWith(' ') ? line.slice(1) : line;

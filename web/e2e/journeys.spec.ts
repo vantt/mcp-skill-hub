@@ -192,8 +192,8 @@ test.describe('Shipped User Flow Journeys (Spec 04 §3)', () => {
     await page.getByRole('button', { name: 'Preview changes' }).click();
     await expect(page.getByText('SKILL.md changed since you opened it')).toBeVisible();
 
-    // Use latest as base
-    await page.getByRole('button', { name: 'Use latest as base' }).click();
+    // Keep my edits on the latest version
+    await page.getByRole('button', { name: 'Keep my edits on the latest version' }).click();
     await expect(page.getByText('SKILL.md changed since you opened it')).not.toBeVisible();
   });
 

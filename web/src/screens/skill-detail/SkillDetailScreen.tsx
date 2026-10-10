@@ -14,6 +14,7 @@ import { ApiError } from '../../api/client';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { NotFoundPage } from '../../components/NotFoundPage';
 import { ProposalPreview } from '../../components/ProposalPreview';
+import { proposalPatch, proposalPaths, proposalWarning } from '../../api/proposal-view';
 import { Skeleton } from '../../components/Skeleton';
 import { StatusBadge } from '../../components/StatusBadge';
 import { Toast } from '../../components/Toast';
@@ -123,6 +124,16 @@ export function SkillDetailScreen() {
   const setTab = (tab: string) => {
     const next = new URLSearchParams(searchParams);
     next.set('tab', tab);
+    next.delete('field');
+    setSearchParams(next);
+  };
+
+  // Opens the Editor with the cursor in the field the Review tab pointed at.
+  const openEditor = (field?: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', 'editor');
+    if (field) next.set('field', field);
+    else next.delete('field');
     setSearchParams(next);
   };
 
@@ -255,7 +266,7 @@ export function SkillDetailScreen() {
                   type="button"
                   className="fg-btn fg-btn--ghost"
                   style={{ padding: '2px 6px', fontSize: '12px' }}
-                  onClick={() => setTab('editor')}
+                  onClick={() => openEditor(missingItems[0]?.id)}
                 >
                   <span>{LABEL_GO_TO_FIELDS}</span>
                 </button>
@@ -393,14 +404,12 @@ export function SkillDetailScreen() {
         <ReviewTab
           skill={skill}
           review={review}
-          onGoToEditor={() => {
-            setTab('editor');
-          }}
+          onGoToEditor={openEditor}
         />
       )}
 
       {activeTab === 'editor' && (
-        <EditorTab skill={skill} workspaceId={workspaceId} />
+        <EditorTab skill={skill} workspaceId={workspaceId} focusField={searchParams.get('field')} />
       )}
 
       {activeTab === 'resources' && <ResourcesTab skill={skill} />}
@@ -426,12 +435,12 @@ export function SkillDetailScreen() {
               : transitionProposal.summary || 'Skill transition'
           }
           target={skill.skill_id}
-          fromState={transitionProposal.from_state || skill.lifecycle_state}
+          fromState={skill.lifecycle_state}
           toState={transitionTarget || undefined}
-          impact={transitionProposal.impact || (transitionTarget ? TRANSITION_COPY[transitionTarget].impact : undefined)}
-          warning={transitionProposal.warning}
-          diff={transitionProposal.diff}
-          stat={transitionProposal.stat}
+          impact={transitionTarget ? TRANSITION_COPY[transitionTarget].impact : undefined}
+          paths={proposalPaths(transitionProposal)}
+          warning={proposalWarning(transitionProposal)}
+          diff={proposalPatch(transitionProposal)}
           proposalId={pins?.proposal_id || ''}
           proposalDigest={pins?.proposal_digest || ''}
           baseVersion={pins?.base_version || ''}

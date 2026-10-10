@@ -137,20 +137,7 @@ test.describe('UX evaluation capture', () => {
     fs.rmSync(OUT_DIR, { recursive: true, force: true });
     fs.mkdirSync(OUT_DIR, { recursive: true });
     hub = prepareHub();
-    // startServer spawns the binary with the current process environment, so swap in
-    // the isolated one just for the spawn. The browser is launched after it is restored.
-    const saved = { ...process.env };
-    Object.assign(process.env, hub.env);
-    try {
-      server = await startServer({ workspace: hub.ws });
-    } finally {
-      for (const key of Object.keys(process.env)) {
-        if (!(key in saved)) {
-          delete process.env[key];
-        }
-      }
-      Object.assign(process.env, saved);
-    }
+    server = await startServer({ workspace: hub.ws, env: hub.env });
   });
 
   test.afterAll(async () => {

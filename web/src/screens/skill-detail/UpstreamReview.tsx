@@ -9,9 +9,9 @@ import { Skeleton } from '../../components/Skeleton';
 const BTN_REVIEW_AGAIN = 'Review again';
 const BTN_CLOSE = 'Close';
 const TITLE_UNCHANGED = 'Upstream is unchanged.';
-const COL_FILE = 'FILE';
-const COL_CHANGE = 'CHANGE';
-const COL_ACTION = 'ACTION';
+const COL_FILE = 'File';
+const COL_CHANGE = 'What changed';
+const COL_ACTION = 'What to do';
 const OPT_TAKE_UPSTREAM = 'Take upstream';
 const OPT_KEEP_MINE = 'Keep mine';
 const OPT_AUTO_MERGED = 'Auto-merged';
@@ -21,6 +21,9 @@ const BTN_APPLYING = 'Applying choices…';
 const BTN_RESULT_DIFF = 'Result diff';
 const BTN_UPSTREAM_DIFF = 'Upstream diff';
 const BTN_LOCAL_DIFF = 'Local diff';
+const MSG_HOW_TO_READ =
+  'Each file shows what changed upstream and what you changed here. "Take upstream" replaces your copy with the upstream one, "Keep mine" ignores the upstream change, and "Auto-merged" keeps both where they do not overlap. Nothing is written until you confirm the update.';
+const MSG_APPLY_CHOICES = 'After changing a choice, press Apply choices to see the result before you confirm.';
 const BTN_CONFIRM_UPDATE = 'Confirm update';
 const BTN_CONFIRMING = 'Confirming…';
 
@@ -251,6 +254,10 @@ export function UpstreamReview({ skillId, onClose, onConfirmed }: UpstreamReview
         </button>
       </div>
 
+      <span className="t-body-sm" style={{ color: 'var(--color-text-muted)' }}>
+        {MSG_HOW_TO_READ}
+      </span>
+
       {hasUnresolved && (
         <div className="fg-banner fg-banner--warning">
           <span>{decisionBannerText}</span>
@@ -311,7 +318,7 @@ export function UpstreamReview({ skillId, onClose, onConfirmed }: UpstreamReview
         </table>
       </div>
 
-      <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 'var(--space-2)' }}>
         <button
           type="button"
           className="fg-btn fg-btn--secondary"
@@ -320,6 +327,9 @@ export function UpstreamReview({ skillId, onClose, onConfirmed }: UpstreamReview
         >
           <span>{applying ? BTN_APPLYING : BTN_APPLY_CHOICES}</span>
         </button>
+        <span className="t-caption" style={{ color: 'var(--color-text-subtle)' }}>
+          {MSG_APPLY_CHOICES}
+        </span>
       </div>
 
       {/* Selected File Diff / Manual Editor */}

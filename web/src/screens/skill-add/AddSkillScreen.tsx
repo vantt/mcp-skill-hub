@@ -4,6 +4,7 @@ import { confirmSkillAdd, previewSkillAdd } from '../../api/queries';
 import type { SkillAddProposal } from '../../api/types';
 import { ApiError } from '../../api/client';
 import { DiffView } from '../../components/DiffView';
+import { proposalFiles, proposalPatch } from '../../api/proposal-view';
 import { StatusBadge } from '../../components/StatusBadge';
 import { Toast } from '../../components/Toast';
 import { useT } from '../../i18n';
@@ -23,9 +24,24 @@ const LABEL_TECH_DETAILS = 'Technical details';
 const LABEL_RESOURCES = 'Resources';
 const LABEL_IDENTITY = 'Identity';
 const LABEL_ORIGIN = 'Origin';
-const LABEL_DIFF = 'Diff';
+const LABEL_SKILLS = 'Skills';
+const LABEL_REVISION = 'Revision';
 const LABEL_ADVANCED = 'Advanced';
-const HINT_GITHUB_URL = 'Public repository, subfolder or file URL.';
+const HINT_GITHUB_URL = 'The address of a public GitHub repository, or of a folder or file inside it.';
+const HINT_DISCOVER =
+  'Discover only looks. It fetches the repository and lists the skills it contains. Nothing is written to your hub until you confirm on the next step, and imported skills start as drafts.';
+const HINT_ADVANCED = 'Optional. Choose where new skills are filed and what to call a single skill.';
+const HINT_COLLECTION = 'The folder the imported skills are filed under. Leave it as core if unsure.';
+const HINT_TARGET_ID = 'Use a different ID than the one in the repository. Only for a single skill; leave empty otherwise.';
+const PLACEHOLDER_URL = 'https://github.com/OWNER/REPO/tree/main/skills';
+const LABEL_TRUST = 'Trust';
+const LABEL_FILES = 'Files that would be written';
+const LABEL_CONFLICTS = 'Conflicts';
+const LABEL_EXACT = 'Exact file changes';
+const MSG_TRUST_DRAFT =
+  'Imported skills start as drafts. Agents will not use them until you review the content and activate them. Public GitHub content is not reviewed by Skill Hub.';
+const MSG_CONFLICT_PREFIX = 'These files already exist and would be changed: ';
+const MSG_NO_CONFLICT = 'No conflicts: every file is new.';
 const HINT_DISCOVERING = 'Cloning and inspecting the pinned revision…';
 const STEP_TWO = '2';
 const LABEL_GITHUB_URL = 'GitHub URL ';
@@ -33,7 +49,6 @@ const REQ_STAR = '*';
 const LABEL_SUMMARY = 'Summary';
 const LABEL_TARGET_STATE = 'Target state';
 const LABEL_LOCATOR = 'Locator';
-const LABEL_ASSESSMENT = 'Assessment: public GitHub source repository.';
 const LABEL_PROP_ID = 'proposal_id: ';
 const LABEL_PROP_DIGEST = 'proposal_digest: ';
 const LABEL_BASE_VERSION = 'base_version: ';
@@ -44,7 +59,7 @@ export function AddSkillScreen() {
   const navigate = useNavigate();
 
   const [step, setStep] = useState<1 | 2>(1);
-  const [locator, setLocator] = useState('https://github.com/acme/agent-skills/tree/main/skills');
+  const [locator, setLocator] = useState('');
   const [collection, setCollection] = useState('core');
   const [targetId, setTargetId] = useState('');
   const [selection, setSelection] = useState('');
@@ -130,8 +145,8 @@ export function AddSkillScreen() {
     setErrorMessage(null);
 
     try {
-      const res = await confirmSkillAdd(pins);
-      setReceiptToast(`Imported · ${res.operation_id}`);
+      await confirmSkillAdd(pins);
+      setReceiptToast(`Imported ${addedIds.join(', ') || 'the skills'} as ${addedIds.length === 1 ? 'a draft' : 'drafts'}. Review each one before activating it.`);
       setTimeout(() => {
         navigate('/skills');
       }, 1500);
@@ -147,6 +162,18 @@ export function AddSkillScreen() {
   };
 
   const pins = proposal ? (proposal.confirmation.confirmation?.pins ?? proposal.confirmation.pins) : null;
+  const files = proposal ? proposalFiles(proposal) : { added: [], modified: [], deleted: [] };
+  const patch = proposal ? proposalPatch(proposal) : '';
+  const addedIds = proposal ? (proposal.skill_ids && proposal.skill_ids.length > 0 ? proposal.skill_ids : proposal.skill_id ? [proposal.skill_id] : []) : [];
+  const license = proposal?.license;
+  const licenseNote = license
+    ? license.warning ||
+      (license.is_unknown
+        ? 'No license was found in the repository. Check you may use this content.'
+        : license.is_proprietary
+          ? 'The license looks proprietary. Check you may use this content.'
+          : '')
+    : '';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', maxWidth: '960px' }}>
@@ -189,16 +216,23 @@ export function AddSkillScreen() {
               style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}
               value={locator}
               onChange={(e) => setLocator(e.target.value)}
-              placeholder="https://github.com/acme/agent-skills/tree/main/skills"
+              placeholder={PLACEHOLDER_URL}
             />
             <span className="fg-field__hint">
               <span>{HINT_GITHUB_URL}</span>
             </span>
           </div>
 
+          <div className="fg-caveat fg-caveat--info">
+            <span>{HINT_DISCOVER}</span>
+          </div>
+
           <details className="fg-acc">
             <summary style={{ cursor: 'pointer', fontWeight: 600 }}>
               <span>{LABEL_ADVANCED}</span>
+              <span className="t-caption" style={{ marginLeft: 'var(--space-2)', color: 'var(--color-text-muted)', fontWeight: 400 }}>
+                {HINT_ADVANCED}
+              </span>
             </summary>
             <div
               className="fg-acc__body"
@@ -219,6 +253,9 @@ export function AddSkillScreen() {
                   value={collection}
                   onChange={(e) => setCollection(e.target.value)}
                 />
+                <span className="fg-field__hint">
+                  <span>{HINT_COLLECTION}</span>
+                </span>
               </div>
 
               <div className="fg-field">
@@ -228,10 +265,13 @@ export function AddSkillScreen() {
                 <input
                   id="gh-target-id"
                   className="fg-input"
-                  placeholder="Optional target ID"
+                  placeholder="e.g. pr-description"
                   value={targetId}
                   onChange={(e) => setTargetId(e.target.value)}
                 />
+                <span className="fg-field__hint">
+                  <span>{HINT_TARGET_ID}</span>
+                </span>
               </div>
             </div>
           </details>
@@ -328,6 +368,22 @@ export function AddSkillScreen() {
                 </div>
                 <div className="fg-fact">
                   <div className="fg-fact__label">
+                    <span>{LABEL_SKILLS}</span>
+                  </div>
+                  <div className="fg-fact__value app-wrap" style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
+                    <span>{addedIds.join(', ') || '-'}</span>
+                  </div>
+                </div>
+                <div className="fg-fact">
+                  <div className="fg-fact__label">
+                    <span>{LABEL_COLLECTION}</span>
+                  </div>
+                  <div className="fg-fact__value">
+                    <span>{proposal.collection || collection}</span>
+                  </div>
+                </div>
+                <div className="fg-fact">
+                  <div className="fg-fact__label">
                     <span>{LABEL_TARGET_STATE}</span>
                   </div>
                   <div className="fg-fact__value">
@@ -346,11 +402,54 @@ export function AddSkillScreen() {
                   <div className="fg-fact__label">
                     <span>{LABEL_LOCATOR}</span>
                   </div>
-                  <div className="fg-fact__value" style={{ wordBreak: 'break-all' }}>
+                  <div className="fg-fact__value app-wrap">
                     <span>{locator}</span>
                   </div>
                 </div>
+                {proposal.origin?.commit && (
+                  <div className="fg-fact">
+                    <div className="fg-fact__label">
+                      <span>{LABEL_REVISION}</span>
+                    </div>
+                    <div className="fg-fact__value app-wrap">
+                      <span>{proposal.origin.commit.slice(0, 12)}</span>
+                    </div>
+                  </div>
+                )}
               </div>
+            </section>
+
+            <section className="fg-card" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+              <div className="fg-card__title">
+                <span>{LABEL_TRUST}</span>
+              </div>
+              <span className="t-body-sm">{MSG_TRUST_DRAFT}</span>
+              {licenseNote && (
+                <div className="fg-caveat fg-caveat--warn" role="note">
+                  <span>{licenseNote}</span>
+                </div>
+              )}
+              {proposal.assessment?.warning && (
+                <div className="fg-caveat fg-caveat--warn" role="note">
+                  <span>{proposal.assessment.warning}</span>
+                </div>
+              )}
+            </section>
+
+            <section className="fg-card" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+              <div className="fg-card__title">
+                <span>{LABEL_CONFLICTS}</span>
+              </div>
+              {files.modified.length > 0 ? (
+                <div className="fg-caveat fg-caveat--warn" role="alert">
+                  <span className="app-wrap">
+                    {MSG_CONFLICT_PREFIX}
+                    {files.modified.join(', ')}
+                  </span>
+                </div>
+              ) : (
+                <span className="t-body-sm">{MSG_NO_CONFLICT}</span>
+              )}
             </section>
 
             <section className="fg-card" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
@@ -358,18 +457,25 @@ export function AddSkillScreen() {
                 <span>{LABEL_RESOURCES}</span>
               </div>
               <span className="t-caption" style={{ color: 'var(--color-text-subtle)' }}>
-                <span>{LABEL_ASSESSMENT}</span>
+                <span>{LABEL_FILES}</span>
               </span>
+              <ul className="t-body-sm app-wrap" style={{ margin: 0, paddingLeft: 'var(--space-4)', fontFamily: 'var(--font-mono)' }}>
+                {[...files.added, ...files.modified].map((f) => (
+                  <li key={f}>{f}</li>
+                ))}
+              </ul>
             </section>
           </div>
 
-          {proposal.diff && (
-            <section className="fg-card" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', padding: 'var(--space-4)' }}>
-              <div className="fg-card__title">
-                <span>{LABEL_DIFF}</span>
+          {patch && (
+            <details className="fg-acc">
+              <summary style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--color-text-muted)' }}>
+                <span>{LABEL_EXACT}</span>
+              </summary>
+              <div style={{ paddingTop: 'var(--space-2)' }}>
+                <DiffView diff={patch} />
               </div>
-              <DiffView diff={proposal.diff} />
-            </section>
+            </details>
           )}
 
           {pins && (
