@@ -3,7 +3,7 @@ title: "Web curation UX: test, score and fix, most-used flows first"
 description: "Evaluate how easy and understandable the skill-curation web UI is, with repeatable screenshot and task runs on a hub clone, ordered by how often each feature is used; fix what the evaluation finds."
 status: pending
 priority: P1
-effort: 3d
+effort: 3.5d
 branch: main
 tags: [web, ux, curation, e2e, accessibility]
 blockedBy: []
@@ -20,6 +20,8 @@ judged it as a user would since the hub model was simplified (Git-native, `.meta
 insights). A first look on 2026-10-10 (screenshots of a clone of the live hub at 1280 px and 390 px,
 installed binary `c84abe7`) already shows dead screens and unclear wording. This plan turns that look
 into a repeatable evaluation and a fix list, and tests the screens in order of how often they are used.
+
+Also in scope (Phase 6): collecting screenshots for the README and the user guide.
 
 Out of scope: new features, the CLI, the MCP server, visual rebranding. Changes stay in `web/` and
 `internal/delivery/web`, plus small wording fixes in `internal/app` result text if a screen shows it.
@@ -79,13 +81,14 @@ Assumption: the web UI records no usage, so the order below is reasoned from the
 
 | # | Phase | Status | Priority |
 |---|---|---|---|
-| 1 | [Harness, fixtures and rubric](./phase-01-harness-and-rubric.md) | Pending | P1 |
+| 1 | [Harness, fixtures and rubric](./phase-01-harness-and-rubric.md) | Complete | P1 |
 | 2 | [Tier 1: daily flows, test and fix](./phase-02-tier1-daily-flows.md) | Pending | P1 |
 | 3 | [Tier 2: weekly flows, test and fix](./phase-03-tier2-weekly-flows.md) | Pending | P2 |
 | 4 | [Tier 3: occasional flows, dead screens](./phase-04-tier3-occasional-flows.md) | Pending | P2 |
 | 5 | [Regression guard and user walk-through](./phase-05-regression-and-walkthrough.md) | Pending | P2 |
+| 6 | [Screenshots for README and user guide](./phase-06-screenshots-for-readme-and-guide.md) | Pending | P2 |
 
-Phases run in order so the most-used flows are fixed first. Phase 2 can ship alone.
+Phases run in order so the most-used flows are fixed first. Phase 2 can ship alone. Phase 6 needs Phases 2 to 4 so the images show the fixed screens, and it can run in parallel with Phase 5.
 
 ## Success Criteria
 
@@ -94,6 +97,7 @@ Phases run in order so the most-used flows are fixed first. Phase 2 can ship alo
 - [ ] No screen mentions runs, insights or `curation_run_start`.
 - [ ] axe reports no serious or critical issue on any screen; the mobile layout has no clipped primary action.
 - [ ] The UX checks run in `make web-e2e` and fail when a dead route or truncated copy command comes back.
+- [ ] `docs/images/web/` holds demo-hub screenshots (no private data, 200 KB each at most), and `README.md` and `docs/user-guide.md` use them.
 - [ ] The user walked through the top five flows and signed off, or listed what is still wrong.
 
 ## Risks
