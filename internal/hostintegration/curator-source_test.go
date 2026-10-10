@@ -58,8 +58,9 @@ func TestNativeCuratorMatrixCutover(t *testing.T) {
 			writeTestFile(t, path, edited, 0o644)
 			if _, err := Plan(context.Background(), request); !errors.Is(err, ErrConflict) {
 				t.Fatalf("edited copy: %v", err)
-			} else if !strings.Contains(err.Error(), "skillhub doctor --fix") || !strings.Contains(err.Error(), "skillhub connect") {
-				t.Fatalf("edited-copy conflict omitted restoration/cutover commands: %v", err)
+			} else if strings.Contains(err.Error(), "doctor --fix") || !strings.Contains(err.Error(), "delete it") || !strings.Contains(err.Error(), "skillhub connect") {
+				// doctor --fix plans through the same cutover and hits this conflict too.
+				t.Fatalf("edited-copy conflict must point at manual deletion, not doctor --fix: %v", err)
 			}
 			if !bytes.Equal(readTestFile(t, path), edited) {
 				t.Fatal("user copy modified")

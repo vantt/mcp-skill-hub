@@ -2,7 +2,7 @@ package hostintegration
 
 import "bytes"
 
-const nativeCuratorConflict = "native curator differs from the bundled copy; leave it in place and review manually. `skillhub doctor --fix` restores the bundled copy, after which `skillhub connect` can remove it"
+const nativeCuratorConflict = "native curator differs from the bundled copy and was left in place; this client gets system-curator over MCP, so review the file, delete it, and run `skillhub connect` again"
 
 func prepareNativeCurator(host Host, path, root string, bundled []byte) (preparedFile, error) {
 	if !HostSupportsSkillsExtension(host) {
