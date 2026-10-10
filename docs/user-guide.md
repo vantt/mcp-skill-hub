@@ -88,6 +88,11 @@ skillhub connect -g --workspace ~/skillhub --yes
 
 The registration stores the absolute path of the `skillhub` binary and of your workspace. If you move either, run `skillhub connect` again.
 
+If a host already has the global `skillhub:bootstrap` instruction block,
+`connect` and `doctor --fix` reuse it rather than adding a duplicate project
+block. Existing managed project blocks are still checked and repaired. The
+project's server registration and other connection artifacts remain local.
+
 Claude Code uses only `skillhub --profile runtime`: runtime resolution stays on
 MCP, while `system-curator` curates through the CLI. No `/mcp` curation toggle is
 needed. This decision is independent of the verified server-toggle evidence.

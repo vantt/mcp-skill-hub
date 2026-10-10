@@ -107,3 +107,8 @@ go run ./cmd/skillhub help
 ```
 
 Tests run in parallel by default. A test that sets environment variables, changes the working directory, or asserts on process-global state must stay serial (no `t.Parallel()`).
+
+Test packages that reach host integration (`app`, `cli`, `mcpserver`, `web`,
+and `hostintegration`) isolate HOME, USERPROFILE, and XDG directories in
+`TestMain`, before parallel tests start. Their subprocesses inherit that
+isolation; running the suite does not use your agent-host configuration.
