@@ -168,11 +168,14 @@ Subcommands:
                                       --cadence: daily, weekly, manual (default: weekly)
   confirm --proposal <id> --proposal-digest <d> --base-version <v>
                                       Apply the proposal that triage accept printed
-  import <source-id> [--path <p>] [--skill <name>]... [--yes]
-                                      Import existing skills from a watched source as drafts
+  import <locator|source-id> [--ref <r>] [--path <p>] [--skill <name> | --all] [--yes]
+                                      Preview discovered skills and conflicts; --yes imports drafts only
+  import --proposal <id> --proposal-digest <d> --base-version <v> --yes
+                                      Apply the stored, reviewed import proposal without rediscovery
 
 capture and confirm write source records only; your skills are never changed.
 Watching a source does not auto-import skills; import creates draft skills that you review and activate.
+Import previews contact the source and may cache a proposal in runtime. No canonical files change.
 Use --json for machine-readable output.
 `,
 	"check": `Usage: skillhub check [--workspace <path>] [--all-due | --all | <source-id>...] [--json]

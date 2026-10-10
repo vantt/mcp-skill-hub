@@ -27,6 +27,8 @@ type SourceImportService struct {
 
 type SourceImportPreviewInput struct {
 	SourceID       string   `json:"source_id"`
+	Locator        string   `json:"locator,omitempty"`
+	Ref            string   `json:"ref,omitempty"`
 	Path           string   `json:"path,omitempty"`
 	Skills         []string `json:"skills,omitempty"`
 	IdempotencyKey string   `json:"idempotency_key,omitempty"`
@@ -88,23 +90,68 @@ func (service SourceImportService) PreviewSourceImport(ctx context.Context, path
 	service = service.defaults(root)
 
 	sourceID := strings.TrimSpace(input.SourceID)
-	if sourceID == "" {
-		return SourceImportProposal{}, errors.New("source_id is required")
+	locator := strings.TrimSpace(input.Locator)
+	if sourceID == "" && locator == "" {
+		return SourceImportProposal{}, errors.New("source_id or locator is required")
+	}
+	if sourceID != "" && locator != "" {
+		return SourceImportProposal{}, errors.New("specify source_id or locator, not both")
 	}
 
 	_, records, err := readSourceRecords(root)
 	if err != nil {
 		return SourceImportProposal{}, err
 	}
+	scopePrefix := input.Path
 	var record *sourcepkg.Record
-	for i := range records {
-		if records[i].ID == sourceID {
-			record = &records[i]
-			break
+	if locator != "" {
+		// Resolve an in-memory source only. Import embeds upstream provenance in the
+		// drafts; it does not register a watched source or an intake candidate.
+		sourceService := SourceService{Clock: service.Clock, Adapters: service.Adapters}
+		inspectionCtx, cancel := context.WithTimeout(ctx, sourcepkg.DefaultTimeout)
+		defer cancel()
+		resolved, _, failure, resolveErr := sourceService.resolveAttachSource(inspectionCtx, SourceAttachInput{
+			Locator: locator,
+			Ref:     input.Ref,
+			Path:    input.Path,
+		}, nil)
+		if resolveErr != nil {
+			return SourceImportProposal{}, resolveErr
 		}
-	}
-	if record == nil {
-		return SourceImportProposal{}, fmt.Errorf("source %q not found", sourceID)
+		if failure != nil {
+			return SourceImportProposal{Result: failure.Result}, nil
+		}
+		// Import does not change watch policy. Reuse an existing source identity
+		// when the locator matches, regardless of its monitoring configuration.
+		for _, existing := range records {
+			if existing.Adapter == resolved.Adapter &&
+				sameRepository(existing.Locator.Repository, resolved.Locator.Repository) &&
+				existing.Locator.Ref == resolved.Locator.Ref &&
+				existing.Locator.Path == resolved.Locator.Path {
+				resolved.ID = existing.ID
+				break
+			}
+		}
+		// The locator path is already the adapter's source root. Resource paths
+		// are relative to it, so discovery must not apply the same prefix again.
+		scopePrefix = ""
+		record = &resolved
+		sourceID = record.ID
+	} else {
+		for i := range records {
+			if records[i].ID == sourceID {
+				copy := records[i]
+				if input.Ref != "" {
+					copy.Locator.Ref = input.Ref
+					copy.CurrentRevision = nil // An explicit ref must resolve, never reuse another ref's bytes.
+				}
+				record = &copy
+				break
+			}
+		}
+		if record == nil {
+			return SourceImportProposal{}, fmt.Errorf("source %q not found", sourceID)
+		}
 	}
 	adapter, ok := service.Adapters[record.Adapter]
 	if !ok {
@@ -131,9 +178,11 @@ func (service SourceImportService) PreviewSourceImport(ctx context.Context, path
 		}
 		currentRev = *record.CurrentRevision
 	}
+	if locator != "" || input.Ref != "" {
+		record.CurrentRevision = &currentRev
+	}
 
-	scopePrefix := input.Path
-	if scopePrefix == "" && record.Locator.Path == "" {
+	if locator == "" && scopePrefix == "" && record.Locator.Path == "" {
 		scopePrefix = commonParentDirForSource(root, record.ID)
 	}
 	resources, err := adapter.List(opCtx, src, currentRev, sourcepkg.Scope{Prefix: scopePrefix})
@@ -222,7 +271,7 @@ func (service SourceImportService) PreviewSourceImport(ctx context.Context, path
 		schemaVersion = v
 	}
 	for _, pi := range pendingImports {
-		itemChanges, itemAdded, itemErr := buildImportItemChanges(schemaVersion, pi, record, currentRev, revCallback, nowISO)
+		itemChanges, itemAdded, itemErr := buildImportItemChanges(schemaVersion, pi, importItemSource{record: record, locatorImport: locator != ""}, currentRev, revCallback, nowISO)
 		if itemErr != nil {
 			return SourceImportProposal{}, itemErr
 		}
@@ -547,14 +596,20 @@ func listWorkspaceSkillIDs(root string) (map[string]bool, error) {
 	return ids, nil
 }
 
+type importItemSource struct {
+	record        *sourcepkg.Record
+	locatorImport bool
+}
+
 func buildImportItemChanges(
 	schemaVersion int,
 	pi DiscoveredSkillItem,
-	record *sourcepkg.Record,
+	source importItemSource,
 	currentRev sourcepkg.Revision,
 	revCallback func(string) (sourcepkg.Revision, error),
 	nowISO string,
 ) ([]mutation.Change, []string, error) {
+	record := source.record
 	var changes []mutation.Change
 	var added []string
 	targetID := pi.TargetID
@@ -591,6 +646,9 @@ func buildImportItemChanges(
 				"commit": currentRev.Value,
 				"synced": currentRev.Value,
 				"path":   pi.SkillDir,
+			}
+			if source.locatorImport {
+				src["path"] = skillOrigin.Path
 			}
 			if skillOrigin.FilesDigest != "" {
 				src["files_digest"] = skillOrigin.FilesDigest

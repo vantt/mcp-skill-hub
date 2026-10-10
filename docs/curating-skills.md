@@ -533,7 +533,26 @@ skillhub eval routing --policy custom-policy.yaml --min-precision 0.60 --min-rec
 
 - **Leave-one-out:** For each test case, the tested example is removed from the skill's candidate scoring set to measure true generalization.
 - **Metrics:** Reports Precision@1, Recall, No-Skill Recall, No-Skill Precision, and False Positive Rate.
+- **JSON contract:** `--json` returns the common `schema_version`, `status`, `summary`, `items`, `suggested_actions`, `warnings`, and `error` envelope. Read case counts, rates, per-skill metrics, and failing cases from the top-level `metrics` object (for example, `metrics.recall`), not from the envelope root. Without thresholds, or when all thresholds pass, `status` is `ok` and the exit code is 0. A failed threshold returns `status: "action_required"`, retains `metrics`, includes a `routing_threshold_failed` warning for each failed threshold, and exits 1; `error` remains `null` because evaluation completed. Invalid requests still return a structured error and exit 2. An undefined rate (`null`) fails any threshold applied to it.
 - **CI Gate:** Automated as a `make check` gate test (`TestRoutingEvalGate`) executing in under 1 second.
+
+## Import repository skills as drafts (`skillhub source import`)
+
+Import directly from a remote repository locator, or from an existing source ID:
+
+```bash
+skillhub source import https://github.com/owner/repo --ref main --path skills --all --json
+```
+
+Preview is the default. Its JSON includes `discovered`, `importable`, and `skipped` skills, with conflict flags and skip reasons. Existing skills are skipped, never overwritten. Preview may contact the repository and persist a disposable proposal/cache under `runtime`, but changes no canonical files. Without `--skill`, all discovered skills in the selected path are considered; `--skill <name>` can be repeated, and cannot be combined with `--all`.
+
+After human review, apply exactly the stored proposal using the pins in `confirmation.confirmation.pins`:
+
+```bash
+skillhub source import --proposal PROP-... --proposal-digest sha256:... --base-version sha256:... --yes
+```
+
+This confirmation does not rediscover upstream content. A changed canonical workspace or mismatched pins rejects the proposal. `source import <locator|source-id> --yes` instead previews and applies fresh content in one invocation. Both routes create drafts only, retain upstream provenance, and do not approve content, activate skills, or register new watched sources. Review and activate drafts separately.
 
 ## Advanced intake and recovery
 
@@ -598,7 +617,7 @@ Use this workflow when you require multi-stage governance, audit logging of cand
 | Check watched sources for updates | `skillhub source check --all-due\|--all` (or `skillhub check ...`) |
 | Review insight proposals in inbox | `skillhub inbox`; `skillhub insight show <id>` |
 | Decide an insight proposal | `skillhub insight decide <id> --decision plan\|reject [flags]` |
-| Import skills from source | `skillhub source import <source-id> [--path <subdir>] [--skill <name>] [--yes]` |
+| Import skills from source | `skillhub source import <locator\|source-id> [--ref <r>] [--path <subdir>] [--skill <name>\|--all] [--yes]` |
 | Measure funnel usage and conversion | `skillhub telemetry funnel [--since <period>] [--skill <id>]` |
 | Import local Claude Code transcripts | `skillhub telemetry import-transcripts --project <dir>` |
 | Evaluate routing quality | `skillhub eval routing [--no-skill <f>] [--policy <f>]` |

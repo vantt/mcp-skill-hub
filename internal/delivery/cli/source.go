@@ -97,8 +97,8 @@ func runSource(ctx context.Context, args []string, stdout, stderr io.Writer) int
 			return writeInvalidRequest(stdout, stderr, flags.jsonOutput, "confirm requires --proposal, --proposal-digest, and --base-version", "Pass the exact pins printed by triage.")
 		}
 	case "import":
-		if len(positionals) != 1 {
-			return writeInvalidRequest(stdout, stderr, flags.jsonOutput, "import requires one source ID", "Run `skillhub source import <source-id> [--path <subdir>] [--skill <name>]... [--yes]`.")
+		if err := validateSourceImportRequest(flags, positionals); err != nil {
+			return writeInvalidRequest(stdout, stderr, flags.jsonOutput, err.Error(), "Preview with `skillhub source import <locator|source-id> [--ref <r>] [--path <p>] [--skill <name> | --all]`; confirm with `skillhub source import --proposal <id> --proposal-digest <d> --base-version <v> --yes`.")
 		}
 	case "attach":
 		if len(positionals) != 1 {
@@ -199,50 +199,7 @@ func runSource(ctx context.Context, args []string, stdout, stderr io.Writer) int
 		}
 		return writeSourceMutation(stdout, stderr, flags.jsonOutput, result)
 	case "import":
-		sourceID := positionals[0]
-		importService := app.SourceImportService{}
-		if flags.proposalID != "" {
-			if flags.proposalDigest == "" || flags.baseVersion == "" {
-				return writeInvalidRequest(stdout, stderr, flags.jsonOutput, "confirming import requires --proposal, --proposal-digest, and --base-version", "Pass all three pins or use --yes.")
-			}
-			preview, err := importService.LoadSourceImportProposal(ctx, flags.workspace, flags.proposalID)
-			if err != nil {
-				return writeSourceError(stdout, stderr, flags.jsonOutput, err)
-			}
-			result, err := importService.ConfirmSourceImport(ctx, flags.workspace, preview, app.ConfirmationPins{
-				ProposalID:     flags.proposalID,
-				ProposalDigest: flags.proposalDigest,
-				BaseVersion:    flags.baseVersion,
-			})
-			return writeSourceImportResult(stdout, stderr, flags.jsonOutput, result, err)
-		}
-		preview, err := importService.PreviewSourceImport(ctx, flags.workspace, app.SourceImportPreviewInput{
-			SourceID:       sourceID,
-			Path:           flags.sourcePath,
-			Skills:         flags.skills,
-			IdempotencyKey: flags.idempotencyKey,
-		})
-		if err != nil {
-			return writeSourceError(stdout, stderr, flags.jsonOutput, err)
-		}
-		if flags.yes {
-			if len(preview.Importable) == 0 {
-				if flags.jsonOutput {
-					return writeSourceJSON(stdout, stderr, preview)
-				}
-				p := termui.New(stdout)
-				p.Line(preview.Summary)
-				var bullets []string
-				for _, sk := range preview.Skipped {
-					bullets = append(bullets, fmt.Sprintf("skipped %s: %s", sk.TargetID, sk.SkipReason))
-				}
-				p.Bullets(bullets...)
-				return 0
-			}
-			result, err := importService.ConfirmSourceImport(ctx, flags.workspace, preview, preview.Confirmation.Confirmation.Pins)
-			return writeSourceImportResult(stdout, stderr, flags.jsonOutput, result, err)
-		}
-		return writeSourceImportProposal(stdout, stderr, flags.jsonOutput, preview, sourceID)
+		return runSourceImport(ctx, app.SourceImportService{}, flags, positionals, stdout, stderr)
 	case "attach":
 		target := positionals[0]
 		input := app.SourceAttachInput{
@@ -714,32 +671,32 @@ func writeSingleSource(stdout, stderr io.Writer, jsonOutput bool, item app.Sourc
 	return 0
 }
 
-func writeSourceImportProposal(stdout, stderr io.Writer, jsonOutput bool, proposal app.SourceImportProposal, sourceID string) int {
-	if jsonOutput {
-		return writeSourceJSON(stdout, stderr, proposal)
-	}
-	p := termui.New(stdout)
-	p.Line(proposal.Summary)
-	var bullets []string
-	for _, item := range proposal.Importable {
-		bullets = append(bullets, fmt.Sprintf("%s -> %s [draft] (importable)", item.Name, item.TargetID))
-	}
-	for _, item := range proposal.Skipped {
-		bullets = append(bullets, fmt.Sprintf("%s -> %s [skipped: %s]", item.Name, item.TargetID, item.SkipReason))
-	}
-	p.Bullets(bullets...)
-	for _, warn := range proposal.Warnings {
-		p.Warning(warn.Summary)
-	}
-	p.Blank()
-	pins := proposal.Confirmation.Confirmation.Pins
-	p.Fields(
-		termui.Field{Label: "Proposal", Value: pins.ProposalID},
-		termui.Field{Label: "Digest", Value: pins.ProposalDigest},
-		termui.Field{Label: "Base version", Value: pins.BaseVersion},
-	)
-	p.Line(fmt.Sprintf("Confirm with:\n  skillhub source import %s --proposal %s --proposal-digest %s --base-version %s\nor re-run with --yes to import directly.", sourceID, pins.ProposalID, pins.ProposalDigest, pins.BaseVersion))
-	return 0
+func writeSourceImportProposal(stdout, stderr io.Writer, jsonOutput bool, proposal app.SourceImportProposal) int {
+	return writeResult(stdout, stderr, jsonOutput, proposal, func(p *termui.Printer) {
+		p.Line(proposal.Summary)
+		var bullets []string
+		for _, item := range proposal.Importable {
+			bullets = append(bullets, fmt.Sprintf("%s -> %s [draft] (importable)", item.Name, item.TargetID))
+		}
+		for _, item := range proposal.Skipped {
+			bullets = append(bullets, fmt.Sprintf("%s -> %s [skipped: %s]", item.Name, item.TargetID, item.SkipReason))
+		}
+		p.Bullets(bullets...)
+		for _, warn := range proposal.Warnings {
+			p.Warning(warn.Summary)
+		}
+		p.Line("No canonical files changed during preview.")
+		if proposal.Confirmation.Confirmation.Required {
+			p.Blank()
+			pins := proposal.Confirmation.Confirmation.Pins
+			p.Fields(
+				termui.Field{Label: "Proposal", Value: pins.ProposalID},
+				termui.Field{Label: "Digest", Value: pins.ProposalDigest},
+				termui.Field{Label: "Base version", Value: pins.BaseVersion},
+			)
+			p.Line(fmt.Sprintf("Confirm with:\n  skillhub source import --proposal %s --proposal-digest %s --base-version %s --yes", pins.ProposalID, pins.ProposalDigest, pins.BaseVersion))
+		}
+	})
 }
 
 func writeSourceImportResult(stdout, stderr io.Writer, jsonOutput bool, result app.SourceImportResult, err error) int {
