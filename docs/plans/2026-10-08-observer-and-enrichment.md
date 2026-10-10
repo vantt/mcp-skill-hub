@@ -394,7 +394,7 @@ Quyết định:
 | Phase 4 | chờ baseline |
 | §5.1 tách profile | xong code (G); chưa host nào verified nên `integrate` vẫn ghi một entry đủ bộ |
 | 5 (a) `current_uri`, phân trang `skill_list` | xong (G) |
-| 5 `directoryRead` | bộ đếm O3 `unsupported_method_calls`/`unlisted_resource_reads` đã bỏ vì không đo được (C round 3); cần cách đo khác hoặc hoãn hẳn |
+| 5 `directoryRead` | **hoãn hẳn** (người dùng quyết 2026-10-10). Bộ đếm O3 đã bỏ vì không đo được (C round 3). Giữ `directoryRead: false`; chỉ mở lại khi có client thuần MCP thật sự thiếu file |
 | 5 (c) `system-curator` native/MCP trùng tên | xong (H round 2): `51cb26b`, `352c063`, `9041f52`, `7c64527`, `06f8aab`, `7660bf5`; tests `TestConnectPreviewThenApplyWritesProjectFilesOnly`, `TestNativeCuratorMatrixCutover`, `TestCuratorSourcePerSessionClient`, `TestDoctorReportsNativeCuratorVersionSkew`, `TestDoctorTextReportsNativeCuratorFixCommand`; temp HOME/project smoke connect đúng 10 files, không có `*.skillhub-sha256`; doctor text in cùng lệnh fix như JSON và không sửa file; `make check` xanh sau rebase lên main `4834408` (đã có C Phase 5/schema v5) |
 
 ## 9. Thực thi song song với plan simplify (worktree riêng)

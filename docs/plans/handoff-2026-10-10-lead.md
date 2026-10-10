@@ -30,7 +30,7 @@ schema v5, `9b6c986`). Phase 0 (scorecard) is the user's own work with distill-l
 | 5(c) one curator source per client | done (H, `51cb26b`..`1fdd787`, fix `d65b0e7`); no client verified for `skills_extension`, so all native hosts keep the native copy and the server hides the MCP copy from claude-code/codex/gemini |
 | Phase 3 enrichment | **deferred until there are cases.** Blocker: distill-lab rejects `where: usage:<case_id>`. Lead recommendation: when cases exist, promote confirmed cases to Git eval cases and cite them as `repo@commit:path` (option 1 in observer-handoff-G.md §2); do not change distill-lab |
 | Phase 4 resolver | waits for the baseline (`skillhub telemetry baseline`), counting since the v4/v5 migration |
-| `directoryRead` | O3 counters were removed; lead recommends deferring entirely. User has not decided |
+| `directoryRead` | deferred entirely (user decided 2026-10-10). Reopen only if a pure-MCP client is shown to miss files |
 
 ## Small open items
 
