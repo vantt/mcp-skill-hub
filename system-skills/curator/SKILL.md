@@ -1,8 +1,8 @@
 ---
 name: system-curator
-version: 1.6.0
+version: 1.6.1
 contract-version: "2"
-description: Guide Skill Hub maintenance through the bundled, application-service-backed curation tools.
+description: Guide Skill Hub maintenance through the `skillhub` CLI (with --json) when a shell is available, or the bundled curation MCP tools when it is not.
 activation-policy: explicit-only
 coordination-boundary: instruction-only-best-effort
 instruction-only: true
@@ -44,13 +44,32 @@ skill; that path uses `skill_resolve` instead. When you do not use the recommend
 skill, re-resolve with `prior.kind: rejected` instead of picking one yourself.
 When you use a different skill, call `skill_feedback` with the real `skill_id`.
 
+**First step, every session:** if you have a shell tool, run `skillhub version`
+before anything else, and do not search for MCP curation tools first. If it
+prints a version, every curation action below is a `skillhub … --json` command
+from the CLI column of the intent table. The CLI is the supported interface on
+shell hosts, not a workaround: it calls the same application services as the
+MCP tools. Missing MCP curation tools are expected there and are never a reason
+to stop.
+
 ## Choose the interface
 
-If you can run shell commands and `skillhub version` works, use the CLI with
-`--json`, adding `--workspace <path>` when the connected project does not resolve
-the intended Hub. Otherwise use the MCP tools. The CLI needs one fewer MCP
-server, accepts local skill folders, and calls the same application services.
-Do not change host registrations or permissions merely to choose an interface.
+Decide before your first curation call. If you can run shell commands, run
+exactly `skillhub version` as a single command: no `command -v`, `which`, `&&`,
+pipes, or `cd` around it. Hosts usually pre-approve `skillhub …` commands but
+ask about anything else, so a compound probe can stall on a permission prompt
+before curation starts. If it prints a version, use the CLI with `--json` for
+the whole session, adding `--workspace <path>` after the subcommand when the
+connected project does not resolve the intended Hub. Prefer the CLI even when
+curation MCP tools are also listed: the CLI needs one fewer MCP server, accepts
+local skill folders, and calls the same application services. Use the MCP tools
+only when there is no shell or `skillhub version` fails.
+
+If an MCP curation call is denied or the tool is missing and a shell is
+available, switch to the CLI equivalent in the intent table instead of stopping.
+If a CLI command is denied, report which command needs approval and why; do not
+retry it in another form to get around the prompt. Do not change host
+registrations or permissions merely to choose an interface.
 
 On the CLI path, run the preview form first and show what will change: the
 proposal diff, discovered files, conflicts, and warnings explain what the user
@@ -59,6 +78,11 @@ binds confirmation to the proposal ID, digest, base version, and workspace.
 Never use a bare `--yes` on the first call or `skill confirm <id>` without its
 digest: those forms do not preserve the reviewed decision. If a proposal is
 stale, regenerate the preview and ask again rather than substituting fresh pins.
+"I approve in advance" or "just apply it" does not replace the preview: the user
+can only approve a diff they have seen, so still run the preview, show it, and
+then run its `cli` command once they confirm that diff. The host may also ask
+before that command; that prompt is the host's own check, not a reason to retry
+in another form.
 
 Never use `--approve-content`: content approval belongs to the human reviewing
 the actual bytes. Never use `--force`, `telemetry purge`, or `migrate --yes`;
@@ -79,11 +103,11 @@ not ask for it or reconstruct it.
 
 ## Start at Curation Home
 
-On the MCP path only, if curation tools (`hub_status`, `skill_review`,
-`source_list`) are missing on a host with split profiles, tell the user to
-enable `skillhub-curation` in the host's MCP controls. Where available, open
-`/mcp`, select skillhub-curation, and Enable it for curation; Disable it for daily
-work. A working CLI does not need that server enabled.
+Only when there is no shell or `skillhub version` fails, and the curation tools
+(`hub_status`, `skill_review`, `source_list`) are missing, tell the user to enable
+`skillhub-curation` in the host's MCP controls (where available: open `/mcp`,
+select skillhub-curation, Enable). With a working CLI never suggest enabling it;
+connect no longer registers it for Claude Code.
 
 For general curation, start with `skillhub status --json` or `hub_status`.
 Both are local and offline: do not enumerate the catalog, fetch sources, or
