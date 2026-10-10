@@ -12,7 +12,7 @@ import (
 func (adapter *Server) registerResolverTools(server *mcp.Server) {
 	addTool(server, &mcp.Tool{
 		Name: "skill_resolve", Title: "Resolve a skill",
-		Description: "Recommend at most one primary skill from bounded task evidence. Send task.description in English; translate a non-English request first. primary.setup (and supporting[].setup), when present, is a hint: review_required means a human has not approved the skill's content yet, so do not use the skill and tell the user to run `skillhub skill review <id>`; unsupported_platform means this operating system is not supported; any other state is a hint from the user's terminal (basis), so confirm with the skill's own check in your shell via local.preflight. This does not load or activate skill content; use skills/get and resources/read only after host approval.",
+		Description: "Recommend at most one primary skill from task evidence (task.description in English). If setup is review_required, do not use the skill and ask the user to run `skillhub skill review <id>`. This does not load skill content; use skills/get and resources/read after approval.",
 		Annotations: annotations(true, false, true, false),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input resolveInput) (*mcp.CallToolResult, toolOutcome[resolveResult], error) {
 		request := resolverpkg.Request(input)

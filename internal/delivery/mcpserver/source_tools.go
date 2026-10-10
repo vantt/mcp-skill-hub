@@ -20,7 +20,7 @@ func (adapter *Server) registerSourceTools(server *mcp.Server) {
 	addTool(server, &mcp.Tool{
 		Name:        "source_list",
 		Title:       "List sources",
-		Description: "List monitored sources in the catalog as a snapshot-bound page. Pass next_cursor unchanged to continue; limit defaults to 25 and is at most 100.",
+		Description: "List monitored sources in the catalog as a snapshot-bound page. Pass next_cursor unchanged to continue.",
 		Annotations: annotations(true, false, false, false),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input sourceListInput) (*mcp.CallToolResult, toolOutcome[paging.Page[app.SourceListItem]], error) {
 		limit, err := paging.NormalizeLimit(input.Limit)
@@ -50,7 +50,7 @@ func (adapter *Server) registerSourceTools(server *mcp.Server) {
 	addTool(server, &mcp.Tool{
 		Name:        "source_check",
 		Title:       "Check sources",
-		Description: "Check selected or due source revisions through configured adapters. This records revision changes and per-skill upstream results in results[].skills without editing curated skills.",
+		Description: "Check selected or due source revisions through configured adapters without editing curated skills.",
 		Annotations: annotations(false, false, false, true),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input sourceCheckInput) (*mcp.CallToolResult, toolOutcome[app.SourceCheckResult], error) {
 		if len(input.SourceIDs) == 0 && !input.AllDue {

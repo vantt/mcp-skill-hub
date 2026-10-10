@@ -13,7 +13,7 @@ func (adapter *Server) registerSourceWatchTools(server *mcp.Server) {
 	addTool(server, &mcp.Tool{
 		Name:        "source_watch_preview",
 		Title:       "Preview source watch",
-		Description: "Preview watching a public GitHub repository for skill updates and attaching it as a learning reference. Local filesystem folders are rejected. Returns an immutable watch proposal with confirmation pins. No canonical source records change during preview.",
+		Description: "Preview watching a GitHub repository and attaching it as a learning reference. Returns confirmation pins.",
 		Annotations: annotations(false, false, false, true),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input sourceWatchPreviewInput) (*mcp.CallToolResult, toolOutcome[app.SourceProposal], error) {
 		locator := strings.TrimSpace(input.Locator)
@@ -38,7 +38,7 @@ func (adapter *Server) registerSourceWatchTools(server *mcp.Server) {
 	addTool(server, &mcp.Tool{
 		Name:        "source_watch_confirm",
 		Title:       "Confirm source watch",
-		Description: "Apply an approved source watch, attach, detach, or unwatch proposal. All proposal_id, proposal_digest, and base_version pins are required.",
+		Description: "Apply an approved source watch, attach, detach, or unwatch proposal with confirmation pins.",
 		Annotations: annotations(false, true, true, false),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input confirmationInput) (*mcp.CallToolResult, toolOutcome[app.SourceMutationResult], error) {
 		proposalID := strings.TrimSpace(input.ProposalID)

@@ -15,7 +15,7 @@ func (adapter *Server) registerSkillReviewTools(server *mcp.Server) {
 	addTool(server, &mcp.Tool{
 		Name:        "skill_review",
 		Title:       "Review skill diagnostics",
-		Description: "Perform a comprehensive, offline, read-only diagnostic review for one skill from canonical files without rebuilding the catalog. Returns activation readiness, canonical validation issues, resource divergence, git status, and next action recommendations.",
+		Description: "Perform an offline diagnostic review for one skill, returning readiness, validation issues, resource divergence, and git status.",
 		Annotations: annotations(true, false, false, false),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input skillReviewInput) (*mcp.CallToolResult, toolOutcome[app.SkillReviewResult], error) {
 		id := strings.TrimSpace(input.SkillID)

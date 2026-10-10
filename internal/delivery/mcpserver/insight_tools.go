@@ -16,7 +16,7 @@ func (adapter *Server) registerInsightTools(server *mcp.Server) {
 	addTool(server, &mcp.Tool{
 		Name:        "skill_update_preview",
 		Title:       "Preview skill update",
-		Description: "Persist a validated skill update preview and return exact confirmation pins. No canonical skill files change during preview. runtime replaces the skill's runtime block (requires.bins/env/platforms, setup.check/command; an empty object removes it); changing it requires the user to review the skill again before its files are served to agents.",
+		Description: "Preview a skill update and return confirmation pins. An updated runtime block requires re-review with `skillhub skill review <id>`.",
 		Annotations: annotations(false, false, false, false),
 	},
 		func(ctx context.Context, _ *mcp.CallToolRequest, input skillUpdatePreviewInput) (*mcp.CallToolResult, toolOutcome[app.SkillProposal], error) {
@@ -55,7 +55,7 @@ func (adapter *Server) registerInsightTools(server *mcp.Server) {
 	addTool(server, &mcp.Tool{
 		Name:        "skill_update_confirm",
 		Title:       "Confirm skill update",
-		Description: "Apply exactly one persisted skill proposal. All proposal_id, proposal_digest, and base_version pins are required and exact replay returns the prior receipt.",
+		Description: "Apply a persisted skill proposal with required confirmation pins.",
 		Annotations: annotations(false, true, true, false),
 	},
 		func(ctx context.Context, _ *mcp.CallToolRequest, input confirmationInput) (*mcp.CallToolResult, toolOutcome[app.SkillMutationResult], error) {
@@ -73,7 +73,7 @@ func (adapter *Server) registerInsightTools(server *mcp.Server) {
 	addTool(server, &mcp.Tool{
 		Name:        "routing_evaluate",
 		Title:       "Evaluate routing",
-		Description: "Evaluate one versioned request with the same deterministic resolver, catalog snapshot, policy revision, and distribution pins used by skill_resolve. This read-only evaluation never changes policy.",
+		Description: "Evaluate a routing request with the deterministic resolver against the current catalog. This read-only evaluation never changes policy.",
 		Annotations: annotations(true, false, true, false),
 	},
 		func(ctx context.Context, _ *mcp.CallToolRequest, input resolveInput) (*mcp.CallToolResult, toolOutcome[routingEvaluationResult], error) {

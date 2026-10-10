@@ -28,7 +28,7 @@ func (adapter *Server) registerSkillCreateTools(server *mcp.Server) {
 	addTool(server, &mcp.Tool{
 		Name:        "skill_create_preview",
 		Title:       "Preview skill creation",
-		Description: "Persist a validated draft skill creation preview and return exact confirmation pins. No canonical skill files change during preview.",
+		Description: "Preview creating a draft skill and return confirmation pins.",
 		Annotations: annotations(false, false, false, false),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input skillCreatePreviewInput) (*mcp.CallToolResult, toolOutcome[app.SkillProposal], error) {
 		if strings.TrimSpace(input.SkillID) == "" || strings.TrimSpace(input.Name) == "" || strings.TrimSpace(input.Description) == "" {
@@ -60,7 +60,7 @@ func (adapter *Server) registerSkillCreateTools(server *mcp.Server) {
 	addTool(server, &mcp.Tool{
 		Name:        "skill_create_confirm",
 		Title:       "Confirm skill creation",
-		Description: "Apply exactly one persisted draft skill creation proposal. All proposal_id, proposal_digest, and base_version pins are required and exact replay returns the prior receipt.",
+		Description: "Apply a persisted draft skill creation proposal with required confirmation pins.",
 		Annotations: annotations(false, true, true, false),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input confirmationInput) (*mcp.CallToolResult, toolOutcome[app.SkillMutationResult], error) {
 		if strings.TrimSpace(input.ProposalID) == "" || strings.TrimSpace(input.ProposalDigest) == "" || strings.TrimSpace(input.BaseVersion) == "" {
@@ -87,7 +87,7 @@ func (adapter *Server) registerSkillTransitionTools(server *mcp.Server) {
 	addTool(server, &mcp.Tool{
 		Name:        "skill_transition_preview",
 		Title:       "Preview skill lifecycle transition",
-		Description: "Persist a validated skill lifecycle transition preview (target: active, deprecated, or archived) and return exact confirmation pins. No canonical skill files change during preview.",
+		Description: "Preview a skill lifecycle transition (target: active, deprecated, or archived) and return confirmation pins.",
 		Annotations: annotations(false, false, false, false),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input skillTransitionPreviewInput) (*mcp.CallToolResult, toolOutcome[app.SkillProposal], error) {
 		if strings.TrimSpace(input.SkillID) == "" {
@@ -117,7 +117,7 @@ func (adapter *Server) registerSkillTransitionTools(server *mcp.Server) {
 	addTool(server, &mcp.Tool{
 		Name:        "skill_transition_confirm",
 		Title:       "Confirm skill lifecycle transition",
-		Description: "Apply exactly one persisted skill lifecycle transition proposal. All proposal_id, proposal_digest, and base_version pins are required and exact replay returns the prior receipt.",
+		Description: "Apply a persisted skill lifecycle transition proposal with required confirmation pins.",
 		Annotations: annotations(false, true, true, false),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input confirmationInput) (*mcp.CallToolResult, toolOutcome[app.SkillMutationResult], error) {
 		if strings.TrimSpace(input.ProposalID) == "" || strings.TrimSpace(input.ProposalDigest) == "" || strings.TrimSpace(input.BaseVersion) == "" {
@@ -189,7 +189,7 @@ func (adapter *Server) registerSkillGetTool(server *mcp.Server) {
 	addTool(server, &mcp.Tool{
 		Name:        "skill_get",
 		Title:       "Get skill",
-		Description: "Get a single skill by ID in any lifecycle state, returning its routing fields, entrypoint path, content, and metadata. For an active skill, local.path is a read-only copy of the skill folder: resolve relative file references such as scripts/ against it. Every trusted skill also gets a writable local.state_directory and local.env (SKILLHUB_SKILL_DIR, SKILLHUB_STATE_DIR, SKILLHUB_CONFIG_DIR): export them when you run its check, setup, or scripts, and install dependencies only into the state directory, never globally. If $SKILLHUB_CONFIG_DIR/env exists, load it too (for example `set -a; . \"$SKILLHUB_CONFIG_DIR/env\"; set +a`) and never print its values; if a required variable is missing, tell the user to run `skillhub skill env set <id> <NAME>` instead of asking for the value. When local.preflight is present, run its check command in working_directory under your own permissions before using the scripts, and ask the user before running setup. If local.status is review_required, the skill's content has not been approved: content is omitted, resources/read refuses every file, so do not use the skill and tell the user to run local.review_command.",
+		Description: "Get a skill by ID in any lifecycle state (routing, content, metadata). For active skills, local.path is a read-only copy of the skill folder and local.state_directory is writable. If local.status is review_required, content is omitted: ask the user to run `skillhub skill review <id>`. Run local.preflight check before scripts; ask before setup.",
 		Annotations: annotations(true, false, false, false),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input skillGetInput) (*mcp.CallToolResult, toolOutcome[skillGetResult], error) {
 		id := strings.TrimSpace(input.SkillID)

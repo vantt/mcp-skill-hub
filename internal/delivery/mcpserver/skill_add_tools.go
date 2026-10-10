@@ -45,7 +45,7 @@ func (adapter *Server) registerSkillAddTools(server *mcp.Server) {
 	addTool(server, &mcp.Tool{
 		Name:        "skill_add_preview",
 		Title:       "Preview skill addition",
-		Description: "Preview adding a skill from a public GitHub repository. Local filesystem paths are rejected. Returns an immutable add proposal with confirmation pins. No canonical skill files change during preview.",
+		Description: "Preview adding a skill from a public GitHub repository. Returns an add proposal with confirmation pins.",
 		Annotations: annotations(false, false, false, true),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input skillAddPreviewInput) (*mcp.CallToolResult, toolOutcome[app.SkillAddProposal], error) {
 		if err := validateSkillAddLocator(input.Locator); err != nil {
@@ -66,7 +66,7 @@ func (adapter *Server) registerSkillAddTools(server *mcp.Server) {
 	addTool(server, &mcp.Tool{
 		Name:        "skill_add_confirm",
 		Title:       "Confirm skill addition",
-		Description: "Apply an approved draft skill addition proposal. All proposal_id, proposal_digest, and base_version pins are required.",
+		Description: "Apply an approved draft skill addition proposal with confirmation pins.",
 		Annotations: annotations(false, true, true, false),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input confirmationInput) (*mcp.CallToolResult, toolOutcome[app.SkillAddResult], error) {
 		proposalID := strings.TrimSpace(input.ProposalID)

@@ -13,7 +13,7 @@ func (adapter *Server) registerSourceImportTools(server *mcp.Server) {
 	addTool(server, &mcp.Tool{
 		Name:        "source_import_preview",
 		Title:       "Preview source skill import",
-		Description: "Discover SKILL.md folders in the watched revision of a source repository by reading the ref's current commit, marking already-imported skills, checking for ID conflicts, and returning an import proposal preview. No canonical skills are created during preview.",
+		Description: "Discover skills in a watched source repository revision and return an import proposal preview.",
 		Annotations: annotations(false, false, false, false),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input sourceImportPreviewInput) (*mcp.CallToolResult, toolOutcome[app.SourceImportProposal], error) {
 		sourceID := strings.TrimSpace(input.SourceID)
@@ -32,7 +32,7 @@ func (adapter *Server) registerSourceImportTools(server *mcp.Server) {
 	addTool(server, &mcp.Tool{
 		Name:        "source_import_confirm",
 		Title:       "Confirm source skill import",
-		Description: "Apply a reviewed source skill import proposal, creating draft skills with provenance. All proposal_id, proposal_digest, and base_version pins are required.",
+		Description: "Apply a reviewed source skill import proposal with confirmation pins.",
 		Annotations: annotations(false, true, true, false),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input confirmationInput) (*mcp.CallToolResult, toolOutcome[app.SourceImportResult], error) {
 		service := app.SourceImportService{}

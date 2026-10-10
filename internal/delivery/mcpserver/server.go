@@ -517,8 +517,8 @@ func addTool[In, Out any](server *mcp.Server, tool *mcp.Tool, handler mcp.ToolHa
 	if err != nil {
 		panic(fmt.Sprintf("derive output schema for %s: %v", tool.Name, err))
 	}
-	closeObjectSchemas(outputSchema)
 	normalizeMultiTypeSchemas(outputSchema)
+	shrinkOutputSchema(outputSchema)
 	if tool.Name == "skill_resolve" || tool.Name == "routing_evaluate" {
 		committedRequest, contractErr := contractschemas.ResolverRequest()
 		if contractErr != nil {
@@ -628,6 +628,28 @@ func normalizeMultiTypeSchemas(schema *jsonschema.Schema) {
 		normalizeMultiTypeSchemas(child)
 	}
 	normalizeMultiTypeSchemas(schema.Items)
+}
+func shrinkOutputSchema(schema *jsonschema.Schema) {
+	if schema == nil {
+		return
+	}
+	schema.Description = ""
+	schema.Title = ""
+	schema.Schema = ""
+	schema.ID = ""
+	schema.AdditionalProperties = nil
+	for _, child := range schema.Properties {
+		shrinkOutputSchema(child)
+	}
+	for _, child := range schema.Defs {
+		shrinkOutputSchema(child)
+	}
+	for _, child := range schema.AnyOf {
+		shrinkOutputSchema(child)
+	}
+	if schema.Items != nil {
+		shrinkOutputSchema(schema.Items)
+	}
 }
 
 func applyCommonConstraints(schema *jsonschema.Schema) {

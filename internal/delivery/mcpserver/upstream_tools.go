@@ -16,7 +16,7 @@ func (adapter *Server) registerUpstreamTools(server *mcp.Server) {
 	addTool(server, &mcp.Tool{
 		Name:        "skill_upstream_status",
 		Title:       "Get skill upstream status",
-		Description: "Report upstream repository status, drift, and changed file counts for tracked skills without network access. Agents cannot apply upstream updates. Give the user the update command or the WebUI hint; the user reviews the diff and applies it. After applying, a third-party skill needs the user's content approval (`skillhub skill review <id>`).",
+		Description: "Report upstream repository status, drift, and changed file counts for tracked skills without network access. Tell the user to run `skillhub skill update <id>` to apply updates.",
 		Annotations: annotations(true, false, false, false),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input skillUpstreamStatusInput) (*mcp.CallToolResult, toolOutcome[skillUpstreamStatusResult], error) {
 		skillID := strings.TrimSpace(input.SkillID)

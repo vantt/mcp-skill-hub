@@ -13,7 +13,7 @@ import (
 func (adapter *Server) registerWorkspaceTools(server *mcp.Server) {
 	addTool(server, &mcp.Tool{
 		Name: "curation_session_record", Title: "Record completed curation session",
-		Description: "Record only explicitly observed, content-free UX measurements after a curation session has actually ended. Omit unavailable measurements; never guess them. This telemetry-only operation never mutates canonical files or routing policy.",
+		Description: "Record explicitly observed, content-free UX measurements after a curation session has ended. This telemetry operation never mutates canonical files.",
 		Annotations: annotations(false, false, true, false),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input curationSessionRecordInput) (*mcp.CallToolResult, toolOutcome[app.CurationSessionResult], error) {
 		if input.SchemaVersion != SchemaVersion || input.EventID == "" || input.Status == "" || input.Basis == "" {
@@ -27,7 +27,7 @@ func (adapter *Server) registerWorkspaceTools(server *mcp.Server) {
 			RoutineGitNoise: input.RoutineGitNoise, DurationMS: input.DurationMS, ErrorCode: input.ErrorCode,
 		}))
 	})
-	addTool(server, &mcp.Tool{Name: "hub_status", Title: "Skill Hub status", Description: "Return the local curation home, workspace health, action counts, and ranked next actions without changing state.", Annotations: annotations(true, false, false, false)},
+	addTool(server, &mcp.Tool{Name: "hub_status", Title: "Skill Hub status", Description: "Return local curation home, workspace health, action counts, and ranked next actions.", Annotations: annotations(true, false, false, false)},
 		func(ctx context.Context, _ *mcp.CallToolRequest, _ noArgs) (*mcp.CallToolResult, toolOutcome[app.CurationHome], error) {
 			return appResult((app.CurationService{}).GetCurationHome(ctx, adapter.workspace))
 		})
@@ -39,7 +39,7 @@ func (adapter *Server) registerWorkspaceTools(server *mcp.Server) {
 		func(ctx context.Context, _ *mcp.CallToolRequest, _ noArgs) (*mcp.CallToolResult, toolOutcome[app.Result], error) {
 			return appResult((app.CatalogService{}).BuildCatalogGeneration(ctx, adapter.workspace))
 		})
-	addTool(server, &mcp.Tool{Name: "workspace_diff", Title: "Read workspace diff", Description: "Return an owner-bound page of canonical Git paths, or retained changes for one managed operation_id. File contents are only returned through the bounded operation-diff contract.", Annotations: annotations(true, false, false, false)},
+	addTool(server, &mcp.Tool{Name: "workspace_diff", Title: "Read workspace diff", Description: "Return canonical Git diff paths or changes for an operation_id.", Annotations: annotations(true, false, false, false)},
 		func(ctx context.Context, _ *mcp.CallToolRequest, input workspaceDiffInput) (*mcp.CallToolResult, toolOutcome[workspaceDiffResult], error) {
 			limit, err := paging.NormalizeLimit(input.Limit)
 			if err != nil {
