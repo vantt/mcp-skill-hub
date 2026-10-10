@@ -39,7 +39,7 @@ func TestInitRequiresConfirmationBeforeMutation(t *testing.T) {
 }
 
 func TestDoctorHostIntegrationPreviewIsReadOnlyAndDependencyOrdered(t *testing.T) {
-	t.Parallel()
+	t.Setenv("HOME", t.TempDir())
 	root := healthyWorkspaceWithoutHosts(t)
 	result, err := (WorkspaceService{}).Doctor(root)
 	if err != nil {
