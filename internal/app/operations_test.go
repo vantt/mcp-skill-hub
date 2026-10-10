@@ -267,3 +267,310 @@ func TestGetOperationDiff_CommittedMatchesGitDiff(t *testing.T) {
 		t.Fatalf("diff missing added line: %s", ch.Diff)
 	}
 }
+
+func TestGetOperationDiff_PreservedAfterV5MigrationCommit(t *testing.T) {
+	t.Parallel()
+
+	root := filepath.Join(t.TempDir(), "workspace")
+	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+		t.Fatal(err)
+	}
+	skillDir := filepath.Join(root, "skills", "default", "demo")
+	if err := os.MkdirAll(filepath.Join(skillDir, "references"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(skillDir, ".meta"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("# Demo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, ".meta", "skill.yaml"), []byte("schema_version: 1\nid: demo\nstatus: active\nrouting:\n  triggers: [demo]\n  operations: [review]\n  not_for: [other]\n  min_scope: single_step\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Perform an initial mutation and commit it
+	filePath := "skills/default/demo/references/doc.txt"
+	set := mutation.WriteSet{
+		Command: "create_doc",
+		Changes: []mutation.Change{
+			{Path: filePath, Contents: []byte("Line 1: initial\n")},
+		},
+	}
+	planned, err := mutation.PlanMutation(root, set)
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := mutation.ConfirmMutation(root, planned, mutation.Confirmation{
+		ProposalID:          planned.ID,
+		ProposalDigest:      planned.Digest,
+		BaseCatalogSnapshot: planned.BaseCatalogSnapshot,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmdAdd := exec.Command("git", "-C", root, "add", "-A")
+	if out, err := cmdAdd.CombinedOutput(); err != nil {
+		t.Fatalf("git add: %v (%s)", err, string(out))
+	}
+	cmdCommit := exec.Command("git", "-C", root, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-m", "commit op 1")
+	if out, err := cmdCommit.CombinedOutput(); err != nil {
+		t.Fatalf("git commit: %v (%s)", err, string(out))
+	}
+
+	// 2. Set schema-version to 4 and run v5 migration to rewrite receipts, then commit the migration
+	if err := os.WriteFile(filepath.Join(root, ".skillhub", "schema-version"), []byte("4\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	migService := MigrationService{}
+	applied, err := migService.Migrate(context.Background(), root, 5, true)
+	if err != nil || applied.Status != StatusApplied {
+		t.Fatalf("v5 migration failed: %#v, %v", applied, err)
+	}
+
+	cmdAdd2 := exec.Command("git", "-C", root, "add", "-A")
+	if out, err := cmdAdd2.CombinedOutput(); err != nil {
+		t.Fatalf("git add after migration: %v (%s)", err, string(out))
+	}
+	cmdCommit2 := exec.Command("git", "-C", root, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-m", "commit v5 migration")
+	if out, err := cmdCommit2.CombinedOutput(); err != nil {
+		t.Fatalf("git commit after migration: %v (%s)", err, string(out))
+	}
+
+	// 3. Diff for original operation must still be found and accurate!
+	wsSvc := WorkspaceService{}
+	diffRes, err := wsSvc.GetOperationDiff(context.Background(), root, receipt.OperationID)
+	if err != nil {
+		t.Fatalf("GetOperationDiff: %v", err)
+	}
+	if len(diffRes.Changes) != 1 {
+		t.Fatalf("expected 1 change, got %d", len(diffRes.Changes))
+	}
+	ch := diffRes.Changes[0]
+	if !ch.DiffAvailable {
+		t.Fatalf("expected DiffAvailable == true after v5 migration commit, got false (digest_only=%v)", ch.DigestOnlyMetadata)
+	}
+	if ch.After != "Line 1: initial\n" {
+		t.Fatalf("unexpected After: %q", ch.After)
+	}
+	if !strings.Contains(ch.Diff, "+Line 1: initial") {
+		t.Fatalf("unexpected diff: %s", ch.Diff)
+	}
+}
+
+func TestGetOperationDiff_IndependentOfLaterEdits(t *testing.T) {
+	t.Parallel()
+
+	root := filepath.Join(t.TempDir(), "workspace")
+	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+		t.Fatal(err)
+	}
+	skillDir := filepath.Join(root, "skills", "default", "demo")
+	if err := os.MkdirAll(filepath.Join(skillDir, "references"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(skillDir, ".meta"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("# Demo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, ".meta", "skill.yaml"), []byte("schema_version: 1\nid: demo\nstatus: active\nrouting:\n  triggers: [demo]\n  operations: [review]\n  not_for: [other]\n  min_scope: single_step\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Perform OP-1 and commit
+	filePath := "skills/default/demo/references/doc.txt"
+	set1 := mutation.WriteSet{
+		Command: "op1",
+		Changes: []mutation.Change{
+			{Path: filePath, Contents: []byte("Line 1: initial\n")},
+		},
+	}
+	planned1, err := mutation.PlanMutation(root, set1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt1, err := mutation.ConfirmMutation(root, planned1, mutation.Confirmation{
+		ProposalID:          planned1.ID,
+		ProposalDigest:      planned1.Digest,
+		BaseCatalogSnapshot: planned1.BaseCatalogSnapshot,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_ = exec.Command("git", "-C", root, "add", "-A").Run()
+	_ = exec.Command("git", "-C", root, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-m", "commit op 1").Run()
+
+	// 2. Perform OP-2 on the same file and commit
+	set2 := mutation.WriteSet{
+		Command: "op2",
+		Changes: []mutation.Change{
+			{Path: filePath, Contents: []byte("Line 1: initial\nLine 2: later edit\n")},
+		},
+	}
+	planned2, err := mutation.PlanMutation(root, set2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = mutation.ConfirmMutation(root, planned2, mutation.Confirmation{
+		ProposalID:          planned2.ID,
+		ProposalDigest:      planned2.Digest,
+		BaseCatalogSnapshot: planned2.BaseCatalogSnapshot,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_ = exec.Command("git", "-C", root, "add", "-A").Run()
+	_ = exec.Command("git", "-C", root, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-m", "commit op 2").Run()
+
+	// 3. Diff for OP-1 must still reflect OP-1's content, NOT OP-2's content!
+	wsSvc := WorkspaceService{}
+	diffRes1, err := wsSvc.GetOperationDiff(context.Background(), root, receipt1.OperationID)
+	if err != nil {
+		t.Fatalf("GetOperationDiff OP-1: %v", err)
+	}
+	ch1 := diffRes1.Changes[0]
+	if !ch1.DiffAvailable {
+		t.Fatal("expected DiffAvailable == true for OP-1")
+	}
+	if ch1.After != "Line 1: initial\n" {
+		t.Fatalf("OP-1 diff returned later commit's after content: %q", ch1.After)
+	}
+	if strings.Contains(ch1.Diff, "later edit") {
+		t.Fatalf("OP-1 diff contains later edit text: %s", ch1.Diff)
+	}
+}
+
+func TestGetOperationDiff_DigestMismatchYieldsDigestOnly(t *testing.T) {
+	t.Parallel()
+
+	root := filepath.Join(t.TempDir(), "workspace")
+	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+		t.Fatal(err)
+	}
+	skillDir := filepath.Join(root, "skills", "default", "demo")
+	if err := os.MkdirAll(filepath.Join(skillDir, "references"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(skillDir, ".meta"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("# Demo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, ".meta", "skill.yaml"), []byte("schema_version: 1\nid: demo\nstatus: active\nrouting:\n  triggers: [demo]\n  operations: [review]\n  not_for: [other]\n  min_scope: single_step\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Perform mutation recording after-digest for "Line 1: planned\n"
+	filePath := "skills/default/demo/references/doc.txt"
+	set := mutation.WriteSet{
+		Command: "op_mismatch",
+		Changes: []mutation.Change{
+			{Path: filePath, Contents: []byte("Line 1: planned\n")},
+		},
+	}
+	planned, err := mutation.PlanMutation(root, set)
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := mutation.ConfirmMutation(root, planned, mutation.Confirmation{
+		ProposalID:          planned.ID,
+		ProposalDigest:      planned.Digest,
+		BaseCatalogSnapshot: planned.BaseCatalogSnapshot,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Now modify the file to something unrelated before committing
+	if err := os.WriteFile(filepath.Join(root, filePath), []byte("Line 1: completely different edit\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_ = exec.Command("git", "-C", root, "add", "-A").Run()
+	_ = exec.Command("git", "-C", root, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-m", "commit with unrelated edit").Run()
+
+	// GetOperationDiff must report digest_only=true because committed digest does not match receipt
+	wsSvc := WorkspaceService{}
+	diffRes, err := wsSvc.GetOperationDiff(context.Background(), root, receipt.OperationID)
+	if err != nil {
+		t.Fatalf("GetOperationDiff: %v", err)
+	}
+	ch := diffRes.Changes[0]
+	if ch.DiffAvailable {
+		t.Fatal("expected DiffAvailable == false when committed digest does not match receipt")
+	}
+	if !ch.DigestOnlyMetadata {
+		t.Fatal("expected DigestOnlyMetadata == true when digests mismatch")
+	}
+}
+
+func TestGetOperationDiff_UncommittedWorkingFileMismatchYieldsDigestOnly(t *testing.T) {
+	t.Parallel()
+
+	root := filepath.Join(t.TempDir(), "workspace")
+	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+		t.Fatal(err)
+	}
+	skillDir := filepath.Join(root, "skills", "default", "demo")
+	if err := os.MkdirAll(filepath.Join(skillDir, "references"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(skillDir, ".meta"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("# Demo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, ".meta", "skill.yaml"), []byte("schema_version: 1\nid: demo\nstatus: active\nrouting:\n  triggers: [demo]\n  operations: [review]\n  not_for: [other]\n  min_scope: single_step\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Initial git commit of workspace baseline
+	_ = exec.Command("git", "-C", root, "add", "-A").Run()
+	_ = exec.Command("git", "-C", root, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-m", "baseline").Run()
+
+	// 2. Perform an uncommitted mutation
+	filePath := "skills/default/demo/references/doc.txt"
+	set := mutation.WriteSet{
+		Command: "op_uncommitted",
+		Changes: []mutation.Change{
+			{Path: filePath, Contents: []byte("Line 1: operation content\n")},
+		},
+	}
+	planned, err := mutation.PlanMutation(root, set)
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := mutation.ConfirmMutation(root, planned, mutation.Confirmation{
+		ProposalID:          planned.ID,
+		ProposalDigest:      planned.Digest,
+		BaseCatalogSnapshot: planned.BaseCatalogSnapshot,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 3. Edit the working file again before any commit
+	if err := os.WriteFile(filepath.Join(root, filePath), []byte("Line 1: operation content\nExtra uncommitted edit\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// 4. GetOperationDiff must report digest_only=true because working file != operation after-digest
+	wsSvc := WorkspaceService{}
+	diffRes, err := wsSvc.GetOperationDiff(context.Background(), root, receipt.OperationID)
+	if err != nil {
+		t.Fatalf("GetOperationDiff: %v", err)
+	}
+	ch := diffRes.Changes[0]
+	if ch.DiffAvailable {
+		t.Fatal("expected DiffAvailable == false when working file was edited after operation")
+	}
+	if !ch.DigestOnlyMetadata {
+		t.Fatal("expected DigestOnlyMetadata == true when working file does not match after-digest")
+	}
+}

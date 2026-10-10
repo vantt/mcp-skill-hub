@@ -475,7 +475,6 @@ func (WorkspaceService) GetOperationDiff(ctx context.Context, path, operationID 
 		Changes []receiptChange `yaml:"changes"`
 	}
 	found := false
-	var receiptRelPath string
 	err = walkOperationsYAML(root, "history/operations", func(rel string, data []byte) error {
 		var header struct {
 			ID string `yaml:"id"`
@@ -487,7 +486,6 @@ func (WorkspaceService) GetOperationDiff(ctx context.Context, path, operationID 
 			return errors.New("duplicate operation ID")
 		}
 		found = true
-		receiptRelPath = rel
 		return yaml.Unmarshal(data, &document)
 	})
 	if err != nil {
@@ -496,7 +494,6 @@ func (WorkspaceService) GetOperationDiff(ctx context.Context, path, operationID 
 	if !found {
 		return OperationDiffResult{}, errors.New("operation not found")
 	}
-	receiptCommit := gitCommitForFile(root, receiptRelPath)
 	paths := []string{}
 	changes := make([]OperationChange, 0, len(document.Changes))
 	for _, stored := range document.Changes {
@@ -510,22 +507,27 @@ func (WorkspaceService) GetOperationDiff(ctx context.Context, path, operationID 
 			change.Before, change.After = stored.BeforeContent, stored.AfterContent
 			change.Diff = renderBoundedOperationDiff(stored.Path, stored.BeforeContent, stored.AfterContent)
 			change.DiffAvailable = true
-		} else if receiptCommit != "" {
-			beforeStr, _ := gitShowCommitFile(root, receiptCommit+"~1", stored.Path)
-			afterStr, _ := gitShowCommitFile(root, receiptCommit, stored.Path)
-			diffStr := gitDiffCommits(root, receiptCommit+"~1", receiptCommit, stored.Path)
-			if diffStr == "" && (beforeStr != "" || afterStr != "") {
-				diffStr = renderBoundedOperationDiff(stored.Path, beforeStr, afterStr)
-			}
-			if diffStr != "" || beforeStr != "" || afterStr != "" {
-				change.Before = beforeStr
-				change.After = afterStr
-				change.Diff = diffStr
-				change.DiffAvailable = true
+		} else if commit, isRoot, foundCommit := findCommitForContent(root, stored.Path, stored.BeforeDigest, stored.AfterDigest); foundCommit {
+			var beforeStr, afterStr, diffStr string
+			if isRoot {
+				afterBytes, _ := gitShowCommitBytes(root, commit, stored.Path)
+				afterStr = string(afterBytes)
+				diffStr = renderBoundedOperationDiff(stored.Path, "", afterStr)
 			} else {
-				change.DigestOnlyMetadata = true
+				beforeBytes, _ := gitShowCommitBytes(root, commit+"~1", stored.Path)
+				afterBytes, _ := gitShowCommitBytes(root, commit, stored.Path)
+				beforeStr = string(beforeBytes)
+				afterStr = string(afterBytes)
+				diffStr = gitDiffCommits(root, commit+"~1", commit, stored.Path)
+				if diffStr == "" && (beforeStr != "" || afterStr != "") {
+					diffStr = renderBoundedOperationDiff(stored.Path, beforeStr, afterStr)
+				}
 			}
-		} else {
+			change.Before = beforeStr
+			change.After = afterStr
+			change.Diff = diffStr
+			change.DiffAvailable = true
+		} else if change.CurrentMatchesAfter {
 			tracked, headDigest := inspectGitPath(root, stored.Path)
 			if tracked && headDigest == stored.BeforeDigest {
 				beforeStr, _ := gitShowCommitFile(root, "HEAD", stored.Path)
@@ -543,6 +545,8 @@ func (WorkspaceService) GetOperationDiff(ctx context.Context, path, operationID 
 			} else {
 				change.DigestOnlyMetadata = true
 			}
+		} else {
+			change.DigestOnlyMetadata = true
 		}
 		changes = append(changes, change)
 	}
@@ -591,17 +595,59 @@ func walkOperationsYAML(root, relative string, visit func(string, []byte) error)
 		return visit(filepath.ToSlash(rel), data)
 	})
 }
-func gitCommitForFile(root, relPath string) string {
-	cmd := exec.Command("git", "-C", root, "log", "-n", "1", "--format=%H", "--", relPath)
+func gitShowCommitBytes(root, commit, relPath string) ([]byte, bool) {
+	cmd := exec.Command("git", "-C", root, "show", commit+":"+relPath)
 	out, err := cmd.Output()
 	if err != nil {
-		return ""
+		return nil, false
 	}
-	commit := strings.TrimSpace(string(out))
-	if len(commit) == 40 {
-		return commit
+	return out, true
+}
+
+func findCommitForContent(root, relPath, beforeDigest, afterDigest string) (string, bool, bool) {
+	cmd := exec.Command("git", "-C", root, "log", "-n", "50", "--format=%H", "--", relPath)
+	out, err := cmd.Output()
+	if err != nil {
+		return "", false, false
 	}
-	return ""
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	for _, line := range lines {
+		commit := strings.TrimSpace(line)
+		if len(commit) != 40 {
+			continue
+		}
+		var commitDigest string
+		afterData, afterOk := gitShowCommitBytes(root, commit, relPath)
+		if afterOk {
+			commitDigest = sourcepkg.Digest(afterData)
+		}
+		if commitDigest != afterDigest {
+			continue
+		}
+
+		parentsCmd := exec.Command("git", "-C", root, "rev-list", "--parents", "-n", "1", commit)
+		parentsOut, parentsErr := parentsCmd.Output()
+		if parentsErr != nil {
+			continue
+		}
+		parentParts := strings.Fields(strings.TrimSpace(string(parentsOut)))
+		isRoot := len(parentParts) <= 1
+
+		var parentDigest string
+		if !isRoot {
+			parentCommit := parentParts[1]
+			parentData, parentOk := gitShowCommitBytes(root, parentCommit, relPath)
+			if parentOk {
+				parentDigest = sourcepkg.Digest(parentData)
+			}
+		}
+		if parentDigest != beforeDigest {
+			continue
+		}
+
+		return commit, isRoot, true
+	}
+	return "", false, false
 }
 
 func gitShowCommitFile(root, commit, relPath string) (string, bool) {
