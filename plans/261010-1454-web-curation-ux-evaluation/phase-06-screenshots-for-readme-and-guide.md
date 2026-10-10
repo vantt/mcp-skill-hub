@@ -1,7 +1,7 @@
 ---
 phase: 6
 title: "Screenshots for README and user guide"
-status: pending
+status: completed
 priority: P2
 effort: "0.5d"
 dependencies: [2, 3, 4]

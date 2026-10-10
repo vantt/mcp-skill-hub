@@ -235,6 +235,114 @@ Skill Hub web UI: http://127.0.0.1:7421/#token=36dee9ed913f3c4e56d973ef16a0f6127
 
 Unless `--no-open` is passed, Skill Hub automatically opens your default browser to this URL. The token in the URL fragment is held in memory by the browser application and sent as a Bearer token on API calls.
 
+### Do common tasks in the Web UI
+
+The pictures below use invented skills and a demo hub, so your screens will list your own skills. Each task starts from the menu on the left: Home, Skills and Sources. The Web UI never commits, pushes or approves content for you; the steps that need the terminal are written as commands you can copy.
+
+#### See what needs your attention
+
+Open **Home**. The box at the top says what to do next and has one button for it. Under it, *Workspace* tells you whether the hub is healthy, whether the search index is current and whether Git has uncommitted changes. *Overview* counts the sources that are ready to distill and the lessons waiting for your decision.
+
+![Home: what needs attention, and the one next step to take.](images/web/home.png)
+
+#### Find a skill
+
+1. Open **Skills**.
+2. Type part of a name or id in **Search**, or narrow the list with **Lifecycle** (draft, active, deprecated), **Collection** or **Upstream**.
+3. Click a row to open the skill. The **Routing** column says whether agents can be recommended the skill (*Routable*) or not yet (*Not routed*).
+
+![Skills: every skill with its state, and filters to find one.](images/web/skills-list.png)
+
+On a phone-width screen the same list stacks each skill into a card.
+
+![The same list on a 390 px wide screen.](images/web/mobile-skills.png)
+
+#### Check one skill
+
+Open a skill; the **Review** tab opens first. *Validity* says whether the skill file follows the required format. *Activation readiness* lists what a draft needs before agents can use it. *In Git vs what agents see* tells you whether the search index matches the files.
+
+![Review: whether agents can use this skill, and what to check first.](images/web/skill-review.png)
+
+A skill you added from someone else's repository also shows a **Content trust** card. Agents get no content from such a skill until you have read it and approved it. Approval happens only in your terminal; the card shows the exact command to copy:
+
+```bash
+skillhub skill edit <skill-id> --approve-content <digest>
+```
+
+If a draft is not ready, the page says so next to the **Activate skill** button and each missing item has a **Go to field** link that opens the editor on the field to fill in.
+
+![A draft that cannot be activated yet, with links to the fields to fix.](images/web/skill-review-draft.png)
+
+#### Activate, deprecate or archive a skill
+
+1. Open the skill and click **Activate skill** (or **Deprecate** for an active one). The button stays off until the draft is ready.
+2. A confirmation lists the files that will change and says in words what changes. Open **Exact file changes** to see the patch.
+3. Click **Activate skill** in the confirmation to save, or **Cancel** to leave everything as it was.
+
+![Activate: the confirmation that shows what changes before anything is saved.](images/web/skill-activate-confirm.png)
+
+Skills move in order: draft, active, deprecated, archived. Archiving is done with `skillhub skill archive <skill-id>`.
+
+#### Fix a skill's description and routing fields
+
+1. Open the skill and choose the **Editor** tab.
+2. Change the fields. Each routing field has a short explanation and an example under it. Your draft is kept in this browser while you work.
+3. Click **Preview changes**. The dialog lists the files touched and describes the change in words.
+4. Click **Save changes** to write it, or **Cancel**.
+
+![Editor: preview the exact change before it is saved.](images/web/editor-preview.png)
+
+If the skill was changed somewhere else while the form was open (for example with the command line), a drawer opens when you preview. It shows what you changed and what changed meanwhile, and warns when both touched the same field. Choose **Keep my edits on the latest version** to apply your edits on top of the saved version, or **Discard my edits** to drop them. **Copy draft** and **Download draft** keep a copy of your text first.
+
+![Conflict: the skill changed somewhere else while the form was open.](images/web/editor-conflict.png)
+
+#### Create a skill
+
+1. Open **Skills** and click **Create skill**.
+2. Fill in the skill id, display name and description. The id cannot be changed later.
+3. Fill in the routing fields (operations, triggers, not for, minimum scope). You can leave them empty now, but they are needed before the skill can be activated.
+4. Click **Preview draft**, check the files that will be written, then confirm.
+
+The new skill is a draft: agents do not use it until you activate it.
+
+![Create a skill: the form tells you which fields are needed to activate it later.](images/web/create-skill.png)
+
+#### Add skills from GitHub
+
+1. Open **Skills** and click **Add from GitHub**.
+2. Paste the address of a public repository, or of a folder or file inside it, and click **Discover skills**. Discover only looks: it lists the skills it finds and writes nothing.
+3. On the next step, read where the skills come from, the revision, the trust note, the files that would be written and any conflicts. Choose the skills (or **Import all**), then click **Confirm import**. Imported skills start as drafts and a third-party skill needs your content approval (see above) before agents receive it.
+
+![Add from GitHub: paste a repository address to find skills in it.](images/web/add-from-github-discover.png)
+
+#### Act on upstream updates
+
+A skill added from GitHub remembers where it came from. To see which ones have news:
+
+1. In **Skills**, set **Upstream** to *Has an update*. To refresh the information first, run `skillhub skill outdated --check` in your terminal, or open a skill and click **Check now** in its *Upstream repository* section.
+2. Open a skill marked *Update available* and click **Review update**.
+3. For each changed file choose **Take upstream**, **Keep mine** or **Edit manually**, then click **Apply choices**.
+
+#### Link and check sources
+
+Open **Sources**. A source is a repository your skills learn from or track for updates. Each row shows when it was last checked and what its last check found; *Changed* means it has commits no skill has learned from yet. Use **Check now** on one row, **Check due sources** or **Check all** to look for news.
+
+![Sources: where skills learn from, and when each was last checked.](images/web/sources.png)
+
+#### Hand a source to your curator agent
+
+1. On **Sources**, tick the sources you want learned from and click **Distill with Curator Agent**.
+2. Click **Copy handoff** and paste the text to your curator agent, an agent that has the distill-lab skill.
+3. The agent records its lessons in each skill. Read them in the skill's **Distill** tab, where you decide what to keep.
+
+![Distill: copy the brief and give it to your curator agent.](images/web/distill-handoff.png)
+
+#### Change the theme
+
+Use the appearance button at the top right of any screen to switch between light, dark and the system setting.
+
+![The same list in the dark theme.](images/web/dark-skills-list.png)
+
 ### Network Binding and Host Protection
 
 - **Multi-IP environments:** When your computer has multiple non-loopback network interfaces (e.g. Wi-Fi, Ethernet, Docker bridges, or Tailscale/VPNs), `skillhub serve web` binds to `0.0.0.0` so you can access the UI across local interfaces. On single-interface machines, it binds strictly to `127.0.0.1`.

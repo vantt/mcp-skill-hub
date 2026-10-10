@@ -45,6 +45,8 @@ To tag and push in one command, run:
 scripts/release-preflight.sh --push v0.1.0
 ```
 
+If the web UI changed since the last release, rerun `make web-shots` before tagging and commit the refreshed images in `docs/images/web/`. They are captured from an invented demo hub, so the README and the user guide show the current screens.
+
 ## Automated release pipeline
 
 Pushing a `v*.*.*` tag initiates the automated GitHub Actions release workflow (`.github/workflows/release.yml`):

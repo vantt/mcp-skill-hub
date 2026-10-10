@@ -76,6 +76,20 @@ On startup, Skill Hub outputs an authenticated browser URL containing a one-time
 Skill Hub web UI: http://127.0.0.1:7421/#token=36dee9ed...
 ```
 
+Home shows what needs your attention and the one next step to take:
+
+![Home: what needs attention, and the one next step to take.](docs/images/web/home.png)
+
+Open a skill to see whether agents can use it and what is missing before a draft can be activated:
+
+![Review: whether agents can use this skill, and what to check first.](docs/images/web/skill-review.png)
+
+The screens also fit a phone-width window:
+
+<img src="docs/images/web/mobile-skills.png" alt="The skills list on a narrow phone screen." width="260">
+
+The [user guide](docs/user-guide.md#do-common-tasks-in-the-web-ui) walks through each task with a picture next to the steps. The pictures use invented demo skills.
+
 **Network and Security Behavior:**
 - **Multi-IP Detection:** On machines with multiple non-loopback IPv4 interfaces (e.g. Wi-Fi, Ethernet, Docker bridges, or Tailscale/VPNs), the server binds to `0.0.0.0` to permit access across local network interfaces. On single-interface machines, it binds strictly to `127.0.0.1`.
 - **Loopback Only:** Pass `--loopback-only` to force the server to bind exclusively to `127.0.0.1`.

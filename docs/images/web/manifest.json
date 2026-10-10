@@ -1,0 +1,144 @@
+{
+  "images": [
+    {
+      "file": "home.png",
+      "route": "/",
+      "state": "Home with the next action and the status of the hub",
+      "width": 1280,
+      "height": 570,
+      "theme": "light",
+      "caption": "Home: what needs attention, and the one next step to take.",
+      "alt": "The Skill Hub home screen showing the status of the hub and the next action."
+    },
+    {
+      "file": "skills-list.png",
+      "route": "/skills",
+      "state": "List with draft, active and deprecated skills",
+      "width": 1280,
+      "height": 533,
+      "theme": "light",
+      "caption": "Skills: every skill with its state, and filters to find one.",
+      "alt": "The skills list with a state filter and skills that are draft, active or deprecated."
+    },
+    {
+      "file": "skill-review.png",
+      "route": "/skills/release-checklist",
+      "state": "Review tab of an active skill",
+      "width": 1280,
+      "height": 840,
+      "theme": "light",
+      "caption": "Review: whether agents can use this skill, and what to check first.",
+      "alt": "The Review tab of an active skill showing its content check and readiness."
+    },
+    {
+      "file": "skill-review-draft.png",
+      "route": "/skills/api-design-review",
+      "state": "Draft that is missing activation requirements",
+      "width": 1280,
+      "height": 855,
+      "theme": "light",
+      "caption": "A draft that cannot be activated yet, with links to the fields to fix.",
+      "alt": "The Review tab of a draft skill listing the missing fields with links to fix each one."
+    },
+    {
+      "file": "skill-activate-confirm.png",
+      "route": "/skills/incident-notes",
+      "state": "Confirmation before activating a draft",
+      "width": 1280,
+      "height": 800,
+      "theme": "light",
+      "caption": "Activate: the confirmation that shows what changes before anything is saved.",
+      "alt": "A confirmation dialog asking to activate a skill, listing what will change."
+    },
+    {
+      "file": "editor-preview.png",
+      "route": "/skills/release-checklist?…",
+      "state": "Editor tab with a preview of the change",
+      "width": 1280,
+      "height": 800,
+      "theme": "light",
+      "caption": "Editor: preview the exact change before it is saved.",
+      "alt": "The editor tab with a dialog that previews the changed description as a diff."
+    },
+    {
+      "file": "editor-conflict.png",
+      "route": "/skills/meeting-summary?…",
+      "state": "Conflict drawer after an edit made elsewhere",
+      "width": 1280,
+      "height": 800,
+      "theme": "light",
+      "caption": "Conflict: the skill changed somewhere else while the form was open.",
+      "alt": "The conflict drawer explaining that the skill changed elsewhere and offering ways to continue."
+    },
+    {
+      "file": "create-skill.png",
+      "route": "/skills/create",
+      "state": "Create form with the field hints",
+      "width": 1280,
+      "height": 1305,
+      "theme": "light",
+      "caption": "Create a skill: the form tells you which fields are needed to activate it later.",
+      "alt": "The create skill form with hints under the fields."
+    },
+    {
+      "file": "add-from-github-discover.png",
+      "route": "/skills/add",
+      "state": "Add from GitHub, first step, with a placeholder address",
+      "width": 1280,
+      "height": 541,
+      "theme": "light",
+      "caption": "Add from GitHub: paste a repository address to find skills in it.",
+      "alt": "The add from GitHub form with a repository address filled in."
+    },
+    {
+      "file": "sources.png",
+      "route": "/sources",
+      "state": "Sources list with one source and its check result",
+      "width": 1280,
+      "height": 480,
+      "theme": "light",
+      "caption": "Sources: where skills learn from, and when each was last checked.",
+      "alt": "The sources list with one source and the result of its last check."
+    },
+    {
+      "file": "distill-handoff.png",
+      "route": "/sources/distill?…",
+      "state": "Distill hand-off brief with a selected source",
+      "width": 1280,
+      "height": 701,
+      "theme": "light",
+      "caption": "Distill: copy the brief and give it to your curator agent.",
+      "alt": "The distill hand-off screen with a brief ready to copy for the curator agent."
+    },
+    {
+      "file": "mobile-skills.png",
+      "route": "/skills",
+      "state": "Skills list on a phone-width screen",
+      "width": 390,
+      "height": 860,
+      "theme": "light",
+      "caption": "The same list on a 390 px wide screen.",
+      "alt": "The skills list on a narrow phone screen."
+    },
+    {
+      "file": "dark-skills-list.png",
+      "route": "/skills",
+      "state": "Skills list in the dark theme",
+      "width": 1280,
+      "height": 533,
+      "theme": "dark",
+      "caption": "The same list in the dark theme.",
+      "alt": "The skills list in the dark theme."
+    }
+  ],
+  "skipped": [
+    {
+      "file": "upstream-updates",
+      "reason": "An upstream update is only produced by a real network check against GitHub; the state cannot be made offline without faking it."
+    },
+    {
+      "file": "add-from-github-review",
+      "reason": "The review step appears only after discovery has fetched a repository over the network."
+    }
+  ]
+}
