@@ -15,6 +15,11 @@ type stockClientMatrixEntry struct {
 		Status string `json:"status"`
 		Reason string `json:"reason"`
 	} `json:"server_toggle"`
+	SkillsExtension *struct {
+		Status   string `json:"status"`
+		Reason   string `json:"reason"`
+		Evidence string `json:"evidence"`
+	} `json:"skills_extension"`
 }
 
 type matrixDocument struct {
@@ -49,6 +54,25 @@ func hostSupportsServerToggleFromData(host Host, data []byte) bool {
 				return true
 			}
 			return false
+		}
+	}
+	return false
+}
+
+// HostSupportsSkillsExtension selects MCP-only curator delivery only for verified clients.
+func HostSupportsSkillsExtension(host Host) bool {
+	var doc matrixDocument
+	if err := json.Unmarshal(matrixData, &doc); err != nil {
+		return false
+	}
+	names := map[Host]string{HostClaude: "Claude Code", HostCodex: "Codex CLI", HostGemini: "Gemini CLI"}
+	name, ok := names[host]
+	if !ok {
+		return false
+	}
+	for _, client := range doc.StockClients {
+		if strings.EqualFold(client.Client, name) {
+			return client.SkillsExtension != nil && client.SkillsExtension.Status == "verified" && client.SkillsExtension.Evidence != ""
 		}
 	}
 	return false

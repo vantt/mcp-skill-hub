@@ -171,7 +171,7 @@ func apply(ctx context.Context, plan PlanResult, options ApplyOptions) (ApplyRes
 		if err != nil {
 			return ApplyResult{}, err
 		}
-		if bytes.Equal(raw, change.Desired) && exists {
+		if (bytes.Equal(raw, change.Desired) && exists) || (nativeRemoval(change) && !exists) {
 			continue
 		}
 		if digest(raw, exists) != change.PreimageDigest {
@@ -202,14 +202,30 @@ func apply(ctx context.Context, plan PlanResult, options ApplyOptions) (ApplyRes
 		if err != nil {
 			return result, err
 		}
-		if bytes.Equal(raw, write.change.Desired) && exists {
+		if (bytes.Equal(raw, write.change.Desired) && exists) || (nativeRemoval(write.change) && !exists) {
 			continue
 		}
 		if digest(raw, exists) != write.change.PreimageDigest {
 			return result, fmt.Errorf("%w: %s", ErrStalePlan, write.change.Path)
 		}
-		if err := atomicWrite(root, writeRoot, write.change.Path, write.change.Desired, write.mode); err != nil {
+		if nativeRemoval(write.change) {
+			relative, err := managedRelativePath(writeRoot, write.change.Path)
+			if err != nil {
+				return result, err
+			}
+			if err := rejectRootSymlinkComponents(root, relative); err != nil {
+				return result, err
+			}
+			if err := root.Remove(relative); err != nil {
+				return result, err
+			}
+		} else if err := atomicWrite(root, writeRoot, write.change.Path, write.change.Desired, write.mode); err != nil {
 			return result, err
+		}
+		if write.change.Kind == ChangeNativeSkill {
+			if err := writeCuratorReceipt(root, writeRoot, write.change); err != nil {
+				return result, err
+			}
 		}
 		result.Changed = append(result.Changed, write.change)
 	}
@@ -219,6 +235,20 @@ func apply(ctx context.Context, plan PlanResult, options ApplyOptions) (ApplyRes
 func expectedDesired(change Change, raw []byte, plan PlanResult) ([]byte, error) {
 	switch change.Kind {
 	case ChangeNativeSkill:
+		if HostSupportsSkillsExtension(change.Host) {
+			writeRoot := plan.Root
+			if writeRoot == "" {
+				writeRoot = plan.Workspace
+			}
+			owned, err := nativeCuratorOwned(change.Path, writeRoot, raw)
+			if err != nil {
+				return nil, err
+			}
+			if !owned {
+				return nil, &ConflictError{Path: change.Path, Reason: "native curator differs from the installed copy; preserve it and review manually"}
+			}
+			return nil, nil
+		}
 		return []byte(systemCuratorInstructions()), nil
 	case ChangeBootstrap:
 		desired, conflict := updateBootstrap(raw)

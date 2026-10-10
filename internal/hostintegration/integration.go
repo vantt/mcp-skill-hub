@@ -132,7 +132,7 @@ func prepare(ctx context.Context, request Request) (preparedInspection, error) {
 		}
 		if adapter.NativeSkill {
 			skillPath := filepath.Join(root, filepath.FromSlash(skillRel))
-			skill, err := prepareExactFile(ChangeNativeSkill, skillPath, root, []byte(bundle.Instructions))
+			skill, err := prepareNativeCurator(adapter.Host, skillPath, root, []byte(bundle.Instructions))
 			if err != nil {
 				return preparedInspection{}, err
 			}
