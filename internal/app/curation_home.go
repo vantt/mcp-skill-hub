@@ -193,9 +193,8 @@ type homeState struct {
 
 func defaultCategories() []ActionCategory {
 	return []ActionCategory{
-		{Kind: "interrupted_runs", Availability: AvailabilityAvailable},
-		{Kind: "changed_sources", Availability: AvailabilityAvailable},
-		{Kind: "pending_insights", Availability: AvailabilityAvailable},
+		{Kind: "sources_ready_to_distill", Availability: AvailabilityAvailable},
+		{Kind: "candidate_lessons", Availability: AvailabilityAvailable},
 		{Kind: "source_unavailable", Availability: AvailabilityAvailable},
 		{Kind: "sources_due", Availability: AvailabilityAvailable},
 		{Kind: "blocking_decisions", Availability: AvailabilityNotConfigured},
@@ -302,11 +301,10 @@ func readHomeCounts(ctx context.Context, root string, state *homeState) (resultE
 	state.Summary.PendingHighValueInsights = candHighValue
 	state.TopCandidateSkillID = topSkillID
 	state.TopCandidateSkillPath = topSkillPath
-	setCategoryCount(state.Categories, "interrupted_runs", state.Summary.FailedOrInterruptedRuns)
 	setCategoryCount(state.Categories, "source_unavailable", state.UnavailableSources)
-	setCategoryCount(state.Categories, "changed_sources", state.ChangedSources)
+	setCategoryCount(state.Categories, "sources_ready_to_distill", state.ChangedSources)
 	setCategoryCount(state.Categories, "sources_due", state.DueSources)
-	setCategoryCount(state.Categories, "pending_insights", state.Summary.PendingInsights)
+	setCategoryCount(state.Categories, "candidate_lessons", state.Summary.PendingInsights)
 	upstreamSkills, upstreamErr := ListSkillUpstream(ctx, root)
 	if upstreamErr == nil {
 		count := 0

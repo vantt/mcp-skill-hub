@@ -1,23 +1,41 @@
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { useSession, useSources } from '../../api/queries';
+import { useSources } from '../../api/queries';
 import type { SourceSummary } from '../../api/types';
 import { Skeleton } from '../../components/Skeleton';
 import { StatusBadge } from '../../components/StatusBadge';
 import { buildHandoffBrief } from '../../domain/handoff-brief';
 import { distillLabel } from '../../domain/source-distill';
-import { loadDraft, saveDraft } from '../../state/drafts';
 
 const TITLE_DISTILL = 'Distill with Curator Agent';
 const LABEL_SELECTED_SOURCES = 'Selected sources';
-const LABEL_EMPTY_SELECTION = 'Select learning sources on the Sources screen first.';
 const BTN_BACK_SOURCES = 'Back to Sources';
+const INTRO_PICK =
+  'A curator agent reads a learning source and records lessons for the skills linked to it. Pick the sources to hand over; nothing is changed until you decide on a lesson.';
+const LABEL_PICK_SOURCES = 'Sources ready to distill';
+const BTN_CONTINUE = 'Continue with selected sources';
+const MSG_NO_SOURCES =
+  'There are no sources yet. A source is a repository your skills learn from. Open a skill, go to its Sources tab and add a learning reference.';
+const MSG_NONE_READY =
+  'No source is ready to distill. A source becomes ready when a check finds new commits in it, or when it was never distilled.';
+const BTN_OPEN_SOURCES = 'Open Sources';
+const BTN_CHANGE_SELECTION = 'Change selection';
+const INTRO_BRIEF =
+  'Copy this handoff and paste it to your curator agent, an agent that has the distill-lab skill. It records lessons in each skill; read them in the skill\'s Distill tab, where you decide what to keep.';
+const LABEL_SKILLS = 'Skills: ';
+const LABEL_NO_SKILL = 'no linked skill';
 const TITLE_BRIEF_BAR = 'Handoff for your Curator Agent';
 const BTN_COPY_HANDOFF = 'Copy handoff';
 const LABEL_COPIED = 'Copied';
 const LABEL_ARROW = ' ← ';
 const LABEL_LPAREN = ' (';
 const LABEL_RPAREN = ')';
+
+function shortRevision(value?: string): string {
+  if (!value) return '';
+  const colon = value.indexOf(':');
+  return value.slice(0, colon + 1) + value.slice(colon + 1, colon + 11);
+}
 
 interface ClassifiedSource {
   id: string;
@@ -30,44 +48,10 @@ export function DistillHandoffScreen() {
   const [searchParams] = useSearchParams();
   const requestedSourceIds = searchParams.getAll('source');
 
-  const { data: session } = useSession();
-  const workspaceId = session?.workspace_id || 'default';
-
   const { data: sourcesData, isLoading, error: sourcesError } = useSources();
 
   const [copied, setCopied] = useState(false);
-  const [randomId] = useState(() =>
-    typeof crypto !== 'undefined' && crypto.randomUUID
-      ? crypto.randomUUID()
-      : 'hnd-' + Math.random().toString(36).substring(2, 12),
-  );
-
-  if (requestedSourceIds.length === 0) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-        <h1 style={{ margin: 0, fontSize: '20px', fontWeight: 600 }}>
-          <span>{TITLE_DISTILL}</span>
-        </h1>
-        <div
-          className="fg-card"
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 'var(--space-3)',
-            padding: 'var(--space-6) var(--space-4)',
-          }}
-        >
-          <span style={{ color: 'var(--color-text-muted)', fontSize: '14px', textAlign: 'center' }}>
-            {LABEL_EMPTY_SELECTION}
-          </span>
-          <Link to="/sources" className="fg-btn fg-btn--primary" style={{ textDecoration: 'none' }}>
-            <span>{BTN_BACK_SOURCES}</span>
-          </Link>
-        </div>
-      </div>
-    );
-  }
+  const [picked, setPicked] = useState<string[]>([]);
 
   if (isLoading) {
     return (
@@ -79,7 +63,7 @@ export function DistillHandoffScreen() {
     );
   }
 
-  if (sourcesError) {
+  if (sourcesError && !sourcesData) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
         <div className="fg-banner fg-banner--danger">
@@ -121,6 +105,97 @@ export function DistillHandoffScreen() {
     }
   }
 
+  if (requestedSourceIds.length === 0) {
+    const ready = allSources.filter((src) => distillLabel(src).selectable);
+    const pickedQuery = picked.map((id) => `source=${encodeURIComponent(id)}`).join('&');
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+        <h1 style={{ margin: 0, fontSize: '20px', fontWeight: 600 }}>
+          <span>{TITLE_DISTILL}</span>
+        </h1>
+        <p style={{ margin: 0, fontSize: '14px', color: 'var(--color-text-muted)', maxWidth: '64ch' }}>
+          <span>{INTRO_PICK}</span>
+        </p>
+        {ready.length === 0 ? (
+          <div
+            className="fg-card"
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 'var(--space-3)',
+              padding: 'var(--space-6) var(--space-4)',
+            }}
+          >
+            <span style={{ color: 'var(--color-text-muted)', fontSize: '14px', textAlign: 'center', maxWidth: '56ch' }}>
+              {allSources.length === 0 ? MSG_NO_SOURCES : MSG_NONE_READY}
+            </span>
+            <Link to="/sources" className="fg-btn fg-btn--primary" style={{ textDecoration: 'none' }}>
+              <span>{BTN_OPEN_SOURCES}</span>
+            </Link>
+          </div>
+        ) : (
+          <section className="fg-card" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+            <div className="fg-card__title">
+              <span style={{ fontSize: '15px', fontWeight: 600 }}>{LABEL_PICK_SOURCES}</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+              {ready.map((src) => (
+                <label
+                  key={src.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 'var(--space-3)',
+                    flexWrap: 'wrap',
+                    padding: 'var(--space-2) var(--space-3)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 'var(--radius-sm)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={picked.includes(src.id)}
+                    onChange={(e) =>
+                      setPicked((prev) =>
+                        e.target.checked ? [...prev, src.id] : prev.filter((id) => id !== src.id),
+                      )
+                    }
+                  />
+                  <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, fontSize: '14px' }}>{src.id}</span>
+                  <StatusBadge variant="chip" tone="warning" label={distillLabel(src).label} />
+                  <span style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>
+                    {LABEL_SKILLS}
+                    {src.referencing_skills.length > 0 ? src.referencing_skills.join(', ') : LABEL_NO_SKILL}
+                  </span>
+                </label>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+              {picked.length > 0 ? (
+                <Link
+                  to={`/sources/distill?${pickedQuery}`}
+                  className="fg-btn fg-btn--primary"
+                  style={{ textDecoration: 'none' }}
+                >
+                  <span>{BTN_CONTINUE}</span>
+                </Link>
+              ) : (
+                <button type="button" className="fg-btn fg-btn--primary" disabled>
+                  <span>{BTN_CONTINUE}</span>
+                </button>
+              )}
+              <Link to="/sources" className="fg-btn fg-btn--secondary" style={{ textDecoration: 'none' }}>
+                <span>{BTN_BACK_SOURCES}</span>
+              </Link>
+            </div>
+          </section>
+        )}
+      </div>
+    );
+  }
+
   const classified: ClassifiedSource[] = requestedSourceIds.map((id) => {
     const src = allSources.find((s) => s.id === id);
     if (!src) {
@@ -134,31 +209,13 @@ export function DistillHandoffScreen() {
   });
 
   const validSources = classified.filter((c) => c.valid);
-  const validIds = validSources.map((c) => c.id);
 
-  // Generate or retrieve idempotency key
-  const draftId = [...validIds].sort().join(',');
-  let handoffRequestId = '';
-  if (validIds.length > 0) {
-    const existingDraft = loadDraft<{ handoff_request_id: string }>(
-      workspaceId,
-      'distill-handoff',
-      draftId,
-      '',
-    );
-    if (existingDraft?.value?.handoff_request_id) {
-      handoffRequestId = existingDraft.value.handoff_request_id;
-    } else {
-      handoffRequestId = randomId;
-      saveDraft(workspaceId, 'distill-handoff', draftId, '', {
-        handoff_request_id: handoffRequestId,
-      });
-    }
-  }
-
-  const brief = validIds.length > 0
-    ? buildHandoffBrief({ sourceIds: validIds, idempotencyKey: handoffRequestId })
-    : '';
+  const brief =
+    validSources.length > 0
+      ? buildHandoffBrief({
+          sources: validSources.map((c) => ({ id: c.id, skills: c.source?.referencing_skills ?? [] })),
+        })
+      : '';
 
   const handleCopy = async () => {
     if (!brief) return;
@@ -175,17 +232,23 @@ export function DistillHandoffScreen() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
       {/* Header */}
-      <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
         <h1 style={{ margin: 0, fontSize: '20px', fontWeight: 600 }}>
           <span>{TITLE_DISTILL}</span>
         </h1>
+        <Link to="/sources/distill" className="fg-btn fg-btn--secondary fg-btn--small" style={{ textDecoration: 'none' }}>
+          <span>{BTN_CHANGE_SELECTION}</span>
+        </Link>
       </div>
+      <p style={{ margin: 0, fontSize: '14px', color: 'var(--color-text-muted)', maxWidth: '64ch' }}>
+        <span>{INTRO_BRIEF}</span>
+      </p>
 
       {/* Selected sources card */}
       <section className="fg-card" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
         <div className="fg-card__title">
           <span style={{ fontSize: '15px', fontWeight: 600 }}>
-            {LABEL_SELECTED_SOURCES}{LABEL_LPAREN}{validIds.length}{LABEL_RPAREN}
+            {LABEL_SELECTED_SOURCES}{LABEL_LPAREN}{validSources.length}{LABEL_RPAREN}
           </span>
         </div>
 
@@ -202,19 +265,19 @@ export function DistillHandoffScreen() {
                     padding: 'var(--space-2) var(--space-3)',
                     backgroundColor: 'var(--color-surface-sunken)',
                     borderRadius: 'var(--radius-sm)',
-                    border: '1px solid var(--color-danger-subtle, #fca5a5)',
+                    border: '1px solid var(--color-danger)',
                     fontSize: '13px',
                   }}
                 >
                   <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{c.id}</span>
-                  <span style={{ color: 'var(--color-danger, #dc2626)' }}>{c.error}</span>
+                  <span style={{ color: 'var(--color-danger)' }}>{c.error}</span>
                 </div>
               );
             }
 
             const src = c.source!;
-            const curRev = src.current_revision?.value || 'unknown';
-            const distRev = src.distilled_revision?.value || 'never';
+            const curRev = shortRevision(src.current_revision?.value) || 'unknown';
+            const distRev = shortRevision(src.distilled_revision?.value) || 'never';
             const distill = distillLabel(src);
 
             return (
@@ -239,6 +302,10 @@ export function DistillHandoffScreen() {
                     {curRev}{LABEL_ARROW}{distRev}
                   </span>
                   <StatusBadge variant="chip" tone="info" label={distill.label} />
+                  <span style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>
+                    {LABEL_SKILLS}
+                    {src.referencing_skills.length > 0 ? src.referencing_skills.join(', ') : LABEL_NO_SKILL}
+                  </span>
                 </div>
               </div>
             );

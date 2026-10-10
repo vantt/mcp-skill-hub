@@ -89,8 +89,12 @@ export const en = {
   'home.degraded_body': 'Catalog is stale. Run skillhub rebuild, then reload.',
   'home.summary_title': 'Overview',
   'home.not_configured': 'Not set up',
-  'home.changed_sources.one': '{count} changed source',
-  'home.changed_sources.other': '{count} changed sources',
+  'home.category.sources_ready_to_distill': 'Sources ready to distill',
+  'home.category.candidate_lessons': 'Candidate lessons to review',
+  'home.category.source_unavailable': 'Unreachable sources',
+  'home.category.sources_due': 'Sources due for a check',
+  'home.category.blocking_decisions': 'Blocking decisions',
+  'home.category.routing_evaluations': 'Routing evaluations',
   'home.unreachable_sources.one': '{count} unreachable source',
   'home.unreachable_sources.other': '{count} unreachable sources',
 
@@ -115,6 +119,8 @@ export const en = {
   'common.error': 'An error occurred',
   'common.later_phase': 'This screen arrives in a later delivery phase.',
   'common.not_found': 'Page not found.',
+  'common.not_found_hint':
+    'This address does not lead anywhere. Lessons to review are in the Distill tab of each skill; sources are on the Sources page.',
   'common.session_expired_title': 'Session expired',
   'common.session_expired_desc': 'Your session token is missing or has expired. Please reopen the web UI from the terminal command `skillhub serve web`.',
 } as const;

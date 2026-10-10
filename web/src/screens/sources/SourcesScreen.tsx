@@ -21,9 +21,12 @@ const BTN_CHECKING_ALL = 'Checking all…';
 const BTN_CHECK_DUE = 'Check due sources';
 const BTN_CHECKING_DUE = 'Checking due…';
 const BTN_DISTILL_CURATOR = 'Distill with Curator Agent';
-const REASON_SELECT_SOURCE = 'Select at least one learning source';
+const INTRO_SOURCES =
+  'A source is a repository your skills learn from or track for updates. Check finds new commits; a source marked ready has commits no skill has learned from yet. Tick it and hand it to your curator agent.';
 const BTN_ADD_FROM_GITHUB = 'Add skills from GitHub';
 const LABEL_NO_SOURCES = 'No sources yet. Link a repository whose ideas should improve your skills.';
+const LABEL_NO_SOURCES_WHY =
+  'A source is a repository your skills track or learn from. Skill Hub checks it for new commits, and your curator agent turns what it finds into lessons for the linked skills. Add skills from GitHub, or open a skill and add a learning reference on its Sources tab.';
 const LABEL_NO_READY_SOURCES = 'No sources ready to distill.';
 const LABEL_SKILLS_PREFIX = 'Skills:';
 const LABEL_NO_SKILLS = 'no skills';
@@ -242,7 +245,7 @@ export function SourcesScreen() {
     : groups;
 
   const distillQuery = selectedSources.map((id) => `source=${encodeURIComponent(id)}`).join('&');
-  const distillHref = `/sources/distill?${distillQuery}`;
+  const distillHref = distillQuery ? `/sources/distill?${distillQuery}` : '/sources/distill';
 
   const importModalTitle = `${TITLE_IMPORT_SKILLS_FROM}${importSourceId || ''}`;
   return (
@@ -271,25 +274,21 @@ export function SourcesScreen() {
           >
             <span>{checkingAll ? BTN_CHECKING_ALL : BTN_CHECK_ALL}</span>
           </button>
-          {selectedSources.length > 0 ? (
-            <Link to={distillHref} className="fg-btn fg-btn--primary" style={{ textDecoration: 'none' }}>
-              <span>{BTN_DISTILL_CURATOR}{LABEL_LPAREN}{selectedSources.length}{LABEL_RPAREN}</span>
-            </Link>
-          ) : (
-            <button
-              type="button"
-              className="fg-btn fg-btn--primary"
-              disabled
-              title={REASON_SELECT_SOURCE}
-            >
-              <span>{BTN_DISTILL_CURATOR}</span>
-            </button>
-          )}
+          <Link to={distillHref} className="fg-btn fg-btn--primary" style={{ textDecoration: 'none' }}>
+            <span>
+              {BTN_DISTILL_CURATOR}
+              {selectedSources.length > 0 ? `${LABEL_LPAREN}${selectedSources.length}${LABEL_RPAREN}` : ''}
+            </span>
+          </Link>
           <Link to="/skills/add" className="fg-btn fg-btn--secondary" style={{ textDecoration: 'none' }}>
             <span>{BTN_ADD_FROM_GITHUB}</span>
           </Link>
         </div>
       </div>
+
+      <p style={{ margin: 0, fontSize: '14px', color: 'var(--color-text-muted)', maxWidth: '72ch' }}>
+        <span>{INTRO_SOURCES}</span>
+      </p>
 
       {actionError && (
         <div className="fg-banner fg-banner--danger">
@@ -301,6 +300,9 @@ export function SourcesScreen() {
         <div className="fg-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-6) var(--space-4)' }}>
           <span style={{ color: 'var(--color-text-muted)', fontSize: '14px', textAlign: 'center' }}>
             {LABEL_NO_SOURCES}
+          </span>
+          <span style={{ color: 'var(--color-text-muted)', fontSize: '13px', textAlign: 'center', maxWidth: '60ch' }}>
+            {LABEL_NO_SOURCES_WHY}
           </span>
           <Link to="/skills/add" className="fg-btn fg-btn--primary" style={{ textDecoration: 'none' }}>
             <span>{BTN_ADD_FROM_GITHUB}</span>
@@ -386,7 +388,7 @@ export function SourcesScreen() {
                               <Link
                                 key={skillId}
                                 to={`/skills/${encodeURIComponent(skillId)}`}
-                                style={{ color: 'var(--color-primary)', textDecoration: 'none', fontWeight: 500 }}
+                                style={{ color: 'var(--color-link)', textDecoration: 'none', fontWeight: 500 }}
                               >
                                 <span>{skillId}</span>
                               </Link>
@@ -401,7 +403,7 @@ export function SourcesScreen() {
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
                       <button
                         type="button"
                         className="fg-btn fg-btn--secondary fg-btn--small"

@@ -1,8 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { SessionResponse, SourceListResult } from '../../api/types';
+import type { SourceListResult } from '../../api/types';
 import { loadGolden } from '../../test/golden';
 import { DistillHandoffScreen } from './DistillHandoffScreen';
 
@@ -24,100 +25,99 @@ describe('DistillHandoffScreen', () => {
     window.localStorage.clear();
   });
 
-  it('renders empty selection state when no sources are provided', () => {
-    render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={['/sources/distill']}>
-          <DistillHandoffScreen />
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
-
-    expect(
-      screen.getByText('Select learning sources on the Sources screen first.'),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Back to Sources' })).toHaveAttribute(
-      'href',
-      '/sources',
-    );
-  });
-
-  it('brief contains both source IDs and the key, and is stable across re-renders', () => {
-    const goldenSession = loadGolden<SessionResponse>('session');
-    queryClient.setQueryData(['session'], goldenSession);
-
-    const goldenSources = loadGolden<SourceListResult>('sources');
-    const sourcesData: SourceListResult = {
-      ...goldenSources,
+  function sourcesWith(
+    sources: Array<{ id: string; ready: boolean; skills: string[] }>,
+  ): SourceListResult {
+    const golden = loadGolden<SourceListResult>('sources');
+    return {
+      ...golden,
+      sources: [],
       groups: [
         {
           repository: 'https://github.com/example/repo',
-          sources: [
-            {
-              id: 'source-a',
-              status: 'changed',
-              role: 'learning-source',
-              referencing_skills: ['skill-1'],
-              skills_vendored_count: 0,
-              importable_count: 0,
-              ready_to_distill: true,
-              current_revision: { kind: 'git-commit', value: 'c2' },
-              distilled_revision: { kind: 'git-commit', value: 'c1' },
-            },
-            {
-              id: 'source-b',
-              status: 'changed',
-              role: 'learning-source',
-              referencing_skills: ['skill-2'],
-              skills_vendored_count: 0,
-              importable_count: 0,
-              ready_to_distill: true,
-              current_revision: { kind: 'git-commit', value: 'b2' },
-              distilled_revision: { kind: 'git-commit', value: 'b1' },
-            },
-          ],
+          sources: sources.map((s) => ({
+            id: s.id,
+            status: s.ready ? 'changed' : 'watching',
+            role: 'learning-source',
+            referencing_skills: s.skills,
+            skills_vendored_count: 0,
+            importable_count: 0,
+            ready_to_distill: s.ready,
+            current_revision: { kind: 'git-commit', value: 'c2' },
+            distilled_revision: { kind: 'git-commit', value: 'c1' },
+          })),
         },
       ],
     };
-    queryClient.setQueryData(['sources'], sourcesData);
+  }
 
-    const { unmount } = render(
+  function renderAt(url: string) {
+    return render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={['/sources/distill?source=source-a&source=source-b']}>
+        <MemoryRouter initialEntries={[url]}>
           <DistillHandoffScreen />
         </MemoryRouter>
       </QueryClientProvider>,
     );
+  }
 
-    // Selected sources are listed
-    expect(screen.getByText('Selected sources (2)')).toBeInTheDocument();
+  it('offers the ready sources to pick when none is selected', async () => {
+    queryClient.setQueryData(
+      ['sources'],
+      sourcesWith([
+        { id: 'source-a', ready: true, skills: ['skill-1'] },
+        { id: 'source-b', ready: false, skills: ['skill-2'] },
+      ]),
+    );
+    renderAt('/sources/distill');
+
+    expect(screen.getByText('Sources ready to distill')).toBeInTheDocument();
     expect(screen.getByText('source-a')).toBeInTheDocument();
-    expect(screen.getByText('source-b')).toBeInTheDocument();
+    expect(screen.queryByText('source-b')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Continue with selected sources' })).toBeDisabled();
 
-    // Brief contains both source IDs and curation_run_start
-    const pre = screen.getByText(/curation_run_start/i);
-    expect(pre).toBeInTheDocument();
-    expect(pre.textContent).toContain('["source-a","source-b"]');
-    expect(pre.textContent).not.toContain('#token=');
-
-    // Extract the idempotency_key
-    const match = pre.textContent?.match(/idempotency_key:\s*"([^"]+)"/);
-    expect(match).not.toBeNull();
-    const key = match![1];
-
-    unmount();
-
-    // Reopen with the same selection -> same key
-    render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={['/sources/distill?source=source-a&source=source-b']}>
-          <DistillHandoffScreen />
-        </MemoryRouter>
-      </QueryClientProvider>,
+    await userEvent.click(screen.getByRole('checkbox'));
+    expect(screen.getByRole('link', { name: 'Continue with selected sources' })).toHaveAttribute(
+      'href',
+      '/sources/distill?source=source-a',
     );
-
-    const preAgain = screen.getByText(/curation_run_start/i);
-    expect(preAgain.textContent).toContain(`idempotency_key: "${key}"`);
   });
 
+  it('says why nothing can be picked and links to Sources', () => {
+    queryClient.setQueryData(['sources'], sourcesWith([{ id: 'source-b', ready: false, skills: ['skill-2'] }]));
+    renderAt('/sources/distill');
+    expect(screen.getByText(/No source is ready to distill/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open Sources' })).toHaveAttribute('href', '/sources');
+  });
+
+  it('explains what a source is when there are none', () => {
+    queryClient.setQueryData(['sources'], sourcesWith([]));
+    renderAt('/sources/distill');
+    expect(screen.getByText(/A source is a repository your skills learn from/)).toBeInTheDocument();
+  });
+
+  it('names each skill with its source in the brief', () => {
+    queryClient.setQueryData(
+      ['sources'],
+      sourcesWith([
+        { id: 'source-a', ready: true, skills: ['skill-1'] },
+        { id: 'source-b', ready: true, skills: ['skill-2'] },
+      ]),
+    );
+    renderAt('/sources/distill?source=source-a&source=source-b');
+
+    expect(screen.getByText('Selected sources (2)')).toBeInTheDocument();
+    const pre = screen.getByText(/Use the distill-lab skill/);
+    expect(pre.textContent).toContain('- Distill skill-1 from source source-a');
+    expect(pre.textContent).toContain('- Distill skill-2 from source source-b');
+    expect(pre.textContent).not.toContain('#token=');
+    expect(screen.getByRole('link', { name: 'Change selection' })).toHaveAttribute('href', '/sources/distill');
+  });
+
+  it('flags a requested source that is not ready', () => {
+    queryClient.setQueryData(['sources'], sourcesWith([{ id: 'source-b', ready: false, skills: ['skill-2'] }]));
+    renderAt('/sources/distill?source=source-b');
+    expect(screen.getByText(/Not ready to distill/)).toBeInTheDocument();
+    expect(screen.queryByText(/Use the distill-lab skill/)).toBeNull();
+  });
 });

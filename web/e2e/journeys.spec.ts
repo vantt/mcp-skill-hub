@@ -226,9 +226,9 @@ test.describe('Shipped User Flow Journeys (Spec 04 §3)', () => {
       // 3. On Distill screen: verify brief
       await expect(page).toHaveURL(/sources\/distill/);
       const brief = await page.locator('pre').textContent();
-      expect(brief).toContain('curation_run_start');
+      expect(brief).toContain('Use the distill-lab skill');
       expect(brief).toContain('source-c');
-      expect(brief).toContain('idempotency_key:');
+      expect(brief).not.toContain('curation_');
     } finally {
       if (seed?.ws) {
         try {

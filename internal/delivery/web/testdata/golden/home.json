@@ -35,17 +35,12 @@
   ],
   "categories": [
     {
-      "kind": "interrupted_runs",
+      "kind": "sources_ready_to_distill",
       "count": 0,
       "availability": "available"
     },
     {
-      "kind": "changed_sources",
-      "count": 0,
-      "availability": "available"
-    },
-    {
-      "kind": "pending_insights",
+      "kind": "candidate_lessons",
       "count": 0,
       "availability": "available"
     },

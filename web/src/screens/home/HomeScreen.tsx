@@ -58,6 +58,11 @@ export function HomeScreen() {
   const cta = resolveActionCta(topAction);
   const help = actionHelp(topAction?.kind);
 
+  const categoryLabel = (kind: string) => {
+    const label = t(`home.category.${kind}`);
+    return label === `home.category.${kind}` ? kind.replace(/_/g, ' ') : label;
+  };
+
   const formatCount = (count: number, availability?: string) => {
     if (availability === 'not_configured') return t('home.not_configured');
     return isHealthy ? String(count) : t('workspace.unavailable');
@@ -226,7 +231,7 @@ export function HomeScreen() {
               }}
             >
               <span className="t-body-sm" style={{ color: 'var(--color-text-muted)' }}>
-                <span>{cat.kind.replace(/_/g, ' ')}</span>
+                <span>{categoryLabel(cat.kind)}</span>
               </span>
               <span
                 className="t-ui"

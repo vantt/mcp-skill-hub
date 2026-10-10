@@ -441,8 +441,8 @@ provenance:
 		t.Fatal(err)
 	}
 	for _, cat := range home.Categories {
-		if cat.Kind == "changed_sources" && cat.Count != 0 {
-			t.Fatalf("expected changed_sources count 0, got %d", cat.Count)
+		if cat.Kind == "sources_ready_to_distill" && cat.Count != 0 {
+			t.Fatalf("expected sources_ready_to_distill count 0, got %d", cat.Count)
 		}
 	}
 	if home.HomeSummary.UpstreamUpdates != 0 {

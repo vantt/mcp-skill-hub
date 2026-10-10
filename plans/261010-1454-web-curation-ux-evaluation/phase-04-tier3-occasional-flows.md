@@ -1,7 +1,7 @@
 ---
 phase: 4
 title: "Tier 3: occasional flows and dead screens"
-status: pending
+status: completed
 priority: P2
 effort: "0.5d"
 dependencies: [2]

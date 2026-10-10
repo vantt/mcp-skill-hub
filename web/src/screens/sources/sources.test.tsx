@@ -46,6 +46,7 @@ describe('SourcesScreen', () => {
     expect(
       screen.getByText('No sources yet. Link a repository whose ideas should improve your skills.'),
     ).toBeInTheDocument();
+    expect(screen.getByText(/A source is a repository your skills track or learn from/)).toBeInTheDocument();
   });
 
   it('two groups render repository headings and orphan chip', () => {
@@ -192,10 +193,11 @@ describe('SourcesScreen', () => {
     // src-2 is non-selectable (no checkbox)
     expect(screen.queryByLabelText('Select src-2 for distillation')).not.toBeInTheDocument();
 
-    // Distill button is initially disabled with reason title
-    const distillBtn = screen.getByRole('button', { name: /Distill with Curator Agent/i });
-    expect(distillBtn).toBeDisabled();
-    expect(distillBtn).toHaveAttribute('title', 'Select at least one learning source');
+    // With nothing ticked the button still works: the Distill page offers the ready sources to pick
+    expect(screen.getByRole('link', { name: 'Distill with Curator Agent' })).toHaveAttribute(
+      'href',
+      '/sources/distill',
+    );
 
     // Check src-1
     fireEvent.click(checkboxSrc1);

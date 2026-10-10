@@ -12,6 +12,9 @@ import { StatusBadge } from '../../components/StatusBadge';
 const TITLE_LEARNING = 'Learning references';
 const LABEL_NO_LEARNING =
   'No learning references yet. Link a repository or document whose ideas should improve this skill.';
+const INTRO_LEARNING =
+  'A learning reference is a repository whose ideas should improve this skill. Skill Hub checks it for new commits; when it is ready, hand it to your curator agent from the Sources page.';
+const LABEL_ADDRESS = 'Repository address';
 const LABEL_LAST_CHECKED = 'Last checked: ';
 const BTN_UNLINK = 'Unlink';
 const BTN_ADD = 'Add learning reference';
@@ -87,12 +90,17 @@ export function LearningSection({ skillId, learning }: LearningSectionProps) {
         <span>{TITLE_LEARNING}</span>
       </div>
 
+      <p style={{ margin: 0, fontSize: '13px', color: 'var(--color-text-muted)', maxWidth: '72ch' }}>
+        <span>{INTRO_LEARNING}</span>
+      </p>
+
       {/* Add Reference Form */}
       <form onSubmit={handleAddReference} style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
         <input
           type="text"
           className="fg-input"
           style={{ flex: 1, minWidth: '240px' }}
+          aria-label={LABEL_ADDRESS}
           placeholder={PLACEHOLDER_LOCATOR}
           value={locator}
           onChange={(e) => setLocator(e.target.value)}

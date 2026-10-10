@@ -92,7 +92,7 @@ describe('UsagePanel', () => {
     expect(screen.getByText('No usage recorded')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'No recommendations, activations, loads, or doctor checks observed for this skill in the selected time window.',
+        /No recommendations, activations, loads, or doctor checks observed for this skill in the selected time window\./,
       ),
     ).toBeInTheDocument();
   });

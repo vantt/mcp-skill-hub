@@ -140,7 +140,7 @@ describe('HomeScreen', () => {
       actions: [],
       categories: [
         { kind: 'attention_items', count: 5, availability: 'available' },
-        { kind: 'changed_sources', count: 3, availability: 'available' },
+        { kind: 'sources_ready_to_distill', count: 3, availability: 'available' },
       ],
     };
 
@@ -184,11 +184,12 @@ describe('HomeScreen', () => {
       workspace: { health: 'valid', index: 'current', git_dirty: false, git_configured: true, recovery_pending: false },
       actions: [],
       categories: [
-        { kind: 'changed_sources', count: 4, availability: 'available' },
+        { kind: 'sources_ready_to_distill', count: 4, availability: 'available' },
         { kind: 'routing_evaluations', count: 0, availability: 'not_configured' },
       ],
     });
-    expect(screen.getAllByText('changed sources')).toHaveLength(1);
+    expect(screen.getAllByText('Sources ready to distill')).toHaveLength(1);
+    expect(screen.getByText('Routing evaluations')).toBeInTheDocument();
     expect(screen.queryByText('Action categories')).toBeNull();
     expect(screen.getByText('Not set up')).toBeInTheDocument();
   });

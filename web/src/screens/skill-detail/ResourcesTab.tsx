@@ -5,7 +5,8 @@ const LABEL_KIND = 'Kind';
 const LABEL_SIZE = 'Size';
 const LABEL_DIGEST = 'Digest';
 const LABEL_STATE = 'State';
-const LABEL_NO_RESOURCES = 'No companion resources. Only SKILL.md.';
+const LABEL_NO_RESOURCES =
+  'No companion resources. This skill is only its SKILL.md. Scripts, reference documents or other files you put in the skill folder are listed here.';
 const NOTICE_RESOURCES =
   'Changed resource: if only the catalog is out of date, run skillhub rebuild. If a file is missing, restore it or re-add the skill. Resource content is not viewable in v1.';
 const LABEL_ACTIVE = 'Active';

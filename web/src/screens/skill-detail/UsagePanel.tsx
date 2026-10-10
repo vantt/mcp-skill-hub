@@ -44,7 +44,7 @@ const LABEL_LOAD_RESOURCE = 'Resource';
 
 const EMPTY_TITLE = 'No usage recorded';
 const EMPTY_DESCRIPTION =
-  'No recommendations, activations, loads, or doctor checks observed for this skill in the selected time window.';
+  'No recommendations, activations, loads, or doctor checks observed for this skill in the selected time window. Usage appears once a connected coding agent is offered this skill, so a new or inactive skill shows nothing yet.';
 
 const WINDOW_OPTIONS: { label: string; value: FunnelSince }[] = [
   { label: '7 days', value: '7d' },
@@ -134,7 +134,7 @@ export function UsagePanel({ skillId }: UsagePanelProps) {
         <div
           role="group"
           aria-label="Select usage time window"
-          style={{ display: 'flex', gap: 'var(--space-2)' }}
+          style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}
         >
           {WINDOW_OPTIONS.map((opt) => (
             <button

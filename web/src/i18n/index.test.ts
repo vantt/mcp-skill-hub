@@ -16,8 +16,6 @@ describe('i18n catalog', () => {
     const t = useT();
     expect(t('home.unreachable_sources', { count: 1 })).toBe('1 unreachable source');
     expect(t('home.unreachable_sources', { count: 2 })).toBe('2 unreachable sources');
-    expect(t('home.changed_sources', { count: 1 })).toBe('1 changed source');
-    expect(t('home.changed_sources', { count: 5 })).toBe('5 changed sources');
   });
 
   it('returns missing key itself', () => {

@@ -7,6 +7,8 @@ const MSG_NO_DOCUMENT = 'No distillation document (.meta/distill.yaml) recorded 
 const TITLE_GOAL = 'Distillation Goal';
 const MSG_NO_GOAL = 'No explicit distillation goal stated.';
 const MSG_NO_LESSONS = 'No lessons recorded yet.';
+const NOTE_DECIDE =
+  'This page only shows the lessons. Your curator agent records and decides them: tell it, for example, "1 planned, 3 rejected: already covered". Or run the distill-lab script yourself: distill.py decide <file> <number> --state planned|ported|rejected.';
 const LABEL_WHAT = 'What: ';
 const LABEL_NOTABLE = 'Notable: ';
 const LABEL_CONTRAST = 'Contrast: ';
@@ -163,6 +165,10 @@ export function DistillTab({ skillId }: DistillTabProps) {
           </div>
         </div>
 
+        <p style={{ margin: 0, fontSize: '13px', color: 'var(--color-text-muted)' }}>
+          <span>{NOTE_DECIDE}</span>
+        </p>
+
         {(!doc.lessons || doc.lessons.length === 0) ? (
           <p style={{ color: 'var(--color-text-muted)', margin: 0, fontSize: '13px' }}>
             <span>{MSG_NO_LESSONS}</span>
@@ -177,7 +183,7 @@ export function DistillTab({ skillId }: DistillTabProps) {
                   display: 'flex',
                   flexDirection: 'column',
                   gap: 'var(--space-2)',
-                  backgroundColor: 'var(--color-surface-subtle)',
+                  backgroundColor: 'var(--color-surface-sunken)',
                   border: '1px solid var(--color-border)',
                 }}
               >

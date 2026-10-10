@@ -25,7 +25,7 @@ state at commit `7ec5811`; "after" is the working tree that carries the fixes be
 
 | Flow | Task | Next | Wording | State | Safety | Copyable | Mobile | Access | Notes |
 |---|---|---|---|---|---|---|---|---|---|
-| home | 2 | 2 | 1 | 2 | 2 | 2 | 2 | 2 | Overview still lists "pending insights" and "changed sources" as raw category names; see open question. |
+| home | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | Overview category names were reworded in Tier 3 (D30): "Sources ready to distill", "Candidate lessons to review". |
 | skills-list | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | Rows stack on a phone with the column names beside each value. |
 | skill-review | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | |
 | skill-review-draft | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | What is missing is said once next to the button, with a link to the editor. |
@@ -134,6 +134,81 @@ Before and after (images in `web-ux-evidence/tier2/`):
 | create preview 390 | ![](web-ux-evidence/tier2/before-create-preview-390.png) | ![](web-ux-evidence/tier2/after-create-preview-390.png) |
 | add, advanced open 1280 | ![](web-ux-evidence/tier2/before-add-advanced-1280.png) | ![](web-ux-evidence/tier2/after-add-advanced-1280.png) |
 
-## Tier 3
+## Tier 3: occasional flows and dead screens
 
-Filled in by the later phases.
+Scored on the capture of the hub clone, before and after the Tier 3 fixes. "Before" is the state at commit
+`25a0250`; "after" is the working tree that carries the fixes below. Evidence images are in
+`web-ux-evidence/tier3/`.
+
+### Before
+
+| Flow | Task | Next | Wording | State | Safety | Copyable | Mobile | Access | Defects |
+|---|---|---|---|---|---|---|---|---|---|
+| home (Overview) | 2 | 2 | 0 | 2 | 2 | 2 | 2 | 2 | D30 |
+| sources | 1 | 1 | 1 | 1 | 2 | 2 | 0 | 2 | D31 |
+| distill-empty | 0 | 1 | 1 | 0 | 2 | 2 | 2 | 2 | D29 |
+| distill-source | 0 | 1 | 0 | 2 | 2 | 1 | 1 | 2 | D28 |
+| inbox (old address) | 1 | 0 | 1 | 1 | 2 | 2 | 2 | 2 | D32 |
+| skill-tab-resources | 2 | 1 | 1 | 1 | 2 | 2 | 2 | 2 | D34 |
+| skill-tab-usage | 2 | 1 | 1 | 1 | 2 | 2 | 1 | 2 | D34 |
+| skill-tab-runtime | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | |
+| skill-tab-sources | 1 | 1 | 1 | 1 | 2 | 2 | 2 | 1 | D34 |
+| appearance-menu | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | |
+
+### After
+
+| Flow | Task | Next | Wording | State | Safety | Copyable | Mobile | Access | Notes |
+|---|---|---|---|---|---|---|---|---|---|
+| home (Overview) | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | Plain names; no run or lesson-inbox term left. |
+| sources | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | A sentence says what a source is and what "ready" means; the empty state says how sources come to exist; row actions wrap at 390 px. |
+| distill-empty | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | Offers the ready sources to tick instead of a dead end; says why nothing is ready when so. |
+| distill-source | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | The brief names each skill with its source and follows the distill-lab flow. |
+| inbox (old address) | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | Page not found with links to Skills, Sources and Home, and a pointer to where lessons live. |
+| skill-tab-resources | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | Empty state says what companion files are. |
+| skill-tab-usage | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | Empty state says when usage appears; the time-window buttons wrap at 390 px. |
+| skill-tab-runtime | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | Unchanged. |
+| skill-tab-sources | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | Says what a learning reference is; the address field has a label. |
+| appearance-menu | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | Unchanged; the panel fits 390 px. |
+
+No 0 remains. Metrics: before, `sources` had 2 clipped elements and `distill-source` and `skill-tab-usage` had 1 each at
+390 px; after, no clipped element, no horizontal overflow and no serious or critical axe finding on any
+Tier 3 capture at either width.
+
+### Decisions
+
+- **Inbox (D1, decided through the coordinator):** lessons are not triaged on a separate page. The app has no
+  Inbox route or nav item (the old binary that showed "Unknown API path" and a badge of 39 predates that).
+  `.meta/distill.yaml` does hold candidate lessons; the web already shows them per skill in the Distill tab
+  (read-only) and Home links there. The Distill tab now says how to decide them, and `/inbox` lands on a page that
+  points to Skills and Sources.
+- **Public contract:** the Home JSON schema (`schemas/curation-home-v1.schema.json`, emitted by `skillhub status --json`
+  and the status MCP tool) keeps its `home_summary` field names. Only the free-text category `kind` values
+  changed.
+
+### Defects found in this tier
+
+| Id | Severity | Defect | Status |
+|---|---|---|---|
+| D1 | High | Inbox page failed with "Unknown API path" and a nav badge of 39. | Not present in the current app (route, nav item and API are gone); `/inbox` now says Page not found with links. Covered by an E2E test. |
+| D4 | Medium | Sources page kept "Open a run" and "Recent runs". | Not reproducible: already gone in the current app. An E2E test asserts no "run" text on an empty Sources page. |
+| D5 | Medium | The handoff brief told the agent to call `curation_run_start` and `curation_run_submit`, which no longer exist. | Fixed together with D28. |
+| D28 | High | The brief could not be followed: no such tools, and it asked for "insights" and a run id back. | Fixed: it names each skill with its source and describes the distill-lab pass (`.meta/distill.yaml`, `distill.py`, do not edit the skill, do not commit, report lessons by decision state). Unit and E2E tests. |
+| D29 | Medium | Distill with no source selected was a dead end ("Select learning sources on the Sources screen first."), and the Sources button was disabled with only a tooltip. | Fixed: the button always works; the Distill page lists the ready sources to tick, or says why none is ready. |
+| D30 | Medium | Home Overview named categories after removed concepts, in raw snake case: "pending insights", "changed sources", "interrupted runs". | Fixed at the source: category kinds are `sources_ready_to_distill` and `candidate_lessons`, `interrupted_runs` is dropped (nothing writes a run), and the web shows plain names. |
+| D31 | Medium | Sources said nothing about what a source is, "Changed" was unexplained, and at 390 px the Unwatch button ran off the card. | Fixed: intro sentence, richer empty state, wrapping row actions. |
+| D32 | Medium | The old inbox address ended on "Page not found." with nowhere to go. | Fixed: links to Skills, Sources and Home. |
+| D33 | Low | `var(--color-primary)` (Sources) and `var(--color-surface-subtle)` (Distill tab) are not tokens, so the skill links and lesson cards lost their colour. | Fixed: `--color-link` and `--color-surface-sunken`. |
+| D34 | Low | Resources, Usage and the skill Sources tab gave empty states without saying what the thing is; the Usage time-window buttons ran off screen at 390 px; the address field had no label. | Fixed. |
+| D35 | Low | The Distill tab showed lessons but not how to decide them. | Fixed: one note naming the curator agent and `distill.py decide`. |
+
+### Evidence
+
+Before and after (images in `web-ux-evidence/tier3/`):
+
+| Flow | Before | After |
+|---|---|---|
+| home 1280 | ![](web-ux-evidence/tier3/before-home-1280.png) | ![](web-ux-evidence/tier3/after-home-1280.png) |
+| sources 390 | ![](web-ux-evidence/tier3/before-sources-390.png) | ![](web-ux-evidence/tier3/after-sources-390.png) |
+| distill, nothing selected 1280 | ![](web-ux-evidence/tier3/before-distill-empty-1280.png) | ![](web-ux-evidence/tier3/after-distill-empty-1280.png) |
+| distill brief 1280 | ![](web-ux-evidence/tier3/before-distill-source-1280.png) | ![](web-ux-evidence/tier3/after-distill-source-1280.png) |
+| usage 390 | ![](web-ux-evidence/tier3/before-skill-tab-usage-390.png) | ![](web-ux-evidence/tier3/after-skill-tab-usage-390.png) |
