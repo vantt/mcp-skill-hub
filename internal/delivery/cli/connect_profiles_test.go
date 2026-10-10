@@ -31,8 +31,6 @@ func TestConnectClaudeCurationGuidance(t *testing.T) {
 				if code != 0 {
 					t.Fatalf("%v exit = %d: %s", call, code, stderr)
 				}
-				guidance := stdout
-				alreadyCurrent := step == 2
 				if jsonOutput {
 					var response struct {
 						app.Result
@@ -41,23 +39,11 @@ func TestConnectClaudeCurationGuidance(t *testing.T) {
 					if err := json.Unmarshal([]byte(stdout), &response); err != nil {
 						t.Fatalf("machine-readable output: %v: %s", err, stdout)
 					}
-					guidance = response.CurationGuidance
-					if strings.Contains(response.Summary, "/mcp") {
-						t.Fatal("guidance must not be appended to existing JSON summary")
+					if (response.CurationGuidance != "") != (step != 2) {
+						t.Fatalf("unexpected optional guidance at step %d: %s", step, stdout)
 					}
-				}
-				wantCount := 1
-				if alreadyCurrent {
-					wantCount = 0
-				}
-				if got := strings.Count(guidance, "/mcp"); got != wantCount {
-					t.Fatalf("%v reminder count = %d, want %d: %s", call, got, wantCount, stdout)
-				}
-				if !alreadyCurrent {
-					for _, action := range []string{"skillhub-curation", "Disable", "Enable"} {
-						if !strings.Contains(guidance, action) {
-							t.Fatalf("curation guidance missing %q: %s", action, guidance)
-						}
+					if response.CurationGuidance != "" && strings.Contains(response.Summary, response.CurationGuidance) {
+						t.Fatal("guidance leaked into JSON summary")
 					}
 				}
 				if !apply {

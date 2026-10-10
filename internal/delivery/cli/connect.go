@@ -78,15 +78,13 @@ func runConnection(ctx context.Context, args []string, stdout, stderr io.Writer,
 	return 0
 }
 
-// A Claude MCP change writes both entries when the matrix verifies split profiles.
-// Other changes and already-current connections must not repeat the reminder.
+// Claude Code curates through the CLI. Emit guidance only when registration or
+// permissions change, never for already-current connections or other hosts.
 func connectCurationGuidance(result app.Result) string {
-	if !hostintegration.HostSupportsServerToggle(hostintegration.HostClaude) {
-		return ""
-	}
 	for _, item := range result.Items {
-		if item.ID == "host_"+string(hostintegration.HostClaude)+"_"+string(hostintegration.ChangeMCP) {
-			return "Claude Code: open `/mcp`, select skillhub-curation, Disable it for daily work; Enable it when you want to curate."
+		if item.ID == "host_"+string(hostintegration.HostClaude)+"_"+string(hostintegration.ChangeMCP) ||
+			item.ID == "host_"+string(hostintegration.HostClaude)+"_"+string(hostintegration.ChangeHostPermissions) {
+			return "Claude Code: curation runs through the CLI. Commands with --yes or confirm require approval; --approve-content is blocked. First opening this folder shows a trust dialog listing Bash(skillhub:*)."
 		}
 	}
 	return ""
