@@ -674,6 +674,11 @@ func shrinkOutputSchema(schema *jsonschema.Schema) {
 	if schema == nil {
 		return
 	}
+	// An embedded $id starts a separate schema resource. Its local references
+	// depend on that boundary and its definitions, so keep the resource intact.
+	if schema.ID != "" {
+		return
+	}
 	schema.Description = ""
 	schema.Title = ""
 	schema.Schema = ""
