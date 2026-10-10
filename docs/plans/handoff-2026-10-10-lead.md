@@ -5,16 +5,16 @@ in a new lead session, then the plans below.
 
 ## Where things are
 
-- Repo `/home/vantt/projects/mcp-skill-hub`, origin/main = `38bc67e`; local main has a few
-  unpushed docs commits after it. Worktree `/home/vantt/projects/mcp-skill-hub-curator-cli`
-  (branch `wave5/curator-cli`) belongs to agent J; do not touch it while J runs.
+- Repo `/home/vantt/projects/mcp-skill-hub`, main = origin/main (wave 5 done, curator 1.6.1).
+  No other worktrees or branches.
 - Live hub `/home/vantt/skill-hub`, schema **v5**, main = origin/main = `786c60e`. Local
   tags `pre-schema-v4` and `pre-schema-v5` (not pushed) mark the state before each
   migration.
-- Binary `~/.local/bin/skillhub` built from `38bc67e` (stamp the commit with
+- Binary `~/.local/bin/skillhub` built from `c84abe7` (stamp the commit with
   `-ldflags "-X github.com/vantt/mcp-skill-hub/internal/version.Commit=<sha>"`). Restart
-  Claude Code after installing so the MCP server runs it. The user's global connection
-  (`connect -g`) was outdated on 2026-10-10.
+  Claude Code after installing so the MCP server runs it. On 2026-10-10 the lead ran
+  `connect -g` and `connect` in this repo with it: only `skillhub --profile runtime` is
+  registered, the four CLI permission rules are in `~/.claude/settings.json`, curator 1.6.1.
 - Case journal is **enabled** on the live hub (`runtime/case_journal.json`). The MCP server
   writes cases itself during `skill_resolve` (`internal/app/resolver.go:95`); agents do not.
   On 2026-10-10 the store held 13 events and 0 cases. Cases are written only on disagreement
@@ -50,7 +50,8 @@ for session-aware cases), curation moves to the `system-curator` skill calling
 | 3 Claude Code permission rules | **verified** by the user (§5.2): ask beats allow, flag order does not bypass, `--approve-content` denied |
 | 4 `connect` writes the rules, drops `skillhub-curation` on Claude Code, warns about the trust dialog; fix the doctor HOME test | **done**, K merged (3 rounds, `…`..`7767a4b`): runtime-only Claude entry, 4 rules, no disconnect/receipts, tests isolated from HOME (incl. Go caches), `servable.go` fixed |
 | 5 real-host smoke | **done** (design note §7 row 5) |
-| 6 curator 1.6.1 probe/fallback wording | open (design note §7 row 6) |
+| 6 curator 1.6.1 | **done** (`c84abe7`); compliance still imperfect in `claude -p`, see row 7 |
+| 7 measure curator compliance with repeatable `claude -p` scenarios | open |
 
 Facts learned on 2026-10-10 (also in the matrix): Claude Code `/mcp` Disable persists across
 restarts (tick = on, empty circle = off); `disabledMcpjsonServers` rejects a server instead
