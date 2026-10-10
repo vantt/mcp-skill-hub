@@ -156,9 +156,6 @@ func apply(ctx context.Context, plan PlanResult, options ApplyOptions) (ApplyRes
 			return ApplyResult{}, err
 		}
 		order := changeOrder(change.Kind)
-		if plan.Remove && change.Kind == ChangePermissionReceipt {
-			order = 5
-		}
 		if order < 0 || order < lastOrder {
 			return ApplyResult{}, fmt.Errorf("plan changes are not dependency ordered")
 		}
@@ -277,7 +274,7 @@ func expectedDesired(change Change, raw []byte, plan PlanResult) ([]byte, error)
 func changeOrder(kind ChangeKind) int {
 	switch kind {
 	case ChangePermissionReceipt:
-		return 0
+		return 5
 	case ChangeMCP:
 		return 1
 	case ChangeHostPermissions:
@@ -309,7 +306,7 @@ func validateChangePath(root string, scope Scope, change Change) error {
 		if change.Host != HostClaude {
 			return fmt.Errorf("host %q has no permission ownership receipt", change.Host)
 		}
-		relative = claudePermissionReceiptPath
+		relative = claudePermissionReceiptPath(scope)
 	case ChangeMCP:
 		relative = configRel
 	case ChangeHostPermissions:

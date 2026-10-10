@@ -81,10 +81,9 @@ func buildPlan(ctx context.Context, request Request) (PlanResult, error) {
 		return PlanResult{}, err
 	}
 	plan := PlanResult{Workspace: prepared.workspace, Root: prepared.root, Scope: prepared.scope, Binary: prepared.binary, Remove: request.Remove}
-	kinds := []ChangeKind{ChangePermissionReceipt, ChangeMCP, ChangeHostPermissions, ChangeNativeSkill, ChangeBootstrap}
-	if request.Remove {
-		kinds = []ChangeKind{ChangeMCP, ChangeHostPermissions, ChangeNativeSkill, ChangeBootstrap, ChangePermissionReceipt}
-	}
+	// Ownership becomes durable only after the additions have been written.
+	// An interrupted connect without a receipt conservatively preserves them.
+	kinds := []ChangeKind{ChangeMCP, ChangeHostPermissions, ChangeNativeSkill, ChangeBootstrap, ChangePermissionReceipt}
 	for _, kind := range kinds {
 		for _, host := range prepared.hosts {
 			for _, file := range host.files {

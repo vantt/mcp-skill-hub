@@ -223,7 +223,7 @@ func (service WorkspaceService) DoctorFix(path string, yes bool) (Result, error)
 		return Result{}, err
 	}
 	result, err := service.apply(path, false)
-	if err != nil || result.Error != nil {
+	if err != nil || result.Error != nil || (result.Status != StatusApplied && result.Status != StatusReady && result.Status != StatusOK) {
 		return result, err
 	}
 	return applyExternalConnections(context.Background(), root, result)

@@ -9,7 +9,12 @@ import (
 	"strings"
 )
 
-const claudePermissionReceiptPath = ".claude/skillhub-permissions.json"
+func claudePermissionReceiptPath(scope Scope) string {
+	if scope == ScopeUser {
+		return ".claude/skillhub-permissions.json"
+	}
+	return ".claude/skillhub-permissions.local.json"
+}
 
 var claudeCLIRules = []struct {
 	key    string
@@ -69,7 +74,7 @@ func desiredClaudePermissionReceipt(raw, settings, desiredSettings []byte) ([]by
 }
 
 func prepareClaudePermissionReceipt(adapter Adapter, scope Scope, root, workspace string) (preparedFile, error) {
-	path := filepath.Join(root, filepath.FromSlash(claudePermissionReceiptPath))
+	path := filepath.Join(root, filepath.FromSlash(claudePermissionReceiptPath(scope)))
 	raw, mode, exists, err := readManagedFile(path, root)
 	if err != nil {
 		return preparedFile{}, err

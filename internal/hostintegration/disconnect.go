@@ -26,7 +26,7 @@ func prepareDisconnect(request Request) (preparedInspection, error) {
 			relative string
 		}{
 			{ChangeMCP, config}, {ChangeHostPermissions, adapter.permissionsPath(scope)},
-			{ChangeNativeSkill, skill}, {ChangeBootstrap, instructions}, {ChangePermissionReceipt, claudePermissionReceiptPath},
+			{ChangeNativeSkill, skill}, {ChangeBootstrap, instructions}, {ChangePermissionReceipt, claudePermissionReceiptPath(scope)},
 		} {
 			path := filepath.Join(root, filepath.FromSlash(target.relative))
 			raw, mode, exists, err := readManagedFile(path, root)
@@ -61,7 +61,7 @@ func desiredDisconnectFile(kind ChangeKind, raw []byte, request Request) ([]byte
 	case ChangeMCP:
 		return removeClaudeRegistration(raw, request.Binary, request.Workspace)
 	case ChangeHostPermissions:
-		receipt, _, _, err := readManagedFile(filepath.Join(request.Root, filepath.FromSlash(claudePermissionReceiptPath)), request.Root)
+		receipt, _, _, err := readManagedFile(filepath.Join(request.Root, filepath.FromSlash(claudePermissionReceiptPath(request.Scope))), request.Root)
 		if err != nil {
 			return nil, err
 		}
@@ -72,6 +72,18 @@ func desiredDisconnectFile(kind ChangeKind, raw []byte, request Request) ([]byte
 		}
 		return nil, nil
 	case ChangeNativeSkill:
+		// Project and user connections rooted at HOME share the native skill.
+		otherConfig := adapters[0].UserConfigRelativePath
+		if request.Scope == ScopeUser {
+			otherConfig = adapters[0].ConfigRelativePath
+		}
+		other, _, _, err := readManagedFile(filepath.Join(request.Root, filepath.FromSlash(otherConfig)), request.Root)
+		if err != nil {
+			return nil, err
+		}
+		if _, registered := RegisteredWorkspace(HostClaude, other); registered {
+			return raw, nil
+		}
 		if nativeCuratorOwned(raw) {
 			return nil, nil
 		}

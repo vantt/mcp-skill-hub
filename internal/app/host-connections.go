@@ -1,9 +1,7 @@
 package app
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,8 +10,9 @@ import (
 )
 
 type externalConnection struct {
-	request hostintegration.Request
-	global  bool
+	request       hostintegration.Request
+	global        bool
+	matchingHosts []hostintegration.Host
 }
 
 // Only repair hosts already registered in the current project or user scope;
@@ -37,19 +36,12 @@ func externalConnections(workspace, binary string) []externalConnection {
 			if err != nil {
 				continue
 			}
-			registered := false
-			if adapter.Host == hostintegration.HostCodex {
-				registered = bytes.Contains(raw, []byte("mcp_servers.skillhub"))
-			} else {
-				var config struct {
-					Servers map[string]json.RawMessage `json:"mcpServers"`
-				}
-				if json.Unmarshal(raw, &config) == nil {
-					_, registered = config.Servers["skillhub"]
-				}
-			}
+			registeredWorkspace, registered := hostintegration.RegisteredWorkspace(adapter.Host, raw)
 			if registered {
 				target.request.Hosts = append(target.request.Hosts, adapter.Host)
+				if filepath.Clean(registeredWorkspace) == filepath.Clean(workspace) {
+					target.matchingHosts = append(target.matchingHosts, adapter.Host)
+				}
 			}
 		}
 		if len(target.request.Hosts) > 0 {
@@ -65,6 +57,12 @@ func applyExternalConnections(ctx context.Context, workspace string, result Resu
 		return Result{}, err
 	}
 	for _, target := range externalConnections(workspace, binary) {
+		// Confirmed doctor repair is for this workspace, not permission to
+		// redirect a connection belonging to another workspace.
+		if len(target.matchingHosts) == 0 {
+			continue
+		}
+		target.request.Hosts = target.matchingHosts
 		plan, err := hostintegration.Plan(ctx, target.request)
 		if err != nil {
 			return Result{}, err

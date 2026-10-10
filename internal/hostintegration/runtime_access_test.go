@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -95,6 +96,15 @@ func TestRuntimeDirsAreCreatedInEmptyConfigsAndAreIdempotent(t *testing.T) {
 	dirs := RuntimeAccessDirs(workspace)
 
 	assertHasAll(t, "claude", jsonStrings(t, claudeLocal(root), "permissions", "additionalDirectories"), dirs)
+	for key, want := range map[string][]string{
+		"allow": {"Bash(skillhub:*)"},
+		"ask":   {"Bash(skillhub * --yes*)", "Bash(skillhub * confirm *)"},
+		"deny":  {"Bash(skillhub * --approve-content*)"},
+	} {
+		if got := jsonStrings(t, claudeLocal(root), "permissions", key); !slices.Equal(got, want) {
+			t.Fatalf("fresh Claude %s = %v, want %v", key, got, want)
+		}
+	}
 	assertHasAll(t, "gemini", jsonStrings(t, filepath.Join(root, ".gemini", "settings.json"), "context", "includeDirectories"), dirs)
 	roots, err := codexWritableRoots(readTestFile(t, filepath.Join(root, ".codex", "config.toml")))
 	if err != nil {

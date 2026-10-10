@@ -171,6 +171,9 @@ func formatChangeKind(kind, summary string) string {
 		}
 		return ".claude/settings.json"
 	case "permission-ownership":
+		if strings.Contains(summary, "skillhub-permissions.local.json") {
+			return ".claude/skillhub-permissions.local.json"
+		}
 		return ".claude/skillhub-permissions.json"
 	case "native-skill":
 		return "curator skill"

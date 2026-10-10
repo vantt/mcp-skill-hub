@@ -88,12 +88,18 @@ func (service ConnectService) Connect(ctx context.Context, request ConnectReques
 		}
 		for _, change := range plan.Changes {
 			item := hostChangeItem(change.Host, levels[change.Host], change.Kind, change.Path, "Will be written after confirmation.")
+			if request.Remove {
+				item.Impact = "Managed content will be removed or updated after confirmation."
+			}
 			if change.Preview != "" {
 				item.Summary += "\nManaged diff preview:\n" + change.Preview
 			}
 			result.Items = append(result.Items, item)
 		}
 		result.SuggestedActions = []Action{{Label: "Write the agent connection", Command: connectCommand(request, workspacePath) + " --yes", RequiresConfirmation: true}}
+		if request.Remove {
+			result.SuggestedActions[0].Label = "Remove the agent connection"
+		}
 		return result, nil
 	}
 	applied, err := hostintegration.Apply(ctx, plan, hostintegration.ApplyOptions{Confirmed: true})
@@ -105,7 +111,11 @@ func (service ConnectService) Connect(ctx context.Context, request ConnectReques
 		result.Summary = "Agent connection for " + label + " removed; user-owned content preserved."
 	}
 	for _, change := range applied.Changed {
-		result.Items = append(result.Items, hostChangeItem(change.Host, levels[change.Host], change.Kind, change.Path, "Written."))
+		impact := "Written."
+		if request.Remove {
+			impact = "Managed content removed or updated."
+		}
+		result.Items = append(result.Items, hostChangeItem(change.Host, levels[change.Host], change.Kind, change.Path, impact))
 	}
 	if len(applied.Changed) > 0 {
 		result.Warnings = append(result.Warnings, hostBestEffortWarning())
