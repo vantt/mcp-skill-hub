@@ -26,6 +26,8 @@ func TestHumanOutputFitsWidth(t *testing.T) {
 	}
 
 	assertWidth := func(output, cmdName string) {
+		// The workspace path depends on the host temp dir (long on macOS); measure with a placeholder.
+		output = strings.ReplaceAll(output, root, "<WORKSPACE>")
 		for _, line := range strings.Split(output, "\n") {
 			trimmed := strings.TrimRight(line, "\r")
 			if strings.HasPrefix(trimmed, "  $ ") {
