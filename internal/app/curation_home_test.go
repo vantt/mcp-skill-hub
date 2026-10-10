@@ -627,10 +627,13 @@ lessons:
 	if reviewAction.ID != "candidate-skill" {
 		t.Fatalf("expected review_lessons ID 'candidate-skill', got %q", reviewAction.ID)
 	}
-	if !strings.Contains(reviewAction.Command, "distill.py list") {
-		t.Fatalf("expected command to reference distill.py list, got %q", reviewAction.Command)
+	if reviewAction.Command != "distill.py list skills/default/candidate-skill/.meta/distill.yaml" {
+		t.Fatalf("expected command 'distill.py list skills/default/candidate-skill/.meta/distill.yaml', got %q", reviewAction.Command)
 	}
-	if !strings.Contains(reviewAction.Summary, "ready for review with distill-lab") {
-		t.Fatalf("expected summary to reference distill-lab, got %q", reviewAction.Summary)
+	if strings.HasPrefix(reviewAction.Command, "python3 .claude") {
+		t.Fatalf("command must not emit repo-only path: %q", reviewAction.Command)
+	}
+	if !strings.Contains(reviewAction.Summary, "distill-lab skill's distill.py script") {
+		t.Fatalf("expected summary to reference distill-lab skill's script, got %q", reviewAction.Summary)
 	}
 }

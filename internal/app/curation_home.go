@@ -473,11 +473,11 @@ func deriveCurationHome(state homeState) CurationHome {
 	if state.Summary.PendingInsights > 0 {
 		home.HomeSummary.OptionalItems += state.Summary.PendingInsights
 		// Candidate lessons are optional work: do not let them alone turn home.Status into action_required
-		summary := fmt.Sprintf("%d candidate lesson(s) ready for review with distill-lab", state.Summary.PendingInsights)
+		summary := fmt.Sprintf("%d candidate lesson(s) ready for review using the distill-lab skill's distill.py script", state.Summary.PendingInsights)
 		if state.Summary.PendingHighValueInsights > 0 {
-			summary = fmt.Sprintf("%d candidate lesson(s) ready for review with distill-lab; %d are high-value", state.Summary.PendingInsights, state.Summary.PendingHighValueInsights)
+			summary = fmt.Sprintf("%d candidate lesson(s) ready for review using the distill-lab skill's distill.py script; %d are high-value", state.Summary.PendingInsights, state.Summary.PendingHighValueInsights)
 		}
-		cmd := "python3 .claude/skills/distill-lab/scripts/distill.py list"
+		cmd := "distill.py list"
 		if state.TopCandidateSkillPath != "" {
 			cmd += " " + state.TopCandidateSkillPath
 		}
