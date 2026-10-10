@@ -28,6 +28,29 @@ func initTestWorkspace(t *testing.T) string {
 	return root
 }
 
+func TestDoctorTextReportsNativeCuratorFixCommand(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	root := initTestWorkspace(t)
+	path := filepath.Join(root, ".claude", "skills", "system-curator", "SKILL.md")
+	stale := []byte("Previous native curator instructions.\n")
+	if err := os.WriteFile(path, stale, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, stdout, stderr := runCLI(t, "doctor", "--workspace", root)
+	if code != 0 {
+		t.Fatalf("doctor exit = %d: %s", code, stderr)
+	}
+	command := "skillhub doctor --fix --workspace " + root + " --yes"
+	text := strings.Join(strings.Fields(stdout), " ")
+	if !strings.Contains(text, path) || !strings.Contains(text, command) {
+		t.Fatalf("doctor drift report omitted path or fix command %q:\n%s", command, stdout)
+	}
+	content, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(content, stale) {
+		t.Fatalf("doctor drift report changed native curator: %v", err)
+	}
+}
+
 func TestHelpEntryPointsPrintUsageAndExitZero(t *testing.T) {
 	t.Parallel()
 	for _, args := range [][]string{{}, {"help"}, {"--help"}, {"-h"}} {

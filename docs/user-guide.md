@@ -225,7 +225,7 @@ Push the workspace to a remote first. Skill Hub never pushes for you. Install th
 skillhub doctor
 ```
 
-`doctor` checks the workspace, the current project's connection, and global connections. If it lists repairs, preview and apply them:
+`doctor` checks the workspace, the current project's connection, and global connections. Its text output prints the same repair commands as the JSON `suggested_actions`, including the command to restore a native curator that differs from the bundled version. If it lists repairs, preview and apply them:
 
 ```bash
 skillhub doctor --fix

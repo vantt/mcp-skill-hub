@@ -127,7 +127,18 @@ func runDoctor(args []string, stdout, stderr io.Writer) int {
 	} else {
 		result, err = (app.WorkspaceService{}).Doctor(path)
 	}
-	return writeWorkspaceResult(result, err, stdout, stderr, jsonOutput)
+	code := writeWorkspaceResult(result, err, stdout, stderr, jsonOutput)
+	if code != 0 || jsonOutput {
+		return code
+	}
+	p := termui.New(stdout)
+	for _, action := range result.SuggestedActions {
+		p.Line("FIX: " + action.Command)
+	}
+	if p.Err() != nil {
+		return 1
+	}
+	return 0
 }
 
 func initFlags(args []string) (path string, jsonOutput, yes, verbose, force bool, err error) {
