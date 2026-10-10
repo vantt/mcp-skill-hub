@@ -355,22 +355,6 @@ func classifyEntity(path string) string {
 		return "source_candidate"
 	case strings.HasPrefix(path, "sources/skills/"):
 		return "skill_source_link"
-	case strings.Contains(path, "/observations/"):
-		return "observation"
-	case strings.Contains(path, "/findings/"):
-		return "finding"
-	case strings.Contains(path, "/runs/"):
-		return "run"
-	case strings.HasPrefix(path, "distill/comparisons/"):
-		return "comparison"
-	case strings.Contains(path, "/insights/"):
-		return "insight"
-	case strings.Contains(path, "/proposals/"):
-		return "proposal"
-	case strings.Contains(path, "/incorporations/"):
-		return "incorporation"
-	case strings.Contains(path, "/outcomes/"):
-		return "outcome"
 	case strings.HasPrefix(path, "history/operations/"):
 		return "operation"
 	case strings.HasPrefix(path, "registry/collections/"):
@@ -463,8 +447,7 @@ func validateEntities(entities []entity) error {
 					return fmt.Errorf("%s: dangling reference %s=%q", item.Path, key, id)
 				}
 				expectedKinds := map[string][]string{
-					"skill_id": {"skill"}, "source_id": {"source"}, "insight_id": {"insight"},
-					"proposal_id": {"proposal"}, "operation_id": {"operation"}, "incorporation_id": {"incorporation"},
+					"skill_id": {"skill"}, "source_id": {"source"}, "operation_id": {"operation"},
 				}
 				if kinds := expectedKinds[key]; len(kinds) != 0 && !containsString(kinds, target.Kind) {
 					return fmt.Errorf("%s: reference %s=%q targets %s, expected %s", item.Path, key, id, target.Kind, strings.Join(kinds, " or "))

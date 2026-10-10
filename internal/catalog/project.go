@@ -180,19 +180,9 @@ func projectTypedEntity(ctx context.Context, tx *sql.Tx, item entity) error {
 			return err
 		}
 		return projectRevisions(ctx, tx, item)
-	case "observation", "finding":
-		_, err := tx.ExecContext(ctx, `INSERT INTO findings(id,path,source_id,status,summary,content_json) VALUES(?,?,?,?,?,?)`, item.ID, item.Path, stringField(item.Document, "source_id"), stringField(item.Document, "status"), firstString(item.Document, "what", "summary", "finding"), item.JSON)
-		return err
-	case "comparison":
-		_, err := tx.ExecContext(ctx, `INSERT INTO comparisons(id,path,subject,verdict,content_json) VALUES(?,?,?,?,?)`, item.ID, item.Path, stringField(item.Document, "subject"), stringField(item.Document, "verdict"), item.JSON)
-		return err
-	case "outcome":
-		evidence, _ := json.Marshal(item.Document["evidence"])
-		_, err := tx.ExecContext(ctx, `INSERT INTO outcomes(id,path,incorporation_id,state,evidence_json,content_json) VALUES(?,?,?,?,?,?)`, item.ID, item.Path, stringField(item.Document, "incorporation_id"), firstString(item.Document, "state", "status"), string(evidence), item.JSON)
-		return err
 	case "operation":
 		return projectOperation(ctx, tx, item)
-	case "run", "proposal", "incorporation", "source_candidate", "skill_source_link", "routing_evaluation":
+	case "source_candidate", "skill_source_link", "routing_evaluation":
 		_, err := tx.ExecContext(ctx, `INSERT INTO provenance(id,path,kind,source_id,insight_id,proposal_id,operation_id,state,content_json) VALUES(?,?,?,?,?,?,?,?,?)`, item.ID, item.Path, item.Kind, nullable(stringField(item.Document, "source_id")), nullable(stringField(item.Document, "insight_id")), nullable(stringField(item.Document, "proposal_id")), nullable(stringField(item.Document, "operation_id")), firstString(item.Document, "state", "status"), item.JSON)
 		return err
 	}
@@ -365,15 +355,9 @@ func expectedRowCounts(input buildInput) map[string]int64 {
 					}
 				}
 			}
-		case "observation", "finding":
-			counts["findings"]++
-		case "comparison":
-			counts["comparisons"]++
-		case "outcome":
-			counts["outcomes"]++
 		case "operation":
 			counts["operations"]++
-		case "run", "proposal", "incorporation", "source_candidate", "skill_source_link", "routing_evaluation":
+		case "source_candidate", "skill_source_link", "routing_evaluation":
 			counts["provenance"]++
 		}
 	}

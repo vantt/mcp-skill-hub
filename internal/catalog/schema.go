@@ -127,6 +127,6 @@ CREATE VIRTUAL TABLE curation_fts USING fts5(entity_id UNINDEXED, kind UNINDEXED
 
 var countedTables = []string{
 	"canonical_files", "canonical_entities", "skills", "resources", "routing_metadata", "routing_documents",
-	"sources", "source_revisions", "findings", "comparisons", "provenance", "outcomes", "operations",
+	"sources", "source_revisions", "provenance", "operations",
 	"skill_fts", "resource_fts", "curation_fts",
 }
