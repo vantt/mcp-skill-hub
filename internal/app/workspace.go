@@ -1,7 +1,6 @@
 package app
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -223,7 +222,11 @@ func (service WorkspaceService) DoctorFix(path string, yes bool) (Result, error)
 	}}); err != nil {
 		return Result{}, err
 	}
-	return service.apply(path, false)
+	result, err := service.apply(path, false)
+	if err != nil || result.Error != nil {
+		return result, err
+	}
+	return applyExternalConnections(context.Background(), root, result)
 }
 
 func (service WorkspaceService) apply(path string, isInit bool) (Result, error) {
@@ -520,74 +523,6 @@ func renderIssues(issues []canonical.Issue) string {
 		values = append(values, issue.Path+": "+issue.Message)
 	}
 	return strings.Join(values, "; ")
-}
-
-func checkProjectAndGlobalConnections(ctx context.Context, root string, result Result) Result {
-	binary, err := currentBinary()
-	if err != nil {
-		return result
-	}
-	if cwd, err := os.Getwd(); err == nil && cwd != root {
-		hasProjectConnection := false
-		for _, rel := range []string{".mcp.json", ".codex/config.toml", ".gemini/settings.json"} {
-			if data, err := os.ReadFile(filepath.Join(cwd, rel)); err == nil && bytes.Contains(data, []byte("skillhub")) {
-				hasProjectConnection = true
-				break
-			}
-		}
-		if hasProjectConnection {
-			plan, planErr := hostintegration.Plan(ctx, hostintegration.Request{
-				Workspace: root,
-				Root:      cwd,
-				Scope:     hostintegration.ScopeProject,
-				Binary:    binary,
-			})
-			if planErr != nil || len(plan.Changes) > 0 {
-				result.Status = StatusActionRequired
-				result.Items = append(result.Items, Item{
-					ID:      "project_connection_outdated",
-					Summary: fmt.Sprintf("Current project connection at %s is outdated or needs repair.", cwd),
-					Impact:  fmt.Sprintf("Run `skillhub connect --project %s --yes` to update.", cwd),
-				})
-				result.SuggestedActions = append(result.SuggestedActions, Action{
-					Label:                "Update project connection",
-					Command:              fmt.Sprintf("skillhub connect --project %s --yes", cwd),
-					RequiresConfirmation: true,
-				})
-			}
-		}
-	}
-	if home, err := os.UserHomeDir(); err == nil {
-		hasGlobalConnection := false
-		for _, rel := range []string{".claude.json", ".codex/config.toml", ".gemini/settings.json"} {
-			if data, err := os.ReadFile(filepath.Join(home, rel)); err == nil && bytes.Contains(data, []byte("skillhub")) {
-				hasGlobalConnection = true
-				break
-			}
-		}
-		if hasGlobalConnection {
-			plan, planErr := hostintegration.Plan(ctx, hostintegration.Request{
-				Workspace: root,
-				Root:      home,
-				Scope:     hostintegration.ScopeUser,
-				Binary:    binary,
-			})
-			if planErr != nil || len(plan.Changes) > 0 {
-				result.Status = StatusActionRequired
-				result.Items = append(result.Items, Item{
-					ID:      "global_connection_outdated",
-					Summary: "Global agent connection is outdated or needs repair.",
-					Impact:  "Run `skillhub connect -g --yes` to update.",
-				})
-				result.SuggestedActions = append(result.SuggestedActions, Action{
-					Label:                "Update global connection",
-					Command:              "skillhub connect -g --yes",
-					RequiresConfirmation: true,
-				})
-			}
-		}
-	}
-	return result
 }
 
 // NewWorkspaceInvalidError formats workspace failures consistently for every delivery adapter.

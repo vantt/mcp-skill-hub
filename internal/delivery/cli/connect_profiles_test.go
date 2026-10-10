@@ -104,51 +104,68 @@ func TestConnectOtherHostsOmitCurationGuidance(t *testing.T) {
 	}
 }
 
-func TestDoctorLegacyClaudeFullProjectSuggestsConnect(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
-	workspace := initTestWorkspace(t)
-	project := t.TempDir()
-	if code, _, stderr := runCLI(t, "connect", "--project", project, "--workspace", workspace, "--yes"); code != 0 {
-		t.Fatal(stderr)
-	}
-	binary, err := os.Executable()
-	if err != nil {
-		t.Fatal(err)
-	}
-	legacy, err := json.Marshal(map[string]any{"mcpServers": map[string]any{"skillhub": map[string]any{
-		"type": "stdio", "command": binary, "args": []string{"mcp", "serve", "--workspace", workspace},
-	}}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	path := filepath.Join(project, ".mcp.json")
-	if err := os.WriteFile(path, legacy, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	t.Chdir(project)
-	code, stdout, stderr := runCLI(t, "doctor", "--workspace", workspace, "--json")
-	if code != 0 {
-		t.Fatalf("legacy doctor exit = %d: %s", code, stderr)
-	}
-	var result app.Result
-	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
-		t.Fatal(err)
-	}
-	if result.Error != nil || result.Status == app.StatusError {
-		t.Fatalf("valid full entry must not be broken: %+v", result)
-	}
-	for _, item := range result.Items {
-		if item.ID != "project_connection_outdated" {
-			t.Fatalf("unexpected legacy finding: %+v", item)
-		}
-	}
-	for _, action := range result.SuggestedActions {
-		if !strings.HasPrefix(action.Command, "skillhub connect --project ") {
-			t.Fatalf("legacy entry should at most suggest connect: %+v", action)
-		}
-	}
-	after, err := os.ReadFile(path)
-	if err != nil || !bytes.Equal(after, legacy) {
-		t.Fatalf("doctor modified legacy registration: %v", err)
+func TestDoctorMigratesLegacyClaudeConnections(t *testing.T) {
+	for _, shape := range []string{"full", "pair"} {
+		t.Run(shape, func(t *testing.T) {
+			t.Setenv("HOME", t.TempDir())
+			workspace, project := initTestWorkspace(t), t.TempDir()
+			binary, err := os.Executable()
+			if err != nil {
+				t.Fatal(err)
+			}
+			args := []string{"mcp", "serve", "--workspace", workspace}
+			servers := map[string]any{}
+			if shape == "pair" {
+				args = []string{"mcp", "serve", "--profile", "runtime", "--workspace", workspace}
+				servers["skillhub-curation"] = map[string]any{"type": "stdio", "command": binary, "args": []string{"mcp", "serve", "--profile", "curation", "--workspace", workspace}}
+			}
+			servers["skillhub"] = map[string]any{"type": "stdio", "command": binary, "args": args}
+			legacy, _ := json.Marshal(map[string]any{"mcpServers": servers})
+			path := filepath.Join(project, ".mcp.json")
+			if err := os.WriteFile(path, legacy, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			t.Chdir(project)
+			code, stdout, stderr := runCLI(t, "doctor", "--workspace", workspace, "--json")
+			if code != 0 {
+				t.Fatalf("legacy doctor exit = %d: %s", code, stderr)
+			}
+			var result app.Result
+			if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+				t.Fatal(err)
+			}
+			if result.Error != nil || result.Status != app.StatusActionRequired || len(result.Items) != 1 || result.Items[0].ID != "project_connection_outdated" {
+				t.Fatalf("valid legacy connection should suggest migration, not be broken: %+v", result)
+			}
+			if len(result.SuggestedActions) != 1 || !strings.HasPrefix(result.SuggestedActions[0].Command, "skillhub connect --project ") {
+				t.Fatalf("missing connect suggestion: %+v", result.SuggestedActions)
+			}
+			after, err := os.ReadFile(path)
+			if err != nil || !bytes.Equal(after, legacy) {
+				t.Fatalf("doctor preview modified legacy registration: %v", err)
+			}
+			if code, _, stderr := runCLI(t, "doctor", "--workspace", workspace, "--fix", "--yes"); code != 0 {
+				t.Fatal(stderr)
+			}
+			after, err = os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var config struct {
+				Servers map[string]struct {
+					Args []string `json:"args"`
+				} `json:"mcpServers"`
+			}
+			if err := json.Unmarshal(after, &config); err != nil {
+				t.Fatal(err)
+			}
+			want := []string{"mcp", "serve", "--profile", "runtime", "--workspace", workspace}
+			if len(config.Servers) != 1 || !slices.Equal(config.Servers["skillhub"].Args, want) {
+				t.Fatalf("doctor --fix did not migrate %s: %s", shape, after)
+			}
+			if code, stdout, stderr := runCLI(t, "doctor", "--workspace", workspace, "--json"); code != 0 || strings.Contains(stdout, "connection_outdated") {
+				t.Fatalf("migrated connection remains outdated: %d %s %s", code, stdout, stderr)
+			}
+		})
 	}
 }
