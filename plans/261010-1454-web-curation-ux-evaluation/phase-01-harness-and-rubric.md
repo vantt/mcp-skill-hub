@@ -1,7 +1,7 @@
 ---
 phase: 1
 title: "Harness, fixtures and rubric"
-status: pending
+status: completed
 priority: P1
 effort: "4h"
 dependencies: []
