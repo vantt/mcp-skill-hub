@@ -1,0 +1,29 @@
+collection: default
+created_at: "2026-10-02T05:40:01.770141907Z"
+description: Run an existing AgentKit plan phase by phase through Herdr, using one fresh worker agent per phase and sequential or parallel execution based on dependencies. The coordinator supervises from a Herdr pane, relays approval questions through a file mailbox, verifies and commits each phase, and closes the panes it created. Requires HERDR_ENV=1. Not for creating a plan, and not for a full handoff.
+history:
+    - occurred_at: "2026-10-02T05:40:01.770141907Z"
+      state: draft
+id: herdr-cook-plan
+name: herdr-cook-plan
+provenance:
+    created_by: skill_add
+    origin:
+        added_at: "2026-10-02T05:40:01.770141907Z"
+        commit: 619b8cdea5de1f57d48814c5c87ba623575bb41d
+        content_digest: sha256:29cffb7f663dc21cb3432a576d22f84ab147a91a036b7e5a1674834c4e82f8ea
+        folder_digest: sha256:0382941395c0d6eca961c5a7005d8034c3d1ce690985e362147e35603d15c71d
+        kind: github
+        name: herdr-cook-plan
+        path: herdr-cook-plan
+        ref: main
+        repository: https://github.com/thieung/herdr-cook-plan.git
+quality:
+    reviewed: false
+routing:
+    min_scope: ""
+    not_for: []
+    triggers: []
+schema_version: 1
+status: draft
+updated_at: "2026-10-02T05:40:01.770141907Z"

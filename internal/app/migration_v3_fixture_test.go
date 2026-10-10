@@ -20,12 +20,11 @@ func TestRealHubFixtureMigrationV1ToV2ToV3(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	liveHub := "/home/vantt/skill-hub"
-	if _, err := os.Stat(liveHub); err != nil {
-		t.Skipf("live hub not found at %s: %v", liveHub, err)
-	}
+	// A snapshot of the real hub at schema version 1 (vantt/skill-hub@0f88983),
+	// taken before that hub was migrated.
+	liveHub := filepath.Join("testdata", "live-hub-v1")
 
-	// Copy fixture files read-only from /home/vantt/skill-hub
+	// Copy the fixture files into a fresh workspace
 	filesToCopy := []string{
 		".skillhub/schema-version",
 		"skills/default/test-audit/SKILL.md",

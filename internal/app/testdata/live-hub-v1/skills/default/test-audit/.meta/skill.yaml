@@ -1,0 +1,28 @@
+sources:
+- id: openclaw
+  repo: https://github.com/openclaw/openclaw
+  ref: main
+  path: .agents/skills/test-audit
+  roles:
+  - upstream
+  - learning
+  synced: 90563ee83bd60ece1d2819bc09015c01c81063c4
+  learn_paths:
+  - .agents/skills/test-audit
+  - .agents/skills/openclaw-testing
+  - .agents/skills/openclaw-test-performance
+  - docs/help/testing/writing-tests.md
+  - test/AGENTS.md
+  - AGENTS.md
+- id: superpowers
+  repo: https://github.com/obra/superpowers
+  ref: main
+  path: skills/test-driven-development
+  roles:
+  - learning
+  learn_paths:
+  - skills/test-driven-development
+  - skills/systematic-debugging/condition-based-waiting.md
+  - skills/systematic-debugging/find-polluter.sh
+  - skills/verification-before-completion
+  - docs/testing.md

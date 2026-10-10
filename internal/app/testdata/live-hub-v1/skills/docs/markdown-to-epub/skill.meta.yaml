@@ -1,0 +1,19 @@
+created_at: "2026-10-04T08:08:00.921492687Z"
+description: Covert markdown files to Epub
+history:
+    - occurred_at: "2026-10-04T08:08:00.921492687Z"
+      state: draft
+id: markdown-to-epub
+name: Markdown to Epub
+provenance:
+    created_by: skillhub
+quality:
+    reviewed: false
+routing:
+    min_scope: ""
+    not_for: []
+    operations: []
+    triggers: []
+schema_version: 1
+status: draft
+updated_at: "2026-10-04T08:08:00.921492687Z"

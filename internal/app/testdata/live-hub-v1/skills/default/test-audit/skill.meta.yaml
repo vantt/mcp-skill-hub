@@ -1,0 +1,35 @@
+collection: default
+created_at: "2026-10-02T06:28:08.454941051Z"
+description: Invoke whenever writing, changing, reviewing, or sweeping tests. Authoring gate for new tests plus audit workflow for low-value, implementation-coupled, or duplicative tests and the test-only production seams they demand.
+history:
+    - occurred_at: "2026-10-02T06:28:08.454941051Z"
+      state: draft
+    - from: draft
+      occurred_at: "2026-10-02T07:19:21.392056389Z"
+      state: active
+id: test-audit
+name: test-audit
+provenance:
+    created_by: skill_add
+    origin:
+        added_at: "2026-10-02T06:28:08.454941051Z"
+        commit: 90563ee83bd60ece1d2819bc09015c01c81063c4
+        content_digest: sha256:885be2c1c3faabed5f453c0d6ce34b5f898239fe7daf91c862d9c3fe416f7f79
+        folder_digest: sha256:ded5451b94606a340b79bbacf3157abfe9248481f292f77f8d18f11289f3cace
+        kind: github
+        name: test-audit
+        path: .agents/skills/test-audit
+        ref: main
+        repository: https://github.com/openclaw/openclaw.git
+quality:
+    reviewed: true
+routing:
+    min_scope: multi_step
+    not_for:
+        - writing new features or fixing non-test production bugs
+    operations: []
+    triggers:
+        - audit tests, review test suite, clean junk tests, test coverage review, test authoring gate
+schema_version: 1
+status: active
+updated_at: "2026-10-02T07:34:11.590726885Z"
