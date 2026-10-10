@@ -19,5 +19,6 @@ All hosts are currently unverified; `integrate` writes one full entry everywhere
 - **CLAUDE.md is gitignored**: `.gitignore` ignores `CLAUDE.md`. The canonical host template is `internal/hostintegration/bootstrap.go` (`bootstrapBlock`), which synchronizes `AGENTS.md` and project files via `updateBootstrap`.
 
 ## 4. Noticed but Unfixed (Out of Scope / Worktree C Ownership)
-- `internal/delivery/mcpserver/server.go:215-217, 260-262`: Returns code `snapshot_expired` for malformed/missing URI inputs instead of `invalid_params` (owned by Worktree C).
+- (Lead, 2026-10-10) The getSkill/readResource URI checks now return `invalid_uri`
+(C round 4, 5b5a440). `server.go:215` is the skills/list cursor check, where `snapshot_expired` is intended.
 - `internal/delivery/mcpserver/server.go:527-533`: `committedResponse` schema injection for `skill_resolve` and `routing_evaluate` injects `$ref: "#/$defs/setup"`, panicking if root-level `$defs` are pruned.
