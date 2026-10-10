@@ -46,9 +46,9 @@ for session-aware cases), curation moves to the `system-curator` skill calling
 
 | Step | State |
 |---|---|
-| 1–2 CLI gaps + curator rewrite | agent J running, prompt `prompt-wave5-J-curator-cli.md` |
+| 1–2 CLI gaps + curator rewrite | **done**, J merged (`fd4ac80`..`32db030`): bound `cli` confirm commands, `eval routing` envelope, `source import`, curator 1.6.0. Lead ran a real `claude -p` read-only curation with only the runtime MCP entry: used the CLI, hub unchanged |
 | 3 Claude Code permission rules | **verified** by the user (§5.2): ask beats allow, flag order does not bypass, `--approve-content` denied |
-| 4 `connect` writes the rules, drops `skillhub-curation` on Claude Code, warns about the trust dialog; fix the doctor HOME test | prompt K, write after J merges |
+| 4 `connect` writes the rules, drops `skillhub-curation` on Claude Code, warns about the trust dialog; fix the doctor HOME test | agent K, prompt `prompt-wave5-K-connect-cli.md`, worktree `mcp-skill-hub-connect-cli` |
 | 5 real-host smoke | lead, after K |
 
 Facts learned on 2026-10-10 (also in the matrix): Claude Code `/mcp` Disable persists across
