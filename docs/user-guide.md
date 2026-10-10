@@ -84,37 +84,66 @@ skillhub connect -g --workspace ~/skillhub --yes
 |---|---|
 | Project | `.mcp.json`, `.codex/config.toml`, `.gemini/settings.json` (server registration); `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` (a short block marked by `skillhub:bootstrap` comments); the `system-curator` skill under `.claude/skills/`, `.agents/skills/`, and `.gemini/skills/` |
 | Global (`-g`) | `~/.claude.json`, `~/.codex/config.toml`, `~/.gemini/settings.json`; `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, `~/.gemini/GEMINI.md`; the `system-curator` skill under `~/.claude/skills/`, `~/.agents/skills/`, and `~/.gemini/skills/` |
-| Host Permissions | `connect` and `doctor --fix --yes` configure filesystem access to `runtime/cache/skills`, `runtime/envs`, and `runtime/config`: Claude Code `permissions.additionalDirectories` (project `.claude/settings.local.json`, also honoring `.claude/settings.json`; user `~/.claude/settings.json`), Codex `[sandbox_workspace_write] writable_roots`, and Gemini CLI `context.includeDirectories`. `skillhub doctor` reports missing entries; entries are never removed automatically. |
+| Host Permissions | `connect` and `doctor --fix --yes` configure filesystem access to `runtime/cache/skills`, `runtime/envs`, and `runtime/config`: Claude Code `permissions.additionalDirectories` (project `.claude/settings.local.json`, also honoring directory allowances in `.claude/settings.json`; user `~/.claude/settings.json`), Codex `[sandbox_workspace_write] writable_roots`, and Gemini CLI `context.includeDirectories`. Claude Code also gets the CLI rules below and scope-specific ownership receipts: project `.claude/skillhub-permissions.local.json`, global `~/.claude/skillhub-permissions.json`. |
 
 The registration stores the absolute path of the `skillhub` binary and of your workspace. If you move either, run `skillhub connect` again.
 
-Claude Code uses two entries: `skillhub` runs `--profile runtime` and
-`skillhub-curation` runs `--profile curation`. Newly written entries start enabled.
-Open `/mcp`, select skillhub-curation, Disable it for daily work; Enable it when
-you want to curate. Claude Code remembers the disabled state across restarts.
-It defers MCP tool schemas until ToolSearch, so disabling curation mostly saves
-the tool-name list, not roughly 50k tokens. Codex and Gemini still use one full
-`skillhub` entry because their per-server toggles are unverified.
+Claude Code uses only `skillhub --profile runtime`: runtime resolution stays on
+MCP, while `system-curator` curates through the CLI. No `/mcp` curation toggle is
+needed. This decision is independent of the verified server-toggle evidence.
+Codex and Gemini are unchanged in this wave: one full `skillhub` entry, with
+their toggle and permission mechanisms still unverified.
 
-`connect` (also available as `integrate`) shows this reminder once in preview
-and apply output only when writing the Claude Code MCP registration. With
-`--json`, the reminder is a separate optional `curation_guidance` string; existing
-result fields keep their meaning. Repeating an unchanged connection writes
-nothing and omits the reminder. An existing single full Claude Code entry remains
-valid; `doctor` may suggest re-running `connect` to update the project connection.
+In the same Claude Code permissions file, connect adds exactly these rules:
+
+| Permission | Rule |
+|---|---|
+| allow | `Bash(skillhub:*)` |
+| ask | `Bash(skillhub * --yes*)` |
+| ask | `Bash(skillhub * confirm *)` |
+| deny | `Bash(skillhub * --approve-content*)` |
+
+Existing rules keep their order and are never duplicated by a rerun. Claude Code
+asks before `skillhub` commands containing `--yes` or `confirm`, and blocks
+`--approve-content`. On first opening the project, its trust dialog lists the
+pre-approved `Bash(skillhub:*)` permission. These behaviors were
+[verified by the user on Claude Code 2.1.296](plans/2026-10-10-curator-via-cli.md#5-an-toàn-ranh-giới-người-duyệt);
+permission-bypass modes do not enforce these rules.
+
+`connect` (also available as `integrate`) shows short CLI curation guidance when
+the Claude Code registration or permissions change. With `--json`, guidance is a
+separate optional `curation_guidance` string; other result fields keep their
+meaning. Repeating an unchanged connection writes nothing and omits guidance.
+Older single full entries and wave-4 runtime/curation pairs are not broken:
+`doctor` suggests re-running connect, and `connect --yes` or
+`doctor --fix --yes` migrates them. Connect removes a prior `skillhub-curation`
+entry only when its complete contents match the managed registration; custom
+entries remain untouched.
 
 Existing `CLAUDE.md`, `AGENTS.md`, and `GEMINI.md` files keep your own text. Skill Hub only manages the marked block.
 
 > **Caution on committing connection files:** Project connection files (`.mcp.json`, `.codex/config.toml`, `.gemini/settings.json`) contain machine-specific absolute paths to your local binary and workspace. We recommend adding `.mcp.json`, `.codex/`, and `.gemini/` to your project's `.gitignore` rather than committing them to shared repositories. Similarly, do not commit connection files that embed machine-specific paths into your canonical skills repository.
 ### Undo a connection
 
-Delete what `connect` wrote:
+For Claude Code, preview removal and then confirm it:
 
-- the `skillhub` entry (and `skillhub-curation` for Claude Code) in the registration files above,
-- the block between the `skillhub:bootstrap` start and end comments in the instruction files,
-- the `system-curator` skill folders.
+```bash
+skillhub disconnect --workspace ~/skillhub          # current project
+skillhub disconnect --workspace ~/skillhub --yes    # apply
+skillhub disconnect -g --workspace ~/skillhub --yes  # user connection
+```
 
-Your workspace and skills are untouched.
+Disconnect removes only permission rules and runtime directories recorded as
+added by connect, plus unedited managed MCP, curator, and bootstrap content.
+Pre-existing user rules, later user additions, edited files, and directory
+allowances without an ownership receipt are preserved. Ownership is recorded
+only after a successful connect; an interrupted write without a receipt is
+conservatively treated as unowned. Disconnect removes the receipt last. Your
+workspace and canonical skills are untouched.
+
+Codex and Gemini removal remains manual: delete the `skillhub` registration,
+the marked `skillhub:bootstrap` instruction block, and the native `system-curator`
+folder; remove only runtime directory allowances you know connect added.
 
 ## Curate skills
 
@@ -122,7 +151,8 @@ Skill curation has its own task-oriented guide:
 
 - [Curating skills](curating-skills.md) covers source collection, draft imports, skill creation and editing, review, lifecycle transitions, upstream learning, inbox decisions, and Git review.
 - Start with `skillhub status` or ask a connected agent, “Curate my Skill Hub.” Both return the current state and one recommended next action.
-- The bundled `system-curator` prefers CLI curation when shell commands are available and `skillhub version` works; it uses `--json` and `--workspace` when needed. Hosts without a working CLI use the same skill through MCP curation tools. Runtime resolution remains MCP-backed; existing connection registrations are unchanged.
+- Human `skillhub status` inventory includes both active and draft skills; a draft-only hub is not reported as empty. Existing JSON count fields keep their meanings.
+- The bundled `system-curator` prefers CLI curation when shell commands are available and `skillhub version` works; it uses `--json` and `--workspace` when needed. Hosts without a working CLI use the same skill through MCP curation tools. Runtime resolution remains MCP-backed; Claude Code connect now registers only the runtime profile.
 - Preview skill addition, creation, editing, transitions, watching, and `skillhub source import <locator> [--skill <name> | --all] --json` before approving anything. Source import discovers skills and conflicts without changing canonical files; confirmation creates drafts only. Never ask the agent to approve third-party content. Network checks (`skillhub check`) require an explicit request.
 - `skillhub eval routing --json` returns the common result envelope with the report under `metrics`. CLI curation skips the MCP-only `curation_session_record` telemetry call.
 - Return here for workspace setup, agent connections, routing behavior, migration, and troubleshooting.
@@ -244,6 +274,10 @@ skillhub doctor
 ```
 
 `doctor` checks the workspace, the current project's connection, and global connections. Its text output prints the same repair commands as the JSON `suggested_actions`, including the command to restore a native curator that differs from the bundled version. If it lists repairs, preview and apply them:
+Confirmed `doctor --fix --yes` also repairs already-registered hosts in the
+current project and user scope **for this workspace**; it does not install extra
+hosts or redirect connections belonging to another workspace. Blocked workspace
+remediation leaves external connections unchanged.
 
 ```bash
 skillhub doctor --fix
@@ -252,7 +286,7 @@ skillhub doctor --fix --yes
 
 **Host approval and trust prompts after connect.**
 When connecting Skill Hub to agent hosts, each host may prompt for permission on initial launch:
-- **Claude Code:** May display an approval prompt when connecting to a new stdio MCP server command. Press `y` or accept to permit `skillhub mcp serve`.
+- **Claude Code:** The first project trust dialog lists `Bash(skillhub:*)`. Review that permission before trusting the folder. Commands containing `--yes` or `confirm` ask for approval; `--approve-content` is blocked by the installed rules. The host may separately ask to trust the stdio MCP command.
 - **Codex / Gemini CLI:** Look for host trust prompts regarding newly added MCP tools or instruction files. Approve the `skillhub` server to allow tool resolution.
 
 **Windows SmartScreen or unsigned binary warnings.**
@@ -335,6 +369,7 @@ Restart the agent after `connect`. Check that the `skillhub` binary still exists
 | Create a workspace | `skillhub init [path] [--force] --yes` |
 | Connect a project | `skillhub connect [--workspace <path>] --yes` |
 | Connect all projects | `skillhub connect -g --workspace <path> --yes` |
+| Disconnect Claude Code | `skillhub disconnect [-g] [--workspace <path>] [--yes]` |
 | Health and next step | `skillhub status` |
 | Diagnose and repair | `skillhub doctor [--fix [--yes]]` |
 | Add a skill (GitHub or local) | `skillhub skill add <locator> [--skill <n>\|--all] [--yes]` |

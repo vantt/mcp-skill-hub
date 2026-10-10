@@ -132,7 +132,7 @@ là bảng ngắn.
 | 1 | Sửa lỗ hổng CLI §4 (field `cli`, phong bì `eval routing`, `source import`, lệnh confirm đầy đủ trong JSON preview); test | agent |
 | 2 | Curator §6: cột CLI, đoạn chọn giao diện, quy tắc an toàn §5.1; test server-boundary giữ nguyên cho bản MCP | agent |
 | 3 | Bài thử quyền Claude Code §5.2 (người dùng chạy, lead chuẩn bị); ghi matrix | người dùng, lead |
-| 4 | `connect`: host có shell chỉ ghi `skillhub --profile runtime` + quyền §5.2; bỏ entry `skillhub-curation` mà `connect` đã ghi trước đó (chỉ khi nội dung khớp đúng thứ mình ghi); `doctor` gợi ý chạy lại `connect`. Host không có shell giữ nguyên | agent |
+| 4 | `connect`: host có shell chỉ ghi `skillhub --profile runtime` + quyền §5.2; bỏ entry `skillhub-curation` mà `connect` đã ghi trước đó (chỉ khi nội dung khớp đúng thứ mình ghi); `doctor` gợi ý chạy lại `connect`. Host không có shell giữ nguyên | agent K — xong cho Claude Code; Codex/Gemini giữ một entry full trong wave này |
 | 5 | Smoke: temp HOME, Claude Code curate thật bằng CLI (như bằng chứng cũ trong matrix: `claude -p … "Curate my Skill Hub"`, chỉ đọc) | lead |
 
 Bước 1–2 có thể chung một worktree. Bước 4 phụ thuộc bước 3.

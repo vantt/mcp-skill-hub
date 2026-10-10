@@ -15,6 +15,14 @@ The agent checks local status and recommends one next action. The CLI equivalent
 ```bash
 skillhub status
 ```
+The bundled curator prefers `skillhub ... --json` when shell commands work;
+runtime resolution still uses MCP. Claude Code connect installs one runtime MCP
+server and [CLI permission rules](user-guide.md#what-gets-written), so no curation
+server toggle is needed. Codex and Gemini retain one full MCP entry in this wave.
+Preview first (for example, `skillhub skill activate <id>`), review the proposal,
+then obtain explicit approval before using its digest- and base-version-pinned
+confirmation command. The agent must never approve third-party content.
+
 
 Use the recommended action rather than running every workflow. Most curation sessions follow one of two beginner journeys:
 
