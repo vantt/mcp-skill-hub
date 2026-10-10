@@ -305,6 +305,12 @@ skillhub validate    # shows exact file:line errors with fixes
 skillhub rebuild
 ```
 
+Rebuild checks an active skill's entrypoint at
+`skills/<collection>/<id>/SKILL.md`, alongside—not inside—`.meta/`.
+Missing or invalid frontmatter produces a servability warning: `name` must match
+the skill ID and `description` must be non-empty. Fix the entrypoint and rebuild.
+Hub metadata under `.meta/` is not counted as a distributed resource.
+
 **Validating staged files before committing (`validate --staged`).**
 To verify that staged commits are structurally valid without running into working-tree differences, run:
 

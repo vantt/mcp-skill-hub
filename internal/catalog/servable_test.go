@@ -8,24 +8,29 @@ import (
 
 func TestBuildWarnsAboutActiveSkillsThatCannotBeServed(t *testing.T) {
 	t.Parallel()
-	root := newWorkspace(t)
-	meta := func(id string) string {
-		return "schema_version: 1\nid: " + id + "\nname: Skill\nstatus: active\ndescription: Fixture skill.\nrouting:\n  triggers: [fixture]\n  not_for: [unrelated]\n  min_scope: single_step\n"
-	}
-	writeCanonical(t, root, "skills/core/good/skill.meta.yaml", meta("good"))
-	writeCanonical(t, root, "skills/core/good/SKILL.md", "---\nname: good\ndescription: Fixture skill.\n---\n\n# Good\n")
-	writeCanonical(t, root, "skills/core/renamed/skill.meta.yaml", meta("renamed"))
-	writeCanonical(t, root, "skills/core/renamed/SKILL.md", "---\nname: renamed\ndescription: \"\"\n---\n\n# Renamed\n")
+	for _, metadataPath := range []string{"skill.meta.yaml", ".meta/skill.yaml"} {
+		t.Run(metadataPath, func(t *testing.T) {
+			t.Parallel()
+			root := newWorkspace(t)
+			meta := func(id string) string {
+				return "schema_version: 1\nid: " + id + "\nname: Skill\nstatus: active\ndescription: Fixture skill.\nrouting:\n  triggers: [fixture]\n  not_for: [unrelated]\n  min_scope: single_step\n"
+			}
+			writeCanonical(t, root, "skills/core/good/"+metadataPath, meta("good"))
+			writeCanonical(t, root, "skills/core/good/SKILL.md", "---\nname: good\ndescription: Fixture skill.\n---\n\n# Good\n")
+			writeCanonical(t, root, "skills/core/renamed/"+metadataPath, meta("renamed"))
+			writeCanonical(t, root, "skills/core/renamed/SKILL.md", "---\nname: renamed\ndescription: \"\"\n---\n\n# Renamed\n")
 
-	result := build(t, root, BuildOptions{})
-	var warned []string
-	for _, warning := range result.Warnings {
-		if strings.HasPrefix(warning, "skills/core/") {
-			warned = append(warned, warning)
-		}
-	}
-	if len(warned) != 1 || !strings.Contains(warned[0], "renamed") || !strings.Contains(warned[0], `name "renamed"`) {
-		t.Fatalf("servability warnings = %#v", warned)
+			result := build(t, root, BuildOptions{})
+			var warned []string
+			for _, warning := range result.Warnings {
+				if strings.HasPrefix(warning, "skills/core/") {
+					warned = append(warned, warning)
+				}
+			}
+			if len(warned) != 1 || !strings.Contains(warned[0], "renamed") || !strings.Contains(warned[0], "frontmatter") {
+				t.Fatalf("servability warnings = %#v", warned)
+			}
+		})
 	}
 }
 

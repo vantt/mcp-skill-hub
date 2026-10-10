@@ -92,7 +92,7 @@ func servableSkillWarnings(input buildInput) []string {
 		if item.Kind != "skill" || stringField(item.Document, "status") != "active" {
 			continue
 		}
-		directory := item.Path[:strings.LastIndex(item.Path, "/")]
+		directory := strings.TrimSuffix(item.Path[:strings.LastIndex(item.Path, "/")], "/.meta")
 		var entrypoint []byte
 		count, total := 0, int64(0)
 		for _, file := range input.Files {
