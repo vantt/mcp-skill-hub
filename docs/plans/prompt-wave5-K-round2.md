@@ -47,9 +47,11 @@ Do, one commit per item, `make check` green before each:
    behavior change, explain it and keep it only if it is correct.
    Run the real-HOME check only after the isolation is in place, and record the
    hashes first. Done means: `make check` passes BOTH with a temp HOME and with the real
-   HOME, and the real HOME is unchanged afterwards (compare mtimes/hashes of
-   ~/.claude.json, ~/.claude/settings.json, ~/.codex/config.toml,
-   ~/.gemini/settings.json before/after; read-only).
+   HOME, and the real HOME is unchanged afterwards: compare hashes of
+   ~/.claude/settings.json, ~/.claude/skills/system-curator/SKILL.md,
+   ~/.codex/config.toml, ~/.gemini/settings.json before/after, and for
+   ~/.claude.json (Claude Code rewrites it constantly) compare only its
+   `mcpServers` object. Read-only.
 
 3. Bug found by the lead in a fresh-clone check:
    internal/catalog/servable.go:95 `servableSkillWarnings` sets
