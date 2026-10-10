@@ -21,8 +21,32 @@ jobs:
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version: "1.26.0"
+      # GitHub's Windows runners keep %TEMP% and the Go build cache on the slow
+      # C: drive and scan every new file with Defender. The suite is dominated
+      # by file creation, fsync and process spawns, and ran ~100x slower than
+      # on Linux (22-31 min, then past the 30m timeout). Keep scratch files on
+      # the D: work drive and exclude them from real-time scanning.
+      - name: Fast scratch space (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force D:\tmp, D:\gocache | Out-Null
+          "TMP=D:\tmp" >> $env:GITHUB_ENV
+          "TEMP=D:\tmp" >> $env:GITHUB_ENV
+          "GOCACHE=D:\gocache" >> $env:GITHUB_ENV
+          try { Add-MpPreference -ExclusionPath 'D:\tmp','D:\gocache',"$env:GITHUB_WORKSPACE" } catch { Write-Warning "Defender exclusion not applied: $_" }
       - name: Test
+        if: matrix.os != 'windows-latest'
         run: go test -timeout 30m ./...
+      - name: Test (Windows, with per-test timings)
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        run: go test -v -timeout 60m ./... 2>&1 | tee "$RUNNER_TEMP/go-test.log"
+      - name: Slowest Windows tests
+        if: always() && matrix.os == 'windows-latest'
+        shell: bash
+        run: |
+          grep -E '^\s*--- (PASS|FAIL): ' "$RUNNER_TEMP/go-test.log" | sed -E 's/.*--- (PASS|FAIL): (\S+) \(([0-9.]+)s\).*/\3 \2/' | sort -rn | head -40 || true
       - name: Race test
         if: matrix.os != 'windows-latest'
         run: go test -race -timeout 30m ./...
