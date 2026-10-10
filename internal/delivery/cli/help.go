@@ -233,7 +233,7 @@ Show uncommitted canonical changes in the workspace's Git repository.
 
 Example: skillhub diff
 `,
-	"telemetry": `Usage: skillhub telemetry <health|preview|export|purge|funnel|import-transcripts> [--workspace <path>] [--json]
+	"telemetry": `Usage: skillhub telemetry <health|preview|export|purge|funnel|cases|chains|import-transcripts|baseline> [--workspace <path>] [--json]
 
 Inspect or export the local, disposable telemetry record. Nothing leaves your
 machine unless you export it.
@@ -244,9 +244,17 @@ Subcommands:
   export [--output <file> --yes]      Preview, or with --yes write the sanitized file
   purge --yes                         Discard and recreate the telemetry store
   funnel [--since <date|Nd>] [--until <date>] [--skill <id>]
+         [--by client|operation|snapshot]
                                       Show recommendation and activation funnel report
+  cases [list] [--since <date|Nd>] [--kind <kind>]
+                                      List case journal entries (also the bare cases command)
+  cases <status|enable|disable>        Inspect or toggle the case journal
+  chains [--since <date|Nd>] [--kind override|after_no_skill|reformulation]
+                                      Show disagreement chains
   import-transcripts --project <dir> [--since <date|Nd>]
                                       Import tool observations from Claude Code transcripts
+  baseline [--since <date|Nd>] [--until <date>] [--min-chains <n>]
+           [--write <file>]            Measure baseline sufficiency and optionally save a snapshot
 
 Example: skillhub telemetry import-transcripts --project ~/projects/my-app
 `,

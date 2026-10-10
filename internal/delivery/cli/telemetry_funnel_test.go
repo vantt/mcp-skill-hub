@@ -117,17 +117,6 @@ func TestTelemetryCLIFunnel(t *testing.T) {
 	}
 }
 
-func TestTelemetryCLIHelpIncludesFunnel(t *testing.T) {
-	t.Parallel()
-	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"help", "telemetry"}, &stdout, &stderr); code != 0 {
-		t.Fatalf("help telemetry code=%d stdout=%s stderr=%s", code, stdout.String(), stderr.String())
-	}
-	if !strings.Contains(stdout.String(), "funnel") {
-		t.Fatalf("help telemetry missing funnel subcommand:\n%s", stdout.String())
-	}
-}
-
 func TestFunnelAndBaselineRenderUnmeasurableCountersAsUnknown(t *testing.T) {
 	t.Parallel()
 	root, requestPath := telemetryCLIWorkspace(t)

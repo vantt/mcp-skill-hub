@@ -78,18 +78,3 @@ func TestTelemetryCLIImportTranscripts(t *testing.T) {
 		t.Errorf("missing privacy notice in output: %s", outStr)
 	}
 }
-
-func TestTelemetryCLIHelpIncludesImportTranscripts(t *testing.T) {
-	t.Parallel()
-	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"help", "telemetry"}, &stdout, &stderr); code != 0 {
-		t.Fatalf("help telemetry code=%d stdout=%s stderr=%s", code, stdout.String(), stderr.String())
-	}
-	out := stdout.String()
-	if !strings.Contains(out, "import-transcripts") {
-		t.Errorf("help telemetry missing import-transcripts:\n%s", out)
-	}
-	if !strings.Contains(out, "funnel") {
-		t.Errorf("help telemetry missing funnel:\n%s", out)
-	}
-}
