@@ -69,6 +69,10 @@
       "status": "unverified",
       "reason": "No safely invocable installed stock-client harness was available.",
       "assumptions": [],
+      "skills_extension": {
+        "status": "unverified",
+        "reason": "No executed stock-client evidence for SEP-2640 skills/list and skills/get."
+      },
       "server_toggle": {
         "status": "unverified",
         "reason": "No safely invocable installed stock-client harness was available."
@@ -82,6 +86,10 @@
       "operations": ["MCP registration", "system-curator load", "read-only curation inspection"],
       "evidence": "In an isolated initialized workspace, `claude -p --mcp-config .mcp.json --strict-mcp-config --permission-mode bypassPermissions` was asked `Curate my Skill Hub`, to load system-curator, inspect only, and make no mutations. It exited 0 after seven turns, reported workspace/catalog/recovery/source/insight state, and left the workspace unchanged.",
       "assumptions": ["The host retains final tool approval and activation authority."],
+      "skills_extension": {
+        "status": "unverified",
+        "reason": "Executed MCP registration and native curator load do not verify SEP-2640 skills/list and skills/get."
+      },
       "server_toggle": {
         "status": "unverified",
         "reason": "Claude Code supports `/mcp enable|disable` interactively, but disabledMcpServers in ~/.claude.json is documented in issue #78314 as ineffective at suppressing tool loading in active sessions, and project-scoped automated toggling remains unverified."
@@ -92,6 +100,10 @@
       "status": "unverified",
       "reason": "No safely invocable installed stock-client harness was available.",
       "assumptions": [],
+      "skills_extension": {
+        "status": "unverified",
+        "reason": "No executed stock-client evidence for SEP-2640 skills/list and skills/get."
+      },
       "server_toggle": {
         "status": "unverified",
         "reason": "Cursor UI provides a manual per-server toggle in settings, but project-scoped automated enable/disable toggling has not been verified with citations."
@@ -103,6 +115,10 @@
       "status": "blocked_unverified",
       "reason": "The generated .codex/config.toml was parsed and the server registration was recognized, but the end-to-end curation run stopped before model/tool execution because the locally installed client could not refresh its authentication token (HTTP 401).",
       "assumptions": ["Project trust or an explicit trusted automation mode is required before Codex enables project MCP configuration."],
+      "skills_extension": {
+        "status": "unverified",
+        "reason": "Registration recognition does not verify SEP-2640 skills/list and skills/get; model/tool execution was blocked by authentication."
+      },
       "server_toggle": {
         "status": "unverified",
         "reason": "Codex config.toml supports `enabled = false` per server, but automated dynamic toggling between runtime and curation profiles has not been verified."
@@ -113,6 +129,10 @@
       "status": "blocked_unverified",
       "reason": "The generated .gemini/settings.json registration was recognized, but the installed host disabled the project server while the isolated folder was untrusted; no end-to-end curation claim is made.",
       "assumptions": ["The project folder must be trusted before Gemini enables its MCP registration."],
+      "skills_extension": {
+        "status": "unverified",
+        "reason": "Registration recognition does not verify SEP-2640 skills/list and skills/get; the isolated project was untrusted."
+      },
       "server_toggle": {
         "status": "unverified",
         "reason": "Gemini settings.json does not provide per-server enable/disable toggling."
