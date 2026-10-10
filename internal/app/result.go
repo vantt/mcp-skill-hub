@@ -26,6 +26,8 @@ type Result struct {
 	Warnings         []Warning      `json:"warnings"`
 	Error            *Error         `json:"error"`
 	Details          map[string]any `json:"details,omitempty"`
+	// CLI is populated only by the CLI delivery adapter for a pinned preview.
+	CLI string `json:"cli,omitempty"`
 }
 
 // ApplicationError returns the structured error carried by this Result, if any.
@@ -55,8 +57,10 @@ type Item struct {
 
 // Action is a safe next command that may be suggested to a caller.
 type Action struct {
-	Label                string `json:"label"`
-	Command              string `json:"command"`
+	Label   string `json:"label"`
+	Command string `json:"command"`
+	// CLI is the runnable CLI counterpart; MCP leaves it unset.
+	CLI                  string `json:"cli,omitempty"`
 	RequiresConfirmation bool   `json:"requires_confirmation,omitempty"`
 }
 

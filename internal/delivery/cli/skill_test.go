@@ -130,6 +130,18 @@ func TestSkillCLIConfirmsStoredExactProposalAndRejectsInterveningEdit(t *testing
 	if err := json.Unmarshal(stdout.Bytes(), &stale); err != nil || stale.Error == nil || stale.Error.Code != app.ErrorStaleProposal {
 		t.Fatalf("stale result = %#v, %v", stale, err)
 	}
+	if len(stale.SuggestedActions) != 1 || stale.SuggestedActions[0].CLI == "" {
+		t.Fatalf("stale proposal has no runnable recovery: %#v", stale.SuggestedActions)
+	}
+	stdout.Reset()
+	stderr.Reset()
+	if code := Run(strings.Fields(stale.SuggestedActions[0].CLI)[1:], &stdout, &stderr); code != 0 {
+		t.Fatalf("stale proposal recovery = %d: %s %s", code, stdout.String(), stderr.String())
+	}
+	var review app.SkillReviewResult
+	if err := json.Unmarshal(stdout.Bytes(), &review); err != nil || review.SkillID != "stored-proposal" {
+		t.Fatalf("stale proposal recovery did not inspect the affected skill: %s, %v", stdout.String(), err)
+	}
 }
 
 func TestSkillCLIExternalEditorUsesValidatedMutationFlow(t *testing.T) {

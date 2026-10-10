@@ -103,8 +103,12 @@ func TestDiffOutputUsesRelativePaths(t *testing.T) {
 	if code := Run([]string{"diff", "--workspace", root, "--json"}, &stdout, &stderr); code != 0 {
 		t.Fatalf("diff exit = %d: %s", code, stderr.String())
 	}
-	if strings.Contains(stdout.String(), root) || !strings.Contains(stdout.String(), "skills/demo/sample/SKILL.md") {
-		t.Fatalf("unsafe diff output: %s", stdout.String())
+	var diff app.CurationDiff
+	if err := json.Unmarshal(stdout.Bytes(), &diff); err != nil {
+		t.Fatal(err)
+	}
+	if len(diff.Groups) != 1 || len(diff.Groups[0].Files) != 1 || diff.Groups[0].Files[0].Path != "skills/demo/sample/SKILL.md" {
+		t.Fatalf("unsafe diff file paths: %#v", diff.Groups)
 	}
 }
 func TestStatusInvalidWorkspaceDoesNotPrintNoSkillsYetBUG08(t *testing.T) {

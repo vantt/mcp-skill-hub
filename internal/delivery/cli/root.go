@@ -22,6 +22,7 @@ func RunContext(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		return writeGlobalHelp(stdout)
 	}
 
+	stdout = commandOutput{Writer: stdout, args: args}
 	jsonOutput := hasJSONFlag(args)
 	if isHelpFlag(args[0]) {
 		return writeGlobalHelp(stdout)
@@ -105,6 +106,9 @@ func writeInvalidRequest(stdout, stderr io.Writer, jsonOutput bool, reason, fix 
 }
 
 func writeJSON(writer io.Writer, value any) error {
+	if out, ok := writer.(commandOutput); ok {
+		value = cliJSONValue(value, out.workspace())
+	}
 	encoder := json.NewEncoder(writer)
 	encoder.SetEscapeHTML(false)
 	return encoder.Encode(value)

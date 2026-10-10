@@ -28,7 +28,7 @@
     "action": {
       "type": "object", "additionalProperties": false,
       "required": ["label", "command"],
-      "properties": {"label": {"type": "string"}, "command": {"type": "string"}, "requires_confirmation": {"type": "boolean"}}
+      "properties": {"label": {"type": "string"}, "command": {"type": "string"}, "cli": {"type": "string"}, "requires_confirmation": {"type": "boolean"}}
     },
     "warning": {
       "type": "object", "additionalProperties": false,

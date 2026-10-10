@@ -49,6 +49,15 @@ confirm proposals by short ID (`skillhub skill confirm <proposal-id>`), while MC
 and automation endpoints require all three pins: `proposal_id`, `proposal_digest`,
 and `base_version` as governed by [action-confirmation-policy.schema.json](../../schemas/action-confirmation-policy.schema.json).
 
+CLI JSON includes `suggested_actions[].cli`, the runnable shell counterpart of
+the unchanged `command`. Semantic previews that require confirmation also
+include top-level `cli`: the full confirm command with proposal ID, digest,
+base version, resolved workspace, and JSON output. Run that command only after
+the user approves the reviewed preview. A stale proposal fails rather than
+regenerating a different change. MCP responses omit these CLI-only fields.
+Commands requiring additional intent (for example, an unavailable curation-run
+tool) point to the existing CLI inspection route, not an invented mutation.
+
 State-reporting results explicitly disclose state basis: canonical facts
 derived from the local Git working tree versus served facts from the active SQLite
 catalog generation (`servable`, `catalog_snapshot`, `generation`). Unconfirmed editor

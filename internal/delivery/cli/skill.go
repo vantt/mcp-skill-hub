@@ -578,8 +578,8 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 		if flags.proposalID == "" {
 			return flags, errors.New("confirm requires a proposal ID")
 		}
-		if flags.id != "" || flags.collection != "" || flags.name != "" || flags.description != "" || flags.contentFile != "" || flags.minScope != "" || flags.rationale != "" || flags.hasRoutingFlags() || flags.approveContent != "" || flags.editor || flags.yes || flags.fullDiff || flags.idempotencyKey != "" {
-			return flags, errors.New("confirm accepts only workspace, proposal pins, and output flags")
+		if flags.id != "" || flags.collection != "" || flags.name != "" || flags.description != "" || flags.contentFile != "" || flags.minScope != "" || flags.rationale != "" || flags.hasRoutingFlags() || flags.approveContent != "" || flags.editor || flags.fullDiff || flags.idempotencyKey != "" {
+			return flags, errors.New("confirm accepts only workspace, proposal pins, --yes, and output flags")
 		}
 	default:
 		return flags, fmt.Errorf("unsupported skill subcommand %q", subcommand)
