@@ -39,7 +39,7 @@ Transitions go in order: draft to active to deprecated to archived. You cannot j
 - *Canonical state:* Validated YAML and Markdown files in your Git working tree (`skills/`, `sources/`, `distill/`). This is your durable authority.
 - *Served state:* The compiled SQLite catalog generation (`runtime/catalog/generations/<gen>.db`) used for agent routing. If canonical files change, unchanged skills remain servable with degraded diagnostics, while changed or deleted companion resources become unavailable (`resource_content_unavailable`). Historical bytes are never guessed.
 
-**Preview, confirmation, and recovery.** Mutating operations preview first. In the interactive CLI, you confirm using a short proposal ID (`skillhub skill confirm <proposal-id>`). MCP tools and automation require all three exact pins (`proposal_id`, `proposal_digest`, and `base_version`). Mutating CLI commands that accept `--yes` generate, validate, and apply a fresh proposal in one step. When using external editors (`--editor`), Skill Hub detects concurrent modifications via content digests (`edit_conflict`) and saves bounded 24-hour recovery files to `runtime/edits/` so edits are never lost.
+**Preview, confirmation, and recovery.** Mutating operations preview first. CLI JSON previews include a runnable `cli` confirmation command pinned to the proposal ID, digest, base version, and workspace; suggested actions include their CLI counterpart in `suggested_actions[].cli`, while `command` retains its existing MCP/application meaning. Automation should execute the bound command only after the user approves the preview, not regenerate it with a bare `--yes`. Interactive users can still confirm by short proposal ID (`skillhub skill confirm <proposal-id>`). When using external editors (`--editor`), Skill Hub detects concurrent modifications via content digests (`edit_conflict`) and saves bounded 24-hour recovery files to `runtime/edits/` so edits are never lost.
 
 **Nothing commits for you.** Skill Hub writes files but never runs `git commit` or `git push`. You decide when to commit. `skillhub status` reminds you when there are uncommitted changes with the exact git commit command.
 ## Set up and connect agents
@@ -122,6 +122,9 @@ Skill curation has its own task-oriented guide:
 
 - [Curating skills](curating-skills.md) covers source collection, draft imports, skill creation and editing, review, lifecycle transitions, upstream learning, inbox decisions, and Git review.
 - Start with `skillhub status` or ask a connected agent, “Curate my Skill Hub.” Both return the current state and one recommended next action.
+- The bundled `system-curator` prefers CLI curation when shell commands are available and `skillhub version` works; it uses `--json` and `--workspace` when needed. Hosts without a working CLI use the same skill through MCP curation tools. Runtime resolution remains MCP-backed; existing connection registrations are unchanged.
+- Preview skill addition, creation, editing, transitions, watching, and `skillhub source import <locator> [--skill <name> | --all] --json` before approving anything. Source import discovers skills and conflicts without changing canonical files; confirmation creates drafts only. Never ask the agent to approve third-party content. Network checks (`skillhub check`) require an explicit request.
+- `skillhub eval routing --json` returns the common result envelope with the report under `metrics`. CLI curation skips the MCP-only `curation_session_record` telemetry call.
 - Return here for workspace setup, agent connections, routing behavior, migration, and troubleshooting.
 
 ## How the agent picks a skill
@@ -361,7 +364,7 @@ Restart the agent after `connect`. Check that the `skillhub` binary still exists
 | Act on an insight | `skillhub insight show\|decide\|apply\|confirm` |
 | Save an intake candidate | `skillhub source capture <url> --reason <text>` |
 | Triage candidate sources | `skillhub source triage <id> --decision accept\|defer\|reject\|import ...` |
-| Import skills from source | `skillhub source import <source-id> [--path <subdir>] [--skill <name>] [--yes]` |
+| Import skills from source | `skillhub source import <locator\|source-id> [--ref <r>] [--path <subdir>] [--skill <name>\|--all] [--yes]` |
 | Ask for a skill recommendation | `skillhub resolve --request <file>` |
 | Evaluate routing quality | `skillhub eval routing [--no-skill <file>] [--policy <file>]` |
 | See uncommitted changes | `skillhub diff` |

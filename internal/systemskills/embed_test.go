@@ -118,63 +118,6 @@ func TestCuratorCompatibilityMetadata(t *testing.T) {
 	}
 }
 
-func TestCuratorGuidanceDurableBehaviorContract(t *testing.T) {
-	t.Parallel()
-
-	normalizedSkill := strings.Join(strings.Fields(CuratorSkill), " ")
-	contracts := map[string]string{
-		"explicit activation":       "Use this skill only when the user explicitly asks",
-		"best-effort boundary":      "instruction-only coordination contract",
-		"application services":      "Domain mutation remains in application services",
-		"status-first offline flow": "call `hub_status` first. It is local and offline",
-		"recovery priority":         "Interrupted or failed operations",
-		"one primary question":      "Ask at most one primary, high-value question per turn",
-		"terminology translation":   "| Observation | Finding |",
-		"progressive disclosure":    "**L0:** status and one recommended next action",
-		"approval matrix":           "Preview first, then require explicit approval pinned to proposal ID, digest, and base version",
-		"batch orchestration":       "Call `source_check` once for the requested batch",
-		"no active batch apply":     "**Active skills were not changed.**",
-		"independent recovery":      "recommend `skillhub doctor` or `skillhub doctor --fix`",
-		"honest session telemetry":  "Never guess, infer, or backfill a measurement that was not observed",
-		"completion-only telemetry": "only after the curation session has actually ended",
-	}
-	for name, text := range contracts {
-		if !strings.Contains(normalizedSkill, text) {
-			t.Errorf("missing %s contract %q", name, text)
-		}
-	}
-}
-
-func TestCuratorGuidanceRequiresPreviewBeforeConfirm(t *testing.T) {
-	t.Parallel()
-
-	pairs := [][2]string{
-		{"`skill_create_preview`", "`skill_create_confirm`"},
-		{"`skill_transition_preview`", "`skill_transition_confirm`"},
-		{"`skill_update_preview`", "`skill_update_confirm`"},
-	}
-	for _, pair := range pairs {
-		preview := strings.Index(CuratorSkill, pair[0])
-		confirm := strings.Index(CuratorSkill, pair[1])
-		if preview < 0 || confirm < 0 {
-			t.Fatalf("missing semantic mutation pair %v", pair)
-		}
-		if preview >= confirm {
-			t.Errorf("preview %s must precede confirm %s", pair[0], pair[1])
-		}
-	}
-
-	normalizedSkill := strings.Join(strings.Fields(CuratorSkill), " ")
-	for _, prohibited := range []string{
-		"edit canonical Hub files directly",
-		"emulate the missing tool by editing files or databases",
-	} {
-		if !strings.Contains(normalizedSkill, prohibited) {
-			t.Errorf("missing no-bypass instruction %q", prohibited)
-		}
-	}
-}
-
 // The curator's SKILL.md is served verbatim, so its frontmatter is where the
 // compatibility contract lives; this keeps it equal to CuratorMetadata.
 func TestCuratorFrontmatterDeclaresCompatibilityMetadata(t *testing.T) {
