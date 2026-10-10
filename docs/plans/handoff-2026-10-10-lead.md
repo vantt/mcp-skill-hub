@@ -34,11 +34,13 @@ schema v5, `9b6c986`). Phase 0 (scorecard) is the user's own work with distill-l
 
 ## Small open items
 
-- `skillhub telemetry --help` does not list the `cases` subcommand.
-- `internal/delivery/mcpserver/server.go:527-533` injects `$ref: "#/$defs/setup"` into the
-  skill_resolve and routing_evaluate schemas; it would panic if root `$defs` were pruned.
-  Latent today (profiles strip metadata only).
 - The real-hub test-audit skill has 0 examples (validate warns).
+- `TestDoctorHostIntegrationPreviewIsReadOnlyAndDependencyOrdered` (internal/app) reads the real
+  HOME global connection and fails with `global_connection_outdated` when the user's `connect -g`
+  is stale. Run `make check` with a temp HOME/XDG until the test is isolated.
+- Wave 4 (2026-10-10): worktree I merged (`1ef2841`..`7cd3fb0`): telemetry help, schema `$id`
+  preserved in shrink, Claude Code split profiles. Proposal pending:
+  `docs/plans/2026-10-10-curator-via-cli.md` §9.
 
 ## How the user works with the lead
 

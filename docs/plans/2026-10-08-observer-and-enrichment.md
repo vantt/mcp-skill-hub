@@ -392,7 +392,7 @@ Quyết định:
 | Phase 2 case journal | xong (D, F) |
 | Phase 3 | **chặn**: distill-lab không nhận `where: usage:<case_id>`; 3 hướng trong `observer-handoff-G.md` §2, chờ quyết |
 | Phase 4 | chờ baseline |
-| §5.1 tách profile | xong code (G); chưa host nào verified nên `integrate` vẫn ghi một entry đủ bộ |
+| §5.1 tách profile | xong (G, I `7cd3fb0`). Claude Code verified 2026-10-10: `connect` ghi `skillhub` (runtime) + `skillhub-curation` (curation) và nhắc tắt curation trong `/mcp`; Codex/Gemini vẫn một entry. Hướng tiếp: [curator qua CLI](2026-10-10-curator-via-cli.md) |
 | 5 (a) `current_uri`, phân trang `skill_list` | xong (G) |
 | 5 `directoryRead` | **hoãn hẳn** (người dùng quyết 2026-10-10). Bộ đếm O3 đã bỏ vì không đo được (C round 3). Giữ `directoryRead: false`; chỉ mở lại khi có client thuần MCP thật sự thiếu file |
 | 5 (c) `system-curator` native/MCP trùng tên | xong (H round 2): `51cb26b`, `352c063`, `9041f52`, `7c64527`, `06f8aab`, `7660bf5`; tests `TestConnectPreviewThenApplyWritesProjectFilesOnly`, `TestNativeCuratorMatrixCutover`, `TestCuratorSourcePerSessionClient`, `TestDoctorReportsNativeCuratorVersionSkew`, `TestDoctorTextReportsNativeCuratorFixCommand`; temp HOME/project smoke connect đúng 10 files, không có `*.skillhub-sha256`; doctor text in cùng lệnh fix như JSON và không sửa file; `make check` xanh sau rebase lên main `4834408` (đã có C Phase 5/schema v5) |
