@@ -320,7 +320,7 @@ Phát hiện trong lúc distill; quyết định thiết kế đã chốt, chưa
 | `tools/list` (danh sách tool MCP, không phải danh sách skill) | **Đã quyết 2026-10-08 — tách profile, xem §5.1** |
 | URI skill chứa digest **của từng skill** (`internal/app/distribution.go:355-360`) → URI cũ trả `snapshot_expired` sau khi skill đó đổi | **Đã quyết 2026-10-08 — (a):** giữ URI khóa phiên bản; lỗi `snapshot_expired` kèm `current_uri` và thông báo dễ hiểu ("skill đã cập nhật, gọi `skills/get <current_uri>`"); thêm một dòng vào `CLAUDE.md`. Không làm alias `current` vì: đọc nửa cũ nửa mới âm thầm, phá cache client theo URI, mất digest cho observer. Phase 1 đếm `snapshot_expired`; nếu nhiều và agent xử lý sai thì xét lại alias + `resources/updated`. Lesson `stable-skill-uri-for-recovery` |
 | `directoryRead: false` (`server.go:75`) | **Đã quyết 2026-10-08 — hoãn và đo:** host đã cho agent thấy đủ file qua `resources` trong `skills/get` (`distribution.go:40`) và `local.path` của `skill_get`; chỉ client thuần MCP, bỏ qua `resources`, không có shell mới thiếu. Phase 1 (O3) thêm bộ đếm: đọc path không có trong `resources`, gọi method skills không hỗ trợ; > 0 thì làm. Lesson `directory-read-for-deferred-files` đã sửa (fact a sai, impact 0, rejected-deferred) |
-| `system-curator` vừa native vừa MCP cùng tên (`hostintegration/integration.go:33-35`) | **Đã quyết 2026-10-08 — (c):** mỗi client chỉ một nguồn; client hỗ trợ MCP skills extension dùng MCP, còn lại dùng native, theo `docs/mcp-compatibility-matrix.json`. Lesson `native-and-mcp-same-name` |
+| `system-curator` vừa native vừa MCP cùng tên (`hostintegration/integration.go:33-35`) | **Đã port 2026-10-10 — (c):** mỗi client chỉ một nguồn, theo `skills_extension` trong `docs/mcp-compatibility-matrix.json`. Commits: `c09742a` matrix + sync test; `e03ed41` native cutover + receipt, giữ bản người dùng đã sửa; `5dee318` lọc `skills/list`/`skills/get` theo client chuẩn hóa; `1b8c2f7` test doctor version skew (report + lệnh fix đã có). Chưa stock client nào verified, nên native install không đổi cho Claude Code/Codex/Gemini; unknown, Cursor và Claude Desktop vẫn nhận MCP. CLI hiện là `connect`, không còn `integrate`/remove command; cleanup native chạy qua hostintegration `Plan`/`Apply`. Lesson `native-and-mcp-same-name` |
 | `skill_list` model-callable, không `limit`/`cursor` (`mcpserver/types.go:229-231`) | **Đã quyết 2026-10-08:** phân trang (mặc định ~50, dùng gói `paging` như `skills/list`) + sửa mô tả: dùng cho curate, chọn skill cho task thì gọi `skill_resolve`. Không có trong profile runtime (§5.1). Lesson `model-callable-list-needs-guard` |
 
 Đã sửa: curator frontmatter phục vụ nguyên văn (commit `3746e3e`).
@@ -395,7 +395,7 @@ Quyết định:
 | §5.1 tách profile | xong code (G); chưa host nào verified nên `integrate` vẫn ghi một entry đủ bộ |
 | 5 (a) `current_uri`, phân trang `skill_list` | xong (G) |
 | 5 `directoryRead` | bộ đếm O3 `unsupported_method_calls`/`unlisted_resource_reads` đã bỏ vì không đo được (C round 3); cần cách đo khác hoặc hoãn hẳn |
-| 5 (c) `system-curator` native/MCP trùng tên | chưa làm |
+| 5 (c) `system-curator` native/MCP trùng tên | xong (H): `c09742a`, `e03ed41`, `5dee318`, `1b8c2f7`; tests `TestNativeCuratorMatrixCutover`, `TestCuratorSourcePerSessionClient`, `TestDoctorReportsNativeCuratorVersionSkew`; temp HOME/project smoke `connect`, stdio `skills/list`/`skills/get`, `doctor --json`; `make check` xanh sau rebase lên main `76a0c7e` |
 
 ## 9. Thực thi song song với plan simplify (worktree riêng)
 

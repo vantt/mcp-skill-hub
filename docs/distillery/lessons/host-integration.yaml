@@ -71,7 +71,20 @@ lessons:
         distribution serves it too; b: nothing prevents the collision. One source; small
         change.
     final_score: 4
-    decision: {state: candidate}
+    decision:
+      state: ported
+      reason: >-
+        Ported 2026-10-10: each supported client selects one curator source using the
+        synchronized skills_extension matrix. Verified clients use MCP; other integrated
+        clients retain native installation and skills/list plus skills/get omit the
+        bundled curator for their normalized sessions. Installation receipts permit
+        cleanup of unchanged older copies; user edits and unrecognizable legacy versions
+        are reported and preserved. Unknown sessions retain MCP because native installation
+        cannot be assumed. No stock client is currently verified, so native delivery stays
+        unchanged for all supported hosts. Doctor skew reporting already existed; added
+        its missing regression coverage.
+      at: 167da6c0d42c
+      local: c09742a matrix; e03ed41 native cutover; 5dee318 MCP filtering; 1b8c2f7 doctor skew test
 
   - key: install-by-copying
     domains:
