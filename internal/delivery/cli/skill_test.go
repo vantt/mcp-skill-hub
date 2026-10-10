@@ -135,7 +135,7 @@ func TestSkillCLIConfirmsStoredExactProposalAndRejectsInterveningEdit(t *testing
 	}
 	stdout.Reset()
 	stderr.Reset()
-	if code := Run(strings.Fields(stale.SuggestedActions[0].CLI)[1:], &stdout, &stderr); code != 0 {
+	if code := Run(splitCLI(stale.SuggestedActions[0].CLI)[1:], &stdout, &stderr); code != 0 {
 		t.Fatalf("stale proposal recovery = %d: %s %s", code, stdout.String(), stderr.String())
 	}
 	var review app.SkillReviewResult

@@ -43,7 +43,7 @@ func TestRemoteAddAndWatchCLIConfirmStoredPreviews(t *testing.T) {
 	}
 	adapter := sourcepkg.GitRepositoryAdapter{CacheRoot: filepath.Join(root, "runtime", "sources", "git"), AllowFileProtocol: true}
 	adapters := map[string]sourcepkg.Adapter{"git": adapter}
-	locator := "file://" + filepath.ToSlash(repoDir)
+	locator := localFileURL(repoDir)
 	// The local Git transport makes remote-service discovery deterministic. The
 	// delivered commands go through the real CLI stored-proposal confirmation.
 	preview, err := (app.SkillAddService{Adapters: adapters}).PreviewSkillAdd(context.Background(), root, app.SkillAddInput{Locator: locator, Selection: "remote-tool"})
@@ -94,7 +94,7 @@ func runDeliveredConfirm(t *testing.T, root string, preview any) {
 	if delivered.CLI == "" {
 		t.Fatalf("missing bound command: %s", output.String())
 	}
-	code, stdout, stderr := runCLI(t, strings.Fields(delivered.CLI)[1:]...)
+	code, stdout, stderr := runCLI(t, splitCLI(delivered.CLI)[1:]...)
 	if code != 0 {
 		t.Fatalf("delivered confirm %s: %d %s %s", delivered.CLI, code, stdout, stderr)
 	}

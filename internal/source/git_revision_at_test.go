@@ -60,7 +60,7 @@ func TestGitRevisionAt(t *testing.T) {
 	}
 	source := Source{
 		Locator: Locator{
-			Repository: "file://" + filepath.ToSlash(r1Dir),
+			Repository: fileURLFromPath(r1Dir),
 			Ref:        "main",
 		},
 	}
@@ -138,7 +138,7 @@ func TestGitRevisionAt(t *testing.T) {
 
 	sourceR2 := Source{
 		Locator: Locator{
-			Repository: "file://" + filepath.ToSlash(r2Dir),
+			Repository: fileURLFromPath(r2Dir),
 			Ref:        "main",
 		},
 	}
@@ -160,7 +160,7 @@ func TestGitRevisionAt(t *testing.T) {
 		CacheRoot:         freshCacheDir,
 		AllowFileProtocol: true,
 	}
-	r1URL := "file://" + filepath.ToSlash(r1Dir)
+	r1URL := fileURLFromPath(r1Dir)
 
 	// Branch name
 	branchCommit, err := adapterRemote.RemoteRefCommit(context.Background(), r1URL, "main")

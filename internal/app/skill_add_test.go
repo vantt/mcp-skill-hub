@@ -686,7 +686,7 @@ func TestSkillAddRemoteGitRealAdapter(t *testing.T) {
 		Clock:    sourceClock{now: now},
 		Adapters: map[string]sourcepkg.Adapter{"git": adapter},
 	}
-	fileURL := "file://" + filepath.ToSlash(repoDir)
+	fileURL := localFileURL(repoDir)
 
 	// 1. Add skill a and confirm through stored proposal (DispatchConfirmProposal)
 	previewA, err := service.PreviewSkillAdd(context.Background(), root, SkillAddInput{
@@ -926,7 +926,7 @@ func TestSkillAddConfirmWritesRepoWithoutRepositoryOrContentDigest(t *testing.T)
 		Adapters: map[string]sourcepkg.Adapter{"git": adapter},
 	}
 
-	fileURL := "file://" + filepath.ToSlash(repoDir)
+	fileURL := localFileURL(repoDir)
 	preview, err := addService.PreviewSkillAdd(context.Background(), root, SkillAddInput{
 		Locator: fileURL,
 		All:     true,

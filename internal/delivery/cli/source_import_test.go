@@ -26,7 +26,7 @@ func TestSourceImportLocatorPreviewAndBoundConfirm(t *testing.T) {
 	}
 	before := sourceImportCanonicalSnapshot(t, root)
 	flags := sourceFlags{workspace: root, ref: "main", sourcePath: "skills", all: true, jsonOutput: true}
-	code, stdout, stderr := runSourceImportForTest(t, service, flags, "file://"+filepath.ToSlash(repo))
+	code, stdout, stderr := runSourceImportForTest(t, service, flags, localFileURL(repo))
 	if code != 0 || stderr != "" {
 		t.Fatalf("preview: %d %s %s", code, stdout, stderr)
 	}
@@ -76,7 +76,7 @@ func TestSourceImportLocatorPreviewAndBoundConfirm(t *testing.T) {
 	if got := sourceImportCanonicalSnapshot(t, root); !reflect.DeepEqual(before, got) {
 		t.Fatal("wrong base version changed canonical files")
 	}
-	code, stdout, stderr = runCLIForTest(strings.Fields(preview.CLI)[1:])
+	code, stdout, stderr = runCLIForTest(splitCLI(preview.CLI)[1:])
 	if code != 0 || stderr != "" {
 		t.Fatalf("bound confirm: %d %s %s", code, stdout, stderr)
 	}
@@ -114,7 +114,7 @@ func TestSourceImportLocatorImmediateDraftsAndSelection(t *testing.T) {
 	t.Parallel()
 	root, repo, service := sourceImportLocatorFixture(t)
 	flags := sourceFlags{workspace: root, ref: "main", sourcePath: "skills", skills: []string{"reviewed-skill"}, yes: true, jsonOutput: true}
-	code, stdout, stderr := runSourceImportForTest(t, service, flags, "file://"+filepath.ToSlash(repo))
+	code, stdout, stderr := runSourceImportForTest(t, service, flags, localFileURL(repo))
 	if code != 0 || stderr != "" {
 		t.Fatalf("immediate apply: %d %s %s", code, stdout, stderr)
 	}
@@ -145,7 +145,7 @@ func TestSourceImportLocatorUsesExplicitRef(t *testing.T) {
 	sourceImportGit(t, repo, "commit", "-m", "selected ref skill")
 	sourceImportGit(t, repo, "checkout", "main")
 	flags := sourceFlags{workspace: root, ref: "review-branch", sourcePath: "skills", skills: []string{"branch-skill"}, jsonOutput: true}
-	code, stdout, stderr := runSourceImportForTest(t, service, flags, "file://"+filepath.ToSlash(repo))
+	code, stdout, stderr := runSourceImportForTest(t, service, flags, localFileURL(repo))
 	if code != 0 || stderr != "" {
 		t.Fatalf("ref preview: %d %s %s", code, stdout, stderr)
 	}
@@ -285,7 +285,7 @@ func sourceImportGit(t *testing.T, dir string, args ...string) {
 func TestSourceImportExplicitRefDoesNotUseStoredRevision(t *testing.T) {
 	t.Parallel()
 	root, repo, service := sourceImportLocatorFixture(t)
-	locator := sourcepkg.Locator{Repository: "file://" + filepath.ToSlash(repo), Ref: "main", Path: "skills"}
+	locator := sourcepkg.Locator{Repository: localFileURL(repo), Ref: "main", Path: "skills"}
 	limits := sourcepkg.Limits{TimeoutSeconds: 20, MaxBytes: sourcepkg.DefaultMaxBytes, MaxFiles: sourcepkg.DefaultMaxFiles, MaxFileBytes: sourcepkg.DefaultMaxFileSize}
 	revision, err := service.Adapters["git"].CurrentRevision(context.Background(), sourcepkg.Source{ID: "existing-source", Locator: locator, Limits: limits})
 	if err != nil {

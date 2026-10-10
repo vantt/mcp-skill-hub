@@ -83,7 +83,7 @@ func TestScan(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	validCwds := []string{"/test/project"}
+	validCwds := []string{filepath.Clean("/test/project")}
 	result, err := Scan([]string{testdataDir}, time.Time{}, time.Time{}, validCwds)
 	if err != nil {
 		t.Fatalf("Scan: %v", err)

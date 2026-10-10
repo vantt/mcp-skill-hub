@@ -66,7 +66,7 @@ func setupUpstreamUpdateHarness(t *testing.T) (string, string, string, string, U
 		Adapters: map[string]sourcepkg.Adapter{"git": adapter},
 	}
 
-	fileURL := "file://" + filepath.ToSlash(repoDir)
+	fileURL := localFileURL(repoDir)
 	preview, err := addService.PreviewSkillAdd(context.Background(), root, SkillAddInput{
 		Locator: fileURL,
 		All:     true,
@@ -513,7 +513,7 @@ func TestUpstreamUpdate(t *testing.T) {
 			Clock:    sourceClock{now: time.Now().UTC()},
 			Adapters: map[string]sourcepkg.Adapter{"git": adapter},
 		}
-		fileURL := "file://" + filepath.ToSlash(repoDir)
+		fileURL := localFileURL(repoDir)
 		prevAdd, err := addService.PreviewSkillAdd(context.Background(), root, SkillAddInput{
 			Locator:   fileURL,
 			Selection: "parent",
@@ -685,7 +685,7 @@ func TestUpstreamMetaCannotSelfApproveOnImportAndUpstreamUpdate(t *testing.T) {
 	}
 
 	// 2. Import / Add skill
-	fileURL := "file://" + filepath.ToSlash(repoDir)
+	fileURL := localFileURL(repoDir)
 	prevAdd, err := addService.PreviewSkillAdd(ctx, root, SkillAddInput{
 		Locator:   fileURL,
 		Selection: "self-approve",
