@@ -2,9 +2,7 @@ package app
 
 import (
 	"context"
-	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -28,6 +26,7 @@ func TestRealHubFixtureMigrationV1ToV2ToV3(t *testing.T) {
 
 	// Copy the fixture files into a fresh workspace
 	filesToCopy := []string{
+		".skillhub/schema-version",
 		"skills/default/test-audit/SKILL.md",
 		"skills/default/test-audit/skill.meta.yaml",
 		"skills/default/test-audit/.meta/skill.yaml",
@@ -40,13 +39,6 @@ func TestRealHubFixtureMigrationV1ToV2ToV3(t *testing.T) {
 	for _, rel := range filesToCopy {
 		src := filepath.Join(liveHub, filepath.FromSlash(rel))
 		data, err := os.ReadFile(src)
-		if err != nil && errors.Is(err, os.ErrNotExist) {
-			cmd := exec.Command("git", "-C", liveHub, "show", "0f88983:"+rel)
-			if out, cmdErr := cmd.Output(); cmdErr == nil {
-				data = out
-				err = nil
-			}
-		}
 		if err != nil {
 			t.Fatalf("read %s from live hub: %v", src, err)
 		}
@@ -58,7 +50,6 @@ func TestRealHubFixtureMigrationV1ToV2ToV3(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	_ = os.WriteFile(filepath.Join(root, ".skillhub", "schema-version"), []byte("1\n"), 0o644)
 
 	runGitInDir(t, root, "init")
 	runGitInDir(t, root, "config", "user.name", "SkillHub Test")
