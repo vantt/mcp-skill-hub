@@ -7,8 +7,8 @@ cd /home/vantt/projects/mcp-skill-hub-small-fixes && omp --profile=<profile>
 ```
 
 ```text
-You are worktree I. Fix two small defects in the Go repo mcp-skill-hub, test-first.
-The lead verified both on main 9dbc041.
+You are worktree I. Fix two small defects and switch Claude Code to split MCP
+profiles in the Go repo mcp-skill-hub, test-first. The lead verified items 1-2 on main 9dbc041.
 
 STEP 0: WORK ONLY IN YOUR OWN WORKTREE (mandatory)
 - Worktree /home/vantt/projects/mcp-skill-hub-small-fixes, branch
@@ -58,9 +58,53 @@ green before each (if TestGitRevisionAt fails with "broken pipe", rerun it once)
      shape a client sees beyond what the fix needs; say in the report if
      tools/list bytes change and by how much.
 
+3. Mark Claude Code as verified for per-server toggle, so connect/integrate
+   write two entries (`skillhub` --profile runtime, `skillhub-curation`
+   --profile curation) for Claude Code. The dual-entry code already exists
+   (internal/hostintegration/integration.go:228, files.go:247, preview.go);
+   only the matrix gate blocks it.
+
+   Evidence (the user ran it on 2026-10-10, Claude Code 2.1.296; record it):
+   in an isolated workspace with a project .mcp.json holding both entries,
+   both servers connected at start; `/mcp` -> Disable skillhub-curation left
+   only the 3 mcp__skillhub__* tools (skill_feedback, skill_get,
+   skill_resolve); Enable restored 23 mcp__skillhub-curation__* tools; after
+   /exit and reopening, skillhub-curation stayed disabled until re-enabled
+   (Claude Code MCP logs show it was not started). In `/mcp` an enabled
+   server shows a tick, a disabled one an empty circle. Claude Code defers
+   MCP tool schemas (agents see names until ToolSearch), so on this host the
+   saving is mostly the tool-name list, not ~50k tokens.
+
+   - Update the Claude Code entry in BOTH docs/mcp-compatibility-matrix.json
+     and internal/hostintegration/matrix.json (they must stay identical):
+     `server_toggle.status: "verified"`, a short `evidence` string with the
+     facts above, client_version 2.1.296 for this check, and drop the old
+     "issue #78314" reason. Update the scope_notes line that says no client
+     is verified. Do not change other clients.
+   - Update TestHostSupportsServerToggle (matrix_test.go:57): Claude Code is
+     now true from the embedded matrix, Codex and Gemini stay false.
+   - Newly written skillhub-curation entries start enabled in Claude Code.
+     Make the connect/integrate text output (preview and apply) say once,
+     for Claude Code only when it writes the curation entry: open `/mcp`,
+     select skillhub-curation, Disable it for daily work; Enable it when you
+     want to curate. Keep JSON output machine-readable (add a field, do not
+     put prose in existing fields).
+   - Align internal/systemskills/curator/SKILL.md:60-62 with that wording
+     ("open `/mcp`, select skillhub-curation, Enable"), keep it host-neutral
+     enough for other hosts. If the native curator copy has a version/digest
+     that doctor checks, bump it the way earlier curator edits did.
+   - Check what `skillhub doctor` says about an existing project that still
+     has one full `skillhub` entry for Claude Code. It must not call that
+     broken; at most suggest re-running connect. Add a test for whatever it
+     does.
+   - Smoke in a temp HOME and temp project: `skillhub connect --workspace
+     <temp workspace> --yes` writes exactly two Claude Code entries with the
+     right --profile args, the reminder is printed, a second connect is a
+     no-op, and Codex/Gemini projections still write one full entry.
+
 Out of scope: the live hub, test-audit examples, distill-lab, web/.
 
 When done, report: commits (hash + subject), files changed, tests added,
-`make check` result, the tools/list byte size for each profile before and after,
+`make check` result, the temp-HOME smoke output for item 3, the tools/list byte size for each profile before and after,
 and anything you noticed but did not fix.
 ```
