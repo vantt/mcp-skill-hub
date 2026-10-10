@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -15,6 +16,8 @@ import (
 var update = flag.Bool("update", false, "rewrite golden files")
 
 func normalizeGolden(body, root string) string {
+	// The runtime doctor reports the host platform; goldens are recorded on linux.
+	body = strings.ReplaceAll(body, `"name": "`+runtime.GOOS+`"`, `"name": "linux"`)
 	s := strings.ReplaceAll(body, root, "<WORKSPACE>")
 	s = regexp.MustCompile(`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})`).ReplaceAllString(s, "<TIME>")
 	s = regexp.MustCompile(`sha256:[0-9a-f]{64}`).ReplaceAllString(s, "<DIGEST>")

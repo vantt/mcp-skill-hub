@@ -217,7 +217,7 @@ func TestUpstreamRoutesReviewAndConfirm(t *testing.T) {
 	}
 
 	// Add skill to workspace with file:// locator
-	fileURL := "file://" + filepath.ToSlash(repoDir)
+	fileURL := localFileURL(repoDir)
 	addService := app.SkillAddService{
 		Clock:    app.SystemClock{},
 		Adapters: map[string]sourcepkg.Adapter{"git": adapter},

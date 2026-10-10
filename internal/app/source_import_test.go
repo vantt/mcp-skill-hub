@@ -699,7 +699,7 @@ func TestSourceImportInV3CreatesMetaSkillYAMLAndMatchesSkillAddTrust(t *testing.
 		CacheRoot:         filepath.Join(root, "runtime", "sources", "git"),
 		AllowFileProtocol: true,
 	}
-	fileURL := "file://" + filepath.ToSlash(repoDir)
+	fileURL := localFileURL(repoDir)
 
 	headCommit := runGitInDir(t, repoDir, "rev-parse", "HEAD")
 	now := time.Now().UTC()

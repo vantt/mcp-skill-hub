@@ -96,8 +96,9 @@ func TestInitDefaultOutputIsShortSummaryWithoutDigests(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit = %d: %s", code, stderr)
 	}
+	flat := strings.Join(strings.Fields(stdout), " ")
 	for _, want := range []string{"Workspace created at " + root, "claude-code", "codex-cli", "gemini-cli", "Next:", "git -C", root, "skillhub connect", "-g", `curate my Skill Hub`} {
-		if !strings.Contains(stdout, want) {
+		if !strings.Contains(flat, want) {
 			t.Fatalf("init output is missing %q:\n%s", want, stdout)
 		}
 	}

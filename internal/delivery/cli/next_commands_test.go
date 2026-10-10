@@ -51,7 +51,7 @@ func TestSkillPreviewCLICommandsApplyReviewedProposal(t *testing.T) {
 				t.Fatalf("action not bound to preview: %+v", action)
 			}
 		}
-		confirm := strings.Fields(preview.CLI)
+		confirm := splitCLI(preview.CLI)
 		code, output, stderr = runCLI(t, confirm[1:]...)
 		if code != 0 {
 			t.Fatalf("confirm %s = %d: %s %s", preview.CLI, code, output, stderr)
@@ -91,7 +91,7 @@ func TestLocalAddCLIConfirmsSnapshotNotChangedInput(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(input, "SKILL.md"), []byte("changed after review"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	code, output, stderr = runCLI(t, strings.Fields(preview.CLI)[1:]...)
+	code, output, stderr = runCLI(t, splitCLI(preview.CLI)[1:]...)
 	if code != 0 {
 		t.Fatalf("confirm: %d %s %s", code, output, stderr)
 	}

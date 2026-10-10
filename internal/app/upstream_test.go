@@ -403,7 +403,7 @@ func TestUpstreamCheck(t *testing.T) {
 		Adapters: map[string]sourcepkg.Adapter{"git": adapter},
 	}
 
-	fileURL := "file://" + filepath.ToSlash(repoDir)
+	fileURL := localFileURL(repoDir)
 
 	// Step 1: add skills/a (phases 1-2 path)
 	previewA, err := addService.PreviewSkillAdd(context.Background(), root, SkillAddInput{
