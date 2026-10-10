@@ -1,7 +1,7 @@
 # Ghi chú thiết kế: curator dùng CLI trên host có shell
 
 **Ngày:** 2026-10-10
-**Trạng thái:** đề xuất, chờ người dùng duyệt. Chưa giao agent.
+**Trạng thái:** đã duyệt 2026-10-10 (§9: 1–4 đồng ý). Bước 1–2 giao worktree J; bước 3 bài thử quyền do người dùng chạy.
 **Phạm vi:** cách agent curate Skill Hub (skill `system-curator`, `skillhub connect`, profile MCP).
 Không đổi resolver, telemetry, hay đường runtime (`skill_resolve`, `skill_get`, `skill_feedback`).
 **Liên quan:** [observer plan §5.1](2026-10-08-observer-and-enrichment.md) (tách profile MCP),
@@ -130,7 +130,7 @@ Mục 3 của I (Claude Code ghi 2 entry + câu nhắc `/mcp`) trở thành bư�
 matrix vẫn đúng và vẫn dùng cho host khác, nhưng bước 4 ở trên sẽ bỏ entry `skillhub-curation` trên
 Claude Code. Không cần dừng I; phần bị thay là câu nhắc và lựa chọn 2 entry cho Claude Code.
 
-## 9. Câu hỏi cho người dùng
+## 9. Câu hỏi cho người dùng (đã trả lời 2026-10-10: cả 4 đồng ý; §5.2 chỉ ghi vào `connect` sau khi bài thử đạt)
 
 1. Duyệt hướng §2 (runtime MCP, curation CLI trên host có shell)?
 2. Bỏ `curation_session_record` ở đường CLI (§4.5)?
