@@ -38,18 +38,11 @@ test.describe('Shipped User Flow Journeys (Spec 04 §3)', () => {
     assertLoopbackOnly(page, server);
 
     const ws = server.ws;
-    const metaPath = path.join(ws, 'skills', 'core', 'smoke-skill', 'skill.meta.yaml');
+    const metaPath = path.join(ws, 'skills', 'core', 'smoke-skill', '.meta', 'skill.yaml');
     const metaContent = fs.readFileSync(metaPath, 'utf8');
 
     // 1. Mark smoke-skill third-party by adding origin to provenance
-    const updatedMeta = metaContent.replace(
-      '    created_by: skillhub',
-      `    created_by: skillhub
-    origin:
-        kind: github
-        repository: https://github.com/example/skills
-        commit: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`,
-    );
+    const updatedMeta = `${metaContent.trimEnd()}\nprovenance:\n    origin:\n        kind: github\n        repository: https://github.com/example/skills\n        commit: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n`;
     fs.writeFileSync(metaPath, updatedMeta);
 
     // 2. Run skillhub rebuild
@@ -204,7 +197,7 @@ test.describe('Shipped User Flow Journeys (Spec 04 §3)', () => {
     await expect(page.getByText('SKILL.md changed since you opened it')).not.toBeVisible();
   });
 
-  test('flow 3.5: sources - check now, select distillable source, hand off, and open finalized run', async ({
+  test('flow 3.5: sources - check now, select a source, and open the distill handoff', async ({
     page,
   }) => {
     test.setTimeout(120_000);
@@ -236,79 +229,6 @@ test.describe('Shipped User Flow Journeys (Spec 04 §3)', () => {
       expect(brief).toContain('curation_run_start');
       expect(brief).toContain('source-c');
       expect(brief).toContain('idempotency_key:');
-
-      // 4. Paste finalized run ID and open
-      await page.getByLabel('Paste run IDs returned by agent').fill(seed.finalizedRunId);
-      await page.getByRole('button', { name: 'Open runs' }).click();
-
-      const runLink = page.getByRole('link', { name: seed.finalizedRunId });
-      await expect(runLink).toBeVisible();
-      await runLink.click();
-
-      // 5. On Run page: shows Finalized panel
-      await expect(page.locator('.fg-card__title', { hasText: 'Finalized' })).toBeVisible();
-      await expect(page.getByRole('link', { name: 'Open Inbox →' })).toBeVisible();
-    } finally {
-      if (seed?.ws) {
-        try {
-          fs.rmSync(seed.ws, { recursive: true, force: true });
-        } catch {
-          // Ignore
-        }
-      }
-    }
-  });
-
-  test('flow 3.6: decide and apply an insight', async ({ page }) => {
-    test.setTimeout(120_000);
-    const seed = seedDistillWorkspace();
-    server = await startServer({ workspace: seed.ws });
-    assertLoopbackOnly(page, server);
-
-    try {
-      await page.goto(server.url);
-      await page.goto(`${server.origin}/inbox`);
-
-      // Open second insight
-      await page.getByText('Incorporate practice two into consumer review.').click();
-
-      // Plan insight
-      await page.getByRole('button', { name: 'Plan' }).click();
-      const planDialog = page.getByRole('dialog');
-      await planDialog
-        .getByPlaceholder('Explain the reason for this decision…')
-        .fill('Plan for patch composition in flow 3.6.');
-      await planDialog.getByRole('button', { name: 'Confirm plan' }).click();
-      await expect(page.getByText('planned')).toBeVisible();
-
-      // Compose patch
-      await page.getByRole('button', { name: 'Compose patch' }).click();
-      await expect(page).toHaveURL(/inbox\/INS-consumer-review--insight-consumer-two\/apply/);
-
-      // Edit content and map concept
-      const editorTextarea = page.getByLabel('SKILL.md replacement content');
-      const curContent = await editorTextarea.inputValue();
-      await editorTextarea.fill(curContent + '\n\n## Practice Two Instructions\nDetailed review instructions.\n');
-
-      const conceptInput = page.getByPlaceholder('Concept, e.g. retry limits');
-      await conceptInput.fill('practice-two');
-      await page.getByRole('button', { name: '+ Add concept' }).click();
-
-      // Preview apply and confirm
-      const previewBtn = page.getByRole('button', { name: 'Preview apply' });
-      await expect(previewBtn).not.toBeDisabled();
-      await previewBtn.click();
-
-      const proposalModal = page.getByRole('dialog');
-      await expect(proposalModal).toBeVisible();
-      await proposalModal.getByRole('button', { name: 'Apply patch' }).click();
-
-      // Receipt displayed
-      await expect(page.getByText('Insight patch applied successfully!')).toBeVisible();
-      const viewReviewBtn = page.getByRole('link', { name: 'View Skill Review →' });
-      await viewReviewBtn.click();
-
-      await expect(page).toHaveURL(/skills\/consumer-review\?tab=review/);
     } finally {
       if (seed?.ws) {
         try {

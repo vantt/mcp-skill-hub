@@ -27,17 +27,10 @@ test('skill-runtime: review shows approve command, no approve button, and runtim
   test.setTimeout(120_000);
 
   const ws = server.ws;
-  const metaPath = path.join(ws, 'skills', 'core', 'smoke-skill', 'skill.meta.yaml');
+  const metaPath = path.join(ws, 'skills', 'core', 'smoke-skill', '.meta', 'skill.yaml');
   const metaContent = fs.readFileSync(metaPath, 'utf8');
   // 1. Mark smoke-skill third-party by adding origin to provenance
-  const updatedMeta = metaContent.replace(
-    '    created_by: skillhub',
-    `    created_by: skillhub
-    origin:
-        kind: github
-        repository: https://github.com/example/skills
-        commit: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`,
-  );
+  const updatedMeta = `${metaContent.trimEnd()}\nprovenance:\n    origin:\n        kind: github\n        repository: https://github.com/example/skills\n        commit: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n`;
   fs.writeFileSync(metaPath, updatedMeta);
   // 2. Run skillhub rebuild
   execFileSync(binaryPath, ['rebuild', '--workspace', ws], { stdio: 'pipe' });

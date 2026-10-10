@@ -68,10 +68,6 @@ test.describe('Accessibility and Responsive Sweep (Phase 12)', () => {
       '/skills/consumer-review?tab=sources',
       '/sources',
       '/sources/distill?source=source-c',
-      `/sources/runs/${seed.finalizedRunId}`,
-      '/inbox',
-      '/inbox/INS-consumer-review--insight-consumer-one',
-      '/inbox/INS-consumer-review--insight-consumer-one/apply',
     ];
 
     const widths = [360, 768, 1280, 1440];
@@ -113,34 +109,13 @@ test.describe('Accessibility and Responsive Sweep (Phase 12)', () => {
     await page.goto(server.url);
     await page.setViewportSize({ width: 1280, height: 800 });
 
-    // 1. ConfirmDialog: on /sources/runs/:id (cancel run dialog)
-    await page.goto(`${server.origin}/sources/runs/${seed.inProgressRunId}`);
+    // 1. ProposalPreview and ConflictDrawer on the Editor tab
+    await page.goto(`${server.origin}/skills/consumer-review?tab=editor`);
     await page.waitForLoadState('networkidle');
-    const cancelBtn = page.getByRole('button', { name: 'Cancel run' });
-    await expect(cancelBtn).toBeVisible();
-    await cancelBtn.click();
-    await expect(page.getByRole('alertdialog')).toBeVisible();
-    await assertA11y(page, 'ConfirmDialog modal open');
-
-    // Dismiss cancel dialog
-    await page.getByRole('alertdialog').getByRole('button', { name: 'Cancel', exact: true }).click();
-
-    // 2. ConflictDrawer and ProposalPreview on Composer
-    await page.goto(
-      `${server.origin}/inbox/INS-consumer-review--insight-consumer-two/apply`,
-    );
-    await page.waitForLoadState('networkidle');
-
-    // Map observation and edit content
-    const editor = page.getByLabel('SKILL.md replacement content');
-    const curContent = await editor.inputValue();
-    await editor.fill(curContent + '\n\n## A11y Test\nA11y instructions.\n');
-    const conceptInput = page.getByPlaceholder('Concept, e.g. retry limits');
-    await conceptInput.fill('a11y-concept');
-    await page.getByRole('button', { name: '+ Add concept' }).click();
+    await page.locator('#edit-desc').fill('A11y draft description.');
 
     // Open ProposalPreview
-    const previewBtn = page.getByRole('button', { name: 'Preview apply' });
+    const previewBtn = page.getByRole('button', { name: 'Preview changes' });
     await expect(previewBtn).not.toBeDisabled();
     await previewBtn.click();
 
@@ -162,7 +137,7 @@ test.describe('Accessibility and Responsive Sweep (Phase 12)', () => {
       },
     );
 
-    // Click Preview apply -> ConflictDrawer opens
+    // Click Preview changes -> ConflictDrawer opens
     await previewBtn.click();
     await expect(
       page.getByText('SKILL.md changed since you opened it'),
@@ -171,6 +146,19 @@ test.describe('Accessibility and Responsive Sweep (Phase 12)', () => {
 
     // Close ConflictDrawer
     await page.getByRole('button', { name: 'Close' }).first().click();
+
+    // 2. ConfirmDialog: deprecate via CLI, then open the Archive confirmation
+    execFileSync(binaryPath, ['skill', 'deprecate', 'consumer-review', '--yes'], {
+      env: { ...process.env, SKILLHUB_WORKSPACE: seed.ws },
+      stdio: 'pipe',
+    });
+    await page.goto(`${server.origin}/skills/consumer-review`);
+    await page.waitForLoadState('networkidle');
+    const archiveBtn = page.getByRole('button', { name: 'Archive' });
+    await expect(archiveBtn).toBeVisible();
+    await archiveBtn.click();
+    await expect(page.getByRole('alertdialog')).toBeVisible();
+    await assertA11y(page, 'ConfirmDialog modal open');
   });
 
   test('media emulation: prefers-reduced-motion and forced-colors on Home and Skill Detail', async ({
