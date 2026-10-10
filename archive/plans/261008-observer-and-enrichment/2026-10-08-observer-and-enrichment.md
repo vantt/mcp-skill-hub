@@ -1,11 +1,11 @@
 # Plan: Observer trước, làm giàu thông tin sau
 
 **Ngày:** 2026-10-08
-**Trạng thái:** D1–D8 đã duyệt 2026-10-08, sửa sau red-team (D2, D4, D5, D7, D8, §5.1 — xem §7 và Validation Log); Phase 5: câu 11–15 đã duyệt
+**Trạng thái:** **đã archive 2026-10-10**: phần xây dựng xong; O7 (lấy baseline), Phase 3, Phase 4 và các việc nhỏ chuyển sang `docs/plans/2026-10-10-observation-backlog.md` (M2–M5, F1, F3, F7, H1–H4). Trước đó: D1–D8 đã duyệt 2026-10-08, sửa sau red-team (D2, D4, D5, D7, D8, §5.1 — xem §7 và Validation Log); Phase 5: câu 11–15 đã duyệt
 **Phạm vi:** host mcp-skill-hub (agent ↔ hub, telemetry, resolver, curation). Không bao gồm skill `distill`.
 **Nguồn:** deep-dive meta-skill (`docs/distillery/deep-dives/skill-recommendation.md`), thiết kế vòng enrichment trong chat 2026-10-08
-**Liên quan:** [doc 04 telemetry/evaluation](../design/04-telemetry-reproducibility-evaluation.md), [doc 06 source learning](../design/06-source-learning-and-distillation.md), [doc 03 resolver](../design/03-resolver-design.md), PRD §30, §45
-**Phụ thuộc plan khác:** [simplify-hub-model](../../plans/261008-1433-simplify-hub-model/plan.md). Observer Phase 3 **blockedBy** simplify Phase 3 (model lesson + preview/confirm pin); O7 baseline **blockedBy** simplify Phase 4 (đổi mọi `catalog_snapshot`). Lịch song song ở §9.
+**Liên quan:** [doc 04 telemetry/evaluation](../../../docs/design/04-telemetry-reproducibility-evaluation.md), [doc 06 source learning](../../../docs/design/06-source-learning-and-distillation.md), [doc 03 resolver](../../../docs/design/03-resolver-design.md), PRD §30, §45
+**Phụ thuộc plan khác:** [simplify-hub-model](../261008-1433-simplify-hub-model/plan.md). Observer Phase 3 **blockedBy** simplify Phase 3 (model lesson + preview/confirm pin); O7 baseline **blockedBy** simplify Phase 4 (đổi mọi `catalog_snapshot`). Lịch song song ở §9.
 
 ## 0. Nguyên tắc
 
@@ -37,7 +37,7 @@ Mục tiêu: một vòng resolve → load → kết quả được ghi **đầy 
 Đã có:
 
 - Event envelope + allowlist payload **phẳng** (token, tokens, count, millis, bool, stageMillis;
-  `events.go:103-111`), content_mode `none`, retention 14 ngày raw + trim 100 MB, rollup 180 ngày
+  `events.go:103-111`), content_mode `none`, retention raw (14 ngày lúc viết, nay 30 ngày) + trim 100 MB, rollup 180 ngày
   keyed `(day, skill_id, metric)` (`internal/telemetry/rollup.go:17-24`).
 - Attribution phía server cho mỗi lần load: `recommended | supporting | override |
   after_no_skill | after_needs_context | unsolicited`
@@ -69,7 +69,7 @@ Lỗ hổng (đây là việc của Phase 1):
 | G10 | Hub quên nội dung task (`recorder.go:146`) | | Có số đếm "sai" nhưng không có gì để học (Phase 2) |
 | G11 | `resolution_id` là **fingerprint nội dung request** — cùng task ở hai session ra cùng ID | `internal/resolver/resolver.go:336` (cacheKey bỏ `RequestID`) | Chuỗi bị gộp nhầm nếu key chỉ bằng resolution_id |
 | G12 | Load event gắn snapshot **lúc load**, bị bỏ nếu catalog không mở được | `internal/app/curation_telemetry.go:17-40` | Metric theo snapshot vỡ đúng tại `catalog.changed` |
-| G13 | Rollup không có chiều client/snapshot; raw chỉ 14 ngày | `rollup.go:17-24`, `recorder.go:18-20` | Không cắt được theo client/snapshot quá 14 ngày |
+| G13 | Rollup không có chiều client/snapshot; raw chỉ 14 ngày (lúc viết; nay 30) | `rollup.go:17-24`, `recorder.go:18-20` | Không cắt được theo client/snapshot quá 14 ngày |
 
 <!-- Updated: Red Team 2026-10-08 - thêm G11-G13, sửa G1/G4/G5/G8 theo bằng chứng -->
 
@@ -313,7 +313,7 @@ Nguồn: deep-dive meta-skill (`docs/distillery/deep-dives/skill-recommendation.
 
 ## Phase 5 — Các vấn đề spec/host (đã quyết 2026-10-08)
 
-Phát hiện trong lúc distill; quyết định thiết kế đã chốt, chưa implement:
+Phát hiện trong lúc distill; quyết định thiết kế đã chốt; (a), (c) và `directoryRead` xong hoặc hoãn hẳn, xem bảng trạng thái §8:
 
 | Vấn đề | Đề xuất |
 |---|---|
@@ -383,16 +383,16 @@ Quyết định:
 4. Phase 2 → Phase 3 (sau simplify Phase 3) → Phase 4 theo số liệu
 5. Phase 5 / §5.1 sau simplify Phase 3 (đo lại tools/list trước)
 
-### Trạng thái (2026-10-10, main 7c8b279)
+### Trạng thái (2026-10-10, kiểm lại ở main b3d3f7f)
 
 | Việc | Trạng thái |
 |---|---|
 | Phase 1 (O1–O6, O3, O4, O8) | xong (worktree A, D, E, F) |
-| O7 baseline | lệnh có; hub thật migrate lên v4 ngày 2026-10-10, bắt đầu đếm từ đó |
+| O7 baseline | lệnh có; hub thật lên schema v4 rồi v5 ngày 2026-10-10, đếm từ đó; mới 0 resolved và 2 no_skill, chưa đủ. Chuyển sang backlog M2 |
 | Phase 2 case journal | xong (D, F) |
 | Phase 3 | **đã quyết hướng (2026-10-10): hướng 1** — case đã xác nhận được đưa thành eval case trong Git (`evals/routing/<case_id>.json`) và lesson trích dẫn `repo@commit:path`; không sửa distill-lab. Chờ có cases (0 case ngày 2026-10-10) |
 | Phase 4 | chờ baseline |
-| §5.1 tách profile | xong (G, I `7cd3fb0`). Claude Code verified 2026-10-10: `connect` ghi `skillhub` (runtime) + `skillhub-curation` (curation) và nhắc tắt curation trong `/mcp`; Codex/Gemini vẫn một entry. Hướng tiếp: [curator qua CLI](2026-10-10-curator-via-cli.md) |
+| §5.1 tách profile | xong (G, I `7cd3fb0`). Claude Code verified 2026-10-10. Sau wave 5 `connect` chỉ còn ghi entry `skillhub` (runtime) trên Claude Code, curation đi qua CLI; Codex/Gemini vẫn một entry. Hướng tiếp: [curator qua CLI](../261010-curator-via-cli/2026-10-10-curator-via-cli.md) |
 | 5 (a) `current_uri`, phân trang `skill_list` | xong (G) |
 | 5 `directoryRead` | **hoãn hẳn** (người dùng quyết 2026-10-10). Bộ đếm O3 đã bỏ vì không đo được (C round 3). Giữ `directoryRead: false`; chỉ mở lại khi có client thuần MCP thật sự thiếu file |
 | 5 (c) `system-curator` native/MCP trùng tên | xong (H round 2): `51cb26b`, `352c063`, `9041f52`, `7c64527`, `06f8aab`, `7660bf5`; tests `TestConnectPreviewThenApplyWritesProjectFilesOnly`, `TestNativeCuratorMatrixCutover`, `TestCuratorSourcePerSessionClient`, `TestDoctorReportsNativeCuratorVersionSkew`, `TestDoctorTextReportsNativeCuratorFixCommand`; temp HOME/project smoke connect đúng 10 files, không có `*.skillhub-sha256`; doctor text in cùng lệnh fix như JSON và không sửa file; `make check` xanh sau rebase lên main `4834408` (đã có C Phase 5/schema v5) |

@@ -1,11 +1,11 @@
 # Ghi chú thiết kế: curator dùng CLI trên host có shell
 
 **Ngày:** 2026-10-10
-**Trạng thái:** đã duyệt 2026-10-10 (§9: 1–4 đồng ý). Bước 1–2 giao worktree J; bước 3 bài thử quyền do người dùng chạy.
+**Trạng thái:** **đã archive 2026-10-10**: bước 0–6 xong (J, K, smoke, curator 1.6.1). Bước 7 và §5.3 (quyền Codex/Gemini) chuyển sang `docs/plans/2026-10-10-observation-backlog.md` (M8, H1). §3 và §4 giữ nguyên làm hồ sơ: các lỗ hổng §4 đều đã sửa, `source import` đã có. Trước đó: đã duyệt (§9: 1–4 đồng ý).
 **Phạm vi:** cách agent curate Skill Hub (skill `system-curator`, `skillhub connect`, profile MCP).
 Không đổi resolver, telemetry, hay đường runtime (`skill_resolve`, `skill_get`, `skill_feedback`).
-**Liên quan:** [observer plan §5.1](2026-10-08-observer-and-enrichment.md) (tách profile MCP),
-[prompt worktree I](prompt-wave4-I-small-fixes.md) (Claude Code ghi 2 entry), `internal/systemskills/curator/SKILL.md`.
+**Liên quan:** [observer plan §5.1](../261008-observer-and-enrichment/2026-10-08-observer-and-enrichment.md) (tách profile MCP),
+[prompt worktree I](../261010-agent-prompts-and-handoffs/prompt-wave4-I-small-fixes.md) (Claude Code ghi 2 entry), `internal/systemskills/curator/SKILL.md`.
 
 ## 1. Câu hỏi
 
@@ -111,7 +111,7 @@ của host. Đề xuất làm nó rõ ràng hơn:
    - Lần mở đầu, hộp thoại trust báo "This folder pre-approves 1 tool permission … Bash(skillhub:*)".
      `connect` nên báo trước điều này.
    - Phụ: CLI không nhận `--workspace` đứng trước lệnh con (`skillhub --workspace hub skill …` lỗi);
-     curator phải đặt cờ sau lệnh con. Chưa thử lệnh ghép có `--yes` (`cd x && skillhub … --yes`).
+     curator phải đặt cờ sau lệnh con. Chưa thử lệnh ghép có `--yes` (`cd x && skillhub … --yes`); chuyển sang backlog (F4).
 3. Codex/Gemini: chỉ có lời dặn trong skill cho tới khi kiểm chứng được cơ chế quyền tương ứng.
 
 ## 6. Curator: một file hay hai
@@ -135,11 +135,11 @@ là bảng ngắn.
 | 4 | `connect`: host có shell chỉ ghi `skillhub --profile runtime` + quyền §5.2; bỏ entry `skillhub-curation` mà `connect` đã ghi trước đó (chỉ khi nội dung khớp đúng thứ mình ghi); `doctor` gợi ý chạy lại `connect`. Host không có shell giữ nguyên | agent K — xong cho Claude Code; Codex/Gemini giữ một entry full trong wave này |
 | 5 | Smoke: temp HOME, Claude Code curate thật bằng CLI (như bằng chứng cũ trong matrix: `claude -p … "Curate my Skill Hub"`, chỉ đọc) | lead — **xong 2026-10-10**: project do `connect` (main `7767a4b`) ghi, `claude -p --mcp-config .mcp.json --strict-mcp-config --permission-mode default`: chỉ server `skillhub`; curator dùng `skillhub status`, `skill show`; hub không đổi. Lần thử ghi bị chặn (hub không đổi), nhưng chặn ở `command -v skillhub && …` chứ không phải luật ask. Khi user scope còn `skillhub-curation` (wave 4), agent dùng MCP trước và bỏ cuộc khi bị từ chối thay vì chuyển sang CLI |
 | 6 | Curator 1.6.1: thăm dò bằng đúng `skillhub version` (một lệnh, không nối `&&`), ưu tiên CLI kể cả khi có tool MCP curation, và chuyển sang CLI khi tool MCP bị từ chối | lead — **1.6.1 xong**: mô tả skill nêu CLI trước, "First step" bắt buộc, "duyệt trước" không thay preview, chỉ gợi ý bật `skillhub-curation` khi không có shell. `claude -p` lần cuối: agent dùng CLI (trước đó có lần dừng hẳn), nhưng vẫn không chạy `skillhub version`, vẫn chạy thẳng `--yes` bỏ preview, và thử lại sau khi bị từ chối. Luật ask chặn được; hub không đổi |
-| 7 | Mức tuân thủ curator: đo bằng một bộ kịch bản `claude -p` lặp lại (đọc, ghi có "duyệt trước", MCP bị từ chối), sửa câu chữ theo số liệu thay vì từng lần; lưu ý `-p` không hỏi lại người dùng được nên có thể khác phiên tương tác | mở |
+| 7 | Mức tuân thủ curator: đo bằng một bộ kịch bản `claude -p` lặp lại (đọc, ghi có "duyệt trước", MCP bị từ chối), sửa câu chữ theo số liệu thay vì từng lần; lưu ý `-p` không hỏi lại người dùng được nên có thể khác phiên tương tác | chuyển sang backlog (M8) |
 
 Bước 1–2 có thể chung một worktree. Bước 4 phụ thuộc bước 3.
 
-## 8. Ảnh hưởng tới worktree I
+## 8. Ảnh hưởng tới worktree I (đã hiện thực: I đã merge, bước 4 thay phần 2 entry trên Claude Code)
 
 Mục 3 của I (Claude Code ghi 2 entry + câu nhắc `/mcp`) trở thành bước tạm: bằng chứng toggle trong
 matrix vẫn đúng và vẫn dùng cho host khác, nhưng bước 4 ở trên sẽ bỏ entry `skillhub-curation` trên

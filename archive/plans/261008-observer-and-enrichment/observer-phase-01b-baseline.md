@@ -3,7 +3,7 @@
 **Date:** 2026-10-09  
 **Branch:** `wave3/observer-baseline`  
 **Parent Plan:** [docs/plans/2026-10-08-observer-and-enrichment.md](2026-10-08-observer-and-enrichment.md) (§1.2 O7, §1.3, §5.1)  
-**Related Design:** [docs/design/04-telemetry-reproducibility-evaluation.md](../design/04-telemetry-reproducibility-evaluation.md) (§4.1, §9.1)
+**Related Design:** [docs/design/04-telemetry-reproducibility-evaluation.md](../../../docs/design/04-telemetry-reproducibility-evaluation.md) (§4.1, §9.1)
 
 ---
 

@@ -204,7 +204,7 @@ lessons:
         Deferred 2026-10-08: the host already lists skill files via skills/get resources and
         skill_get local.path; reopen when the Phase 1 counter for unlisted-path reads or
         unsupported skill methods is above zero (plan
-        docs/plans/2026-10-08-observer-and-enrichment.md).
+        archive/plans/261008-observer-and-enrichment/2026-10-08-observer-and-enrichment.md).
       at: 167da6c0d42c
 
   - key: bounded-file-fetch

@@ -1,13 +1,13 @@
 ---
 title: "Simplify the hub data model"
 description: "Make Git the database, history, audit log and integrity mechanism of the hub; keep in the binary only what Git cannot give (locks, preview/confirm pins, human content approval). Move each skill's hub-side data into skills/<collection>/<id>/.meta/, reduce distillation to lessons + repo@commit pointers + cursor + decisions, and make a fresh clone of the hub work."
-status: in-progress # phases 1-5 done; phase 0 (scorecard) is the user's
+status: done # phases 1-5 done 2026-10-10; phase 0 and open decision 3 moved to docs/plans/2026-10-10-observation-backlog.md (M6, M7)
 priority: P1
 effort: TBD
 branch: TBD
 tags: [architecture, storage, distill, portability]
 blockedBy: []
-blocks: [docs/plans/2026-10-08-observer-and-enrichment.md (observer Phase 3 needs Phase 3 here; observer O7 baseline needs Phase 4 here)]
+blocks: [] # observer plan's dependencies on Phase 3 and 4 here are satisfied
 created: 2026-10-08
 ---
 
@@ -29,7 +29,7 @@ source, `repo@commit:path` is complete evidence. The binary adds only what Git
 lacks: a workspace lock, preview/confirm pins against concurrent edits, and the
 human content approval of third-party content.
 
-## Verified starting facts (2026-10-08)
+## Verified starting facts (2026-10-08, historical: these describe the code before the phases)
 
 - A fresh clone lacks the empty layout directories that `init` creates; `skillhub
   status` failed with `statat sources/intake: no such file or directory` until
@@ -93,7 +93,7 @@ runtime/                                    gitignored cache: catalog.db, shared
 1. ~~One operation = one Git commit versus "approved locally before commit".~~ Decided: D8.
 2. ~~Cross-skill comparisons: keep per skill only, or add a hub-level location.~~ Decided
    2026-10-10: per skill only; revisit when a real cross-skill need appears.
-3. Runtime trims (single `catalog.db` without generations and pins; serve skills
+3. ~~Runtime trims~~ Moved to `docs/plans/2026-10-10-observation-backlog.md` (M7). (single `catalog.db` without generations and pins; serve skills
    from the checkout instead of `runtime/cache/skills` copies; cheaper staleness
    check; plain telemetry store). Each is independent and can be scheduled later,
    **but must keep D10** and is blocked by the observer plan's Phase 1 baseline and
@@ -103,7 +103,7 @@ runtime/                                    gitignored cache: catalog.db, shared
 
 | # | Phase | Depends on | Status |
 |---|---|---|---|
-| 0 | Discovery experiment: project-local `.claude/skills/distill-lab`, target `test-audit`, sources `openclaw/openclaw` and `obra/superpowers`; writes directly to `skills/default/test-audit/.meta/{skill.yaml,distill.yaml}` in the hub. `test-audit` content stays unapproved until phase 2 lands (it has never been approved). Phase 0 data is disposable until Phase 2 lands. The scorecard must state a keep/drop threshold per lesson field. | none | in progress |
+| 0 | Discovery experiment: project-local `.claude/skills/distill-lab`, target `test-audit`, sources `openclaw/openclaw` and `obra/superpowers`; writes directly to `skills/default/test-audit/.meta/{skill.yaml,distill.yaml}` in the hub. `test-audit` content stays unapproved until phase 2 lands (it has never been approved). Phase 0 data is disposable until Phase 2 lands. The scorecard must state a keep/drop threshold per lesson field. | none | moved to the observation backlog (M6); needs the user's scorecard |
 | 1 | Hub portability: create layout directories lazily (read paths tolerate missing directories; do not add lazy creation for `sources/intake` and other directories later phases delete); `status`/`doctor` report "host integration missing" as fixable, with a note to re-run `skillhub integrate` after a pull that untracked those files; add the missing curator tools now and write the server-boundary test once against the final tool set in Phase 3 | none | done (merged d115fc7) |
 | 2 | `IsHubMeta` predicate at every site (D4), inbound `.meta/` stripping, `.meta/distill.yaml` out of the catalog snapshot; bump the canonical schema version (`workspace.go:19`) so older binaries refuse rather than misjudge trust; record a minimum binary version | none | done (merged d115fc7) |
 | 4 | `skill.meta.yaml` → `.meta/skill.yaml` (D5, D6) with a workspace migration through the WAL and a schema bump; field destination table; trust verdict and upstream status unchanged for every existing skill (test); approval-history walk follows both paths (`internal/app/skill_review_changes.go:24,73-90`) and leaves `.meta/` out of the blob sets | 2 | done (merged d6af65f; live hub migrated 2026-10-10, ebbb739) |
@@ -141,7 +141,7 @@ Rules for every worktree agent:
 Verified 2026-10-10 (lead): `git clone` of the live hub (`786c60e`) into a temp dir with
 isolated HOME/XDG, then `skillhub validate` (ok) → `rebuild` (applied) → `status` (healthy;
 only "host integration missing", fixable). The MCP server on the clone serves `test-audit`
-and `skill_resolve` returns it. Found: `rebuild` warns "skill test-audit will not be served:
+and `skill_resolve` returns it. **Resolved in `f24f806`** (`servableSkillWarnings` now strips `/.meta`). Found at the time: `rebuild` warns "skill test-audit will not be served:
 skills/default/test-audit/.meta/SKILL.md is missing" — false; `servableSkillWarnings`
 (`internal/catalog/servable.go:95`) derives the skill directory from `.meta/skill.yaml`, so it
 also skips `ValidateServableSkill` for every skill since Phase 4.
@@ -158,7 +158,7 @@ also skips `ValidateServableSkill` for every skill since Phase 4.
 - Human approval, reopen-only-on-new-evidence, tombstones and coverage gaps are
   preserved, including across the migration of existing distill data.
 - Stored telemetry events stay readable.
-- Phase 0 produces a scorecard with a keep/drop threshold per field that decides which
+- (Moved to the observation backlog, M6; not met when this plan closed.) Phase 0 produces a scorecard with a keep/drop threshold per field that decides which
   lesson fields (`notable`, `contrast`, R/E/F) become schema.
 
 ## Red Team Review

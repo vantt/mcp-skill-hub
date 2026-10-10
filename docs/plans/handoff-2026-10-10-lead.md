@@ -1,6 +1,6 @@
 # Lead handoff, 2026-10-10
 
-State after wave 3, updated late 2026-10-10 (wave 4 merged, wave 5 J running). Read this first
+State at the end of 2026-10-10: waves 1–5 merged, the three original plans archived. Read this first
 in a new lead session, then the plans below.
 
 ## Where things are
@@ -23,15 +23,18 @@ in a new lead session, then the plans below.
 
 ## Plans
 
-`plans/261008-1433-simplify-hub-model/plan.md`: Phases 1–5 done (5 = digest-only receipts,
+**Open work lives in `docs/plans/2026-10-10-observation-backlog.md`** (mostly measurement: baseline, cases,
+curator compliance; plus small fixes and host checks). The three original plans are in `archive/plans/`:
+
+`archive/plans/261008-1433-simplify-hub-model/plan.md`: Phases 1–5 done (5 = digest-only receipts,
 schema v5, `9b6c986`). Phase 0 (scorecard) is the user's own work with distill-lab.
 
-`docs/plans/2026-10-08-observer-and-enrichment.md` (status table after §8):
+`archive/plans/261008-observer-and-enrichment/2026-10-08-observer-and-enrichment.md` (status table after §8):
 
 | Item | State |
 |---|---|
 | Phase 1, 2 | done |
-| §5.1 MCP profiles (runtime / curation / all) | code done; no host verified for toggling, manual check on Claude Code pending |
+| §5.1 MCP profiles (runtime / curation / all) | code done; Claude Code verified (2026-10-10, and no longer needed there); other hosts: backlog H2 |
 | 5(a), skill_list paging | done |
 | 5(c) one curator source per client | done (H, `51cb26b`..`1fdd787`, fix `d65b0e7`); no client verified for `skills_extension`, so all native hosts keep the native copy and the server hides the MCP copy from claude-code/codex/gemini |
 | Phase 3 enrichment | **deferred until there are cases.** Decided 2026-10-10: option 1 (promote confirmed cases to Git eval cases, cite `repo@commit:path`; do not change distill-lab) |
@@ -40,7 +43,7 @@ schema v5, `9b6c986`). Phase 0 (scorecard) is the user's own work with distill-l
 
 ## Wave 5: curator via CLI (approved 2026-10-10)
 
-`docs/plans/2026-10-10-curator-via-cli.md`. On shell hosts runtime stays MCP (3 tools; needed
+`archive/plans/261010-curator-via-cli/2026-10-10-curator-via-cli.md`. On shell hosts runtime stays MCP (3 tools; needed
 for session-aware cases), curation moves to the `system-curator` skill calling
 `skillhub … --json`. User answered §9: all four yes.
 
@@ -60,12 +63,14 @@ so trust what the user saw; the CLI rejects `--workspace` before the subcommand.
 
 ## Small open items
 
+Superseded by the backlog (F1–F8, H1–H4); kept below as history.
+
 - The real-hub test-audit skill has 0 examples (validate warns).
 - Tests are isolated from HOME (TestMain in app, cli, mcpserver, web, hostintegration);
   `make check` passes in the user's plain shell.
 - Wave 4 (2026-10-10): worktree I merged (`1ef2841`..`7cd3fb0`): telemetry help, schema `$id`
   preserved in shrink, Claude Code split profiles. Proposal pending:
-  `docs/plans/2026-10-10-curator-via-cli.md` §9.
+  `archive/plans/261010-curator-via-cli/2026-10-10-curator-via-cli.md` §9 (answered).
 
 - Simplify open decision 2 decided 2026-10-10: cross-skill comparisons stay per skill.
 
