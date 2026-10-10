@@ -21,14 +21,6 @@ type connectFlags struct {
 }
 
 func runConnect(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	return runConnection(ctx, args, stdout, stderr, false)
-}
-
-func runDisconnect(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	return runConnection(ctx, args, stdout, stderr, true)
-}
-
-func runConnection(ctx context.Context, args []string, stdout, stderr io.Writer, remove bool) int {
 	flags, err := parseConnectFlags(args)
 	if err != nil {
 		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), connectFix)
@@ -38,7 +30,7 @@ func runConnection(ctx context.Context, args []string, stdout, stderr io.Writer,
 		return writeWorkspaceResolutionError(stdout, stderr, flags.json, resErr)
 	}
 	result, err := (app.ConnectService{}).Connect(ctx, app.ConnectRequest{
-		Project: flags.project, Workspace: ws, Global: flags.global, Hosts: flags.hosts, Yes: flags.yes, Remove: remove,
+		Project: flags.project, Workspace: ws, Global: flags.global, Hosts: flags.hosts, Yes: flags.yes,
 	})
 	if err != nil {
 		if errors.Is(err, hostintegration.ErrSymlink) {
@@ -58,9 +50,6 @@ func runConnection(ctx context.Context, args []string, stdout, stderr io.Writer,
 	}
 	if result.Error != nil {
 		return writeWorkspaceResult(result, err, stdout, stderr, flags.json)
-	}
-	if remove {
-		return writeWorkspaceResult(result, nil, stdout, stderr, flags.json)
 	}
 	if flags.json {
 		response := struct {
@@ -170,11 +159,6 @@ func formatChangeKind(kind, summary string) string {
 			return ".claude/settings.local.json"
 		}
 		return ".claude/settings.json"
-	case "permission-ownership":
-		if strings.Contains(summary, "skillhub-permissions.local.json") {
-			return ".claude/skillhub-permissions.local.json"
-		}
-		return ".claude/skillhub-permissions.json"
 	case "native-skill":
 		return "curator skill"
 	case "bootstrap-instructions", "bootstrap":

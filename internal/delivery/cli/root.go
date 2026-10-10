@@ -37,8 +37,6 @@ func RunContext(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		return runHelp(args[1:], stdout, stderr)
 	case "connect", "integrate":
 		return runConnect(ctx, args[1:], stdout, stderr)
-	case "disconnect":
-		return runDisconnect(ctx, args[1:], stdout, stderr)
 	case "version":
 		return runVersion(args[1:], stdout, stderr)
 	case "status":

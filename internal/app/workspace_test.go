@@ -48,7 +48,7 @@ func TestDoctorHostIntegrationPreviewIsReadOnlyAndDependencyOrdered(t *testing.T
 	if result.Status != StatusActionRequired {
 		t.Fatalf("host integration preview = %#v", result)
 	}
-	ranks := map[string]int{"mcp-registration": 1, "host-permissions": 2, "native-skill": 3, "bootstrap-instructions": 4, "permission-ownership": 5}
+	ranks := map[string]int{"mcp-registration": 1, "host-permissions": 2, "native-skill": 3, "bootstrap-instructions": 4}
 	lastRank := -1
 	for _, item := range result.Items {
 		parts := strings.SplitN(item.ID, "_", 3)

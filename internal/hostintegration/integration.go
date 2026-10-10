@@ -80,10 +80,8 @@ func buildPlan(ctx context.Context, request Request) (PlanResult, error) {
 	if err != nil {
 		return PlanResult{}, err
 	}
-	plan := PlanResult{Workspace: prepared.workspace, Root: prepared.root, Scope: prepared.scope, Binary: prepared.binary, Remove: request.Remove}
-	// Ownership becomes durable only after the additions have been written.
-	// An interrupted connect without a receipt conservatively preserves them.
-	kinds := []ChangeKind{ChangeMCP, ChangeHostPermissions, ChangeNativeSkill, ChangeBootstrap, ChangePermissionReceipt}
+	plan := PlanResult{Workspace: prepared.workspace, Root: prepared.root, Scope: prepared.scope, Binary: prepared.binary}
+	kinds := []ChangeKind{ChangeMCP, ChangeHostPermissions, ChangeNativeSkill, ChangeBootstrap}
 	for _, kind := range kinds {
 		for _, host := range prepared.hosts {
 			for _, file := range host.files {
@@ -113,9 +111,6 @@ func prepare(ctx context.Context, request Request) (preparedInspection, error) {
 	if err != nil {
 		return preparedInspection{}, err
 	}
-	if request.Remove {
-		return prepareDisconnect(request)
-	}
 	prepared := preparedInspection{workspace: workspace, root: root, scope: scope, binary: binary}
 	bundle := systemskills.CuratorBundle()
 	for _, adapter := range selected {
@@ -136,13 +131,6 @@ func prepare(ctx context.Context, request Request) (preparedInspection, error) {
 				return preparedInspection{}, err
 			}
 			host.files = append(host.files, permissions)
-		}
-		if adapter.Host == HostClaude {
-			receipt, err := prepareClaudePermissionReceipt(adapter, scope, root, workspace)
-			if err != nil {
-				return preparedInspection{}, err
-			}
-			host.files = append(host.files, receipt)
 		}
 		if adapter.NativeSkill {
 			skillPath := filepath.Join(root, filepath.FromSlash(skillRel))

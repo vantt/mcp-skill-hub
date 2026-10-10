@@ -84,7 +84,7 @@ skillhub connect -g --workspace ~/skillhub --yes
 |---|---|
 | Project | `.mcp.json`, `.codex/config.toml`, `.gemini/settings.json` (server registration); `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` (a short block marked by `skillhub:bootstrap` comments); the `system-curator` skill under `.claude/skills/`, `.agents/skills/`, and `.gemini/skills/` |
 | Global (`-g`) | `~/.claude.json`, `~/.codex/config.toml`, `~/.gemini/settings.json`; `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, `~/.gemini/GEMINI.md`; the `system-curator` skill under `~/.claude/skills/`, `~/.agents/skills/`, and `~/.gemini/skills/` |
-| Host Permissions | `connect` and `doctor --fix --yes` configure filesystem access to `runtime/cache/skills`, `runtime/envs`, and `runtime/config`: Claude Code `permissions.additionalDirectories` (project `.claude/settings.local.json`, also honoring directory allowances in `.claude/settings.json`; user `~/.claude/settings.json`), Codex `[sandbox_workspace_write] writable_roots`, and Gemini CLI `context.includeDirectories`. Claude Code also gets the CLI rules below and scope-specific ownership receipts: project `.claude/skillhub-permissions.local.json`, global `~/.claude/skillhub-permissions.json`. |
+| Host Permissions | `connect` and `doctor --fix --yes` configure filesystem access to `runtime/cache/skills`, `runtime/envs`, and `runtime/config`: Claude Code `permissions.additionalDirectories` (project `.claude/settings.local.json`, also honoring directory allowances in `.claude/settings.json`; user `~/.claude/settings.json`), Codex `[sandbox_workspace_write] writable_roots`, and Gemini CLI `context.includeDirectories`. Claude Code also gets the CLI rules below. Connect appends missing entries without removing or reordering user rules; it does not track ownership or write permission receipts. |
 
 The registration stores the absolute path of the `skillhub` binary and of your workspace. If you move either, run `skillhub connect` again.
 
@@ -125,25 +125,16 @@ Existing `CLAUDE.md`, `AGENTS.md`, and `GEMINI.md` files keep your own text. Ski
 > **Caution on committing connection files:** Project connection files (`.mcp.json`, `.codex/config.toml`, `.gemini/settings.json`) contain machine-specific absolute paths to your local binary and workspace. We recommend adding `.mcp.json`, `.codex/`, and `.gemini/` to your project's `.gitignore` rather than committing them to shared repositories. Similarly, do not commit connection files that embed machine-specific paths into your canonical skills repository.
 ### Undo a connection
 
-For Claude Code, preview removal and then confirm it:
+Connection removal is manual:
 
-```bash
-skillhub disconnect --workspace ~/skillhub          # current project
-skillhub disconnect --workspace ~/skillhub --yes    # apply
-skillhub disconnect -g --workspace ~/skillhub --yes  # user connection
-```
+- Remove the `skillhub` registration from the relevant project or user config.
+- Remove the marked `skillhub:bootstrap` instruction block and native
+  `system-curator` folder when no remaining connection needs them.
+- Review permission rules and runtime directory allowances separately. Connect
+  does not record which entries it added; preserve any user rules or directory
+  access still needed by another connection.
 
-Disconnect removes only permission rules and runtime directories recorded as
-added by connect, plus unedited managed MCP, curator, and bootstrap content.
-Pre-existing user rules, later user additions, edited files, and directory
-allowances without an ownership receipt are preserved. Ownership is recorded
-only after a successful connect; an interrupted write without a receipt is
-conservatively treated as unowned. Disconnect removes the receipt last. Your
-workspace and canonical skills are untouched.
-
-Codex and Gemini removal remains manual: delete the `skillhub` registration,
-the marked `skillhub:bootstrap` instruction block, and the native `system-curator`
-folder; remove only runtime directory allowances you know connect added.
+Your workspace and canonical skills are untouched.
 
 ## Curate skills
 
@@ -369,7 +360,6 @@ Restart the agent after `connect`. Check that the `skillhub` binary still exists
 | Create a workspace | `skillhub init [path] [--force] --yes` |
 | Connect a project | `skillhub connect [--workspace <path>] --yes` |
 | Connect all projects | `skillhub connect -g --workspace <path> --yes` |
-| Disconnect Claude Code | `skillhub disconnect [-g] [--workspace <path>] [--yes]` |
 | Health and next step | `skillhub status` |
 | Diagnose and repair | `skillhub doctor [--fix [--yes]]` |
 | Add a skill (GitHub or local) | `skillhub skill add <locator> [--skill <n>\|--all] [--yes]` |
