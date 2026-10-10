@@ -152,7 +152,7 @@
     "Claude Code is the only V1 stock client with executed end-to-end curation evidence. Codex and Gemini configuration projections are best-effort previews, not claimed supported until their blocked end-to-end checks pass.",
     "Curator delivery is per client: verified skills_extension clients use MCP only; other integrated hosts retain native installation. Previously installed native copies are removed only when their bytes match the installation receipt (or, for legacy copies without a receipt, the embedded curator); edits are reported and preserved.",
     "skills/list and skills/get omit system-curator for identified native-integrated Claude Code, Codex, and Gemini sessions. Other clients, Claude Desktop, and sessions without clientInfo retain MCP delivery because native installation cannot be assumed.",
-    "Per-server enable/disable toggle support is required before skillhub connect/integrate splits profiles into dual entries (skillhub and skillhub-curation). Claude Code is verified by the user-observed interactive /mcp toggle and persistence check on 2026-10-10; Codex and Gemini remain unverified and keep one full entry.",
+    "Claude Code connect/integrate selects runtime-only MCP and curation via CLI, independently of its verified per-server toggle. Toggle evidence remains the user-observed interactive /mcp persistence check on 2026-10-10. Codex and Gemini remain unchanged in this wave: one full entry, with toggle and permissions unverified.",
     "Claude Code: listing a server in `.claude/settings.local.json` `disabledMcpjsonServers` does not disable it; it rejects it. User check 2026-10-10 (2.1.296): skillhub-curation was absent from `/mcp` and could not be enabled there. Do not use it to start curation disabled."
   ]
 }

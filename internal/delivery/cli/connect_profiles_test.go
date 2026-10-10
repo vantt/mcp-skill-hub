@@ -78,14 +78,12 @@ func TestConnectClaudeCurationGuidance(t *testing.T) {
 			if err := json.Unmarshal(data, &registration); err != nil {
 				t.Fatal(err)
 			}
-			if len(registration.Servers) != 2 {
-				t.Fatalf("Claude server count = %d, want 2: %s", len(registration.Servers), data)
+			if len(registration.Servers) != 1 {
+				t.Fatalf("Claude server count = %d, want 1: %s", len(registration.Servers), data)
 			}
-			for server, profile := range map[string]string{"skillhub": "runtime", "skillhub-curation": "curation"} {
-				want := []string{"mcp", "serve", "--profile", profile, "--workspace", workspace}
-				if !slices.Equal(registration.Servers[server].Args, want) {
-					t.Fatalf("%s args = %v, want %v", server, registration.Servers[server].Args, want)
-				}
+			want := []string{"mcp", "serve", "--profile", "runtime", "--workspace", workspace}
+			if !slices.Equal(registration.Servers["skillhub"].Args, want) {
+				t.Fatalf("runtime args = %v, want %v", registration.Servers["skillhub"].Args, want)
 			}
 		}
 	}

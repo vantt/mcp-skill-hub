@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -391,17 +392,8 @@ func assertJSONRegistration(t *testing.T, path, binary, workspace string, gemini
 	wantArgs := []string{"mcp", "serve", "--workspace", workspace}
 	if !gemini {
 		wantArgs = []string{"mcp", "serve", "--profile", "runtime", "--workspace", workspace}
-		var curation struct {
-			Command string   `json:"command"`
-			Args    []string `json:"args"`
-		}
-		if err := json.Unmarshal(root.MCPServers["skillhub-curation"], &curation); err != nil {
-			t.Fatalf("decode %s curation registration: %v", path, err)
-		}
-		if curation.Command != binary || !slices.Equal(curation.Args, []string{"mcp", "serve", "--profile", "curation", "--workspace", workspace}) {
-			t.Fatalf("%s curation registration = %+v", path, curation)
-		}
-	} else if _, exists := root.MCPServers["skillhub-curation"]; exists {
+	}
+	if _, exists := root.MCPServers["skillhub-curation"]; exists {
 		t.Fatalf("%s unexpectedly contains a curation entry", path)
 	}
 	if !slices.Equal(skillhub.Args, wantArgs) {
@@ -610,51 +602,6 @@ func TestDualEntryAndSingleEntryConfigs(t *testing.T) {
 	bin := "/usr/local/bin/skillhub"
 	ws := "/path/to/workspace"
 
-	// Claude dual vs single
-	claudeDual, err := desiredClaudeConfig([]byte("{}"), bin, ws, true)
-	if err != nil {
-		t.Fatalf("desiredClaudeConfig dual: %v", err)
-	}
-	var claudeDualParsed struct {
-		MCPServers map[string]claudeMCPServer `json:"mcpServers"`
-	}
-	if err := json.Unmarshal(claudeDual, &claudeDualParsed); err != nil {
-		t.Fatalf("unmarshal claudeDual: %v", err)
-	}
-	if _, ok := claudeDualParsed.MCPServers["skillhub"]; !ok {
-		t.Fatal("missing skillhub in claude dual")
-	}
-	if _, ok := claudeDualParsed.MCPServers["skillhub-curation"]; !ok {
-		t.Fatal("missing skillhub-curation in claude dual")
-	}
-	if !slices.Contains(claudeDualParsed.MCPServers["skillhub"].Args, "runtime") {
-		t.Fatalf("expected runtime profile in skillhub args: %+v", claudeDualParsed.MCPServers["skillhub"].Args)
-	}
-	if !slices.Contains(claudeDualParsed.MCPServers["skillhub-curation"].Args, "curation") {
-		t.Fatalf("expected curation profile in skillhub-curation args: %+v", claudeDualParsed.MCPServers["skillhub-curation"].Args)
-	}
-
-	// Claude single cleans up curation if present
-	claudeSingle, err := desiredClaudeConfig(claudeDual, bin, ws, false)
-	if err != nil {
-		t.Fatalf("desiredClaudeConfig single from dual: %v", err)
-	}
-	var claudeSingleParsed struct {
-		MCPServers map[string]claudeMCPServer `json:"mcpServers"`
-	}
-	if err := json.Unmarshal(claudeSingle, &claudeSingleParsed); err != nil {
-		t.Fatalf("unmarshal claudeSingle: %v", err)
-	}
-	if _, ok := claudeSingleParsed.MCPServers["skillhub"]; !ok {
-		t.Fatal("missing skillhub in claude single")
-	}
-	if _, ok := claudeSingleParsed.MCPServers["skillhub-curation"]; ok {
-		t.Fatal("skillhub-curation not removed from claude single")
-	}
-	if slices.Contains(claudeSingleParsed.MCPServers["skillhub"].Args, "--profile") {
-		t.Fatalf("single entry should not contain --profile flag: %+v", claudeSingleParsed.MCPServers["skillhub"].Args)
-	}
-
 	// Gemini dual vs single
 	geminiDual, err := desiredGeminiConfig([]byte("{}"), bin, ws, true)
 	if err != nil {
@@ -710,16 +657,42 @@ func TestDualEntryAndSingleEntryConfigs(t *testing.T) {
 	}
 }
 
-func TestMCPChangePreviewDualEntry(t *testing.T) {
-	bin := "/bin/skillhub"
-	ws := "/workspace"
-	raw := []byte(`{"mcpServers":{}}`)
-	desired, err := desiredClaudeConfig(raw, bin, ws, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	preview := mcpChangePreview(HostClaude, raw, desired)
-	if !strings.Contains(preview, "command:") || !strings.Contains(preview, "skillhub-curation.command:") {
-		t.Fatalf("preview missing curation fields:\n%s", preview)
+func TestClaudeConnectionMigratesOnlyOwnedCurationServer(t *testing.T) {
+	t.Parallel()
+	for _, edited := range []bool{false, true} {
+		t.Run(fmt.Sprint(edited), func(t *testing.T) {
+			workspace, root := t.TempDir(), t.TempDir()
+			binary := filepath.Join(workspace, "skillhub")
+			server := claudeMCPServer{Type: "stdio", Command: binary, Args: []string{"mcp", "serve", "--profile", "curation", "--workspace", workspace}}
+			cur, _ := json.Marshal(server)
+			if edited {
+				cur = append(cur[:len(cur)-1], []byte(`,"env":{"USER_SETTING":"keep"}}`)...)
+			}
+			raw := []byte(`{"mcpServers":{"skillhub-curation":` + string(cur) + `,"other":{"command":"keep"}}}`)
+			path := filepath.Join(root, ".mcp.json")
+			writeTestFile(t, path, raw, 0o600)
+			request := Request{Workspace: workspace, Root: root, Binary: binary, Hosts: []Host{HostClaude}}
+			plan, err := Plan(context.Background(), request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !edited && !strings.Contains(plan.Changes[0].Preview, "skillhub-curation.command:") {
+				t.Fatalf("removal absent from preview: %s", plan.Changes[0].Preview)
+			}
+			applyAll(t, request)
+			var config struct {
+				MCPServers map[string]json.RawMessage `json:"mcpServers"`
+			}
+			if err := json.Unmarshal(readTestFile(t, path), &config); err != nil {
+				t.Fatal(err)
+			}
+			_, retained := config.MCPServers["skillhub-curation"]
+			if retained != edited {
+				t.Fatalf("curation retained = %t, edited = %t", retained, edited)
+			}
+			if string(config.MCPServers["other"]) != `{"command":"keep"}` {
+				t.Fatal("unrelated server changed")
+			}
+		})
 	}
 }

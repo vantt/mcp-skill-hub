@@ -247,7 +247,7 @@ func expectedDesired(change Change, raw []byte, plan PlanResult) ([]byte, error)
 		supportsToggle := HostSupportsServerToggle(change.Host)
 		switch change.Host {
 		case HostClaude:
-			return desiredClaudeConfig(raw, plan.Binary, plan.Workspace, supportsToggle)
+			return desiredClaudeCLICurationConfig(raw, plan.Binary, plan.Workspace)
 		case HostGemini:
 			return desiredGeminiConfig(raw, plan.Binary, plan.Workspace, supportsToggle)
 		case HostCodex:

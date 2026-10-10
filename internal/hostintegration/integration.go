@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 
 	"github.com/vantt/mcp-skill-hub/internal/systemskills"
@@ -228,7 +229,7 @@ func prepareConfig(host Host, path, root, workspace, binary string) (preparedFil
 	supportsToggle := HostSupportsServerToggle(host)
 	switch host {
 	case HostClaude:
-		desired, err = desiredClaudeConfig(raw, binary, workspace, supportsToggle)
+		desired, err = desiredClaudeCLICurationConfig(raw, binary, workspace)
 	case HostGemini:
 		desired, err = desiredGeminiConfig(raw, binary, workspace, supportsToggle)
 	case HostCodex:
@@ -273,29 +274,32 @@ func preparePermissions(adapter Adapter, scope Scope, path, root, workspace stri
 	return file, nil
 }
 
-func desiredClaudeConfig(raw []byte, binary, workspace string, supportsToggle bool) ([]byte, error) {
-	if supportsToggle {
-		runtimeServer, err := json.Marshal(claudeMCPServer{Type: "stdio", Command: binary, Args: []string{"mcp", "serve", "--profile", "runtime", "--workspace", workspace}})
-		if err != nil {
-			return nil, fmt.Errorf("encode Claude runtime MCP registration: %w", err)
-		}
-		curationServer, err := json.Marshal(claudeMCPServer{Type: "stdio", Command: binary, Args: []string{"mcp", "serve", "--profile", "curation", "--workspace", workspace}})
-		if err != nil {
-			return nil, fmt.Errorf("encode Claude curation MCP registration: %w", err)
-		}
-		updated, err := upsertJSONPath(raw, []string{"mcpServers", "skillhub"}, runtimeServer)
-		if err != nil {
-			return nil, err
-		}
-		return upsertJSONPath(updated, []string{"mcpServers", "skillhub-curation"}, curationServer)
-	}
-	encoded, err := json.Marshal(claudeMCPServer{Type: "stdio", Command: binary, Args: []string{"mcp", "serve", "--workspace", workspace}})
+// Claude Code curates through the CLI, independently of its verified MCP toggle.
+// Keep only the runtime server; remove the wave-4 curation entry only if its
+// complete contents still match the registration connect wrote.
+func desiredClaudeCLICurationConfig(raw []byte, binary, workspace string) ([]byte, error) {
+	encoded, err := json.Marshal(claudeMCPServer{Type: "stdio", Command: binary, Args: []string{"mcp", "serve", "--profile", "runtime", "--workspace", workspace}})
 	if err != nil {
-		return nil, fmt.Errorf("encode Claude MCP registration: %w", err)
+		return nil, fmt.Errorf("encode Claude runtime MCP registration: %w", err)
 	}
 	updated, err := upsertJSONPath(raw, []string{"mcpServers", "skillhub"}, encoded)
 	if err != nil {
 		return nil, err
+	}
+	var config struct {
+		MCPServers map[string]json.RawMessage `json:"mcpServers"`
+	}
+	if err := json.Unmarshal(updated, &config); err != nil {
+		return nil, err
+	}
+	curation, ok := config.MCPServers["skillhub-curation"]
+	if !ok {
+		return updated, nil
+	}
+	expected, _ := json.Marshal(claudeMCPServer{Type: "stdio", Command: binary, Args: []string{"mcp", "serve", "--profile", "curation", "--workspace", workspace}})
+	var have, want any
+	if json.Unmarshal(curation, &have) != nil || json.Unmarshal(expected, &want) != nil || !reflect.DeepEqual(have, want) {
+		return updated, nil
 	}
 	return removeJSONPath(updated, []string{"mcpServers", "skillhub-curation"})
 }
