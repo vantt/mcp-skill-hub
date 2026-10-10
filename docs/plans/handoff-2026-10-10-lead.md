@@ -48,8 +48,9 @@ for session-aware cases), curation moves to the `system-curator` skill calling
 |---|---|
 | 1–2 CLI gaps + curator rewrite | **done**, J merged (`fd4ac80`..`32db030`): bound `cli` confirm commands, `eval routing` envelope, `source import`, curator 1.6.0. Lead ran a real `claude -p` read-only curation with only the runtime MCP entry: used the CLI, hub unchanged |
 | 3 Claude Code permission rules | **verified** by the user (§5.2): ask beats allow, flag order does not bypass, `--approve-content` denied |
-| 4 `connect` writes the rules, drops `skillhub-curation` on Claude Code, warns about the trust dialog; fix the doctor HOME test | agent K, prompt `prompt-wave5-K-connect-cli.md`, worktree `mcp-skill-hub-connect-cli` |
-| 5 real-host smoke | lead, after K |
+| 4 `connect` writes the rules, drops `skillhub-curation` on Claude Code, warns about the trust dialog; fix the doctor HOME test | **done**, K merged (3 rounds, `…`..`7767a4b`): runtime-only Claude entry, 4 rules, no disconnect/receipts, tests isolated from HOME (incl. Go caches), `servable.go` fixed |
+| 5 real-host smoke | **done** (design note §7 row 5) |
+| 6 curator 1.6.1 probe/fallback wording | open (design note §7 row 6) |
 
 Facts learned on 2026-10-10 (also in the matrix): Claude Code `/mcp` Disable persists across
 restarts (tick = on, empty circle = off); `disabledMcpjsonServers` rejects a server instead
@@ -59,16 +60,12 @@ so trust what the user saw; the CLI rejects `--workspace` before the subcommand.
 ## Small open items
 
 - The real-hub test-audit skill has 0 examples (validate warns).
-- `TestDoctorHostIntegrationPreviewIsReadOnlyAndDependencyOrdered` (internal/app) reads the real
-  HOME global connection and fails with `global_connection_outdated` when the user's `connect -g`
-  is stale. Run `make check` with a temp HOME/XDG until the test is isolated.
+- Tests are isolated from HOME (TestMain in app, cli, mcpserver, web, hostintegration);
+  `make check` passes in the user's plain shell.
 - Wave 4 (2026-10-10): worktree I merged (`1ef2841`..`7cd3fb0`): telemetry help, schema `$id`
   preserved in shrink, Claude Code split profiles. Proposal pending:
   `docs/plans/2026-10-10-curator-via-cli.md` §9.
 
-- `internal/catalog/servable.go:95`: `servableSkillWarnings` takes the skill directory from
-  `.meta/skill.yaml`, so every rebuild warns "<skill>/.meta/SKILL.md is missing" and
-  `ValidateServableSkill` never runs. Skills are still served. Found in the fresh-clone check.
 - Simplify open decision 2 decided 2026-10-10: cross-skill comparisons stay per skill.
 
 ## How the user works with the lead
