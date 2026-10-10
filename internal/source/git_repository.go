@@ -962,8 +962,7 @@ func (adapter GitRepositoryAdapter) RevisionAt(ctx context.Context, source Sourc
 			})
 			if fetchErr != nil && !errors.Is(fetchErr, git.NoErrAlreadyUpToDate) {
 				if errors.Is(fetchErr, git.ErrExactSHA1NotSupported) ||
-					strings.Contains(strings.ToLower(fetchErr.Error()), "not our ref") ||
-					strings.Contains(strings.ToLower(fetchErr.Error()), "couldn't find remote ref") {
+					isUnreachableCommitFetchError(fetchErr) {
 					return ErrHistoryUnavailable
 				}
 				if errors.Is(fetchErr, ErrLimitExceeded) {
@@ -1083,4 +1082,21 @@ func (adapter GitRepositoryAdapter) CommitHasSkill(ctx context.Context, remoteUR
 		return false, nil
 	}
 	return entry.Mode == filemode.Regular || entry.Mode == filemode.Executable, nil
+}
+
+// isUnreachableCommitFetchError reports whether a single-commit fetch failed because the remote
+// does not have that commit. A server that rejects an unknown SHA ("not our ref") exits while the
+// client is still writing its haves, so the client may see a closed pipe before it reads the
+// message; both outcomes mean the commit is unavailable.
+func isUnreachableCommitFetchError(err error) bool {
+	if errors.Is(err, io.ErrClosedPipe) {
+		return true
+	}
+	text := strings.ToLower(err.Error())
+	for _, marker := range []string{"not our ref", "couldn't find remote ref", "broken pipe", "closed pipe"} {
+		if strings.Contains(text, marker) {
+			return true
+		}
+	}
+	return false
 }
