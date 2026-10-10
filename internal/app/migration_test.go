@@ -17,34 +17,34 @@ func TestMigrationServicePreviewThenApply(t *testing.T) {
 	t.Parallel()
 	root := newLegacyAppWorkspace(t)
 	service := MigrationService{}
-	preview, err := service.Migrate(t.Context(), root, 4, false)
+	preview, err := service.Migrate(t.Context(), root, 5, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if preview.Status != StatusActionRequired || preview.SourceSchemaVersion != 0 || preview.TargetSchemaVersion != 4 || preview.ProposalDigest == "" || len(preview.Changes) != 1 {
+	if preview.Status != StatusActionRequired || preview.SourceSchemaVersion != 0 || preview.TargetSchemaVersion != 5 || preview.ProposalDigest == "" || len(preview.Changes) != 1 {
 		t.Fatalf("preview = %#v", preview)
 	}
 	if _, err := os.Stat(filepath.Join(root, ".skillhub", "schema-version")); !os.IsNotExist(err) {
 		t.Fatalf("preview changed canonical marker: %v", err)
 	}
 
-	applied, err := service.Migrate(t.Context(), root, 4, true)
+	applied, err := service.Migrate(t.Context(), root, 5, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if applied.Status != StatusApplied || applied.Receipt == nil || applied.Receipt.SourceSchemaVersion != 0 || applied.Receipt.TargetSchemaVersion != 4 || applied.Receipt.Generation == "" {
+	if applied.Status != StatusApplied || applied.Receipt == nil || applied.Receipt.SourceSchemaVersion != 0 || applied.Receipt.TargetSchemaVersion != 5 || applied.Receipt.Generation == "" {
 		t.Fatalf("applied = %#v", applied)
 	}
 	if status, err := catalog.Inspect(t.Context(), root); err != nil || status.State != catalog.StateHealthy {
 		t.Fatalf("catalog = %#v, %v", status, err)
 	}
 
-	currentPreview, err := service.Migrate(t.Context(), root, 4, false)
+	currentPreview, err := service.Migrate(t.Context(), root, 5, false)
 	if err != nil || currentPreview.Status != StatusReady || currentPreview.Receipt != nil {
 		t.Fatalf("already-current preview = %#v, %v", currentPreview, err)
 	}
 
-	retry, err := service.Migrate(t.Context(), root, 4, true)
+	retry, err := service.Migrate(t.Context(), root, 5, true)
 	if err != nil || retry.Status != StatusApplied || retry.Receipt == nil {
 		t.Fatalf("idempotent retry = %#v, %v", retry, err)
 	}
@@ -168,14 +168,14 @@ func TestMigrateReplayFailsWhenMarkerWasLostAfterApply(t *testing.T) {
 	t.Parallel()
 	root := newLegacyAppWorkspace(t)
 	service := MigrationService{}
-	if _, err := service.Migrate(t.Context(), root, 4, true); err != nil {
+	if _, err := service.Migrate(t.Context(), root, 5, true); err != nil {
 		t.Fatal(err)
 	}
 	marker := filepath.Join(root, ".skillhub", "schema-version")
 	if err := os.Remove(marker); err != nil {
 		t.Fatal(err)
 	}
-	result, err := service.Migrate(t.Context(), root, 4, true)
+	result, err := service.Migrate(t.Context(), root, 5, true)
 	if err == nil || !errors.Is(err, mutation.ErrConflict) {
 		t.Fatalf("replay after marker loss = %#v, %v; want conflict", result, err)
 	}
@@ -195,22 +195,22 @@ func TestMigrationServiceV2ToV3(t *testing.T) {
 		t.Fatal(err)
 	}
 	service := MigrationService{}
-	preview, err := service.Migrate(t.Context(), root, 4, false)
+	preview, err := service.Migrate(t.Context(), root, 5, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if preview.SourceSchemaVersion != 2 || preview.TargetSchemaVersion != 4 {
-		t.Fatalf("preview versions = %d to %d, want 2 to 4", preview.SourceSchemaVersion, preview.TargetSchemaVersion)
+	if preview.SourceSchemaVersion != 2 || preview.TargetSchemaVersion != 5 {
+		t.Fatalf("preview versions = %d to %d, want 2 to 5", preview.SourceSchemaVersion, preview.TargetSchemaVersion)
 	}
-	applied, err := service.Migrate(t.Context(), root, 4, true)
+	applied, err := service.Migrate(t.Context(), root, 5, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if applied.Status != StatusApplied || applied.Receipt.TargetSchemaVersion != 4 {
+	if applied.Status != StatusApplied || applied.Receipt.TargetSchemaVersion != 5 {
 		t.Fatalf("applied result = %#v", applied)
 	}
 	data, err := os.ReadFile(marker)
-	if err != nil || strings.TrimSpace(string(data)) != "4" {
+	if err != nil || strings.TrimSpace(string(data)) != "5" {
 		t.Fatalf("marker after migration = %q, %v", string(data), err)
 	}
 }
@@ -249,7 +249,7 @@ routing:
 	}
 
 	service := MigrationService{}
-	applied, err := service.Migrate(t.Context(), root, 4, true)
+	applied, err := service.Migrate(t.Context(), root, 5, true)
 	if err != nil {
 		t.Fatalf("migration failed: %v", err)
 	}

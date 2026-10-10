@@ -23,14 +23,14 @@ func TestMigrateCLIJSONPreviewAndConfirmation(t *testing.T) {
 	}
 	stdout.Reset()
 	stderr.Reset()
-	if code := Run([]string{"migrate", "--workspace", root, "--to", "4", "--json"}, &stdout, &stderr); code != 0 {
+	if code := Run([]string{"migrate", "--workspace", root, "--to", "5", "--json"}, &stdout, &stderr); code != 0 {
 		t.Fatalf("preview exit = %d: %s", code, stderr.String())
 	}
 	var preview app.MigrationResult
 	if err := json.Unmarshal(stdout.Bytes(), &preview); err != nil {
 		t.Fatal(err)
 	}
-	if preview.Status != app.StatusActionRequired || preview.SourceSchemaVersion != 0 || preview.TargetSchemaVersion != 4 || len(preview.Changes) != 1 || preview.Receipt != nil {
+	if preview.Status != app.StatusActionRequired || preview.SourceSchemaVersion != 0 || preview.TargetSchemaVersion != 5 || len(preview.Changes) != 1 || preview.Receipt != nil {
 		t.Fatalf("preview = %#v", preview)
 	}
 	if _, err := os.Stat(filepath.Join(root, ".skillhub", "schema-version")); !os.IsNotExist(err) {
@@ -46,7 +46,7 @@ func TestMigrateCLIJSONPreviewAndConfirmation(t *testing.T) {
 	if err := json.Unmarshal(stdout.Bytes(), &applied); err != nil {
 		t.Fatal(err)
 	}
-	if applied.Status != app.StatusApplied || applied.Receipt == nil || applied.Receipt.SourceSchemaVersion != 0 || applied.Receipt.TargetSchemaVersion != 4 {
+	if applied.Status != app.StatusApplied || applied.Receipt == nil || applied.Receipt.SourceSchemaVersion != 0 || applied.Receipt.TargetSchemaVersion != 5 {
 		t.Fatalf("applied = %#v", applied)
 	}
 }
@@ -67,7 +67,7 @@ func TestMigrateCLIHumanPreviewIncludesPinnedDiff(t *testing.T) {
 		t.Fatalf("preview exit = %d: %s", code, stderr.String())
 	}
 	output := stdout.String()
-	for _, expected := range []string{"Source schema version:  0", "Target schema version:  4", "Proposal digest:        sha256:", "+++ b/.skillhub/schema-version", "+4"} {
+	for _, expected := range []string{"Source schema version:  0", "Target schema version:  5", "Proposal digest:        sha256:", "+++ b/.skillhub/schema-version", "+5"} {
 		if !strings.Contains(output, expected) {
 			t.Fatalf("human preview lacks %q:\n%s", expected, output)
 		}

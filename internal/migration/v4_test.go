@@ -137,7 +137,7 @@ decision_rationale: Rejected by curator because sleep creates flake
 	if err != nil {
 		t.Fatalf("registry preview failed: %v", err)
 	}
-	if proposal.SourceVersion != 3 || proposal.TargetVersion != 4 {
+	if proposal.SourceVersion != 3 || proposal.TargetVersion != 5 {
 		t.Fatalf("unexpected versions: source=%d, target=%d", proposal.SourceVersion, proposal.TargetVersion)
 	}
 	receipt, err := mutation.ConfirmMutation(root, proposal.Mutation, mutation.Confirmation{
@@ -154,8 +154,8 @@ decision_rationale: Rejected by curator because sleep creates flake
 
 	// 4. Verify version marker on disk
 	newVer, err := DetectVersion(root)
-	if err != nil || newVer != 4 {
-		t.Fatalf("expected detected version 4, got %d, %v", newVer, err)
+	if err != nil || newVer != 5 {
+		t.Fatalf("expected detected version 5, got %d, %v", newVer, err)
 	}
 
 	// 5. Verify legacy directories deleted

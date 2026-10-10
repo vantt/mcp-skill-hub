@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/vantt/mcp-skill-hub/internal/workspace"
+	"gopkg.in/yaml.v3"
 )
 
 func TestGitDirtyDisablesRepositoryFsmonitorAndHooks(t *testing.T) {
@@ -57,6 +58,27 @@ func TestCommitWritesReceiptAndIsPinned(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, "sources/catalog/SRC-1.yaml")); err != nil {
 		t.Fatal(err)
+	}
+	receiptPath := filepath.Join(root, operationPath(receipt.OperationID, time.Now()))
+	receiptBytes, err := os.ReadFile(receiptPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rawReceipt map[string]any
+	if err := yaml.Unmarshal(receiptBytes, &rawReceipt); err != nil {
+		t.Fatal(err)
+	}
+	for i, ch := range rawReceipt["changes"].([]any) {
+		m := ch.(map[string]any)
+		if _, ok := m["before_content"]; ok {
+			t.Fatalf("receipt change[%d] must not have before_content", i)
+		}
+		if _, ok := m["after_content"]; ok {
+			t.Fatalf("receipt change[%d] must not have after_content", i)
+		}
+		if _, ok := m["content_available"]; ok {
+			t.Fatalf("receipt change[%d] must not have content_available", i)
+		}
 	}
 	retry, err := Commit(root, WriteSet{OperationID: "OP-1", Command: "create_source", Changes: []Change{{Path: "sources/catalog/SRC-1.yaml", Contents: []byte("id: SRC-1\n")}}})
 	if err != nil || retry.OperationID != receipt.OperationID {

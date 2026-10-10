@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"gopkg.in/yaml.v3"
 )
@@ -65,35 +64,16 @@ func receiptYAML(root string, set WriteSet, changes []Change, resultSnapshot str
 	if set.ProposalID != "" {
 		document.Proposal = &receiptProposal{ID: set.ProposalID, Digest: set.ProposalDigest}
 	}
-	const perChangeContentLimit = 64 << 10
-	const totalContentLimit = 512 << 10
-	contentBytes := 0
 	for _, item := range changes {
 		after := ""
 		if !item.Delete {
 			after = digest(item.Contents)
 		}
-		change := receiptChange{Path: item.Path, Before: item.BeforeDigest, After: after}
-		var before []byte
-		if item.BeforeDigest != "" {
-			var err error
-			before, err = readCanonicalFile(root, item.Path)
-			if err != nil {
-				return nil, fmt.Errorf("read operation before-image %s: %w", item.Path, err)
-			}
-		}
-		afterContent := item.Contents
-		if item.Delete {
-			afterContent = nil
-		}
-		combined := len(before) + len(afterContent)
-		if len(before) <= perChangeContentLimit && len(afterContent) <= perChangeContentLimit && contentBytes+combined <= totalContentLimit && utf8.Valid(before) && utf8.Valid(afterContent) && !strings.ContainsRune(string(before), '\x00') && !strings.ContainsRune(string(afterContent), '\x00') {
-			change.BeforeContent = string(before)
-			change.AfterContent = string(afterContent)
-			change.ContentAvailable = true
-			contentBytes += combined
-		}
-		document.Changes = append(document.Changes, change)
+		document.Changes = append(document.Changes, receiptChange{
+			Path:   item.Path,
+			Before: item.BeforeDigest,
+			After:  after,
+		})
 	}
 	contents, err := yaml.Marshal(document)
 	if err != nil {

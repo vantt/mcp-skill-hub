@@ -323,10 +323,15 @@ func validWriteSet(set WriteSet, requireOperation bool) error {
 	if !validOptionalDigest(set.RequestDigest) {
 		return errors.New("request digest is invalid")
 	}
+	isMigration := set.SourceSchemaVersion != nil && set.TargetSchemaVersion != nil
 	seen := make(map[string]bool, len(set.Changes))
 	total := 0
 	for _, item := range set.Changes {
-		if !canonicalPath(item.Path) || seen[item.Path] {
+		valid := canonicalPath(item.Path)
+		if !valid && isMigration && strings.HasPrefix(item.Path, "history/operations/") {
+			valid = validMigrationPath(item.Path)
+		}
+		if !valid || seen[item.Path] {
 			return fmt.Errorf("invalid or duplicate canonical path: %s", item.Path)
 		}
 		if item.Delete && len(item.Contents) != 0 {
@@ -358,6 +363,19 @@ func canonicalPath(path string) bool {
 		}
 	}
 	return !strings.HasPrefix(path, "history/operations/")
+}
+
+func validMigrationPath(path string) bool {
+	if path == "" || strings.Contains(path, `\`) || strings.HasPrefix(path, ".") || strings.HasPrefix(path, "/") || strings.ContainsRune(path, '\x00') {
+		return false
+	}
+	parts := strings.Split(path, "/")
+	for _, part := range parts {
+		if part == "" || part == "." || part == ".." {
+			return false
+		}
+	}
+	return true
 }
 
 func validOpaqueID(value string) bool {

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/vantt/mcp-skill-hub/internal/canonical"
+	"github.com/vantt/mcp-skill-hub/internal/mutation"
 )
 
 func TestValidateWorkspaceApplicationContract(t *testing.T) {
@@ -188,5 +189,81 @@ changes:
 	}
 	if !diffRes.Changes[0].DiffAvailable {
 		t.Fatalf("expected DiffAvailable true")
+	}
+}
+
+func TestGetOperationDiff_CommittedMatchesGitDiff(t *testing.T) {
+	t.Parallel()
+
+	root := filepath.Join(t.TempDir(), "workspace")
+	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+		t.Fatal(err)
+	}
+	skillDir := filepath.Join(root, "skills", "default", "demo")
+	if err := os.MkdirAll(filepath.Join(skillDir, "references"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(skillDir, ".meta"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("# Demo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, ".meta", "skill.yaml"), []byte("schema_version: 1\nid: demo\nstatus: active\nrouting:\n  triggers: [demo]\n  operations: [review]\n  not_for: [other]\n  min_scope: single_step\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create and confirm a mutation
+	filePath := "skills/default/demo/references/doc.txt"
+	set := mutation.WriteSet{
+		Command: "test_create",
+		Changes: []mutation.Change{
+			{Path: filePath, Contents: []byte("Line 1: initial content\nLine 2: more content\n")},
+		},
+	}
+	planned, err := mutation.PlanMutation(root, set)
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := mutation.ConfirmMutation(root, planned, mutation.Confirmation{
+		ProposalID:          planned.ID,
+		ProposalDigest:      planned.Digest,
+		BaseCatalogSnapshot: planned.BaseCatalogSnapshot,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Commit the mutation and receipt to Git
+	cmdAdd := exec.Command("git", "-C", root, "add", "-A")
+	if out, err := cmdAdd.CombinedOutput(); err != nil {
+		t.Fatalf("git add: %v (%s)", err, string(out))
+	}
+	cmdCommit := exec.Command("git", "-C", root, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-m", "apply test_create")
+	if out, err := cmdCommit.CombinedOutput(); err != nil {
+		t.Fatalf("git commit: %v (%s)", err, string(out))
+	}
+
+	// Call GetOperationDiff
+	wsSvc := WorkspaceService{}
+	diffRes, err := wsSvc.GetOperationDiff(context.Background(), root, receipt.OperationID)
+	if err != nil {
+		t.Fatalf("GetOperationDiff: %v", err)
+	}
+
+	if diffRes.OperationID != receipt.OperationID || len(diffRes.Changes) != 1 {
+		t.Fatalf("unexpected diffRes: %#v", diffRes)
+	}
+	ch := diffRes.Changes[0]
+	if !ch.DiffAvailable {
+		t.Fatal("expected DiffAvailable == true for committed operation")
+	}
+	if ch.After != "Line 1: initial content\nLine 2: more content\n" {
+		t.Fatalf("unexpected after content: %q", ch.After)
+	}
+
+	// Verify that diff contains the added lines
+	if !strings.Contains(ch.Diff, "+Line 1: initial content") {
+		t.Fatalf("diff missing added line: %s", ch.Diff)
 	}
 }

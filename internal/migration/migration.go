@@ -15,7 +15,7 @@ import (
 	"github.com/vantt/mcp-skill-hub/internal/workspace"
 )
 
-const CurrentVersion = 4
+const CurrentVersion = 5
 
 var (
 	ErrNoMigrationPath = errors.New("no canonical migration path is registered")
@@ -60,6 +60,7 @@ func DefaultRegistry() Registry {
 		1: {from: 1, to: 2, plan: planV1ToV2},
 		2: {from: 2, to: 3, plan: planV2ToV3},
 		3: {from: 3, to: 4, plan: planV3ToV4},
+		4: {from: 4, to: 5, plan: planV4ToV5},
 	}}
 }
 

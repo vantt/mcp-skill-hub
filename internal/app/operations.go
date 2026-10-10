@@ -475,7 +475,8 @@ func (WorkspaceService) GetOperationDiff(ctx context.Context, path, operationID 
 		Changes []receiptChange `yaml:"changes"`
 	}
 	found := false
-	err = walkOperationsYAML(root, "history/operations", func(_ string, data []byte) error {
+	var receiptRelPath string
+	err = walkOperationsYAML(root, "history/operations", func(rel string, data []byte) error {
 		var header struct {
 			ID string `yaml:"id"`
 		}
@@ -486,6 +487,7 @@ func (WorkspaceService) GetOperationDiff(ctx context.Context, path, operationID 
 			return errors.New("duplicate operation ID")
 		}
 		found = true
+		receiptRelPath = rel
 		return yaml.Unmarshal(data, &document)
 	})
 	if err != nil {
@@ -494,6 +496,7 @@ func (WorkspaceService) GetOperationDiff(ctx context.Context, path, operationID 
 	if !found {
 		return OperationDiffResult{}, errors.New("operation not found")
 	}
+	receiptCommit := gitCommitForFile(root, receiptRelPath)
 	paths := []string{}
 	changes := make([]OperationChange, 0, len(document.Changes))
 	for _, stored := range document.Changes {
@@ -507,8 +510,39 @@ func (WorkspaceService) GetOperationDiff(ctx context.Context, path, operationID 
 			change.Before, change.After = stored.BeforeContent, stored.AfterContent
 			change.Diff = renderBoundedOperationDiff(stored.Path, stored.BeforeContent, stored.AfterContent)
 			change.DiffAvailable = true
+		} else if receiptCommit != "" {
+			beforeStr, _ := gitShowCommitFile(root, receiptCommit+"~1", stored.Path)
+			afterStr, _ := gitShowCommitFile(root, receiptCommit, stored.Path)
+			diffStr := gitDiffCommits(root, receiptCommit+"~1", receiptCommit, stored.Path)
+			if diffStr == "" && (beforeStr != "" || afterStr != "") {
+				diffStr = renderBoundedOperationDiff(stored.Path, beforeStr, afterStr)
+			}
+			if diffStr != "" || beforeStr != "" || afterStr != "" {
+				change.Before = beforeStr
+				change.After = afterStr
+				change.Diff = diffStr
+				change.DiffAvailable = true
+			} else {
+				change.DigestOnlyMetadata = true
+			}
 		} else {
-			change.DigestOnlyMetadata = true
+			tracked, headDigest := inspectGitPath(root, stored.Path)
+			if tracked && headDigest == stored.BeforeDigest {
+				beforeStr, _ := gitShowCommitFile(root, "HEAD", stored.Path)
+				currentData, _ := os.ReadFile(filepath.Join(root, filepath.FromSlash(stored.Path)))
+				change.Before = beforeStr
+				change.After = string(currentData)
+				change.Diff = renderBoundedOperationDiff(stored.Path, change.Before, change.After)
+				change.DiffAvailable = true
+			} else if !tracked && stored.BeforeDigest == "" {
+				currentData, _ := os.ReadFile(filepath.Join(root, filepath.FromSlash(stored.Path)))
+				change.Before = ""
+				change.After = string(currentData)
+				change.Diff = renderBoundedOperationDiff(stored.Path, "", change.After)
+				change.DiffAvailable = true
+			} else {
+				change.DigestOnlyMetadata = true
+			}
 		}
 		changes = append(changes, change)
 	}
@@ -550,8 +584,42 @@ func walkOperationsYAML(root, relative string, visit func(string, []byte) error)
 		if err != nil {
 			return err
 		}
-		return visit(path, data)
+		rel, relErr := filepath.Rel(root, path)
+		if relErr != nil {
+			return relErr
+		}
+		return visit(filepath.ToSlash(rel), data)
 	})
+}
+func gitCommitForFile(root, relPath string) string {
+	cmd := exec.Command("git", "-C", root, "log", "-n", "1", "--format=%H", "--", relPath)
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	commit := strings.TrimSpace(string(out))
+	if len(commit) == 40 {
+		return commit
+	}
+	return ""
+}
+
+func gitShowCommitFile(root, commit, relPath string) (string, bool) {
+	cmd := exec.Command("git", "-C", root, "show", commit+":"+relPath)
+	out, err := cmd.Output()
+	if err != nil {
+		return "", false
+	}
+	return string(out), true
+}
+
+func gitDiffCommits(root, commitA, commitB, relPath string) string {
+	cmd := exec.Command("git", "-C", root, "diff", commitA, commitB, "--", relPath)
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return string(out)
 }
 
 func workspacePathDigest(root, path string) (string, error) {
