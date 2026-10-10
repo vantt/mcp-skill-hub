@@ -8,11 +8,11 @@ cd /home/vantt/projects/mcp-skill-hub-small-fixes && omp --profile=<profile>
 
 ```text
 You are worktree I. Fix two small defects and switch Claude Code to split MCP
-profiles in the Go repo mcp-skill-hub, test-first. The lead verified items 1-2 on main 9dbc041.
+profiles in the Go repo mcp-skill-hub, test-first. The lead verified items 1-2 on main 1d17fbf.
 
 STEP 0: WORK ONLY IN YOUR OWN WORKTREE (mandatory)
 - Worktree /home/vantt/projects/mcp-skill-hub-small-fixes, branch
-  wave4/small-fixes (the lead created it from main 9dbc041).
+  wave4/small-fixes (the lead created it from main 1d17fbf).
   `git -C /home/vantt/projects/mcp-skill-hub-small-fixes status -sb` must show it.
 - ABSOLUTE paths only, under /home/vantt/projects/mcp-skill-hub-small-fixes/.
 - Never write to /home/vantt/projects/mcp-skill-hub (lead's main checkout) or
