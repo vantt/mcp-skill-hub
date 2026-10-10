@@ -58,6 +58,12 @@ regenerating a different change. MCP responses omit these CLI-only fields.
 Commands requiring additional intent (for example, an unavailable curation-run
 tool) point to the existing CLI inspection route, not an invented mutation.
 
+`skillhub eval routing --json` uses this envelope with its complete evaluation
+report under `metrics`, not as bare root-level metric fields. A failed quality
+threshold retains the metrics, returns `action_required` with
+`routing_threshold_failed` warnings and a null operational `error`, and exits 1.
+Successful evaluation exits 0; invalid requests still use an error envelope.
+
 State-reporting results explicitly disclose state basis: canonical facts
 derived from the local Git working tree versus served facts from the active SQLite
 catalog generation (`servable`, `catalog_snapshot`, `generation`). Unconfirmed editor

@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -22,6 +21,11 @@ type routingEvalFlags struct {
 	minNoSkillRecall *float64
 	maxFPR           *float64
 	jsonOutput       bool
+}
+
+type routingEvalResult struct {
+	app.Result
+	Metrics app.RoutingEvalReport `json:"metrics"`
 }
 
 const routingUsage = "Run `skillhub eval routing [--workspace <path>] [--no-skill <file>] [--policy <file>] [--min-precision F] [--min-recall F] [--min-no-skill-recall F] [--max-fpr F] [--json]`."
@@ -149,11 +153,20 @@ func runEvaluationRouting(ctx context.Context, args []string, stdout, stderr io.
 	}
 
 	if flags.jsonOutput {
-		encoded, marshalErr := json.MarshalIndent(report, "", "  ")
-		if marshalErr != nil {
-			return writeWorkspaceResult(app.Result{}, marshalErr, stdout, stderr, true)
+		result := app.NewResult(app.StatusOK, "Routing evaluation completed.")
+		if thresholdFailed {
+			result.Status = app.StatusActionRequired
+			result.Summary = "Routing evaluation failed quality thresholds."
+			for _, reason := range failedReasons {
+				result.Warnings = append(result.Warnings, app.Warning{
+					Code:    "routing_threshold_failed",
+					Summary: reason,
+				})
+			}
 		}
-		_, _ = fmt.Fprintln(stdout, string(encoded))
+		if err := writeJSON(stdout, routingEvalResult{Result: result, Metrics: report}); err != nil {
+			return 1
+		}
 		if thresholdFailed {
 			return 1
 		}

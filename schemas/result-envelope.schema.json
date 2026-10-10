@@ -15,6 +15,7 @@
     "warnings": {"type": "array", "description": "public: Non-fatal actionable warnings.", "items": {"$ref": "#/$defs/warning"}},
     "error": {"description": "public: Present for error outcomes; null otherwise.", "oneOf": [{"type": "null"}, {"$ref": "error-envelope.schema.json"}]},
     "cli": {"type": "string", "description": "public: CLI-only runnable confirmation command bound to a preview's proposal ID, digest, base version, and workspace."},
+    "metrics": {"type": "object", "description": "public: Routing evaluation report, including case counts, rates, per-skill metrics, and failures; emitted by eval routing."},
     "operation_id": {"type": "string", "description": "public: Opaque operation receipt for a completed mutation."},
     "proposal": {"$ref": "#/$defs/proposal", "description": "public: Pinned semantic-mutation preview; confirm with every opaque field."},
     "next_page": {"type": "string", "description": "experimental: Opaque page continuation token; do not display to normal users."},
