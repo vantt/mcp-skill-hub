@@ -2,7 +2,7 @@ GOLANGCI_LINT ?= go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v
 # Lint only issues introduced after this revision; existing findings are tracked debt.
 LINT_BASE ?= origin/main
 
-.PHONY: test test-race test-perf lint lint-all fmt fmt-check vet check web-install web-build web-test web-check web-e2e web-ux web-dev
+.PHONY: test test-race test-perf lint lint-all fmt fmt-check vet check web-install web-build web-test web-check web-e2e web-ux web-shots web-dev
 
 ## test: full suite, same as CI
 test:
@@ -67,6 +67,15 @@ web-ux: web-build
 	cd web && npx playwright install chromium && UX_CAPTURE=1 UX_HUB_SOURCE='$(UX_HUB_SOURCE)' UX_OUT_DIR='$(UX_OUT_DIR)' npx playwright test --project=ux
 	@echo "UX capture output: $(UX_OUT_DIR)"
 	@ls $(UX_OUT_DIR) | grep -c '\.png$$' | xargs -I{} echo "{} screenshots"
+
+## web-shots: capture the README and user-guide screenshots from an invented demo hub into docs/images/web/
+## SHOTS_OUT_DIR: write somewhere else (for example to compare two runs).
+SHOTS_OUT_DIR ?= $(CURDIR)/docs/images/web
+web-shots: web-build
+	go build -o web/.e2e/skillhub ./cmd/skillhub
+	cd web && npx playwright install chromium && SHOTS_CAPTURE=1 SHOTS_OUT_DIR='$(SHOTS_OUT_DIR)' npx playwright test e2e/ux/shots.spec.ts --project=chromium
+	@echo "Screenshots in $(SHOTS_OUT_DIR)"
+	@ls $(SHOTS_OUT_DIR) | grep -c '\.png$$' | xargs -I{} echo "{} screenshots"
 
 web-dev:
 	bash scripts/web-dev.sh
