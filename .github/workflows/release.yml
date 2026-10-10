@@ -133,6 +133,18 @@ jobs:
           go-version: "1.26.0"
           cache: true
 
+      # Same fix as ci.yml: the suite is file-creation heavy and ran past the 30m timeout on the
+      # C: drive with real-time scanning. Keep scratch files on the D: work drive, excluded from scanning.
+      - name: Fast scratch space (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force D:\tmp, D:\gocache | Out-Null
+          "TMP=D:\tmp" >> $env:GITHUB_ENV
+          "TEMP=D:\tmp" >> $env:GITHUB_ENV
+          "GOCACHE=D:\gocache" >> $env:GITHUB_ENV
+          try { Add-MpPreference -ExclusionPath 'D:\tmp','D:\gocache',"$env:GITHUB_WORKSPACE" } catch { Write-Warning "Defender exclusion not applied: $_" }
+
       - name: Run unit and integration tests
         shell: bash
         run: go test -timeout 30m ./...
