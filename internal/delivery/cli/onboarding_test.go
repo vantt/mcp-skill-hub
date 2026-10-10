@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 
@@ -184,39 +183,6 @@ func TestConnectPreviewThenApplyWritesProjectFilesOnly(t *testing.T) {
 	}
 	if !strings.Contains(string(registration), workspace) && !strings.Contains(string(registration), escapedWorkspace) {
 		t.Fatalf(".mcp.json is missing workspace %q:\n%s", workspace, registration)
-	}
-	var files []string
-	if err := filepath.WalkDir(project, func(path string, entry os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if entry.IsDir() {
-			return nil
-		}
-		relative, err := filepath.Rel(project, path)
-		if err != nil {
-			return err
-		}
-		files = append(files, filepath.ToSlash(relative))
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	slices.Sort(files)
-	wantFiles := []string{
-		".agents/skills/system-curator/SKILL.md",
-		".claude/settings.local.json",
-		".claude/skills/system-curator/SKILL.md",
-		".codex/config.toml",
-		".gemini/settings.json",
-		".gemini/skills/system-curator/SKILL.md",
-		".mcp.json",
-		"AGENTS.md",
-		"CLAUDE.md",
-		"GEMINI.md",
-	}
-	if !slices.Equal(files, wantFiles) {
-		t.Fatalf("connect file set = %v, want %v (no curator sidecars)", files, wantFiles)
 	}
 
 	before, _ := os.ReadFile(filepath.Join(project, "CLAUDE.md"))

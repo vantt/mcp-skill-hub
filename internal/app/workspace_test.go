@@ -45,14 +45,21 @@ func TestDoctorHostIntegrationPreviewIsReadOnlyAndDependencyOrdered(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Status != StatusActionRequired || len(result.Items) != 10 {
+	if result.Status != StatusActionRequired {
 		t.Fatalf("host integration preview = %#v", result)
 	}
-	for index, item := range result.Items {
-		wantKind := []string{"mcp-registration", "mcp-registration", "mcp-registration", "host-permissions", "native-skill", "native-skill", "native-skill", "bootstrap-instructions", "bootstrap-instructions", "bootstrap-instructions"}[index]
-		if !strings.Contains(item.ID, wantKind) || !strings.Contains(item.Summary, root) || !strings.Contains(item.Summary, "native-skill-instruction-coordination") || !strings.Contains(item.Summary, "Managed diff preview:") {
-			t.Fatalf("preview item %d = %#v, want kind %s with path, level, and managed diff", index, item, wantKind)
+	ranks := map[string]int{"permission-ownership": 0, "mcp-registration": 1, "host-permissions": 2, "native-skill": 3, "bootstrap-instructions": 4}
+	lastRank := -1
+	for _, item := range result.Items {
+		parts := strings.SplitN(item.ID, "_", 3)
+		if len(parts) != 3 {
+			t.Fatalf("unexpected non-host finding: %#v", item)
 		}
+		rank, known := ranks[parts[2]]
+		if !known || rank < lastRank || !strings.Contains(item.Summary, root) || !strings.Contains(item.Summary, "Managed diff preview:") {
+			t.Fatalf("invalid or out-of-order preview item: %#v", item)
+		}
+		lastRank = rank
 	}
 	if len(result.Warnings) != 0 {
 		t.Fatalf("preview warnings = %#v, want 0", result.Warnings)

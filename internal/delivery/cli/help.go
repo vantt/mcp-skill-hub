@@ -19,6 +19,7 @@ Get started:
 Setup:
   init      Create a workspace (preview by default; --yes applies)
   connect   Connect an agent to a workspace, per project or with -g for all projects
+  disconnect Remove an unedited Claude Code connection; preserve user-owned rules
   doctor    Check the workspace and agent connections; --fix repairs
   status    Show what needs attention next
 
@@ -71,6 +72,15 @@ instruction block, and the system-curator skill. Preview by default; --yes appli
   --host <name>     Limit to claude, codex, or gemini (repeat or comma-separate)
   --yes             Write the files
   --json            Machine-readable result
+`,
+	"disconnect": `Usage: skillhub disconnect [--project <dir>] [-g|--global]
+                           [--workspace <path>] [--host claude] [--yes] [--json]
+
+Remove the Claude Code integration. Preview by default; --yes applies.
+Removes only permission rules and runtime directories recorded as added by
+connect, plus unedited Skill Hub registration, curator, and bootstrap content.
+Pre-existing rules, user edits, and legacy directories without a receipt stay.
+Codex and Gemini disconnect are not supported.
 `,
 	"doctor": `Usage: skillhub doctor [--workspace <path>] [--fix [--yes]] [--json]
 

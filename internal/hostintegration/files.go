@@ -156,6 +156,9 @@ func apply(ctx context.Context, plan PlanResult, options ApplyOptions) (ApplyRes
 			return ApplyResult{}, err
 		}
 		order := changeOrder(change.Kind)
+		if plan.Remove && change.Kind == ChangePermissionReceipt {
+			order = 5
+		}
 		if order < 0 || order < lastOrder {
 			return ApplyResult{}, fmt.Errorf("plan changes are not dependency ordered")
 		}
@@ -171,7 +174,7 @@ func apply(ctx context.Context, plan PlanResult, options ApplyOptions) (ApplyRes
 		if err != nil {
 			return ApplyResult{}, err
 		}
-		if (bytes.Equal(raw, change.Desired) && exists) || (nativeRemoval(change) && !exists) {
+		if (bytes.Equal(raw, change.Desired) && exists) || (removalChange(change, plan) && !exists) {
 			continue
 		}
 		if digest(raw, exists) != change.PreimageDigest {
@@ -202,13 +205,13 @@ func apply(ctx context.Context, plan PlanResult, options ApplyOptions) (ApplyRes
 		if err != nil {
 			return result, err
 		}
-		if (bytes.Equal(raw, write.change.Desired) && exists) || (nativeRemoval(write.change) && !exists) {
+		if (bytes.Equal(raw, write.change.Desired) && exists) || (removalChange(write.change, plan) && !exists) {
 			continue
 		}
 		if digest(raw, exists) != write.change.PreimageDigest {
 			return result, fmt.Errorf("%w: %s", ErrStalePlan, write.change.Path)
 		}
-		if nativeRemoval(write.change) {
+		if removalChange(write.change, plan) {
 			relative, err := managedRelativePath(writeRoot, write.change.Path)
 			if err != nil {
 				return result, err
@@ -228,7 +231,16 @@ func apply(ctx context.Context, plan PlanResult, options ApplyOptions) (ApplyRes
 }
 
 func expectedDesired(change Change, raw []byte, plan PlanResult) ([]byte, error) {
+	if plan.Remove {
+		if change.Host != HostClaude {
+			return nil, fmt.Errorf("disconnect currently supports only Claude Code")
+		}
+		return desiredDisconnectFile(change.Kind, raw, Request{Workspace: plan.Workspace, Root: plan.Root, Scope: plan.Scope, Binary: plan.Binary})
+	}
 	switch change.Kind {
+	case ChangePermissionReceipt:
+		file, err := prepareClaudePermissionReceipt(adapters[0], plan.Scope, plan.Root, plan.Workspace)
+		return file.desired, err
 	case ChangeNativeSkill:
 		if HostSupportsSkillsExtension(change.Host) {
 			if !nativeCuratorOwned(raw) {
@@ -255,7 +267,8 @@ func expectedDesired(change Change, raw []byte, plan PlanResult) ([]byte, error)
 		}
 	case ChangeHostPermissions:
 		if change.Host == HostClaude {
-			return desiredClaudePermissions(raw, plan.Workspace)
+			file, err := preparePermissions(adapters[0], plan.Scope, change.Path, plan.Root, plan.Workspace)
+			return file.desired, err
 		}
 	}
 	return nil, fmt.Errorf("unsupported change %q for host %q", change.Kind, change.Host)
@@ -263,14 +276,16 @@ func expectedDesired(change Change, raw []byte, plan PlanResult) ([]byte, error)
 
 func changeOrder(kind ChangeKind) int {
 	switch kind {
-	case ChangeMCP:
+	case ChangePermissionReceipt:
 		return 0
-	case ChangeHostPermissions:
+	case ChangeMCP:
 		return 1
-	case ChangeNativeSkill:
+	case ChangeHostPermissions:
 		return 2
-	case ChangeBootstrap:
+	case ChangeNativeSkill:
 		return 3
+	case ChangeBootstrap:
+		return 4
 	default:
 		return -1
 	}
@@ -290,6 +305,11 @@ func validateChangePath(root string, scope Scope, change Change) error {
 	var relative string
 	configRel, skillRel, instructionRel := adapter.relativePaths(scope)
 	switch change.Kind {
+	case ChangePermissionReceipt:
+		if change.Host != HostClaude {
+			return fmt.Errorf("host %q has no permission ownership receipt", change.Host)
+		}
+		relative = claudePermissionReceiptPath
 	case ChangeMCP:
 		relative = configRel
 	case ChangeHostPermissions:

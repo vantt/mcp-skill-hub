@@ -27,6 +27,8 @@ type ConnectRequest struct {
 	Global    bool
 	Hosts     []hostintegration.Host
 	Yes       bool
+	// Remove disconnects Claude Code, preserving user-owned configuration.
+	Remove bool
 }
 
 // Connect previews the connection unless Yes is set. It reuses the same
@@ -44,7 +46,10 @@ func (service ConnectService) Connect(ctx context.Context, request ConnectReques
 	if err != nil {
 		return Result{}, err
 	}
-	hostRequest := hostintegration.Request{Workspace: workspacePath, Root: root, Scope: scope, Binary: binary, Hosts: request.Hosts}
+	if request.Remove && len(request.Hosts) == 0 {
+		request.Hosts = []hostintegration.Host{hostintegration.HostClaude}
+	}
+	hostRequest := hostintegration.Request{Workspace: workspacePath, Root: root, Scope: scope, Binary: binary, Hosts: request.Hosts, Remove: request.Remove}
 	inspection, err := hostintegration.Inspect(ctx, hostRequest)
 	if err != nil {
 		return Result{}, err
@@ -71,10 +76,16 @@ func (service ConnectService) Connect(ctx context.Context, request ConnectReques
 	}
 	if len(plan.Changes) == 0 {
 		result := NewResult(StatusReady, "Agent connection for "+label+" is already current; nothing to change.")
+		if request.Remove {
+			result.Summary = "Agent connection for " + label + " has no removable managed content; nothing to change."
+		}
 		return result, nil
 	}
 	if !request.Yes {
 		result := NewResult(StatusActionRequired, "Preview only: agent connection for "+label+" was not written without --yes.")
+		if request.Remove {
+			result.Summary = "Preview only: agent connection for " + label + " was not removed without --yes."
+		}
 		for _, change := range plan.Changes {
 			item := hostChangeItem(change.Host, levels[change.Host], change.Kind, change.Path, "Will be written after confirmation.")
 			if change.Preview != "" {
@@ -90,6 +101,9 @@ func (service ConnectService) Connect(ctx context.Context, request ConnectReques
 		return Result{}, err
 	}
 	result := NewResult(StatusApplied, "Agent connection for "+label+" written.")
+	if request.Remove {
+		result.Summary = "Agent connection for " + label + " removed; user-owned content preserved."
+	}
 	for _, change := range applied.Changed {
 		result.Items = append(result.Items, hostChangeItem(change.Host, levels[change.Host], change.Kind, change.Path, "Written."))
 	}
@@ -161,6 +175,9 @@ func (service ConnectService) target(request ConnectRequest) (root string, scope
 
 func connectCommand(request ConnectRequest, workspacePath string) string {
 	parts := []string{"skillhub connect"}
+	if request.Remove {
+		parts[0] = "skillhub disconnect"
+	}
 	if request.Global {
 		parts = append(parts, "--global")
 	} else if request.Project != "" {

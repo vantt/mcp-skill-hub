@@ -80,8 +80,12 @@ func buildPlan(ctx context.Context, request Request) (PlanResult, error) {
 	if err != nil {
 		return PlanResult{}, err
 	}
-	plan := PlanResult{Workspace: prepared.workspace, Root: prepared.root, Scope: prepared.scope, Binary: prepared.binary}
-	for _, kind := range []ChangeKind{ChangeMCP, ChangeHostPermissions, ChangeNativeSkill, ChangeBootstrap} {
+	plan := PlanResult{Workspace: prepared.workspace, Root: prepared.root, Scope: prepared.scope, Binary: prepared.binary, Remove: request.Remove}
+	kinds := []ChangeKind{ChangePermissionReceipt, ChangeMCP, ChangeHostPermissions, ChangeNativeSkill, ChangeBootstrap}
+	if request.Remove {
+		kinds = []ChangeKind{ChangeMCP, ChangeHostPermissions, ChangeNativeSkill, ChangeBootstrap, ChangePermissionReceipt}
+	}
+	for _, kind := range kinds {
 		for _, host := range prepared.hosts {
 			for _, file := range host.files {
 				if file.state.Conflict != "" {
@@ -110,6 +114,9 @@ func prepare(ctx context.Context, request Request) (preparedInspection, error) {
 	if err != nil {
 		return preparedInspection{}, err
 	}
+	if request.Remove {
+		return prepareDisconnect(request)
+	}
 	prepared := preparedInspection{workspace: workspace, root: root, scope: scope, binary: binary}
 	bundle := systemskills.CuratorBundle()
 	for _, adapter := range selected {
@@ -130,6 +137,13 @@ func prepare(ctx context.Context, request Request) (preparedInspection, error) {
 				return preparedInspection{}, err
 			}
 			host.files = append(host.files, permissions)
+		}
+		if adapter.Host == HostClaude {
+			receipt, err := prepareClaudePermissionReceipt(adapter, scope, root, workspace)
+			if err != nil {
+				return preparedInspection{}, err
+			}
+			host.files = append(host.files, receipt)
 		}
 		if adapter.NativeSkill {
 			skillPath := filepath.Join(root, filepath.FromSlash(skillRel))
@@ -253,24 +267,28 @@ func preparePermissions(adapter Adapter, scope Scope, path, root, workspace stri
 	if err != nil {
 		return preparedFile{}, err
 	}
-	if scope == ScopeProject && adapter.SharedPermissionsRelativePath != "" {
-		sharedPath := filepath.Join(root, filepath.FromSlash(adapter.SharedPermissionsRelativePath))
-		shared, _, sharedExists, err := readManagedFile(sharedPath, root)
-		if err != nil {
-			return preparedFile{}, err
-		}
-		if sharedExists {
-			if desired, derr := desiredClaudePermissions(shared, workspace); derr == nil && bytes.Equal(desired, shared) {
-				return newPreparedFile(host, ChangeHostPermissions, path, raw, raw, mode, exists, ""), nil
-			}
-		}
-	}
 	desired, err := desiredClaudePermissions(raw, workspace)
 	if err != nil {
 		return newPreparedFile(host, ChangeHostPermissions, path, raw, raw, mode, exists, err.Error()), nil
 	}
+	if scope == ScopeProject && adapter.SharedPermissionsRelativePath != "" {
+		sharedPath := filepath.Join(root, filepath.FromSlash(adapter.SharedPermissionsRelativePath))
+		shared, _, sharedExists, readErr := readManagedFile(sharedPath, root)
+		if readErr != nil {
+			return preparedFile{}, readErr
+		}
+		if sharedExists {
+			withDirs, dirErr := ensureJSONStringArray(shared, claudeAllowedDirsPath, RuntimeAccessDirs(workspace))
+			if dirErr == nil && bytes.Equal(withDirs, shared) {
+				desired, err = desiredClaudeCLIRules(raw)
+				if err != nil {
+					return preparedFile{}, err
+				}
+			}
+		}
+	}
 	file := newPreparedFile(host, ChangeHostPermissions, path, raw, desired, mode, exists, "")
-	file.preview = boundPreview("managed allowed directories only: " + allowedDirsPreview(host, raw, workspace))
+	file.preview = claudePermissionsPreview(raw, desired)
 	return file, nil
 }
 

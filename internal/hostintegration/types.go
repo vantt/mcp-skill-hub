@@ -36,9 +36,10 @@ const (
 	// ChangeHostPermissions is a separate host settings file that allows the
 	// runtime directories. Hosts whose MCP config file also carries the
 	// allowance (Codex, Gemini CLI) fold it into ChangeMCP instead.
-	ChangeHostPermissions ChangeKind = "host-permissions"
-	ChangeNativeSkill     ChangeKind = "native-skill"
-	ChangeBootstrap       ChangeKind = "bootstrap-instructions"
+	ChangeHostPermissions   ChangeKind = "host-permissions"
+	ChangeNativeSkill       ChangeKind = "native-skill"
+	ChangeBootstrap         ChangeKind = "bootstrap-instructions"
+	ChangePermissionReceipt ChangeKind = "permission-ownership"
 )
 
 // Scope selects where a host integration is written relative to Request.Root.
@@ -108,6 +109,8 @@ type Request struct {
 	Scope     Scope
 	Binary    string
 	Hosts     []Host
+	// Remove previews or applies removal of the Claude Code integration.
+	Remove bool
 }
 
 // FileState is a read-only view of one managed integration surface.
@@ -155,6 +158,7 @@ type PlanResult struct {
 	Scope     Scope
 	Binary    string
 	Changes   []Change
+	Remove    bool
 }
 
 // ApplyOptions makes mutation authorization explicit at the application boundary.

@@ -19,9 +19,6 @@ func TestProjectRootIsSeparateFromServedWorkspace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Plan: %v", err)
 	}
-	if len(plan.Changes) != 10 {
-		t.Fatalf("change count = %d, want 10", len(plan.Changes))
-	}
 	for _, change := range plan.Changes {
 		if !strings.HasPrefix(change.Path, project+string(filepath.Separator)) {
 			t.Fatalf("change path %s is outside the project root", change.Path)

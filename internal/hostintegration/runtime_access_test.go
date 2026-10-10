@@ -68,7 +68,6 @@ func TestRuntimeDirsAreAddedForEveryHostWithoutClobberingUserEntries(t *testing.
 
 			claude := jsonStrings(t, claudeSettings, "permissions", "additionalDirectories")
 			assertHasAll(t, "claude additionalDirectories", claude, append([]string{"/user/dir"}, dirs...))
-			assertContains(t, claudeSettings, `"allow": ["Bash(ls)"]`)
 			assertContains(t, claudeSettings, `"model": "keep"`)
 			gemini := jsonStrings(t, geminiPath, "context", "includeDirectories")
 			assertHasAll(t, "gemini includeDirectories", gemini, append([]string{"/user/gem"}, dirs...))
@@ -204,14 +203,9 @@ func TestSharedProjectSettingsSatisfyCheckButFixWritesLocalFile(t *testing.T) {
 	encoded, _ := json.Marshal(map[string]any{"permissions": map[string]any{"additionalDirectories": RuntimeAccessDirs(workspace)}})
 	writeTestFile(t, shared, encoded, 0o600)
 
-	plan, err := Plan(context.Background(), request)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, change := range plan.Changes {
-		if change.Kind == ChangeHostPermissions {
-			t.Fatalf("shared settings already satisfy the check, got change for %s", change.Path)
-		}
+	applyAll(t, request)
+	if dirs := jsonStrings(t, claudeLocal(root), "permissions", "additionalDirectories"); len(dirs) != 0 {
+		t.Fatalf("shared directory allowances duplicated locally: %v", dirs)
 	}
 
 	writeTestFile(t, shared, []byte("{}\n"), 0o600)

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -37,7 +38,36 @@ var (
 const codexWritableRootsTable = "sandbox_workspace_write"
 
 func desiredClaudePermissions(raw []byte, workspace string) ([]byte, error) {
-	return ensureJSONStringArray(raw, claudeAllowedDirsPath, RuntimeAccessDirs(workspace))
+	updated, err := ensureJSONStringArray(raw, claudeAllowedDirsPath, RuntimeAccessDirs(workspace))
+	if err != nil {
+		return nil, err
+	}
+	return desiredClaudeCLIRules(updated)
+}
+
+func desiredClaudeCLIRules(raw []byte) ([]byte, error) {
+	updated := raw
+	for _, rule := range claudeCLIRules {
+		existing, err := jsonStringArrayAt(updated, []string{"permissions", rule.key})
+		if err != nil {
+			return nil, err
+		}
+		values := append([]string(nil), existing...)
+		for _, value := range rule.values {
+			if !slices.Contains(values, value) {
+				values = append(values, value)
+			}
+		}
+		if slices.Equal(existing, values) {
+			continue
+		}
+		encoded, _ := json.Marshal(values)
+		updated, err = upsertJSONPath(updated, []string{"permissions", rule.key}, encoded)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return updated, nil
 }
 
 // ensureJSONStringArray makes the array of strings at path contain every value,
