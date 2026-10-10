@@ -65,50 +65,13 @@ func planV4ToV5(root string) ([]mutation.Change, []FileDiff, error) {
 		if readErr != nil {
 			return fmt.Errorf("read receipt %s: %w", path, readErr)
 		}
-
-		var doc map[string]any
-		if err := yaml.Unmarshal(data, &doc); err != nil {
-			return fmt.Errorf("unmarshal receipt %s: %w", path, err)
+		newYAML, stripped, stripErr := stripReceiptBodiesNode(data)
+		if stripErr != nil {
+			return fmt.Errorf("strip receipt %s: %w", path, stripErr)
 		}
-
-		rawChanges, ok := doc["changes"].([]any)
-		if !ok || len(rawChanges) == 0 {
+		if !stripped {
 			return nil
 		}
-
-		hasBodies := false
-		var strippedChanges []any
-		for _, rawCh := range rawChanges {
-			chMap, isMap := rawCh.(map[string]any)
-			if !isMap {
-				strippedChanges = append(strippedChanges, rawCh)
-				continue
-			}
-			newCh := make(map[string]any)
-			for k, v := range chMap {
-				if k == "before_content" || k == "after_content" || k == "content_available" {
-					hasBodies = true
-					continue
-				}
-				newCh[k] = v
-			}
-			strippedChanges = append(strippedChanges, newCh)
-		}
-
-		if !hasBodies {
-			return nil
-		}
-
-		doc["changes"] = strippedChanges
-		var buf bytes.Buffer
-		enc := yaml.NewEncoder(&buf)
-		enc.SetIndent(2)
-		if err := enc.Encode(doc); err != nil {
-			return fmt.Errorf("marshal stripped receipt %s: %w", path, err)
-		}
-		_ = enc.Close()
-
-		newYAML := buf.Bytes()
 		rel, relErr := filepath.Rel(root, path)
 		if relErr != nil {
 			return relErr
@@ -134,4 +97,59 @@ func planV4ToV5(root string) ([]mutation.Change, []FileDiff, error) {
 	}
 
 	return changes, diffs, nil
+}
+
+func stripReceiptBodiesNode(data []byte) ([]byte, bool, error) {
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return nil, false, err
+	}
+	if doc.Kind != yaml.DocumentNode || len(doc.Content) == 0 || doc.Content[0].Kind != yaml.MappingNode {
+		return nil, false, nil
+	}
+
+	mapping := doc.Content[0]
+	hasBodies := false
+
+	for i := 0; i < len(mapping.Content); i += 2 {
+		keyNode := mapping.Content[i]
+		if keyNode.Value != "changes" {
+			continue
+		}
+		changesVal := mapping.Content[i+1]
+		if changesVal.Kind != yaml.SequenceNode {
+			continue
+		}
+
+		for _, item := range changesVal.Content {
+			if item.Kind != yaml.MappingNode {
+				continue
+			}
+			var newContent []*yaml.Node
+			for j := 0; j < len(item.Content); j += 2 {
+				k := item.Content[j].Value
+				v := item.Content[j+1]
+				if k == "before_content" || k == "after_content" || k == "content_available" {
+					hasBodies = true
+					continue
+				}
+				newContent = append(newContent, item.Content[j], v)
+			}
+			item.Content = newContent
+		}
+	}
+
+	if !hasBodies {
+		return nil, false, nil
+	}
+
+	var buf bytes.Buffer
+	enc := yaml.NewEncoder(&buf)
+	enc.SetIndent(4)
+	if err := enc.Encode(&doc); err != nil {
+		return nil, false, err
+	}
+	_ = enc.Close()
+
+	return buf.Bytes(), true, nil
 }
