@@ -112,3 +112,7 @@ Test packages that reach host integration (`app`, `cli`, `mcpserver`, `web`,
 and `hostintegration`) isolate HOME, USERPROFILE, and XDG directories in
 `TestMain`, before parallel tests start. Their subprocesses inherit that
 isolation; running the suite does not use your agent-host configuration.
+
+Missing `GOCACHE`, `GOMODCACHE`, and `GOPATH` values are resolved with `go env`
+before isolation, so subprocess builds reuse existing Go caches rather than
+filling the temporary home with read-only modules. Explicit values are preserved.
