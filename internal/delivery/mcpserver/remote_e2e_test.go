@@ -299,7 +299,13 @@ func TestRemoteHubEndToEndThroughATunnel(t *testing.T) {
 		t.Fatalf("read the written entry: %v\n%s", err, raw)
 	}
 	entry := config.Servers["skillhub"]
-	if entry.Command != binary || !slices.Equal(entry.Args, []string{"mcp", "proxy", "--hub", tunnel.url, "--token-file", tokenCopy}) {
+	// connect records the binary's resolved path (macOS temp dirs are symlinks).
+	wantBinary, err := filepath.EvalSymlinks(binary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotBinary, err := filepath.EvalSymlinks(entry.Command)
+	if err != nil || gotBinary != wantBinary || !slices.Equal(entry.Args, []string{"mcp", "proxy", "--hub", tunnel.url, "--token-file", tokenCopy}) {
 		t.Fatalf("written entry = %+v", entry)
 	}
 	agentHost := exec.Command(entry.Command, entry.Args...)
@@ -760,7 +766,10 @@ func TestOneMachineStdioServerOpensNoPortAndStartsNoProcess(t *testing.T) {
 // serving side by side on one workspace: stdio servers for B's own agents and
 // the network listener for two proxies of machine A, all calling
 // skill_resolve at the same time. Every call writes its telemetry events; none
-// is lost.
+// is lost. The stdio servers and the proxies are separate processes; the
+// listener runs in the test process, so it stops cleanly on every system
+// (a separate process could only be killed on Windows, losing its last
+// telemetry batch).
 func TestHubServesLocalStdioAndRemoteProxiesAtOnce(t *testing.T) {
 	const (
 		localServers = 3
@@ -770,7 +779,7 @@ func TestHubServesLocalStdioAndRemoteProxiesAtOnce(t *testing.T) {
 	)
 	binary := buildSkillHub(t)
 	root := newMemoryWorkspace(t, binary, skills)
-	hub := startHubProcess(t, binary, root, os.Environ())
+	hub := startHTTPTestHub(t, root)
 
 	sessions := make([]*mcp.ClientSession, 0, localServers+proxies)
 	var locals []*memoryServe
@@ -781,7 +790,7 @@ func TestHubServesLocalStdioAndRemoteProxiesAtOnce(t *testing.T) {
 		sessions = append(sessions, served.session)
 	}
 	for range proxies {
-		proxied := startProxyProcess(t, proxyCommand(binary, hub.url, hub.tokenFile, append(os.Environ(), "XDG_STATE_HOME="+t.TempDir())))
+		proxied := startProxyProcess(t, proxyCommand(binary, hub.baseURL, hub.tokenFile, append(os.Environ(), "XDG_STATE_HOME="+t.TempDir())))
 		remotes = append(remotes, proxied)
 		sessions = append(sessions, proxied.session)
 	}
