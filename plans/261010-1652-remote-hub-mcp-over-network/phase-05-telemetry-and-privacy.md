@@ -29,3 +29,5 @@ Remote use produces the same observations as local use (chains, cases, loads) wi
 - [x] Telemetry store contains no token and no IP (test with a scan).
 - [x] Existing telemetry tests stay green.
 - [ ] A bundle fetch counts one load per skill version and session (with task 3).
+
+- Decisions after review (2026-10-11): the client label `remote:<host>` stays (it needs no schema change); the label follows the connection type, so an agent on the hub machine that connects through the HTTP listener is also labelled remote, which is acceptable. Task 3 (count a bundle fetch once per skill version and session) is done after the bundle endpoint is merged, with the hook described in `plans/reports/cook-261011-remote-phase5.md`.
