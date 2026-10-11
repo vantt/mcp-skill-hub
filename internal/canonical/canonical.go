@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -368,16 +369,25 @@ func scan(root string, beforeRecheck func()) (Snapshot, error) {
 		return Snapshot{}, err
 	}
 	if !sameInventory(first, second) {
-		return Snapshot{}, fmt.Errorf("canonical workspace changed during scan; retry")
+		return Snapshot{}, errChangedDuringScan
 	}
-	catalog := make([]FileDigest, 0, len(first))
-	for _, item := range first {
+	return newSnapshot(first), nil
+}
+
+// newSnapshot derives both aggregate digests from a complete, path-sorted inventory.
+func newSnapshot(files []FileDigest) Snapshot {
+	catalog := make([]FileDigest, 0, len(files))
+	for _, item := range files {
 		if catalogAffecting(item.Path) {
 			catalog = append(catalog, item)
 		}
 	}
-	return Snapshot{Files: first, CatalogSnapshot: aggregate(catalog), ProjectionInputDigest: aggregate(first)}, nil
+	return Snapshot{Files: files, CatalogSnapshot: aggregate(catalog), ProjectionInputDigest: aggregate(files)}
 }
+
+// errChangedDuringScan reports that two observations of the canonical tree in one
+// scan disagreed, so no consistent snapshot can be published.
+var errChangedDuringScan = errors.New("canonical workspace changed during scan; retry")
 
 func inventory(root string) ([]FileDigest, error) {
 	files, err := workspace.RelativeFiles(root)
@@ -400,10 +410,14 @@ func inventory(root string) ([]FileDigest, error) {
 			return nil, fmt.Errorf("canonical files exceed V1 aggregate limit of %d bytes at %s", workspace.MaxCanonicalBytesV1, rel)
 		}
 		totalBytes += int64(len(contents))
-		digest := sha256.Sum256(contents)
-		items = append(items, FileDigest{Path: rel, Digest: "sha256:" + hex.EncodeToString(digest[:])})
+		items = append(items, FileDigest{Path: rel, Digest: contentDigest(contents)})
 	}
 	return items, nil
+}
+
+func contentDigest(contents []byte) string {
+	digest := sha256.Sum256(contents)
+	return "sha256:" + hex.EncodeToString(digest[:])
 }
 
 func readCanonicalFile(root *os.Root, relative string) ([]byte, error) {

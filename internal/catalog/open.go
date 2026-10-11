@@ -91,8 +91,13 @@ func InspectWhileLocked(ctx context.Context, root string) (Status, error) {
 	if err != nil || published.State != StateUnknown {
 		return published, err
 	}
-	pointer := *published.Pointer
-	snapshot, err := canonical.Scan(root)
+	return inspectCanonicalWhileLocked(root, *published.Pointer)
+}
+
+// inspectCanonicalWhileLocked compares the canonical inputs with a published
+// pointer that inspectPublishedWhileLocked has already verified under the same lock.
+func inspectCanonicalWhileLocked(root string, pointer Pointer) (Status, error) {
+	snapshot, err := canonical.ScanCached(root)
 	if err != nil {
 		return Status{}, err
 	}
@@ -343,7 +348,7 @@ func openWithFallback(ctx context.Context, root string, keepLock bool) (*Handle,
 		}
 
 		pointer := *published.Pointer
-		status, err := InspectWhileLocked(ctx, root)
+		status, err := inspectCanonicalWhileLocked(root, pointer)
 		if err != nil {
 			_ = lock.Unlock()
 			return nil, err
