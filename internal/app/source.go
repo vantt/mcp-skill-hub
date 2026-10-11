@@ -249,7 +249,7 @@ func (service SourceService) ListSources(ctx context.Context, path, status strin
 		for _, s := range lnkSkills {
 			skillSet[s] = true
 		}
-		var combinedSkills []string
+		combinedSkills := make([]string, 0, len(skillSet))
 		for s := range skillSet {
 			combinedSkills = append(combinedSkills, s)
 		}

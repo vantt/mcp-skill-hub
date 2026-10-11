@@ -287,6 +287,10 @@ func TestCloneRebuildRetainsRevisionLosesOperationalTimesAndStatusDoesNotFetch(t
 	if len(listed.Sources) != 1 || listed.Sources[0].Record.CurrentRevision == nil || listed.Sources[0].Record.CurrentRevision.Value != revision("one").Value {
 		t.Fatalf("cloned source = %#v", listed.Sources)
 	}
+	// A source no skill uses lists an empty skills array, never null, which the web UI reads with .includes.
+	if listed.Sources[0].Skills == nil {
+		t.Fatal("a source with no skills listed a nil skills slice, which serializes as null")
+	}
 	cloneHome, err := (CurationService{}).GetCurationHome(context.Background(), clone)
 	if err != nil {
 		t.Fatal(err)
