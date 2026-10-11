@@ -2,7 +2,9 @@ package mcpserver
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -464,7 +466,7 @@ func TestRemoteHubEndToEndThroughATunnel(t *testing.T) {
 // archive, or a hub from before bundles existed.
 type frontHub struct {
 	url  string
-	mode atomic.Value // string: "", "cut", "truncate" or "legacy"
+	mode atomic.Value // string: "", "cut", "truncate", "stall" or "legacy"
 }
 
 func startFrontHub(t *testing.T, hub *httpTestHub) *frontHub {
@@ -482,7 +484,7 @@ func startFrontHub(t *testing.T, hub *httpTestHub) *frontHub {
 		switch {
 		case mode == "legacy" && (request.URL.Path == HTTPBundlePath || request.URL.Path == HTTPStatusPath):
 			http.NotFound(writer, request)
-		case (mode == "cut" || mode == "truncate") && request.URL.Path == HTTPBundlePath:
+		case (mode == "cut" || mode == "truncate" || mode == "stall") && request.URL.Path == HTTPBundlePath:
 			front.damageBundle(t, writer, request, hub.baseURL, mode)
 		default:
 			forward.ServeHTTP(writer, request)
@@ -495,8 +497,9 @@ func startFrontHub(t *testing.T, hub *httpTestHub) *frontHub {
 
 // damageBundle fetches the real bundle and sends only its first half: "cut"
 // announces the full length and then drops the connection, as when the hub
-// stops in the middle of a download; "truncate" announces the shorter length,
-// so the HTTP answer is complete but the archive is not.
+// stops in the middle of a download; "stall" announces the full length and
+// then sends nothing more until the client gives up; "truncate" announces the
+// shorter length, so the HTTP answer is complete but the archive is not.
 func (front *frontHub) damageBundle(t *testing.T, writer http.ResponseWriter, request *http.Request, hubURL, mode string) {
 	upstream, err := http.NewRequestWithContext(request.Context(), http.MethodGet, hubURL+request.URL.RequestURI(), nil)
 	if err != nil {
@@ -534,6 +537,10 @@ func (front *frontHub) damageBundle(t *testing.T, writer http.ResponseWriter, re
 	writer.WriteHeader(http.StatusOK)
 	_, _ = writer.Write(half)
 	writer.(http.Flusher).Flush()
+	if mode == "stall" {
+		<-request.Context().Done()
+		return
+	}
 	connection, buffered, err := writer.(http.Hijacker).Hijack()
 	if err != nil {
 		t.Error(err)
@@ -655,6 +662,48 @@ func TestRemoteFetchFailures(t *testing.T) {
 		}
 		assertNothingCached(t, proxied, id)
 	})
+
+	t.Run("a download that stalls counts as an unreachable hub and a cancelled one as cancelled", func(t *testing.T) {
+		// Its own hub: the skill changes on it.
+		root := newBundleHubFixture(t)
+		hub := startHTTPTestHub(t, root)
+		front := startFrontHub(t, hub)
+		proxied := startTestProxy(t, front.url, hub.token, t.TempDir(), nil)
+		old, result, encoded := proxySkillGet(t, proxied.session, id)
+		if result.IsError || old.Remote == nil || old.Remote.Cache != remoteCacheFetched {
+			t.Fatalf("first fetch = %s", encoded)
+		}
+		writeFixtureFile(t, filepath.Join(root, "skills", "default", id, "references", "dispatch.md"), []byte("# Dispatch\n\nChanged on the hub.\n"))
+		rebuildFixtureCatalog(t, root)
+		// The resolution names the new version, so the next get downloads it.
+		resolveFor(t, proxied.session, remoteBenchTaskText(t, root, id), "REQ-stall")
+		front.mode.Store("stall")
+		request := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Name: "skill_get", Arguments: json.RawMessage(`{"skill_id":"` + id + `"}`)}}
+
+		// The proxy's own deadline for one download, shortened.
+		ctx, cancel := context.WithTimeout(t.Context(), 500*time.Millisecond)
+		defer cancel()
+		stalled, err := proxied.proxy.skillGet(ctx, request)
+		if err != nil {
+			t.Fatalf("stalled download: %v", err)
+		}
+		encoded, _ = json.Marshal(stalled.StructuredContent)
+		got := decodeSkillGet(t, encoded)
+		if stalled.IsError || got.Remote == nil || got.Remote.Cache != remoteCacheOffline || got.Local.Path != old.Local.Path {
+			t.Fatalf("a stalled download should fall back to the cached copy: %s", encoded)
+		}
+
+		// The agent host cancels the call in the middle of the download.
+		ctx, cancel = context.WithCancel(t.Context())
+		time.AfterFunc(300*time.Millisecond, cancel)
+		cancelled, err := proxied.proxy.skillGet(ctx, request)
+		if !errors.Is(err, context.Canceled) || cancelled != nil {
+			t.Fatalf("a cancelled download = %+v, %v; want the cancellation", cancelled, err)
+		}
+		if versions := proxied.proxy.cache.Versions(proxied.proxy.hubID, id); len(versions) != 1 {
+			t.Fatalf("%d cached versions after the failed downloads, want only the first one", len(versions))
+		}
+	})
 }
 
 // TestNetworkListenerReachesNoCurationTool calls every tool the full local
@@ -752,7 +801,10 @@ func TestOneMachineStdioServerOpensNoPortAndStartsNoProcess(t *testing.T) {
 	}
 	for _, task := range tasks {
 		children, err := os.ReadFile(fmt.Sprintf("/proc/%d/task/%s/children", pid, task.Name()))
-		if err == nil && strings.TrimSpace(string(children)) != "" {
+		if err != nil {
+			t.Skipf("this kernel does not list child processes in /proc: %v", err)
+		}
+		if strings.TrimSpace(string(children)) != "" {
 			t.Fatalf("the stdio server started child processes: %s", children)
 		}
 	}
@@ -873,11 +925,11 @@ func TestRemoteTimingScriptTimesAFetchAndACachedRepeat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	stateDir := t.TempDir()
+	stateDir, scratch := t.TempDir(), t.TempDir()
 	command := exec.Command("sh", script, "--skill", "herdr-cook-plan", "--task", remoteBenchTaskText(t, root, "herdr-cook-plan"),
 		"--hub", hub.url, "--token-file", hub.tokenFile)
 	command.Dir = t.TempDir()
-	command.Env = append(remoteBenchEnv(), "SKILLHUB_BIN="+binary, "XDG_STATE_HOME="+stateDir, "TMPDIR="+t.TempDir())
+	command.Env = append(remoteBenchEnv(), "SKILLHUB_BIN="+binary, "XDG_STATE_HOME="+stateDir, "TMPDIR="+scratch)
 	output, err := command.CombinedOutput()
 	text := string(output)
 	if err != nil {
@@ -897,5 +949,8 @@ func TestRemoteTimingScriptTimesAFetchAndACachedRepeat(t *testing.T) {
 	}
 	if entries, _ := os.ReadDir(stateDir); len(entries) != 0 {
 		t.Fatalf("the timing script used the user's own cache: %v", entries)
+	}
+	if entries, _ := os.ReadDir(scratch); len(entries) != 0 {
+		t.Fatalf("the timing script left its temporary cache behind: %v", entries)
 	}
 }
