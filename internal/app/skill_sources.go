@@ -53,10 +53,12 @@ func (service SourceService) SkillSources(ctx context.Context, path, skillID str
 		return SkillSourcesResult{}, skill.ErrNotFound
 	}
 
-	// 1. Get Upstream (nil if skill has no github/git origin)
+	// 1. Get Upstream (nil if skill has no github/git origin). An upstream
+	// without a source record is returned with status "untracked" so the
+	// caller can offer to track it.
 	var upstream *SkillUpstream
 	up, upErr := GetSkillUpstream(ctx, root, skillID)
-	if upErr == nil && up.Repository != "" && up.Status != "untracked" {
+	if upErr == nil && up.Repository != "" {
 		upstream = &up
 	}
 
