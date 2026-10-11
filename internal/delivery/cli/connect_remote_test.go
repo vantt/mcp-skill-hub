@@ -90,6 +90,22 @@ func isolateClient(t *testing.T) (home, state string) {
 	return home, state
 }
 
+// containsPath reports whether a host file names path, either as it is or,
+// in JSON and TOML strings, with each Windows backslash escaped.
+func containsPath(text, path string) bool {
+	return strings.Contains(text, path) || strings.Contains(text, strings.ReplaceAll(path, `\`, `\\`))
+}
+
+// commandLineArg is how a printed command line shows a temporary path:
+// unquoted, except on Windows, where its backslashes make the command quote it
+// in double quotes.
+func commandLineArg(path string) string {
+	if runtime.GOOS == "windows" {
+		return `"` + path + `"`
+	}
+	return path
+}
+
 // flatText joins wrapped output into one line of single-spaced words.
 func flatText(text string) string { return strings.Join(strings.Fields(text), " ") }
 
@@ -154,10 +170,10 @@ func TestConnectHubWritesEachHostsEntryAndNeverTheToken(t *testing.T) {
 		if registration.HubURL != hub || registration.TokenFile != tokenFile || registration.Workspace != "" {
 			t.Fatalf("%s registration = %+v", host, registration)
 		}
-		if !strings.Contains(config, binary) || strings.Contains(config, "skillhub-curation") || strings.Contains(config, `"cwd"`) || strings.Contains(config, "cwd =") {
+		if !containsPath(config, binary) || strings.Contains(config, "skillhub-curation") || strings.Contains(config, `"cwd"`) || strings.Contains(config, "cwd =") {
 			t.Fatalf("%s config:\n%s", host, config)
 		}
-		if host != "claude" && !strings.Contains(config, cacheDir) {
+		if host != "claude" && !containsPath(config, cacheDir) {
 			t.Fatalf("%s config does not allow the skill cache %s:\n%s", host, cacheDir, config)
 		}
 		if host == "claude" {
@@ -174,7 +190,7 @@ func TestConnectHubWritesEachHostsEntryAndNeverTheToken(t *testing.T) {
 			if len(entry.Servers) != 1 || entry.Servers["skillhub"].Type != "stdio" || !slices.Equal(entry.Servers["skillhub"].Args, wantArgs) {
 				t.Fatalf("Claude entry: %s", config)
 			}
-			if !strings.Contains(tree[".claude/settings.local.json"], cacheDir) || !strings.Contains(tree[".claude/settings.local.json"], "Bash(skillhub:*)") {
+			if !containsPath(tree[".claude/settings.local.json"], cacheDir) || !strings.Contains(tree[".claude/settings.local.json"], "Bash(skillhub:*)") {
 				t.Fatalf("Claude permissions: %s", tree[".claude/settings.local.json"])
 			}
 		}
@@ -340,7 +356,7 @@ func TestConnectSwitchesAScopeAndRemoveRestoresIt(t *testing.T) {
 	if err := json.Unmarshal(raw, &config); err != nil {
 		t.Fatal(err)
 	}
-	if len(config.Servers) != 2 || strings.Contains(string(raw), "\"serve\"") || strings.Contains(string(raw), ws) {
+	if len(config.Servers) != 2 || strings.Contains(string(raw), "\"serve\"") || containsPath(string(raw), ws) {
 		t.Fatalf("one entry for the scope expected after the switch:\n%s", raw)
 	}
 	if _, err := os.Stat(filepath.Join(project, ".claude", "skills", "system-curator", "SKILL.md")); !os.IsNotExist(err) {
@@ -348,7 +364,7 @@ func TestConnectSwitchesAScopeAndRemoveRestoresIt(t *testing.T) {
 	}
 
 	code, stdout, _ = runCLI(t, "connect", "--remove", "--project", project)
-	if code != 0 || !strings.Contains(stdout, "Preview only: the Skill Hub connection for project") || !strings.Contains(stdout, "  $ skillhub connect --remove --project "+project+" --yes") {
+	if code != 0 || !strings.Contains(stdout, "Preview only: the Skill Hub connection for project") || !strings.Contains(stdout, "  $ skillhub connect --remove --project "+commandLineArg(project)+" --yes") {
 		t.Fatalf("remove preview:\n%s", stdout)
 	}
 	if after := treeOf(t, project); maps.Equal(before, after) {

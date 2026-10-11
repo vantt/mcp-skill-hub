@@ -277,7 +277,8 @@ func TestServeMCPListenerLifecycle(t *testing.T) {
 		t.Fatalf("no connect line; stdout: %s; stderr: %s", stdout.String(), stderr.String())
 	}
 	tokenFile := hubtoken.DefaultPath(ws)
-	if !strings.Contains(stdout.String(), "--token-file "+tokenFile+" --yes") {
+	// The path is quoted where it needs it, as for a Windows path.
+	if !strings.Contains(stdout.String(), "--token-file "+shellQuote(tokenFile)+" --yes") {
 		t.Fatalf("connect line lacks the token file path:\n%s", stdout.String())
 	}
 	token, err := hubtoken.Read(tokenFile)
@@ -360,7 +361,7 @@ func TestTokenCommands(t *testing.T) {
 		"  - A running listener uses the new token from its next request; it does not need a restart.\n" +
 		"\n" +
 		"Next: Apply the rotation:\n" +
-		"  $ skillhub token rotate --workspace " + ws + " --yes\n"
+		"  $ skillhub token rotate --workspace " + shellQuote(ws) + " --yes\n"
 	if code != 0 || stderr != "" || stdout != want {
 		t.Fatalf("token rotate preview: exit %d, stderr %q, stdout:\n%s\nwant:\n%s", code, stderr, stdout, want)
 	}
