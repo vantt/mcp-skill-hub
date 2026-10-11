@@ -26,8 +26,18 @@ export function parseDiff(raw: string): DiffLine[] {
   // is written "----", so only the header shape is skipped.
   const isFileHeader = (line: string) => /^(---|\+\+\+) [ab]\//.test(line) || line === '--- /dev/null' || line === '+++ /dev/null';
 
+  // "@@ -a,b +c,d @@" restarts the numbering: a side with no lines (count 0) names the line before it.
+  const startOf = (start: string, count: string | undefined) => (count === '0' ? Number(start) + 1 : Number(start));
+
   for (const line of lines) {
-    if (line.startsWith('@@') || isFileHeader(line)) {
+    if (line.startsWith('@@')) {
+      const hunk = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(line);
+      if (hunk) {
+        oldLine = startOf(hunk[1]!, hunk[2]);
+        newLine = startOf(hunk[3]!, hunk[4]);
+      }
+      result.push({ type: 'meta', text: line });
+    } else if (isFileHeader(line) || line.startsWith('\\ ')) {
       result.push({ type: 'meta', text: line });
     } else if (line.startsWith('+')) {
       result.push({ type: 'add', text: line.slice(1), lineNew: newLine++ });
