@@ -123,7 +123,7 @@ func TestVersionFlagPrintsTheVersionLine(t *testing.T) {
 
 func TestRemovedCommandsAreNotSupported(t *testing.T) {
 	t.Parallel()
-	for _, command := range []string{"integrate", "web", "check"} {
+	for _, command := range []string{"integrate", "web", "check", "validate", "rebuild", "migrate", "diff"} {
 		code, _, stderr := runCLI(t, command)
 		if code != 2 || !strings.Contains(stderr, "is not supported") {
 			t.Fatalf("%s exit = %d stderr = %q", command, code, stderr)
@@ -131,6 +131,36 @@ func TestRemovedCommandsAreNotSupported(t *testing.T) {
 		if code, _, stderr := runCLI(t, "help", command); code != 2 || !strings.Contains(stderr, "is not supported") {
 			t.Fatalf("help %s exit = %d stderr = %q", command, code, stderr)
 		}
+	}
+}
+
+func TestMaintainGroupRunsTheMaintenanceCommands(t *testing.T) {
+	t.Parallel()
+	root := initTestWorkspace(t)
+	for _, args := range [][]string{
+		{"maintain", "validate", "--workspace", root},
+		{"maintain", "validate", "--staged", "--workspace", root},
+		{"maintain", "rebuild", "--workspace", root},
+		{"maintain", "migrate", "--workspace", root},
+		{"maintain", "diff", "--workspace", root},
+	} {
+		if code, stdout, stderr := runCLI(t, args...); code != 0 {
+			t.Fatalf("%v exit = %d\n%s%s", args, code, stdout, stderr)
+		}
+	}
+	for _, args := range [][]string{{"maintain"}, {"maintain", "check"}} {
+		if code, _, stderr := runCLI(t, args...); code != 2 || !strings.Contains(stderr, "skillhub help maintain") {
+			t.Fatalf("%v exit = %d stderr = %q", args, code, stderr)
+		}
+	}
+	for _, args := range [][]string{{"maintain", "--help"}, {"maintain", "rebuild", "--help"}, {"help", "maintain"}} {
+		if code, stdout, _ := runCLI(t, args...); code != 0 || !strings.HasPrefix(stdout, "Usage: skillhub maintain validate") {
+			t.Fatalf("%v exit = %d stdout = %q", args, code, stdout)
+		}
+	}
+	code, stdout, _ := runCLI(t, "help")
+	if code != 0 || !strings.Contains(stdout, "\n  maintain  ") || regexp.MustCompile(`\n  (validate|rebuild|migrate|diff) `).MatchString(stdout) {
+		t.Fatalf("global help:\n%s", stdout)
 	}
 }
 
@@ -476,7 +506,7 @@ func TestWorkspaceEnvironmentPrecedence(t *testing.T) {
 	if code, _, stderr := runCLI(t, "status", "--quiet"); code != 0 {
 		t.Fatalf("status through env exit = %d: %s", code, stderr)
 	}
-	if code, _, stderr := runCLI(t, "validate"); code != 0 {
+	if code, _, stderr := runCLI(t, "maintain", "validate"); code != 0 {
 		t.Fatalf("validate through env exit = %d: %s", code, stderr)
 	}
 

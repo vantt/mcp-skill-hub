@@ -71,7 +71,7 @@ func TestValidatePropagatesApplicationCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	var stdout, stderr bytes.Buffer
-	if code := RunContext(ctx, []string{"validate", "--workspace", t.TempDir(), "--json"}, &stdout, &stderr); code != 130 {
+	if code := RunContext(ctx, []string{"maintain", "validate", "--workspace", t.TempDir(), "--json"}, &stdout, &stderr); code != 130 {
 		t.Fatalf("validate exit = %d: stdout=%s stderr=%s", code, stdout.String(), stderr.String())
 	}
 	var result app.Result
@@ -100,7 +100,7 @@ func TestDiffOutputUsesRelativePaths(t *testing.T) {
 	}
 	stdout.Reset()
 	stderr.Reset()
-	if code := Run([]string{"diff", "--workspace", root, "--json"}, &stdout, &stderr); code != 0 {
+	if code := Run([]string{"maintain", "diff", "--workspace", root, "--json"}, &stdout, &stderr); code != 0 {
 		t.Fatalf("diff exit = %d: %s", code, stderr.String())
 	}
 	var diff app.CurationDiff

@@ -86,7 +86,7 @@ export const en = {
   'home.next_action_title': 'Next action',
   'home.nothing_needs_attention': 'Nothing needs attention.',
   'home.degraded_title': 'Search index needs rebuild.',
-  'home.degraded_body': 'Catalog is stale. Run skillhub rebuild, then reload.',
+  'home.degraded_body': 'Catalog is stale. Run skillhub maintain rebuild, then reload.',
   'home.summary_title': 'Overview',
   'home.not_configured': 'Not set up',
   'home.category.sources_ready_to_distill': 'Sources ready to distill',

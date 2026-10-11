@@ -54,7 +54,7 @@ function seedResourceWorkspace(): string {
   write(RUN_SH, RUN_SH_BODY, 0o755);
   write(GUIDE_MD, GUIDE_BODY);
   write(LOGO_PNG, LOGO_BYTES);
-  runCLI(['rebuild']);
+  runCLI(['maintain', 'rebuild']);
   return dir;
 }
 

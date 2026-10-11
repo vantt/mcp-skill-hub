@@ -18,7 +18,7 @@ func runRebuild(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		if errors.As(err, &resErr) {
 			return writeWorkspaceResolutionError(stdout, stderr, hasJSONFlag(args), resErr)
 		}
-		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub rebuild --workspace <path>`.")
+		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub maintain rebuild --workspace <path>`.")
 	}
 	var progress app.ProgressSink
 	if verbose && !jsonOutput {

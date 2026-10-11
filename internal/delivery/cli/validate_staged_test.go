@@ -18,7 +18,7 @@ func TestValidateStagedAndWorkingTree(t *testing.T) {
 
 	// 1. Working tree validate passes on clean workspace
 	var stdout, stderr bytes.Buffer
-	code := Run([]string{"validate", "--workspace", root}, &stdout, &stderr)
+	code := Run([]string{"maintain", "validate", "--workspace", root}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("clean validate failed (exit %d): %s", code, stderr.String())
 	}
@@ -32,7 +32,7 @@ func TestValidateStagedAndWorkingTree(t *testing.T) {
 	// 2. Validate --staged passes on clean index
 	stdout.Reset()
 	stderr.Reset()
-	code = Run([]string{"validate", "--staged", "--workspace", root}, &stdout, &stderr)
+	code = Run([]string{"maintain", "validate", "--staged", "--workspace", root}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("clean staged validate failed (exit %d): %s", code, stderr.String())
 	}
@@ -51,7 +51,7 @@ func TestValidateStagedAndWorkingTree(t *testing.T) {
 	// Staged validation should now fail
 	stdout.Reset()
 	stderr.Reset()
-	code = Run([]string{"validate", "--staged", "--workspace", root}, &stdout, &stderr)
+	code = Run([]string{"maintain", "validate", "--staged", "--workspace", root}, &stdout, &stderr)
 	if code != 2 {
 		t.Fatalf("expected exit 2 on broken staged file, got %d (stdout: %s, stderr: %s)", code, stdout.String(), stderr.String())
 	}
@@ -62,7 +62,7 @@ func TestValidateStagedAndWorkingTree(t *testing.T) {
 	// 4. Incompatible / unknown flags fail before Git access
 	stdout.Reset()
 	stderr.Reset()
-	code = Run([]string{"validate", "--bogus-flag", "--workspace", root}, &stdout, &stderr)
+	code = Run([]string{"maintain", "validate", "--bogus-flag", "--workspace", root}, &stdout, &stderr)
 	if code != 2 {
 		t.Fatalf("expected exit 2 on unknown argument, got %d", code)
 	}
@@ -141,14 +141,14 @@ Normal skill body.
 
 	// Rebuild catalog so active skills are queryable
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"rebuild", "--workspace", root, "--json"}, &stdout, &stderr); code != 0 {
+	if code := Run([]string{"maintain", "rebuild", "--workspace", root, "--json"}, &stdout, &stderr); code != 0 {
 		t.Fatalf("rebuild failed: %s", stderr.String())
 	}
 
 	// 1. JSON validate output
 	stdout.Reset()
 	stderr.Reset()
-	code := Run([]string{"validate", "--workspace", root, "--json"}, &stdout, &stderr)
+	code := Run([]string{"maintain", "validate", "--workspace", root, "--json"}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("expected code 0 for validate with warnings, got %d: %s", code, stderr.String())
 	}
@@ -176,7 +176,7 @@ Normal skill body.
 	// 2. Human validate output prints WARN lines
 	stdout.Reset()
 	stderr.Reset()
-	code = Run([]string{"validate", "--workspace", root}, &stdout, &stderr)
+	code = Run([]string{"maintain", "validate", "--workspace", root}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("expected code 0 for human validate, got %d: %s", code, stderr.String())
 	}

@@ -50,7 +50,7 @@ describe('HomeScreen', () => {
     const kinds: Array<{ kind: string; id?: string; count?: number; wantType: string; wantText?: string }> = [
       { kind: 'repair_workspace', wantType: 'command', wantText: 'skillhub doctor --fix' },
       { kind: 'recover_workspace', wantType: 'command', wantText: 'skillhub doctor --fix' },
-      { kind: 'rebuild_index', wantType: 'command', wantText: 'skillhub rebuild' },
+      { kind: 'rebuild_index', wantType: 'command', wantText: 'skillhub maintain rebuild' },
       { kind: 'retry_unavailable_sources', wantType: 'link', wantText: '/sources' },
       { kind: 'check_due_sources', wantType: 'link', wantText: '/sources' },
       { kind: 'distill_changed_sources', wantType: 'link', wantText: '/sources?filter=ready' },

@@ -326,15 +326,15 @@ func TestNoNonInteractiveUseWordingInAnyError(t *testing.T) {
 	commands := [][]string{
 		{"status"},
 		{"doctor"},
-		{"validate"},
-		{"diff"},
-		{"rebuild"},
+		{"maintain", "validate"},
+		{"maintain", "diff"},
+		{"maintain", "rebuild"},
 		{"skill", "list"},
 		{"skill", "show", "foo"},
 		{"source", "list"},
 		{"source", "capture", "https://example.com", "--reason", "test"},
 		{"source", "check"},
-		{"migrate"},
+		{"maintain", "migrate"},
 		{"resolve", "--request", "req.json"},
 		{"telemetry", "health"},
 	}
@@ -493,10 +493,10 @@ func TestAllCommandFailuresExitNonZero(t *testing.T) {
 		args []string
 	}{
 		{"status missing ws", []string{"status"}},
-		{"validate missing ws", []string{"validate"}},
+		{"validate missing ws", []string{"maintain", "validate"}},
 		{"doctor missing ws", []string{"doctor"}},
-		{"diff missing ws", []string{"diff"}},
-		{"rebuild missing ws", []string{"rebuild"}},
+		{"diff missing ws", []string{"maintain", "diff"}},
+		{"rebuild missing ws", []string{"maintain", "rebuild"}},
 		{"skill list missing ws", []string{"skill", "list"}},
 		{"skill show missing id", []string{"skill", "show"}},
 		{"skill unknown subcommand", []string{"skill", "invalidsub"}},

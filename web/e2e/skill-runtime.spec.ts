@@ -32,8 +32,8 @@ test('skill-runtime: review shows approve command, no approve button, and runtim
   // 1. Mark smoke-skill third-party by adding origin to provenance
   const updatedMeta = `${metaContent.trimEnd()}\nprovenance:\n    origin:\n        kind: github\n        repository: https://github.com/example/skills\n        commit: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n`;
   fs.writeFileSync(metaPath, updatedMeta);
-  // 2. Run skillhub rebuild
-  execFileSync(binaryPath, ['rebuild', '--workspace', ws], { stdio: 'pipe' });
+  // 2. Run skillhub maintain rebuild
+  execFileSync(binaryPath, ['maintain', 'rebuild', '--workspace', ws], { stdio: 'pipe' });
 
   // 3. Store E2E_TOKEN with secret value piped on stdin
   const secretValue = 'SECRET-PIPED-VALUE-DO-NOT-LEAK-9988';

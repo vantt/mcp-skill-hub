@@ -69,7 +69,7 @@ func workspaceLintWarnings(ctx context.Context, root string) []Warning {
 	if err != nil {
 		return []Warning{{
 			Code:    "lint_skipped",
-			Summary: "Metadata lint skipped: catalog generation unavailable. Run `skillhub rebuild` first.",
+			Summary: "Metadata lint skipped: catalog generation unavailable. Run `skillhub maintain rebuild` first.",
 		}}
 	}
 	defer handle.Close()

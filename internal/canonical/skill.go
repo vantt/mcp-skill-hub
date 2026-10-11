@@ -895,6 +895,6 @@ func skillIssueFix(message, id string) string {
 	case strings.Contains(message, "status"):
 		return "Set status to draft, active, deprecated, or archived"
 	default:
-		return "Correct the field in this file and run `skillhub validate`."
+		return "Correct the field in this file and run `skillhub maintain validate`."
 	}
 }

@@ -345,7 +345,7 @@ func (SkillService) ReadSkill(ctx context.Context, path, id string) (SkillReadRe
 	if err != nil {
 		if errors.Is(err, skill.ErrResourceDigestMismatch) {
 			why := fmt.Sprintf("Current canonical content for %s no longer matches published manifest digest %s.", entry.Path, entry.Digest)
-			fix := fmt.Sprintf("Run `skillhub rebuild` to publish current canonical files, or inspect differences with `skillhub skill review %s`.", id)
+			fix := fmt.Sprintf("Run `skillhub maintain rebuild` to publish current canonical files, or inspect differences with `skillhub skill review %s`.", id)
 			return SkillReadResult{}, NewResourceContentUnavailableError(why, fix)
 		}
 		return SkillReadResult{}, err

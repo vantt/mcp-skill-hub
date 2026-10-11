@@ -43,16 +43,10 @@ func RunContext(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		return runStatus(ctx, args[1:], stdout, stderr)
 	case "init":
 		return runInit(ctx, args[1:], stdout, stderr)
-	case "validate":
-		return runValidate(ctx, args[1:], stdout, stderr)
-	case "rebuild":
-		return runRebuild(ctx, args[1:], stdout, stderr)
-	case "diff":
-		return runDiff(ctx, args[1:], stdout, stderr)
+	case "maintain":
+		return runMaintain(ctx, args[1:], stdout, stderr)
 	case "doctor":
 		return runDoctor(ctx, args[1:], stdout, stderr)
-	case "migrate":
-		return runMigrate(ctx, args[1:], stdout, stderr)
 	case "skill":
 		return runSkill(ctx, args[1:], stdout, stderr)
 	case "source":
@@ -78,6 +72,25 @@ func RunContext(ctx context.Context, args []string, stdout, stderr io.Writer) in
 	default:
 		return writeInvalidRequest(stdout, stderr, jsonOutput, fmt.Sprintf("The command %q is not supported.", args[0]), "Run `skillhub help` to list commands.")
 	}
+}
+
+// runMaintain runs the maintenance commands: validate, rebuild, migrate and
+// diff. doctor runs the checks and doctor --fix the repairs most people need.
+func runMaintain(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	if len(args) == 0 {
+		return writeInvalidRequest(stdout, stderr, false, "maintain needs a subcommand: validate, rebuild, migrate or diff.", "Run `skillhub help maintain`.")
+	}
+	switch args[0] {
+	case "validate":
+		return runValidate(ctx, args[1:], stdout, stderr)
+	case "rebuild":
+		return runRebuild(ctx, args[1:], stdout, stderr)
+	case "migrate":
+		return runMigrate(ctx, args[1:], stdout, stderr)
+	case "diff":
+		return runDiff(ctx, args[1:], stdout, stderr)
+	}
+	return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), fmt.Sprintf("unsupported maintain subcommand %q.", args[0]), "Run `skillhub help maintain` for validate, rebuild, migrate and diff.")
 }
 
 func hasJSONFlag(args []string) bool {

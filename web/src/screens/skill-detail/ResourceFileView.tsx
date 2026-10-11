@@ -30,9 +30,9 @@ const MSG_EMPTY = 'This file is empty.';
 const MSG_TRUNCATED = 'Showing the first 1 MiB; this file is too large to edit here.';
 const MSG_TOO_LARGE = 'This file is larger than 1 MiB, so it cannot be shown or edited here.';
 const MSG_MISSING =
-  'This file is listed in the catalog but is missing from the skill folder. Restore the file, or run skillhub rebuild if it was removed on purpose.';
+  'This file is listed in the catalog but is missing from the skill folder. Restore the file, or run skillhub maintain rebuild if it was removed on purpose.';
 const MSG_NOT_REGULAR =
-  'This path is not a regular file (for example a symlink or a folder), so its content is not shown. Replace it with a regular file, then run skillhub rebuild.';
+  'This path is not a regular file (for example a symlink or a folder), so its content is not shown. Replace it with a regular file, then run skillhub maintain rebuild.';
 const MSG_NOT_EDITABLE = 'This file cannot be edited here.';
 const MSG_NOT_SAVED = 'Nothing was saved.';
 const MSG_TRUST_WARNING =

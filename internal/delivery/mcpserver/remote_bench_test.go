@@ -435,7 +435,7 @@ func cloneRemoteBenchHub(t *testing.T, binary, hub string, skillIDs []string) st
 	if output, err := clone.CombinedOutput(); err != nil {
 		t.Fatalf("clone %s: %v\n%s", hub, err, output)
 	}
-	runRemoteBench(t, binary, "rebuild", "--workspace", root)
+	runRemoteBench(t, binary, "maintain", "rebuild", "--workspace", root)
 	for _, id := range skillIDs {
 		trust, err := (app.SkillService{}).ContentTrustFor(t.Context(), root, id)
 		if err != nil {

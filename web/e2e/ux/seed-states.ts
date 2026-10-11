@@ -179,7 +179,7 @@ export function prepareHub(source: string | undefined = process.env.UX_HUB_SOURC
   }
 
   const runCLI = makeCLIRunner(ws, env);
-  runCLI(['rebuild']);
+  runCLI(['maintain', 'rebuild']);
   const hub: UxHub = {
     ws,
     root,
@@ -195,6 +195,6 @@ export function prepareHub(source: string | undefined = process.env.UX_HUB_SOURC
     },
   };
   seedUxStates(hub);
-  runCLI(['rebuild']);
+  runCLI(['maintain', 'rebuild']);
   return hub;
 }

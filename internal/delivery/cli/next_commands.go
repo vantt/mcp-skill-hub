@@ -125,11 +125,11 @@ func cliNextCommand(command, id, workspace string) string {
 	var cli string
 	switch command {
 	case "workspace_validate", "ValidateWorkspace":
-		cli = "skillhub validate"
+		cli = "skillhub maintain validate"
 	case "workspace_rebuild":
-		cli = "skillhub rebuild"
+		cli = "skillhub maintain rebuild"
 	case "workspace_diff", "GetCurationDiff":
-		cli = "skillhub diff"
+		cli = "skillhub maintain diff"
 	case "source_check":
 		cli = "skillhub source check"
 	case "skill_upstream_status":

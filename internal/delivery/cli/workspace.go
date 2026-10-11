@@ -192,7 +192,7 @@ func runValidate(ctx context.Context, args []string, stdout, stderr io.Writer) i
 		if errors.As(err, &resErr) {
 			return writeWorkspaceResolutionError(stdout, stderr, jsonOutput, resErr)
 		}
-		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub validate [--staged] [--workspace <path>]`.")
+		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub maintain validate [--staged] [--workspace <path>]`.")
 	}
 	result, err := executeValidate(ctx, path, staged)
 	if err != nil {
@@ -353,7 +353,7 @@ func writeInvalidWorkspace(stdout, stderr io.Writer, jsonOutput bool, cause erro
 	why := cause.Error()
 	fix := "Run `skillhub doctor --workspace <path>` to inspect safe remediation, then `skillhub doctor --fix --workspace <path>` to apply it."
 	if strings.Contains(why, "canonical validation failed") {
-		fix = "Correct the content errors in the affected file (or use `skillhub skill edit <id>`), then run `skillhub validate`."
+		fix = "Correct the content errors in the affected file (or use `skillhub skill edit <id>`), then run `skillhub maintain validate`."
 	}
 	result := app.ErrorResult(&app.Error{
 		Code: app.ErrorWorkspaceInvalid,

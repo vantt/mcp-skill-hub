@@ -10,7 +10,7 @@ There are two ways to have your skills on a second machine.
 
 | | Clone the workspace with Git | Use the hub on machine B over the network |
 |---|---|---|
-| How | `git clone` the workspace on machine A and run `skillhub rebuild` | Machine B runs a listener; machine A connects to it |
+| How | `git clone` the workspace on machine A and run `skillhub maintain rebuild` | Machine B runs a listener; machine A connects to it |
 | New or changed skills | Reach machine A after you push on B and pull on A | Reach machine A at once, on the next `skill_resolve` |
 | Curation | On every machine that has a clone | Only on machine B |
 | Usage records (telemetry) | Each machine keeps its own | All on machine B, one place |

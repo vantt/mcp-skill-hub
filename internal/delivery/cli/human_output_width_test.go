@@ -22,7 +22,7 @@ func TestHumanOutputFitsWidth(t *testing.T) {
 		{"skill", "review", "wide-skill"},
 		{"skill", "activate", "wide-skill", "--yes"},
 		{"source", "list"},
-		{"validate"},
+		{"maintain", "validate"},
 	}
 
 	assertWidth := func(output, cmdName string) {

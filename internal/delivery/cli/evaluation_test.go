@@ -41,7 +41,7 @@ func TestEvaluationCLICommittedArtifactsRunAndRegenerateDeterministically(t *tes
 	}
 	stdout.Reset()
 	stderr.Reset()
-	if code := Run([]string{"rebuild", "--workspace", workspace, "--json"}, &stdout, &stderr); code != 0 {
+	if code := Run([]string{"maintain", "rebuild", "--workspace", workspace, "--json"}, &stdout, &stderr); code != 0 {
 		t.Fatalf("rebuild=%d stdout=%s stderr=%s", code, stdout.String(), stderr.String())
 	}
 

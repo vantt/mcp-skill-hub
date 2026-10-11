@@ -85,7 +85,7 @@ before that command; that prompt is the host's own check, not a reason to retry
 in another form.
 
 Never use `--approve-content`: content approval belongs to the human reviewing
-the actual bytes. Never use `--force`, `telemetry purge`, or `migrate --yes`;
+the actual bytes. Never use `--force`, `telemetry purge`, or `maintain migrate --yes`;
 these bypass normal safety or perform destructive/structural maintenance, not
 ordinary curation. `skillhub source check` uses the network and writes source
 revision state, so run it only when the user explicitly asks for an update check.
@@ -118,6 +118,12 @@ Both are local and offline: do not enumerate the catalog, fetch sources, or
 perform a network check for the opening answer. Present a short status, the
 highest-priority item, and one recommended next action.
 
+`status --json` also names the `role` of the current folder. In a project that
+uses a hub on another machine (`client-remote`) there is no hub here to curate:
+say that curation runs on the hub machine. `skillhub doctor --json` lists every
+check with the repair `doctor --fix` would make (`fix`) or the command a person
+runs (`manual`); doctor exits 1 while a problem remains.
+
 Order work as follows:
 
 1. Invalid workspace or pending recovery journal.
@@ -133,7 +139,7 @@ Order work as follows:
 11. Healthy, up-to-date summary.
 
 Always present interrupted or recovery work before optional maintenance. If the
-workspace or index is unhealthy, use `skillhub validate --json` or
+workspace or index is unhealthy, use `skillhub maintain validate --json` or
 `workspace_validate` for evidence and
 recommend `skillhub doctor` or `skillhub doctor --fix` as the independent CLI
 recovery path. Do not invent a repair or write around application services.
@@ -163,7 +169,7 @@ states, cursors, or IDs unless an ID is needed to disambiguate a selected item.
 | List skills | `skillhub skill list --state draft` | `skill_list` | Filter active, draft, deprecated, or archived skills. |
 | Show a skill | `skillhub skill show <id>` | `skill_review` | Inspect content or diagnostic facts without changing them. |
 | Assess a routing change | `skillhub eval routing` | `routing_evaluate` | Inspect metrics and meaningful deltas before approving metadata changes. |
-| Validate, rebuild, or show changes | `skillhub validate` / `skillhub rebuild` / `skillhub diff` | `workspace_validate` / `workspace_rebuild` / `workspace_diff` | Rebuild changes derived state only; inspect canonical changes before committing. |
+| Validate, rebuild, or show changes | `skillhub maintain validate` / `skillhub maintain rebuild` / `skillhub maintain diff` | `workspace_validate` / `workspace_rebuild` / `workspace_diff` | Rebuild changes derived state only; inspect canonical changes before committing. |
 
 ### What to ask and inspect
 
@@ -236,8 +242,8 @@ states, cursors, or IDs unless an ID is needed to disambiguate a selected item.
   apply routing changes only through the reviewed preview/confirm flow.
 - **Validate/rebuild/diff:** Ask whether the user wants health evidence, derived
   index repair, or Git review. Inspect result `items`, validation failures, or
-  diff `groups` using `skillhub validate --json`, `skillhub rebuild --json`,
-  or `skillhub diff --json`. Rebuild is immediate but touches only disposable
+  diff `groups` using `skillhub maintain validate --json`, `skillhub maintain rebuild --json`,
+  or `skillhub maintain diff --json`. Rebuild is immediate but touches only disposable
   projections; commits still require an explicit request.
 
 For an unknown intent, ask one small clarifying question instead of dumping a

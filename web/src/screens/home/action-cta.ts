@@ -28,7 +28,7 @@ export function resolveActionCta(action?: ActionInput): CtaResult {
     case 'rebuild_index':
       return {
         type: 'command',
-        command: action.command || 'skillhub rebuild',
+        command: action.command || 'skillhub maintain rebuild',
         label: 'Copy command',
       };
     case 'retry_unavailable_sources':

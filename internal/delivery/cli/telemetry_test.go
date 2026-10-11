@@ -160,7 +160,7 @@ func telemetryCLIWorkspace(t *testing.T) (string, string) {
 	writeResolverFixture(t, root, "skills/core/code-review/SKILL.md", "---\nname: code-review\ndescription: Review code changes for defects.\n---\n\n# Code Review\nInspect evidence.\n")
 	stdout.Reset()
 	stderr.Reset()
-	if code := Run([]string{"rebuild", "--workspace", root, "--json"}, &stdout, &stderr); code != 0 {
+	if code := Run([]string{"maintain", "rebuild", "--workspace", root, "--json"}, &stdout, &stderr); code != 0 {
 		t.Fatalf("rebuild=%d: %s %s", code, stdout.String(), stderr.String())
 	}
 	requestPath := filepath.Join(t.TempDir(), "request.json")

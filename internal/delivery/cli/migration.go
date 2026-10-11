@@ -19,7 +19,7 @@ func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		if errors.As(err, &resErr) {
 			return writeWorkspaceResolutionError(stdout, stderr, hasJSONFlag(args), resErr)
 		}
-		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub migrate --workspace <path> [--to <version>]` to preview, then add --yes after review.")
+		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub maintain migrate --workspace <path> [--to <version>]` to preview, then add --yes after review.")
 	}
 	result, err := (app.MigrationService{}).Migrate(ctx, workspacePath, target, yes)
 	if err != nil {

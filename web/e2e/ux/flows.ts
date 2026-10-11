@@ -35,7 +35,7 @@ function ensureCompanionFile(hub: FlowContext['hub']): boolean {
   if (fs.existsSync(file)) return false;
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, UX_RESOURCE_BODY);
-  hub.runCLI(['rebuild']);
+  hub.runCLI(['maintain', 'rebuild']);
   return true;
 }
 

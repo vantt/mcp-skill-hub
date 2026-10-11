@@ -109,7 +109,7 @@ func classifyResolveError(err error) *app.Error {
 		return &app.Error{Code: app.ErrorIndexStale, Retryable: true, Render: app.ErrorRender{
 			Error: "The derived catalog is unavailable or stale.",
 			Why:   err.Error(),
-			Fix:   "Run `skillhub rebuild --workspace <path>`, then retry.",
+			Fix:   "Run `skillhub maintain rebuild --workspace <path>`, then retry.",
 		}}
 	}
 	return nil

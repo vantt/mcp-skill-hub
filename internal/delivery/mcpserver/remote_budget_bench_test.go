@@ -317,7 +317,7 @@ func checkHubChanges(t *testing.T, binary, root string, hub *hubProcess, link *b
 		before[id] = hubDigest(t, root, id)
 		editBenchSkillMeta(t, root, id, fmt.Sprintf("remote bench routing change %d", round))
 	}
-	runRemoteBench(t, binary, "rebuild", "--workspace", root)
+	runRemoteBench(t, binary, "maintain", "rebuild", "--workspace", root)
 	for _, id := range skillIDs {
 		if hubDigest(t, root, id) != before[id] {
 			t.Fatalf("a routing change altered the digest of %s", id)
@@ -398,7 +398,7 @@ func editBenchSkillContent(t *testing.T, binary, root, id, line string) {
 	if err := file.Close(); err != nil {
 		t.Fatal(err)
 	}
-	runRemoteBench(t, binary, "rebuild", "--workspace", root)
+	runRemoteBench(t, binary, "maintain", "rebuild", "--workspace", root)
 	trust, err := (app.SkillService{}).ContentTrustFor(t.Context(), root, id)
 	if err != nil {
 		t.Fatal(err)

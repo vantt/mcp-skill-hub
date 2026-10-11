@@ -46,7 +46,7 @@ jobs:
           (cd "$workspace" && "$skillhub_bin" init)
           cp -R testdata/evaluation/workspace-overlay/. "$workspace"/
           rm -rf "$workspace/runtime/catalog"
-          bin/skillhub rebuild --workspace "$workspace" --json >/dev/null
+          bin/skillhub maintain rebuild --workspace "$workspace" --json >/dev/null
 
           report=reports/committed-cli-evaluation.json
           bin/skillhub eval run \

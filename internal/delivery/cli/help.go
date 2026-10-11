@@ -35,10 +35,7 @@ Serve:
   token     Show or rotate the hub token that serve requires
 
 Maintenance:
-  validate  Validate canonical workspace files
-  rebuild   Rebuild the derived search catalog
-  migrate   Preview or apply a canonical schema migration
-  diff      Show uncommitted canonical changes
+  maintain  validate files, rebuild the search index, migrate the schema, show uncommitted changes
   cache     Clear the copies of skills fetched from a remote hub
   update    Update skillhub to the latest release or specified version
 
@@ -263,35 +260,29 @@ experiment manifest (see ` + "`skillhub eval manifest`" + `). Developer tool.
 
 Example: skillhub resolution replay --case case.json --manifest manifest.json
 `,
-	"validate": `Usage: skillhub validate [--workspace <path>] [--staged] [--json]
+	"maintain": `Usage: skillhub maintain validate [--staged] [--workspace <path>] [--json]
+       skillhub maintain rebuild [--verbose] [--workspace <path>] [--json]
+       skillhub maintain migrate [--to <version>] [--yes] [--workspace <path>] [--json]
+       skillhub maintain diff [--workspace <path>] [--json]
 
-Validate the canonical workspace files (skills, sources, schema). Use --staged
-to validate files currently staged in the Git index without touching the working tree.
-Prints each problem with its file. Run it after editing files by hand, before ` + "`skillhub rebuild`" + `.
+Maintenance commands. skillhub doctor runs the checks and skillhub doctor --fix
+the repairs most people need; these are the single steps.
 
-Example: skillhub validate
-`,
-	"rebuild": `Usage: skillhub rebuild [--workspace <path>] [--verbose] [--json]
+  validate   Validate the hub files (skills, sources, schema) and print each
+             problem with its file. --staged validates the files staged in the
+             Git index without touching the working tree, for a pre-commit hook.
+  rebuild    Rebuild the search index from the hub files; only files that pass
+             validation are published. Safe at any time. --verbose adds progress
+             events and table row counts.
+  migrate    Preview a schema migration; --yes applies it. --to defaults to 1.
+  diff       Show the uncommitted changes of the hub's Git repository.
 
-Rebuild the search index from the workspace files. Only files that pass validation
-are published. Safe to run at any time; use it when status says the search index
-is stale. Prints a single summary line by default; add --verbose for progress events
-and detailed table row counts.
-
-Example: skillhub rebuild
-`,
-	"migrate": `Usage: skillhub migrate [--to <version>] [--yes] [--workspace <path>] [--json]
-
-Preview or apply a canonical schema migration. Without --yes it only previews.
---to defaults to 1.
-
-Example: skillhub migrate --to 1 --yes
-`,
-	"diff": `Usage: skillhub diff [--workspace <path>] [--json]
-
-Show uncommitted canonical changes in the workspace's Git repository.
-
-Example: skillhub diff
+Examples:
+  skillhub maintain validate
+  skillhub maintain validate --staged
+  skillhub maintain rebuild
+  skillhub maintain migrate --to 1 --yes
+  skillhub maintain diff
 `,
 	"telemetry": `Usage: skillhub telemetry <health|preview|export|purge|funnel|cases|chains|import-transcripts|baseline> [--workspace <path>] [--json]
 

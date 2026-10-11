@@ -18,7 +18,7 @@ func runDiff(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		if errors.As(err, &resErr) {
 			return writeWorkspaceResolutionError(stdout, stderr, hasJSONFlag(args), resErr)
 		}
-		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub diff --workspace <path>`.")
+		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub maintain diff --workspace <path>`.")
 	}
 	result, err := (app.WorkspaceService{}).GetCurationDiff(ctx, path)
 	if err != nil {

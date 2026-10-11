@@ -160,7 +160,7 @@ export function prepareDemoHub(): DemoHub {
       '# Acme agent skills\nShared release and incident practices a curator may fold into a skill.\n',
       DEMO_SKILLS.active,
     );
-    runCLI(['rebuild']);
+    runCLI(['maintain', 'rebuild']);
 
     // Commit everything so the screens show a clean workspace, as a curator would have it.
     for (const args of [['add', '-A'], ['commit', '--quiet', '-m', 'Add demo skills and source']]) {

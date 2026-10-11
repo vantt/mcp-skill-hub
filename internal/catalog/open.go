@@ -48,7 +48,7 @@ func EnsureFreshOrRebuild(ctx context.Context, root string) error {
 		return err
 	}
 	if len(issues) > 0 {
-		return fmt.Errorf("search index is stale: canonical validation failed: %s: %s (run `skillhub validate` to inspect)", issues[0].Path, issues[0].Message)
+		return fmt.Errorf("search index is stale: canonical validation failed: %s: %s (run `skillhub maintain validate` to inspect)", issues[0].Path, issues[0].Message)
 	}
 	_, err = BuildCatalogGeneration(ctx, root, BuildOptions{})
 	return err

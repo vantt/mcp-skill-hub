@@ -206,7 +206,7 @@ func TestPerCommandHelpHasRealUsage(t *testing.T) {
 	t.Parallel()
 	want := map[string][]string{
 		"resolve": {"--request", "Example"}, "resolution": {"replay", "--manifest"},
-		"validate": {"Example"}, "rebuild": {"Example"}, "migrate": {"--to", "--yes"}, "diff": {"Example"},
+		"maintain":  {"validate [--staged]", "rebuild [--verbose]", "migrate [--to <version>] [--yes]", "diff [--workspace <path>]", "Examples"},
 		"telemetry": {"purge --yes", "export"}, "eval": {"manifest", "promote"}, "version": {"--json"},
 	}
 	for command, fragments := range want {
@@ -343,7 +343,7 @@ func TestDiffGroupsDraftSkills(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("create exit = %d: %s", code, stderr)
 	}
-	code, stdout, stderr := runCLI(t, "diff", "--workspace", root)
+	code, stdout, stderr := runCLI(t, "maintain", "diff", "--workspace", root)
 	if code != 0 {
 		t.Fatalf("diff exit = %d: %s", code, stderr)
 	}

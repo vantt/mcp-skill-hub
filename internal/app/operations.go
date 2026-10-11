@@ -51,7 +51,7 @@ func formatValidationResult(issues []canonical.Issue) Result {
 		}
 		fix := issue.Fix
 		if fix == "" {
-			fix = "Correct this file and run `skillhub validate`."
+			fix = "Correct this file and run `skillhub maintain validate`."
 		}
 		result.Items = append(result.Items, Item{
 			ID:      fmt.Sprintf("validation_issue_%d", index+1),
@@ -67,7 +67,7 @@ func formatValidationResult(issues []canonical.Issue) Result {
 			Render: ErrorRender{
 				Error: "The workspace has validation errors.",
 				Why:   fmt.Sprintf("Canonical validation found %d issue(s).", len(issues)),
-				Fix:   "Correct the findings listed above (or use `skillhub skill edit <id>`), then run `skillhub validate`.",
+				Fix:   "Correct the findings listed above (or use `skillhub skill edit <id>`), then run `skillhub maintain validate`.",
 			},
 		}
 	}
