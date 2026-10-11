@@ -1,0 +1,12 @@
+{
+  "skill_id": "review-skill",
+  "path": "skills/core/review-skill/references/checks.md",
+  "size_bytes": 21,
+  "digest": "<DIGEST>",
+  "editable": true,
+  "reason": "",
+  "line_ending": "lf",
+  "truncated": false,
+  "content": "# Checks\n\nRun tests.\n"
+}
+
