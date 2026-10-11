@@ -122,3 +122,13 @@ stringifies them, only partly detected), and explicit `!!binary`/`!!set`/`!!omap
   subtests skip where links cannot be created).
 - The workflow edits sit on `327f2ed`; a rebase onto the onboarding release may conflict in `ci.yml` and
   `release.yml` (plan "Re-verify at start").
+
+## Open points for the rebase
+
+- The CI tag-test step selects tests with `-run 'CoverReleased'`; the wrapper tag test still to be written must be
+  named `TestKnownWrappersCoverReleasedRenders` (or another name containing `CoverReleased`) so the step runs it.
+- After rebasing onto the main that carries the onboarding redesign, rerun the digest collection loop in the
+  `internal/systemskills/known-digests.go` comment and add any new curator digests.
+- The `ci.yml` and `release.yml` edits were made on `327f2ed` and may conflict with the onboarding release's
+  workflow changes; resolve them keeping Node 18, `SKILLHUB_REQUIRE_NODE=1`, `SKILLHUB_REQUIRE_TAGS=1` and
+  `fetch-depth: 0`.
