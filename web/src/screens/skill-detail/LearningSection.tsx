@@ -1,26 +1,17 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import {
-  confirmSourceProposal,
-  previewAttachSource,
-  previewDetachSource,
-} from '../../api/queries';
+import { confirmSourceProposal, previewDetachSource } from '../../api/queries';
 import type { LearningReference } from '../../api/types';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { StatusBadge } from '../../components/StatusBadge';
 
 const TITLE_LEARNING = 'Learning references';
-const LABEL_NO_LEARNING =
-  'No learning references yet. Link a repository or document whose ideas should improve this skill.';
+const LABEL_NO_LEARNING = 'No learning references yet.';
 const INTRO_LEARNING =
-  'A learning reference is a repository whose ideas should improve this skill. Skill Hub checks it for new commits; when it is ready, hand it to your curator agent from the Sources page.';
-const LABEL_ADDRESS = 'Repository address';
+  'A learning reference is a repository whose ideas should improve this skill. Skill Hub checks it for new commits; when it is ready, hand it to your curator agent from the Sources page. Use Add source above to link one.';
 const LABEL_LAST_CHECKED = 'Last checked: ';
 const BTN_UNLINK = 'Unlink';
-const BTN_ADD = 'Add learning reference';
-const BTN_ADDING = 'Adding…';
 const BTN_UNLINKING = 'Unlinking…';
-const PLACEHOLDER_LOCATOR = 'https://github.com/owner/repo';
 
 interface LearningSectionProps {
   skillId: string;
@@ -29,38 +20,9 @@ interface LearningSectionProps {
 
 export function LearningSection({ skillId, learning }: LearningSectionProps) {
   const queryClient = useQueryClient();
-  const [locator, setLocator] = useState('');
-  const [adding, setAdding] = useState(false);
-  const [addError, setAddError] = useState<string | null>(null);
-
   const [unlinkingSourceId, setUnlinkingSourceId] = useState<string | null>(null);
   const [unlinking, setUnlinking] = useState(false);
   const [unlinkError, setUnlinkError] = useState<string | null>(null);
-
-  const handleAddReference = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = locator.trim();
-    if (!trimmed) return;
-
-    setAdding(true);
-    setAddError(null);
-    try {
-      const prop = await previewAttachSource(skillId, { locator: trimmed });
-      const pins = prop.confirmation?.confirmation?.pins;
-      if (pins) {
-        await confirmSourceProposal(pins.proposal_id, {
-          proposal_digest: pins.proposal_digest,
-          base_version: pins.base_version,
-        });
-      }
-      setLocator('');
-      queryClient.invalidateQueries({ queryKey: ['skill-sources', skillId] });
-    } catch (err: unknown) {
-      setAddError(err instanceof Error ? err.message : 'Failed to attach source');
-    } finally {
-      setAdding(false);
-    }
-  };
 
   const handleConfirmUnlink = async () => {
     if (!unlinkingSourceId) return;
@@ -94,32 +56,6 @@ export function LearningSection({ skillId, learning }: LearningSectionProps) {
         <span>{INTRO_LEARNING}</span>
       </p>
 
-      {/* Add Reference Form */}
-      <form onSubmit={handleAddReference} style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-        <input
-          type="text"
-          className="fg-input"
-          style={{ flex: 1, minWidth: '240px' }}
-          aria-label={LABEL_ADDRESS}
-          placeholder={PLACEHOLDER_LOCATOR}
-          value={locator}
-          onChange={(e) => setLocator(e.target.value)}
-          disabled={adding}
-        />
-        <button
-          type="submit"
-          className="fg-btn fg-btn--secondary"
-          disabled={adding || !locator.trim()}
-        >
-          <span>{adding ? BTN_ADDING : BTN_ADD}</span>
-        </button>
-      </form>
-
-      {addError && (
-        <div className="fg-banner fg-banner--danger" style={{ fontSize: '13px' }}>
-          <span>{addError}</span>
-        </div>
-      )}
       {unlinkError && (
         <div className="fg-banner fg-banner--danger" style={{ fontSize: '13px' }}>
           <span>{unlinkError}</span>
