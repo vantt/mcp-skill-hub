@@ -1,7 +1,7 @@
 ---
 phase: 1
 title: "Syntax cleanup"
-status: pending
+status: completed
 priority: P1
 effort: "2d"
 dependencies: []
@@ -111,6 +111,26 @@ Agents' stdio registrations are not touched: `mcp serve` keeps its name (P1, rev
    new binary, ask Claude Code to run `cd <project> && skillhub doctor --fix` and `skillhub doctor --json --fix`, and
    record whether each prompts. If the compound form does not prompt, add `Bash(*&& skillhub *)` to the `ask` list
    and its test.
+
+## Todo
+
+- [x] Docs-command extractor (`commandSegments`) and the `--version` case in `checkGuideCommand`; `TestRemoteHubGuideCommandsExist` uses the extractor
+- [x] Remove `integrate`, `web`, `check`; add `--version`; global help vs `help --dev`; hide `mcp` (`help mcp` still prints usage)
+- [x] `init`, `connect` (incl. `--remove`), `doctor --fix`, `cache clear`, `token rotate` act directly; `--dry-run` prints "Would change:" and writes nothing; `--yes` on them is an unknown argument
+- [x] Drop `--yes` from every printed onboarding command (app, CLI, `mcpserver/proxy.go`, scripts, workflows, web e2e); `proxy.go` prints `cache clear --hub <url>`
+- [x] Remote-doctor sentence names `connect --hub ... --dry-run`
+- [x] `token rotate` terminal guard (unless `--dry-run`)
+- [x] Position-independent `ask` rules and the permuted-flag test
+- [x] Curator skill text (both copies): `source check`, ask-first sentence
+- [x] `cache clear [--hub <url>]`
+- [x] One `--since` parser with one error text; help matches
+- [x] One list for the `skill` subcommand hints
+- [x] One platform-aware quoting helper (`internal/shellquote`) replacing all four
+- [x] Printed runnable commands through `Printer.Command` in the files this phase owns
+- [x] Step 8: compound-command matching verified from the Claude Code permissions documentation (ask rules apply when any subcommand matches); no fallback rule needed. Not run by hand in an interactive session.
+- [x] Grep gate clean; `go test ./...`, `go vet` (linux, windows, darwin) and `gofmt -l` clean
+
+Report: [cook-261011-onboarding-phase1](../reports/cook-261011-onboarding-phase1.md)
 
 ## Validation
 

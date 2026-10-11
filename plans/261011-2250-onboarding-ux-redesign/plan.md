@@ -169,14 +169,14 @@ re-pointing, client checks in status, `doctor --fix` for clients, non-zero exit 
 
 ## Phases
 
-| # | Phase | Effort | Depends on |
-|---|---|---|---|
-| 1 | [Syntax cleanup](./phase-01-syntax-cleanup.md) | 2d | none |
-| 2 | [init, connect, user config and role detection](./phase-02-init-connect-and-role-detection.md) | 4d | 1 |
-| 3 | [serve and token hand-off](./phase-03-serve-and-token-handoff.md) | 1.5d | 1, 2 |
-| 4 | [status and doctor by role, maintain group](./phase-04-status-doctor-and-maintain.md) | 3d | 2, 3 |
-| 5 | [Docs: README onboarding and guides](./phase-05-docs-readme-and-guides.md) | 1.5d | 2, 3, 4 |
-| 6 | [Guided skill create (optional, later)](./phase-06-guided-skill-create.md) | 0.5d | 1 (5 for its doc section) |
+| # | Phase | Effort | Depends on | Status |
+|---|---|---|---|---|
+| 1 | [Syntax cleanup](./phase-01-syntax-cleanup.md) | 2d | none | completed |
+| 2 | [init, connect, user config and role detection](./phase-02-init-connect-and-role-detection.md) | 4d | 1 | pending |
+| 3 | [serve and token hand-off](./phase-03-serve-and-token-handoff.md) | 1.5d | 1, 2 | pending |
+| 4 | [status and doctor by role, maintain group](./phase-04-status-doctor-and-maintain.md) | 3d | 2, 3 | pending |
+| 5 | [Docs: README onboarding and guides](./phase-05-docs-readme-and-guides.md) | 1.5d | 2, 3, 4 | pending |
+| 6 | [Guided skill create (optional, later)](./phase-06-guided-skill-create.md) | 0.5d | 1 (5 for its doc section) | pending |
 
 Run the phases in order 1 -> 2 -> 3 -> 4 -> 5. Phase 3 uses the per-hub client token path helper from Phase 2, and
 both edit `internal/delivery/cli/help.go`, so they are not run in parallel. Phase 6 can start any time after 1.
