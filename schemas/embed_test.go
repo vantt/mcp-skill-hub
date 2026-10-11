@@ -107,6 +107,9 @@ func TestTelemetryServerObservedBlockedLoadSchema(t *testing.T) {
 	validateJSON(t, TelemetryEvent, replaceJSON(blocked, `"attribution":"recommended"`, `"attribution":"recommended","first_activation":true`), false)
 	// Accepts first_activation: false on blocked load
 	validateJSON(t, TelemetryEvent, replaceJSON(blocked, `"attribution":"recommended"`, `"attribution":"recommended","first_activation":false`), true)
+	// A whole-skill bundle fetch is a load surface; unknown surfaces stay refused.
+	validateJSON(t, TelemetryEvent, replaceJSON(blocked, `"surface":"skill_get"`, `"surface":"skill_bundle"`), true)
+	validateJSON(t, TelemetryEvent, replaceJSON(blocked, `"surface":"skill_get"`, `"surface":"skill_cache"`), false)
 }
 
 func TestEvaluationCaseSchemaSupportsMultipleOutcomesBranchesAndCounters(t *testing.T) {
