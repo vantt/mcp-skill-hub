@@ -2,7 +2,7 @@
 
 In about 10 minutes you will have your own skill library, connected to a project in Claude Code. You will write one skill and see the hub recommend it for a matching task.
 
-You need Git, a terminal, and Claude Code. Your **agent** is the AI coding tool you work with, such as Claude Code. Skill Hub is verified with Claude Code. `connect` also writes connection files for Codex and Gemini CLI; those are not yet verified end to end.
+You need Git, a terminal, and Claude Code, your **agent**: the AI coding tool you work with. Skill Hub is verified with Claude Code. It also writes setup files for Codex and Gemini CLI, which are not yet verified end to end.
 
 ## Install Skill Hub
 
@@ -44,7 +44,7 @@ Workspace created at <home>/skillhub.
 Agent connection for this workspace written: claude-code, codex-cli, gemini-cli.
 ```
 
-`<home>` stands for your home folder; follow this guide rather than the next steps `init` prints. Commit the workspace's own files, naming each path:
+`<home>` stands for your home folder. Skip the next steps that `init` prints; its commit hint stages files that must stay out of Git. Commit the workspace's own files, naming each path:
 
 ```bash
 git -C ~/skillhub add .gitignore .skillhub/schema-version
@@ -75,8 +75,7 @@ Agent connection for project <home>/myproject written.
 
 Output is trimmed. Leave out `--yes` to preview what `connect` would write. The [What gets written](user-guide.md#what-gets-written) table lists every connection file.
 
-> [!TIP]
-> Add `-g` to connect every project on this machine at once: `skillhub connect -g --workspace ~/skillhub --yes`.
+To connect every project on this machine at once, add `-g`: `skillhub connect -g --workspace ~/skillhub --host claude --yes`.
 
 Now open a new Claude Code session in that folder, so it loads the hub. The first time, Claude Code shows a trust dialog that lists `Bash(skillhub:*)`. Check that the workspace and the connection are healthy:
 
@@ -111,9 +110,8 @@ Use this skill when you write a Git commit message.
 Create the skill from inside your connected project. The flags tell the hub when the skill applies (`--trigger`, `--example`) and when it does not (`--not-for`). At least 3 examples are recommended; one is enough to start:
 
 ```bash
-cd ~/myproject
 skillhub skill create commit-style --collection core --name "Commit style" \
-  --description "Write git commit messages in our team style" --content-file ~/commit-style.md \
+  --description "Write Git commit messages in our team style" --content-file ~/commit-style.md \
   --operation document --trigger "write a commit message" --not-for "writing release notes" \
   --min-scope single_step --example "write a commit message for my staged changes" --yes
 ```
@@ -134,6 +132,8 @@ Skill commit-style is now active.
 
 ## See your first win
 
+Your agent needs a staged change to write about. In a new project, run `git init`, create a `README.md`, then run `git add README.md`.
+
 In your Claude Code session, ask:
 
 > write a commit message for my staged changes
@@ -147,7 +147,9 @@ Checked-by: skillhub-demo
 You can run the same lookup by hand. Save this request as `~/req.json`. Keep `scope` inside `task`; without it, the hub answers with a question instead of a skill.
 
 ```json
-{"schema_version":"1","request_id":"r1","task":{"description":"write a commit message for my staged changes","scope":"single_step"},"operation":"document"}
+{"schema_version": "1", "request_id": "r1", "operation": "document",
+ "task": {"description": "write a commit message for my staged changes",
+          "scope": "single_step"}}
 ```
 
 Ask the hub which skill fits the request:
@@ -160,7 +162,7 @@ skillhub resolve --request ~/req.json
 Resolved commit-style (medium confidence). Host approval is required before activation.
 ```
 
-Confirm that the skill is active:
+The second sentence means your agent still decides whether to load the skill. Confirm that the skill is active:
 
 ```bash
 skillhub skill list
@@ -196,16 +198,14 @@ skillhub serve web --loopback-only
 Skill Hub web UI: http://127.0.0.1:7421/#token=<token>
 ```
 
-Your browser opens the address. Press Ctrl+C to stop the web UI. The [Web UI](web-ui.md) guide tours every screen.
+Your browser opens the address. Press Ctrl+C to stop the web UI. The [web UI guide](web-ui.md) tours every screen.
 
-<img src="images/web/skills-list.png" alt="The skills list with a state filter and skills that are draft, active or deprecated." width="800">
-
-Skills: every skill with its state, and filters to find one.
+<img src="images/web/skills-list.png" alt="The skills list with a state filter and skills that are draft, active or deprecated." width="800"><br><em>Skills: every skill with its state, and filters to find one.</em>
 
 ## If it did not work
 
 - "No Skill Hub workspace was found from the current directory." Run the command inside your connected project, or set `SKILLHUB_WORKSPACE` as shown above.
-- Your agent does not use the hub: open a new Claude Code session in the connected folder, then run `skillhub doctor` there.
+- Your agent does not use the hub: open a new Claude Code session in the connected folder. Then run `skillhub doctor` there.
 - Activation is refused: the draft needs real instructions and routing fields. The error lists what is missing and suggests a `skillhub skill edit` command.
 - `resolve` asks "What is the bounded scope of this task?": add `"scope":"single_step"` inside `task` in your request file.
 - Anything else: see [Troubleshooting](troubleshooting.md), starting with [Setup and connection](troubleshooting.md#setup-and-connection) and [Skills](troubleshooting.md#skills).
@@ -214,7 +214,7 @@ Skills: every skill with its state, and filters to find one.
 
 - Add a skill from GitHub and review it: [Add a skill](curating-skills.md#add-a-skill-skillhub-skill-add).
 - Keep copied skills up to date with `skillhub check`: [Sources and learning](sources-and-learning.md#keep-copied-skills-up-to-date).
-- Let a **curator agent** (an agent that has the distill-lab skill) propose lessons from other repositories: [Learn from other repositories](sources-and-learning.md#learn-from-other-repositories).
-- Find your way around the screens: [Web UI](web-ui.md#do-common-tasks).
+- Let a **curator agent** (an agent with the distill-lab skill) propose **lessons**: improvements you decide on. See [Learn from other repositories](sources-and-learning.md#learn-from-other-repositories).
+- Find your way around the screens: [The web UI](web-ui.md#do-common-tasks).
 - Use Skill Hub every day: [Using Skill Hub](user-guide.md).
 - Look up any command: [Command reference](command-reference.md).

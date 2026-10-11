@@ -6,7 +6,7 @@ One skill library. Every agent. Every project.\
 [Quickstart](#quickstart) · [User guide](docs/user-guide.md) · [Curating skills](docs/curating-skills.md)
 
 Keep your agent skills in one Git repository you own, and stop copying skill folders between projects.
-When your agent starts a task, it asks the hub which skill fits, and the hub suggests one. Nothing changes in your library without your say-so.
+When your agent starts a task, it asks the hub which skill fits, and the hub suggests one. Nothing changes in your skills without your say-so.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/web/dark-skills-list.png">
@@ -17,8 +17,8 @@ When your agent starts a task, it asks the hub which skill fits, and the hub sug
 
 ## Why Skill Hub
 
-- **Your agent asks for the right skill.** It sends a short task description and gets one recommendation, or "no skill fits". The full skill text loads only after the agent picks it.
-- **You approve every change.** New skills start as drafts that agents are not offered. Skills from someone else's repository reach your agent only after you approve them in the terminal.
+- **One recommendation per task.** Your agent is told to ask the hub with a short task description. It gets one recommendation, or "no skill fits", and the full skill text loads only after it picks one.
+- **You approve every skill change.** New skills start as drafts that agents are not offered. Skills from someone else's repository reach your agent only after you approve them in the terminal.
 - **One program, nothing to keep running.** Skill Hub is a single binary. Your agent starts it when needed; nothing runs in the background.
 - **Git is the database.** Your skills are plain files in your own repository. Review them, share them with teammates, and roll them back with Git.
 - **A local web UI.** Browse, review and edit skills in your browser, on your own machine.
@@ -91,12 +91,12 @@ Open a new Claude Code session in that folder and ask:
 
 > curate my Skill Hub
 
-Your agent shows the state of your hub and suggests one next step.
+The curator skill that `connect` installed tells your agent to show the hub's status and one next step.
 
 > [!TIP]
-> Use `skillhub connect -g --workspace ~/skillhub --yes` to connect every project at once.
+> Use `skillhub connect -g --workspace ~/skillhub --host claude --yes` to connect every project at once.
 
-Add your first skill -> [Get started](docs/getting-started.md)
+Next: [create your first skill](docs/getting-started.md#create-your-first-skill).
 
 ## See it
 
@@ -121,10 +121,10 @@ skillhub serve web --loopback-only
 ## Documentation
 
 - **Start:** [Get started](docs/getting-started.md) · [Installation](docs/installation.md)
-- **Guides:** [Using Skill Hub](docs/user-guide.md) · [Curating skills](docs/curating-skills.md) · [Sources and learning](docs/sources-and-learning.md) · [Web UI](docs/web-ui.md) · [Troubleshooting](docs/troubleshooting.md)
+- **Guides:** [Using Skill Hub](docs/user-guide.md) · [Curating skills](docs/curating-skills.md) · [Sources and learning](docs/sources-and-learning.md) · [Web UI guide](docs/web-ui.md) · [Troubleshooting](docs/troubleshooting.md)
 - **Reference:** [Command reference](docs/command-reference.md) · [All docs](docs/README.md)
 - **Maintainers:** [Contributing](CONTRIBUTING.md) · [Release runbook](docs/release-runbook.md)
 
 ## Contributing and license
 
-To build, test or release Skill Hub, see [CONTRIBUTING.md](CONTRIBUTING.md). Skill Hub is released under the MIT License, see [LICENSE](LICENSE).
+To build, test or release Skill Hub, see [CONTRIBUTING.md](CONTRIBUTING.md). Skill Hub is released under the MIT License; see [LICENSE](LICENSE).
