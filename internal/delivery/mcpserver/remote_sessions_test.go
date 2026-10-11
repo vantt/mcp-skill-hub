@@ -3,6 +3,7 @@ package mcpserver
 import (
 	"bytes"
 	"context"
+	"io"
 	"io/fs"
 	"log/slog"
 	"net"
@@ -437,6 +438,29 @@ func TestRemoteCallsStoreNoTokenAndNoClientAddress(t *testing.T) {
 	first := callSkillResolve(t, session, resolveTask("review changed code in module alpha", "review", "")).Resolution.ResolutionID
 	reformulation := callSkillResolve(t, session, resolveTask(rawTask, "review", first)).Resolution.ResolutionID
 	callSkillGet(t, session, "review-skill")
+	// Bundle requests, delivered and not modified, go through the same scan.
+	bundleClient := remoteHTTPClient(t, clientIP, hub.token)
+	etag := ""
+	for _, want := range []int{http.StatusOK, http.StatusNotModified} {
+		request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, hub.baseURL+HTTPBundlePath+"?skill=review-skill", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Header.Set("Mcp-Session-Id", session.ID())
+		if etag != "" {
+			request.Header.Set("If-None-Match", etag)
+		}
+		response, err := bundleClient.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = io.Copy(io.Discard, response.Body)
+		_ = response.Body.Close()
+		if response.StatusCode != want {
+			t.Fatalf("bundle request status = %d, want %d", response.StatusCode, want)
+		}
+		etag = response.Header.Get("ETag")
+	}
 	hub.stop(t)
 
 	recorder := openHubRecorder(t, root)
@@ -455,6 +479,9 @@ func TestRemoteCallsStoreNoTokenAndNoClientAddress(t *testing.T) {
 	}
 	if got, want := reformulationCase.Task["description"], telemetry.NewRedactor(root).Redact(rawTask); got != want {
 		t.Fatalf("remote case task = %q, want the hub redaction %q", got, want)
+	}
+	if loads := bundleLoads(recentRawEvents(t, recorder)); len(loads) != 1 {
+		t.Fatalf("recorded %d bundle loads for one delivered and one confirmed bundle, want 1", len(loads))
 	}
 	if err := recorder.Close(t.Context()); err != nil {
 		t.Fatal(err)

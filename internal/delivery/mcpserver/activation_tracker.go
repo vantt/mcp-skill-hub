@@ -70,6 +70,9 @@ type activationTracker struct {
 	mu       sync.Mutex
 	now      func() time.Time
 	sessions map[*mcp.ServerSession]*sessionState
+	// anon is the "no session" state: calls that carry no live MCP session
+	// (for example a bundle request before the caller opened one) share it,
+	// with its own session hash, and never touch a real session's state.
 	anon     *sessionState
 	redactor *telemetry.Redactor
 }
@@ -233,6 +236,31 @@ func (t *activationTracker) markActivation(session *mcp.ServerSession, resolutio
 		resKey = "-"
 	}
 	key := resKey + "\x00" + skillID
+	if state.activated[key] {
+		return false
+	}
+	state.activated[key] = true
+	return true
+}
+
+// markBundleFetch reports whether this is the first fetch or confirmation of
+// a skill version's bundle in the session, so a bundle counts as one load per
+// skill version and session however often the caller revalidates it. digest
+// is empty for a refused (unapproved) skill, whose version the refusal does
+// not name; such a skill then counts one blocked load per session. A nil
+// session (a request that names no live session) is never deduplicated: the
+// "no session" state is shared by every client of the hub, so one client's
+// load must not hide another's. Its loads still carry the no-session hash.
+func (t *activationTracker) markBundleFetch(session *mcp.ServerSession, skillID, digest string) bool {
+	if session == nil {
+		return true
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	state := t.sessionState(session)
+	state.lastSeen = t.now()
+	key := "bundle\x00" + skillID + "\x00" + digest
 	if state.activated[key] {
 		return false
 	}

@@ -2,6 +2,8 @@ package mcpserver
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -42,6 +44,13 @@ const (
 	proxyBundleTimeout = 2 * time.Minute
 	// proxyMaxSkillMarkdown bounds the SKILL.md text returned from the cache.
 	proxyMaxSkillMarkdown = skillruntime.BundleMaxBytes
+	// proxyConfirmTimeout bounds the background confirmation of a cache hit;
+	// nothing waits for it.
+	proxyConfirmTimeout = 15 * time.Second
+	// proxyMaxCountedVersions bounds the memory of versions the hub already
+	// counted; when it is full it starts over, which costs at most one more
+	// confirmation per version (the hub counts each version once per session).
+	proxyMaxCountedVersions = 4096
 )
 
 var proxySkillIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
@@ -101,16 +110,30 @@ type Proxy struct {
 	fetchLocks  map[string]*sync.Mutex
 	lastGC      time.Time
 	unreachable bool
+	// counted holds the versions the hub has counted as loaded in a hub
+	// session (see countedKey); confirming holds the confirmations in flight.
+	counted    map[string]bool
+	confirming map[string]bool
+
+	// background bounds the confirmations sent after cache hits; close
+	// cancels it and waits for them.
+	background      context.Context
+	stopBackground  context.CancelFunc
+	backgroundTasks sync.WaitGroup
 
 	// tokenRejected is set while the hub answers 401 to this machine's token.
 	tokenRejected *atomic.Bool
 }
 
-// skillHint is what the latest resolution said about a skill.
+// skillHint is what the latest resolution said about a skill. resolutionID
+// and sessionID name that resolution and the hub session that answered it;
+// both are empty when the hint comes from a bundle answer.
 type skillHint struct {
 	digest         string
 	reviewRequired bool
 	at             time.Time
+	resolutionID   string
+	sessionID      string
 }
 
 // NormalizeHubURL checks a hub base URL and returns it without a trailing
@@ -172,7 +195,10 @@ func NewProxy(ctx context.Context, options ProxyOptions) (*Proxy, error) {
 		now:           time.Now,
 		hints:         map[string]skillHint{},
 		fetchLocks:    map[string]*sync.Mutex{},
+		counted:       map[string]bool{},
+		confirming:    map[string]bool{},
 	}
+	proxy.background, proxy.stopBackground = context.WithCancel(context.WithoutCancel(ctx))
 	hubHost, err := url.Parse(hubURL)
 	if err != nil {
 		return nil, err
@@ -241,6 +267,11 @@ func ServeProxy(ctx context.Context, options ProxyOptions) error {
 }
 
 func (proxy *Proxy) close() {
+	// Stop the cache-hit confirmations first: they may use the hub session.
+	proxy.mu.Lock()
+	proxy.stopBackground()
+	proxy.mu.Unlock()
+	proxy.backgroundTasks.Wait()
 	proxy.connectMu.Lock()
 	defer proxy.connectMu.Unlock()
 	if proxy.upstream != nil {
@@ -251,21 +282,24 @@ func (proxy *Proxy) close() {
 	proxy.client.CloseIdleConnections()
 }
 
-// noteClient remembers the agent host's name from its session, so the hub
-// connection, opened on the first call, carries the real host name.
+// noteClient remembers the agent host's name, so the hub connection, opened
+// on the first forwarded call, carries the real host name and the hub labels
+// the session remote:<host>. The name comes from the host's initialize
+// handshake or, for a host that negotiates the newer protocol without one,
+// from the client information it sends with each request.
 func (proxy *Proxy) noteClient(request *mcp.CallToolRequest) {
-	if request == nil || request.Session == nil {
+	if request == nil {
 		return
 	}
-	params := request.Session.InitializeParams()
-	if params == nil || params.ClientInfo == nil {
+	info := request.ClientInfo()
+	if info == nil || strings.TrimSpace(info.Name) == "" {
 		return
 	}
 	proxy.clientMu.Lock()
 	defer proxy.clientMu.Unlock()
 	if proxy.clientInfo == nil {
-		info := *params.ClientInfo
-		proxy.clientInfo = &info
+		copied := *info
+		proxy.clientInfo = &copied
 	}
 }
 
@@ -509,8 +543,9 @@ func (proxy *Proxy) noteHints(structured any) {
 	var outcome struct {
 		Result *struct {
 			Resolution struct {
-				Primary    *recommended  `json:"primary"`
-				Supporting []recommended `json:"supporting"`
+				ResolutionID string        `json:"resolution_id"`
+				Primary      *recommended  `json:"primary"`
+				Supporting   []recommended `json:"supporting"`
 			} `json:"resolution"`
 		} `json:"result"`
 	}
@@ -522,6 +557,8 @@ func (proxy *Proxy) noteHints(structured any) {
 		items = append(items, *primary)
 	}
 	now := proxy.now()
+	resolutionID := outcome.Result.Resolution.ResolutionID
+	sessionID := proxy.currentSessionID()
 	proxy.mu.Lock()
 	defer proxy.mu.Unlock()
 	for _, item := range items {
@@ -533,6 +570,8 @@ func (proxy *Proxy) noteHints(structured any) {
 			digest:         digest,
 			reviewRequired: item.Setup != nil && item.Setup.State == skillruntime.StateReviewRequired,
 			at:             now,
+			resolutionID:   resolutionID,
+			sessionID:      sessionID,
 		}
 	}
 }
@@ -582,7 +621,8 @@ type proxySkillGetResult struct {
 // skillGet answers skill_get from the cache, fetching the skill bundle when
 // the version is not cached. Skills that cannot be bundled (drafts, skills
 // awaiting review, the bundled curator) are forwarded, so the hub answers
-// them exactly as it answers a local caller.
+// them exactly as it answers a local caller. A cache hit answers at once and
+// lets the hub count the load in the background (see confirmLoad).
 func (proxy *Proxy) skillGet(ctx context.Context, request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	var input skillGetInput
 	if request != nil && request.Params != nil && len(request.Params.Arguments) > 0 {
@@ -598,6 +638,7 @@ func (proxy *Proxy) skillGet(ctx context.Context, request *mcp.CallToolRequest) 
 	hint, hinted := proxy.hint(skillID)
 	if hinted && !hint.reviewRequired {
 		if cached, ok := proxy.cache.Lookup(proxy.hubID, skillID, hint.digest); ok {
+			proxy.confirmLoad(skillID, hint)
 			return proxy.localResult(cached, remoteCacheHit, "")
 		}
 	}
@@ -605,9 +646,11 @@ func (proxy *Proxy) skillGet(ctx context.Context, request *mcp.CallToolRequest) 
 	switch outcome.kind {
 	case fetchInstalled:
 		proxy.rememberVersion(skillID, outcome.cached.Digest)
+		proxy.markCounted(outcome.sessionID, skillID, outcome.cached.Digest)
 		return proxy.localResult(outcome.cached, remoteCacheFetched, "")
 	case fetchNotModified:
 		proxy.rememberVersion(skillID, outcome.cached.Digest)
+		proxy.markCounted(outcome.sessionID, skillID, outcome.cached.Digest)
 		return proxy.localResult(outcome.cached, remoteCacheHit, "")
 	case fetchForward:
 		return proxy.forward(ctx, "skill_get", request)
@@ -656,6 +699,9 @@ type fetchOutcome struct {
 	code    string
 	message string
 	action  string
+	// sessionID is the hub session the request named, so the version the
+	// hub delivered or confirmed is known to be counted in that session.
+	sessionID string
 }
 
 // fetchBundle asks the hub for the current version of a skill in one request,
@@ -668,7 +714,7 @@ func (proxy *Proxy) fetchBundle(ctx context.Context, skillID string) fetchOutcom
 		held = append(held, version.Digest)
 	}
 	for attempt := 0; attempt < 2; attempt++ {
-		outcome, retry := proxy.requestBundle(ctx, skillID, held)
+		outcome, retry := proxy.requestBundle(ctx, skillID, held, false)
 		if !retry {
 			return outcome
 		}
@@ -679,7 +725,10 @@ func (proxy *Proxy) fetchBundle(ctx context.Context, skillID string) fetchOutcom
 	return fetchOutcome{kind: fetchFailed, code: "internal_error", message: "The cached skill kept disappearing while it was being used.", action: "Retry once."}
 }
 
-func (proxy *Proxy) requestBundle(ctx context.Context, skillID string, held []string) (fetchOutcome, bool) {
+// requestBundle sends one bundle request. quiet marks a background request:
+// it tells the user nothing about the hub's reachability and leaves cache
+// garbage collection to requests the agent waits for.
+func (proxy *Proxy) requestBundle(ctx context.Context, skillID string, held []string, quiet bool) (fetchOutcome, bool) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, proxy.bundleURL+"?skill="+url.QueryEscape(skillID), nil)
 	if err != nil {
 		return fetchOutcome{kind: fetchFailed, err: err, code: "internal_error", message: "The bundle request could not be built.", action: "Retry once."}, false
@@ -692,8 +741,9 @@ func (proxy *Proxy) requestBundle(ctx context.Context, skillID string, held []st
 		}
 		request.Header.Set("If-None-Match", strings.Join(tags, ", "))
 	}
-	if id := proxy.currentSessionID(); id != "" {
-		request.Header.Set("Mcp-Session-Id", id)
+	sessionID := proxy.currentSessionID()
+	if sessionID != "" {
+		request.Header.Set("Mcp-Session-Id", sessionID)
 	}
 	response, err := proxy.client.Do(request)
 	if err != nil {
@@ -706,7 +756,9 @@ func (proxy *Proxy) requestBundle(ctx context.Context, skillID string, held []st
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 64<<10))
 		_ = response.Body.Close()
 	}()
-	proxy.noteReachable(true)
+	if !quiet {
+		proxy.noteReachable(true)
+	}
 	digest := strings.Trim(strings.TrimPrefix(response.Header.Get("ETag"), "W/"), `"`)
 	switch response.StatusCode {
 	case http.StatusOK:
@@ -726,14 +778,16 @@ func (proxy *Proxy) requestBundle(ctx context.Context, skillID string, held []st
 			}
 			return fetchOutcome{kind: fetchFailed, err: err, code: "internal_error", message: "The skill could not be stored in the local cache " + proxy.CacheDir() + ".", action: "Check free disk space and the permissions of that directory."}, false
 		}
-		proxy.collectGarbage(skillID, digest)
-		return fetchOutcome{kind: fetchInstalled, cached: cached}, false
+		if !quiet {
+			proxy.collectGarbage(skillID, digest)
+		}
+		return fetchOutcome{kind: fetchInstalled, cached: cached, sessionID: sessionID}, false
 	case http.StatusNotModified:
 		cached, ok := proxy.cache.Lookup(proxy.hubID, skillID, digest)
 		if !ok {
 			return fetchOutcome{}, true
 		}
-		return fetchOutcome{kind: fetchNotModified, cached: cached}, false
+		return fetchOutcome{kind: fetchNotModified, cached: cached, sessionID: sessionID}, false
 	case http.StatusUnauthorized:
 		return fetchOutcome{kind: fetchFailed, code: hubTokenRejectedCode, message: hubTokenRejectedMessage, action: hubTokenRejectedAction}, false
 	case http.StatusForbidden, http.StatusNotFound:
@@ -753,6 +807,112 @@ func (proxy *Proxy) requestBundle(ctx context.Context, skillID string, held []st
 	default:
 		return fetchOutcome{kind: fetchFailed, code: "hub_response_invalid", message: fmt.Sprintf("The hub answered the skill request with HTTP %d.", response.StatusCode), action: "Check that the hub runs the same skillhub version as this machine."}, false
 	}
+}
+
+// countedKey names a skill version counted by the hub in one hub session; an
+// empty sessionID is the hub's "no session" state.
+func countedKey(sessionID, skillID, digest string) string {
+	return sessionID + "\x00" + skillID + "\x00" + digest
+}
+
+// markCounted notes that the hub counted this version as loaded in the hub
+// session sessionID, because it delivered or confirmed the bundle to a
+// request naming that session.
+func (proxy *Proxy) markCounted(sessionID, skillID, digest string) {
+	proxy.mu.Lock()
+	defer proxy.mu.Unlock()
+	if len(proxy.counted) >= proxyMaxCountedVersions {
+		proxy.counted = map[string]bool{}
+	}
+	proxy.counted[countedKey(sessionID, skillID, digest)] = true
+}
+
+// confirmLoad lets the hub count a cache hit as a load without making the
+// agent wait. A hit costs no request when the hub already counted this
+// version in the current hub session; otherwise one conditional bundle
+// request naming the cached digest runs in the background, and the hub
+// answers 304 with no content and counts the load once for the version and
+// session. If the hub cannot be reached the hit is not retried and the user
+// is not warned; reportCachedLoad may record it through skill_feedback
+// instead. Use is never reported here: the agent reports it itself.
+func (proxy *Proxy) confirmLoad(skillID string, hint skillHint) {
+	sessionID := proxy.currentSessionID()
+	key := countedKey(sessionID, skillID, hint.digest)
+	proxy.mu.Lock()
+	if proxy.counted[key] || proxy.confirming[key] || proxy.background.Err() != nil {
+		proxy.mu.Unlock()
+		return
+	}
+	proxy.confirming[key] = true
+	// Added under mu while background is live; close cancels background
+	// under mu before it waits, so it never misses a task.
+	proxy.backgroundTasks.Add(1)
+	proxy.mu.Unlock()
+	go func() {
+		defer proxy.backgroundTasks.Done()
+		defer func() {
+			proxy.mu.Lock()
+			delete(proxy.confirming, key)
+			proxy.mu.Unlock()
+		}()
+		ctx, cancel := context.WithTimeout(proxy.background, proxyConfirmTimeout)
+		defer cancel()
+		// No fetch lock: a hub that never answers must not hold up the next
+		// skill_get. The cache installs atomically and tolerates concurrent
+		// writers, as it does for several proxy processes.
+		outcome, _ := proxy.requestBundle(ctx, skillID, []string{hint.digest}, true)
+		switch outcome.kind {
+		case fetchNotModified:
+			proxy.markCounted(outcome.sessionID, skillID, hint.digest)
+		case fetchInstalled:
+			// The hub has a newer version than the resolution named; it is
+			// now cached and the next skill_get uses it.
+			proxy.rememberVersion(skillID, outcome.cached.Digest)
+			proxy.markCounted(outcome.sessionID, skillID, outcome.cached.Digest)
+		case fetchUnreachable:
+			// A fresh deadline: the bundle request may have used up its own.
+			feedbackCtx, cancelFeedback := context.WithTimeout(proxy.background, proxyDialTimeout)
+			defer cancelFeedback()
+			proxy.reportCachedLoad(feedbackCtx, skillID, hint)
+		}
+	}()
+}
+
+// reportCachedLoad records a cache hit through skill_feedback (outcome
+// loaded) when the bundle confirmation could not reach the hub. It runs only
+// for a version named by a resolution that the still-open hub session
+// answered, makes one attempt without reconnecting, and uses an event_id
+// derived from the session, skill and version, so a repeated attempt is
+// deduplicated by the hub instead of counted twice.
+func (proxy *Proxy) reportCachedLoad(ctx context.Context, skillID string, hint skillHint) {
+	if hint.resolutionID == "" || hint.sessionID == "" {
+		return
+	}
+	proxy.connectMu.Lock()
+	session := proxy.upstream
+	proxy.connectMu.Unlock()
+	if session == nil || session.ID() != hint.sessionID {
+		return
+	}
+	arguments, err := json.Marshal(map[string]string{
+		"schema_version": SchemaVersion,
+		"resolution_id":  hint.resolutionID,
+		"event_id":       cachedLoadEventID(hint.sessionID, skillID, hint.digest),
+		"outcome":        "loaded",
+		"selected_skill": skillID,
+	})
+	if err != nil {
+		return
+	}
+	// A failure is dropped: the hit was served and is not retried.
+	_, _ = session.CallTool(ctx, &mcp.CallToolParams{Name: "skill_feedback", Arguments: json.RawMessage(arguments)})
+}
+
+// cachedLoadEventID is the fixed feedback event_id of a cache hit of one
+// skill version in one hub session. The session ID is hashed, not stored.
+func cachedLoadEventID(sessionID, skillID, digest string) string {
+	sum := sha256.Sum256([]byte(sessionID + "\x00" + skillID + "\x00" + digest))
+	return "cache-" + hex.EncodeToString(sum[:20])
 }
 
 // collectGarbage trims this hub's cache at most once an hour, keeping the

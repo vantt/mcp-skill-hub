@@ -58,14 +58,36 @@ func contentReviewRequiredMessage(skillID string) string {
 }
 
 // skillBundle is the one code path behind both transports. A delivered or
-// confirmed version counts as an activation of the skill.
+// confirmed (not modified) version counts as one load of the skill per
+// version and session, so a client that revalidates its cached copy on every
+// use is counted like a local skill_get, not once per request. A refused,
+// unapproved skill counts as a blocked load, once per session.
 func (adapter *Server) skillBundle(ctx context.Context, session *mcp.ServerSession, skillID string, held []string) (app.SkillBundle, error) {
 	bundle, err := adapter.distribution.SkillBundle(ctx, adapter.workspace, skillID, held)
 	if err != nil {
+		var review *app.ContentReviewRequiredError
+		if errors.As(err, &review) {
+			adapter.recordBundleLoad(ctx, session, "", app.SkillLoad{
+				SkillID:      review.SkillID,
+				ResourceKind: "entrypoint",
+				Surface:      "skill_bundle",
+				Blocked:      true,
+				ReasonCodes:  review.ReasonCodes,
+			})
+		}
 		return bundle, err
 	}
-	adapter.recordLoad(ctx, session, app.SkillLoad{SkillID: skillID, ResourceKind: "entrypoint", Surface: "skill_get"})
+	adapter.recordBundleLoad(ctx, session, bundle.Digest, app.SkillLoad{SkillID: bundle.SkillID, ResourceKind: "entrypoint", Surface: "skill_bundle"})
 	return bundle, nil
+}
+
+// recordBundleLoad records load unless this session already counted the same
+// skill version through a bundle.
+func (adapter *Server) recordBundleLoad(ctx context.Context, session *mcp.ServerSession, digest string, load app.SkillLoad) {
+	if adapter.tracker != nil && !adapter.tracker.markBundleFetch(session, load.SkillID, digest) {
+		return
+	}
+	adapter.recordLoad(ctx, session, load)
 }
 
 // bundleMethod serves skills/bundle over any MCP transport.
@@ -178,8 +200,11 @@ func parseIfNoneMatch(header string) []string {
 	return digests
 }
 
-// sessionByID finds the MCP session a bundle request belongs to, so the load
-// is attributed to the caller's resolutions. An unknown ID yields nil.
+// sessionByID finds the MCP session a bundle request belongs to: the proxy
+// sends its hub session ID in the Mcp-Session-Id header, so the load is
+// attributed to that session's resolutions. A missing or unknown ID (no
+// session opened yet, or one that expired) yields nil, which the activation
+// tracker keeps as its separate "no session" state.
 func sessionByID(server *mcp.Server, id string) *mcp.ServerSession {
 	if id == "" || server == nil {
 		return nil

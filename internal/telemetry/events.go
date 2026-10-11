@@ -130,7 +130,7 @@ var commonRouting = fields(
 var (
 	setupStates              = map[string]bool{"ready": true, "setup_required": true, "unsupported_platform": true, "review_required": true, "unknown": true}
 	skillResourceKinds       = map[string]bool{"entrypoint": true, "reference": true, "script": true, "asset": true, "resource": true}
-	skillLoadSurfaces        = map[string]bool{"skill_get": true, "skills_get": true, "resources_read": true}
+	skillLoadSurfaces        = map[string]bool{"skill_get": true, "skills_get": true, "resources_read": true, "skill_bundle": true}
 	activationAttributes     = map[string]bool{"recommended": true, "supporting": true, "override": true, "after_no_skill": true, "after_needs_context": true, "unsolicited": true}
 	doctorStatuses           = map[string]bool{"ready": true, "setup_required": true, "unsupported_platform": true, "failed": true}
 	contentReviewReasonCodes = map[string]bool{"content_review_required": true, "content_review_stale": true}
