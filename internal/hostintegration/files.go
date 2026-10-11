@@ -124,7 +124,7 @@ func apply(ctx context.Context, plan PlanResult, options ApplyOptions) (ApplyRes
 	if !options.Confirmed {
 		return ApplyResult{}, ErrConfirmationRequired
 	}
-	if !filepath.IsAbs(plan.Workspace) || !filepath.IsAbs(plan.Binary) {
+	if !filepath.IsAbs(plan.Binary) || (plan.mode().local() && !filepath.IsAbs(plan.Workspace)) {
 		return ApplyResult{}, fmt.Errorf("plan workspace and binary paths must be absolute")
 	}
 	writeRoot := plan.Root
@@ -171,17 +171,17 @@ func apply(ctx context.Context, plan PlanResult, options ApplyOptions) (ApplyRes
 		if err != nil {
 			return ApplyResult{}, err
 		}
-		if (bytes.Equal(raw, change.Desired) && exists) || (nativeRemoval(change) && !exists) {
+		if (!isRemoval(change) && bytes.Equal(raw, change.Desired) && exists) || (isRemoval(change) && !exists) {
 			continue
 		}
 		if digest(raw, exists) != change.PreimageDigest {
 			return ApplyResult{}, fmt.Errorf("%w: %s", ErrStalePlan, change.Path)
 		}
-		expected, err := expectedDesired(change, raw, plan)
+		expected, remove, err := expectedChange(change, raw, plan)
 		if err != nil {
 			return ApplyResult{}, err
 		}
-		if !bytes.Equal(expected, change.Desired) {
+		if remove != isRemoval(change) || (!remove && !bytes.Equal(expected, change.Desired)) {
 			return ApplyResult{}, fmt.Errorf("plan desired content is invalid for %s", change.Path)
 		}
 		if !exists {
@@ -202,13 +202,13 @@ func apply(ctx context.Context, plan PlanResult, options ApplyOptions) (ApplyRes
 		if err != nil {
 			return result, err
 		}
-		if (bytes.Equal(raw, write.change.Desired) && exists) || (nativeRemoval(write.change) && !exists) {
+		if (!isRemoval(write.change) && bytes.Equal(raw, write.change.Desired) && exists) || (isRemoval(write.change) && !exists) {
 			continue
 		}
 		if digest(raw, exists) != write.change.PreimageDigest {
 			return result, fmt.Errorf("%w: %s", ErrStalePlan, write.change.Path)
 		}
-		if nativeRemoval(write.change) {
+		if isRemoval(write.change) {
 			relative, err := managedRelativePath(writeRoot, write.change.Path)
 			if err != nil {
 				return result, err
@@ -219,6 +219,9 @@ func apply(ctx context.Context, plan PlanResult, options ApplyOptions) (ApplyRes
 			if err := root.Remove(relative); err != nil {
 				return result, err
 			}
+			if write.change.Remove {
+				removeEmptyParents(root, relative)
+			}
 		} else if err := atomicWrite(root, writeRoot, write.change.Path, write.change.Desired, write.mode); err != nil {
 			return result, err
 		}
@@ -227,39 +230,60 @@ func apply(ctx context.Context, plan PlanResult, options ApplyOptions) (ApplyRes
 	return result, nil
 }
 
-func expectedDesired(change Change, raw []byte, plan PlanResult) ([]byte, error) {
+// expectedChange recomputes a change from the file's current content, so a
+// plan cannot carry content other than what planning would produce. The second
+// result reports that the change deletes the file.
+func expectedChange(change Change, raw []byte, plan PlanResult) ([]byte, bool, error) {
+	mode := plan.mode()
 	switch change.Kind {
 	case ChangeNativeSkill:
+		if !mode.local() {
+			if !nativeCuratorOwned(raw) {
+				return nil, false, &ConflictError{Path: change.Path, Reason: "the system-curator skill changed after the preview; it is left in place"}
+			}
+			return nil, true, nil
+		}
 		if HostSupportsSkillsExtension(change.Host) {
 			if !nativeCuratorOwned(raw) {
-				return nil, &ConflictError{Path: change.Path, Reason: nativeCuratorConflict}
+				return nil, false, &ConflictError{Path: change.Path, Reason: nativeCuratorConflict}
 			}
-			return nil, nil
+			return nil, true, nil
 		}
-		return []byte(systemCuratorInstructions()), nil
+		return []byte(systemCuratorInstructions()), false, nil
 	case ChangeBootstrap:
-		desired, conflict := updateBootstrap(raw)
+		update := updateBootstrap
+		if mode.remove {
+			update = removeBootstrap
+		}
+		desired, conflict := update(raw)
 		if conflict != "" {
-			return nil, &ConflictError{Path: change.Path, Reason: conflict}
+			return nil, false, &ConflictError{Path: change.Path, Reason: conflict}
 		}
-		return desired, nil
+		if mode.remove && len(bytes.TrimSpace(desired)) == 0 {
+			return nil, true, nil
+		}
+		return desired, false, nil
 	case ChangeMCP:
-		supportsToggle := HostSupportsServerToggle(change.Host)
-		switch change.Host {
-		case HostClaude:
-			return desiredClaudeCLICurationConfig(raw, plan.Binary, plan.Workspace)
-		case HostGemini:
-			return desiredGeminiConfig(raw, plan.Binary, plan.Workspace, supportsToggle)
-		case HostCodex:
-			return desiredCodexConfig(raw, plan.Binary, plan.Workspace, supportsToggle)
+		desired, remove, err := desiredConfig(change.Host, raw, mode)
+		if remove {
+			desired = nil
 		}
+		return desired, remove, err
 	case ChangeHostPermissions:
 		if change.Host == HostClaude {
-			file, err := preparePermissions(adapters[0], plan.Scope, change.Path, plan.Root, plan.Workspace)
-			return file.desired, err
+			previous, err := readConfigRegistration(plan, change.Host)
+			if err != nil {
+				return nil, false, err
+			}
+			root := plan.Root
+			if root == "" {
+				root = plan.Workspace
+			}
+			file, err := preparePermissions(adapters[0], plan.Scope, change.Path, root, mode, previous)
+			return file.desired, file.remove, err
 		}
 	}
-	return nil, fmt.Errorf("unsupported change %q for host %q", change.Kind, change.Host)
+	return nil, false, fmt.Errorf("unsupported change %q for host %q", change.Kind, change.Host)
 }
 
 func changeOrder(kind ChangeKind) int {

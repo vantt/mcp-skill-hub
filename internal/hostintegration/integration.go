@@ -44,6 +44,7 @@ type preparedFile struct {
 	desired []byte
 	mode    os.FileMode
 	preview string
+	remove  bool
 }
 
 type preparedHost struct {
@@ -56,6 +57,8 @@ type preparedInspection struct {
 	root      string
 	scope     Scope
 	binary    string
+	hub       *RemoteHub
+	remove    bool
 	hosts     []preparedHost
 }
 
@@ -80,7 +83,7 @@ func buildPlan(ctx context.Context, request Request) (PlanResult, error) {
 	if err != nil {
 		return PlanResult{}, err
 	}
-	plan := PlanResult{Workspace: prepared.workspace, Root: prepared.root, Scope: prepared.scope, Binary: prepared.binary}
+	plan := PlanResult{Workspace: prepared.workspace, Root: prepared.root, Scope: prepared.scope, Binary: prepared.binary, Hub: prepared.hub, Remove: prepared.remove}
 	kinds := []ChangeKind{ChangeMCP, ChangeHostPermissions, ChangeNativeSkill, ChangeBootstrap}
 	for _, kind := range kinds {
 		for _, host := range prepared.hosts {
@@ -95,7 +98,7 @@ func buildPlan(ctx context.Context, request Request) (PlanResult, error) {
 					Host: host.adapter.Host, Kind: kind, Path: file.state.Path,
 					PreimageDigest: file.state.PreimageDigest,
 					Desired:        append([]byte(nil), file.desired...), Mode: uint32(file.mode.Perm()),
-					Preview: file.preview,
+					Preview: file.preview, Remove: file.remove,
 				})
 			}
 		}
@@ -111,7 +114,8 @@ func prepare(ctx context.Context, request Request) (preparedInspection, error) {
 	if err != nil {
 		return preparedInspection{}, err
 	}
-	prepared := preparedInspection{workspace: workspace, root: root, scope: scope, binary: binary}
+	prepared := preparedInspection{workspace: workspace, root: root, scope: scope, binary: binary, hub: request.Hub, remove: request.Remove}
+	mode := planMode{workspace: workspace, binary: binary, hub: request.Hub, remove: request.Remove}
 	bundle := systemskills.CuratorBundle()
 	for _, adapter := range selected {
 		if err := ctx.Err(); err != nil {
@@ -120,13 +124,17 @@ func prepare(ctx context.Context, request Request) (preparedInspection, error) {
 		host := preparedHost{adapter: adapter}
 		configRel, skillRel, instructionRel := adapter.relativePaths(scope)
 		configPath := filepath.Join(root, filepath.FromSlash(configRel))
-		config, err := prepareConfig(adapter.Host, configPath, root, workspace, binary)
+		previous, err := scopeRegistration(adapter, scope, root)
+		if err != nil {
+			return preparedInspection{}, err
+		}
+		config, err := prepareConfigFor(adapter.Host, configPath, root, mode)
 		if err != nil {
 			return preparedInspection{}, err
 		}
 		host.files = append(host.files, config)
 		if permissionsRel := adapter.permissionsPath(scope); permissionsRel != "" {
-			permissions, err := preparePermissions(adapter, scope, filepath.Join(root, filepath.FromSlash(permissionsRel)), root, workspace)
+			permissions, err := preparePermissions(adapter, scope, filepath.Join(root, filepath.FromSlash(permissionsRel)), root, mode, previous)
 			if err != nil {
 				return preparedInspection{}, err
 			}
@@ -134,13 +142,27 @@ func prepare(ctx context.Context, request Request) (preparedInspection, error) {
 		}
 		if adapter.NativeSkill {
 			skillPath := filepath.Join(root, filepath.FromSlash(skillRel))
-			skill, err := prepareNativeCurator(adapter.Host, skillPath, root, []byte(bundle.Instructions))
+			var skill preparedFile
+			if mode.local() {
+				skill, err = prepareNativeCurator(adapter.Host, skillPath, root, []byte(bundle.Instructions))
+			} else {
+				skill, err = prepareCuratorRemoval(adapter.Host, skillPath, root)
+			}
 			if err != nil {
 				return preparedInspection{}, err
 			}
 			host.files = append(host.files, skill)
 		}
 		instructionPath := filepath.Join(root, filepath.FromSlash(instructionRel))
+		if mode.remove {
+			instructions, err := prepareInstructionsRemoval(instructionPath, root)
+			if err != nil {
+				return preparedInspection{}, err
+			}
+			host.files = append(host.files, instructions)
+			prepared.hosts = append(prepared.hosts, host)
+			continue
+		}
 		globalHasBootstrap := false
 		if scope == ScopeProject {
 			if home, homeErr := os.UserHomeDir(); homeErr == nil {
@@ -163,13 +185,27 @@ func prepare(ctx context.Context, request Request) (preparedInspection, error) {
 }
 
 func validateRequest(request Request) (workspace, root string, scope Scope, binary string, selected []Adapter, err error) {
-	if !filepath.IsAbs(request.Workspace) {
+	local := request.Hub == nil && !request.Remove
+	if request.Hub != nil && request.Remove {
+		return "", "", "", "", nil, fmt.Errorf("a plan either connects a remote hub or removes the connection")
+	}
+	if request.Hub != nil {
+		if err := validateRemoteHub(*request.Hub); err != nil {
+			return "", "", "", "", nil, err
+		}
+	}
+	if local && !filepath.IsAbs(request.Workspace) {
 		return "", "", "", "", nil, fmt.Errorf("workspace path must be absolute")
+	}
+	if !local && request.Workspace != "" {
+		return "", "", "", "", nil, fmt.Errorf("a remote or removal plan serves no workspace")
 	}
 	if !filepath.IsAbs(request.Binary) {
 		return "", "", "", "", nil, fmt.Errorf("binary path must be absolute")
 	}
-	workspace = filepath.Clean(request.Workspace)
+	if local {
+		workspace = filepath.Clean(request.Workspace)
+	}
 	binary = filepath.Clean(request.Binary)
 	root = workspace
 	if request.Root != "" {
@@ -177,6 +213,9 @@ func validateRequest(request Request) (workspace, root string, scope Scope, bina
 			return "", "", "", "", nil, fmt.Errorf("root path must be absolute")
 		}
 		root = filepath.Clean(request.Root)
+	}
+	if root == "" {
+		return "", "", "", "", nil, fmt.Errorf("root path must be set for a remote or removal plan")
 	}
 	scope = request.Scope
 	switch scope {
@@ -187,6 +226,9 @@ func validateRequest(request Request) (workspace, root string, scope Scope, bina
 		return "", "", "", "", nil, fmt.Errorf("unsupported scope %q", scope)
 	}
 	for _, target := range []struct{ label, path string }{{"workspace", workspace}, {"root", root}} {
+		if target.path == "" {
+			continue
+		}
 		info, statErr := os.Stat(target.path)
 		if statErr != nil {
 			return "", "", "", "", nil, fmt.Errorf("inspect %s: %w", target.label, statErr)
@@ -221,23 +263,13 @@ func validateRequest(request Request) (workspace, root string, scope Scope, bina
 	return workspace, root, scope, binary, selected, nil
 }
 
-func prepareConfig(host Host, path, root, workspace, binary string) (preparedFile, error) {
+func prepareConfig(host Host, path, root string, plan planMode) (preparedFile, error) {
+	workspace := plan.workspace
 	raw, mode, exists, err := readManagedFile(path, root)
 	if err != nil {
 		return preparedFile{}, err
 	}
-	var desired []byte
-	supportsToggle := HostSupportsServerToggle(host)
-	switch host {
-	case HostClaude:
-		desired, err = desiredClaudeCLICurationConfig(raw, binary, workspace)
-	case HostGemini:
-		desired, err = desiredGeminiConfig(raw, binary, workspace, supportsToggle)
-	case HostCodex:
-		desired, err = desiredCodexConfig(raw, binary, workspace, supportsToggle)
-	default:
-		err = fmt.Errorf("unsupported host %q", host)
-	}
+	desired, _, err := desiredConfig(host, raw, plan)
 	if err != nil {
 		return newPreparedFile(host, ChangeMCP, path, raw, raw, mode, exists, err.Error()), nil
 	}
@@ -248,13 +280,23 @@ func prepareConfig(host Host, path, root, workspace, binary string) (preparedFil
 	return file, nil
 }
 
-func preparePermissions(adapter Adapter, scope Scope, path, root, workspace string) (preparedFile, error) {
+func preparePermissions(adapter Adapter, scope Scope, path, root string, plan planMode, previous Registration) (preparedFile, error) {
+	if !plan.local() {
+		return prepareNonLocalPermissions(adapter, scope, path, root, plan, previous)
+	}
+	workspace := plan.workspace
 	host := adapter.Host
 	raw, mode, exists, err := readManagedFile(path, root)
 	if err != nil {
 		return preparedFile{}, err
 	}
-	desired, err := desiredClaudePermissions(raw, workspace)
+	// A local hub replacing a remote one drops the remote cache directory;
+	// over a local entry nothing is dropped.
+	base, err := stripJSONStringArray(raw, claudeAllowedDirsPath, staleAccessDirs(previous, plan), true)
+	if err != nil {
+		return newPreparedFile(host, ChangeHostPermissions, path, raw, raw, mode, exists, err.Error()), nil
+	}
+	desired, err := desiredClaudePermissions(base, workspace)
 	if err != nil {
 		return newPreparedFile(host, ChangeHostPermissions, path, raw, raw, mode, exists, err.Error()), nil
 	}
@@ -267,7 +309,7 @@ func preparePermissions(adapter Adapter, scope Scope, path, root, workspace stri
 		if sharedExists {
 			withDirs, dirErr := ensureJSONStringArray(shared, claudeAllowedDirsPath, RuntimeAccessDirs(workspace))
 			if dirErr == nil && bytes.Equal(withDirs, shared) {
-				desired, err = desiredClaudeCLIRules(raw)
+				desired, err = desiredClaudeCLIRules(base)
 				if err != nil {
 					return preparedFile{}, err
 				}

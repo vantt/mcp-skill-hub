@@ -36,10 +36,12 @@ func externalConnections(workspace, binary string) []externalConnection {
 			if err != nil {
 				continue
 			}
-			registeredWorkspace, registered := hostintegration.RegisteredWorkspace(adapter.Host, raw)
-			if registered {
+			registration := hostintegration.ReadRegistration(adapter.Host, raw)
+			// An entry for a remote hub belongs to that hub; the remote doctor
+			// checks it, and a local workspace never rewrites it.
+			if registration.Present && !registration.Remote() {
 				target.request.Hosts = append(target.request.Hosts, adapter.Host)
-				if filepath.Clean(registeredWorkspace) == filepath.Clean(workspace) {
+				if filepath.Clean(registration.Workspace) == filepath.Clean(workspace) {
 					target.matchingHosts = append(target.matchingHosts, adapter.Host)
 				}
 			}

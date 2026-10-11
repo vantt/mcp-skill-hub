@@ -244,7 +244,7 @@ func (gate *httpGate) ServeHTTP(writer http.ResponseWriter, request *http.Reques
 		http.Error(writer, "Forbidden: cross-origin requests are not accepted", http.StatusForbidden)
 		return
 	}
-	if request.URL.Path != HTTPEndpointPath && (request.URL.Path != HTTPBundlePath || gate.bundle == nil) {
+	if request.URL.Path != HTTPEndpointPath && request.URL.Path != HTTPStatusPath && (request.URL.Path != HTTPBundlePath || gate.bundle == nil) {
 		http.NotFound(writer, request)
 		return
 	}
@@ -279,6 +279,10 @@ func (gate *httpGate) ServeHTTP(writer http.ResponseWriter, request *http.Reques
 	}
 	if request.URL.Path == HTTPBundlePath {
 		gate.bundle.ServeHTTP(writer, request)
+		return
+	}
+	if request.URL.Path == HTTPStatusPath {
+		serveHubStatus(writer, request)
 		return
 	}
 	if request.Method == http.MethodPost && request.Header.Get("Mcp-Session-Id") == "" && gate.sessionCount() >= gate.maxSessions {

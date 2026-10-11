@@ -15,15 +15,35 @@ import (
 const connectFix = "Run `skillhub connect [--project <dir>] [-g|--global] [--workspace <path>] [--host claude|codex|gemini] [--yes]`."
 
 type connectFlags struct {
-	project, workspace string
-	hosts              []hostintegration.Host
-	global, yes, json  bool
+	project, workspace   string
+	hub, tokenFile       string
+	hosts                []hostintegration.Host
+	global, yes, json    bool
+	remove, cache        bool
+	hubSet, tokenFileSet bool
+	workspaceSet         bool
 }
+
+// connectUsageError is a flag combination connect refuses, with its own
+// plain-words message.
+type connectUsageError struct{ what, why, fix string }
+
+func (e *connectUsageError) Error() string { return e.what + " " + e.why }
 
 func runConnect(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	flags, err := parseConnectFlags(args)
 	if err != nil {
+		var usage *connectUsageError
+		if errors.As(err, &usage) {
+			return writeWorkspaceResult(app.ErrorResult(&app.Error{Code: app.ErrorInvalidRequest, Render: app.ErrorRender{Error: usage.what, Why: usage.why, Fix: usage.fix}}), nil, stdout, stderr, hasJSONFlag(args))
+		}
 		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), connectFix)
+	}
+	switch {
+	case flags.remove:
+		return runConnectRemove(ctx, flags, stdout, stderr)
+	case flags.hubSet:
+		return runConnectHub(ctx, flags, stdout, stderr)
 	}
 	ws, resErr := resolveWorkspace(flags.workspace)
 	if resErr != nil {
@@ -33,18 +53,8 @@ func runConnect(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		Project: flags.project, Workspace: ws, Global: flags.global, Hosts: flags.hosts, Yes: flags.yes,
 	})
 	if err != nil {
-		if errors.Is(err, hostintegration.ErrSymlink) {
-			symlinkPath := ""
-			parts := strings.Split(err.Error(), ": ")
-			if len(parts) > 1 {
-				symlinkPath = strings.TrimSpace(parts[len(parts)-1])
-			}
-			why := "A host integration path contains a symbolic link. Skill Hub will not write through symlinks."
-			if symlinkPath != "" {
-				why = fmt.Sprintf("Host integration path %s contains a symbolic link. Skill Hub will not write through symlinks.", symlinkPath)
-			}
-			fix := "Connect per project using `skillhub connect --yes`, select unaffected hosts with `--host <name>`, or replace the symlink with a regular directory."
-			return writeInvalidRequest(stdout, stderr, flags.json, why, fix)
+		if code, handled := writeConnectSymlinkError(err, stdout, stderr, flags.json); handled {
+			return code
 		}
 		return writeWorkspaceResult(result, err, stdout, stderr, flags.json)
 	}
@@ -65,6 +75,25 @@ func runConnect(ctx context.Context, args []string, stdout, stderr io.Writer) in
 	}
 	renderConnectResult(stdout, result)
 	return 0
+}
+
+// writeConnectSymlinkError explains a host path that contains a symbolic link,
+// which connect never writes through. It reports false for any other error.
+func writeConnectSymlinkError(err error, stdout, stderr io.Writer, jsonOutput bool) (int, bool) {
+	if !errors.Is(err, hostintegration.ErrSymlink) {
+		return 0, false
+	}
+	symlinkPath := ""
+	parts := strings.Split(err.Error(), ": ")
+	if len(parts) > 1 {
+		symlinkPath = strings.TrimSpace(parts[len(parts)-1])
+	}
+	why := "A host integration path contains a symbolic link. Skill Hub will not write through symlinks."
+	if symlinkPath != "" {
+		why = fmt.Sprintf("Host integration path %s contains a symbolic link. Skill Hub will not write through symlinks.", symlinkPath)
+	}
+	fix := "Connect per project using `skillhub connect --yes`, select unaffected hosts with `--host <name>`, or replace the symlink with a regular directory."
+	return writeInvalidRequest(stdout, stderr, jsonOutput, why, fix), true
 }
 
 // Claude Code curates through the CLI. Emit guidance only when registration or
@@ -202,7 +231,23 @@ func parseConnectFlags(args []string) (connectFlags, error) {
 			if err != nil {
 				return flags, err
 			}
-			flags.workspace = item
+			flags.workspace, flags.workspaceSet = item, true
+		case "--hub":
+			item, err := value(&index)
+			if err != nil {
+				return flags, err
+			}
+			flags.hub, flags.hubSet = item, true
+		case "--token-file":
+			item, err := value(&index)
+			if err != nil {
+				return flags, err
+			}
+			flags.tokenFile, flags.tokenFileSet = item, true
+		case "--remove":
+			flags.remove = true
+		case "--cache":
+			flags.cache = true
 		case "--host":
 			item, err := value(&index)
 			if err != nil {
@@ -221,6 +266,32 @@ func parseConnectFlags(args []string) (connectFlags, error) {
 	}
 	if flags.global && flags.project != "" {
 		return flags, fmt.Errorf("--global and --project cannot be combined")
+	}
+	switch {
+	case flags.remove && (flags.workspaceSet || flags.hubSet || flags.tokenFileSet):
+		return flags, &connectUsageError{
+			what: "--remove cannot be combined with --workspace, --hub or --token-file.",
+			why:  "--remove takes out the Skill Hub entry of the scope, whichever hub it points at.",
+			fix:  "Run `skillhub connect --remove [--project <dir>] [-g|--global] [--host <name>] --yes`.",
+		}
+	case flags.workspaceSet && flags.hubSet:
+		return flags, &connectUsageError{
+			what: "--workspace and --hub cannot be used together.",
+			why:  "--workspace connects a hub on this machine and --hub a hub on another machine; one scope points at one hub.",
+			fix:  "Run `skillhub connect --workspace <path> --yes` for the hub on this machine, or `skillhub connect --hub <url> --token-file <path> --yes` for a hub on another machine.",
+		}
+	case flags.tokenFileSet && !flags.hubSet:
+		return flags, &connectUsageError{
+			what: "--token-file needs --hub.",
+			why:  "The token file is for a hub on another machine; a hub on this machine needs no token.",
+			fix:  "Add --hub <url>, or leave out --token-file.",
+		}
+	case flags.cache && !flags.remove:
+		return flags, &connectUsageError{
+			what: "--cache needs --remove.",
+			why:  "--cache clears the skills fetched from a remote hub when its entry is removed.",
+			fix:  "Add --remove, or clear the cache alone with `skillhub cache clear --hub <url>`.",
+		}
 	}
 	return flags, nil
 }

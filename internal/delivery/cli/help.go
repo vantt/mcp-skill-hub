@@ -15,10 +15,12 @@ Get started:
   2. cd <your project> && skillhub connect --workspace ~/skillhub --yes
      (or: skillhub connect -g --workspace ~/skillhub --yes          Connect every project)
   3. Open your agent there and ask: "curate my Skill Hub"
+  On another machine, use that hub through an SSH tunnel or Tailscale:
+     skillhub connect --hub <url> --token-file <path> --yes
 
 Setup:
   init      Create a workspace (preview by default; --yes applies)
-  connect   Connect an agent to a workspace, per project or with -g for all projects
+  connect   Connect an agent to a workspace (-g for all projects), --hub to a hub on another machine
   doctor    Check the workspace and agent connections; --fix repairs
   status    Show what needs attention next
 
@@ -64,6 +66,10 @@ IDs, digests, and row counts; --json prints the full machine-readable result.
 `,
 	"connect": `Usage: skillhub connect [--project <dir>] [-g|--global] [--workspace <path>]
                         [--host claude|codex|gemini]... [--yes] [--json]
+       skillhub connect --hub <url> [--token-file <path>] [--project <dir>] [-g|--global]
+                        [--host claude|codex|gemini]... [--yes] [--json]
+       skillhub connect --remove [--cache] [--project <dir>] [-g|--global]
+                        [--host claude|codex|gemini]... [--yes] [--json]
 
 Connect agents to a workspace. Writes the MCP registration, the Skill Hub
 instruction block, and the system-curator skill. Preview by default; --yes applies.
@@ -75,11 +81,35 @@ instruction block, and the system-curator skill. Preview by default; --yes appli
   --host <name>     Limit to claude, codex, or gemini (repeat or comma-separate)
   --yes             Write the files
   --json            Machine-readable result
+
+A hub on another machine (through an SSH tunnel or Tailscale):
+  --hub <url>       The base URL the hub printed when ` + "`skillhub serve mcp --addr`" + `
+                    started, for example http://127.0.0.1:7420. The agent host then
+                    starts ` + "`skillhub mcp proxy`" + `. Curation stays on the hub machine, so no
+                    curation server and no system-curator skill are installed.
+  --token-file <p>  This machine's copy of the hub's token file. Copy it from the hub
+                    machine, for example with scp, and chmod 600 it; only its path is
+                    written, never the token. Without it, the agent host must start the
+                    proxy with SKILLHUB_HUB_TOKEN set.
+
+Undo a connection:
+  --remove          Remove the Skill Hub entry of the scope (local or remote hub), its
+                    instruction block and an unchanged system-curator skill; unrelated
+                    host configuration stays
+  --cache           With --remove, also clear the skills fetched from the remote hub
+
+--workspace and --hub exclude each other: one scope points at one hub, and
+connecting it to another hub replaces its entry.
 `,
 	"doctor": `Usage: skillhub doctor [--workspace <path>] [--fix [--yes]] [--json]
 
 Check the workspace, catalog, and agent connections for this workspace. --fix
 previews repairs; add --yes to apply them.
+
+When this project or your user account is connected to a remote hub (connect
+--hub), doctor also checks that connection: hub reachable, token accepted,
+hub version, skill cache writable, and the last fetch. On a machine without a
+workspace it checks only the remote hub. The token is never printed.
 `,
 	"status": `Usage: skillhub status [--workspace <path>] [--json|--quiet]
 

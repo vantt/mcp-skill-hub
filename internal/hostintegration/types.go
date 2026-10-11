@@ -102,12 +102,30 @@ func (a Adapter) relativePaths(scope Scope) (config, skill, instructions string)
 // directory that receives host files (a project directory, or the home
 // directory for ScopeUser) and defaults to Workspace. Hosts may be empty to
 // select every supported host.
+//
+// Hub and Remove select the other two kinds of plan. With Hub set the scope
+// is pointed at a hub on another machine: the host starts the stdio proxy,
+// Workspace stays empty and Root must be set. With Remove set every Skill Hub
+// surface in the scope is removed (the entry, its allowed directories and
+// permission rules, the instruction block and an unchanged curator skill);
+// Workspace stays empty and Root must be set.
 type Request struct {
 	Workspace string
 	Root      string
 	Scope     Scope
 	Binary    string
 	Hosts     []Host
+	Hub       *RemoteHub
+	Remove    bool
+}
+
+// RemoteHub is a hub on another machine. URL is its base URL without a path;
+// TokenFile, when set, is the absolute path of the local copy of the hub's
+// token file. Only that path is written into host config files, never the
+// token itself.
+type RemoteHub struct {
+	URL       string
+	TokenFile string
 }
 
 // FileState is a read-only view of one managed integration surface.
@@ -146,6 +164,9 @@ type Change struct {
 	Desired        []byte
 	Mode           uint32
 	Preview        string
+	// Remove deletes the file instead of writing Desired: what is left holds
+	// no content other than what Skill Hub wrote.
+	Remove bool
 }
 
 // PlanResult is dependency ordered and can be passed directly to Apply.
@@ -155,6 +176,8 @@ type PlanResult struct {
 	Scope     Scope
 	Binary    string
 	Changes   []Change
+	Hub       *RemoteHub
+	Remove    bool
 }
 
 // ApplyOptions makes mutation authorization explicit at the application boundary.
