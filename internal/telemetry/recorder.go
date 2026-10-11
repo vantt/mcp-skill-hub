@@ -128,6 +128,8 @@ type Recorder struct {
 	// persisted holds cumulative counters from earlier recorders, loaded by a
 	// health check. Only this instance's own counters are written back on Close.
 	persisted [len(counterMetaKeys)]uint64
+	// writer is the event batch connection; only the run goroutine uses it.
+	writer writerConnection
 }
 
 // Open validates configuration and workspace confinement before starting the
@@ -444,7 +446,7 @@ func (r *Recorder) run() {
 		r.setState("healthy", "")
 	}
 	for {
-		item := <-r.queue
+		item := r.nextRequest()
 		if item.event != nil {
 			batch := []storedEnvelope{*item.event}
 			for len(batch) < 64 {
@@ -477,10 +479,27 @@ func (r *Recorder) run() {
 	}
 }
 
+// nextRequest waits for the next queued request and closes the write
+// connection when the queue stays empty for writerIdleRelease.
+func (r *Recorder) nextRequest() request {
+	if r.writer.database == nil {
+		return <-r.queue
+	}
+	idle := time.NewTimer(writerIdleRelease)
+	defer idle.Stop()
+	select {
+	case item := <-r.queue:
+		return item
+	case <-idle.C:
+		r.writer.release()
+		return <-r.queue
+	}
+}
+
 func (r *Recorder) writeBatch(events []storedEnvelope) {
 	ctx, cancel := context.WithTimeout(context.Background(), r.config.OperationTimeout)
 	defer cancel()
-	if err := writeEvents(ctx, r.config, events); err != nil {
+	if err := writeEvents(ctx, r.config, &r.writer, events); err != nil {
 		r.dropped.Add(uint64(len(events)))
 		r.recordFailure("write telemetry: " + err.Error())
 		return
@@ -490,6 +509,10 @@ func (r *Recorder) writeBatch(events []storedEnvelope) {
 }
 
 func (r *Recorder) handleOperation(item request) bool {
+	// Administrative operations open the store themselves with every open-time
+	// check, and purge removes its files, so no write connection stays open
+	// across them. The next event batch opens a fresh one.
+	r.writer.release()
 	result := response{}
 	switch item.op {
 	case opFlush:

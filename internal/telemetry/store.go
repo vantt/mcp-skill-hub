@@ -14,7 +14,8 @@ import (
 	"sync"
 	"time"
 
-	_ "modernc.org/sqlite"
+	sqlite "modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 )
 
 const schema = `
@@ -116,7 +117,37 @@ func initialize(config Config) error {
 	return nil
 }
 
+// openDatabase opens the anchored store with every open-time check. Several
+// processes creating the store or switching it to WAL at the same moment can get
+// SQLITE_BUSY straight away, without SQLite waiting on busy_timeout, so a busy
+// open is retried with backoff until the context or the operation timeout ends.
 func openDatabase(ctx context.Context, config Config) (*sql.DB, error) {
+	timeout := config.OperationTimeout
+	if timeout <= 0 {
+		timeout = defaultOperationTimeout
+	}
+	giveUp := time.Now().Add(timeout)
+	delay := 5 * time.Millisecond
+	for {
+		database, err := openDatabaseOnce(ctx, config)
+		if err == nil || !isBusy(err) || time.Now().Add(delay).After(giveUp) {
+			return database, err
+		}
+		select {
+		case <-ctx.Done():
+			return nil, err
+		case <-time.After(delay):
+		}
+		delay = min(2*delay, 100*time.Millisecond)
+	}
+}
+
+func isBusy(err error) bool {
+	var sqliteErr *sqlite.Error
+	return errors.As(err, &sqliteErr) && sqliteErr.Code()&0xff == sqlite3.SQLITE_BUSY
+}
+
+func openDatabaseOnce(ctx context.Context, config Config) (*sql.DB, error) {
 	anchor := config.storeAnchor
 	if anchor == nil {
 		if config.storeAnchorErr != nil {
@@ -132,6 +163,15 @@ func openDatabase(ctx context.Context, config Config) (*sql.DB, error) {
 	}
 	if err := anchor.validateIdentity(); err != nil {
 		return nil, err
+	}
+	// SQLite may create the database, but an existing entry must be a regular
+	// file: a symlink or another kind of object placed there later is refused.
+	if info, err := anchor.root.Lstat(anchor.databaseName); err == nil {
+		if !info.Mode().IsRegular() {
+			return nil, errors.New("unsafe telemetry database path")
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("inspect telemetry database: %w", err)
 	}
 	database, err := sql.Open("sqlite", sqliteURL(anchor.sqlitePath))
 	if err != nil {
@@ -462,12 +502,117 @@ func sqliteURL(path string) string {
 	}).String()
 }
 
-func writeEvents(ctx context.Context, config Config, events []storedEnvelope) error {
+// writerIdleRelease closes the write connection once the recorder has been idle
+// this long, so an idle process holds no SQLite handle (and, on Windows, no lock
+// that would block deleting the database file). Tests shorten it.
+var writerIdleRelease = 5 * time.Second
+
+const (
+	// writerReverifyInterval bounds how long one write connection is reused.
+	// The next batch reopens the store, which repeats every open-time check,
+	// quick_check included, so a long busy period still detects corruption.
+	writerReverifyInterval = 5 * time.Minute
+)
+
+// writerConnection keeps the recorder's write connection open across event
+// batches. Opening the store runs quick_check and the schema statements (one of
+// which writes telemetry_meta); doing that for every batch made concurrent
+// writers wait on each other until batches hit the operation timeout.
+//
+// Reuse never trusts the cached handle blindly. Before every batch the anchored
+// directory is revalidated (re-anchoring when it was replaced) and the database
+// entry must still be the same regular file the connection opened, with private
+// permissions. Any mismatch closes the connection and falls back to a full
+// open with every check. Holding the file open also keeps its identity from
+// being reused, so the comparison cannot be fooled by a recreated file.
+//
+// A writerConnection is only used from the recorder goroutine.
+type writerConnection struct {
+	database  *sql.DB
+	directory os.FileInfo
+	file      os.FileInfo
+	openedAt  time.Time
+}
+
+func (writer *writerConnection) acquire(ctx context.Context, config Config) (*sql.DB, error) {
+	if writer.database != nil && writer.current(config) {
+		return writer.database, nil
+	}
+	writer.release()
 	database, err := openDatabase(ctx, config)
+	if err != nil {
+		return nil, err
+	}
+	directory, file, err := config.storeAnchor.identities()
+	if err != nil {
+		_ = database.Close()
+		return nil, err
+	}
+	writer.database, writer.directory, writer.file, writer.openedAt = database, directory, file, time.Now()
+	return database, nil
+}
+
+// current reports whether the cached connection may serve the next batch.
+func (writer *writerConnection) current(config Config) bool {
+	if time.Since(writer.openedAt) >= writerReverifyInterval {
+		return false
+	}
+	anchor := config.storeAnchor
+	if anchor == nil || anchor.ensureCurrent(config) != nil {
+		return false
+	}
+	directory, file, err := anchor.identities()
+	if err != nil || !os.SameFile(directory, writer.directory) || !os.SameFile(file, writer.file) {
+		return false
+	}
+	// Opening chmods the file to 0600; reopen to restore that if it changed.
+	// Windows reports synthetic permission bits, so the check does not apply.
+	return runtime.GOOS == "windows" || file.Mode().Perm() == 0o600
+}
+
+// release closes the cached connection, if any. A close error only means the
+// connection was already unusable, and the next batch opens a fresh one.
+func (writer *writerConnection) release() {
+	if writer == nil || writer.database == nil {
+		return
+	}
+	_ = writer.database.Close()
+	*writer = writerConnection{}
+}
+
+// identities returns the anchored directory and the database file as they are
+// now. The database entry must be a regular file, never a symlink or another
+// kind of filesystem object.
+func (anchor *storeAnchor) identities() (os.FileInfo, os.FileInfo, error) {
+	directory, err := anchor.directory.Stat()
+	if err != nil {
+		return nil, nil, fmt.Errorf("inspect telemetry directory handle: %w", err)
+	}
+	file, err := anchor.root.Lstat(anchor.databaseName)
+	if err != nil {
+		return nil, nil, fmt.Errorf("inspect telemetry database: %w", err)
+	}
+	if !file.Mode().IsRegular() {
+		return nil, nil, errors.New("unsafe telemetry database path")
+	}
+	return directory, file, nil
+}
+
+// writeEvents commits one batch through the recorder's write connection. A
+// failed batch closes the connection so the next one reopens with every check.
+func writeEvents(ctx context.Context, config Config, writer *writerConnection, events []storedEnvelope) error {
+	database, err := writer.acquire(ctx, config)
 	if err != nil {
 		return err
 	}
-	defer database.Close()
+	if err := writeEventBatch(ctx, database, config, events); err != nil {
+		writer.release()
+		return err
+	}
+	return nil
+}
+
+func writeEventBatch(ctx context.Context, database *sql.DB, config Config, events []storedEnvelope) error {
 	transaction, err := database.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -508,6 +653,19 @@ func nullIfEmpty(value string) any {
 }
 
 func trimLogicalSize(ctx context.Context, transaction *sql.Tx, maximum int64) error {
+	// The logical size counts characters of TEXT columns that are all stored in
+	// database pages, so it can never exceed the pages this transaction sees.
+	// Below the limit that bound makes the full-table sum unnecessary.
+	var pageSize, pageCount int64
+	if err := transaction.QueryRowContext(ctx, `PRAGMA page_size`).Scan(&pageSize); err != nil {
+		return err
+	}
+	if err := transaction.QueryRowContext(ctx, `PRAGMA page_count`).Scan(&pageCount); err != nil {
+		return err
+	}
+	if pageSize*pageCount <= maximum {
+		return nil
+	}
 	for {
 		var size int64
 		if err := transaction.QueryRowContext(ctx, `SELECT COALESCE(SUM(length(id)+length(occurred_at)+length(kind)+COALESCE(length(resolution_id),0)+length(payload_json)),0) FROM telemetry_events`).Scan(&size); err != nil {
