@@ -110,7 +110,7 @@ Phases run in order. Phase 3 is the heart of the two headline criteria and is th
 The two headline criteria come first; the security criteria below them are the price of exposing a network listener and are not optional.
 
 **1. The skill runs on the remote machine.**
-- [ ] For every approved skill in a test hub (including `herdr-cook-plan`: 14 files, about 186 KB, and `test-audit`: 4 files), the remote client gets the whole skill folder: `SKILL.md`, `references/`, `scripts/` and any other file, byte-identical to the hub (digest equal).
+- [ ] For every approved skill in a test hub (including `herdr-cook-plan`: 13 files served, about 186 KB, and `test-audit`: 2 files served; the `.meta/` curation files are not part of what a hub serves, today or remotely, decided 2026-10-11), the remote client gets the whole skill folder: `SKILL.md`, `references/`, `scripts/` and any other file, byte-identical to the hub (digest equal).
 - [ ] The files are materialized in a local directory on machine A, and `SKILLHUB_SKILL_DIR`, `SKILLHUB_STATE_DIR` and `SKILLHUB_CONFIG_DIR` point at it, so a skill's `check`, `setup` and scripts run exactly as they do on a local hub (an end-to-end test runs one skill's `check` command on the client).
 - [ ] The same skill gives the same result locally and remotely (same files, same digest, same runtime spec).
 - [ ] Unapproved skill content stays blocked for remote callers exactly as it is for local ones.
