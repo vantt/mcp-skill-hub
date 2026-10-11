@@ -89,7 +89,7 @@ Agents' stdio registrations are not touched: `mcp serve` keeps its name (P1, rev
 - Modify: `internal/delivery/mcpserver/proxy.go:944,949`, `scripts/remote-timing.sh:110`
 - Modify: `system-skills/curator/SKILL.md` and `internal/systemskills/curator/SKILL.md` together
 - Modify: `internal/delivery/cli/remote_guide_doc_test.go` (extractor, `--version` handling)
-- Tests to update: the 69 test files under `internal/{delivery/cli,app,hostintegration}` that pass `--yes` (33 call
+- Tests to update: the 33 test files under `internal/{delivery/cli,app,hostintegration}` that pass `--yes` (195 occurrences, about 70 call
   sites on onboarding commands; grep `--yes` together with `"init"|"connect"|"doctor"|"cache"|"token"`), plus
   `internal/delivery/cli/{curation_test.go:182,source_test.go,source_watch_test.go,telemetry_lifecycle_test.go:69,telemetry_help,telemetry_chains,telemetry_funnel,telemetry_transcripts,skill_add,next_commands,splitcli,human_output_width,version}_test.go`,
   `internal/hostintegration/cli-permissions_test.go`, `internal/systemskills/embed_test.go` (copies stay identical)

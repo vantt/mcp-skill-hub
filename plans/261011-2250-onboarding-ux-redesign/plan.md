@@ -160,7 +160,7 @@ re-pointing, client checks in status, `doctor --fix` for clients, non-zero exit 
   effective entry is the project entry when one exists, else the user entry (resolved question 6). Result: `hub`,
   `client-local`, `client-remote`, `both`, or `none`, with per-host project, user and effective entries and the
   stored hub.
-- **Health checks:** `RoleReport` -> `health.Run(ctx, report, depth)` -> registered `CheckProvider`s -> `[]Section`
+- **Health checks:** `RoleReport` -> `app.Run(ctx, report, depth)` (`internal/app/health.go`) -> registered `CheckProvider`s -> `[]Section`
   of `Finding{Code, Message, Fix}` -> status (light, unlocked) or doctor (full, shared lock) renderer -> `--fix` runs
   each finding's `Fix.Apply` and prints what changed. The token is sent only per `tokenMaySend`.
 - **`serve`:** parse mode and `--addr` list -> validate (port default, duplicates, wildcard overlap, port 0 exempt from
@@ -182,8 +182,8 @@ Run the phases in order 1 -> 2 -> 3 -> 4 -> 5. Phase 3 uses the per-hub client t
 both edit `internal/delivery/cli/help.go`, so they are not run in parallel. Phase 6 can start any time after 1.
 
 Sizing basis (counted 2026-10-11): 51 CLI `init` invocations in 23 test files and 46 direct `WorkspaceService.Init`
-calls in 17 files change with the new `init` signature; 69 test files under `internal/{delivery/cli,app,hostintegration}`
-pass `--yes` (33 call sites on onboarding commands); 73 cli/app test files use `t.Parallel`, so tests must not change
+calls in 17 files change with the new `init` signature; 33 test files under `internal/{delivery/cli,app,hostintegration}`
+pass `--yes` (195 occurrences, about 70 on onboarding commands); 73 cli/app test files use `t.Parallel`, so tests must not change
 the process working directory (Phase 2 keeps a path parameter in `app.Init` and adds a test seam).
 
 Each user-facing surface is reworded once, in the phase that owns it: Phase 1 only removes commands and drops `--yes`
@@ -284,7 +284,7 @@ reach it through `ssh -N -L`.
 | `integrate` | 1 | `internal/delivery/cli/root.go:38`, `help.go:454`, `internal/app/curation_home.go`, `internal/hostintegration/types.go`, tests `internal/app/workspace_test.go`, `internal/delivery/cli/workspace_next_steps_test.go`, `internal/delivery/cli/curation_test.go:182`; matrix note `internal/hostintegration/matrix.json:155` |
 | `skillhub web` | 1 | `internal/delivery/cli/root.go:74-75`, `help.go:429-432` |
 | `skillhub check` | 1 | `internal/delivery/cli/root.go:60`, `help.go:215-226`, `next_commands.go`, `skill_add.go`, `internal/app/source_import.go`; tests `skill_add_test.go`, `source_test.go`, `source_watch_test.go`, `telemetry_lifecycle_test.go:69` (top-level `check`); curator skill `system-skills/curator/SKILL.md:90,154,209,334` and its identical copy `internal/systemskills/curator/SKILL.md` (`internal/systemskills/embed_test.go:22`); docs `command-reference.md`, `curating-skills.md`, `sources-and-learning.md`, `web-ui.md`, `getting-started.md` |
-| `--yes` on onboarding commands | 1 | `internal/delivery/cli/{workspace,connect,connect_remote,cache,token}.go`, `help.go:14-16,59,67,104,349,363`, `internal/app/{workspace,connect,connect_remote,doctor_remote,host-connections,errors}.go`; `internal/delivery/mcpserver/proxy.go:944,949` (`cache clear --hub --yes`, also invalid under P8); `scripts/remote-timing.sh:110`; `scripts/install.sh:751,811`, `scripts/install.ps1:670,811`; 69 test files (33 onboarding call sites); `system-skills/curator/SKILL.md:134` and copy; docs |
+| `--yes` on onboarding commands | 1 | `internal/delivery/cli/{workspace,connect,connect_remote,cache,token}.go`, `help.go:14-16,59,67,104,349,363`, `internal/app/{workspace,connect,connect_remote,doctor_remote,host-connections,errors}.go`; `internal/delivery/mcpserver/proxy.go:944,949` (`cache clear --hub --yes`, also invalid under P8); `scripts/remote-timing.sh:110`; `scripts/install.sh:751,811`, `scripts/install.ps1:670,811`; 33 test files (195 occurrences, about 70 onboarding lines); docs |
 | `mcp serve` in help/docs (command itself stays, hidden) | 1, 5 | `internal/delivery/cli/help.go:321,390`, `docs/command-reference.md:89`, `docs/remote-hub-guide.md:26`, `docs/release-runbook.md:164`; registration writers and their tests are **not** changed |
 | `--trust-private-network` | 3 | `internal/delivery/cli/mcp.go`, `help.go`, `serve_mcp_test.go`, `internal/delivery/mcpserver/http.go` (`TrustPrivateNetwork`, `CheckListenAddress` at `:84`), `http_test.go`, `internal/app/doctor_remote.go`, docs `command-reference.md`, `remote-hub-guide.md`, `release-runbook.md`, `design/remote-hub.md` |
 | `--loopback-only`, `SKILLHUB_WEB_ADDR` | 3 | `internal/delivery/cli/serve.go:44,78`, `help.go`, `serve_test.go`, `internal/delivery/web/listen.go:30`, `README.md`, docs `command-reference`, `getting-started`, `release-runbook`, `sources-and-learning`, `troubleshooting`, `web-ui`, `contracts/web-api.md`; `.github/workflows/release.yml:732,840`; `web/e2e/smoke.spec.ts` (test name only) |
@@ -293,7 +293,7 @@ reach it through `ssh -N -L`.
 | `validate`, `rebuild`, `migrate`, `diff` (top level) | 4 | `internal/delivery/cli/root.go`, `help.go:243-271`, `catalog.go:21`, `migration.go:22`, `curation.go:113`, `workspace.go:85,365`, `validate_staged.go`, `next_commands.go:127-131`, `resolver.go:112`; `internal/app/workspace.go:128,188,190`, `migration.go:86`, `operations.go:53,69`, `metadata_lint.go:72`, `skill_resource.go:124`, `skill_lifecycle.go:348`, `skill_review.go:613`, `curation_home.go:572`; `internal/canonical/skill.go:898`; `internal/catalog/open.go:51`; web UI `web/src/screens/home/action-cta.ts:31`, `web/src/screens/skill-detail/ResourcesTab.tsx:19`, `ResourceFileView.tsx:33,35`, `web/src/components/AppShell.tsx:66`, `web/src/i18n/en.ts:89`, tests `web/src/screens/home/home.test.tsx:53`, `web/src/screens/skill-detail/resource-file-view.test.tsx:141`; web e2e `web/e2e/skill-resources.spec.ts:57`, `skill-runtime.spec.ts:35-36`, `journeys.spec.ts:48-49`, `a11y.spec.ts:42` (CI runs them through `.github/workflows/ci.yml:155`, `make web-e2e`); curator skill `SKILL.md:132,162,235-236` and copy; `.github/workflows/evaluation.yml:46`; docs `command-reference.md`, `curating-skills.md:291-296` |
 | Old remote-doctor remote fixtures (`"mcp","serve"` args used as data) | none | `internal/app/doctor_remote_test.go:331` stays: `mcp serve` registrations remain valid (P1) |
 | `token show` advice, fixed client token path | 3 | `internal/delivery/cli/{token,mcp,connect_remote}.go`, `internal/app/doctor_remote.go`, `internal/hubtoken/hubtoken.go`, docs `remote-hub-guide.md`, `command-reference.md` |
-| `getting-started.md` links | 5 | `README.md:98,122`, `docs/README.md:7`, `docs/curating-skills.md:5,115`, `docs/installation.md:25`, `docs/troubleshooting.md:83`, `docs/user-guide.md:3,25` |
+| `getting-started.md` links | 5 | `README.md:98,122`, `docs/README.md:7`, `docs/curating-skills.md:5,115`, `docs/installation.md:25`, `docs/troubleshooting.md:83`, `docs/user-guide.md:3,25,120` |
 | `git add` staging hint | 2 | `stageWorkspaceCommand`, `internal/delivery/cli/workspace.go:71` (removed: init commits) |
 
 Phases 1, 4 and 5 each end with a repo-wide grep gate over the same paths for the names they remove (Phase 1:

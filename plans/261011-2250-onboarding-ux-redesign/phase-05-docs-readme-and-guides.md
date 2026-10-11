@@ -79,7 +79,7 @@ cannot fix, token rejected -> re-run the `scp` line, "pre-commit hook fails with
 if any external link must keep resolving (decide when writing; the stub is the default because the other session asked
 for anchors or stubs). Its "Create your first skill" walkthrough moves to `docs/curating-skills.md` under the same
 heading so `#create-your-first-skill` keeps working there; update `docs/curating-skills.md:5,115`,
-`docs/troubleshooting.md:83`, `docs/user-guide.md:3,25`, `docs/README.md:7`.
+`docs/troubleshooting.md:83`, `docs/user-guide.md:3,25,120`, `docs/README.md:7`.
 
 **Other docs with old names** (plan.md inventory): `docs/command-reference.md` (no `integrate`, `check`, `mcp serve`
 (`:89`), top-level maintenance, `--yes` on onboarding, `--loopback-only`, `--trust-private-network`; add `maintain`,

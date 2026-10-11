@@ -27,8 +27,9 @@ Agents launch `mcp serve` (stdio, hidden, unchanged; P1). `serve` becomes the ne
 
 ## Requirements
 
-- Syntax: `skillhub serve [mcp|web] [--addr <host:port>[,<host:port>...]] [--token-file <file>] [--allow-host <name>]...`
-  plus web-only `--no-open` and `--dev`. No subcommand means mcp. Remove `--trust-private-network`,
+- Syntax: `skillhub serve [mcp|web] [--addr <host:port>[,<host:port>...]] [--token-file <file>] [--allow-host <name>]... [--workspace <path>]`
+  plus web-only `--no-open` and `--dev`. `--workspace <path>` stays as an advanced option (P8), because web e2e
+  (`web/e2e/support/server.ts:71`) and release smoke (`.github/workflows/release.yml:732,840`) pass it. No subcommand means mcp. Remove `--trust-private-network`,
   `--loopback-only`, `SKILLHUB_WEB_ADDR` (`internal/delivery/cli/serve.go:44,78`), `--profile` on serve (the network
   server is runtime-only; stdio profiles stay on `mcp serve`). `serve mcp` without `--addr` no longer serves stdio.
 - Defaults: mcp `0.0.0.0:7420`, web `0.0.0.0:7421`. `--dev` keeps its loopback-only rule.

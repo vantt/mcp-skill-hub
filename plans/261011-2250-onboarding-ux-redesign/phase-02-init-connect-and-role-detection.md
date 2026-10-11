@@ -35,6 +35,8 @@ Facts this phase builds on (re-verified 2026-10-11):
 
 ## Requirements
 
+- Remove `init --force` (P10): a non-empty folder is refused with the exact command to create an empty one; remove the flag from `initFlags` (`internal/delivery/cli/workspace.go:235`), help, tests and docs.
+
 **User config (P6, F4).** New package `internal/userconfig`: `type Config struct { Hub string; PreviousHubs []string }`,
 `type Store interface { Load() (Config, error); SetHub(path string) error }`, `Default() Store` (directory
 `$SKILLHUB_USER_CONFIG_DIR` when set, else `<os.UserConfigDir()>/skillhub`), and `NewStore(dir string) Store` for
@@ -63,7 +65,8 @@ role-aware:
 - local entry whose hub path no longer exists: "The hub at <path> is gone." + `skillhub doctor --fix` when the
   missing path is the stored hub's previous path and the stored hub exists; when the stored hub path itself is
   missing: `cd <new-location> && skillhub init`, then `skillhub doctor --fix` in each project (never `doctor --fix`
-  alone when the stored hub is gone); otherwise the `init` line.
+  alone when the stored hub is gone); a missing path that was never recorded: `skillhub connect <stored hub path>`
+  (same text as the Phase 4 check).
 - Help text says once: `--workspace` takes a local hub path, `--hub` takes a URL (P8).
 
 **`init` argument (S3).** `init` takes no path. Its optional argument is classified by
