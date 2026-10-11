@@ -17,9 +17,9 @@ created: 2026-10-10
 
 Today the MCP server only speaks stdio (`internal/delivery/mcpserver/server.go:132`, `mcp.StdioTransport`), so the hub must live on the same machine as the agent. Moving a hub to another machine works only through Git (`git clone`, `skillhub rebuild`), and each machine then keeps its own telemetry and cases.
 
-This plan adds a second way: one hub, many machines. The agent on machine A talks to `skillhub mcp serve --http` on machine B and gets the same three runtime tools. Curation stays local to the hub machine; it is never exposed over the network.
+This plan adds a second way: one hub, many machines. The agent on machine A talks to `skillhub serve mcp --addr ...` on machine B and gets the same three runtime tools. Curation stays local to the hub machine; it is never exposed over the network.
 
-Assumption: the user asked for this option on 2026-10-10 after the options discussion (Git clone, web over SSH tunnel, MCP over network, shared multi-user hub). Only the third option is planned here. If the real need is only "same skills on several machines", the Git route needs no code and this plan should stay unstarted.
+Decision (user, 2026-10-11): go. One user, several machines, one machine curates and serves the skills; only the network option is planned here (the other options discussed were Git clone, the web UI over an SSH tunnel and a shared multi-user hub).
 
 ## What the code already gives us (checked 2026-10-10)
 
@@ -50,15 +50,47 @@ Today every agent session starts its own `skillhub mcp serve` over stdio and the
 
 What this means for the plan: a shared server is not needed for correctness at the user's load. Its benefit is some memory (at most about 0.25 GB for 20 sessions, less if each still keeps a stdio proxy) and a single telemetry writer. Whether it is worth running a long-lived server is a decision for Phase 1, and it also depends on whether the agent hosts can talk MCP over HTTP directly (not yet checked for Claude Code, Codex or Gemini CLI); if they cannot, every session still keeps a small stdio proxy and the process count does not drop. The test harness is a throwaway Python script outside the repo; Phase 6 should turn it into a repeatable check if the user wants one.
 
-## Decisions to confirm (Phase 1 asks the user)
+## Decisions (answered by the user on 2026-10-11)
 
-| # | Question | Recommended |
+| # | Question | Decision |
 |---|---|---|
-| Q1 | Who connects: only the user's own machines, or other people too? | Own machines first (one shared bearer token per client); no accounts |
-| Q2 | Network exposure | Behind a private network or SSH tunnel by default; direct internet only with TLS |
-| Q3 | Skills with scripts, setup or check commands | Run only on the client, after the client pulls the files; never run on the hub for a remote caller |
-| Q4 | Task text sent over the network (the resolve request) | Allowed only over TLS or loopback; refuse plain HTTP on a non-loopback address |
-| Q5 | Telemetry from remote clients | Written on the hub with a client label; case journal stays opt-in on the hub |
+| Q1 | Who connects | One user with several machines. One machine curates and serves the skills; the others only use them. No accounts: a single shared bearer token |
+| Q2 | How machine A reaches machine B | Both an SSH tunnel and Tailscale (or another private VPN) are supported. No TLS in this plan and no exposure to the open internet. The hub listens on loopback by default (SSH tunnel). For Tailscale the user binds it to the Tailscale address and confirms it with an explicit flag (`--trust-private-network`) |
+| Q3 | Skills with scripts, setup or check commands | Run only on the client, after the client pulls the files; never on the hub for a remote caller |
+| Q4 | Task text sent over the network | The hub refuses to listen on any non-loopback address unless `--trust-private-network` is given; plain HTTP on loopback is allowed (SSH tunnel, tests) |
+| Q5 | Telemetry from remote clients | Written on the hub with a client label; the case journal stays opt-in on the hub |
+
+Go or stop (Phase 1 task 5) is settled: go. The user wants one machine to curate and serve the skills to the others, which the Git route does not do live.
+
+## Two ways of working, both must keep working
+
+1. **One machine (today, unchanged).** The host starts `skillhub mcp serve` over stdio. No network port, no token, no extra process, and the same registrations `skillhub connect --workspace` writes today. A regression test pins this output.
+2. **Machine A uses machine B (new).** B runs a network listener over the same workspace; A's host starts a small stdio proxy that talks to it. Machine B can still serve its own agents over stdio at the same time as it serves A, because the listener is a separate process over the same workspace (the telemetry writer was made safe for several processes on 2026-10-11).
+
+Each host scope (project or global) points at one hub: `connect --workspace` for a local one or `connect --hub` for a remote one. Switching a scope between the two replaces its entry.
+
+## Command syntax (one pattern for every surface)
+
+Hub machine B:
+
+```
+skillhub serve web                                   # web UI, as today
+skillhub serve mcp                                   # MCP over stdio, what hosts launch today (`mcp serve` stays as an alias)
+skillhub serve mcp --addr 127.0.0.1:7420             # network listener, loopback: reach it through an SSH tunnel
+skillhub serve mcp --addr <tailscale-ip>:7420 --trust-private-network
+skillhub token show | rotate                         # shared token; written once to $SKILLHUB_CONFIG_DIR with mode 0600
+```
+
+Machine A:
+
+```
+skillhub connect --workspace ~/skillhub --yes        # hub on this machine (as today)
+skillhub connect --hub http://127.0.0.1:7420 --token-file <path> --yes    # via an SSH tunnel
+skillhub connect --hub http://<tailscale-name>:7420 --token-file <path> --yes
+skillhub connect --remove --yes                      # remove the entry for this scope (works for both kinds)
+```
+
+`--workspace` and `--hub` exclude each other. The token comes from `--token-file` or the environment variable `SKILLHUB_HUB_TOKEN`, and is never written into a host config file. The listener prints the exact `connect --hub` line to run on A when it starts, with the token file path, never the token itself. Network mode always serves the runtime profile only. The stdio proxy `skillhub mcp proxy --hub <url>` is an internal entry that `connect --hub` writes; users do not type it.
 
 ## Phases
 
@@ -67,11 +99,11 @@ What this means for the plan: a shared server is not needed for correctness at t
 | 1 | [Baseline, budgets and decisions](./phase-01-baseline-and-decisions.md) | Pending | P1 |
 | 2 | [HTTP transport, runtime profile only](./phase-02-http-transport.md) | Pending | P1 |
 | 3 | [Skill bundle delivery and client cache (skill runs, fetch is fast)](./phase-03-bundle-delivery-and-cache.md) | Pending | P1 |
-| 4 | [Client setup: connect --remote and doctor](./phase-04-client-setup.md) | Pending | P2 |
+| 4 | [Client setup: connect --hub and doctor](./phase-04-client-setup.md) | Pending | P2 |
 | 5 | [Telemetry, sessions and privacy](./phase-05-telemetry-and-privacy.md) | Pending | P2 |
 | 6 | [Benchmarks, two-machine tests and docs](./phase-06-benchmarks-tests-docs.md) | Pending | P1 |
 
-Phases run in order; Phase 1 can end the plan early if the answer to the assumption above is "Git is enough". Phase 3 is the heart of the two headline criteria and is the largest phase.
+Phases run in order. Phase 3 is the heart of the two headline criteria and is the largest phase.
 
 ## Success Criteria (set by the user on 2026-10-10: the skill runs, and fetching it is fast)
 
@@ -93,17 +125,22 @@ Proposed budgets (Phase 1 measures the local stdio baseline first and confirms o
 
 **3. Safe to expose.**
 - [ ] Curation tools, the case journal CLI, and every write path are unreachable through the network listener (test).
-- [ ] No request is accepted without a valid bearer token, and plain HTTP is refused on any non-loopback address.
+- [ ] No request is accepted without a valid bearer token, and the listener refuses any non-loopback address unless `--trust-private-network` is given (no TLS in this plan; the transport is an SSH tunnel or a private VPN such as Tailscale).
 - [ ] A remote client never receives a path on the hub's disk.
 - [ ] Session-aware cases (`verified_reformulation`, `repeated_gap`) still work per remote session.
-- [ ] `skillhub connect --remote` writes a working entry for Claude Code, and `doctor` explains a failed connection in plain words.
+- [ ] `skillhub connect --hub` writes a working entry for Claude Code, and `doctor` explains a failed connection in plain words (hub stopped, tunnel down, wrong token, old hub version).
+
+**4. Both ways of working keep working.**
+- [ ] One machine: `connect --workspace` and `skillhub mcp serve` behave exactly as before, with no port, token or extra process (regression test on the written entry and on the server start).
+- [ ] A to B: the same skills resolve and run through an SSH tunnel and through a Tailscale address (the second checked by hand on the user's machines; the first also in an automated loopback test).
+- [ ] Machine B serves its own agents over stdio and machine A over the network at the same time, with no lost telemetry events.
 
 ## Risks
 
 | Risk | Mitigation |
 |---|---|
 | Token leaks or is guessed | Long random token, constant-time compare, rotate command, rate limit, no token in URLs or logs |
-| Task text and skill content travel in clear | TLS required beyond loopback; refuse otherwise |
+| Task text and skill content travel in clear | The listener refuses a non-loopback address without `--trust-private-network`; the guide steers to an SSH tunnel or Tailscale and never to plain HTTP over a shared network |
 | The listener widens the attack surface of a curation host | Separate listener, runtime profile hard-wired, no workspace mutation reachable |
 | Skills with scripts run on the wrong machine | Q3 rule enforced in `skill_get` output and tested |
 | Hub down means no routing for remote agents | Client falls back to "no skill" with a clear message; documented |

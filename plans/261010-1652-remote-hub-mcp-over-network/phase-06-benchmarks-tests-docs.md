@@ -22,9 +22,10 @@ Prove the two headline criteria with repeatable measurements, and document the f
 1. End-to-end test: start a hub on port A, run the proxy as machine A, call `skill_resolve`, `skill_get`, run a skill's `check`, call `skill_feedback`.
 2. Failure tests: wrong token, hub stopped mid-fetch, truncated archive, cache directory read-only, unapproved skill, version skew.
 3. Benchmark and compare with the budgets in `plan.md`; the benchmark fails when a budget is missed. Record results per transport.
-4. Security tests: no curation tool reachable, plain HTTP refused off loopback, token never logged.
-5. Write the user guide section: when to prefer Git clone, SSH tunnel for the web UI, or this remote MCP; setup in three commands; what happens when the hub is down.
-6. Run on the real machines once, read-only: a second machine of the user's, with a test token, against a clone of the hub (not the live hub).
+4. Security tests: no curation tool reachable, a non-loopback address refused without `--trust-private-network`, token never logged.
+4a. One-machine regression: with no network listener, `connect --workspace` and `skillhub mcp serve` behave as before (no port, no token, no extra process). Two-way test: machine B serves its own stdio sessions and a remote proxy at the same time with no lost telemetry events.
+5. Write the user guide section "Use one hub from several machines": when Git clone is enough and when this is better; setup in three commands for an SSH tunnel and for Tailscale (including `ssh -N -L` and how to keep the tunnel up, `--trust-private-network` with the Tailscale address, and the token hand-off); what happens when the hub or the tunnel is down; how to go back to one machine.
+6. Run on the real machines once, read-only: a second machine of the user's, with a test token, against a clone of the hub (not the live hub), once through an SSH tunnel and once through Tailscale.
 
 ## Verification
 - All success criteria in `plan.md` are checked with a test or a benchmark line.

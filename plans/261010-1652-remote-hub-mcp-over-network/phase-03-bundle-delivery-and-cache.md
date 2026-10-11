@@ -22,7 +22,7 @@ A remote client gets a complete, runnable copy of an approved skill in one excha
 1. **One bundle per skill version.** The hub offers a bundle of the whole approved skill folder (a deterministic archive of the same files the content digest covers, `.meta/` excluded). It is addressed by the existing skill URI, which already contains the skill digest, so a bundle is immutable and cacheable forever. Compress it (zstd or gzip) and send it in one response; skip files over the existing size caps.
 2. **Trust is unchanged.** The bundle is served only for approved, active skills, with the same checks as `resources/read` today. The client verifies the archive against the digest in the URI before using it; a mismatch is discarded.
 3. **Client cache.** The client stores each bundle under its local state directory by digest (`<state>/remote/<hub-id>/<skill-id>/<digest>/`). A lookup is a directory check, so a repeat use has no network cost. `skill_get` returns, on the client side, a `local.path` that points at this directory, so the activation flow and the `SKILLHUB_*` variables work exactly as for a local hub.
-4. **Where this runs.** The client side needs a small local component: a stdio MCP proxy (`skillhub mcp proxy --remote <url>`) that the agent host starts like today's `skillhub mcp serve`. It forwards `skill_resolve` and `skill_feedback`, and intercepts `skill_get` to fetch and materialize the bundle. This keeps every host working with no change to how hosts launch MCP servers, and keeps the skills runnable.
+4. **Where this runs.** The client side needs a small local component: a stdio MCP proxy (`skillhub mcp proxy --hub <url>`) that the agent host starts like today's `skillhub mcp serve`. It forwards `skill_resolve` and `skill_feedback`, and intercepts `skill_get` to fetch and materialize the bundle. This keeps every host working with no change to how hosts launch MCP servers, and keeps the skills runnable.
 5. **Speed beyond the cache.** Send the bundle with `ETag` equal to the digest and honour `If-None-Match`; prefetch nothing automatically (resolve then get is the normal pair, so `skill_resolve` may include the top skill's digest so the client can start the fetch at once); keep one HTTP/2 connection open.
 6. **Skills that run code.** The `check` and `setup` commands run only on the client, in the cached directory, with the same preflight and approval rules as local skills (`local.preflight`). They never run on the hub for a remote caller (decision Q3).
 7. **Failure behavior.** If the hub is unreachable and the digest is cached, the client may use the cached copy and says so; if not cached, `skill_get` returns a plain error and the agent continues without the skill.
@@ -40,7 +40,7 @@ A remote client gets a complete, runnable copy of an approved skill in one excha
 3. Implement the proxy and cache; extract atomically (temp directory, then rename) so a crash never leaves a half skill.
 4. Make `skill_get` through the proxy return a valid `local.path` and `local.env`.
 5. Run a real skill's `check` through the proxy end to end on loopback.
-6. Add cache garbage collection (keep the last N versions, cap total size) and a `skillhub remote cache clear` command.
+6. Add cache garbage collection (keep the last N versions, cap total size) and a `skillhub cache clear --hub` command (clears only the client cache of fetched skills).
 
 ## Verification
 - Digest of the extracted folder equals the hub's digest for `test-audit` and `herdr-cook-plan`.
