@@ -16,22 +16,26 @@ import (
 // released within the retry budget.
 func TestBatchWaitingPastOperationTimeoutIsRetried(t *testing.T) {
 	config := newWriterTestConfig(t)
-	config.OperationTimeout = 250 * time.Millisecond
+	// Windows runners are slow enough that the fixed time windows leave no room for the retries, so the
+	// timeout and the moment the lock is released scale together and keep their ratio.
+	scale := time.Duration(1)
+	if runtime.GOOS == "windows" {
+		scale = 6
+	}
+	config.OperationTimeout = 250 * time.Millisecond * scale
 	opens := countSQLiteOpens(t)
 	var writer writerConnection
 	defer writer.release()
 	writeTestEvent(t, config, &writer, "evt_retry_seed")
 
 	release := holdWriteLock(t, config.Path)
-	time.AfterFunc(600*time.Millisecond, release)
+	time.AfterFunc(600*time.Millisecond*scale, release)
 	attempts := 0
 	err := retryContended(context.Background(), config, func(ctx context.Context) error {
 		attempts++
 		return writeEvents(ctx, config, &writer, []storedEnvelope{testEnvelope(t, "evt_retry_late")})
 	})
-	// On a slow Windows runner the size trim after the commit can itself run out of time, and the
-	// batch is then reported as failed although it is stored; only the stored count is asserted there.
-	if err != nil && runtime.GOOS != "windows" {
+	if err != nil {
 		t.Fatalf("contended write failed within the retry budget after %d attempts: %v", attempts, err)
 	}
 	if attempts < 2 {
