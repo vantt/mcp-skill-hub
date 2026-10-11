@@ -47,6 +47,13 @@ scripts/release-preflight.sh --push v0.1.0
 
 If the web UI changed since the last release, rerun `make web-shots` before tagging and commit the refreshed images in `docs/images/web/`. They are captured from an invented demo hub, so the README and the user guide show the current screens.
 
+### CI, the Go toolchain and prereleases
+
+- **Pin the Go patch version.** `ci.yml` and `release.yml` both build and test with an exact Go patch version (`go-version: "1.26.9"`), and every job must use the same one. Go 1.26.0 on macOS crashes a forked child before it can run `git`, which showed up as random `git init: signal: segmentation fault` failures in the macOS jobs. It looked like a runner flake and was not: the same suite passes on 1.26.9. Release binaries are built by `release.yml`, so a stale pin there ships a toolchain bug; check both files when you raise the version. The `go` line in `go.mod` is only the minimum for people who build from source.
+- **Find a failure that only one runner shows.** Add a temporary workflow on a throwaway branch that runs a matrix over the suspected variable (here the Go version) and, when it fails, prints the crash reports (`~/Library/Logs/DiagnosticReports` on macOS). Delete the branch afterwards.
+- **A flaky test blocks the release.** The release workflow runs the whole test suite on Linux, macOS and Windows before it builds anything, so a flaky test stops the tag with nothing published. If the failure is a known flake, rerun only the failed job with `gh run rerun <run-id> --failed`. If the code or a test must change, no release exists yet: fix it, wait for green CI, and use the next prerelease number (for example `v0.5.0-alpha.2`) or delete the unpublished tag and tag again.
+- **Prereleases.** A tag such as `v0.5.0-alpha.1` is published as a GitHub prerelease and is never "latest", so the installers behind `releases/latest/download/` do not offer it. Install it with the installer attached to that tag and an explicit version, for example `curl -fsSL https://github.com/vantt/mcp-skill-hub/releases/download/v0.5.0-alpha.1/install.sh | sh -s -- --version 0.5.0-alpha.1`. On Windows set `$env:SKILLHUB_VERSION = '0.5.0-alpha.1'` first and run the `install.ps1` from the same tag.
+
 ### Network MCP listener and remote clients
 
 `skillhub serve mcp --addr` is a network listener that serves the three runtime tools to agents on other machines, and `skillhub mcp proxy` is the client side that `skillhub connect --hub` registers (see the [remote hub guide](remote-hub-guide.md)). Before tagging a release that touches the MCP server, the proxy, the skill cache, `connect` or `doctor`:
