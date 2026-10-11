@@ -44,7 +44,7 @@ Workspace created at <home>/skillhub.
 Agent connection for this workspace written: claude-code, codex-cli, gemini-cli.
 ```
 
-`<home>` stands for your home folder. Skip the next steps that `init` prints; its commit hint stages files that must stay out of Git. Commit the workspace's own files, naming each path:
+`<home>` stands for your home folder. `init` lists the next steps; its commit hint names the folders it stages, and the connection files it writes are listed in the workspace's `.gitignore` because they hold paths from your machine. Commit the workspace's own files:
 
 ```bash
 git -C ~/skillhub add .gitignore .skillhub/schema-version

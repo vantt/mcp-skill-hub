@@ -110,7 +110,13 @@ skillhub-workspace/
 ```gitignore
 /runtime/
 /.skillhub/transactions/
+/.mcp.json
+/.claude/settings.local.json
+/.codex/
+/.gemini/settings.json
 ```
+
+Bốn dòng cuối là file kết nối agent mà `init` ghi vào workspace; chúng chứa đường dẫn tuyệt đối của máy hiện tại nên không được commit. `doctor` báo `machine_file_tracked` nếu Git đang theo dõi một trong số đó.
 
 Recovery transactions nằm ngoài `runtime/` để `rm -rf runtime && skillhub rebuild` không vô tình xóa journal của một canonical mutation bị crash.
 
