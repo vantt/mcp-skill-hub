@@ -1,7 +1,7 @@
 ---
 phase: 3
 title: "serve and token hand-off"
-status: pending
+status: completed
 priority: P1
 effort: "1.5d"
 dependencies: [1, 2]
@@ -109,6 +109,20 @@ Agents launch `mcp serve` (stdio, hidden, unchanged; P1). `serve` becomes the ne
 4. Multi-listener `ServeHTTP` and web server; bind-all-or-nothing.
 5. Banners with the interface filter (inject interfaces, as `web.DefaultInterfaces` already allows) and actual ports.
 6. Remove old flags and env var; update help, remote-doctor texts, CI.
+
+## Todo
+
+- [x] Address-list parser (`parseListenAddresses`) with table tests: defaults, IPv6 in brackets, `localhost`, duplicates, wildcard overlap incl. `0.0.0.0` + `[::]`, port 0 twice, more than 3, host names refused
+- [x] Shared Host policy (`internal/delivery/hostpolicy`) with table tests: wildcard + IPv4/IPv6 literal, foreign name, specific bind + other IP, hostname, `.local`, `--allow-host` (name and `name:port`), web port rule
+- [x] Strict MCP Origin set (`originHosts`, request's own Host) and the foreign-IP Origin test on a wildcard listener
+- [x] `mcpserver.ServeHTTP` and `web.Server.Serve` over several listeners; bind all or nothing in the CLI; `web.Options.ListenAddrs` replaces `ListenPort`
+- [x] MCP banner (scp + connect per usable address, tunnel block for loopback, real ports, warning line, no token) and web banner (warning + write-routes line, one URL per address); interface filter in `hostpolicy.Reachable`
+- [x] `--trust-private-network`, `--loopback-only`, `SKILLHUB_WEB_ADDR`, the wildcard refusal and `--profile` on serve removed; `mcp serve` stdio only; help for serve, token, mcp and connect
+- [x] `token show` refusal and `token rotate` point at the scp line; remote-doctor and connect hand-off texts reworded; `RemoteFixRefusal` text for Phase 4
+- [x] Release smoke drops `--loopback-only`; web e2e unchanged (`--addr 127.0.0.1:0`); remote guide mechanical edits for the guide test
+- [x] `go test ./...`, `go vet` (linux, windows, darwin) and `gofmt -l` clean; web e2e not run here (no `web/node_modules`)
+
+Report: [cook-261011-onboarding-phase3](../reports/cook-261011-onboarding-phase3.md)
 
 ## Validation
 
