@@ -242,6 +242,19 @@ flowchart LR
 
 Allowlist tốt hơn blacklist. Redaction không được xem là bảo đảm tuyệt đối; vì vậy default không persist content.
 
+### 4.4 Remote clients (network listener)
+
+Agent trên máy khác gọi hub qua `skillhub serve mcp --addr ...` (`internal/delivery/mcpserver/http.go`). Telemetry của họ được ghi trên máy hub, vào cùng store và cùng case journal với caller local.
+
+Được ghi:
+
+- Cùng các event và cùng payload allowlist như caller local; không có event type mới, `EventVersion` không đổi.
+- `client.name` = `remote:` + tên host đã chuẩn hóa từ `clientInfo` của MCP initialize handshake (`remote:claude-code`, `remote:codex`, `remote:other` khi không có `clientInfo`); `client.version` chuẩn hóa như local (`telemetry.RemoteClient`, `telemetry.ClientRemotePrefix`). Caller stdio giữ nguyên nhãn cũ (tên host trần, và `skillhub` cho skill load không có resolution trước đó), nên baseline local so sánh được với dữ liệu cũ, còn baseline remote tách riêng theo từng host (`--by client`, rollup `tools_list_bytes:remote:<host>`). Một skill load remote không có resolution trước đó vẫn mang nhãn `remote:<host>`.
+- `session_id_hash`: mỗi HTTP session có hash ngẫu nhiên riêng và bộ nhớ prior-resolution riêng (activation tracker keyed theo `*mcp.ServerSession`). Hai client đồng thời không thấy resolution của nhau; reconnect (session mới) bắt đầu với bộ nhớ rỗng. `verified_reformulation` và `repeated_gap` được tính theo từng session remote, cùng logic như local.
+- Case journal vẫn là opt-in trên hub (mục 4.1); task text remote đi qua cùng redactor trên hub như text local trước khi vào case.
+
+Không bao giờ được ghi (vào telemetry, case journal, log hay bất kỳ file nào): bearer token (kể cả khi client gửi sai chỗ, ví dụ trong query string hay scheme `Basic`), địa chỉ IP/port của client (bộ đếm xác thực thất bại chỉ nằm trong bộ nhớ; error log của `net/http` bị xóa địa chỉ trước khi ghi). Test: `internal/delivery/mcpserver/remote_sessions_test.go` quét store, case journal, mọi file của workspace và HOME/XDG cô lập cùng diagnostics sau các lần gọi remote, kể cả lần xác thực thất bại.
+
 ## 5. Storage architecture
 
 SQLite tables định hướng:
