@@ -172,7 +172,7 @@ re-pointing, client checks in status, `doctor --fix` for clients, non-zero exit 
 | # | Phase | Effort | Depends on | Status |
 |---|---|---|---|---|
 | 1 | [Syntax cleanup](./phase-01-syntax-cleanup.md) | 2d | none | completed |
-| 2 | [init, connect, user config and role detection](./phase-02-init-connect-and-role-detection.md) | 4d | 1 | pending |
+| 2 | [init, connect, user config and role detection](./phase-02-init-connect-and-role-detection.md) | 4d | 1 | completed |
 | 3 | [serve and token hand-off](./phase-03-serve-and-token-handoff.md) | 1.5d | 1, 2 | pending |
 | 4 | [status and doctor by role, maintain group](./phase-04-status-doctor-and-maintain.md) | 3d | 2, 3 | pending |
 | 5 | [Docs: README onboarding and guides](./phase-05-docs-readme-and-guides.md) | 1.5d | 2, 3, 4 | pending |

@@ -1,7 +1,7 @@
 ---
 phase: 2
 title: "init, connect, user config and role detection"
-status: pending
+status: completed
 priority: P1
 effort: "4d"
 dependencies: [1]
@@ -211,6 +211,22 @@ call `runInitIn` through a helper (`initHub(t, dir)`), never `os.Chdir`/`t.Chdir
    read-only `.git/objects` (stderr printed, retry works), and the push failure + retry (F2).
 8. `connect` target resolution, flag removal, token-file refusal, messages.
 9. Installer and CLI call sites.
+
+## Todo
+
+- [x] `internal/userconfig` (`Config`, `Store`, `Default`, `NewStore`, `SetHub` with five previous hubs, 0600, atomic write, unknown keys kept, 64 KiB bound) and its tests
+- [x] `SKILLHUB_USER_CONFIG_DIR`, `APPDATA`, `LOCALAPPDATA` in every `TestMain` isolation list, the web e2e support, the evaluation workflow and the release smoke
+- [x] `DetectRole`/`RoleReport`/`Kind()` with table tests; `FindRemoteEntries` filters the report; the connection-file extractors are deleted
+- [x] Role-aware resolution errors (remote project, none with and without a stored hub, stored hub gone, moved hub via `MovedHubFix`)
+- [x] `ClassifyInitSource` and the remote Git runner (prompts only on a terminal, `protocol.ext/fd.allow=never`, `core.fsmonitor=false`, `--` before the URL) with tests
+- [x] Every `init` row: empty folder, empty Git repo, interrupted runs, hub with unborn HEAD, hub with commits (`.gitignore` entries appended and reported, tracked machine files named), hub subfolder, other files, nested repo and HOME-as-repo refusals, `init <git-url>` unreachable / empty (push, then origin) / hub (probe, trust check, checkout) / not a hub / existing hub binding / origin rules
+- [x] First commit with hooks and signing disabled, fallback identity, retry after a failed commit; marker-based `.git` cleanup; `core.sshCommand` warning
+- [x] `init --force` removed; `init` takes no folder; `runInitIn` test seam and `initHub` helper (no `chdir` in parallel tests)
+- [x] `connect [<path>]`, stored hub, hub-root refresh, `--workspace`/`--project` removed, plain missing-hub errors, token-file refusal, `hubtoken.ClientPath`, one `connectionSummaryLine`
+- [x] Installer next step, CI and release smoke, web e2e call sites, mcpserver subprocess tests
+- [x] `go test ./...`, `go vet` (linux, windows, darwin) and `gofmt -l` clean; web e2e not run here (no `web/node_modules`)
+
+Report: [cook-261011-onboarding-phase2](../reports/cook-261011-onboarding-phase2.md)
 
 ## Validation
 
