@@ -64,6 +64,37 @@ describe('ConflictDrawer', () => {
     expect(onDiscard).toHaveBeenCalledTimes(1);
   });
 
+  it('names a companion file instead of SKILL.md and downloads the draft under its name', () => {
+    const downloads: Array<{ name: string; type: string }> = [];
+    let lastBlob: Blob | null = null;
+    const originalCreate = URL.createObjectURL;
+    const originalRevoke = URL.revokeObjectURL;
+    URL.createObjectURL = (obj: Blob | MediaSource) => {
+      lastBlob = obj as Blob;
+      return 'blob:draft';
+    };
+    URL.revokeObjectURL = () => {};
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      downloads.push({ name: this.download, type: lastBlob?.type ?? '' });
+    });
+
+    try {
+      render(<ConflictDrawer {...defaultProps} fileLabel="skills/core/foo/scripts/run.sh" />);
+
+      expect(
+        screen.getByText('skills/core/foo/scripts/run.sh changed since you opened it'),
+      ).toBeInTheDocument();
+      expect(screen.getByText('Compare the full skills/core/foo/scripts/run.sh')).toBeInTheDocument();
+      expect(screen.queryByText(/SKILL\.md/)).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Download draft' }));
+      expect(downloads).toEqual([{ name: 'draft-run.sh', type: 'text/plain;charset=utf-8' }]);
+    } finally {
+      URL.createObjectURL = originalCreate;
+      URL.revokeObjectURL = originalRevoke;
+    }
+  });
+
   it('closes on Escape', () => {
     const onClose = vi.fn();
     render(<ConflictDrawer {...defaultProps} onClose={onClose} />);

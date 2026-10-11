@@ -127,6 +127,8 @@ export function SkillDetailScreen() {
     const next = new URLSearchParams(searchParams);
     next.set('tab', tab);
     next.delete('field');
+    next.delete('file');
+    next.delete('edit');
     setSearchParams(next);
   };
 
@@ -136,6 +138,8 @@ export function SkillDetailScreen() {
     next.set('tab', 'editor');
     if (field) next.set('field', field);
     else next.delete('field');
+    next.delete('file');
+    next.delete('edit');
     setSearchParams(next);
   };
 
@@ -434,7 +438,13 @@ export function SkillDetailScreen() {
         <EditorTab skill={skill} workspaceId={workspaceId} focusField={searchParams.get('field')} />
       )}
 
-      {activeTab === 'resources' && <ResourcesTab skill={skill} />}
+      {activeTab === 'resources' && (
+        <ResourcesTab
+          skill={skill}
+          workspaceId={workspaceId}
+          thirdParty={review?.content_trust?.third_party ?? false}
+        />
+      )}
 
       {activeTab === 'usage' && <UsagePanel skillId={skill.skill_id} />}
 

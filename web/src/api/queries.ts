@@ -12,6 +12,8 @@ import type {
   SkillListResult,
   SkillMutationResult,
   SkillProposal,
+  SkillResourceContent,
+  SkillResourceList,
   SkillReviewResult,
   SkillRuntimeStatus,
   SkillSourcesResult,
@@ -137,6 +139,37 @@ export async function previewSkillUpdate(
   },
 ): Promise<SkillProposal> {
   return apiFetch<SkillProposal>(`/skills/${encodeURIComponent(id)}/update/preview`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+// Companion files of a skill (SKILL.md and hub metadata excluded), with whether each can be edited.
+export function useSkillResources(id: string) {
+  return useQuery({
+    queryKey: ['skill-resources', id],
+    queryFn: () => apiFetch<SkillResourceList>(`/skills/${encodeURIComponent(id)}/resources`),
+    enabled: Boolean(id),
+  });
+}
+
+export function useSkillResourceContent(id: string, path: string) {
+  return useQuery({
+    queryKey: ['skill-resource', id, path],
+    queryFn: () =>
+      apiFetch<SkillResourceContent>(
+        `/skills/${encodeURIComponent(id)}/resources/content?path=${encodeURIComponent(path)}`,
+      ),
+    enabled: Boolean(id) && Boolean(path),
+  });
+}
+
+// Previews a one-file edit of a companion file; confirm with confirmSkillMutation.
+export async function previewSkillResourceUpdate(
+  id: string,
+  body: { path: string; content: string; expected_digest: string },
+): Promise<SkillProposal> {
+  return apiFetch<SkillProposal>(`/skills/${encodeURIComponent(id)}/resources/preview`, {
     method: 'POST',
     body: JSON.stringify(body),
   });

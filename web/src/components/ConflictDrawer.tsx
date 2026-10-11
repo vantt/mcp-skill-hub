@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { ConfirmDialog } from './ConfirmDialog';
 
-const TITLE_CONFLICT = 'SKILL.md changed since you opened it';
+const DEFAULT_FILE_LABEL = 'SKILL.md';
+const TITLE_CONFLICT_SUFFIX = ' changed since you opened it';
 const BANNER_CONFLICT =
   'This skill was changed somewhere else after you opened it, for example with the command line. Nothing was saved, and your edits are still here.';
 const LABEL_MINE = 'What you changed';
@@ -13,13 +14,14 @@ const LABEL_BOTH_SUFFIX =
 const LABEL_NEXT = 'What you can do';
 const LABEL_NEXT_KEEP = 'Keep my edits on the latest version: your edits are applied on top of what is saved now, then you preview the result.';
 const LABEL_NEXT_DISCARD = 'Discard my edits: your changes are dropped and the editor shows what is saved now.';
-const LABEL_COMPARE = 'Compare the full SKILL.md';
+const LABEL_COMPARE_PREFIX = 'Compare the full ';
 const LABEL_YOUR_DRAFT = 'Your draft';
 const LABEL_LATEST_SAVED = 'Saved now';
 const LABEL_TECH_DETAILS = 'Technical details';
 const LABEL_EXPECTED = 'you opened: ';
 const LABEL_LATEST = 'saved now: ';
-const LABEL_DOWNLOAD_DRAFT = 'Download draft (.md)';
+const LABEL_DOWNLOAD_DRAFT_MD = 'Download draft (.md)';
+const LABEL_DOWNLOAD_DRAFT = 'Download draft';
 const LABEL_COPY_DRAFT = 'Copy draft';
 const LABEL_COPIED = 'Copied';
 const LABEL_DISCARD_RELOAD = 'Discard my edits';
@@ -35,9 +37,25 @@ export interface ConflictDrawerProps {
   mine?: string[];
   theirs?: string[];
   bothFields?: string[];
+  // Names the file in conflict; defaults to SKILL.md.
+  fileLabel?: string;
   onUseLatest: () => void;
   onDiscard: () => void;
   onClose: () => void;
+}
+
+// Download name and MIME type of the draft: draft.md for SKILL.md, draft-<basename> otherwise.
+function draftDownload(fileLabel: string): { name: string; type: string; markdown: boolean } {
+  if (fileLabel === DEFAULT_FILE_LABEL) {
+    return { name: 'draft.md', type: 'text/markdown;charset=utf-8', markdown: true };
+  }
+  const base = fileLabel.split('/').pop() || fileLabel;
+  const markdown = base.toLowerCase().endsWith('.md');
+  return {
+    name: `draft-${base}`,
+    type: markdown ? 'text/markdown;charset=utf-8' : 'text/plain;charset=utf-8',
+    markdown,
+  };
 }
 
 export function ConflictDrawer({
@@ -49,6 +67,7 @@ export function ConflictDrawer({
   mine = [],
   theirs = [],
   bothFields = [],
+  fileLabel = DEFAULT_FILE_LABEL,
   onUseLatest,
   onDiscard,
   onClose,
@@ -82,6 +101,10 @@ export function ConflictDrawer({
 
   if (!open) return null;
 
+  const download = draftDownload(fileLabel);
+  const title = fileLabel + TITLE_CONFLICT_SUFFIX;
+  const compareLabel = LABEL_COMPARE_PREFIX + fileLabel;
+
   const handleCopyDraft = async () => {
     try {
       await navigator.clipboard.writeText(draftContent);
@@ -93,11 +116,11 @@ export function ConflictDrawer({
   };
 
   const handleDownloadDraft = () => {
-    const blob = new Blob([draftContent], { type: 'text/markdown;charset=utf-8' });
+    const blob = new Blob([draftContent], { type: download.type });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'draft.md';
+    a.download = download.name;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -148,7 +171,7 @@ export function ConflictDrawer({
           }}
         >
           <span id="cd-t" className="t-heading-sm" style={{ fontWeight: 600 }}>
-            <span>{TITLE_CONFLICT}</span>
+            <span>{title}</span>
           </span>
           <button type="button" className="fg-icon-btn" aria-label="Close" onClick={onClose}>
             ✕
@@ -200,7 +223,7 @@ export function ConflictDrawer({
 
           <details className="fg-acc">
             <summary style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--color-text-muted)' }}>
-              <span>{LABEL_COMPARE}</span>
+              <span>{compareLabel}</span>
             </summary>
             <div
               style={{
@@ -254,7 +277,7 @@ export function ConflictDrawer({
           }}
         >
           <button type="button" className="fg-btn fg-btn--ghost" onClick={handleDownloadDraft}>
-            <span>{LABEL_DOWNLOAD_DRAFT}</span>
+            <span>{download.markdown ? LABEL_DOWNLOAD_DRAFT_MD : LABEL_DOWNLOAD_DRAFT}</span>
           </button>
           <button type="button" className="fg-btn fg-btn--ghost" onClick={handleCopyDraft}>
             <span>{copiedDraft ? LABEL_COPIED : LABEL_COPY_DRAFT}</span>
