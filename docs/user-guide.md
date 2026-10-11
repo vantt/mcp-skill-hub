@@ -1,12 +1,12 @@
 # Using Skill Hub
 
-This guide is for day-to-day use once your hub works. To install Skill Hub and create your workspace, start with [Get started](getting-started.md).
+This guide is for day-to-day use once your hub works. To install Skill Hub, your hub and a first project, start with the [Quickstart](../README.md#quickstart).
 
-Inside a connected project, `skillhub` finds your workspace on its own. Elsewhere, pass `--workspace ~/skillhub` to each command, or set `SKILLHUB_WORKSPACE=~/skillhub` in your shell.
+Every command acts on the folder you run it in. Inside the hub or a connected project, `skillhub` finds your hub on its own, so this guide writes commands as `cd <folder> && skillhub <command>`.
 
 ## Concepts in plain words
 
-**Workspace.** The Git repository that holds your skills; you create it with `skillhub init`. Git keeps all of it except the secrets you store per skill.
+**Hub.** The folder that holds your skills, kept in its own Git repository; you create it with `skillhub init`. Git keeps all of it except the secrets you store per skill. The command help also calls it the workspace.
 
 **Skill.** A folder with a `SKILL.md` your agent follows and a small file that says when it applies. Skills sit in collections, such as `core`.
 
@@ -16,47 +16,52 @@ Inside a connected project, `skillhub` finds your workspace on its own. Elsewher
 
 **Content approval.** Agents receive nothing from a skill copied from someone else's repository until you approve its content. Only you can approve it, in your terminal.
 
-**Preview first.** Commands that change skills show a preview. Nothing is written until you add `--yes` or confirm. How previews are pinned and how state is reported is in the [result envelope contract](contracts/result-envelope.md).
+**Preview first.** Commands that change skills show a preview. Nothing is written until you add `--yes` or confirm. Setup commands such as `init`, `connect` and `doctor --fix` act at once and print what they changed; add `--dry-run` to see the changes first. How previews are pinned and how state is reported is in the [result envelope contract](contracts/result-envelope.md).
 
-**Nothing commits for you.** Skill Hub writes files but never runs `git commit` or `git push`. `skillhub status` tells you when the workspace has uncommitted changes.
+**Nothing commits for you.** Skill Hub writes your skill changes but never commits or pushes them. Only `skillhub init` makes the hub's first commit, and pushes it to an empty repository when you give it one. `skillhub status` tells you when the hub has uncommitted changes.
 
 ## Set up and connect agents
 
-To create your workspace and connect a first project, follow [Get started](getting-started.md#create-your-workspace). This section covers the choices you have when you connect.
+To install your hub and connect a first project, follow the [Quickstart](../README.md#quickstart). This section covers the choices you have when you connect.
 
 ### Connect one project (recommended)
 
-Connecting a project lets the agents you open in that folder ask the hub for skills. Go to the project and preview what `connect` would write:
+Connecting a project lets the agents you open in that folder ask the hub for skills. Go to the project and see what `connect` would write:
 
 ```bash
-cd ~/myproject
-skillhub connect --workspace ~/skillhub --host claude
+cd <your-project> && skillhub connect --dry-run
 ```
 
 ```text
-Preview only: agent connection for project <home>/myproject was
-not written without --yes.
+Dry run: agent connection for project
+<home>/<your-project>
+was not written.
+Would change:
   - Claude Code: will connect (.mcp.json, .claude/settings.local.json, curator skill, CLAUDE.md)
+  - Codex: will connect (.codex/config.toml, curator skill, AGENTS.md)
+  - Gemini CLI: will connect (.gemini/settings.json, curator skill, GEMINI.md)
 ```
 
 Output is trimmed; `<home>` is your home folder. Write the files:
 
 ```bash
-skillhub connect --workspace ~/skillhub --host claude --yes
+cd <your-project> && skillhub connect
 ```
 
-Without `--host`, `connect` also writes files for Codex and Gemini CLI, which are not yet verified end to end. You can name them too: `--host codex,gemini`. Use `--project <dir>` to connect another folder, then open a new Claude Code session in it.
+`connect` uses the hub that `skillhub init` set up last on this machine. To use another hub on this machine, name its folder: `skillhub connect <path>`. Codex and Gemini CLI are not yet verified end to end; to connect only Claude Code, add `--host claude`. Then open a new Claude Code session in the project.
 
 ### Connect every project at once
 
 Connecting your user account makes the hub available in every project, and leaves project folders untouched:
 
 ```bash
-skillhub connect -g --workspace ~/skillhub --host claude --yes
+skillhub connect -g --host claude
 ```
 
 ```text
-Agent connection for your user account (all projects) written.
+Connected your user account (all projects) to the hub at
+<home>/skill-hub.
+Agent connection written: claude-code.
   - Claude Code: connected (.claude.json, .claude/settings.json, curator skill, CLAUDE.md)
 ```
 
@@ -70,11 +75,11 @@ Output is trimmed. `-g` (or `--global`) fits when you want the hub everywhere. C
 |---|---|
 | Project | `.mcp.json`, `.codex/config.toml`, `.gemini/settings.json` (hub registration); `.claude/settings.local.json` (Claude Code permissions); `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` (a short block between `skillhub:bootstrap` comments); the `system-curator` skill under `.claude/skills/`, `.agents/skills/` and `.gemini/skills/` |
 | Global (`-g`) | `~/.claude.json`, `~/.codex/config.toml`, `~/.gemini/settings.json` (hub registration); `~/.claude/settings.json` (Claude Code permissions); `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, `~/.gemini/GEMINI.md` (the same block); the `system-curator` skill under `~/.claude/skills/`, `~/.agents/skills/` and `~/.gemini/skills/` |
-| Folder access | Each agent may read and write the workspace's `runtime/cache/skills`, `runtime/envs` and `runtime/config`: Claude Code `permissions.additionalDirectories`, Codex `[sandbox_workspace_write] writable_roots`, Gemini CLI `context.includeDirectories` |
+| Folder access | Each agent may read and write the hub's `runtime/cache/skills`, `runtime/envs` and `runtime/config`: Claude Code `permissions.additionalDirectories`, Codex `[sandbox_workspace_write] writable_roots`, Gemini CLI `context.includeDirectories` |
 
 `connect` adds missing entries and never removes or reorders your own. Your own text in `CLAUDE.md`, `AGENTS.md` and `GEMINI.md` stays; Skill Hub manages only the marked block. Running `connect` again on a current connection changes nothing.
 
-The registration holds the absolute paths of the `skillhub` program and of your workspace. If you move either, run `connect` again. Older connections are upgraded when you run `connect --yes` or `doctor --fix --yes`.
+The registration holds the absolute paths of the `skillhub` program and of your hub. If you move the program, run `connect` again. If you move the hub, run `cd <new-location> && skillhub init` there, then `skillhub doctor --fix` in each project. Older connections are upgraded when you run `connect` or `doctor --fix`.
 
 <details>
 <summary>Claude Code permission rules</summary>
@@ -86,24 +91,30 @@ In the same permissions file, `connect` adds exactly these rules:
 | allow | `Bash(skillhub:*)` |
 | ask | `Bash(skillhub * --yes*)` |
 | ask | `Bash(skillhub * confirm *)` |
+| ask | `Bash(skillhub *init*)` |
+| ask | `Bash(skillhub *connect*)` |
+| ask | `Bash(skillhub *--fix*)` |
+| ask | `Bash(skillhub *token rotate*)` |
+| ask | `Bash(skillhub *cache clear*)` |
+| ask | `Bash(skillhub *serve*)` |
 | deny | `Bash(skillhub * --approve-content*)` |
 
-Claude Code asks you before any `skillhub` command with `--yes` or `confirm`, and blocks `--approve-content`. The first time you open the folder, its trust dialog lists `Bash(skillhub:*)`. Permission-bypass modes do not enforce these rules.
+Claude Code asks you before any `skillhub` command with `--yes` or `confirm`, and before `init`, `connect`, `doctor --fix`, `token rotate`, `cache clear` and `serve`, wherever their flags stand. It blocks `--approve-content`. Codex and Gemini CLI have no such rules, so they do not ask first. Connections made by an earlier release lack the newer rules; `skillhub doctor` reports them and `skillhub doctor --fix` adds them. The first time you open the folder, its trust dialog lists `Bash(skillhub:*)`. Permission-bypass modes do not enforce these rules.
 
 </details>
 
 > [!CAUTION]
-> Do not commit connection files. `.mcp.json`, `.claude/settings.local.json`, `.codex/` and `.gemini/` hold absolute paths for this machine. `init` lists them in the workspace's `.gitignore`; add them to a project's `.gitignore` yourself. If your workspace is older, run `skillhub doctor --fix --yes` to add the entries, and `git rm --cached <file>` for any of them Git already tracks. `doctor` names each one it finds.
+> Do not commit connection files. `.mcp.json`, `.claude/settings.local.json`, `.codex/` and `.gemini/` hold absolute paths for this machine. `init` lists them in the hub's `.gitignore`; add them to a project's `.gitignore` yourself. If your hub is older, run `skillhub doctor --fix` to add the entries, and `git rm --cached <file>` for any of them Git already tracks. `doctor` names each one it finds.
 
 ### Undo a connection
 
-`connect --remove` takes out the Skill Hub entry, the marked block and the `system-curator` skill, unless you changed that skill. Other agent settings stay as they are. Preview it in the connected project:
+`connect --remove` takes out the Skill Hub entry, the marked block and the `system-curator` skill, unless you changed that skill. Other agent settings stay as they are. Run it in the connected project:
 
 ```bash
-skillhub connect --remove
+cd <your-project> && skillhub connect --remove
 ```
 
-Add `--yes` to remove it. Add `-g` for the user-account connection, or `--host claude` for one agent. Your workspace and your skills stay untouched.
+Add `--dry-run` to see what it would remove first. Add `-g` for the user-account connection, or `--host claude` for one agent. Your hub and your skills stay untouched.
 
 ## Curate skills
 
@@ -117,7 +128,7 @@ The hub sends back a **recommendation**: the skill that fits, or "no skill fits"
 
 Only active skills are offered, never drafts. A skill from someone else's repository gives no content until you approve it in your terminal; see [Content approval](#concepts-in-plain-words).
 
-You can run the same lookup by hand. Save this request, which matches the skill from [Get started](getting-started.md#create-your-first-skill), as `request.json`. Keep `scope` inside `task`; without it, the hub answers with a question instead of a skill.
+You can run the same lookup by hand. Save this request, which matches the skill from [Create your first skill](curating-skills.md#create-your-first-skill), as `request.json`. Keep `scope` inside `task`; without it, the hub answers with a question instead of a skill.
 
 ```json
 {"schema_version": "1", "request_id": "r1", "operation": "document",
@@ -142,7 +153,7 @@ The second sentence means your agent still decides whether to load the skill. Ad
 
 When your agent loads a skill with the `skill_get` tool, the answer includes a `local` block:
 
-- `local.path`: a read-only copy of the skill's files under the workspace's `runtime/cache/skills/<skill-id>@<hash>/`.
+- `local.path`: a read-only copy of the skill's files under the hub's `runtime/cache/skills/<skill-id>@<hash>/`.
 - `local.state_directory`: a writable folder under `runtime/envs/` for the skill's packages and caches. It survives edits to `SKILL.md`.
 - `local.env`: the variables `SKILLHUB_SKILL_DIR`, `SKILLHUB_STATE_DIR` and `SKILLHUB_CONFIG_DIR`.
 - `local.status`: for example `review_required` when you have not approved the skill's content yet. The agent then gets no content and is told to ask you to run `skillhub skill review <skill-id>`.
@@ -177,7 +188,7 @@ Stored <KEY> for skill <skill-id>.
 
 `skillhub skill env list <skill-id>` lists the names you stored, never the values. `skillhub skill env unset <skill-id> <KEY>` removes one.
 
-Values go to `runtime/config/<skill-id>/env` in your workspace, readable only by you (mode `0600`). The `runtime/` folder is ignored by Git. Names starting with `SKILLHUB_` are reserved.
+Values go to `runtime/config/<skill-id>/env` in your hub, readable only by you (mode `0600`). The `runtime/` folder is ignored by Git. Names starting with `SKILLHUB_` are reserved.
 
 <details>
 <summary>Notes for Windows</summary>
@@ -215,30 +226,23 @@ Moved to [The web UI: Do common tasks](web-ui.md#do-common-tasks).
 
 ## Move to another machine
 
-Your skills live in Git, so moving is a clone. Before you leave the old machine, push the workspace to a remote you own.
+Your skills live in Git, so moving is a fetch. Before you leave the old machine, push the hub to a remote you own. [Keep the hub on GitHub](../README.md#step-1-install-the-hub) shows how `init` sets one up.
 
 If you would rather keep one hub and let agents on other computers use it, see [Use one hub from several machines](remote-hub-guide.md).
 
 > [!IMPORTANT]
-> Skill Hub never commits or pushes for you. Commit and push the workspace yourself before you move.
+> Skill Hub never commits or pushes your skill changes for you. Commit and push the hub yourself before you move.
 
-On the new machine, [install Skill Hub](installation.md), then clone the workspace:
-
-```bash
-git clone <your-workspace-remote> ~/skillhub
-```
-
-A fresh clone has no search index yet. Build it once:
+On the new machine, [install Skill Hub](installation.md), then fetch the hub into an empty folder. `init` builds its search index and makes it the hub of this machine:
 
 ```bash
-skillhub rebuild --workspace ~/skillhub
+mkdir -p ~/skill-hub && cd ~/skill-hub && skillhub init <git-url>
 ```
 
 Connect your projects again, so the connection files point at the new paths:
 
 ```bash
-cd ~/myproject
-skillhub connect --workspace ~/skillhub --host claude --yes
+cd <your-project> && skillhub connect
 ```
 
 Secrets stored with `skill env set` stay on the old machine. Store them again on the new one.
