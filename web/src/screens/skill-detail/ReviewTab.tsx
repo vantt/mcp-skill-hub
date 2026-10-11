@@ -5,6 +5,8 @@ import { StatusBadge } from '../../components/StatusBadge';
 import { ContentTrustCard } from './ContentTrustCard';
 import { ProvenanceCard } from './ProvenanceCard';
 import { activationChecklist } from './activation-checklist';
+import { resourceSummaryText } from './detail-format';
+
 const TITLE_VALIDITY = 'Validity';
 const TITLE_READINESS = 'Activation readiness';
 const TITLE_RESOURCES = 'Resources status';
@@ -51,7 +53,7 @@ export function ReviewTab({ skill, review, onGoToEditor, onViewSources }: Review
 
   const totalBytes = review?.resource_status?.total_bytes ?? skill.resources?.reduce((acc, r) => acc + r.size_bytes, 0) ?? 0;
   const resourceCount = review?.resource_status?.resource_count ?? skill.resources?.length ?? 1;
-  const resourceSummaryText = `${resourceCount} ${resourceCount === 1 ? 'file' : 'files'} · ${totalBytes} bytes`;
+  const resourceSummary = resourceSummaryText(resourceCount, totalBytes);
 
   return (
     <div
@@ -144,7 +146,7 @@ export function ReviewTab({ skill, review, onGoToEditor, onViewSources }: Review
           <span>{HELP_RESOURCES}</span>
         </span>
         <span className="t-body-sm">
-          <span>{resourceSummaryText}</span>
+          <span>{resourceSummary}</span>
         </span>
       </section>
 
