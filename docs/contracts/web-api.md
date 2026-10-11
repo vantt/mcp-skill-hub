@@ -74,16 +74,17 @@ Every endpoint maps directly to an application service method in `internal/app`.
 | `POST /api/v1/skills/{id}/update/preview` | `s.handleSkillUpdatePreview` | `s.app.PreviewSkillUpdate` | Previews metadata or instruction edits |
 | `POST /api/v1/skills/{id}/transitions/preview` | `s.handleSkillTransitionPreview` | `s.app.PreviewSkillTransition` | Previews lifecycle transition (`active`, `deprecated`, `archived`) |
 | `POST /api/v1/skills/proposals/{proposal_id}/confirm` | `s.handleSkillConfirm` | `s.app.ConfirmSkillProposal` | Confirms skill mutation proposal with pins |
-| `GET /api/v1/skills/{id}/sources` | `s.handleSkillSources` | `s.app.GetSkillSources` | Returns upstream source details, drift, and learning links |
+| `GET /api/v1/skills/{id}/sources` | `s.handleSkillSources` | `s.app.GetSkillSources` | Returns upstream source details, drift, and learning links; an upstream origin with no linked source record is included with `status: "untracked"` |
 | `POST /api/v1/skills/{id}/upstream/check` | `s.handleSkillUpstreamCheck` | `s.app.CheckSkillUpstream` | Probes remote upstream repository for skill drift |
 | `POST /api/v1/skills/{id}/upstream/review` | `s.handleSkillUpstreamReview` | `s.app.ReviewSkillUpstream` | Previews 3-way merge update from upstream |
 | `POST /api/v1/upstream/proposals/{proposal_id}/confirm` | `s.handleUpstreamConfirm` | `s.app.ConfirmUpstreamUpdate` | Confirms 3-way merge upstream update |
+| `POST /api/v1/skills/{id}/upstream/track/preview` | `s.handleSkillUpstreamTrackPreview` | `s.sources.PreviewTrackUpstream` | Previews linking an untracked upstream to a source record (fills only the upstream entry of `.meta/skill.yaml`, may add `sources/catalog/<id>.yaml`); returns a pinned proposal with `full_diff` and `candidate`, confirmed through `POST /api/v1/sources/proposals/{proposal_id}/confirm`; `status: "ok"` without pins when there is nothing to track; unknown skill returns 404 |
 | `POST /api/v1/skills/{id}/sources/attach/preview` | `s.handleSkillSourceAttachPreview` | `s.app.PreviewAttachSource` | Previews attaching a learning reference to a skill |
 | `POST /api/v1/skills/{id}/sources/{source_id}/detach/preview` | `s.handleSkillSourceDetachPreview` | `s.app.PreviewDetachSource` | Previews detaching a learning reference from a skill |
 | `GET /api/v1/sources` | `s.handleSourcesList` | `s.app.ListSources` | Lists watched sources grouped by repository and ref |
 | `POST /api/v1/sources/check` | `s.handleSourcesCheck` | `s.app.CheckSources` | Probes watched sources for revision updates |
 | `POST /api/v1/sources/{id}/unwatch/preview` | `s.handleSourceUnwatchPreview` | `s.app.PreviewUnwatchSource` | Previews unwatching and deleting an unreferenced source |
-| `POST /api/v1/sources/proposals/{proposal_id}/confirm` | `s.handleSourceConfirm` | `s.app.ConfirmSourceProposal` | Confirms source watch or unwatch proposal |
+| `POST /api/v1/sources/proposals/{proposal_id}/confirm` | `s.handleSourceConfirm` | `s.app.ConfirmSourceProposal` | Confirms source watch, unwatch, attach, detach or track-upstream proposal |
 | `POST /api/v1/sources/{id}/import/preview` | `s.handleSourceImportPreview` | `s.app.PreviewSourceImport` | Discovers skills in source and previews draft import |
 | `POST /api/v1/sources/import/confirm` | `s.handleSourceImportConfirm` | `s.app.ConfirmSourceImport` | Confirms skill import proposal |
 | `GET /api/v1/runs/{id}` | `s.handleRunGet` | `s.app.GetCurationRun` | Retrieves status and package digest of a curation run |
