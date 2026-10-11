@@ -107,10 +107,11 @@ func writeInitError(stderr io.Writer, result app.Result) int {
 // renderInitSummary prints what init changed and the one next command.
 // Generation IDs and row counts stay available through --verbose and --json.
 func renderInitSummary(p *termui.Printer, result app.Result, report *app.InitReport) {
-	p.Line(result.Summary)
+	// Lines that hold a path or URL are not wrapped, so they can be copied whole.
+	p.Raw(result.Summary + "\n")
 	p.Line(connectionSummaryLine(result))
 	if remote := report.Remote; remote != nil && remote.Fetched {
-		p.Line(fmt.Sprintf("Fetched the hub from %s (branch %s); origin is set.", remote.URL, remote.Branch))
+		p.Raw(fmt.Sprintf("Fetched the hub from %s (branch %s); origin is set.\n", remote.URL, remote.Branch))
 	}
 	if report.Commit != "" {
 		p.Line(fmt.Sprintf("First commit %s: %q.", shortCommit(report.Commit), "Initialize Skill Hub hub"))
@@ -123,15 +124,15 @@ func renderInitSummary(p *termui.Printer, result app.Result, report *app.InitRep
 		switch {
 		case remote.PushError != "":
 			p.Blank()
-			p.Line("The hub is ready here, but the push to " + remote.URL + " failed:")
+			p.Raw("The hub is ready here, but the push to " + remote.URL + " failed:\n")
 			for _, line := range strings.Split(remote.PushError, "\n") {
 				p.Raw("  " + line + "\n")
 			}
 			p.Line("Fix what Git reports, then run the same `skillhub init` command again to push.")
 		case remote.Pushed != "":
-			p.Line(fmt.Sprintf("Pushed %s to %s (branch %s); origin is set.", shortCommit(remote.Pushed), remote.URL, remote.Branch))
+			p.Raw(fmt.Sprintf("Pushed %s to %s (branch %s); origin is set.\n", shortCommit(remote.Pushed), remote.URL, remote.Branch))
 		default:
-			p.Line(fmt.Sprintf("Connected to %s (branch %s); origin is set.", remote.URL, remote.Branch))
+			p.Raw(fmt.Sprintf("Connected to %s (branch %s); origin is set.\n", remote.URL, remote.Branch))
 		}
 	}
 	if len(report.GitignoreAdded) > 0 {
