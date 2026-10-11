@@ -378,6 +378,15 @@ func TestConnectRemoveCacheClearsTheHubsFetchedSkills(t *testing.T) {
 	if code != 0 || !strings.Contains(stdout, "Cached skills that will be cleared:") || !strings.Contains(stdout, "http://127.0.0.1:7420  1       1         2.0 KB") {
 		t.Fatalf("preview:\n%s", stdout)
 	}
+	code, stdout, _ = runCLI(t, "connect", "--remove", "--project", project, "--cache", "--json")
+	var preview struct {
+		app.Result
+		Removal app.Disconnection `json:"removal"`
+	}
+	if code != 0 || json.Unmarshal([]byte(stdout), &preview) != nil || preview.Status != app.StatusActionRequired ||
+		len(preview.Removal.Entries) != 1 || len(preview.Removal.Cache) != 1 || preview.Removal.Cache[0].Versions != 1 {
+		t.Fatalf("JSON preview:\n%s", stdout)
+	}
 	if code, stdout, _ := runCLI(t, "connect", "--remove", "--project", project, "--cache", "--yes"); code != 0 || !strings.Contains(stdout, "Cleared cached skills:") {
 		t.Fatalf("apply:\n%s", stdout)
 	}

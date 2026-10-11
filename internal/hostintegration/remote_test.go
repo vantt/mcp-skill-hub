@@ -279,6 +279,21 @@ func TestRemoveInTheUserScopeKeepsUnrelatedClaudeState(t *testing.T) {
 	assertMode(t, filepath.Join(home, ".claude.json"), 0o600)
 }
 
+func TestUserScopeRoundTripForEveryHost(t *testing.T) {
+	home, binary := t.TempDir(), absoluteBinary(t)
+	writeTestFile(t, filepath.Join(home, ".claude.json"), []byte("{\"numStartups\": 4}\n"), 0o600)
+	writeTestFile(t, filepath.Join(home, ".codex", "config.toml"), []byte("model = \"gpt-5\"\n"), 0o644)
+	writeTestFile(t, filepath.Join(home, ".gemini", "settings.json"), []byte("{\n  \"theme\": \"dark\"\n}\n"), 0o644)
+	writeTestFile(t, filepath.Join(home, ".claude", "CLAUDE.md"), []byte("# Me\n"), 0o644)
+	before := fileTree(t, home)
+	planAndApply(t, Request{Workspace: t.TempDir(), Root: home, Scope: ScopeUser, Binary: binary})
+	planAndApply(t, Request{Root: home, Scope: ScopeUser, Binary: binary, Hub: &RemoteHub{URL: testHubURL}})
+	planAndApply(t, Request{Root: home, Scope: ScopeUser, Binary: binary, Remove: true})
+	if after := fileTree(t, home); !maps.Equal(before, after) {
+		t.Fatalf("user scope after local, remote and removal:\n%v\nbefore:\n%v", after, before)
+	}
+}
+
 func TestRemoveLeavesAChangedCuratorSkillAndUnrelatedPermissions(t *testing.T) {
 	workspace, root, binary := t.TempDir(), t.TempDir(), absoluteBinary(t)
 	planAndApply(t, Request{Workspace: workspace, Root: root, Scope: ScopeProject, Binary: binary, Hosts: []Host{HostClaude}})
