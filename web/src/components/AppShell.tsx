@@ -70,7 +70,7 @@ export function AppShell({ children }: AppShellProps) {
   };
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <a
         href="#main"
         style={{

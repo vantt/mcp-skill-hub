@@ -7,12 +7,31 @@
   --shadow-xl: var(--elevation-lg);
 }
 
-.app-header { padding: 0 var(--space-4); }
-.app-brand { display: flex; align-items: center; gap: 8px; width: 200px; flex: none; }
+/* The browser's 8px body margin would offset the whole frame and add a page scrollbar on top of
+   the main column's own; the shell fills the window exactly and only the columns scroll. */
+html, body { margin: 0; height: 100%; overflow: hidden; }
+#root { height: 100%; }
+
+/* The rail has one fixed width, shared with the brand cell above it, with equal side padding. */
+:root { --app-rail-w: 208px; }
+.app-rail { flex: none; width: var(--app-rail-w); padding: var(--space-4); }
+.app-rail .fg-nav { width: 100%; }
+.app-rail__status { padding: var(--space-3) var(--space-1) !important; }
+
+/* The tab strip scrolls sideways only; a tab's -1px overlap onto the strip border otherwise made a
+   one-pixel vertical scroll range, and a scrollbar with nothing to scroll. */
+.app-tabs { overflow-y: hidden; }
+.app-tabs .fg-tab { margin-bottom: 0; }
+
+/* Thin scrollbars that appear only when a column really overflows. */
+.app-rail, .app-main { scrollbar-width: thin; }
+
+.app-header { padding: 0 var(--space-5); }
+.app-brand { display: flex; align-items: center; gap: 8px; width: var(--app-rail-w); flex: none; }
 .app-title { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .app-crumb { font-size: 12px; display: flex; align-items: center; gap: 4px; min-width: 0; white-space: nowrap; }
 .app-crumb__here { overflow: hidden; text-overflow: ellipsis; }
-.app-main { padding: var(--space-6) var(--space-6) var(--space-8); }
+.app-main { min-width: 0; padding: var(--space-6) var(--space-6) var(--space-7); }
 
 /* Row menu anchors to its cell. */
 .app-skills__actions { position: relative; }
@@ -26,11 +45,12 @@
 
 @media (max-width: 720px) {
   .app-header { padding: 0 var(--space-3); }
+  :root { --app-rail-w: 52px; }
   .app-brand { width: auto; }
   .app-brand__name { display: none; }
   .app-main { padding: var(--space-4) var(--space-3) var(--space-8); }
   /* Rail shrinks to an icon strip so the page keeps the width. */
-  .app-rail { width: 52px; }
+  .app-rail { padding: var(--space-3) var(--space-2); }
   .app-rail .fg-nav__label { display: none; }
   .app-rail .fg-nav__item { justify-content: center; padding-left: 0; padding-right: 0; }
   .app-rail__status { display: none !important; }
@@ -53,7 +73,7 @@
 
 @media (max-width: 720px) {
   /* Seven tabs wrap onto two rows instead of hiding behind a sideways scroll. */
-  .app-tabs { flex-wrap: wrap; overflow-x: visible !important; }
+  .app-tabs { flex-wrap: wrap; overflow: visible !important; }
 }
 
 /* Controls fill their column; without this their padding pushes them past the card edge. */
