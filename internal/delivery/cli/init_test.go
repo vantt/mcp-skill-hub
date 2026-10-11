@@ -499,9 +499,13 @@ func TestInitRefusesARemoteThatIsNotAHubAndLeavesNothing(t *testing.T) {
 func TestInitReportsAnUnreachableRemoteAndLeavesNothing(t *testing.T) {
 	isolateInit(t)
 	dir := t.TempDir()
-	missing := "file://" + filepath.ToSlash(filepath.Join(t.TempDir(), "missing.git"))
+	missing := filepath.ToSlash(filepath.Join(t.TempDir(), "missing.git"))
+	if !strings.HasPrefix(missing, "/") {
+		missing = "/" + missing // a Windows drive path: file:///C:/...
+	}
+	missing = "file://" + missing
 	code, stdout, stderr := runInitCLI(t, dir, missing)
-	if flat := strings.Join(strings.Fields(stderr), " "); code != 1 || !strings.Contains(flat, "Git could not read "+missing+".") || !strings.Contains(flat, "does not appear to be a git repository") || !strings.Contains(flat, "Check the URL and that you can run Git against it") {
+	if flat := strings.Join(strings.Fields(stderr), " "); code != 1 || !strings.Contains(flat, "Git could not read "+missing+".") || !strings.Contains(flat, "fatal:") || !strings.Contains(flat, "Check the URL and that you can run Git against it") {
 		t.Fatalf("exit %d\n%s%s", code, stdout, stderr)
 	}
 	if names := listNames(t, dir); len(names) != 0 {

@@ -375,13 +375,22 @@ func siblingFolder(repo string) string {
 }
 
 // enclosingRepository returns the top level of the Git work tree that holds
-// dir, or "" when there is none.
+// dir, or "" when there is none. It is written as the ancestor of dir that the
+// user knows (Git resolves links, for example macOS /var to /private/var).
 func enclosingRepository(dir string) string {
 	output, err := offlineGitCommand(context.Background(), dir, "rev-parse", "--show-toplevel").Output()
 	if err != nil {
 		return ""
 	}
-	return filepath.Clean(strings.TrimSpace(string(output)))
+	top := filepath.Clean(strings.TrimSpace(string(output)))
+	for current := filepath.Clean(dir); ; current = filepath.Dir(current) {
+		if sameDirectory(current, top) {
+			return current
+		}
+		if filepath.Dir(current) == current {
+			return top
+		}
+	}
 }
 
 // hasCommits reports whether HEAD names a commit.
