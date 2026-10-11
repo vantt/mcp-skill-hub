@@ -20,7 +20,11 @@ import (
 // registrations that already launch it: it is the stdio form of
 // `skillhub serve mcp` and accepts the same flags as before, so the network
 // flags stay unknown there.
+// `skillhub mcp proxy` is the stdio bridge to a remote hub.
 func runMCP(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "proxy" {
+		return runMCPProxy(ctx, args[1:], stdout, stderr)
+	}
 	if len(args) == 0 || args[0] != "serve" {
 		return writeInvalidRequest(stdout, stderr, false, "mcp requires the serve subcommand", "Run `skillhub mcp serve --workspace <path>`.")
 	}
