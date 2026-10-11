@@ -72,10 +72,14 @@ func TestPreviewTrackUpstreamProposesMinimalChangeAndConfirmTracksUpstream(t *te
 	if current, _ := os.ReadFile(metaPath); string(current) != herdrCookPlanMeta {
 		t.Fatalf("preview changed the skill metadata:\n%s", current)
 	}
+	// The metadata diff shows only the changed upstream line as -/+; every
+	// other line of the file is either omitted or shown as context.
 	removed, added := fullDiffSection(proposal.FullDiff, metaRel)
-	removed, added = lineDelta([]byte(strings.Join(removed, "\n")), []byte(strings.Join(added, "\n")))
 	assertLines(t, "removed", removed, []string{`      id: ""`})
 	assertLines(t, "added", added, []string{`      id: herdr-cook-plan-1`})
+	if !strings.Contains(proposal.FullDiff, "+++ b/"+metaRel+"\n@@ -") {
+		t.Fatalf("metadata diff has no hunk header:\n%s", proposal.FullDiff)
+	}
 	if _, recordLines := fullDiffSection(proposal.FullDiff, catalogPath); len(recordLines) == 0 {
 		t.Fatalf("full diff misses the new source record:\n%s", proposal.FullDiff)
 	}
