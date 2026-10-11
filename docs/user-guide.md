@@ -4,6 +4,8 @@ This guide explains how to use Skill Hub day to day. If you have not set it up y
 
 For collecting, creating, reviewing, editing, and improving skills, use the dedicated [curating skills guide](curating-skills.md).
 
+To let agents on other computers use this hub over an SSH tunnel or Tailscale, see [Use one hub from several machines](remote-hub-guide.md).
+
 Run `skillhub help` for the command list and `skillhub help <command>` for the flags and an example of each command. Connected projects automatically resolve the workspace from their configuration. For standalone CLI use outside connected projects, you can export the workspace location once:
 
 ```bash

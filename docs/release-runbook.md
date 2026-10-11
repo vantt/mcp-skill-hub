@@ -47,6 +47,15 @@ scripts/release-preflight.sh --push v0.1.0
 
 If the web UI changed since the last release, rerun `make web-shots` before tagging and commit the refreshed images in `docs/images/web/`. They are captured from an invented demo hub, so the README and the user guide show the current screens.
 
+### Network MCP listener and remote clients
+
+`skillhub serve mcp --addr` is a network listener that serves the three runtime tools to agents on other machines, and `skillhub mcp proxy` is the client side that `skillhub connect --hub` registers (see the [remote hub guide](remote-hub-guide.md)). Before tagging a release that touches the MCP server, the proxy, the skill cache, `connect` or `doctor`:
+
+- Run `make remote-bench`. It times stdio, loopback HTTP and a simulated 100 ms link and fails when a budget in [docs/design/remote-hub.md](design/remote-hub.md#final-numbers) is missed. The safety tests (curation tools unreachable, non-loopback and wildcard addresses refused, the token in no output) run in `go test ./...`.
+- Keep remote clients and hubs of neighbouring releases compatible. Tool schemas only grow. Raise `app.RemoteAPILevel` only when a client of one level cannot work with a hub of another; `doctor` then tells users which side to update. Say in the release notes when both machines must be updated together.
+- The hub token is a per-workspace secret in `<workspace>/runtime/config/.hub-token` (mode 0600, ignored by Git). It is never part of a release artifact, and an upgrade keeps it, so connected machines keep working.
+- The listener speaks plain HTTP by design. It must keep refusing every non-loopback address without `--trust-private-network` and every wildcard address even with it.
+
 ## Automated release pipeline
 
 Pushing a `v*.*.*` tag initiates the automated GitHub Actions release workflow (`.github/workflows/release.yml`):

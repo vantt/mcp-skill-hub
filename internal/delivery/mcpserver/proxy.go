@@ -767,14 +767,17 @@ func (proxy *Proxy) requestBundle(ctx context.Context, skillID string, held []st
 		}
 		cached, err := proxy.cache.Install(proxy.hubID, skillID, digest, response.Body)
 		if err != nil {
-			if errors.Is(err, skillruntime.ErrBundleDigestMismatch) || errors.Is(err, skillruntime.ErrBundleInvalid) {
-				return fetchOutcome{kind: fetchFailed, err: err, code: "resource_digest_mismatch", message: "The skill bundle failed its integrity check and was discarded.", action: "Retry once; if it fails again, check the connection to the hub."}, false
-			}
+			// A cancelled or timed-out download breaks the archive too, so
+			// the context decides first: the call was cancelled, or the hub
+			// stopped answering.
 			if errors.Is(ctx.Err(), context.Canceled) {
 				return fetchOutcome{kind: fetchFailed, err: ctx.Err()}, false
 			}
 			if ctx.Err() != nil {
 				return fetchOutcome{kind: fetchUnreachable, err: ctx.Err()}, false
+			}
+			if errors.Is(err, skillruntime.ErrBundleDigestMismatch) || errors.Is(err, skillruntime.ErrBundleInvalid) {
+				return fetchOutcome{kind: fetchFailed, err: err, code: "resource_digest_mismatch", message: "The skill bundle failed its integrity check and was discarded.", action: "Retry once; if it fails again, check the connection to the hub."}, false
 			}
 			return fetchOutcome{kind: fetchFailed, err: err, code: "internal_error", message: "The skill could not be stored in the local cache " + proxy.CacheDir() + ".", action: "Check free disk space and the permissions of that directory."}, false
 		}

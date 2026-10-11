@@ -2,7 +2,7 @@ GOLANGCI_LINT ?= go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v
 # Lint only issues introduced after this revision; existing findings are tracked debt.
 LINT_BASE ?= origin/main
 
-.PHONY: test test-race test-perf mcp-fanout remote-baseline lint lint-all fmt fmt-check vet check web-install web-build web-test web-check web-e2e web-ux web-shots web-dev
+.PHONY: test test-race test-perf mcp-fanout remote-baseline remote-bench lint lint-all fmt fmt-check vet check web-install web-build web-test web-check web-e2e web-ux web-shots web-dev
 
 ## test: full suite, same as CI
 test:
@@ -27,6 +27,13 @@ mcp-fanout:
 REMOTE_HUB ?=
 remote-baseline:
 	SKILLHUB_PERF=1 SKILLHUB_REMOTE_HUB=$(REMOTE_HUB) go test -count=1 -run '^TestRemoteFetchBench$$' -v ./internal/delivery/mcpserver/
+
+## remote-bench: resolve and get skills over stdio, loopback HTTP and a simulated 100 ms link (hub and proxy
+## as real processes); fails when a budget of the remote hub plan is missed
+## REMOTE_HUB: as for remote-baseline; REMOTE_BENCH_OUT: report file (default: a new temp file)
+REMOTE_BENCH_OUT ?=
+remote-bench:
+	REMOTE_HUB='$(REMOTE_HUB)' REMOTE_BENCH_OUT='$(REMOTE_BENCH_OUT)' sh scripts/remote-bench.sh
 
 ## lint: new issues since LINT_BASE (override: make lint LINT_BASE=<rev>)
 lint:
