@@ -4,7 +4,7 @@ Date: 2026-10-11 (Asia/Saigon). Plan: `plans/261010-1652-remote-hub-mcp-over-net
 
 ## Outcome
 
-Both headline criteria are now proved by repeatable checks. `make remote-bench` runs the hub and the proxy as real processes over stdio, loopback HTTP and a simulated 100 ms link, and fails when a budget is missed; on a read-only clone of the live hub every budget is met with a wide margin. New end-to-end, failure, security, one-machine and two-way tests fill the gaps the earlier phases left. Users get a standalone guide, `docs/remote-hub-guide.md`, and a script, `scripts/remote-timing.sh`, to time a real run from machine A. One production bug the new tests exposed was fixed.
+Both headline criteria are now proved by repeatable checks. `make remote-bench` runs the hub and the proxy as real processes over stdio, loopback HTTP and a simulated 100 ms link, and fails when a budget is missed; on a read-only clone of the live hub every budget is met with a wide margin. New end-to-end, failure, security, one-machine and two-way tests fill the gaps the earlier phases left. Users get a standalone guide, `docs/remote-hub-guide.md`, and a script, `scripts/remote-timing.sh`, to time a real run from machine A. One production bug the new tests exposed was fixed in the skill cache, with a follow-up reorder in the proxy found in review.
 
 ## What was built
 
@@ -24,7 +24,18 @@ Both headline criteria are now proved by repeatable checks. `make remote-bench` 
 
 ## Bug found and fixed
 
-`internal/skillruntime/remote_cache.go`, `writeBundleFile`: when an archive ended inside a file's contents (a download cut off when the hub stops, or a truncated body), the read error came back wrapped as a write failure. The proxy then answered `internal_error`, "The skill could not be stored in the local cache ...", not retryable, with the advice to check disk space and permissions. The Phase 3 truncation test cut the archive at a point that failed earlier, so it did not see this. Fix: a small reader wrapper remembers the first read error of the archive; such an error is now `ErrBundleInvalid`, which the proxy reports as `resource_digest_mismatch`, retryable, "Retry once; if it fails again, check the connection to the hub". Write errors on this machine keep their old message. Test: `TestInstallRefusesAnArchiveCutShortAnywhere` cuts a 30 KB archive at every 101st byte (failed before the fix at byte 708); a cut that loses only the closing padding and gzip trailer still installs, because every file was read in full and matched its digest. Commit `f707c50`.
+`internal/skillruntime/remote_cache.go`, `writeBundleFile`: when an archive ended inside a file's contents (a download cut off when the hub stops, or a truncated body), the read error came back wrapped as a write failure. The proxy then answered `internal_error`, "The skill could not be stored in the local cache ...", not retryable, with the advice to check disk space and permissions. The Phase 3 truncation test cut the archive at a point that failed earlier, so it did not see this. Fix: a small reader wrapper remembers the first read error of the archive; such an error is now `ErrBundleInvalid`, which the proxy reports as `resource_digest_mismatch`, retryable, "Retry once; if it fails again, check the connection to the hub". Write errors on this machine keep their old message. Test: `TestInstallRefusesAnArchiveCutShortAnywhere` cuts a 30 KB archive at every 101st byte (failed before the fix at byte 708); a cut that loses only the closing padding and gzip trailer still installs, because every file was read in full and matched its digest. Commit `f707c50`. The review then found that this made a timed-out or cancelled download look like a broken archive in the proxy; see the Review section for that fix.
+
+## Review
+
+An independent code review (production fix, test flakiness and portability, the request counter, the bench's failure path, the scripts' token handling, and the guide against the code) confirmed that a real local write error is still reported as a storage failure, that the request counter can neither miss nor double-count, that the bench fails on a missed budget, that the timing script never reads or prints the token, and that the guide's messages, paths and rules match the code. Fixed after the review, with tests:
+
+- High: the fix above made a cancelled or timed-out download look like a broken archive, because the proxy checked for an invalid bundle before it checked the call's context. A hub that stalls mid-download then gave `resource_digest_mismatch` instead of falling back to the cached copy, and a cancelled call got a tool error instead of the cancellation. `requestBundle` in `internal/delivery/mcpserver/proxy.go` now checks the context first (a minimal reorder of existing branches). New subtest of `TestRemoteFetchFailures`: a front hub sends half the archive and then stalls; with a short deadline the agent gets the cached copy (`remote.cache = "offline"`), and a cancelled call returns the cancellation. It fails without the reorder.
+- Medium: `make remote-bench REMOTE_BENCH_OUT=<relative path>` wrote the report into the package directory; the script now makes the path absolute first.
+- Medium: the one-machine test skips when the kernel does not list child processes, instead of passing without checking.
+- Low: the timing script stops the proxy before it exits on an error, so the temporary cache is removed after the proxy is gone, and its test now checks that the temporary directory is empty afterwards; the guide check matches whole flags only; the design note no longer names a personal path.
+
+Kept: the benchmark requires exactly 0 bytes on a cached repeat; a future keep-alive or ping from the proxy would need the check adjusted.
 
 ## Criterion -> proof
 
@@ -94,6 +105,6 @@ The user guide's "Undo a connection" section still says removal is manual; `skil
 
 ## Unresolved questions
 
-1. When a download is cut off midway, the proxy now says the bundle failed its integrity check and should be retried. It does not fall back to an older cached copy, because the hub answered before the connection broke. Should a cut-off download count as "hub unreachable" instead, so an older cached copy is served?
+1. When the connection breaks in the middle of a download (not a stall), the proxy says the bundle failed its integrity check and should be retried; it does not fall back to an older cached copy, because the hub answered before the connection broke. A stall past the two-minute download limit does fall back. Should a broken connection count as "hub unreachable" too, so an older cached copy is served at once?
 2. Should the proxy open its hub session at start-up in the background, so the first call of a session over a slow link does not pay about five round trips?
 3. A PowerShell twin of `scripts/remote-timing.sh`, if Windows machines will be machine A?

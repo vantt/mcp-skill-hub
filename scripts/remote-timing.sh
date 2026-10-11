@@ -71,8 +71,15 @@ task = os.environ["TIMING_TASK"] or "use the " + skill + " skill"
 cache = os.environ["TIMING_CACHE"]
 
 
+process = None
+
+
 def fail(message):
     print("ERROR: " + message, file=sys.stderr)
+    if process is not None and process.poll() is None:
+        # Stop the proxy before the shell removes its temporary cache.
+        process.kill()
+        process.wait()
     sys.exit(1)
 
 

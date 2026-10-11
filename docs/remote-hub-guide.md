@@ -341,6 +341,7 @@ Your agent keeps working; it only loses new skills until the connection is back.
 - **A skill used before on this machine** still loads. `skill_get` answers from the cache on machine A and says so: "The hub could not be reached, so this is the copy of the skill cached on this machine; it may be older than the hub's current version."
 - **A skill never used on this machine** cannot be fetched. `skill_get` and `skill_resolve` answer with the error `hub_unreachable`, "The Skill Hub at http://127.0.0.1:7420 could not be reached, so no skill is available right now.", and the suggested action "Continue the task without a skill. To restore skills, check that the hub is running and that the SSH tunnel or VPN to it is up." The agent carries on without a skill.
 
+- A download that stops in the middle is discarded, never kept half-written. If the connection broke, the agent is asked to retry; if the download did not finish within two minutes, the hub counts as unreachable and the cached copy is used as above.
 - A skill that machine B has just marked as waiting for review is never served from the cache.
 - When the hub answers but cannot serve a skill right now (busy, or a file changed on disk), the agent gets `hub_error` and no cached copy, because such an answer may concern the skill's trust or content.
 

@@ -22,11 +22,17 @@
 # 127.0.0.1 ports chosen by the system, and stops every process it starts.
 set -eu
 
-repo_root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
-cd "$repo_root"
-
 work=$(mktemp -d "${TMPDIR:-/tmp}/skillhub-remote-bench.XXXXXX")
 report=${REMOTE_BENCH_OUT:-$work/remote-bench.txt}
+# The test runs in its package directory, so a relative report path is made
+# absolute here, before leaving the caller's directory.
+case $report in
+/*) ;;
+*) report=$PWD/$report ;;
+esac
+
+repo_root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$repo_root"
 log=$work/go-test.log
 
 echo "Running the remote hub benchmark (about a minute)..."

@@ -123,17 +123,17 @@ func TestRemoteBudgetBench(t *testing.T) {
 		budgets = append(budgets, []string{verdict, name, measured, limit})
 	}
 	lan := remote[0]
-	check("skill_resolve on loopback HTTP, first of a session, p95", ms(lan.firstResolve.p95()), "stdio "+ms(stdio.firstResolve.p95())+" + 50 ms",
+	check("skill_resolve on loopback HTTP, first of a session, p95", roundMS(lan.firstResolve.p95()), "stdio "+roundMS(stdio.firstResolve.p95())+" + 50 ms",
 		lan.firstResolve.p95() <= stdio.firstResolve.p95()+budgetResolveOverStdio)
-	check("skill_resolve on loopback HTTP, warm, p95", ms(lan.warmResolve.p95()), "stdio "+ms(stdio.warmResolve.p95())+" + 50 ms",
+	check("skill_resolve on loopback HTTP, warm, p95", roundMS(lan.warmResolve.p95()), "stdio "+roundMS(stdio.warmResolve.p95())+" + 50 ms",
 		lan.warmResolve.p95() <= stdio.warmResolve.p95()+budgetResolveOverStdio)
 	for index, transport := range transports {
 		measured := remote[index]
 		for _, id := range skillIDs {
 			skill := measured.skills[id]
-			check(fmt.Sprintf("first skill_get %s, %s, p95", id, linkLabel(index)), ms(skill.first.p95()), ms(transport.fetch), skill.first.p95() <= transport.fetch)
+			check(fmt.Sprintf("first skill_get %s, %s, p95", id, linkLabel(index)), roundMS(skill.first.p95()), roundMS(transport.fetch), skill.first.p95() <= transport.fetch)
 			check(fmt.Sprintf("first skill_get %s, %s, requests per fetch", id, linkLabel(index)), requestRange(skill.firstRequests), "1", allEqual(skill.firstRequests, 1))
-			check(fmt.Sprintf("cached skill_get %s, %s, p95", id, linkLabel(index)), ms(skill.repeat.p95()), ms(budgetCachedRepeat), skill.repeat.p95() <= budgetCachedRepeat)
+			check(fmt.Sprintf("cached skill_get %s, %s, p95", id, linkLabel(index)), roundMS(skill.repeat.p95()), roundMS(budgetCachedRepeat), skill.repeat.p95() <= budgetCachedRepeat)
 			check(fmt.Sprintf("cached skill_get %s, %s, requests and bytes", id, linkLabel(index)), fmt.Sprintf("requests %s, bytes %s", requestRange(skill.repeatRequests), requestRange(skill.repeatBytes)), "requests 0, bytes 0",
 				allEqual(skill.repeatRequests, 0) && allEqual(skill.repeatBytes, 0))
 		}
@@ -408,8 +408,6 @@ func editBenchSkillContent(t *testing.T, binary, root, id, line string) {
 	}
 }
 
-func ms(value time.Duration) string { return roundMS(value) }
-
 func allEqual(values []int64, want int64) bool {
 	for _, value := range values {
 		if value != want {
@@ -453,22 +451,22 @@ func (report *benchReport) table(header []string, rows [][]string) {
 func (report *benchReport) transport(name string, measured benchTransport, skillIDs []string) {
 	report.line("Transport: %s", name)
 	rows := [][]string{
-		{"session start (process and initialize)", ms(measured.startup.p50()), ms(measured.startup.p95()), ""},
-		{"skill_resolve, first of a session", ms(measured.firstResolve.p50()), ms(measured.firstResolve.p95()), ""},
-		{"skill_resolve, warm", ms(measured.warmResolve.p50()), ms(measured.warmResolve.p95()), ""},
+		{"session start (process and initialize)", roundMS(measured.startup.p50()), roundMS(measured.startup.p95()), ""},
+		{"skill_resolve, first of a session", roundMS(measured.firstResolve.p50()), roundMS(measured.firstResolve.p95()), ""},
+		{"skill_resolve, warm", roundMS(measured.warmResolve.p50()), roundMS(measured.warmResolve.p95()), ""},
 	}
 	for _, id := range skillIDs {
 		skill := measured.skills[id]
 		if measured.local {
 			rows = append(rows,
-				[]string{"skill_get " + id + ", first", ms(skill.first.p50()), ms(skill.first.p95()), "local snapshot, no transfer"},
-				[]string{"skill_get " + id + ", repeat", ms(skill.repeat.p50()), ms(skill.repeat.p95()), "local snapshot, no transfer"})
+				[]string{"skill_get " + id + ", first", roundMS(skill.first.p50()), roundMS(skill.first.p95()), "local snapshot, no transfer"},
+				[]string{"skill_get " + id + ", repeat", roundMS(skill.repeat.p50()), roundMS(skill.repeat.p95()), "local snapshot, no transfer"})
 			continue
 		}
 		rows = append(rows,
-			[]string{"skill_get " + id + ", first fetch", ms(skill.first.p50()), ms(skill.first.p95()),
+			[]string{"skill_get " + id + ", first fetch", roundMS(skill.first.p50()), roundMS(skill.first.p95()),
 				fmt.Sprintf("requests %s, %.1f KB on the wire", requestRange(skill.firstRequests), float64(slices.Max(skill.firstBytes))/1024)},
-			[]string{"skill_get " + id + ", cached repeat", ms(skill.repeat.p50()), ms(skill.repeat.p95()),
+			[]string{"skill_get " + id + ", cached repeat", roundMS(skill.repeat.p50()), roundMS(skill.repeat.p95()),
 				fmt.Sprintf("requests %s, bytes %s", requestRange(skill.repeatRequests), requestRange(skill.repeatBytes))})
 	}
 	report.table([]string{"Step", "p50", "p95", "Traffic"}, rows)

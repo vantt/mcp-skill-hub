@@ -233,8 +233,8 @@ The budgets in the plan's "Success Criteria" part 2 were checked against this ba
 
 Measured with `make remote-bench` (`scripts/remote-bench.sh`, test `TestRemoteBudgetBench` in
 `internal/delivery/mcpserver/remote_budget_bench_test.go`) on 2026-10-11: Linux, 24 cores, other work
-running on the machine; a read-only clone of the live hub (`REMOTE_HUB=/home/vantt/skill-hub`, the two
-skills approved in the clone only); 20 agent sessions per transport. The hub
+running on the machine; a read-only clone of the live hub (`make remote-bench REMOTE_HUB=<hub repository>`,
+the two skills approved in the clone only); 20 agent sessions per transport. The hub
 (`skillhub serve mcp --addr 127.0.0.1:0`) and every proxy (`skillhub mcp proxy`) are real processes.
 The simulated link is a loopback relay that delays every chunk by half the round trip in each
 direction and the first chunk of a connection by one more round trip; it does not limit bandwidth.

@@ -78,7 +78,10 @@ func checkGuideCommand(t *testing.T, line int, command string) {
 		}
 	}
 	for _, flag := range flags {
-		if !strings.Contains(help, flag) {
+		// The whole flag, so -g does not match inside another word and --hub
+		// does not match --hub-something.
+		whole := regexp.MustCompile(`(^|[\s,\[|(])` + regexp.QuoteMeta(flag) + `([\s=,\]|)]|$)`)
+		if !whole.MatchString(help) {
 			t.Errorf("line %d: %q: `skillhub help %s` does not mention the flag %s", line, command, words[0], flag)
 		}
 	}
