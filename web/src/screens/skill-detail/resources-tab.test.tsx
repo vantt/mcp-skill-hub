@@ -175,6 +175,17 @@ describe('ResourcesTab', () => {
     expect(screen.getByRole('table')).toBeInTheDocument();
   });
 
+  it('drops edit from the address when the person leaves edit mode', () => {
+    renderTab(`/skills/${SKILL_ID}?tab=resources`, seedList);
+
+    fireEvent.click(screen.getByRole('button', { name: `Edit ${SCRIPT}` }));
+    expect(currentSearch().get('edit')).toBe('1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel edit' }));
+    expect(currentSearch().get('file')).toBe(SCRIPT);
+    expect(currentSearch().has('edit')).toBe(false);
+  });
+
   it('opens the file without edit mode from View', () => {
     renderTab(`/skills/${SKILL_ID}?tab=resources&edit=1`, seedList);
 

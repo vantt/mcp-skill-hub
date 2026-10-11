@@ -184,6 +184,10 @@ func TestSkillResourceContentRoute(t *testing.T) {
 	if rec := get(t, srv, resourceContentURL("unknown-skill", webResourceDir+"/references/checks.md")); rec.Code != http.StatusNotFound {
 		t.Fatalf("unknown skill = %d (body: %s)", rec.Code, rec.Body.String())
 	}
+	rec = get(t, srv, resourceContentURL("unknown-skill", webResourceDir+"/references/checks.md"))
+	if !strings.Contains(rec.Body.String(), "not in the workspace") {
+		t.Fatalf("a missing skill or file must say so plainly, body: %s", rec.Body.String())
+	}
 }
 
 func TestSkillResourceContentRefusesUnsafePaths(t *testing.T) {

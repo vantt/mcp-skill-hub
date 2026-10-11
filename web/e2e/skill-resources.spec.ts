@@ -158,11 +158,12 @@ test('resources tab: view a binary file, edit a reference document and a script,
   await expect(page.getByText('Saved guide.md.')).toBeVisible();
   expect(fs.readFileSync(path.join(ws, GUIDE_MD), 'utf-8')).toBe(editedGuide);
 
-  // The address still asks for the editor; after a reload it opens on the saved text with no draft.
+  // After saving the view reads the file and the address no longer asks for the editor, so a reload
+  // opens the saved text to read, with no draft.
+  await expect(page).not.toHaveURL(/edit=1/);
   await page.reload();
-  await expect(page.getByRole('textbox', { name: 'guide.md content' })).toHaveValue(editedGuide);
+  await expect(page.getByRole('textbox', { name: 'guide.md content' })).toHaveCount(0);
   await expect(page.locator('.fg-markdown').getByText('Tag the release after review and checks.')).toBeVisible();
-  await expect(page.getByText(/^Nothing changed yet\./)).toBeVisible();
 
   // 4. Edit the script, then change it on disk before previewing: the conflict drawer opens.
   await openResources(page);
