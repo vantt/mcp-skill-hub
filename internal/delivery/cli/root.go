@@ -35,9 +35,9 @@ func RunContext(ctx context.Context, args []string, stdout, stderr io.Writer) in
 	switch args[0] {
 	case "help":
 		return runHelp(args[1:], stdout, stderr)
-	case "connect", "integrate":
+	case "connect":
 		return runConnect(ctx, args[1:], stdout, stderr)
-	case "version":
+	case "version", "--version":
 		return runVersion(args[1:], stdout, stderr)
 	case "status":
 		return runStatus(ctx, args[1:], stdout, stderr)
@@ -57,8 +57,6 @@ func RunContext(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		return runSkill(ctx, args[1:], stdout, stderr)
 	case "source":
 		return runSource(ctx, args[1:], stdout, stderr)
-	case "check":
-		return runCheck(ctx, args[1:], stdout, stderr)
 	case "resolve":
 		return runResolve(ctx, args[1:], stdout, stderr)
 	case "resolution":
@@ -71,8 +69,6 @@ func RunContext(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		return runMCP(ctx, args[1:], stdout, stderr)
 	case "serve":
 		return runServe(ctx, args[1:], stdout, stderr)
-	case "web":
-		return runServe(ctx, append([]string{"web"}, args[1:]...), stdout, stderr)
 	case "token":
 		return runToken(args[1:], stdout, stderr)
 	case "cache":

@@ -30,7 +30,7 @@ export async function startServer(options?: StartServerOptions): Promise<Running
 
   if (!customWorkspace) {
     // 1. Initialize workspace
-    execFileSync(binaryPath, ['init', ws, '--yes'], { stdio: 'pipe' });
+    execFileSync(binaryPath, ['init', ws], { stdio: 'pipe' });
   const contentFile = path.join(os.tmpdir(), `smoke-${Date.now()}.md`);
   fs.writeFileSync(contentFile, '# Smoke Skill\n\nSmoke test instructions.\n');
 

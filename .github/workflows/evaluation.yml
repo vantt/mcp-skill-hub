@@ -40,7 +40,7 @@ jobs:
 
           workspace=$(mktemp -d)
           trap 'rm -rf "$workspace"' EXIT
-          bin/skillhub init "$workspace" --yes
+          bin/skillhub init "$workspace"
           cp -R testdata/evaluation/workspace-overlay/. "$workspace"/
           rm -rf "$workspace/runtime/catalog"
           bin/skillhub rebuild --workspace "$workspace" --json >/dev/null

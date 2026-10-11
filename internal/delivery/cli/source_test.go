@@ -38,7 +38,7 @@ func TestSourceCaptureListAndExplicitEmptyCheck(t *testing.T) {
 	}
 	stdout.Reset()
 	stderr.Reset()
-	code = RunContext(context.Background(), []string{"check", "--all-due", "--workspace", root, "--json"}, &stdout, &stderr)
+	code = RunContext(context.Background(), []string{"source", "check", "--all-due", "--workspace", root, "--json"}, &stdout, &stderr)
 	if code != 0 || !strings.Contains(stdout.String(), `"checked":0`) {
 		t.Fatalf("check code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
@@ -72,7 +72,9 @@ func TestSourceCLIBlockedTelemetryPreservesSuccessAndErrorContracts(t *testing.T
 		name string
 		args func(string) []string
 	}{
-		{name: "success", args: func(root string) []string { return []string{"check", "--all-due", "--workspace", root, "--json"} }},
+		{name: "success", args: func(root string) []string {
+			return []string{"source", "check", "--all-due", "--workspace", root, "--json"}
+		}},
 		{name: "error", args: func(root string) []string {
 			return []string{"source", "capture", "https://user:private@example.com/repo.git", "--reason", "private", "--workspace", root, "--json"}
 		}},
@@ -90,7 +92,7 @@ func TestSourceCLIBlockedTelemetryPreservesSuccessAndErrorContracts(t *testing.T
 func TestSourceCLIRecordsSanitizedCaptureAndCheckEvents(t *testing.T) {
 	t.Parallel()
 	root := onboardCLIFilesystemSource(t)
-	code, stdout, stderr := runCLIForTest([]string{"check", "source-a", "--workspace", root, "--json"})
+	code, stdout, stderr := runCLIForTest([]string{"source", "check", "source-a", "--workspace", root, "--json"})
 	if code != 0 {
 		t.Fatalf("check=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}

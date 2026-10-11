@@ -48,19 +48,19 @@ func (failingWriter) Write([]byte) (int, error) {
 	return 0, errors.New("write failed")
 }
 
-func TestInitPreviewsUntilYes(t *testing.T) {
+func TestInitDryRunWritesNothing(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
-	if exitCode := Run([]string{"init", root}, &stdout, &stderr); exitCode != 0 {
-		t.Fatalf("init preview exit code = %d, stderr = %q", exitCode, stderr.String())
+	if exitCode := Run([]string{"init", root, "--dry-run"}, &stdout, &stderr); exitCode != 0 {
+		t.Fatalf("init --dry-run exit code = %d, stderr = %q", exitCode, stderr.String())
 	}
 	if _, err := os.Stat(root); !os.IsNotExist(err) {
-		t.Fatalf("init preview wrote workspace: %v", err)
+		t.Fatalf("init --dry-run wrote workspace: %v", err)
 	}
 	stdout.Reset()
 	stderr.Reset()
-	if exitCode := Run([]string{"init", root, "--yes"}, &stdout, &stderr); exitCode != 0 {
+	if exitCode := Run([]string{"init", root}, &stdout, &stderr); exitCode != 0 {
 		t.Fatalf("confirmed init exit code = %d, stderr = %q", exitCode, stderr.String())
 	}
 	if _, err := os.Stat(filepath.Join(root, ".skillhub", "schema-version")); err != nil {
@@ -73,20 +73,20 @@ func TestInitDefaultsToCurrentDirectory(t *testing.T) {
 	t.Chdir(root)
 
 	var stdout, stderr bytes.Buffer
-	if exitCode := Run([]string{"init"}, &stdout, &stderr); exitCode != 0 {
-		t.Fatalf("init preview exit code = %d, stderr = %q", exitCode, stderr.String())
+	if exitCode := Run([]string{"init", "--dry-run"}, &stdout, &stderr); exitCode != 0 {
+		t.Fatalf("init --dry-run exit code = %d, stderr = %q", exitCode, stderr.String())
 	}
 	entries, err := os.ReadDir(root)
 	if err != nil {
-		t.Fatalf("read current directory after preview: %v", err)
+		t.Fatalf("read current directory after the dry run: %v", err)
 	}
 	if len(entries) != 0 {
-		t.Fatalf("init preview wrote to the current directory: %v", entries)
+		t.Fatalf("init --dry-run wrote to the current directory: %v", entries)
 	}
 
 	stdout.Reset()
 	stderr.Reset()
-	if exitCode := Run([]string{"init", "--yes"}, &stdout, &stderr); exitCode != 0 {
+	if exitCode := Run([]string{"init"}, &stdout, &stderr); exitCode != 0 {
 		t.Fatalf("confirmed init exit code = %d, stderr = %q", exitCode, stderr.String())
 	}
 	if _, err := os.Stat(filepath.Join(root, ".skillhub", "schema-version")); err != nil {

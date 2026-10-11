@@ -10,12 +10,12 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 
 	"github.com/vantt/mcp-skill-hub/internal/hostintegration"
 	"github.com/vantt/mcp-skill-hub/internal/hubtoken"
+	"github.com/vantt/mcp-skill-hub/internal/shellquote"
 	"github.com/vantt/mcp-skill-hub/internal/skillruntime"
 )
 
@@ -26,7 +26,8 @@ type RemoteConnectRequest struct {
 	Hosts     []hostintegration.Host
 	Hub       string
 	TokenFile string
-	Yes       bool
+	// DryRun reports the changes without writing them.
+	DryRun bool
 	// HubClient sends the reachability probe; nil uses the default client.
 	HubClient *http.Client
 }
@@ -128,7 +129,7 @@ func checkTokenFile(path string) (string, *Error) {
 	return absolute, nil
 }
 
-// ConnectRemote previews, or with Yes writes, host entries that start the
+// ConnectRemote writes, or with DryRun only reports, host entries that start the
 // stdio proxy for a hub on another machine. It writes no curation server and
 // no system-curator skill, because curation runs only on the hub machine, and
 // never writes the token, only the token file path.
@@ -166,7 +167,7 @@ func (service ConnectService) ConnectRemote(ctx context.Context, request RemoteC
 			connection.Replaces = append(connection.Replaces, entry)
 		}
 	}
-	result, err := service.planScope(ctx, hostRequest, request.Yes)
+	result, err := service.planScope(ctx, hostRequest, request.DryRun)
 	if err != nil || result.Error != nil {
 		return result, nil, err
 	}
@@ -176,8 +177,8 @@ func (service ConnectService) ConnectRemote(ctx context.Context, request RemoteC
 	case StatusReady:
 		result.Summary = "Agent connection for " + label + " to the hub at " + hubURL + " is already current; nothing to change."
 	case StatusActionRequired:
-		result.Summary = "Preview only: agent connection for " + label + " to the hub at " + hubURL + " was not written without --yes."
-		result.SuggestedActions = []Action{{Label: "Write the agent connection", Command: remoteConnectCommand(request, hubURL, tokenFile) + " --yes", RequiresConfirmation: true}}
+		result.Summary = "Dry run: agent connection for " + label + " to the hub at " + hubURL + " was not written."
+		result.SuggestedActions = []Action{{Label: "Write the agent connection", Command: remoteConnectCommand(request, hubURL, tokenFile), RequiresConfirmation: true}}
 	case StatusApplied:
 		result.Summary = "Agent connection for " + label + " to the hub at " + hubURL + " written."
 		result.Warnings = append(result.Warnings, hostBestEffortWarning())
@@ -186,9 +187,10 @@ func (service ConnectService) ConnectRemote(ctx context.Context, request RemoteC
 	return result, connection, nil
 }
 
-// planScope runs the inspect, conflict, plan and (with yes) apply sequence
-// of connect for a remote or removal request. The caller sets the summary.
-func (service ConnectService) planScope(ctx context.Context, hostRequest hostintegration.Request, yes bool) (Result, error) {
+// planScope runs the inspect, conflict, plan and (unless dryRun) apply
+// sequence of connect for a remote or removal request. The caller sets the
+// summary.
+func (service ConnectService) planScope(ctx context.Context, hostRequest hostintegration.Request, dryRun bool) (Result, error) {
 	inspection, err := hostintegration.Inspect(ctx, hostRequest)
 	if err != nil {
 		return Result{}, err
@@ -216,12 +218,12 @@ func (service ConnectService) planScope(ctx context.Context, hostRequest hostint
 	if len(plan.Changes) == 0 {
 		return NewResult(StatusReady, ""), nil
 	}
-	if !yes {
+	if dryRun {
 		result := NewResult(StatusActionRequired, "")
 		for _, change := range plan.Changes {
-			impact := "Will be written after confirmation."
+			impact := "Would be written."
 			if change.Remove {
-				impact = "Will be deleted after confirmation."
+				impact = "Would be deleted."
 			}
 			item := hostChangeItem(change.Host, levels[change.Host], change.Kind, change.Path, impact)
 			if change.Preview != "" {
@@ -309,27 +311,16 @@ func remoteConnectCommand(request RemoteConnectRequest, hubURL, tokenFile string
 	if request.Global {
 		parts = append(parts, "--global")
 	} else if request.Project != "" {
-		parts = append(parts, "--project", shellArgument(request.Project))
+		parts = append(parts, "--project", shellquote.Arg(request.Project))
 	}
 	parts = append(parts, "--hub", hubURL)
 	if tokenFile != "" {
-		parts = append(parts, "--token-file", shellArgument(tokenFile))
+		parts = append(parts, "--token-file", shellquote.Arg(tokenFile))
 	}
 	for _, host := range request.Hosts {
 		parts = append(parts, "--host", string(host))
 	}
 	return strings.Join(parts, " ")
-}
-
-// shellArgument quotes a path for a printed command when it needs quoting.
-func shellArgument(value string) string {
-	if value != "" && !strings.ContainsAny(value, " \t\n'\"\\$`!*?[](){};&|<>#~") {
-		return value
-	}
-	if runtime.GOOS == "windows" {
-		return `"` + value + `"`
-	}
-	return "'" + strings.ReplaceAll(value, "'", `'\''`) + "'"
 }
 
 // DisconnectRequest removes the Skill Hub connection of a scope.
@@ -340,7 +331,8 @@ type DisconnectRequest struct {
 	// ClearCache also removes the skills this machine fetched from the remote
 	// hubs the removed entries pointed at.
 	ClearCache bool
-	Yes        bool
+	// DryRun reports the removal without changing anything.
+	DryRun bool
 }
 
 // Disconnection describes what a removal takes out.
@@ -358,7 +350,7 @@ type CacheUsage struct {
 	Bytes    int64  `json:"bytes"`
 }
 
-// Disconnect previews, or with Yes applies, the removal of every Skill Hub
+// Disconnect applies, or with DryRun only reports, the removal of every Skill Hub
 // surface connect wrote in a scope, for a local or a remote hub: the MCP
 // entries, their allowed directories and permission rules, the instruction
 // block and an unchanged system-curator skill. Unrelated host configuration
@@ -425,7 +417,7 @@ func (service ConnectService) Disconnect(ctx context.Context, request Disconnect
 			warnings = append(warnings, sharedHubWarnings(hubs, request.Global, root)...)
 		}
 	}
-	if request.Yes && request.ClearCache {
+	if !request.DryRun && request.ClearCache {
 		// The cache goes first: if clearing fails, the connection is still
 		// in place and the same command can be run again.
 		for _, hub := range hubs {
@@ -439,7 +431,7 @@ func (service ConnectService) Disconnect(ctx context.Context, request Disconnect
 		}
 	}
 	hostRequest := hostintegration.Request{Root: root, Scope: scope, Binary: binary, Hosts: request.Hosts, Remove: true}
-	result, err := service.planScope(ctx, hostRequest, request.Yes)
+	result, err := service.planScope(ctx, hostRequest, request.DryRun)
 	if err != nil || result.Error != nil {
 		return result, nil, err
 	}
@@ -451,10 +443,10 @@ func (service ConnectService) Disconnect(ctx context.Context, request Disconnect
 		result.Summary = "No Skill Hub connection in " + label + "; nothing to remove."
 		return result, disconnection, nil
 	}
-	if !request.Yes {
+	if request.DryRun {
 		result.Status = StatusActionRequired
-		result.Summary = "Preview only: the Skill Hub connection for " + label + " was not removed without --yes."
-		result.SuggestedActions = []Action{{Label: "Remove the agent connection", Command: disconnectCommand(request) + " --yes", RequiresConfirmation: true}}
+		result.Summary = "Dry run: the Skill Hub connection for " + label + " was not removed."
+		result.SuggestedActions = []Action{{Label: "Remove the agent connection", Command: disconnectCommand(request), RequiresConfirmation: true}}
 		return result, disconnection, nil
 	}
 	result.Status = StatusApplied
@@ -498,7 +490,7 @@ func disconnectCommand(request DisconnectRequest) string {
 	if request.Global {
 		parts = append(parts, "--global")
 	} else if request.Project != "" {
-		parts = append(parts, "--project", shellArgument(request.Project))
+		parts = append(parts, "--project", shellquote.Arg(request.Project))
 	}
 	for _, host := range request.Hosts {
 		parts = append(parts, "--host", string(host))

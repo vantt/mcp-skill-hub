@@ -270,7 +270,7 @@ func BenchmarkMCPToolList(b *testing.B) {
 func newMCPBenchmarkWorkspace(b *testing.B) string {
 	b.Helper()
 	root := filepath.Join(b.TempDir(), "workspace")
-	if _, err := (app.WorkspaceService{}).Init(root, true); err != nil {
+	if _, err := (app.WorkspaceService{}).Init(root, false); err != nil {
 		b.Fatal(err)
 	}
 	service := app.SkillService{}

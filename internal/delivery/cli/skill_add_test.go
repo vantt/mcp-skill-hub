@@ -166,8 +166,8 @@ func TestSkillAddPreviewAndResultRenderUpstream(t *testing.T) {
 	}
 	writeSkillAddPreview(p, preview)
 	out := buf.String()
-	wantPreviewLine := "Upstream: tracked by new source anthropics-skills (checked weekly by `skillhub check`; nothing runs in the background)."
-	if !strings.Contains(out, wantPreviewLine) {
+	wantPreviewLine := "Upstream: tracked by new source anthropics-skills (checked weekly by `skillhub source check`; nothing runs in the background)."
+	if !strings.Contains(flatText(out), wantPreviewLine) {
 		t.Fatalf("preview output missing upstream line %q, got:\n%s", wantPreviewLine, out)
 	}
 	if strings.Contains(out, "Watching: off") {

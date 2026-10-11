@@ -192,7 +192,7 @@ func TestConnectWorkspaceOutputIsPinned(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	workspace := filepath.Join(fixedLengthDir(t, 100), "workspace")
-	if code, _, stderr := runCLI(t, "init", workspace, "--yes"); code != 0 {
+	if code, _, stderr := runCLI(t, "init", workspace); code != 0 {
 		t.Fatalf("init exit = %d: %s", code, stderr)
 	}
 
@@ -218,9 +218,9 @@ func TestConnectWorkspaceOutputIsPinned(t *testing.T) {
 		normalize := newPathNormalizer(t, [2]string{workspace, "<WORKSPACE>"}, [2]string{project, "<PROJECT>"}, [2]string{home, "<HOME>"})
 		var transcript strings.Builder
 		for _, args := range [][]string{
+			{"connect", "--project", project, "--workspace", workspace, "--dry-run"},
 			{"connect", "--project", project, "--workspace", workspace},
-			{"connect", "--project", project, "--workspace", workspace, "--yes"},
-			{"connect", "--project", project, "--workspace", workspace, "--yes"},
+			{"connect", "--project", project, "--workspace", workspace},
 		} {
 			code, stdout, stderr := runCLI(t, args...)
 			transcript.WriteString("$ " + normalize.apply(strings.Join(args, " ")) + "\n")
@@ -236,8 +236,8 @@ func TestConnectWorkspaceOutputIsPinned(t *testing.T) {
 		normalize := newPathNormalizer(t, [2]string{workspace, "<WORKSPACE>"}, [2]string{home, "<HOME>"})
 		var transcript strings.Builder
 		for _, args := range [][]string{
-			{"connect", "-g", "--workspace", workspace, "--host", "claude,codex,gemini"},
-			{"connect", "-g", "--workspace", workspace, "--yes"},
+			{"connect", "-g", "--workspace", workspace, "--host", "claude,codex,gemini", "--dry-run"},
+			{"connect", "-g", "--workspace", workspace},
 		} {
 			code, stdout, stderr := runCLI(t, args...)
 			transcript.WriteString("$ " + normalize.apply(strings.Join(args, " ")) + "\n")
@@ -251,7 +251,7 @@ func TestConnectWorkspaceOutputIsPinned(t *testing.T) {
 
 	t.Run("doctor for a local entry", func(t *testing.T) {
 		project := fixedLengthDir(t, 80)
-		if code, _, stderr := runCLI(t, "connect", "--project", project, "--workspace", workspace, "--host", "claude", "--yes"); code != 0 {
+		if code, _, stderr := runCLI(t, "connect", "--project", project, "--workspace", workspace, "--host", "claude"); code != 0 {
 			t.Fatal(stderr)
 		}
 		t.Chdir(project)

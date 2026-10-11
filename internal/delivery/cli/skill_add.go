@@ -115,7 +115,7 @@ func writeSkillAddPreview(p *termui.Printer, preview app.SkillAddProposal) {
 		termui.Plural(len(preview.Resources), "file", "files"), termui.Bytes(preview.TotalBytes)))
 	if preview.UpstreamSource != nil {
 		if preview.UpstreamSource.Created {
-			p.Line(fmt.Sprintf("Upstream: tracked by new source %s (checked weekly by `skillhub check`; nothing runs in the background).", preview.UpstreamSource.SourceID))
+			p.Line(fmt.Sprintf("Upstream: tracked by new source %s (checked weekly by `skillhub source check`; nothing runs in the background).", preview.UpstreamSource.SourceID))
 		} else {
 			p.Line(fmt.Sprintf("Upstream: tracked by source %s.", preview.UpstreamSource.SourceID))
 		}

@@ -14,6 +14,7 @@ import (
 	"github.com/vantt/mcp-skill-hub/internal/delivery/mcpserver"
 	"github.com/vantt/mcp-skill-hub/internal/delivery/web"
 	"github.com/vantt/mcp-skill-hub/internal/hubtoken"
+	"github.com/vantt/mcp-skill-hub/internal/shellquote"
 )
 
 // runMCP keeps `skillhub mcp serve` working, unchanged, for the host
@@ -228,9 +229,9 @@ func ensureHubToken(workspaceRoot, explicit string, stderr io.Writer) (string, i
 }
 
 func writeHubTokenError(stderr io.Writer, path string, err error) {
-	fix := "Check the file and its directory, or remove the file and run `skillhub token rotate --yes` to create a new token."
+	fix := "Check the file and its directory, or remove the file and run `skillhub token rotate` to create a new token."
 	if errors.Is(err, hubtoken.ErrInsecureMode) {
-		fix = "Run `chmod 600 " + path + "`, or run `skillhub token rotate --yes` to replace it with a private file."
+		fix = "Run `chmod 600 " + path + "`, or run `skillhub token rotate` to replace it with a private file."
 	}
 	termui.New(stderr).Error("The hub token file "+path+" cannot be used.", err.Error(), fix)
 }
@@ -278,7 +279,7 @@ func writeListenerBanner(w io.Writer, banner listenerBanner) {
 		p.Command("ssh -N -L " + port + ":" + net.JoinHostPort(host, port) + " <user>@<this-machine>")
 	}
 	p.Line("Copy the token file to machine A (for example with scp) and pass its path there, then connect:")
-	p.Command("skillhub connect --hub " + hub + " --token-file " + shellQuote(banner.tokenFile) + " --yes")
+	p.Command("skillhub connect --hub " + hub + " --token-file " + shellquote.Arg(banner.tokenFile))
 	if len(banner.hubURLs) > 1 {
 		p.Line("Use another hub URL above if machine A reaches this machine by a different address.")
 	}

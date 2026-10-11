@@ -14,7 +14,7 @@ import (
 
 func TestTranscriptImportService(t *testing.T) {
 	workspaceRoot := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(workspaceRoot, true); err != nil {
+	if _, err := (WorkspaceService{}).Init(workspaceRoot, false); err != nil {
 		t.Fatal(err)
 	}
 

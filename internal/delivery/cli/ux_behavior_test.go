@@ -203,7 +203,7 @@ func TestStatusReportsStaleIndexAndRebuildAfterHandEdit(t *testing.T) {
 func TestPerCommandHelpHasRealUsage(t *testing.T) {
 	t.Parallel()
 	want := map[string][]string{
-		"check": {"--all-due", "Example"}, "resolve": {"--request", "Example"}, "resolution": {"replay", "--manifest"},
+		"resolve": {"--request", "Example"}, "resolution": {"replay", "--manifest"},
 		"validate": {"Example"}, "rebuild": {"Example"}, "migrate": {"--to", "--yes"}, "diff": {"Example"},
 		"telemetry": {"purge --yes", "export"}, "eval": {"manifest", "promote"}, "version": {"--json"},
 	}
@@ -322,11 +322,11 @@ func TestInitRefusesNonEmptyDirectoryUnlessForce(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("# Existing\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	code, _, stderr := runCLI(t, "init", dir, "--yes")
+	code, _, stderr := runCLI(t, "init", dir)
 	if code != 2 || !strings.Contains(stderr, "Directory is not empty") || !strings.Contains(stderr, "--force") {
 		t.Fatalf("init without --force exit = %d stderr = %s", code, stderr)
 	}
-	code, stdout, stderr := runCLI(t, "init", dir, "--force", "--yes")
+	code, stdout, stderr := runCLI(t, "init", dir, "--force")
 	if code != 0 {
 		t.Fatalf("init with --force exit = %d stdout = %s stderr = %s", code, stdout, stderr)
 	}

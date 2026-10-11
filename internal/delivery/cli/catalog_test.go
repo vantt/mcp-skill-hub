@@ -16,7 +16,7 @@ func TestRebuildCancellationUsesStructuredContract(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
+	if code := Run([]string{"init", root}, &stdout, &stderr); code != 0 {
 		t.Fatalf("init exit = %d: %s", code, stderr.String())
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -39,7 +39,7 @@ func TestRebuildHumanOutputIncludesProgress(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
+	if code := Run([]string{"init", root}, &stdout, &stderr); code != 0 {
 		t.Fatalf("init exit = %d: %s", code, stderr.String())
 	}
 	stdout.Reset()
@@ -68,7 +68,7 @@ func TestRebuildUsesSharedResultEnvelope(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
+	if code := Run([]string{"init", root}, &stdout, &stderr); code != 0 {
 		t.Fatalf("init exit = %d: %s", code, stderr.String())
 	}
 	if err := os.RemoveAll(filepath.Join(root, "runtime")); err != nil {

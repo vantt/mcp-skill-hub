@@ -207,7 +207,7 @@ func TestCurationHomePrioritizesInvalidRecoveryStaleAndGit(t *testing.T) {
 func TestGetCurationHomePrioritizesStaleIndexBeforeGitChanges(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, false); err != nil {
 		t.Fatal(err)
 	}
 	commitWorkspace(t, root)
@@ -234,7 +234,7 @@ func TestGetCurationHomePrioritizesStaleIndexBeforeGitChanges(t *testing.T) {
 func TestGetCurationHomeReportsUnknownIndexDuringPendingRecovery(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, false); err != nil {
 		t.Fatal(err)
 	}
 	injected := errors.New("leave recovery pending")
@@ -268,7 +268,7 @@ func TestGetCurationHomeReportsUnknownIndexDuringPendingRecovery(t *testing.T) {
 func TestGetCurationHomeReadsHealthyWorkspaceOffline(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, false); err != nil {
 		t.Fatal(err)
 	}
 	commitWorkspace(t, root)
@@ -299,7 +299,7 @@ func commitWorkspace(t *testing.T, root string) {
 func TestGetCurationHomeNeverReportsCountsKnownWhenInvalid(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, false); err != nil {
 		t.Fatal(err)
 	}
 	commitWorkspace(t, root)
@@ -362,7 +362,7 @@ func TestGetCurationHomeNeverReportsCountsKnownWhenInvalid(t *testing.T) {
 func TestCurationHomeUpstreamUpdatesAndExcludesUpstreamOnlySources(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -505,7 +505,7 @@ func TestCandidateLessonsCountedInHomeAndSkillSources(t *testing.T) {
 	t.Parallel()
 
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, false); err != nil {
 		t.Fatal(err)
 	}
 	ctx := context.Background()

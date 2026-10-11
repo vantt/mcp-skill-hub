@@ -16,6 +16,7 @@ import (
 	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
 	"github.com/vantt/mcp-skill-hub/internal/delivery/mcpserver"
 	"github.com/vantt/mcp-skill-hub/internal/hubtoken"
+	"github.com/vantt/mcp-skill-hub/internal/shellquote"
 	"github.com/vantt/mcp-skill-hub/internal/skillruntime"
 )
 
@@ -126,7 +127,7 @@ func proxyToken(tokenFile string, stderr io.Writer) (string, int) {
 			fix := "Copy the token file from the hub machine again (it is printed in the hub's start-up message) and pass its path with --token-file."
 			switch {
 			case errors.Is(err, hubtoken.ErrInsecureMode):
-				fix = "Run `chmod 600 " + shellQuote(path) + "`: the token must be readable by you only."
+				fix = "Run `chmod 600 " + shellquote.Arg(path) + "`: the token must be readable by you only."
 			case errors.Is(err, fs.ErrNotExist):
 				fix = "Copy the token file from the hub machine (for example with scp) to " + path + ", or pass the right path with --token-file."
 			}

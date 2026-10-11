@@ -13,13 +13,13 @@ import (
 	"github.com/vantt/mcp-skill-hub/internal/hostintegration"
 )
 
-const connectFix = "Run `skillhub connect [--project <dir>] [-g|--global] [--workspace <path>] [--host claude|codex|gemini] [--yes]`."
+const connectFix = "Run `skillhub connect [--project <dir>] [-g|--global] [--workspace <path>] [--host claude|codex|gemini] [--dry-run]`."
 
 type connectFlags struct {
 	project, workspace   string
 	hub, tokenFile       string
 	hosts                []hostintegration.Host
-	global, yes, json    bool
+	global, dryRun, json bool
 	remove, cache        bool
 	hubSet, tokenFileSet bool
 	workspaceSet         bool
@@ -51,7 +51,7 @@ func runConnect(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		return writeWorkspaceResolutionError(stdout, stderr, flags.json, resErr)
 	}
 	result, err := (app.ConnectService{}).Connect(ctx, app.ConnectRequest{
-		Project: flags.project, Workspace: ws, Global: flags.global, Hosts: flags.hosts, Yes: flags.yes,
+		Project: flags.project, Workspace: ws, Global: flags.global, Hosts: flags.hosts, DryRun: flags.dryRun,
 	})
 	if err != nil {
 		if code, handled := writeConnectSymlinkError(err, stdout, stderr, flags.json); handled {
@@ -93,7 +93,7 @@ func writeConnectSymlinkError(err error, stdout, stderr io.Writer, jsonOutput bo
 	if symlinkPath != "" {
 		why = fmt.Sprintf("Host integration path %s contains a symbolic link. Skill Hub will not write through symlinks.", symlinkPath)
 	}
-	fix := "Connect per project using `skillhub connect --yes`, select unaffected hosts with `--host <name>`, or replace the symlink with a regular directory."
+	fix := "Connect per project using `skillhub connect`, select unaffected hosts with `--host <name>`, or replace the symlink with a regular directory."
 	return writeInvalidRequest(stdout, stderr, jsonOutput, why, fix), true
 }
 
@@ -110,10 +110,13 @@ func connectCurationGuidance(result app.Result) string {
 }
 
 // renderConnectResult prints one line per managed file. Full managed diffs stay
-// in the --json items so the preview remains readable.
+// in the --json items so a dry run remains readable.
 func renderConnectResult(stdout io.Writer, result app.Result) {
 	p := termui.New(stdout)
 	p.Line(result.Summary)
+	if result.Status == app.StatusActionRequired {
+		p.Line("Would change:")
+	}
 	hostFiles := make(map[string][]string)
 	var hostOrder []string
 	for _, item := range result.Items {
@@ -219,8 +222,8 @@ func parseConnectFlags(args []string) (connectFlags, error) {
 		switch args[index] {
 		case "--json":
 			flags.json = true
-		case "--yes":
-			flags.yes = true
+		case "--dry-run":
+			flags.dryRun = true
 		case "-g", "--global":
 			flags.global = true
 		case "--project":
@@ -275,13 +278,13 @@ func parseConnectFlags(args []string) (connectFlags, error) {
 		return flags, &connectUsageError{
 			what: "--remove cannot be combined with --workspace, --hub or --token-file.",
 			why:  "--remove takes out the Skill Hub entry of the scope, whichever hub it points at.",
-			fix:  "Run `skillhub connect --remove [--project <dir>] [-g|--global] [--host <name>] --yes`.",
+			fix:  "Run `skillhub connect --remove [--project <dir>] [-g|--global] [--host <name>]`.",
 		}
 	case flags.workspaceSet && flags.hubSet:
 		return flags, &connectUsageError{
 			what: "--workspace and --hub cannot be used together.",
 			why:  "--workspace connects a hub on this machine and --hub a hub on another machine; one scope points at one hub.",
-			fix:  "Run `skillhub connect --workspace <path> --yes` for the hub on this machine, or `skillhub connect --hub <url> --token-file <path> --yes` for a hub on another machine.",
+			fix:  "Run `skillhub connect --workspace <path>` for the hub on this machine, or `skillhub connect --hub <url> --token-file <path>` for a hub on another machine.",
 		}
 	case flags.tokenFileSet && !flags.hubSet:
 		return flags, &connectUsageError{

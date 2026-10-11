@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	workspaceFix         = "Pass `--workspace <path>`, set the SKILLHUB_WORKSPACE environment variable, or run `skillhub init <path> --yes`."
+	workspaceFix         = "Pass `--workspace <path>`, set the SKILLHUB_WORKSPACE environment variable, or run `skillhub init <path>`."
 	maxConnectionFileLen = 1024 * 1024 // 1 MB bounded read for untrusted connection files
 )
 

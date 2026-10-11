@@ -94,9 +94,9 @@ func checkProjectAndGlobalConnections(ctx context.Context, root string, result R
 		if err == nil && len(plan.Changes) == 0 {
 			continue
 		}
-		id, summary, command := "project_connection_outdated", fmt.Sprintf("Current project connection at %s is outdated or needs repair.", target.request.Root), fmt.Sprintf("skillhub connect --project %s --workspace %s --yes", target.request.Root, root)
+		id, summary, command := "project_connection_outdated", fmt.Sprintf("Current project connection at %s is outdated or needs repair.", target.request.Root), fmt.Sprintf("skillhub connect --project %s --workspace %s", target.request.Root, root)
 		if target.global {
-			id, summary, command = "global_connection_outdated", "Global agent connection is outdated or needs repair.", "skillhub connect -g --workspace "+root+" --yes"
+			id, summary, command = "global_connection_outdated", "Global agent connection is outdated or needs repair.", "skillhub connect -g --workspace "+root
 		}
 		for _, host := range target.request.Hosts {
 			command += " --host " + string(host)

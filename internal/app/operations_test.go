@@ -16,7 +16,7 @@ import (
 func TestValidateWorkspaceApplicationContract(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, false); err != nil {
 		t.Fatal(err)
 	}
 	result, err := (WorkspaceService{}).ValidateWorkspace(context.Background(), root)
@@ -35,7 +35,7 @@ func TestValidateWorkspaceApplicationContract(t *testing.T) {
 func TestGetCurationDiffGroupsRelativeCanonicalPaths(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, false); err != nil {
 		t.Fatal(err)
 	}
 	commitWorkspace(t, root)
@@ -95,7 +95,7 @@ func TestParsePorcelainRejectsAbsolutePath(t *testing.T) {
 
 func TestInspectGitDisablesConfiguredFSMonitor(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, false); err != nil {
 		t.Fatal(err)
 	}
 	commitWorkspace(t, root)
@@ -119,7 +119,7 @@ func TestInspectGitDisablesConfiguredFSMonitor(t *testing.T) {
 func TestValidateWorkspaceAddsNoRuleBeyondCanonicalValidate(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -161,7 +161,7 @@ func TestValidateWorkspaceAddsNoRuleBeyondCanonicalValidate(t *testing.T) {
 func TestWorkspaceServiceGetOperationDiff(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, false); err != nil {
 		t.Fatal(err)
 	}
 	opDir := filepath.Join(root, "history", "operations", "2026", "10")
@@ -196,7 +196,7 @@ func TestGetOperationDiff_CommittedMatchesGitDiff(t *testing.T) {
 	t.Parallel()
 
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, false); err != nil {
 		t.Fatal(err)
 	}
 	skillDir := filepath.Join(root, "skills", "default", "demo")
@@ -272,7 +272,7 @@ func TestGetOperationDiff_PreservedAfterV5MigrationCommit(t *testing.T) {
 	t.Parallel()
 
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, false); err != nil {
 		t.Fatal(err)
 	}
 	skillDir := filepath.Join(root, "skills", "default", "demo")
@@ -363,7 +363,7 @@ func TestGetOperationDiff_IndependentOfLaterEdits(t *testing.T) {
 	t.Parallel()
 
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, false); err != nil {
 		t.Fatal(err)
 	}
 	skillDir := filepath.Join(root, "skills", "default", "demo")
@@ -449,7 +449,7 @@ func TestGetOperationDiff_DigestMismatchYieldsDigestOnly(t *testing.T) {
 	t.Parallel()
 
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, false); err != nil {
 		t.Fatal(err)
 	}
 	skillDir := filepath.Join(root, "skills", "default", "demo")
@@ -513,7 +513,7 @@ func TestGetOperationDiff_UncommittedWorkingFileMismatchYieldsDigestOnly(t *test
 	t.Parallel()
 
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, false); err != nil {
 		t.Fatal(err)
 	}
 	skillDir := filepath.Join(root, "skills", "default", "demo")

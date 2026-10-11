@@ -17,6 +17,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/vantt/mcp-skill-hub/internal/hubtoken"
+	"github.com/vantt/mcp-skill-hub/internal/shellquote"
 )
 
 // stdioToolNames starts the given skillhub command as a stdio MCP server in a
@@ -192,7 +193,7 @@ On machine A:
 Open the tunnel (keep it running):
   $ ssh -N -L 7420:127.0.0.1:7420 <user>@<this-machine>
 Copy the token file to machine A (for example with scp) and pass its path there, then connect:
-  $ skillhub connect --hub http://127.0.0.1:7420 --token-file /home/user/skillhub/runtime/config/.hub-token --yes
+  $ skillhub connect --hub http://127.0.0.1:7420 --token-file /home/user/skillhub/runtime/config/.hub-token
 
 The token itself is never printed; ` + "`skillhub token show`" + ` prints it on a terminal. Stop the listener
 with Ctrl-C.
@@ -222,7 +223,7 @@ Transport:     plain HTTP on a network you trust to be private
 
 On machine A:
 Copy the token file to machine A (for example with scp) and pass its path there, then connect:
-  $ skillhub connect --hub http://100.101.102.103:7420 --token-file /home/user/skillhub/runtime/config/.hub-token --yes
+  $ skillhub connect --hub http://100.101.102.103:7420 --token-file /home/user/skillhub/runtime/config/.hub-token
 
 The token itself is never printed; ` + "`skillhub token show`" + ` prints it on a terminal. Stop the listener
 with Ctrl-C.
@@ -243,7 +244,7 @@ with Ctrl-C.
 	for _, line := range []string{
 		"WARNING: This address listens on every network interface, including any that are not private.",
 		"Hub URLs:\n  - http://192.0.2.5:7420\n  - http://127.0.0.1:7420\n",
-		"  $ skillhub connect --hub http://192.0.2.5:7420 --token-file '/home/user/my skillhub/runtime/config/.hub-token' --yes\n",
+		"  $ skillhub connect --hub http://192.0.2.5:7420 --token-file '/home/user/my skillhub/runtime/config/.hub-token'\n",
 	} {
 		if !strings.Contains(out.String(), line) {
 			t.Fatalf("wildcard banner lacks %q:\n%s", line, out.String())
@@ -278,7 +279,7 @@ func TestServeMCPListenerLifecycle(t *testing.T) {
 	}
 	tokenFile := hubtoken.DefaultPath(ws)
 	// The path is quoted where it needs it, as for a Windows path.
-	if !strings.Contains(stdout.String(), "--token-file "+shellQuote(tokenFile)+" --yes") {
+	if !strings.Contains(stdout.String(), "--token-file "+shellquote.Arg(tokenFile)+"\n") {
 		t.Fatalf("connect line lacks the token file path:\n%s", stdout.String())
 	}
 	token, err := hubtoken.Read(tokenFile)
@@ -354,22 +355,35 @@ func TestTokenCommands(t *testing.T) {
 		t.Fatalf("token show on a terminal: exit %d, stdout %q, stderr %q", code, stdout, stderr)
 	}
 
-	code, stdout, stderr = runCLI(t, "token", "rotate", "--workspace", ws)
-	want = "This replaces the hub token with a new random one.\n" +
+	code, stdout, stderr = runCLI(t, "token", "rotate", "--workspace", ws, "--dry-run")
+	want = "Dry run: the hub token was not replaced.\n" +
 		"Token file:  " + tokenFile + "\n" +
+		"Would change:\n" +
+		"  - The token is replaced with a new random one.\n" +
 		"  - Every machine that connects to this hub stops working until it gets the new token file.\n" +
 		"  - A running listener uses the new token from its next request; it does not need a restart.\n" +
 		"\n" +
-		"Next: Apply the rotation:\n" +
-		"  $ skillhub token rotate --workspace " + shellQuote(ws) + " --yes\n"
+		"To replace the token, run in a terminal:\n" +
+		"  $ skillhub token rotate --workspace " + shellquote.Arg(ws) + "\n"
 	if code != 0 || stderr != "" || stdout != want {
-		t.Fatalf("token rotate preview: exit %d, stderr %q, stdout:\n%s\nwant:\n%s", code, stderr, stdout, want)
+		t.Fatalf("token rotate --dry-run: exit %d, stderr %q, stdout:\n%s\nwant:\n%s", code, stderr, stdout, want)
 	}
 	if unchanged, _ := hubtoken.Read(tokenFile); unchanged != token {
-		t.Fatal("the rotate preview changed the token")
+		t.Fatal("token rotate --dry-run changed the token")
 	}
 
-	code, stdout, stderr = runCLI(t, "token", "rotate", "--workspace", ws, "--yes")
+	// Off a terminal, rotate refuses and names the command to run in one.
+	code, stdout, stderr = runCLI(t, "token", "rotate", "--workspace", ws)
+	if code != 1 || stdout != "" || !strings.Contains(stderr, "rotated only on a terminal") || !strings.Contains(stderr, "  $ skillhub token rotate --workspace "+shellquote.Arg(ws)+"\n") {
+		t.Fatalf("token rotate off a terminal: exit %d, stdout %q, stderr:\n%s", code, stdout, stderr)
+	}
+	if unchanged, _ := hubtoken.Read(tokenFile); unchanged != token {
+		t.Fatal("a refused token rotate changed the token")
+	}
+
+	stdoutIsTerminal = func(io.Writer) bool { return true }
+	code, stdout, stderr = runCLI(t, "token", "rotate", "--workspace", ws)
+	stdoutIsTerminal = original
 	rotated, err := hubtoken.Read(tokenFile)
 	if err != nil {
 		t.Fatal(err)
@@ -379,7 +393,7 @@ func TestTokenCommands(t *testing.T) {
 		"\n" +
 		"Next: Copy the new token file to each machine that connects to this hub, replacing the old one.\n"
 	if code != 0 || stderr != "" || stdout != want || rotated == token {
-		t.Fatalf("token rotate --yes: exit %d, stderr %q, stdout:\n%s\nwant:\n%s", code, stderr, stdout, want)
+		t.Fatalf("token rotate: exit %d, stderr %q, stdout:\n%s\nwant:\n%s", code, stderr, stdout, want)
 	}
 	if strings.Contains(stdout+stderr, rotated) || strings.Contains(stdout+stderr, token) {
 		t.Fatal("token rotate printed a token")

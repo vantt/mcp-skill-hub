@@ -274,7 +274,7 @@ func TestCacheClearGolden(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", stateDir)
 	cacheDir := filepath.Join(stateDir, "skillhub", "remote")
 
-	code, stdout, stderr := runCLI(t, "cache", "clear", "--hub")
+	code, stdout, stderr := runCLI(t, "cache", "clear", "--dry-run")
 	want := "No skills fetched from a remote hub are cached on this machine.\n" +
 		"Cache directory:  " + cacheDir + "\n"
 	if code != 0 || stderr != "" || stdout != want {
@@ -285,10 +285,11 @@ func TestCacheClearGolden(t *testing.T) {
 	cacheSkill(t, stateDir, "http://127.0.0.1:7420", "beta", strings.Repeat("b", 1024))
 	cacheSkill(t, stateDir, "http://100.64.0.2:7420", "alpha", strings.Repeat("c", 100))
 
-	code, stdout, stderr = runCLI(t, "cache", "clear", "--hub")
-	want = "This removes the copies of skills fetched from remote hubs.\n" +
+	code, stdout, stderr = runCLI(t, "cache", "clear", "--dry-run")
+	want = "Dry run: the copies of skills fetched from remote hubs were not removed.\n" +
 		"Cache directory:  " + cacheDir + "\n" +
 		"\n" +
+		"Would change:\n" +
 		"Hub                     Skills  Versions  Size\n" +
 		"http://100.64.0.2:7420  1       1         100 bytes\n" +
 		"http://127.0.0.1:7420   2       2         3.0 KB\n" +
@@ -297,33 +298,33 @@ func TestCacheClearGolden(t *testing.T) {
 		"  - The skills' working directories (installed dependencies) and stored secrets are kept.\n" +
 		"  - Nothing on the hub changes.\n" +
 		"\n" +
-		"Next: Apply the cleanup:\n" +
-		"  $ skillhub cache clear --hub --yes\n"
+		"Next: Clear the cache:\n" +
+		"  $ skillhub cache clear\n"
 	if code != 0 || stderr != "" || stdout != want {
-		t.Fatalf("preview: exit %d, stderr %q, stdout:\n%s\nwant:\n%s", code, stderr, stdout, want)
+		t.Fatalf("dry run: exit %d, stderr %q, stdout:\n%s\nwant:\n%s", code, stderr, stdout, want)
 	}
 
-	code, stdout, stderr = runCLI(t, "cache", "clear", "--hub", "http://127.0.0.1:7420/", "--yes")
+	code, stdout, stderr = runCLI(t, "cache", "clear", "--hub", "http://127.0.0.1:7420/")
 	want = "Removed 2 cached skill versions (3.0 KB).\n" +
 		"Cache directory:  " + cacheDir + "\n"
 	if code != 0 || stderr != "" || stdout != want {
 		t.Fatalf("clear one hub: exit %d, stderr %q, stdout:\n%s\nwant:\n%s", code, stderr, stdout, want)
 	}
-	code, stdout, _ = runCLI(t, "cache", "clear", "--hub", "http://100.64.0.2:7420")
-	if code != 0 || !strings.Contains(stdout, "This removes the copies of skills fetched from http://100.64.0.2:7420.") || !strings.Contains(stdout, "  $ skillhub cache clear --hub http://100.64.0.2:7420 --yes\n") {
-		t.Fatalf("preview of the other hub: exit %d, stdout:\n%s", code, stdout)
+	code, stdout, _ = runCLI(t, "cache", "clear", "--hub", "http://100.64.0.2:7420", "--dry-run")
+	if code != 0 || !strings.Contains(stdout, "Dry run: the copies of skills fetched from http://100.64.0.2:7420 were not removed.") || !strings.Contains(stdout, "  $ skillhub cache clear --hub http://100.64.0.2:7420\n") {
+		t.Fatalf("dry run of the other hub: exit %d, stdout:\n%s", code, stdout)
 	}
-	code, stdout, _ = runCLI(t, "cache", "clear", "--hub", "--yes")
+	code, stdout, _ = runCLI(t, "cache", "clear")
 	if code != 0 || stdout != "Removed 1 cached skill version (100 bytes).\nCache directory:  "+cacheDir+"\n" {
 		t.Fatalf("clear every hub: exit %d, stdout:\n%s", code, stdout)
 	}
 
-	code, stdout, stderr = runCLI(t, "cache", "clear")
+	code, stdout, stderr = runCLI(t, "cache", "clear", "--hub")
 	want = "ERROR: The request cannot be accepted.\n" +
-		"WHY: cache clear needs --hub to say which cache to clear\n" +
-		"FIX: Run `skillhub cache clear --hub` to preview, then add --yes.\n"
+		"WHY: --hub requires the hub's URL; leave --hub out to clear every hub's cache\n" +
+		"FIX: Run `skillhub cache clear [--hub <url>] [--dry-run]`.\n"
 	if code != 2 || stdout != "" || stderr != want {
-		t.Fatalf("no --hub: exit %d, stdout %q, stderr:\n%s\nwant:\n%s", code, stdout, stderr, want)
+		t.Fatalf("--hub without a URL: exit %d, stdout %q, stderr:\n%s\nwant:\n%s", code, stdout, stderr, want)
 	}
 	if code, _, stderr := runCLI(t, "cache"); code != 2 || !strings.Contains(stderr, "cache requires the clear subcommand") {
 		t.Fatalf("bare cache: exit %d, stderr %q", code, stderr)
@@ -332,7 +333,7 @@ func TestCacheClearGolden(t *testing.T) {
 
 func TestHelpDescribesTheRemoteCommands(t *testing.T) {
 	code, stdout, _ := runCLI(t, "help")
-	if code != 0 || !strings.Contains(stdout, "  mcp proxy The stdio bridge to a hub on another machine") || !strings.Contains(stdout, "  cache     Clear the copies of skills fetched from a remote hub") {
+	if code != 0 || strings.Contains(stdout, "mcp proxy") || !strings.Contains(stdout, "  cache     Clear the copies of skills fetched from a remote hub") {
 		t.Fatalf("global help:\n%s", stdout)
 	}
 	code, stdout, _ = runCLI(t, "help", "mcp")
@@ -340,7 +341,7 @@ func TestHelpDescribesTheRemoteCommands(t *testing.T) {
 		t.Fatalf("help mcp:\n%s", stdout)
 	}
 	code, stdout, _ = runCLI(t, "cache", "--help")
-	if code != 0 || !strings.HasPrefix(stdout, "Usage: skillhub cache clear --hub [<url>] [--yes]") {
+	if code != 0 || !strings.HasPrefix(stdout, "Usage: skillhub cache clear [--hub <url>] [--dry-run]") {
 		t.Fatalf("cache --help:\n%s", stdout)
 	}
 }

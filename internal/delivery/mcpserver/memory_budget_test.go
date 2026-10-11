@@ -518,7 +518,7 @@ func sumMemory(servers []*memoryServe) (memSample, error) {
 func newMemoryWorkspace(t *testing.T, binary string, skills int) string {
 	t.Helper()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if output, err := exec.Command(binary, "init", root, "--yes").CombinedOutput(); err != nil {
+	if output, err := exec.Command(binary, "init", root).CombinedOutput(); err != nil {
 		t.Fatalf("skillhub init: %v\n%s", err, output)
 	}
 	for index := 0; index < skills; index++ {

@@ -667,7 +667,7 @@ if ($isDryRun) {
 if ($isSameVersion) {
     Write-Host "skillhub $artifactVersion is already installed at $targetExe"
     Set-SkillhubPath -BinDir $binDir
-    Write-Host "Next step:`n  skillhub init ~/skillhub --yes"
+    Write-Host "Next step:`n  skillhub init ~/skillhub"
     exit 0
 }
 
@@ -808,7 +808,7 @@ try {
     }
 
     Set-SkillhubPath -BinDir $binDir
-    Write-Host "Next step:`n  skillhub init ~/skillhub --yes"
+    Write-Host "Next step:`n  skillhub init ~/skillhub"
 } finally {
     if (Test-Path -LiteralPath $tempDir) {
         Remove-Item -LiteralPath $tempDir -Recurse -Force -ErrorAction SilentlyContinue

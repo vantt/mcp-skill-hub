@@ -59,10 +59,10 @@ func TestServeWebCommand(t *testing.T) {
 			wantStdout: "--loopback-only",
 		},
 		{
-			name:       "web --help contains alias",
+			name:       "web is not a command",
 			args:       []string{"web", "--help"},
-			wantCode:   0,
-			wantStdout: "alias",
+			wantCode:   2,
+			wantStderr: "is not supported",
 		},
 	}
 

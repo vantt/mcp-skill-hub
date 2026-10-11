@@ -15,7 +15,7 @@ func TestMigrateCLIJSONPreviewAndConfirmation(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
+	if code := Run([]string{"init", root}, &stdout, &stderr); code != 0 {
 		t.Fatalf("init exit = %d: %s", code, stderr.String())
 	}
 	if err := os.Remove(filepath.Join(root, ".skillhub", "schema-version")); err != nil {
@@ -55,7 +55,7 @@ func TestMigrateCLIHumanPreviewIncludesPinnedDiff(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
+	if code := Run([]string{"init", root}, &stdout, &stderr); code != 0 {
 		t.Fatalf("init exit = %d: %s", code, stderr.String())
 	}
 	if err := os.Remove(filepath.Join(root, ".skillhub", "schema-version")); err != nil {

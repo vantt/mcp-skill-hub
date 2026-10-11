@@ -1,5 +1,6 @@
-$ connect -g --workspace <WORKSPACE> --host claude,codex,gemini
-Preview only: agent connection for your user account (all projects) was not written without --yes.
+$ connect -g --workspace <WORKSPACE> --host claude,codex,gemini --dry-run
+Dry run: agent connection for your user account (all projects) was not written.
+Would change:
   - Claude Code: will connect (.claude.json, .claude/settings.json, curator skill, CLAUDE.md)
   - Codex: will connect (.codex/config.toml, curator skill, AGENTS.md)
   - Gemini CLI: will connect (.gemini/settings.json, curator skill, GEMINI.md)
@@ -9,9 +10,9 @@ Claude Code: curation runs through the CLI. Commands with --yes or confirm requi
 Bash(skillhub:*).
 
 To write these files, run:
-  $ skillhub connect --global --workspace <WORKSPACE> --host claude-code --host codex-cli --host gemini-cli --yes
+  $ skillhub connect --global --workspace <WORKSPACE> --host claude-code --host codex-cli --host gemini-cli
 [exit 0]
-$ connect -g --workspace <WORKSPACE> --yes
+$ connect -g --workspace <WORKSPACE>
 Agent connection for your user account (all projects) written.
   - Claude Code: connected (.claude.json, .claude/settings.json, curator skill, CLAUDE.md)
   - Codex: connected (.codex/config.toml, curator skill, AGENTS.md)

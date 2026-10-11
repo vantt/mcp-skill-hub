@@ -25,7 +25,7 @@ import (
 func newWebWorkspace(t *testing.T) string {
 	t.Helper()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (app.WorkspaceService{}).Init(root, true); err != nil {
+	if _, err := (app.WorkspaceService{}).Init(root, false); err != nil {
 		t.Fatal(err)
 	}
 	service := app.SkillService{}
@@ -232,7 +232,7 @@ func get(t *testing.T, srv *Server, path string) *httptest.ResponseRecorder {
 func newRuntimeWebWorkspace(t *testing.T) string {
 	t.Helper()
 	root := filepath.Join(t.TempDir(), "runtime-workspace")
-	if _, err := (app.WorkspaceService{}).Init(root, true); err != nil {
+	if _, err := (app.WorkspaceService{}).Init(root, false); err != nil {
 		t.Fatal(err)
 	}
 

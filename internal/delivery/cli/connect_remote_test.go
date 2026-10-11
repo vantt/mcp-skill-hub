@@ -20,6 +20,7 @@ import (
 	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
 	"github.com/vantt/mcp-skill-hub/internal/hostintegration"
 	"github.com/vantt/mcp-skill-hub/internal/hubtoken"
+	"github.com/vantt/mcp-skill-hub/internal/shellquote"
 )
 
 // startStoppableListener runs `skillhub serve mcp --addr 127.0.0.1:0` in
@@ -96,15 +97,9 @@ func containsPath(text, path string) bool {
 	return strings.Contains(text, path) || strings.Contains(text, strings.ReplaceAll(path, `\`, `\\`))
 }
 
-// commandLineArg is how a printed command line shows a temporary path:
-// unquoted, except on Windows, where its backslashes make the command quote it
-// in double quotes.
-func commandLineArg(path string) string {
-	if runtime.GOOS == "windows" {
-		return `"` + path + `"`
-	}
-	return path
-}
+// commandLineArg is how a printed command line shows a temporary path,
+// quoted for the shell of this platform where it needs it.
+func commandLineArg(path string) string { return shellquote.Arg(path) }
 
 // flatText joins wrapped output into one line of single-spaced words.
 func flatText(text string) string { return strings.Join(strings.Fields(text), " ") }
@@ -154,7 +149,7 @@ func TestConnectHubWritesEachHostsEntryAndNeverTheToken(t *testing.T) {
 	}
 	for _, host := range []string{"claude", "codex", "gemini"} {
 		project := t.TempDir()
-		code, stdout, stderr := runCLI(t, "connect", "--project", project, "--hub", hub, "--token-file", tokenFile, "--host", host, "--yes")
+		code, stdout, stderr := runCLI(t, "connect", "--project", project, "--hub", hub, "--token-file", tokenFile, "--host", host)
 		outputs.WriteString(stdout + stderr)
 		if code != 0 {
 			t.Fatalf("%s: exit %d: %s%s", host, code, stdout, stderr)
@@ -201,7 +196,7 @@ func TestConnectHubWritesEachHostsEntryAndNeverTheToken(t *testing.T) {
 		}
 	}
 
-	code, stdout, stderr := runCLI(t, "connect", "-g", "--hub", hub, "--token-file", tokenFile, "--yes", "--json")
+	code, stdout, stderr := runCLI(t, "connect", "-g", "--hub", hub, "--token-file", tokenFile, "--json")
 	outputs.WriteString(stdout + stderr)
 	if code != 0 {
 		t.Fatalf("global: exit %d: %s%s", code, stdout, stderr)
@@ -241,7 +236,7 @@ func TestConnectHubEntryStartsAProxyThatResolvesAndFetchesASkill(t *testing.T) {
 	hub, _ := startStoppableListener(t, ws)
 	tokenFile, token := copyHubToken(t, ws)
 	project := t.TempDir()
-	if code, stdout, stderr := runCLI(t, "connect", "--project", project, "--hub", hub, "--token-file", tokenFile, "--host", "claude", "--yes"); code != 0 {
+	if code, stdout, stderr := runCLI(t, "connect", "--project", project, "--hub", hub, "--token-file", tokenFile, "--host", "claude"); code != 0 {
 		t.Fatalf("connect: %s%s", stdout, stderr)
 	}
 	// Start exactly what the agent host would start from the written entry.
@@ -336,14 +331,14 @@ func TestConnectSwitchesAScopeAndRemoveRestoresIt(t *testing.T) {
 	}
 	before := treeOf(t, project)
 
-	if code, _, stderr := runCLI(t, "connect", "--project", project, "--workspace", ws, "--yes"); code != 0 {
+	if code, _, stderr := runCLI(t, "connect", "--project", project, "--workspace", ws); code != 0 {
 		t.Fatal(stderr)
 	}
-	code, stdout, stderr := runCLI(t, "connect", "--project", project, "--hub", hub, "--token-file", tokenFile)
+	code, stdout, stderr := runCLI(t, "connect", "--project", project, "--hub", hub, "--token-file", tokenFile, "--dry-run")
 	if code != 0 || !strings.Contains(stdout, "This replaces:") || !strings.Contains(flatText(stdout), "Claude Code: the local hub at "+ws) || !strings.Contains(stdout, "remove curator skill") {
 		t.Fatalf("switch preview: exit %d\n%s%s", code, stdout, stderr)
 	}
-	if code, _, stderr := runCLI(t, "connect", "--project", project, "--hub", hub, "--token-file", tokenFile, "--yes"); code != 0 {
+	if code, _, stderr := runCLI(t, "connect", "--project", project, "--hub", hub, "--token-file", tokenFile); code != 0 {
 		t.Fatal(stderr)
 	}
 	raw, err := os.ReadFile(filepath.Join(project, ".mcp.json"))
@@ -363,14 +358,14 @@ func TestConnectSwitchesAScopeAndRemoveRestoresIt(t *testing.T) {
 		t.Fatalf("curator skill kept for a remote hub: %v", err)
 	}
 
-	code, stdout, _ = runCLI(t, "connect", "--remove", "--project", project)
-	if code != 0 || !strings.Contains(stdout, "Preview only: the Skill Hub connection for project") || !strings.Contains(stdout, "  $ skillhub connect --remove --project "+commandLineArg(project)+" --yes") {
-		t.Fatalf("remove preview:\n%s", stdout)
+	code, stdout, _ = runCLI(t, "connect", "--remove", "--project", project, "--dry-run")
+	if code != 0 || !strings.Contains(stdout, "Dry run: the Skill Hub connection for project") || !strings.Contains(stdout, "  $ skillhub connect --remove --project "+commandLineArg(project)+"\n") {
+		t.Fatalf("remove dry run:\n%s", stdout)
 	}
 	if after := treeOf(t, project); maps.Equal(before, after) {
-		t.Fatal("the preview removed the connection")
+		t.Fatal("the dry run removed the connection")
 	}
-	if code, stdout, stderr := runCLI(t, "connect", "--remove", "--project", project, "--yes"); code != 0 || !strings.Contains(stdout, "removed.") {
+	if code, stdout, stderr := runCLI(t, "connect", "--remove", "--project", project); code != 0 || !strings.Contains(stdout, "removed.") {
 		t.Fatalf("remove: exit %d\n%s%s", code, stdout, stderr)
 	}
 	if after := treeOf(t, project); !maps.Equal(before, after) {
@@ -385,24 +380,24 @@ func TestConnectRemoveCacheClearsTheHubsFetchedSkills(t *testing.T) {
 	_, state := isolateClient(t)
 	project := t.TempDir()
 	hub := "http://127.0.0.1:7420"
-	if code, _, stderr := runCLI(t, "connect", "--project", project, "--hub", hub, "--host", "claude", "--yes"); code != 0 {
+	if code, _, stderr := runCLI(t, "connect", "--project", project, "--hub", hub, "--host", "claude"); code != 0 {
 		t.Fatal(stderr)
 	}
-	if code, _, stderr := runCLI(t, "connect", "-g", "--hub", hub, "--host", "claude", "--yes"); code != 0 {
+	if code, _, stderr := runCLI(t, "connect", "-g", "--hub", hub, "--host", "claude"); code != 0 {
 		t.Fatal(stderr)
 	}
 	cacheSkill(t, state, hub, "alpha", strings.Repeat("a", 2048))
 	cacheSkill(t, state, "http://100.64.0.2:7420", "beta", "other hub")
-	code, stdout, _ := runCLI(t, "connect", "--remove", "--project", project, "--cache")
+	code, stdout, _ := runCLI(t, "connect", "--remove", "--project", project, "--cache", "--dry-run")
 	if code != 0 || !strings.Contains(stdout, "Cached skills that will be cleared:") || !strings.Contains(stdout, "http://127.0.0.1:7420  1       1         2.0 KB") ||
 		!strings.Contains(flatText(stdout), "WARNING: Claude Code in your user account still uses http://127.0.0.1:7420; its agents fetch the skills again after the cache is cleared.") {
 		t.Fatalf("preview:\n%s", stdout)
 	}
-	code, stdout, _ = runCLI(t, "connect", "--remove", "-g")
+	code, stdout, _ = runCLI(t, "connect", "--remove", "-g", "--dry-run")
 	if code != 0 || !strings.Contains(flatText(stdout), "Projects that were connected while your user account had the Skill Hub instructions did not get their own copy") {
 		t.Fatalf("global removal preview:\n%s", stdout)
 	}
-	code, stdout, _ = runCLI(t, "connect", "--remove", "--project", project, "--cache", "--json")
+	code, stdout, _ = runCLI(t, "connect", "--remove", "--project", project, "--cache", "--json", "--dry-run")
 	var preview struct {
 		app.Result
 		Removal app.Disconnection `json:"removal"`
@@ -411,10 +406,10 @@ func TestConnectRemoveCacheClearsTheHubsFetchedSkills(t *testing.T) {
 		len(preview.Removal.Entries) != 1 || len(preview.Removal.Cache) != 1 || preview.Removal.Cache[0].Versions != 1 {
 		t.Fatalf("JSON preview:\n%s", stdout)
 	}
-	if code, stdout, _ := runCLI(t, "connect", "--remove", "--project", project, "--cache", "--yes"); code != 0 || !strings.Contains(stdout, "Cleared cached skills:") {
+	if code, stdout, _ := runCLI(t, "connect", "--remove", "--project", project, "--cache"); code != 0 || !strings.Contains(stdout, "Cleared cached skills:") {
 		t.Fatalf("apply:\n%s", stdout)
 	}
-	code, stdout, _ = runCLI(t, "cache", "clear", "--hub")
+	code, stdout, _ = runCLI(t, "cache", "clear", "--dry-run")
 	if code != 0 || strings.Contains(stdout, "http://127.0.0.1:7420") || !strings.Contains(stdout, "http://100.64.0.2:7420") {
 		t.Fatalf("the other hub's cache must stay:\n%s", stdout)
 	}
@@ -445,7 +440,7 @@ func TestDoctorExplainsEachBrokenRemoteConnection(t *testing.T) {
 	hub, stop := startStoppableListener(t, ws)
 	tokenFile, token := copyHubToken(t, ws)
 	project := t.TempDir()
-	if code, _, stderr := runCLI(t, "connect", "--project", project, "--hub", hub, "--token-file", tokenFile, "--host", "claude", "--yes"); code != 0 {
+	if code, _, stderr := runCLI(t, "connect", "--project", project, "--hub", hub, "--token-file", tokenFile, "--host", "claude"); code != 0 {
 		t.Fatal(stderr)
 	}
 	t.Chdir(project)
@@ -513,7 +508,7 @@ func TestDoctorExplainsEachBrokenRemoteConnection(t *testing.T) {
 	}
 
 	old := legacyHub(t, token)
-	if code, _, stderr := runCLI(t, "connect", "--project", project, "--hub", old, "--token-file", tokenFile, "--host", "claude", "--yes"); code != 0 {
+	if code, _, stderr := runCLI(t, "connect", "--project", project, "--hub", old, "--token-file", tokenFile, "--host", "claude"); code != 0 {
 		t.Fatal(stderr)
 	}
 	oldHub := doctor()
@@ -546,7 +541,7 @@ func TestDoctorExplainsEachBrokenRemoteConnection(t *testing.T) {
 func TestDoctorWithAWorkspaceAlsoChecksRemoteEntries(t *testing.T) {
 	isolateClient(t)
 	ws := initTestWorkspace(t)
-	if code, _, stderr := runCLI(t, "connect", "-g", "--hub", "http://127.0.0.1:9", "--host", "claude", "--yes"); code != 0 {
+	if code, _, stderr := runCLI(t, "connect", "-g", "--hub", "http://127.0.0.1:9", "--host", "claude"); code != 0 {
 		t.Fatal(stderr)
 	}
 	code, stdout, _ := runCLI(t, "doctor", "--workspace", ws)
@@ -567,14 +562,14 @@ func TestConnectUsageErrorsGolden(t *testing.T) {
 			"ERROR: --workspace and --hub cannot be used together.\n" +
 				"WHY: --workspace connects a hub on this machine and --hub a hub on another machine; one scope points\n" +
 				"     at one hub.\n" +
-				"FIX: Run `skillhub connect --workspace <path> --yes` for the hub on this machine, or\n" +
-				"     `skillhub connect --hub <url> --token-file <path> --yes` for a hub on another machine.\n",
+				"FIX: Run `skillhub connect --workspace <path>` for the hub on this machine, or\n" +
+				"     `skillhub connect --hub <url> --token-file <path>` for a hub on another machine.\n",
 		},
 		{
 			[]string{"connect", "--remove", "--hub", "http://127.0.0.1:7420"},
 			"ERROR: --remove cannot be combined with --workspace, --hub or --token-file.\n" +
 				"WHY: --remove takes out the Skill Hub entry of the scope, whichever hub it points at.\n" +
-				"FIX: Run `skillhub connect --remove [--project <dir>] [-g|--global] [--host <name>] --yes`.\n",
+				"FIX: Run `skillhub connect --remove [--project <dir>] [-g|--global] [--host <name>]`.\n",
 		},
 		{
 			[]string{"connect", "--token-file", "/t"},
@@ -623,18 +618,19 @@ func TestRemoteConnectAndRemoveOutputGolden(t *testing.T) {
 		Check:    app.HubProbe{Outcome: app.ProbeUnreachable, Reason: "connection refused"},
 		Replaces: []app.ScopeEntry{{Host: "Claude Code", Target: "the local hub at /home/a/skillhub"}},
 	}
-	preview := app.NewResult(app.StatusActionRequired, "Preview only: agent connection for project /home/a/app to the hub at http://127.0.0.1:7420 was not written without --yes.")
+	preview := app.NewResult(app.StatusActionRequired, "Dry run: agent connection for project /home/a/app to the hub at http://127.0.0.1:7420 was not written.")
 	preview.Items = []app.Item{
-		{ID: "host_claude-code_mcp-registration", Summary: "claude-code (x) mcp-registration: /home/a/app/.mcp.json", Impact: "Will be written after confirmation."},
-		{ID: "host_claude-code_host-permissions", Summary: "claude-code (x) host-permissions: /home/a/app/.claude/settings.local.json", Impact: "Will be written after confirmation."},
-		{ID: "host_claude-code_native-skill", Summary: "claude-code (x) native-skill: /home/a/app/.claude/skills/system-curator/SKILL.md", Impact: "Will be deleted after confirmation."},
+		{ID: "host_claude-code_mcp-registration", Summary: "claude-code (x) mcp-registration: /home/a/app/.mcp.json", Impact: "Would be written."},
+		{ID: "host_claude-code_host-permissions", Summary: "claude-code (x) host-permissions: /home/a/app/.claude/settings.local.json", Impact: "Would be written."},
+		{ID: "host_claude-code_native-skill", Summary: "claude-code (x) native-skill: /home/a/app/.claude/skills/system-curator/SKILL.md", Impact: "Would be deleted."},
 	}
 	preview.Warnings = []app.Warning{{Code: "hub_unreachable", Summary: "The hub does not answer at http://127.0.0.1:7420 right now (connection refused). The connection can be written anyway; start `skillhub serve mcp --addr ...` on machine B and open the SSH tunnel or Tailscale connection before you start the agent."}}
-	preview.SuggestedActions = []app.Action{{Command: "skillhub connect --project /home/a/app --hub http://127.0.0.1:7420 --token-file /home/a/.config/skillhub/hub-token --yes"}}
+	preview.SuggestedActions = []app.Action{{Command: "skillhub connect --project /home/a/app --hub http://127.0.0.1:7420 --token-file /home/a/.config/skillhub/hub-token"}}
 	var out strings.Builder
 	renderRemoteConnect(termui.NewWithWidth(&out, 100), preview, connection)
-	want := "Preview only: agent connection for project /home/a/app to the hub at http://127.0.0.1:7420 was not\n" +
-		"written without --yes.\n" +
+	want := "Dry run: agent connection for project /home/a/app to the hub at http://127.0.0.1:7420 was not\n" +
+		"written.\n" +
+		"Would change:\n" +
 		"  - Claude Code: will connect (.mcp.json, .claude/settings.local.json, remove curator skill)\n" +
 		"This replaces:\n" +
 		"  - Claude Code: the local hub at /home/a/skillhub\n" +
@@ -656,7 +652,7 @@ func TestRemoteConnectAndRemoveOutputGolden(t *testing.T) {
 		"         open the SSH tunnel or Tailscale connection before you start the agent.\n" +
 		"\n" +
 		"To write these files, run:\n" +
-		"  $ skillhub connect --project /home/a/app --hub http://127.0.0.1:7420 --token-file /home/a/.config/skillhub/hub-token --yes\n"
+		"  $ skillhub connect --project /home/a/app --hub http://127.0.0.1:7420 --token-file /home/a/.config/skillhub/hub-token\n"
 	if out.String() != want {
 		t.Fatalf("connect --hub preview:\n%s\nwant:\n%s", out.String(), want)
 	}
@@ -686,18 +682,19 @@ func TestRemoteConnectAndRemoveOutputGolden(t *testing.T) {
 		t.Fatalf("connect --hub result:\n%s\nwant:\n%s", out.String(), want)
 	}
 
-	removal := app.NewResult(app.StatusActionRequired, "Preview only: the Skill Hub connection for project /home/a/app was not removed without --yes.")
+	removal := app.NewResult(app.StatusActionRequired, "Dry run: the Skill Hub connection for project /home/a/app was not removed.")
 	removal.Items = []app.Item{
-		{ID: "host_claude-code_mcp-registration", Summary: "claude-code (x) mcp-registration: /home/a/app/.mcp.json", Impact: "Will be deleted after confirmation."},
-		{ID: "host_claude-code_bootstrap-instructions", Summary: "claude-code (x) bootstrap-instructions: /home/a/app/CLAUDE.md", Impact: "Will be written after confirmation."},
+		{ID: "host_claude-code_mcp-registration", Summary: "claude-code (x) mcp-registration: /home/a/app/.mcp.json", Impact: "Would be deleted."},
+		{ID: "host_claude-code_bootstrap-instructions", Summary: "claude-code (x) bootstrap-instructions: /home/a/app/CLAUDE.md", Impact: "Would be written."},
 	}
-	removal.SuggestedActions = []app.Action{{Command: "skillhub connect --remove --project /home/a/app --cache --yes"}}
+	removal.SuggestedActions = []app.Action{{Command: "skillhub connect --remove --project /home/a/app --cache"}}
 	out.Reset()
 	renderConnectRemove(termui.NewWithWidth(&out, 100), removal, &app.Disconnection{
 		Entries: []app.ScopeEntry{{Host: "Claude Code", Target: "the remote hub at http://127.0.0.1:7420"}},
 		Cache:   []app.CacheUsage{{Hub: "http://127.0.0.1:7420", Skills: 2, Versions: 3, Bytes: 3072}},
 	}, true)
-	want = "Preview only: the Skill Hub connection for project /home/a/app was not removed without --yes.\n" +
+	want = "Dry run: the Skill Hub connection for project /home/a/app was not removed.\n" +
+		"Would change:\n" +
 		"  - Claude Code: will remove (.mcp.json deleted, CLAUDE.md)\n" +
 		"The entries point at:\n" +
 		"  - Claude Code: the remote hub at http://127.0.0.1:7420\n" +
@@ -709,7 +706,7 @@ func TestRemoteConnectAndRemoveOutputGolden(t *testing.T) {
 		"  - Unrelated host configuration stays as it is, and nothing changes on the hub.\n" +
 		"\n" +
 		"To remove the connection, run:\n" +
-		"  $ skillhub connect --remove --project /home/a/app --cache --yes\n"
+		"  $ skillhub connect --remove --project /home/a/app --cache\n"
 	if out.String() != want {
 		t.Fatalf("connect --remove preview:\n%s\nwant:\n%s", out.String(), want)
 	}
@@ -764,7 +761,7 @@ func TestHelpDescribesRemoteConnect(t *testing.T) {
 		}
 	}
 	code, stdout, _ = runCLI(t, "help")
-	if code != 0 || !strings.Contains(stdout, "skillhub connect --hub <url> --token-file <path> --yes") {
+	if code != 0 || !strings.Contains(stdout, "skillhub connect --hub <url> --token-file <path>\n") {
 		t.Fatalf("global help:\n%s", stdout)
 	}
 	code, stdout, _ = runCLI(t, "help", "doctor")

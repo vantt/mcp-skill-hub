@@ -284,7 +284,7 @@ func TestRemoteHubEndToEndThroughATunnel(t *testing.T) {
 	if err := os.MkdirAll(project, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	connect := exec.Command(binary, "connect", "--project", project, "--hub", tunnel.url, "--token-file", tokenCopy, "--host", "claude", "--yes")
+	connect := exec.Command(binary, "connect", "--project", project, "--hub", tunnel.url, "--token-file", tokenCopy, "--host", "claude")
 	connect.Env = machineA.env()
 	connectOutput, err := connect.CombinedOutput()
 	if err != nil || !strings.Contains(string(connectOutput), "reachable, token accepted") {

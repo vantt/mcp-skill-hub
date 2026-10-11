@@ -77,7 +77,7 @@ On machine A:
 Open the tunnel (keep it running):
   $ ssh -N -L 7420:127.0.0.1:7420 <user>@<this-machine>
 Copy the token file to machine A (for example with scp) and pass its path there, then connect:
-  $ skillhub connect --hub http://127.0.0.1:7420 --token-file /home/you/skillhub/runtime/config/.hub-token --yes
+  $ skillhub connect --hub http://127.0.0.1:7420 --token-file /home/you/skillhub/runtime/config/.hub-token
 
 The token itself is never printed; `skillhub token show` prints it on a terminal. Stop the listener
 with Ctrl-C.
@@ -109,16 +109,16 @@ This command keeps running and prints nothing. While it runs, `http://127.0.0.1:
 
 ```bash
 cd your-project
-skillhub connect --hub http://127.0.0.1:7420 --token-file ~/.config/skillhub/hub-token          # preview
-skillhub connect --hub http://127.0.0.1:7420 --token-file ~/.config/skillhub/hub-token --yes    # write files
+skillhub connect --hub http://127.0.0.1:7420 --token-file ~/.config/skillhub/hub-token --dry-run  # show the changes
+skillhub connect --hub http://127.0.0.1:7420 --token-file ~/.config/skillhub/hub-token            # write files
 ```
 
-Add `-g` to connect every project in your user account instead, and `--host claude`, `--host codex` or `--host gemini` to limit it to one agent. The preview checks the hub before anything is written:
+Add `-g` to connect every project in your user account instead, and `--host claude`, `--host codex` or `--host gemini` to limit it to one agent. `--dry-run` checks the hub and shows the changes without writing anything:
 
 ```text
-Preview only: agent connection for project
-/home/you/your-project
-to the hub at http://127.0.0.1:7420 was not written without --yes.
+Dry run: agent connection for project /home/you/your-project to the hub at
+http://127.0.0.1:7420 was not written.
+Would change:
   - Claude Code: will connect (.mcp.json, .claude/settings.local.json, CLAUDE.md)
   - Codex: will connect (.codex/config.toml, AGENTS.md)
   - Gemini CLI: will connect (.gemini/settings.json, GEMINI.md)
@@ -138,7 +138,7 @@ Skill cache:  /home/you/.local/state/skillhub/remote/127.0.0.1-7420-bd74e9ccea
     proxy with.
 
 To write these files, run:
-  $ skillhub connect --hub http://127.0.0.1:7420 --token-file /home/you/.config/skillhub/hub-token --yes
+  $ skillhub connect --hub http://127.0.0.1:7420 --token-file /home/you/.config/skillhub/hub-token
 ```
 
 Then restart your agent. It now resolves skills on machine B and runs them on machine A.
@@ -276,12 +276,12 @@ Transport:     plain HTTP on a network you trust to be private
 Copy the token as in [step 2](#2-bring-the-token-to-machine-a), then connect your user account with the Tailscale address:
 
 ```bash
-skillhub connect -g --hub http://100.101.102.103:7420 --token-file ~/.config/skillhub/hub-token --yes
+skillhub connect -g --hub http://100.101.102.103:7420 --token-file ~/.config/skillhub/hub-token
 ```
 
 You can also use machine B's name. Its short name (`http://machine-b:7420`) works as it is when it equals machine B's host name, which is Tailscale's default. Any other name, for example the full MagicDNS name `machine-b.tailnet-name.ts.net`, must be accepted by the listener first: add `--allow-host machine-b.tailnet-name.ts.net` to `skillhub serve mcp` on machine B.
 
-Prefer `-g` for a Tailscale hub. `doctor` sends the token only to a hub on this machine (an SSH tunnel) or to a hub your user account names, never to a hub that only a project's files name, because a cloned repository could name any address. For such a project-only hub, `doctor` checks that it answers and tells you to check the token with the `connect --hub` preview, which writes nothing.
+Prefer `-g` for a Tailscale hub. `doctor` sends the token only to a hub on this machine (an SSH tunnel) or to a hub your user account names, never to a hub that only a project's files name, because a cloned repository could name any address. For such a project-only hub, `doctor` checks that it answers and tells you to check the token with `connect --hub ... --dry-run`, which writes nothing.
 
 ## Check the connection
 
@@ -354,14 +354,15 @@ Each skill version is downloaded once and kept by its digest. A changed skill is
 To remove the cached copies yourself:
 
 ```bash
-skillhub cache clear --hub                                  # preview every hub's cache
-skillhub cache clear --hub http://127.0.0.1:7420 --yes      # clear one hub's cache
+skillhub cache clear --dry-run                         # show every hub's cache
+skillhub cache clear --hub http://127.0.0.1:7420       # clear one hub's cache
 ```
 
 ```text
-This removes the copies of skills fetched from remote hubs.
+Dry run: the copies of skills fetched from remote hubs were not removed.
 Cache directory:  /home/you/.local/state/skillhub/remote
 
+Would change:
 Hub                    Skills  Versions  Size
 http://127.0.0.1:7420  1       1         237 bytes
 
@@ -369,8 +370,8 @@ http://127.0.0.1:7420  1       1         237 bytes
   - The skills' working directories (installed dependencies) and stored secrets are kept.
   - Nothing on the hub changes.
 
-Next: Apply the cleanup:
-  $ skillhub cache clear --hub --yes
+Next: Clear the cache:
+  $ skillhub cache clear
 ```
 
 ## Security in plain words
@@ -390,18 +391,20 @@ Next: Apply the cleanup:
 Rotate the token when a copy may have leaked or when a machine should lose access. On machine B:
 
 ```bash
-skillhub token rotate --workspace ~/skillhub          # preview
-skillhub token rotate --workspace ~/skillhub --yes    # replace the token
+skillhub token rotate --workspace ~/skillhub --dry-run   # show what changes
+skillhub token rotate --workspace ~/skillhub             # replace the token (in a terminal)
 ```
 
 ```text
-This replaces the hub token with a new random one.
+Dry run: the hub token was not replaced.
 Token file:  /home/you/skillhub/runtime/config/.hub-token
+Would change:
+  - The token is replaced with a new random one.
   - Every machine that connects to this hub stops working until it gets the new token file.
   - A running listener uses the new token from its next request; it does not need a restart.
 
-Next: Apply the rotation:
-  $ skillhub token rotate --workspace /home/you/skillhub --yes
+To replace the token, run in a terminal:
+  $ skillhub token rotate --workspace /home/you/skillhub
 ```
 
 Then copy the new token file to every machine A that should keep access, as in [step 2](#2-bring-the-token-to-machine-a).
@@ -412,8 +415,8 @@ To stop using the hub on machine B from machine A, remove the connection. `--cac
 
 ```bash
 cd your-project
-skillhub connect --remove --cache            # preview
-skillhub connect --remove --cache --yes      # remove the entry and clear the cache
+skillhub connect --remove --cache --dry-run  # show what is removed
+skillhub connect --remove --cache            # remove the entry and clear the cache
 ```
 
 ```text
@@ -443,10 +446,10 @@ Next: restart your agent so it stops starting the Skill Hub server
 Files that held only the Skill Hub entry are deleted; files with other content keep it. Use `-g` to remove a user-account connection. To use a hub on machine A itself instead, connect the scope to a workspace there; this replaces the remote entry in one step:
 
 ```bash
-skillhub connect --workspace ~/skillhub --yes
+skillhub connect --workspace ~/skillhub
 ```
 
-Then stop the tunnel and, on machine B, the listener (Ctrl-C, or `systemctl --user disable --now skillhub-listener`). You can delete the token copy on machine A, and `skillhub token rotate --yes` on machine B makes every old copy useless.
+Then stop the tunnel and, on machine B, the listener (Ctrl-C, or `systemctl --user disable --now skillhub-listener`). You can delete the token copy on machine A, and `skillhub token rotate` on machine B makes every old copy useless.
 
 ## Time a run from machine A
 
@@ -488,10 +491,10 @@ On a link with a long round trip, the first call of each agent session takes a f
 | Start the listener (SSH tunnel) | B | `skillhub serve mcp --addr 127.0.0.1:7420 [--workspace <path>]` |
 | Start the listener (Tailscale) | B | `skillhub serve mcp --addr <tailscale-ip>:7420 --trust-private-network [--allow-host <name>]` |
 | Show the token (terminal only) | B | `skillhub token show` |
-| Replace the token | B | `skillhub token rotate [--yes]` |
+| Replace the token | B | `skillhub token rotate [--dry-run]` |
 | Open the tunnel | A | `ssh -N -L 7420:127.0.0.1:7420 <user>@<machine-b>` |
-| Connect to the hub | A | `skillhub connect --hub <url> --token-file <path> [-g] [--host <name>] --yes` |
+| Connect to the hub | A | `skillhub connect --hub <url> --token-file <path> [-g] [--host <name>] [--dry-run]` |
 | Check the connection | A | `skillhub doctor` |
-| Clear fetched skills | A | `skillhub cache clear --hub [<url>] [--yes]` |
-| Remove the connection | A | `skillhub connect --remove [--cache] [-g] --yes` |
+| Clear fetched skills | A | `skillhub cache clear [--hub <url>] [--dry-run]` |
+| Remove the connection | A | `skillhub connect --remove [--cache] [-g] [--dry-run]` |
 | Time a skill fetch | A | `sh scripts/remote-timing.sh --skill <id> [--task <text>]` |

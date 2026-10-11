@@ -12,14 +12,16 @@ import (
 	catalogpkg "github.com/vantt/mcp-skill-hub/internal/catalog"
 	"github.com/vantt/mcp-skill-hub/internal/hostintegration"
 	"github.com/vantt/mcp-skill-hub/internal/mutation"
+	"github.com/vantt/mcp-skill-hub/internal/shellquote"
 	"github.com/vantt/mcp-skill-hub/internal/workspace"
 )
 
 // WorkspaceService is the shared application service used by init and doctor --fix.
 type WorkspaceService struct{}
 
-// Init previews the same mechanical remediation used by DoctorFix until explicitly confirmed.
-func (service WorkspaceService) Init(path string, yes bool, force ...bool) (Result, error) {
+// Init creates or repairs a workspace with the same mechanical remediation
+// used by DoctorFix. With dryRun it only reports what it would do.
+func (service WorkspaceService) Init(path string, dryRun bool, force ...bool) (Result, error) {
 	isForce := len(force) > 0 && force[0]
 	if !isForce {
 		if root, err := workspace.Discover(path); err == nil {
@@ -30,28 +32,28 @@ func (service WorkspaceService) Init(path string, yes bool, force ...bool) (Resu
 					if _, err := os.Lstat(skillhubPath); os.IsNotExist(err) {
 						return ErrorResult(NewInvalidRequestError(
 							fmt.Sprintf("Directory is not empty and is not a Skill Hub workspace: %s", root),
-							"Choose a dedicated directory like `~/skillhub`, or add `--force` to initialize here anyway. If you meant to connect this project to a workspace, run `skillhub connect --yes` instead.",
+							"Choose a dedicated directory like `~/skillhub`, or add `--force` to initialize here anyway. If you meant to connect this project to a workspace, run `skillhub connect` instead.",
 						)), nil
 					}
 				}
 			}
 		}
 	}
-	if !yes {
+	if dryRun {
 		result, err := service.doctorInternal(path, true)
 		if err != nil {
 			return Result{}, err
 		}
 		result.Status = StatusActionRequired
-		result.Summary = "Preview only: workspace initialization was not applied without --yes."
+		result.Summary = "Dry run: workspace initialization was not applied."
 		result.Items = append([]Item{
-			{ID: "workspace_structure", Summary: "Directory structure (skills, sources, distill, history, config, registry, evals)", Impact: "Will be created upon confirmation."},
-			{ID: "git_repository", Summary: "Git repository (.git)", Impact: "Will be initialized upon confirmation."},
-			{ID: "catalog_generation", Summary: "Search index database and schema", Impact: "Will be built upon confirmation."},
+			{ID: "workspace_structure", Summary: "Directory structure (skills, sources, distill, history, config, registry, evals)", Impact: "Would be created."},
+			{ID: "git_repository", Summary: "Git repository (.git)", Impact: "Would be initialized."},
+			{ID: "catalog_generation", Summary: "Search index database and schema", Impact: "Would be built."},
 		}, result.Items...)
 		result.SuggestedActions = []Action{{
 			Label:                "Initialize workspace",
-			Command:              "skillhub init " + path + " --yes",
+			Command:              "skillhub init " + shellquote.Arg(path),
 			RequiresConfirmation: true,
 		}}
 		return result, nil
@@ -154,7 +156,7 @@ func doctorResult(root string, plan workspace.Plan, issues []canonical.Issue, re
 			result.Items = append(result.Items, Item{ID: recovery.OperationID, Summary: "Interrupted mutation " + recovery.OperationID + " (" + string(recovery.Action) + ")", Impact: impact})
 		}
 		if fixable {
-			result.SuggestedActions = []Action{{Label: "Recover interrupted mutations", Command: "skillhub doctor --fix --workspace " + root + " --yes", RequiresConfirmation: true}}
+			result.SuggestedActions = []Action{{Label: "Recover interrupted mutations", Command: "skillhub doctor --fix --workspace " + root, RequiresConfirmation: true}}
 		}
 		return result, nil
 	}
@@ -189,21 +191,22 @@ func doctorResult(root string, plan workspace.Plan, issues []canonical.Issue, re
 		} else if len(issues) > 0 {
 			result.SuggestedActions = append(result.SuggestedActions, Action{Label: "Correct content errors", Command: "skillhub validate --workspace " + root, RequiresConfirmation: false})
 		} else {
-			result.SuggestedActions = append(result.SuggestedActions, Action{Label: "Apply workspace remediation", Command: "skillhub doctor --fix --workspace " + root + " --yes", RequiresConfirmation: true})
+			result.SuggestedActions = append(result.SuggestedActions, Action{Label: "Apply workspace remediation", Command: "skillhub doctor --fix --workspace " + root, RequiresConfirmation: true})
 		}
 	}
 	return result, nil
 }
 
-// DoctorFix applies mechanical remediation only after explicit confirmation.
-func (service WorkspaceService) DoctorFix(path string, yes bool) (Result, error) {
-	if !yes {
+// DoctorFix applies mechanical remediation. With dryRun it only reports the
+// repairs it would make.
+func (service WorkspaceService) DoctorFix(path string, dryRun bool) (Result, error) {
+	if dryRun {
 		result, err := service.doctorInternal(path, false)
 		if err != nil {
 			return Result{}, err
 		}
 		result.Status = StatusActionRequired
-		result.Summary = "Preview only: workspace remediation was not applied without --yes."
+		result.Summary = "Dry run: workspace remediation was not applied."
 		return result, nil
 	}
 	root, err := workspace.Discover(path)
@@ -397,7 +400,7 @@ func inspectHostIntegration(ctx context.Context, root string, result Result) (Re
 	missing := hostintegration.MissingFinding(plan)
 	impact := "Remediation is available after explicit confirmation."
 	if missing != nil {
-		impact = "Fixable: " + missing.Note + " (or run `skillhub doctor --fix --yes`)."
+		impact = "Fixable: " + missing.Note + "."
 	}
 	for _, change := range plan.Changes {
 		item := hostChangeItem(change.Host, levels[change.Host], change.Kind, change.Path, impact)
@@ -413,7 +416,7 @@ func inspectHostIntegration(ctx context.Context, root string, result Result) (Re
 		} else {
 			result.Summary = "Workspace and catalog are healthy; host integration needs attention."
 		}
-		result.SuggestedActions = append(result.SuggestedActions, Action{Label: "Apply host integration remediation", Command: "skillhub doctor --fix --workspace " + root + " --yes", RequiresConfirmation: true})
+		result.SuggestedActions = append(result.SuggestedActions, Action{Label: "Apply host integration remediation", Command: "skillhub doctor --fix --workspace " + root, RequiresConfirmation: true})
 	}
 	return result, nil
 }
@@ -529,5 +532,5 @@ func renderIssues(issues []canonical.Issue) string {
 
 // NewWorkspaceInvalidError formats workspace failures consistently for every delivery adapter.
 func NewWorkspaceInvalidError(reason string) *Error {
-	return &Error{Code: ErrorWorkspaceInvalid, Render: ErrorRender{Error: "The workspace is invalid.", Why: reason, Fix: "Run `skillhub doctor --workspace <path>` to inspect safe remediation, then use `--fix --yes` only after review."}}
+	return &Error{Code: ErrorWorkspaceInvalid, Render: ErrorRender{Error: "The workspace is invalid.", Why: reason, Fix: "Run `skillhub doctor --workspace <path>` to inspect safe remediation, then `skillhub doctor --fix --workspace <path>` to apply it."}}
 }

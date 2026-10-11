@@ -23,6 +23,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/vantt/mcp-skill-hub/internal/app"
 	"github.com/vantt/mcp-skill-hub/internal/delivery/paging"
+	"github.com/vantt/mcp-skill-hub/internal/shellquote"
 	"github.com/vantt/mcp-skill-hub/internal/skillruntime"
 )
 
@@ -941,12 +942,12 @@ func (proxy *Proxy) localResult(cached skillruntime.CachedSkill, cacheState, mes
 	var detail app.SkillDetail
 	if len(cached.Metadata.Detail) > 0 {
 		if err := json.Unmarshal(cached.Metadata.Detail, &detail); err != nil {
-			return proxy.toolFailure("internal_error", "The cached skill metadata could not be read.", "Run `skillhub cache clear --hub --yes` and retry."), nil
+			return proxy.toolFailure("internal_error", "The cached skill metadata could not be read.", "Run `skillhub cache clear --hub "+shellquote.Arg(proxy.hubURL)+"` and retry."), nil
 		}
 	}
 	content, err := readCachedMarkdown(cached.Directory)
 	if err != nil {
-		return proxy.toolFailure("internal_error", "The cached SKILL.md could not be read.", "Run `skillhub cache clear --hub --yes` and retry."), nil
+		return proxy.toolFailure("internal_error", "The cached SKILL.md could not be read.", "Run `skillhub cache clear --hub "+shellquote.Arg(proxy.hubURL)+"` and retry."), nil
 	}
 	local, err := app.ClientLocalSkill(proxy.stateRoot, cached.Directory, cached.Metadata)
 	if err != nil {

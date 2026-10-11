@@ -1,7 +1,7 @@
-$ connect --project <PROJECT> --workspace <WORKSPACE>
-Preview only: agent connection for project
-<PROJECT> was not written
-without --yes.
+$ connect --project <PROJECT> --workspace <WORKSPACE> --dry-run
+Dry run: agent connection for project
+<PROJECT> was not written.
+Would change:
   - Claude Code: will connect (.mcp.json, .claude/settings.local.json, curator skill, CLAUDE.md)
   - Codex: will connect (.codex/config.toml, curator skill, AGENTS.md)
   - Gemini CLI: will connect (.gemini/settings.json, curator skill, GEMINI.md)
@@ -11,9 +11,9 @@ Claude Code: curation runs through the CLI. Commands with --yes or confirm requi
 Bash(skillhub:*).
 
 To write these files, run:
-  $ skillhub connect --project <PROJECT> --workspace <WORKSPACE> --yes
+  $ skillhub connect --project <PROJECT> --workspace <WORKSPACE>
 [exit 0]
-$ connect --project <PROJECT> --workspace <WORKSPACE> --yes
+$ connect --project <PROJECT> --workspace <WORKSPACE>
 Agent connection for project
 <PROJECT> written.
   - Claude Code: connected (.mcp.json, .claude/settings.local.json, curator skill, CLAUDE.md)
@@ -28,7 +28,7 @@ Bash(skillhub:*).
 
 Next: restart your agent so it loads the new MCP server, then ask it: "curate my Skill Hub"
 [exit 0]
-$ connect --project <PROJECT> --workspace <WORKSPACE> --yes
+$ connect --project <PROJECT> --workspace <WORKSPACE>
 Agent connection for project
 <PROJECT> is already current;
 nothing to change.

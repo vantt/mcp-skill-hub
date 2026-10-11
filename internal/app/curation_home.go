@@ -534,7 +534,7 @@ func deriveCurationHome(state homeState) CurationHome {
 		case "rebuild_index":
 			home.Summary = "Search index is stale; skill and source counts are unavailable until it is rebuilt."
 		case "host_integration_missing":
-			home.Summary = "Host integration is missing; re-run skillhub integrate after a pull that untracked those files."
+			home.Summary = "Host integration is missing; run skillhub doctor --fix after a pull that untracked those files."
 		case "review_upstream_updates":
 			home.Summary = fmt.Sprintf("%d skill(s) have upstream changes to review.", recommended.Count)
 		case "distill_changed_sources":
@@ -570,7 +570,7 @@ func recommendationLabel(kind string) string {
 		"recover_workspace":         "Run skillhub doctor --fix",
 		"resume_run":                "Resume the interrupted run",
 		"rebuild_index":             "Run `skillhub rebuild` to refresh the search index",
-		"host_integration_missing":  "Re-run skillhub integrate (or run skillhub doctor --fix)",
+		"host_integration_missing":  "Run skillhub doctor --fix",
 		"retry_unavailable_sources": "Retry unavailable source checks",
 		"review_upstream_updates":   "Review upstream updates with skillhub skill outdated",
 		"distill_changed_sources":   "Distill changed sources",
@@ -583,7 +583,7 @@ func recommendationLabel(kind string) string {
 
 func actionImpact(kind string) string {
 	if kind == "host_integration_missing" {
-		return "Fixable finding: re-run skillhub integrate after a pull that untracked those files (or run skillhub doctor --fix --yes)."
+		return "Fixable finding: run skillhub doctor --fix after a pull that untracked those files."
 	}
 	if strings.Contains(kind, "workspace") || kind == "rebuild_index" {
 		return "Other curation work should wait until local workspace state is healthy."

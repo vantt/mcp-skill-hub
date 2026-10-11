@@ -11,6 +11,7 @@ import (
 
 	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
 	"github.com/vantt/mcp-skill-hub/internal/hubtoken"
+	"github.com/vantt/mcp-skill-hub/internal/shellquote"
 )
 
 // stdoutIsTerminal reports whether w is an interactive terminal. Tests
@@ -26,7 +27,7 @@ var stdoutIsTerminal = func(w io.Writer) bool {
 type tokenConfig struct {
 	workspacePath string
 	tokenFile     string
-	yes           bool
+	dryRun        bool
 }
 
 func runToken(args []string, stdout, stderr io.Writer) int {
@@ -57,7 +58,7 @@ func runToken(args []string, stdout, stderr io.Writer) int {
 	return runTokenRotate(path, cfg, stdout, stderr)
 }
 
-func parseTokenFlags(args []string, allowYes bool) (tokenConfig, string) {
+func parseTokenFlags(args []string, rotate bool) (tokenConfig, string) {
 	var cfg tokenConfig
 	for index := 0; index < len(args); index++ {
 		switch args[index] {
@@ -71,11 +72,11 @@ func parseTokenFlags(args []string, allowYes bool) (tokenConfig, string) {
 				cfg.tokenFile = args[index+1]
 			}
 			index++
-		case "--yes":
-			if !allowYes {
-				return cfg, "unknown argument \"--yes\""
+		case "--dry-run":
+			if !rotate {
+				return cfg, "unknown argument \"--dry-run\""
 			}
-			cfg.yes = true
+			cfg.dryRun = true
 		default:
 			return cfg, fmt.Sprintf("unknown argument %q", args[index])
 		}
@@ -123,21 +124,34 @@ func runTokenShow(path string, stdout, stderr io.Writer) int {
 	return 0
 }
 
+// runTokenRotate replaces the token. It runs only on a terminal, so an agent
+// that has no prompt for this command (Codex, Gemini CLI) cannot cut every
+// connected machine off on its own; --dry-run works anywhere.
 func runTokenRotate(path string, cfg tokenConfig, stdout, stderr io.Writer) int {
 	p := termui.New(stdout)
-	if !cfg.yes {
-		p.Line("This replaces the hub token with a new random one.")
+	if cfg.dryRun {
+		p.Line("Dry run: the hub token was not replaced.")
 		p.Fields(termui.Field{Label: "Token file", Value: path})
+		p.Line("Would change:")
 		p.Bullets(
+			"The token is replaced with a new random one.",
 			"Every machine that connects to this hub stops working until it gets the new token file.",
 			"A running listener uses the new token from its next request; it does not need a restart.",
 		)
 		p.Blank()
-		p.Next("Apply the rotation:", tokenRotateCommand(cfg))
-		if p.Err() != nil {
-			return 1
-		}
-		return 0
+		p.Line("To replace the token, run in a terminal:")
+		p.Command(tokenRotateCommand(cfg))
+		return printerCode(p)
+	}
+	if !stdoutIsTerminal(stdout) {
+		e := termui.New(stderr)
+		e.Error(
+			"The hub token is rotated only on a terminal.",
+			"Rotating cuts off every machine that connects to this hub, so a person runs it, not a script or an agent.",
+			"Run this command in a terminal:",
+		)
+		e.Command(tokenRotateCommand(cfg))
+		return 1
 	}
 	if err := hubtoken.Rotate(path); err != nil {
 		writeHubTokenError(stderr, path, err)
@@ -156,9 +170,9 @@ func runTokenRotate(path string, cfg tokenConfig, stdout, stderr io.Writer) int 
 func tokenRotateCommand(cfg tokenConfig) string {
 	command := "skillhub token rotate"
 	if cfg.tokenFile != "" {
-		command += " --token-file " + shellQuote(cfg.tokenFile)
+		command += " --token-file " + shellquote.Arg(cfg.tokenFile)
 	} else if cfg.workspacePath != "" {
-		command += " --workspace " + shellQuote(cfg.workspacePath)
+		command += " --workspace " + shellquote.Arg(cfg.workspacePath)
 	}
-	return command + " --yes"
+	return command
 }

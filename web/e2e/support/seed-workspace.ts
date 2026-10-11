@@ -77,8 +77,8 @@ export function seedDistillWorkspace(env: NodeJS.ProcessEnv = process.env): Seed
   const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'skillhub-seed-distill-'));
   const runCLI = makeCLIRunner(ws, env);
 
-  // 1. init <ws> --yes; create and activate consumer-review
-  runCLI(['init', ws, '--yes']);
+  // 1. init <ws>; create and activate consumer-review
+  runCLI(['init', ws]);
 
   const consumerReviewMd = path.join(os.tmpdir(), `consumer-review-${Date.now()}.md`);
   fs.writeFileSync(

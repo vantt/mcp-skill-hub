@@ -17,7 +17,7 @@ func TestStatusHumanJSONAndQuietUseOneModel(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
+	if code := Run([]string{"init", root}, &stdout, &stderr); code != 0 {
 		t.Fatalf("init exit = %d: %s", code, stderr.String())
 	}
 	commitCLIWorkspace(t, root)
@@ -87,7 +87,7 @@ func TestDiffOutputUsesRelativePaths(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
+	if code := Run([]string{"init", root}, &stdout, &stderr); code != 0 {
 		t.Fatal(stderr.String())
 	}
 	commitCLIWorkspace(t, root)
@@ -115,7 +115,7 @@ func TestStatusInvalidWorkspaceDoesNotPrintNoSkillsYetBUG08(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
+	if code := Run([]string{"init", root}, &stdout, &stderr); code != 0 {
 		t.Fatal(stderr.String())
 	}
 	// Introduce an invalid file into the workspace
@@ -149,7 +149,7 @@ func TestStatusSuggestsRunnableCreateCommandBUG17(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
+	if code := Run([]string{"init", root}, &stdout, &stderr); code != 0 {
 		t.Fatal(stderr.String())
 	}
 
@@ -166,24 +166,6 @@ func TestStatusSuggestsRunnableCreateCommandBUG17(t *testing.T) {
 	}
 	if !strings.Contains(out, "skillhub skill create my-skill") {
 		t.Errorf("status missing runnable skill create suggestion:\n%s", out)
-	}
-}
-
-func TestIntegrateCommandAlias(t *testing.T) {
-	t.Parallel()
-	root := filepath.Join(t.TempDir(), "workspace")
-	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
-		t.Fatal(stderr.String())
-	}
-	stdout.Reset()
-	stderr.Reset()
-	project := t.TempDir()
-	if code := Run([]string{"integrate", "--workspace", root, "--project", project, "--yes"}, &stdout, &stderr); code != 0 {
-		t.Fatalf("integrate exit = %d: %s", code, stderr.String())
-	}
-	if _, err := os.Stat(filepath.Join(project, ".mcp.json")); err != nil {
-		t.Fatalf("integrate did not write .mcp.json: %v", err)
 	}
 }
 

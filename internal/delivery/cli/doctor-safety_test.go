@@ -39,7 +39,7 @@ func TestDoctorFixPreservesBlockedWorkspaceAndUnregisteredHosts(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Chdir(project)
-	code, stdout, stderr := runCLI(t, "doctor", "--workspace", workspace, "--fix", "--yes", "--json")
+	code, stdout, stderr := runCLI(t, "doctor", "--workspace", workspace, "--fix", "--json")
 	if code != 0 {
 		t.Fatalf("doctor failed: %d %s", code, stderr)
 	}
@@ -56,7 +56,7 @@ func TestDoctorFixPreservesBlockedWorkspaceAndUnregisteredHosts(t *testing.T) {
 	if err := os.WriteFile(marker, original, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if code, _, stderr := runCLI(t, "doctor", "--workspace", workspace, "--fix", "--yes"); code != 0 {
+	if code, _, stderr := runCLI(t, "doctor", "--workspace", workspace, "--fix"); code != 0 {
 		t.Fatal(stderr)
 	}
 	if after, err := os.ReadFile(codexPath); err != nil || !bytes.Equal(after, codex) {
@@ -80,7 +80,7 @@ func TestDoctorFixDoesNotRedirectOtherWorkspaceConnections(t *testing.T) {
 		}
 	}
 	t.Chdir(project)
-	if code, _, stderr := runCLI(t, "doctor", "--workspace", workspace, "--fix", "--yes"); code != 0 {
+	if code, _, stderr := runCLI(t, "doctor", "--workspace", workspace, "--fix"); code != 0 {
 		t.Fatal(stderr)
 	}
 	for _, path := range paths {

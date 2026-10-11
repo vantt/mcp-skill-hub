@@ -19,7 +19,7 @@ import (
 func newEmptyMCPWorkspace(t *testing.T) string {
 	t.Helper()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (app.WorkspaceService{}).Init(root, true); err != nil {
+	if _, err := (app.WorkspaceService{}).Init(root, false); err != nil {
 		t.Fatal(err)
 	}
 	return root
@@ -364,7 +364,7 @@ func TestSkillToolsStdioSubprocess(t *testing.T) {
 	binary := buildSkillHub(t)
 	root := filepath.Join(t.TempDir(), "workspace")
 
-	initCmd := exec.Command(binary, "init", root, "--yes")
+	initCmd := exec.Command(binary, "init", root)
 	if out, err := initCmd.CombinedOutput(); err != nil {
 		t.Fatalf("init failed: %v: %s", err, out)
 	}

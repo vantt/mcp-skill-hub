@@ -18,6 +18,7 @@ import (
 
 	"github.com/vantt/mcp-skill-hub/internal/hostintegration"
 	"github.com/vantt/mcp-skill-hub/internal/hubtoken"
+	"github.com/vantt/mcp-skill-hub/internal/shellquote"
 	"github.com/vantt/mcp-skill-hub/internal/skillruntime"
 	"github.com/vantt/mcp-skill-hub/internal/version"
 )
@@ -229,7 +230,7 @@ func ReadHubToken(hubURL, tokenFile string) HubToken {
 			return HubToken{Source: "environment", Problem: &RemoteCheck{
 				ID: "token", Label: "Hub token", Status: CheckFailed,
 				Detail: "The entry has no --token-file and " + HubTokenEnv + " is not set in this shell, so the proxy may have no token.",
-				Fix:    "Run `skillhub connect --hub " + hubURL + " --token-file <path> --yes` with a copy of the hub's token file, or set " + HubTokenEnv + " in the environment the agent host starts in.",
+				Fix:    "Run `skillhub connect --hub " + hubURL + " --token-file <path>` with a copy of the hub's token file, or set " + HubTokenEnv + " in the environment the agent host starts in.",
 			}}
 		}
 		return HubToken{Value: value, Source: "environment"}
@@ -448,7 +449,7 @@ func (service RemoteDoctorService) checks(ctx context.Context, hubURL, tokenFile
 		return []RemoteCheck{{
 			ID: "hub_reachable", Label: "Hub reachable", Status: CheckFailed,
 			Detail: "The entry's hub URL cannot be used: " + problem.Render.Why,
-			Fix:    "Connect again with the URL the hub printed when it started: `skillhub connect --hub <url> --token-file <path> --yes`.",
+			Fix:    "Connect again with the URL the hub printed when it started: `skillhub connect --hub <url> --token-file <path>`.",
 		}}
 	}
 	token := ReadHubToken(hubURL, tokenFile)
@@ -469,10 +470,11 @@ func (service RemoteDoctorService) checks(ctx context.Context, hubURL, tokenFile
 	if !maySend && token.Problem == nil && probe.Outcome == ProbeNoToken {
 		command := "skillhub connect --hub " + hubURL
 		if tokenFile != "" {
-			command += " --token-file " + shellArgument(tokenFile)
+			command += " --token-file " + shellquote.Arg(tokenFile)
 		}
+		command += " --dry-run"
 		accepted.Status = CheckSkipped
-		accepted.Detail = "not checked: only this project's files name this hub, so doctor does not send it the token; check it with `" + command + "`, a preview that writes nothing"
+		accepted.Detail = "not checked: only this project's files name this hub, so doctor does not send it the token; check it with `" + command + "`, which sends the token because you run it and writes nothing"
 		version.Detail = "not checked: the token was not sent"
 	}
 	checks = append(checks, accepted, version)
@@ -498,7 +500,7 @@ func reachableCheck(hubURL string, probe HubProbe) RemoteCheck {
 	case ProbeNotAHub:
 		check.Status = CheckFailed
 		check.Detail = fmt.Sprintf("Something answers at %s, but it is not a Skill Hub listener (HTTP %d).", hubURL, probe.HTTPStatus)
-		check.Fix = "Check the address: machine B prints the hub URL when `skillhub serve mcp --addr ...` starts; reconnect with `skillhub connect --hub <that URL> --yes`."
+		check.Fix = "Check the address: machine B prints the hub URL when `skillhub serve mcp --addr ...` starts; reconnect with `skillhub connect --hub <that URL>`."
 	case ProbeHubError:
 		check.Status = CheckFailed
 		check.Detail = fmt.Sprintf("The hub at %s answers with an error (HTTP %d: %s).", hubURL, probe.HTTPStatus, probe.Reason)

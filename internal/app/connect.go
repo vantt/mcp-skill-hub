@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/vantt/mcp-skill-hub/internal/hostintegration"
+	"github.com/vantt/mcp-skill-hub/internal/shellquote"
 	"github.com/vantt/mcp-skill-hub/internal/workspace"
 )
 
@@ -26,11 +27,13 @@ type ConnectRequest struct {
 	Workspace string
 	Global    bool
 	Hosts     []hostintegration.Host
-	Yes       bool
+	// DryRun reports the changes without writing them.
+	DryRun bool
 }
 
-// Connect previews the connection unless Yes is set. It reuses the same
-// preimage-pinned host integration machinery as workspace initialization.
+// Connect writes the connection, or with DryRun only reports it. It reuses
+// the same preimage-pinned host integration machinery as workspace
+// initialization.
 func (service ConnectService) Connect(ctx context.Context, request ConnectRequest) (Result, error) {
 	workspacePath, problem := service.resolveWorkspace(request.Workspace)
 	if problem != nil {
@@ -73,16 +76,16 @@ func (service ConnectService) Connect(ctx context.Context, request ConnectReques
 		result := NewResult(StatusReady, "Agent connection for "+label+" is already current; nothing to change.")
 		return result, nil
 	}
-	if !request.Yes {
-		result := NewResult(StatusActionRequired, "Preview only: agent connection for "+label+" was not written without --yes.")
+	if request.DryRun {
+		result := NewResult(StatusActionRequired, "Dry run: agent connection for "+label+" was not written.")
 		for _, change := range plan.Changes {
-			item := hostChangeItem(change.Host, levels[change.Host], change.Kind, change.Path, "Will be written after confirmation.")
+			item := hostChangeItem(change.Host, levels[change.Host], change.Kind, change.Path, "Would be written.")
 			if change.Preview != "" {
 				item.Summary += "\nManaged diff preview:\n" + change.Preview
 			}
 			result.Items = append(result.Items, item)
 		}
-		result.SuggestedActions = []Action{{Label: "Write the agent connection", Command: connectCommand(request, workspacePath) + " --yes", RequiresConfirmation: true}}
+		result.SuggestedActions = []Action{{Label: "Write the agent connection", Command: connectCommand(request, workspacePath), RequiresConfirmation: true}}
 		return result, nil
 	}
 	applied, err := hostintegration.Apply(ctx, plan, hostintegration.ApplyOptions{Confirmed: true})
@@ -100,7 +103,7 @@ func (service ConnectService) Connect(ctx context.Context, request ConnectReques
 }
 
 func (service ConnectService) resolveWorkspace(path string) (string, *Error) {
-	const workspaceFix = "Pass `--workspace <path>`, set the SKILLHUB_WORKSPACE environment variable, or run `skillhub init <path> --yes`."
+	const workspaceFix = "Pass `--workspace <path>`, set the SKILLHUB_WORKSPACE environment variable, or run `skillhub init <path>`."
 	if path == "" {
 		discovered, err := workspace.Discover("")
 		if err != nil {
@@ -164,9 +167,9 @@ func connectCommand(request ConnectRequest, workspacePath string) string {
 	if request.Global {
 		parts = append(parts, "--global")
 	} else if request.Project != "" {
-		parts = append(parts, "--project", request.Project)
+		parts = append(parts, "--project", shellquote.Arg(request.Project))
 	}
-	parts = append(parts, "--workspace", workspacePath)
+	parts = append(parts, "--workspace", shellquote.Arg(workspacePath))
 	for _, host := range request.Hosts {
 		parts = append(parts, "--host", string(host))
 	}

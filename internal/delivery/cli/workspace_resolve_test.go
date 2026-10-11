@@ -13,7 +13,7 @@ func initWorkspace(t *testing.T) string {
 	t.Helper()
 	ws := filepath.Join(t.TempDir(), "ws")
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"init", ws, "--yes"}, &stdout, &stderr); code != 0 {
+	if code := Run([]string{"init", ws}, &stdout, &stderr); code != 0 {
 		t.Fatalf("init failed: %d: %s", code, stderr.String())
 	}
 	return ws
@@ -333,7 +333,7 @@ func TestNoNonInteractiveUseWordingInAnyError(t *testing.T) {
 		{"skill", "show", "foo"},
 		{"source", "list"},
 		{"source", "capture", "https://example.com", "--reason", "test"},
-		{"check"},
+		{"source", "check"},
 		{"migrate"},
 		{"resolve", "--request", "req.json"},
 		{"telemetry", "health"},
@@ -418,7 +418,7 @@ func TestDoctorFixDoesNotCreateWorkspaceAtMissingPath(t *testing.T) {
 	// doctor --fix --yes on missing path fails and creates nothing
 	stdout.Reset()
 	stderr.Reset()
-	code = Run([]string{"doctor", "--fix", "--yes", "--workspace", missingPath}, &stdout, &stderr)
+	code = Run([]string{"doctor", "--fix", "--workspace", missingPath}, &stdout, &stderr)
 	if code == 0 {
 		t.Fatal("doctor --fix --yes on missing path should fail")
 	}
@@ -456,11 +456,11 @@ func TestUnknownIDsExitNonZero(t *testing.T) {
 	t.Parallel()
 	ws := initWorkspace(t)
 
-	// 1. check <unknown-id> exits non-zero and reports unknown source
+	// 1. source check <unknown-id> exits non-zero and reports unknown source
 	var stdout, stderr bytes.Buffer
-	code := Run([]string{"check", "unknown-source-id", "--workspace", ws}, &stdout, &stderr)
+	code := Run([]string{"source", "check", "unknown-source-id", "--workspace", ws}, &stdout, &stderr)
 	if code == 0 {
-		t.Fatal("check unknown-source-id should exit non-zero")
+		t.Fatal("source check unknown-source-id should exit non-zero")
 	}
 	if !strings.Contains(stderr.String(), "unknown-source-id") {
 		t.Fatalf("expected error mentioning unknown-source-id, got:\n%s", stderr.String())
@@ -502,7 +502,7 @@ func TestAllCommandFailuresExitNonZero(t *testing.T) {
 		{"skill unknown subcommand", []string{"skill", "invalidsub"}},
 		{"source list missing ws", []string{"source", "list"}},
 		{"source unknown subcommand", []string{"source", "invalidsub"}},
-		{"check missing ws", []string{"check"}},
+		{"source check missing ws", []string{"source", "check"}},
 		{"resolve missing args", []string{"resolve"}},
 		{"eval unknown subcommand", []string{"eval", "invalidsub"}},
 		{"telemetry unknown subcommand", []string{"telemetry", "invalidsub"}},

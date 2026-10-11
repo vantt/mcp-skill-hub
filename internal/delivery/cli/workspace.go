@@ -12,14 +12,18 @@ import (
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
 	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
+	"github.com/vantt/mcp-skill-hub/internal/shellquote"
 )
 
 func runInit(args []string, stdout, stderr io.Writer) int {
-	path, jsonOutput, yes, verbose, force, err := initFlags(args)
+	path, jsonOutput, dryRun, verbose, force, err := initFlags(args)
 	if err != nil {
-		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub init [path]` to preview, then add `--yes` to apply.")
+		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub init [path]`, or add `--dry-run` to see what it would do.")
 	}
-	result, err := (app.WorkspaceService{}).Init(path, yes, force)
+	result, err := (app.WorkspaceService{}).Init(path, dryRun, force)
+	if dryRun {
+		return writeDryRunResult(result, err, stdout, stderr, jsonOutput)
+	}
 	compact := err == nil && !jsonOutput && !verbose && result.Error == nil &&
 		(result.Status == app.StatusApplied || result.Status == app.StatusReady)
 	if !compact {
@@ -59,10 +63,12 @@ func renderInitSummary(stdout io.Writer, workspacePath string, result app.Result
 		p.Line("Agent connection for this workspace is already in place.")
 	}
 	p.Blank()
+	quoted := shellquote.Arg(workspacePath)
 	p.Line("Next:")
-	p.Line(fmt.Sprintf("  1. Commit the workspace: %s && git -C %s commit -m \"Initialize Skill Hub workspace\"", stageWorkspaceCommand(workspacePath), workspacePath))
-	p.Line(fmt.Sprintf("  2. Connect another project: cd <project> && skillhub connect --workspace %s --yes", workspacePath))
-	p.Line(fmt.Sprintf("     (add -g instead to connect every project: skillhub connect -g --workspace %s --yes)", workspacePath))
+	p.Line("  1. Commit the workspace:")
+	p.Command(stageWorkspaceCommand(quoted) + " && git -C " + quoted + " commit -m \"Initialize Skill Hub workspace\"")
+	p.Line("  2. Connect another project (add -g to connect every project instead):")
+	p.Command("cd <project> && skillhub connect --workspace " + quoted)
 	p.Line("  3. Open your agent there and ask: \"curate my Skill Hub\"")
 }
 
@@ -120,7 +126,7 @@ func runValidate(ctx context.Context, args []string, stdout, stderr io.Writer) i
 }
 
 func runDoctor(args []string, stdout, stderr io.Writer) int {
-	path, jsonOutput, fix, yes, err := doctorFlags(args)
+	path, jsonOutput, fix, dryRun, err := doctorFlags(args)
 	// Entries in this project or the user scope that start the proxy for a
 	// hub on another machine. Without any, doctor works exactly as before.
 	remotes := remoteEntriesHere()
@@ -133,11 +139,11 @@ func runDoctor(args []string, stdout, stderr io.Writer) int {
 			}
 			return writeWorkspaceResolutionError(stdout, stderr, jsonOutput, resErr)
 		}
-		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub doctor --workspace <path>` or add `--fix --yes` after preview.")
+		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub doctor [--workspace <path>] [--fix [--dry-run]]`.")
 	}
 	var result app.Result
 	if fix {
-		result, err = (app.WorkspaceService{}).DoctorFix(path, yes)
+		result, err = (app.WorkspaceService{}).DoctorFix(path, dryRun)
 	} else {
 		result, err = (app.WorkspaceService{}).Doctor(path)
 	}
@@ -151,13 +157,19 @@ func runDoctor(args []string, stdout, stderr io.Writer) int {
 			}{Result: result, RemoteHubs: reports})
 		}
 	}
-	code := writeWorkspaceResult(result, err, stdout, stderr, jsonOutput)
+	var code int
+	if dryRun {
+		code = writeDryRunResult(result, err, stdout, stderr, jsonOutput)
+	} else {
+		code = writeWorkspaceResult(result, err, stdout, stderr, jsonOutput)
+	}
 	if code != 0 || jsonOutput {
 		return code
 	}
 	p := termui.New(stdout)
 	for _, action := range result.SuggestedActions {
-		p.Line("FIX: " + action.Command)
+		p.Line("FIX: " + action.Label + ":")
+		p.Command(action.Command)
 	}
 	if len(reports) > 0 {
 		// The workspace report above came from another printer, so this one
@@ -232,20 +244,23 @@ func renderRemoteDoctor(p *termui.Printer, reports []app.RemoteHubReport) {
 	}
 }
 
-func initFlags(args []string) (path string, jsonOutput, yes, verbose, force bool, err error) {
+func initFlags(args []string) (path string, jsonOutput, dryRun, verbose, force bool, err error) {
 	for _, arg := range args {
 		switch arg {
 		case "--json":
 			jsonOutput = true
-		case "--yes":
-			yes = true
+		case "--dry-run":
+			dryRun = true
 		case "--verbose":
 			verbose = true
 		case "--force":
 			force = true
 		default:
-			if strings.HasPrefix(arg, "-") || path != "" {
-				return "", jsonOutput, yes, verbose, force, fmt.Errorf("init accepts at most one workspace path")
+			if strings.HasPrefix(arg, "-") {
+				return "", jsonOutput, dryRun, verbose, force, fmt.Errorf("unknown argument %q", arg)
+			}
+			if path != "" {
+				return "", jsonOutput, dryRun, verbose, force, fmt.Errorf("init accepts at most one workspace path")
 			}
 			path = arg
 		}
@@ -253,7 +268,7 @@ func initFlags(args []string) (path string, jsonOutput, yes, verbose, force bool
 	if path == "" {
 		path = "."
 	}
-	return path, jsonOutput, yes, verbose, force, nil
+	return path, jsonOutput, dryRun, verbose, force, nil
 }
 
 func workspaceFlag(args []string) (path string, jsonOutput bool, err error) {
@@ -278,33 +293,33 @@ func workspaceFlag(args []string) (path string, jsonOutput bool, err error) {
 	return resolved, jsonOutput, nil
 }
 
-func doctorFlags(args []string) (path string, jsonOutput, fix, yes bool, err error) {
+func doctorFlags(args []string) (path string, jsonOutput, fix, dryRun bool, err error) {
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--json":
 			jsonOutput = true
 		case "--fix":
 			fix = true
-		case "--yes":
-			yes = true
+		case "--dry-run":
+			dryRun = true
 		case "--workspace":
 			if i+1 == len(args) || strings.HasPrefix(args[i+1], "-") {
-				return "", jsonOutput, fix, yes, fmt.Errorf("--workspace requires a path")
+				return "", jsonOutput, fix, dryRun, fmt.Errorf("--workspace requires a path")
 			}
 			path = args[i+1]
 			i++
 		default:
-			return "", jsonOutput, fix, yes, fmt.Errorf("unknown argument %q", args[i])
+			return "", jsonOutput, fix, dryRun, fmt.Errorf("unknown argument %q", args[i])
 		}
 	}
-	if yes && !fix {
-		return "", jsonOutput, fix, yes, fmt.Errorf("--yes requires --fix")
+	if dryRun && !fix {
+		return "", jsonOutput, fix, dryRun, fmt.Errorf("--dry-run requires --fix; doctor without --fix changes nothing")
 	}
 	resolved, resErr := resolveWorkspace(path)
 	if resErr != nil {
-		return "", jsonOutput, fix, yes, resErr
+		return "", jsonOutput, fix, dryRun, resErr
 	}
-	return resolved, jsonOutput, fix, yes, nil
+	return resolved, jsonOutput, fix, dryRun, nil
 }
 
 func writeWorkspaceResult(result app.Result, err error, stdout, stderr io.Writer, jsonOutput bool) int {
@@ -354,13 +369,36 @@ func writeWorkspaceResult(result app.Result, err error, stdout, stderr io.Writer
 	return 0
 }
 
+// writeDryRunResult prints what a --dry-run would change under a "Would
+// change:" heading. Errors and --json output are the same as without
+// --dry-run.
+func writeDryRunResult(result app.Result, err error, stdout, stderr io.Writer, jsonOutput bool) int {
+	if err != nil || jsonOutput || result.Error != nil {
+		return writeWorkspaceResult(result, err, stdout, stderr, jsonOutput)
+	}
+	p := termui.New(stdout)
+	p.Line(result.Summary)
+	var bullets []string
+	for _, item := range result.Items {
+		bullets = append(bullets, item.Summary)
+	}
+	if len(bullets) > 0 {
+		p.Line("Would change:")
+		p.Bullets(bullets...)
+	}
+	for _, warning := range result.Warnings {
+		p.Warning(warning.Summary)
+	}
+	return printerCode(p)
+}
+
 func writeInvalidWorkspace(stdout, stderr io.Writer, jsonOutput bool, cause error) int {
 	var resErr *WorkspaceResolutionError
 	if errors.As(cause, &resErr) {
 		return writeWorkspaceResolutionError(stdout, stderr, jsonOutput, resErr)
 	}
 	why := cause.Error()
-	fix := "Run `skillhub doctor --workspace <path>` to inspect safe remediation, then use `--fix --yes` only after review."
+	fix := "Run `skillhub doctor --workspace <path>` to inspect safe remediation, then `skillhub doctor --fix --workspace <path>` to apply it."
 	if strings.Contains(why, "canonical validation failed") {
 		fix = "Correct the content errors in the affected file (or use `skillhub skill edit <id>`), then run `skillhub validate`."
 	}

@@ -18,7 +18,7 @@ func TestSkillCLIEndToEndPreviewConfirmActivateShowAndArchive(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
+	if code := Run([]string{"init", root}, &stdout, &stderr); code != 0 {
 		t.Fatalf("init = %d: %s", code, stderr.String())
 	}
 	contentFile := filepath.Join(t.TempDir(), "consumer-review.md")
@@ -79,7 +79,7 @@ func TestSkillCLIConfirmsStoredExactProposalAndRejectsInterveningEdit(t *testing
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
+	if code := Run([]string{"init", root}, &stdout, &stderr); code != 0 {
 		t.Fatal(stderr.String())
 	}
 	create := []string{"skill", "create", "--workspace", root, "--id", "stored-proposal", "--collection", "software", "--name", "Stored Proposal", "--description", "Confirm exact bytes", "--trigger", "confirm proposal", "--not-for", "other", "--min-scope", "single_step", "--json"}
@@ -150,7 +150,7 @@ func TestSkillCLIExternalEditorUsesValidatedMutationFlow(t *testing.T) {
 	}
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
+	if code := Run([]string{"init", root}, &stdout, &stderr); code != 0 {
 		t.Fatal(stderr.String())
 	}
 	create := []string{"skill", "create", "--workspace", root, "--id", "editor-skill", "--collection", "software", "--name", "Editor Skill", "--description", "Editor flow", "--trigger", "edit skill", "--not-for", "other work", "--min-scope", "single_step", "--yes"}
@@ -185,7 +185,7 @@ func TestSkillCLIStoredEditorProposalDoesNotReopenEditorAtConfirm(t *testing.T) 
 	}
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
+	if code := Run([]string{"init", root}, &stdout, &stderr); code != 0 {
 		t.Fatal(stderr.String())
 	}
 	if code := Run([]string{"skill", "create", "--workspace", root, "--id", "editor-confirm", "--collection", "software", "--name", "Editor Confirm", "--description", "Editor proposal", "--trigger", "edit", "--not-for", "other", "--min-scope", "single_step", "--yes"}, &stdout, &stderr); code != 0 {
@@ -228,7 +228,7 @@ func TestSkillCLIRoutingExamplesAndScriptsApproval(t *testing.T) {
 		stderr.Reset()
 		return Run(args, &stdout, &stderr)
 	}
-	if code := run("init", root, "--yes"); code != 0 {
+	if code := run("init", root); code != 0 {
 		t.Fatalf("init = %d: %s", code, stderr.String())
 	}
 	readMetadata := func() map[string]any {
@@ -296,7 +296,7 @@ func TestParseSkillFlagsValidatesExamplesAndScriptsApproval(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
+	if code := Run([]string{"init", root}, &stdout, &stderr); code != 0 {
 		t.Fatalf("init = %d: %s", code, stderr.String())
 	}
 	valid := "sha256:" + strings.Repeat("a", 64)
@@ -341,7 +341,7 @@ func TestSkillEditRuntimeFileSetsAndRemovesRuntimeBlock(t *testing.T) {
 		stderr.Reset()
 		return Run(args, &stdout, &stderr)
 	}
-	if code := run("init", root, "--yes"); code != 0 {
+	if code := run("init", root); code != 0 {
 		t.Fatalf("init = %d: %s", code, stderr.String())
 	}
 	if code := run("skill", "create", "rt-edit", "--workspace", root, "--collection", "software", "--name", "RT Edit", "--description", "Runtime edit fixture", "--yes", "--json"); code != 0 {
@@ -400,5 +400,35 @@ func TestSkillEditRuntimeFileSetsAndRemovesRuntimeBlock(t *testing.T) {
 	}
 	if code := run("skill", "edit", "rt-edit", "--workspace", root, "--runtime-file", writeRuntimeFile("# nothing\n"), "--yes"); code == 0 {
 		t.Fatal("an empty runtime file must be rejected")
+	}
+}
+
+// TestSkillSubcommandHintMatchesHelp keeps the "which subcommand" hint and
+// `skillhub help skill` naming the same subcommands.
+func TestSkillSubcommandHintMatchesHelp(t *testing.T) {
+	t.Parallel()
+	help := commandUsage["skill"]
+	section := help[strings.Index(help, "Subcommands:"):strings.Index(help, "\nNote:")]
+	for _, name := range skillSubcommands {
+		if !strings.Contains(section, "\n  "+name+" ") && !strings.Contains(section, "| "+name+" ") {
+			t.Errorf("help skill does not list %q", name)
+		}
+	}
+	for _, line := range strings.Split(section, "\n") {
+		// A subcommand line starts with two spaces and the subcommand name;
+		// continuation lines are indented further.
+		if fields := strings.Fields(line); strings.HasPrefix(line, "  ") && !strings.HasPrefix(line, "   ") && len(fields) > 0 {
+			found := false
+			for _, name := range skillSubcommands {
+				found = found || fields[0] == name
+			}
+			if !found {
+				t.Errorf("help skill lists %q, which the hint leaves out", fields[0])
+			}
+		}
+	}
+	code, _, stderr := runCLI(t, "skill")
+	if code != 2 || !strings.Contains(stderr, "skillhub skill "+strings.Join(skillSubcommands, "|")) {
+		t.Fatalf("bare skill: exit %d, stderr %q", code, stderr)
 	}
 }

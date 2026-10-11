@@ -38,7 +38,7 @@ func createTestSkill(t *testing.T, root, id, name string, active bool) {
 
 func TestUsageServiceFunnel(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -369,7 +369,7 @@ func TestUsageServiceFunnel(t *testing.T) {
 
 func TestFunnelSkillsListExcludesClientNames(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, false); err != nil {
 		t.Fatal(err)
 	}
 	createTestSkill(t, root, "real-skill", "Real Skill", true)

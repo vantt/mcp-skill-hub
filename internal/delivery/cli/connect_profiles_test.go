@@ -15,7 +15,7 @@ import (
 func TestConnectClaudeCurationGuidance(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	workspace := initTestWorkspace(t)
-	for _, command := range []string{"connect", "integrate"} {
+	for _, command := range []string{"connect"} {
 		for _, jsonOutput := range []bool{false, true} {
 			project := t.TempDir()
 			args := []string{command, "--project", project, "--workspace", workspace}
@@ -24,8 +24,8 @@ func TestConnectClaudeCurationGuidance(t *testing.T) {
 			}
 			for step, apply := range []bool{false, true, true} {
 				call := slices.Clone(args)
-				if apply {
-					call = append(call, "--yes")
+				if !apply {
+					call = append(call, "--dry-run")
 				}
 				code, stdout, stderr := runCLI(t, call...)
 				if code != 0 {
@@ -83,7 +83,7 @@ func TestConnectOtherHostsOmitCurationGuidance(t *testing.T) {
 		for _, jsonOutput := range []bool{false, true} {
 			args := []string{"connect", "--project", project, "--workspace", workspace, "--host", host}
 			if jsonOutput {
-				args = append(args, "--json", "--yes")
+				args = append(args, "--json")
 			}
 			code, stdout, stderr := runCLI(t, args...)
 			if code != 0 || strings.Contains(stdout, "curation_guidance") || strings.Contains(stdout, "select skillhub-curation") {
@@ -144,7 +144,7 @@ func TestDoctorMigratesLegacyClaudeConnections(t *testing.T) {
 			if err != nil || !bytes.Equal(after, legacy) {
 				t.Fatalf("doctor preview modified legacy registration: %v", err)
 			}
-			if code, _, stderr := runCLI(t, "doctor", "--workspace", workspace, "--fix", "--yes"); code != 0 {
+			if code, _, stderr := runCLI(t, "doctor", "--workspace", workspace, "--fix"); code != 0 {
 				t.Fatal(stderr)
 			}
 			after, err = os.ReadFile(path)

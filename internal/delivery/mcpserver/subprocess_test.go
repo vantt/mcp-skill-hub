@@ -41,7 +41,7 @@ func TestCLICreateActivateThenMCPListGetRead(t *testing.T) {
 		}
 		return output
 	}
-	run("init", root, "--yes")
+	run("init", root)
 	run("skill", "create", "--workspace", root, "--id", "created-cli", "--collection", "core", "--name", "Created CLI", "--description", "Created through the canonical CLI lifecycle.", "--operation", "review", "--trigger", "review a created CLI skill", "--not-for", "write prose", "--min-scope", "multi_step", "--idempotency-key", "create-e2e", "--yes")
 	skillPath := filepath.Join(root, "skills", "core", "created-cli", "SKILL.md")
 	if err := os.WriteFile(skillPath, []byte("---\nname: created-cli\ndescription: Created through the canonical CLI lifecycle.\n---\n\n# Created CLI\n\nMeaningful procedures.\n"), 0o644); err != nil {
