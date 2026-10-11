@@ -192,3 +192,18 @@ Evidence gathered on 2026-10-11 at `c86b295` (main, clean). Paths are relative t
 - Verified in this project: Claude Code (MCP registration, native curator load, server toggle), per the matrix.
 - Not verified: Gemini CLI and Codex skill loading in this project; any host following a wrapper's include
   instruction (Phase 8 checks Claude Code by hand).
+
+## Doctor and status extension point (message from the onboarding session, 2026-10-12)
+
+Implemented on the onboarding branch, not yet on main; re-verify names after it lands. Package `internal/app`, file
+`health.go`: `Depth` (`DepthLight`, `DepthFull`); `Severity` (`ok`, `notice`, `problem`, `skipped`); `Changed []string`;
+`FixAction{Summary, Apply func(ctx) (Changed, error)}`; `Finding{Code, Label, Severity, Message, Fix *FixAction
+(findings sharing one *FixAction run it once), Manual, Reason, Detail}`; `Section{Kind, Root, Title, Findings}`;
+`CheckProvider{Name(); Applies(RoleReport) bool; Check(ctx, RoleReport, Depth) []Finding}`; `RegisterProvider` (call from
+`init()`; panics on nil or duplicate name); `Run(ctx, RoleReport, Depth) []Section`; `ApplyFixes(ctx, []Section)
+FixReport`; `(RoleReport) HealthHub() string` (what `Applies` should test). Provider findings land in the hub section
+after the built-ins; `Check` only reads and never sends the hub token; a panicking provider shows a
+`<name>_check_failed` problem; notice-only findings never change the doctor exit code. Wrapper and canonical integrity
+stays in hostintegration inspection items. `machine_file_tracked` and `gitignore_entry_missing` and their tests are
+kept; `doctor --fix` reports a tracked connection file with its `git rm --cached` command and still applies the
+other fixes. Remaining on their side before 'done, main is final': README/docs phase, merge into main, `make check`.
