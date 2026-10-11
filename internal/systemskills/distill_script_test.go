@@ -582,7 +582,7 @@ func TestDistillScriptEvidenceCheckNeverFetchesOrRunsMirrorConfig(t *testing.T) 
 
 	r := runScript(t, t.TempDir(), env, "check", file)
 	want := "ERROR: distill.yaml is invalid; nothing was written\n" +
-		"  - refs: part@" + c[:12] + ":docs/a.md#L1: blob not fetched; run git fetch in the mirror\n" +
+		"  - refs: part@" + c[:12] + ":docs/a.md#L1: blob not fetched; read it once with git --git-dir=<mirror> show " + c[:12] + ":docs/a.md (that downloads it), then run check again\n" +
 		"  - refs: part@" + c[:12] + ":docs/nope.md does not resolve in mirror part\n"
 	if r.code != 1 || r.stderr != want {
 		t.Errorf("code %d\n got:\n%s\nwant:\n%s", r.code, r.stderr, want)

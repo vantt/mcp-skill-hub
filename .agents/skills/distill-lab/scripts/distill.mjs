@@ -990,7 +990,7 @@ function checkWhere(data, hub, errors) {
       }
       const found = cache.get(cacheKey);
       if (found.timedOut) errors.push(`${key}: ${ref}: git timed out in mirror ${src}`);
-      else if (found.notFetched) errors.push(`${key}: ${ref}: blob not fetched; run git fetch in the mirror`);
+      else if (found.notFetched) errors.push(`${key}: ${ref}: blob not fetched; read it once with git --git-dir=<mirror> show ${commit}:${file} (that downloads it), then run check again`);
       else if (found.unresolved) errors.push(`${key}: ${ref} does not resolve in mirror ${src}${refusal(found.mirror)}`);
       else {
         const last = end || start;
