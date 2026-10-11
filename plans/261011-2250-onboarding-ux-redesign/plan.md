@@ -76,7 +76,7 @@ checkout; patterns 1-9 adopted, pattern 10 "pairing codes" deferred per decision
 10. **No pairing codes.** Token transfer is a printed `scp` line plus `--token-file`. No automatic push beyond
     decision 3.
 
-## Planner decisions (derived from the code; confirm in Open questions if you disagree)
+## Planner decisions (derived from the code; see Resolved questions)
 
 | # | Decision | Evidence and reason |
 |---|---|---|
@@ -192,7 +192,7 @@ both edit `internal/delivery/cli/help.go`, so they are not run in parallel. Phas
 | `cd <folder> && ...` fails in Windows PowerShell 5.1 | High x Low | Windows blocks in docs use `cd <folder>; skillhub init`; printed next commands use the platform form. |
 | Two quoting styles in printed commands (`app.shellArgument` vs `cli.shellQuote`, backlog F15) break copy-paste on Windows | Medium x Medium | Phase 1 makes one platform-aware quoting helper used by every printed command. |
 | macOS temp paths are long and symlinked (`/var` -> `/private/var`) | Medium x Medium | Tests compare paths with `EvalSymlinks` (as `samePath` does, `internal/workspace/workspace.go:318`); commands print via the non-wrapping `termui.Command` (`termui.go:264`). |
-| Git identity missing on a fresh machine makes the first commit fail | Medium x Medium | See Open question 1; tests set an identity explicitly. |
+| Git identity missing on a fresh machine makes the first commit fail | Medium x Medium | Resolved question 1; tests set an identity explicitly. |
 | Windows and macOS cannot be tested locally | High x Medium | CI matrix is the gate; each phase lists the platform-sensitive tests; wait for green before merging. |
 
 ### Security trade-off (decision 7)
@@ -235,17 +235,19 @@ Each phase is one or more commits on a feature branch; `git revert` of a phase r
 Phase 2 change agent registrations: rolling back after users re-connected requires `connect` again with the old
 binary, so phases 1-4 ship in one release, never separately.
 
-## Open questions
+## Resolved questions (user confirmed 2026-10-11)
 
-1. Git identity missing on the first commit: fail with Git's message plus a hint (`git config --global user.email`),
-   or commit as `Skill Hub <skillhub@localhost>` so the user never types a Git command? Recommended: the fallback
-   identity only for the first commit, and say so in the output.
-2. `init <git-url>` inside an existing hub with no remote, when the remote is empty: push the existing history too?
-   Recommended: yes (same rule as decision 3, remote empty -> push), never when the remote has refs.
-3. Stdio entry name: `mcp stdio` (P1) or keep the hidden name `mcp serve` so existing registrations keep working
-   without `doctor --fix`?
-4. Should `connect <path>` also update the stored hub (P6 says no)?
-5. Confirm P3: `--yes` remains on curation commands and `maintain migrate`.
-6. Do Codex and Gemini CLI let a project entry override a user-scope entry with the same server name? The `both`
-   precedence text in status depends on it; Claude Code is the only verified host
-   (`docs/mcp-compatibility-matrix.json`).
+1. Missing Git identity on the first commit: `init` commits as `Skill Hub <skillhub@localhost>` for that commit only and
+   says so in the output.
+2. `init <git-url>` inside an existing hub with no remote, remote empty: push the existing history. Never push when the
+   remote already has refs.
+3. The stdio entry agents launch is the hidden `skillhub mcp stdio` (P1). Old registrations are rewritten by
+   `doctor --fix`.
+4. `connect <path>` does not change the stored hub (P6).
+5. `--yes` stays on curation commands and `maintain migrate` (P3).
+6. A project entry wins over a user-scope entry with the same server name in Claude Code, Codex and Gemini CLI
+   (see [scope precedence report](../reports/researcher-261011-mcp-config-scope-precedence.md)). Claude Code and
+   Gemini CLI replace the whole entry; Codex merges the two entries key by key (from source, not documented), so
+   stale keys from a user-scope entry can leak into a project entry. Consequences for this plan: the project entry
+   that `connect` writes must set every field it needs, and `status` explains a folder that is both a hub and a
+   client by naming the winning scope. Untested: whether Codex rejects a merged entry that mixes transports.

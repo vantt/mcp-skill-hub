@@ -62,11 +62,11 @@ discovery) but takes its inputs from `DetectRole`. Its error is role-aware:
 | `init <git-url>`, remote empty | As "empty folder", then `git remote add origin <url>` and `git push -u origin HEAD`; print remote URL, branch and commit pushed. Push failure: print Git's error; the local hub stays valid and the message gives `skillhub init <url>` to retry the binding. |
 | `init <git-url>`, remote has a hub | Folder must be empty; `git clone --no-checkout <url> .`, `git ls-tree HEAD .skillhub/schema-version` succeeds, `git checkout`, then as "already a hub". |
 | `init <git-url>`, remote has other content | Remove the `.git` this command created; refuse: "<url> holds a repository that is not a Skill Hub hub." Next: use an empty repository or the URL of an existing hub. |
-| `init <git-url>` in an existing hub without `origin` | `ls-remote`: empty -> add origin and push (Open question 2); refs sharing history (`git merge-base` after fetch) -> add origin, no push; unrelated history -> refuse, origin not added. |
+| `init <git-url>` in an existing hub without `origin` | `ls-remote`: empty -> add origin and push (resolved question 2); refs sharing history (`git merge-base` after fetch) -> add origin, no push; unrelated history -> refuse, origin not added. |
 | `init <git-url>` in a hub whose `origin` differs | Refuse naming the current origin; same URL -> no-op. |
 
 Git commands run with `GIT_TERMINAL_PROMPT` inherited (credential prompts work in a terminal) and the user's Git
-config; the first commit message is "Initialize Skill Hub hub". Missing Git identity: see Open question 1.
+config; the first commit message is "Initialize Skill Hub hub". Missing Git identity: resolved question 1.
 
 **connect** (decision 4, P8):
 - `skillhub connect [<path>] [-g|--global] [--host claude|codex|gemini]... [--dry-run] [--json]`
