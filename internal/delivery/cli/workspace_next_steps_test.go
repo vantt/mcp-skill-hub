@@ -30,3 +30,19 @@ func TestIntegrateHelpIsTheConnectHelp(t *testing.T) {
 		t.Fatalf("help integrate=%d: %s", code, stderr.String())
 	}
 }
+
+func TestStatusNextStepOfAFreshWorkspaceIsARealCommand(t *testing.T) {
+	t.Parallel()
+	root := filepath.Join(t.TempDir(), "workspace")
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("init=%d: %s", code, stderr.String())
+	}
+	stdout.Reset()
+	if code := Run([]string{"status", "--workspace", root}, &stdout, &stderr); code != 0 {
+		t.Fatalf("status=%d: %s", code, stderr.String())
+	}
+	if strings.Contains(stdout.String(), "workspace_diff") || strings.Contains(stdout.String(), "--json") {
+		t.Fatalf("the next step must be a command a person can run:\n%s", stdout.String())
+	}
+}

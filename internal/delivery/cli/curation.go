@@ -94,7 +94,11 @@ func renderCurationHome(writer io.Writer, home app.CurationHome, workspacePath s
 			cmd := fmt.Sprintf("%s && git -C %s commit -m \"Update skills\"", stageWorkspaceCommand(workspacePath), workspacePath)
 			p.Next("Review uncommitted changes", cmd)
 		} else {
-			p.Next(action.Label, action.Command)
+			command := action.Command
+			if command != "" {
+				command = strings.TrimSuffix(cliNextCommand(command, "", workspacePath), " --json")
+			}
+			p.Next(action.Label, command)
 		}
 	}
 }
