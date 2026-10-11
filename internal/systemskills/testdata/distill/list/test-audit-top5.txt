@@ -1,0 +1,5 @@
+  1   45.0  candidate  content      extends          mocks-mirror-the-real-shape
+  2   30.0  candidate  content      extends          wait-on-owned-signal
+  3   30.0  candidate  history      extends          change-detector-test
+  4   22.5  planned    enforcement  new              ratchet-over-doctrine
+  5   16.0  candidate  craft        contradicts      description-trap

@@ -1,0 +1,74 @@
+goal:
+  purpose: 'yes'
+  status: draft
+  in_scope:
+    - 'no'
+    - '123'
+    - '0x1f'
+    - '1_000'
+    - '1234567'
+    - '0123456'
+    - 1e5
+    - '1.5'
+    - '2026-10-11'
+    - 'null'
+    - '~'
+    - 'a: b'
+    - 'a #b'
+    - a#b
+    - '#x'
+    - '- x'
+    - -x
+    - '[x'
+    - '{x'
+    - '&a'
+    - '*a'
+    - '!a'
+    - '|a'
+    - '>a'
+    - "'q"
+    - '"q'
+    - '%x'
+    - '@x'
+    - '`x'
+    - ' lead'
+    - 'trail '
+    - "tab\there"
+    - "ctrl\x01char"
+    - ünïcödé ✓ text
+    - "emoji \U0001F600 face"
+    - "nbsp here"
+    - "bom﻿here"
+    - '---x'
+    - '...x'
+    - '?x'
+    - '? x'
+    - 'x:y'
+    - 'x, y'
+    - '=x'
+    - "line\nbreak"
+    - "trailing break\n"
+    - 'it''s'
+  out_of_scope: ['on', 'Off', 'TRUE', 'y', 'n']
+  failures_it_prevents: ["back\\slash", 'q"uote', "nel\x85here"]
+cursors:
+  src: 1234567890abcdef1234567890abcdef12345678
+  '123': 0123456789abcdef0123456789abcdef01234567
+coverage:
+  src:
+    empty_string: ''
+    space: ' '
+    keys:
+      'yes': quoted bool-like key
+      '1': quoted int-like key
+      'a: b': colon key
+      '': empty key
+lessons:
+  - key: quote-a
+    layer: content
+    what: 'yes'
+    notable: '- dash start'
+    where: [src@1234567, '123@0123456']
+    contrast: new
+    score: {relevance: 1, facts: [a], evidence: 1, effort: 1, why: 'on'}
+    decision: {state: planned, at: '123456789012', reason: 'no'}

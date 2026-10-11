@@ -1,0 +1,176 @@
+# Written by distill-lab/scripts/distill.mjs. Edit freely, then run `distill.mjs format`.
+# impact = number of facts (a-e, a required); final_score = relevance x impact x evidence / effort;
+# lessons are sorted by it,
+# then by layer rank, then by key.
+goal:
+  status: draft
+  purpose: p
+  in_scope:
+    - i
+  out_of_scope:
+    - o
+  failures_it_prevents:
+    - f
+cursors:
+  src: abcdef1234567890
+coverage:
+  numbers:
+    floats:
+      - 1.0e+16
+      - 1e16
+      - 1.5e-05
+      - 0.0001
+      - 1.0e-05
+      - 123456789012345.6
+      - 1234567890123456.0
+      - -0.0
+      - .inf
+      - -.inf
+      - .nan
+      - 2.675
+      - 0.1
+    ints:
+      - 0
+      - -5
+      - 15
+      - 31
+      - 1000
+      - 90
+      - 12345678901234567890123
+    other:
+      - true
+      - false
+      - null
+      - null
+lessons:
+
+  - key: max
+    layer: history
+    what: w
+    notable: n
+    where:
+      - src@abcdef1
+    contrast: extends
+    score:
+      relevance: 3
+      facts: [a, b, c, d, e]
+      impact: 5
+      evidence: 3
+      effort: 1
+      why: w
+    final_score: 45.0
+    also_fits: []
+    decision: {state: planned, reason: kept for later, at: abcdef1}
+
+  - key: half
+    layer: validation
+    what: w
+    notable: n
+    where:
+      - src@abcdef1
+    contrast: extends
+    score:
+      relevance: 3
+      facts: [a, b, c]
+      impact: 3
+      evidence: 1
+      effort: 2
+      why: w
+    final_score: 4.5
+    also_fits: []
+    decision: {state: candidate}
+
+  - key: beta
+    layer: enforcement
+    what: w
+    notable: n
+    where:
+      - src@abcdef1
+    contrast: contradicts
+    score:
+      relevance: 2
+      facts: [a]
+      impact: 1
+      evidence: 2
+      effort: 3
+      why: w
+    final_score: 1.33
+    also_fits: []
+    decision: {state: candidate}
+
+  - key: aaa
+    layer: craft
+    what: w
+    notable: n
+    where:
+      - src@abcdef1
+    contrast: contradicts
+    score:
+      relevance: 2
+      facts: [a]
+      impact: 1
+      evidence: 2
+      effort: 3
+      why: w
+    final_score: 1.33
+    also_fits:
+      - hub
+      - new-skill:x
+      - other-skill
+    status: superseded-by:alpha
+    found_by: human
+    decision: {state: candidate}
+
+  - key: alpha
+    layer: craft
+    what: w
+    notable: n
+    where:
+      - src@abcdef1
+    contrast: contradicts
+    score:
+      relevance: 2
+      facts: [a]
+      impact: 1
+      evidence: 2
+      effort: 3
+      why: w
+    final_score: 1.33
+    also_fits: []
+    decision: {state: candidate}
+
+  - key: two-thirds
+    layer: wording
+    what: w
+    notable: n
+    where:
+      - src@abcdef1:docs/a.md#L1-L2
+    contrast: already-covered
+    score:
+      relevance: 1
+      facts: [a, b]
+      impact: 2
+      evidence: 1
+      effort: 3
+      why: w
+    final_score: 0.67
+    also_fits: []
+    decision: {state: ported, at: '1234567'}
+
+  - key: zeta
+    layer: content
+    what: zero impact because fact a is missing from an empty list
+    notable: n
+    where:
+      - src@abcdef1
+    contrast: new
+    score:
+      relevance: 3
+      facts: []
+      impact: 0
+      evidence: 3
+      effort: 1
+      why: w
+    final_score: 0.0
+    also_fits: []
+    decision: {state: candidate}

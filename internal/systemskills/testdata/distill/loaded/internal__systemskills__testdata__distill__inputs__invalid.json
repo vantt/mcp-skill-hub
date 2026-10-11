@@ -1,0 +1,411 @@
+{
+ "map": [
+  [
+   "goal",
+   {
+    "map": [
+     [
+      "status",
+      "final"
+     ],
+     [
+      "purpose",
+      "   "
+     ],
+     [
+      "in_scope",
+      []
+     ],
+     [
+      "out_of_scope",
+      [
+       "ok",
+       ""
+      ]
+     ],
+     [
+      "failures_it_prevents",
+      "not a list"
+     ],
+     [
+      "extra",
+      "field"
+     ]
+    ]
+   }
+  ],
+  [
+   "cursors",
+   {
+    "map": [
+     [
+      "src",
+      "ABCDEF1"
+     ],
+     [
+      {
+       "int": "1234567"
+      },
+      "abcdef1"
+     ],
+     [
+      "other",
+      {
+       "int": "1234567"
+      }
+     ],
+     [
+      true,
+      "abcdef1"
+     ]
+    ]
+   }
+  ],
+  [
+   "stray",
+   "top-level key"
+  ],
+  [
+   "lessons",
+   [
+    {
+     "map": [
+      [
+       "key",
+       "Not-Kebab"
+      ],
+      [
+       "layer",
+       "nowhere"
+      ],
+      [
+       "what",
+       ""
+      ],
+      [
+       "notable",
+       {
+        "int": "5"
+       }
+      ],
+      [
+       "where",
+       [
+        "src@abcdef1",
+        "bad ref",
+        {
+         "int": "42"
+        },
+        {
+         "date": "2026-10-11"
+        },
+        "unknown@abcdef1",
+        "trailing@abcdef1\n"
+       ]
+      ],
+      [
+       "contrast",
+       "maybe"
+      ],
+      [
+       "score",
+       {
+        "map": [
+         [
+          "relevance",
+          {
+           "int": "4"
+          }
+         ],
+         [
+          "facts",
+          [
+           "a",
+           "a"
+          ]
+         ],
+         [
+          "evidence",
+          {
+           "float": "3.0"
+          }
+         ],
+         [
+          "effort",
+          true
+         ],
+         [
+          "why",
+          ""
+         ],
+         [
+          "extra",
+          {
+           "int": "1"
+          }
+         ]
+        ]
+       }
+      ],
+      [
+       "also_fits",
+       [
+        "Bad Fit"
+       ]
+      ],
+      [
+       "status",
+       "gone"
+      ],
+      [
+       "found_by",
+       "robot"
+      ],
+      [
+       "decision",
+       {
+        "map": [
+         [
+          "state",
+          "rejected"
+         ],
+         [
+          "when",
+          "now"
+         ]
+        ]
+       }
+      ]
+     ]
+    },
+    {
+     "map": [
+      [
+       "key",
+       "ok-key"
+      ],
+      [
+       "layer",
+       "craft"
+      ],
+      [
+       "what",
+       "w"
+      ],
+      [
+       "notable",
+       "n"
+      ],
+      [
+       "where",
+       []
+      ],
+      [
+       "contrast",
+       "new"
+      ],
+      [
+       "score",
+       {
+        "map": [
+         [
+          "relevance",
+          {
+           "int": "1"
+          }
+         ],
+         [
+          "facts",
+          [
+           "b"
+          ]
+         ],
+         [
+          "evidence",
+          {
+           "int": "1"
+          }
+         ],
+         [
+          "effort",
+          {
+           "int": "1"
+          }
+         ],
+         [
+          "why",
+          "w"
+         ]
+        ]
+       }
+      ],
+      [
+       "decision",
+       {
+        "map": [
+         [
+          "state",
+          "candidate"
+         ]
+        ]
+       }
+      ]
+     ]
+    },
+    {
+     "map": [
+      [
+       "key",
+       "ok-key"
+      ],
+      [
+       "layer",
+       "craft"
+      ],
+      [
+       "what",
+       "w"
+      ],
+      [
+       "notable",
+       "n"
+      ],
+      [
+       "where",
+       [
+        "src@abcdef1:path with space"
+       ]
+      ],
+      [
+       "contrast",
+       "new"
+      ],
+      [
+       "score",
+       {
+        "map": [
+         [
+          "relevance",
+          {
+           "int": "1"
+          }
+         ],
+         [
+          "facts",
+          [
+           "a",
+           "z"
+          ]
+         ],
+         [
+          "evidence",
+          {
+           "int": "1"
+          }
+         ],
+         [
+          "effort",
+          {
+           "int": "1"
+          }
+         ],
+         [
+          "why",
+          "w"
+         ]
+        ]
+       }
+      ],
+      [
+       "decision",
+       [
+        "candidate"
+       ]
+      ]
+     ]
+    },
+    "just a string",
+    {
+     "map": [
+      [
+       "key",
+       "yes"
+      ],
+      [
+       {
+        "int": "1"
+       },
+       "int field"
+      ],
+      [
+       "layer",
+       "craft"
+      ],
+      [
+       "what",
+       "w"
+      ],
+      [
+       "notable",
+       "n"
+      ],
+      [
+       "where",
+       [
+        "src@abcdef1"
+       ]
+      ],
+      [
+       "contrast",
+       "new"
+      ],
+      [
+       "score",
+       {
+        "map": [
+         [
+          "relevance",
+          {
+           "int": "1"
+          }
+         ],
+         [
+          "facts",
+          []
+         ],
+         [
+          "evidence",
+          {
+           "int": "1"
+          }
+         ],
+         [
+          "effort",
+          {
+           "int": "1"
+          }
+         ],
+         [
+          "why",
+          "w"
+         ]
+        ]
+       }
+      ],
+      [
+       "decision",
+       {
+        "map": [
+         [
+          "state",
+          "candidate"
+         ]
+        ]
+       }
+      ]
+     ]
+    }
+   ]
+  ]
+ ]
+}

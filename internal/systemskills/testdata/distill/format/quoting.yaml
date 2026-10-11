@@ -1,0 +1,102 @@
+# Written by distill-lab/scripts/distill.mjs. Edit freely, then run `distill.mjs format`.
+# impact = number of facts (a-e, a required); final_score = relevance x impact x evidence / effort;
+# lessons are sorted by it,
+# then by layer rank, then by key.
+goal:
+  status: draft
+  purpose: 'yes'
+  in_scope:
+    - 'no'
+    - '123'
+    - '0x1f'
+    - '1_000'
+    - '1234567'
+    - '0123456'
+    - 1e5
+    - '1.5'
+    - '2026-10-11'
+    - 'null'
+    - '~'
+    - 'a: b'
+    - 'a #b'
+    - a#b
+    - '#x'
+    - '- x'
+    - -x
+    - '[x'
+    - '{x'
+    - '&a'
+    - '*a'
+    - '!a'
+    - '|a'
+    - '>a'
+    - '''q'
+    - '"q'
+    - '%x'
+    - '@x'
+    - '`x'
+    - ' lead'
+    - 'trail '
+    - "tab\there"
+    - "ctrl\x01char"
+    - ünïcödé ✓ text
+    - emoji 😀 face
+    - nbsp here
+    - "bom\uFEFFhere"
+    - '---x'
+    - '...x'
+    - ?x
+    - '? x'
+    - x:y
+    - x, y
+    - =x
+    - 'line
+
+      break'
+    - 'trailing break
+
+      '
+    - it's
+  out_of_scope:
+    - 'on'
+    - 'Off'
+    - 'TRUE'
+    - y
+    - n
+  failures_it_prevents:
+    - back\slash
+    - q"uote
+    - 'nel      here'
+cursors:
+  src: 1234567890abcdef1234567890abcdef12345678
+  '123': 0123456789abcdef0123456789abcdef01234567
+coverage:
+  src:
+    empty_string: ''
+    space: ' '
+    keys:
+      'yes': quoted bool-like key
+      '1': quoted int-like key
+      'a: b': colon key
+      ? ''
+      : empty key
+lessons:
+
+  - key: quote-a
+    layer: content
+    what: 'yes'
+    notable: '- dash start'
+    where:
+      - src@1234567
+      - 123@0123456
+    contrast: new
+    score:
+      relevance: 1
+      facts: [a]
+      impact: 1
+      evidence: 1
+      effort: 1
+      why: 'on'
+    final_score: 1.0
+    also_fits: []
+    decision: {state: planned, reason: 'no', at: '123456789012'}

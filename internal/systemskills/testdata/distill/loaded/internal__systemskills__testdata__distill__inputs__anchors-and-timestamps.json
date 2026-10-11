@@ -1,0 +1,381 @@
+{
+ "map": [
+  [
+   "goal",
+   {
+    "map": [
+     [
+      "status",
+      "draft"
+     ],
+     [
+      "purpose",
+      "p"
+     ],
+     [
+      "in_scope",
+      [
+       "shared item"
+      ]
+     ],
+     [
+      "out_of_scope",
+      [
+       "shared item"
+      ]
+     ],
+     [
+      "failures_it_prevents",
+      [
+       "f"
+      ]
+     ]
+    ]
+   }
+  ],
+  [
+   "cursors",
+   {
+    "map": [
+     [
+      "src",
+      "abcdef1234567890"
+     ]
+    ]
+   }
+  ],
+  [
+   "coverage",
+   {
+    "map": [
+     [
+      "when",
+      {
+       "map": [
+        [
+         "date",
+         {
+          "date": "2026-10-11"
+         }
+        ],
+        [
+         "datetime",
+         {
+          "datetime": "2001-12-14 21:59:43.100000-05:00"
+         }
+        ],
+        [
+         "utc",
+         {
+          "datetime": "2001-12-14 21:59:43+00:00"
+         }
+        ],
+        [
+         "naive",
+         {
+          "datetime": "2026-10-11 10:00:00"
+         }
+        ],
+        [
+         "date_key",
+         {
+          "map": [
+           [
+            {
+             "date": "2026-10-11"
+            },
+            "keyed by a date"
+           ]
+          ]
+         }
+        ]
+       ]
+      }
+     ],
+     [
+      "shared",
+      {
+       "map": [
+        [
+         "base",
+         {
+          "map": [
+           [
+            "a",
+            {
+             "int": "1"
+            }
+           ],
+           [
+            "b",
+            [
+             "x",
+             "y"
+            ]
+           ]
+          ]
+         }
+        ],
+        [
+         "again",
+         {
+          "map": [
+           [
+            "a",
+            {
+             "int": "1"
+            }
+           ],
+           [
+            "b",
+            [
+             "x",
+             "y"
+            ]
+           ]
+          ]
+         }
+        ],
+        [
+         "merged",
+         {
+          "map": [
+           [
+            "a",
+            {
+             "int": "1"
+            }
+           ],
+           [
+            "b",
+            [
+             "x",
+             "y"
+            ]
+           ],
+           [
+            "c",
+            {
+             "int": "3"
+            }
+           ]
+          ]
+         }
+        ]
+       ]
+      }
+     ],
+     [
+      "empty_map",
+      {
+       "map": []
+      }
+     ],
+     [
+      "empty_list",
+      []
+     ],
+     [
+      "nested",
+      [
+       [
+        {
+         "int": "1"
+        },
+        {
+         "int": "2"
+        }
+       ],
+       [],
+       {
+        "map": [
+         [
+          "k",
+          "v"
+         ]
+        ]
+       },
+       {
+        "map": []
+       }
+      ]
+     ],
+     [
+      "int_keys",
+      {
+       "map": [
+        [
+         {
+          "int": "1"
+         },
+         "bool key"
+        ],
+        [
+         null,
+         "null key"
+        ]
+       ]
+      }
+     ]
+    ]
+   }
+  ],
+  [
+   "lessons",
+   [
+    {
+     "map": [
+      [
+       "key",
+       "shared-where"
+      ],
+      [
+       "layer",
+       "content"
+      ],
+      [
+       "what",
+       "w"
+      ],
+      [
+       "notable",
+       "n"
+      ],
+      [
+       "where",
+       [
+        "src@abcdef1"
+       ]
+      ],
+      [
+       "contrast",
+       "new"
+      ],
+      [
+       "score",
+       {
+        "map": [
+         [
+          "relevance",
+          {
+           "int": "1"
+          }
+         ],
+         [
+          "facts",
+          [
+           "a"
+          ]
+         ],
+         [
+          "evidence",
+          {
+           "int": "1"
+          }
+         ],
+         [
+          "effort",
+          {
+           "int": "1"
+          }
+         ],
+         [
+          "why",
+          "w"
+         ]
+        ]
+       }
+      ],
+      [
+       "decision",
+       {
+        "map": [
+         [
+          "state",
+          "candidate"
+         ]
+        ]
+       }
+      ]
+     ]
+    },
+    {
+     "map": [
+      [
+       "key",
+       "shared-where-too"
+      ],
+      [
+       "layer",
+       "content"
+      ],
+      [
+       "what",
+       "w"
+      ],
+      [
+       "notable",
+       "n"
+      ],
+      [
+       "where",
+       [
+        "src@abcdef1"
+       ]
+      ],
+      [
+       "contrast",
+       "new"
+      ],
+      [
+       "score",
+       {
+        "map": [
+         [
+          "relevance",
+          {
+           "int": "1"
+          }
+         ],
+         [
+          "facts",
+          [
+           "a"
+          ]
+         ],
+         [
+          "evidence",
+          {
+           "int": "1"
+          }
+         ],
+         [
+          "effort",
+          {
+           "int": "1"
+          }
+         ],
+         [
+          "why",
+          "w"
+         ]
+        ]
+       }
+      ],
+      [
+       "decision",
+       {
+        "map": [
+         [
+          "state",
+          "candidate"
+         ]
+        ]
+       }
+      ]
+     ]
+    }
+   ]
+  ]
+ ]
+}

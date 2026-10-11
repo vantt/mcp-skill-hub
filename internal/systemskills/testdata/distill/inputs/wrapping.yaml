@@ -1,0 +1,37 @@
+goal:
+  status: confirmed
+  purpose: "A purpose that is long enough to be folded, with   extra   spaces,\ttabs and\nline breaks that collapse into single spaces before the emitter wraps it at the width."
+  in_scope:
+    - a plain list item that is long enough to pass the eighty-eight character width and wrap at a space
+    - 'a quoted list item: it needs single quotes because of the colon and it is long enough to wrap at a space'
+    - "a double-quoted list item\twith a tab, long enough that the emitter must break it with a backslash continuation"
+    - averyveryveryveryveryveryveryveryveryveryveryveryveryveryveryveryveryveryveryverylongwordwithoutanyspaceatall and then more words
+    - "a double-quoted item with  two  spaces\tand a tab placed so that a space falls exactly on the width boundary okay"
+  out_of_scope:
+    - ünïcödé text that is long enough to be wrapped where the column count uses code points ✓✓✓✓✓✓✓
+  failures_it_prevents:
+    - x
+cursors:
+  src: abcdef1234567
+coverage:
+  src:
+    ? a key that is longer than one hundred and twenty eight characters so the emitter must write it as an explicit complex key with a question mark
+    : value
+    flow_like: [a, b]
+lessons:
+  - key: long-prose
+    layer: craft
+    what: exactly sixty characters of prose here, no folding at all..
+    notable: sixty-one characters of prose here, so this one gets folded..
+    where: [src@abcdef1234567]
+    contrast: extends
+    score:
+      relevance: 2
+      facts: [e, c, a]
+      evidence: 3
+      effort: 2
+      why: A why that is long enough to fold and contains averyveryveryveryveryveryveryveryveryveryveryverylongtoken in the middle of it.
+    decision:
+      state: rejected
+      reason: a rejection reason that is long enough to push the flow mapping past the eighty-eight character width limit
+      at: abcdef123456

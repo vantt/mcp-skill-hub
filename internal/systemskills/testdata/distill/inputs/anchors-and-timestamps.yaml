@@ -1,0 +1,46 @@
+goal:
+  status: draft
+  purpose: p
+  in_scope: &scope [shared item]
+  out_of_scope: *scope
+  failures_it_prevents: [f]
+cursors:
+  src: abcdef1234567890
+coverage:
+  when:
+    date: 2026-10-11
+    datetime: 2001-12-14t21:59:43.10-05:00
+    utc: 2001-12-14 21:59:43Z
+    naive: 2026-10-11 10:00:00
+    date_key:
+      2026-10-11: keyed by a date
+  shared:
+    base: &base {a: 1, b: [x, y]}
+    again: *base
+    merged:
+      <<: *base
+      c: 3
+  empty_map: {}
+  empty_list: []
+  nested: [[1, 2], [], {k: v}, {}]
+  int_keys:
+    1: one
+    yes: bool key
+    ~: null key
+lessons:
+  - key: shared-where
+    layer: content
+    what: w
+    notable: n
+    where: &where [src@abcdef1]
+    contrast: new
+    score: {relevance: 1, facts: [a], evidence: 1, effort: 1, why: w}
+    decision: {state: candidate}
+  - key: shared-where-too
+    layer: content
+    what: w
+    notable: n
+    where: *where
+    contrast: new
+    score: {relevance: 1, facts: [a], evidence: 1, effort: 1, why: w}
+    decision: {state: candidate}

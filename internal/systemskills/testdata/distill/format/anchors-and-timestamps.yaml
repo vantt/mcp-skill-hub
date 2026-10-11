@@ -1,0 +1,80 @@
+# Written by distill-lab/scripts/distill.mjs. Edit freely, then run `distill.mjs format`.
+# impact = number of facts (a-e, a required); final_score = relevance x impact x evidence / effort;
+# lessons are sorted by it,
+# then by layer rank, then by key.
+goal:
+  status: draft
+  purpose: p
+  in_scope: &id001
+    - shared item
+  out_of_scope: *id001
+  failures_it_prevents:
+    - f
+cursors:
+  src: abcdef1234567890
+coverage:
+  when:
+    date: 2026-10-11
+    datetime: 2001-12-14 21:59:43.100000-05:00
+    utc: 2001-12-14 21:59:43+00:00
+    naive: 2026-10-11 10:00:00
+    date_key:
+      2026-10-11: keyed by a date
+  shared:
+    base: &id002
+      a: 1
+      b: &id003
+        - x
+        - y
+    again: *id002
+    merged:
+      a: 1
+      b: *id003
+      c: 3
+  empty_map: {}
+  empty_list: []
+  nested:
+    - - 1
+      - 2
+    - []
+    - k: v
+    - {}
+  int_keys:
+    1: bool key
+    null: null key
+lessons:
+
+  - key: shared-where
+    layer: content
+    what: w
+    notable: n
+    where: &id004
+      - src@abcdef1
+    contrast: new
+    score:
+      relevance: 1
+      facts: [a]
+      impact: 1
+      evidence: 1
+      effort: 1
+      why: w
+    final_score: 1.0
+    also_fits: []
+    decision: {state: candidate}
+
+  - key: shared-where-too
+    layer: content
+    what: w
+    notable: n
+    where: *id004
+    contrast: new
+    score:
+      relevance: 1
+      facts: [a]
+      impact: 1
+      evidence: 1
+      effort: 1
+      why: w
+    final_score: 1.0
+    also_fits: []
+    decision: {state: candidate}

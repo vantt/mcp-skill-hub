@@ -1,0 +1,51 @@
+goal:
+  status: final
+  purpose: '   '
+  in_scope: []
+  out_of_scope: [ok, '']
+  failures_it_prevents: not a list
+  extra: field
+cursors:
+  src: ABCDEF1
+  1234567: abcdef1
+  other: 1234567
+  yes: abcdef1
+stray: top-level key
+lessons:
+  - key: Not-Kebab
+    layer: nowhere
+    what: ''
+    notable: 5
+    where: [src@abcdef1, 'bad ref', 42, 2026-10-11, unknown@abcdef1, "trailing@abcdef1\n"]
+    contrast: maybe
+    score: {relevance: 4, facts: [a, a], evidence: 3.0, effort: true, why: '', extra: 1}
+    also_fits: [Bad Fit]
+    status: gone
+    found_by: robot
+    decision: {state: rejected, when: now}
+  - key: ok-key
+    layer: craft
+    what: w
+    notable: n
+    where: []
+    contrast: new
+    score: {relevance: 1, facts: [b], evidence: 1, effort: 1, why: w}
+    decision: {state: candidate}
+  - key: ok-key
+    layer: craft
+    what: w
+    notable: n
+    where: ['src@abcdef1:path with space']
+    contrast: new
+    score: {relevance: 1, facts: [a, z], evidence: 1, effort: 1, why: w}
+    decision: [candidate]
+  - just a string
+  - key: 'yes'
+    1: int field
+    layer: craft
+    what: w
+    notable: n
+    where: [src@abcdef1]
+    contrast: new
+    score: {relevance: 1, facts: [], evidence: 1, effort: 1, why: w}
+    decision: {state: candidate}

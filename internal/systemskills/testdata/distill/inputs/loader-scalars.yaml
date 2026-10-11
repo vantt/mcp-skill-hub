@@ -1,0 +1,64 @@
+# Plain scalars resolved by the YAML 1.1 rules the existing files were written with.
+sha_like:
+  - 1e23456
+  - 0123456
+  - 1234567
+  - 0089abc
+  - 1e5
+  - 1.0e+5
+  - 1.5e3
+  - 12345678901234567890123
+  - '1234567'
+  - "0x1f"
+ints:
+  - 1_000
+  - 0x1f
+  - 0b101
+  - 017
+  - -0
+  - +12
+  - 1:30
+  - 190:20:30
+floats:
+  - 1.5
+  - 1_0.2_5
+  - .5
+  - 1.
+  - -0.0
+  - 1:30.5
+  - .inf
+  - -.Inf
+  - .NaN
+  - 45.0
+dates:
+  - 2026-10-11
+  - 2026-1-1 1:02:03
+  - 2001-12-14t21:59:43.10-05:00
+  - 2001-12-14 21:59:43.123456789 Z
+  - 2026-10-11T10:00:00+05:30
+  - 2026-10-11 10:00:00
+bools: [yes, No, ON, off, TRUE, false, y, n, Yes]
+nulls: [~, null, Null, NULL, '', ]
+empty_value:
+strings: [nil, none, 'yes', "~", =x, <<x, 1e, 0x, 0b, 1_]
+keys:
+  1: int key
+  yes: bool key
+  ~: null key
+  1.5: float key
+  2026-10-11: date key
+  '1': string key
+  =: value key
+merged:
+  base: &base {a: 1, b: 2, c: 3}
+  extra: &extra {b: 20, d: 40}
+  one:
+    c: 30
+    <<: *base
+    e: 50
+  many:
+    <<: [*extra, *base]
+    f: 60
+shared:
+  first: &list [x, y]
+  second: *list

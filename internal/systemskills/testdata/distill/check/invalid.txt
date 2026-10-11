@@ -1,0 +1,38 @@
+ERROR: distill.yaml is invalid; nothing was written
+  - unknown top-level key: stray
+  - goal.status must be draft or confirmed
+  - goal.purpose must be non-empty text
+  - goal.in_scope must be a non-empty list of text
+  - goal.out_of_scope must be a non-empty list of text
+  - goal.failures_it_prevents must be a non-empty list of text
+  - cursors.src: not a commit sha
+  - cursors.other: not a commit sha
+  - lesson 1: key must be kebab-case
+  - lesson 1: layer must be one of enforcement, content, history, validation, craft, wording, ecosystem
+  - lesson 1: what must be non-empty text
+  - lesson 1: notable must be non-empty text
+  - lesson 1: bad where 'bad ref'
+  - lesson 1: bad where 42
+  - lesson 1: bad where datetime.date(2026, 10, 11)
+  - lesson 1: contrast must be one of already-covered, contradicts, extends, new
+  - lesson 1: score.relevance must be an integer 0-3
+  - lesson 1: score.evidence must be an integer 1-3
+  - lesson 1: score.effort must be an integer 1-3
+  - lesson 1: score.facts must be a list of distinct letters from a-e
+  - lesson 1: score.why must explain the weights
+  - lesson 1: unknown score field extra
+  - lesson 1: also_fits entries must be hub, new-skill:<name> or a skill id
+  - lesson 1: status must be removed or superseded-by:<key>
+  - lesson 1: found_by may only be human
+  - lesson 1: a rejected decision needs a reason
+  - lesson 1: unknown decision field when
+  - lesson 2 (ok-key): where must be a non-empty list
+  - lesson 2 (ok-key): score.facts without fact a count for nothing; add a or clear the list
+  - lesson 3 (ok-key): duplicate key
+  - lesson 3 (ok-key): bad where 'src@abcdef1:path with space'
+  - lesson 3 (ok-key): score.facts must be a list of distinct letters from a-e
+  - lesson 3 (ok-key): decision.state must be one of candidate, planned, ported, rejected
+  - lesson 4: must be a mapping
+  - lesson 5 (yes): unknown field 1
+  - lesson Not-Kebab: where cites unknown source 'unknown'
+  - lesson Not-Kebab: where cites unknown source 'trailing'
