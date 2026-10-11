@@ -128,6 +128,24 @@ test.describe('UX regression guards', () => {
     }
   });
 
+  test('the frame fills the window: the page itself never scrolls and no scroller is empty', async ({ page }) => {
+    test.setTimeout(300_000);
+    for (const flow of FLOWS) {
+      await openFlow(page, server, hub, flow, DESKTOP.width, DESKTOP.height);
+      const frame = await page.evaluate(() => {
+        const doc = document.documentElement;
+        const scrollers = (Array.from(document.querySelectorAll('*')) as HTMLElement[])
+          .filter((el) => /auto|scroll/.test(getComputedStyle(el).overflowY))
+          .filter((el) => el.scrollHeight > el.clientHeight && el.scrollHeight - el.clientHeight <= 2)
+          .map((el) => `${el.tagName}.${el.className}`);
+        return { pageScrolls: doc.scrollHeight > window.innerHeight, bodyMargin: getComputedStyle(document.body).marginLeft, scrollers };
+      });
+      expect(frame.pageScrolls, `${flow.id}: the page scrolls on top of its columns`).toBe(false);
+      expect(frame.bodyMargin, `${flow.id}: the frame is offset by a body margin`).toBe('0px');
+      expect(frame.scrollers, `${flow.id}: a scrollbar with next to nothing to scroll`).toEqual([]);
+    }
+  });
+
   test('every copy button copies the whole command it sits next to', async ({ page }) => {
     test.setTimeout(300_000);
     let checked = 0;
