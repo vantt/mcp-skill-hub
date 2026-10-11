@@ -1093,7 +1093,7 @@ func isUnreachableCommitFetchError(err error) bool {
 		return true
 	}
 	text := strings.ToLower(err.Error())
-	for _, marker := range []string{"not our ref", "couldn't find remote ref", "broken pipe", "closed pipe"} {
+	for _, marker := range []string{"not our ref", "couldn't find remote ref", "broken pipe", "closed pipe", "pipe is being closed"} {
 		if strings.Contains(text, marker) {
 			return true
 		}

@@ -213,3 +213,11 @@ func TestGitRevisionAt(t *testing.T) {
 		t.Fatalf("expected ErrMirrorBusy, got %v", err)
 	}
 }
+
+func TestUnreachableCommitFetchErrorRecognizesTheWindowsClosedPipeText(t *testing.T) {
+	t.Parallel()
+	err := errors.New("sending upload-req message: encoding shallow \"abc\": write |1: The pipe is being closed.")
+	if !isUnreachableCommitFetchError(err) {
+		t.Fatal("a fetch that ends in a closed pipe must read as an unreachable commit")
+	}
+}
