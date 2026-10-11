@@ -8,7 +8,11 @@ import (
 
 // CallerContext carries transport-derived session and client identity into
 // application services without coupling them to MCP or transport protocols.
-// CLI-origin calls carry no session hash; MCP sessions carry a process-stable session hash.
+// CLI-origin calls carry no session hash; each MCP session (a stdio process or
+// one session of the network listener) carries its own random session hash.
+// Client names the host; callers of the network listener carry the remote
+// label (telemetry.ClientRemotePrefix). Neither field ever holds a network
+// address or a credential.
 type CallerContext struct {
 	SessionHash   string
 	Client        telemetry.Client
