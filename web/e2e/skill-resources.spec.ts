@@ -24,7 +24,7 @@ let ws: string;
 function seedResourceWorkspace(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'skillhub-e2e-resources-'));
   const runCLI = makeCLIRunner(dir);
-  runCLI(['init', dir]);
+  runCLI(['init']);
 
   // Outside the workspace: a stray file in it would be refused as non-canonical content.
   const contentFile = path.join(os.tmpdir(), `${SKILL_ID}-${Date.now()}.md`);

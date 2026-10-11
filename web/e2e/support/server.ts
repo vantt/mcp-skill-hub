@@ -15,8 +15,25 @@ export interface RunningServer {
 
 export interface StartServerOptions {
   workspace?: string;
-  // Environment for the spawned server; defaults to the current process environment.
+  // Environment for the spawned server; defaults to an isolated environment whose HOME,
+  // XDG_CONFIG_HOME and per-user Skill Hub config live in a temporary folder.
   env?: NodeJS.ProcessEnv;
+}
+
+// isolatedServerEnv keeps every skillhub process of the suite away from the real user
+// profile: `skillhub init` records the hub path in the per-user config.
+function isolatedServerEnv(root: string): NodeJS.ProcessEnv {
+  const home = path.join(root, 'home');
+  fs.mkdirSync(home, { recursive: true });
+  return {
+    ...process.env,
+    HOME: home,
+    USERPROFILE: home,
+    XDG_CONFIG_HOME: path.join(root, 'config'),
+    APPDATA: path.join(root, 'appdata'),
+    LOCALAPPDATA: path.join(root, 'localappdata'),
+    SKILLHUB_USER_CONFIG_DIR: path.join(root, 'skillhub-user-config'),
+  };
 }
 
 export async function startServer(options?: StartServerOptions): Promise<RunningServer> {
@@ -27,10 +44,12 @@ export async function startServer(options?: StartServerOptions): Promise<Running
 
   const customWorkspace = options?.workspace;
   const ws = customWorkspace || fs.mkdtempSync(path.join(os.tmpdir(), 'skillhub-e2e-'));
+  const envRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'skillhub-e2e-env-'));
+  const env = options?.env ?? isolatedServerEnv(envRoot);
 
   if (!customWorkspace) {
-    // 1. Initialize workspace
-    execFileSync(binaryPath, ['init', ws], { stdio: 'pipe' });
+    // 1. Initialize the hub in its own folder: init acts on the current folder.
+    execFileSync(binaryPath, ['init'], { cwd: ws, env, stdio: 'pipe' });
   const contentFile = path.join(os.tmpdir(), `smoke-${Date.now()}.md`);
   fs.writeFileSync(contentFile, '# Smoke Skill\n\nSmoke test instructions.\n');
 
@@ -52,7 +71,7 @@ export async function startServer(options?: StartServerOptions): Promise<Running
     ],
     {
       env: {
-        ...process.env,
+        ...env,
         SKILLHUB_WORKSPACE: ws,
       },
       stdio: 'pipe',
@@ -69,7 +88,7 @@ export async function startServer(options?: StartServerOptions): Promise<Running
   const proc = spawn(
     binaryPath,
     ['serve', 'web', '--addr', '127.0.0.1:0', '--no-open', '--workspace', ws],
-    { stdio: ['ignore', 'pipe', 'pipe'], env: options?.env ?? process.env },
+    { stdio: ['ignore', 'pipe', 'pipe'], env },
   );
 
   const serverInfo = await new Promise<{ url: string; origin: string }>((resolve, reject) => {
@@ -124,6 +143,11 @@ export async function startServer(options?: StartServerOptions): Promise<Running
       } catch {
         // Ignore cleanup error on temp dir.
       }
+    }
+    try {
+      fs.rmSync(envRoot, { recursive: true, force: true });
+    } catch {
+      // Ignore cleanup error on temp dir.
     }
   };
 

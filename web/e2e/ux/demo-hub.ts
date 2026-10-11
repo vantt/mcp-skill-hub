@@ -141,7 +141,8 @@ export function prepareDemoHub(): DemoHub {
   const runCLI = makeCLIRunner(ws, env);
   // A failure while seeding must not leave the throwaway root behind.
   try {
-    runCLI(['init', ws]);
+    fs.mkdirSync(ws, { recursive: true });
+    runCLI(['init']);
 
     for (const skill of SKILLS) {
       createDemoSkill(runCLI, root, skill);

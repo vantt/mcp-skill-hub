@@ -46,6 +46,7 @@ export function isolatedEnv(root: string): NodeJS.ProcessEnv {
     XDG_DATA_HOME: path.join(root, 'xdg', 'data'),
     XDG_STATE_HOME: path.join(root, 'xdg', 'state'),
     XDG_CACHE_HOME: path.join(root, 'xdg', 'cache'),
+    SKILLHUB_USER_CONFIG_DIR: path.join(root, 'xdg', 'config', 'skillhub'),
     GIT_CONFIG_GLOBAL: path.join(home, '.gitconfig'),
     GIT_CONFIG_NOSYSTEM: '1',
     GIT_TERMINAL_PROMPT: '0',

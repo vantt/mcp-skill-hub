@@ -17,7 +17,7 @@ const WATCHED_SOURCE_ID = 'notes-fs';
 function seedWorkspace(): string {
   const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'skillhub-e2e-skill-sources-'));
   const runCLI = makeCLIRunner(ws);
-  runCLI(['init', ws]);
+  runCLI(['init']);
 
   // Outside the workspace: a stray file inside it would be refused as off-layout.
   const contentFile = path.join(os.tmpdir(), `track-me-content-${process.pid}-${Date.now()}.md`);
