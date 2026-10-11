@@ -259,7 +259,9 @@ On a phone-width screen the same list stacks each skill into a card.
 
 #### Check one skill
 
-Open a skill; the **Review** tab opens first. *Validity* says whether the skill file follows the required format. *Activation readiness* lists what a draft needs before agents can use it. *In Git vs what agents see* tells you whether the search index matches the files.
+Open a skill; the **Overview** tab opens first. It sums up the skill in four cards: *About* (name, description, collection, lifecycle state and file count), *Routing* (operations, triggers, not for and minimum scope, which decide when an agent is offered the skill), *Provenance* (where the skill came from) and *Sources* (its upstream repository and learning references). **Edit** opens the editor and **Manage sources** opens the **Sources** tab.
+
+The **Review** tab is one click away. *Validity* says whether the skill file follows the required format. *Activation readiness* lists what a draft needs before agents can use it. *In Git vs what agents see* tells you whether the search index matches the files.
 
 ![Review: whether agents can use this skill, and what to check first.](images/web/skill-review.png)
 
@@ -319,9 +321,16 @@ The new skill is a draft: agents do not use it until you activate it.
 
 A skill added from GitHub remembers where it came from. To see which ones have news:
 
-1. In **Skills**, set **Upstream** to *Has an update*. To refresh the information first, run `skillhub skill outdated --check` in your terminal, or open a skill and click **Check now** in its *Upstream repository* section.
+1. In **Skills**, set **Upstream** to *Has an update*. To refresh the information first, run `skillhub skill outdated --check` in your terminal, or open a skill's **Sources** tab and click **Check now** in its *Upstream repository* section.
 2. Open a skill marked *Update available* and click **Review update**.
 3. For each changed file choose **Take upstream**, **Keep mine** or **Edit manually**, then click **Apply choices**.
+
+#### Manage one skill's sources
+
+Open a skill and choose the **Sources** tab. It lists the skill's upstream repository and every learning reference; a skill with neither shows *No sources yet*.
+
+- **Add a learning reference.** Click **Add source**, then either **Link a watched source** (pick a source the hub already watches) or **Watch a GitHub repository** (paste its address, and optionally a branch or tag and a folder path). Click **Preview** to see the files that would be written, then **Add source** to confirm. **Unlink** removes a reference again.
+- **Track an upstream.** A skill copied from GitHub before Skill Hub tracked upstreams shows its repository as *Not tracked*: Skill Hub knows where it came from but cannot check it for updates. Click **Track upstream** to see the exact change (the skill's metadata file and, when needed, a new source record), then confirm. Only the upstream entry changes; afterwards **Check now** and **Review update** work. The same is available in the terminal as `skillhub source backfill --skill <skill-id>`.
 
 #### Link and check sources
 
