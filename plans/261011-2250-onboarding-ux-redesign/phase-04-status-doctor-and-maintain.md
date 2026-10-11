@@ -1,7 +1,7 @@
 ---
 phase: 4
 title: "status and doctor by role, maintain group"
-status: pending
+status: completed
 priority: P1
 effort: "3d"
 dependencies: [2, 3]
@@ -59,8 +59,10 @@ func ApplyFixes(ctx context.Context, sections []Section) FixReport // Fixed, Not
 ```
 
 The existing hub doctor, host-connection check and remote doctor become providers; nothing is computed twice. The
-distill-lab plan registers its hub checks (generated system-skill file tracked by Git, Node missing warning,
-wrapper/canonical integrity with a `--fix` migration) through `RegisterProvider` without touching the renderers.
+distill-lab plan registers only notice-severity hub Findings through `RegisterProvider` (Node missing, a generated
+skill file tracked by Git, an unknown file in an ignored skill folder) without touching the renderers.
+Wrapper/canonical integrity of system skills does not go through `RegisterProvider`: it stays in the hostintegration
+inspection items, which doctor reports in the hub section through the hub's agent connection check.
 
 **Invariant (S1).** No provider sends the hub token to a hub unless `tokenMaySend(hubURL, entries)` is true (user scope
 names that hub, or it is loopback). status, doctor and `doctor --fix` share this rule. The client-remote provider's
@@ -169,6 +171,31 @@ tool names (`workspace_validate`, `workspace_rebuild`, `workspace_diff`) do not 
    `doctor --json` shape; status try-lock.
 5. `maintain` group and hint strings (Go, web, e2e, curator skill, workflow).
 6. Repo-wide grep gate for `skillhub validate|rebuild|migrate|diff` outside `maintain` (same paths as Phase 1).
+
+## Todo
+
+- [x] Engine `internal/app/health.go`: `Depth`, `Severity`, `Changed`, `FixAction`, `Finding` (plus optional `Reason`
+      and `Detail`), `Section`, `CheckProvider`, `RegisterProvider`, `Run`, `ApplyFixes`/`FixReport`, `StatusNext`,
+      `WithProbeClient`; registered providers add to the hub section; a panicking provider becomes a problem finding
+- [x] Providers: hub (`health_hub.go`, one shared inspection with `WorkspaceService.Doctor`), client-local and
+      client-remote (`health_client.go`); `tokenMaySend` kept in the remote checks and asserted by tests (app and CLI)
+- [x] Client-local: missing hub re-pointed only to the stored hub when the missing path is in `previous_hubs`; outdated
+      entries and permission rules fixed with connect's safe merge; `--workspace` keeps only connections to that hub
+- [x] Pre-commit hook check (doctor only) and `--fix` rewrite of `skillhub validate` to `skillhub maintain validate`
+- [x] `doctor --fix` through `ApplyFixes` over up to three rounds, re-detecting the role; "Fixed:" with files and
+      "Not fixed:" with reason and command; client-remote never fixed (`RemoteFixRefusal`); a tracked connection file
+      no longer blocks the hub repair
+- [x] status: light depth, try-lock (`mutation.TryAcquireSharedLock`, `CurationService{NoWait: true}`), one `Next:` per
+      the table; exit 2 with the role message in a folder without a role
+- [x] doctor exit codes 0/1/2; `doctor --json` combined shape; `status --json` on curation-home-v1 with optional
+      `role` and `client_sections` declared in the schema
+- [x] `maintain validate|rebuild|migrate|diff`; top-level names removed; Go, web UI, web e2e, curator skill (both
+      copies), evaluation workflow and remote guide hints renamed; grep gate clean (only the hook check names the old
+      call on purpose)
+- [x] `go test ./...`, `go vet` (linux, windows, darwin) and `gofmt -l` clean; web unit tests and e2e not run here (no
+      `web/node_modules`)
+
+Report: [cook-261011-onboarding-phase4](../reports/cook-261011-onboarding-phase4.md)
 
 ## Validation
 

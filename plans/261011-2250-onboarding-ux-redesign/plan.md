@@ -174,7 +174,7 @@ re-pointing, client checks in status, `doctor --fix` for clients, non-zero exit 
 | 1 | [Syntax cleanup](./phase-01-syntax-cleanup.md) | 2d | none | completed |
 | 2 | [init, connect, user config and role detection](./phase-02-init-connect-and-role-detection.md) | 4d | 1 | completed |
 | 3 | [serve and token hand-off](./phase-03-serve-and-token-handoff.md) | 1.5d | 1, 2 | completed |
-| 4 | [status and doctor by role, maintain group](./phase-04-status-doctor-and-maintain.md) | 3d | 2, 3 | pending |
+| 4 | [status and doctor by role, maintain group](./phase-04-status-doctor-and-maintain.md) | 3d | 2, 3 | completed |
 | 5 | [Docs: README onboarding and guides](./phase-05-docs-readme-and-guides.md) | 1.5d | 2, 3, 4 | pending |
 | 6 | [Guided skill create (optional, later)](./phase-06-guided-skill-create.md) | 0.5d | 1 (5 for its doc section) | pending |
 
@@ -205,7 +205,7 @@ first; the other session implements afterwards from the new main.
 | Launch args, permission rules, config entry writing, connect option parsing | this plan |
 | `init`, `connect`, `doctor`, `status`, `serve`; command renames everywhere; README | this plan |
 | Curator `SKILL.md` text (both identical copies, `system-skills/curator/SKILL.md` and `internal/systemskills/curator/SKILL.md`), text edits only | this plan |
-| Health check extension point (`internal/app/health.go`: `CheckProvider`, `Finding`, `FixAction`, `RegisterProvider`) | this plan defines it (Phase 4); the distill-lab plan registers hub checks: Git tracks a generated system-skill file, Node missing warning, wrapper/canonical integrity with a `--fix` migration |
+| Health check extension point (`internal/app/health.go`: `CheckProvider`, `Finding`, `FixAction`, `RegisterProvider`) | this plan defines it (Phase 4); the distill-lab plan registers only notice-severity hub Findings through `RegisterProvider`: Node missing, a generated skill file tracked by Git, an unknown file in an ignored skill folder. Wrapper/canonical integrity of system skills does not go through `RegisterProvider`: it stays in the hostintegration inspection items, which doctor reports in the hub section (the hub's agent connection check) |
 
 The connection summary wording `connection written: claude-code, codex-cli, gemini-cli` lives in one function
 (Phase 2 names it); both plans reuse it. Because `init` commits "every file it wrote that `.gitignore` does not
