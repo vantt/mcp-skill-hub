@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -329,7 +330,8 @@ func TestPreviewResourceUpdateEditsOneScript(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != 0o755 {
+	// Windows has no executable bit, so the saved file reports a fixed mode there.
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o755 {
 		t.Fatalf("mode = %v, want 0755", info.Mode().Perm())
 	}
 	metadataAfter, err := os.ReadFile(f.abs(".meta/skill.yaml"))

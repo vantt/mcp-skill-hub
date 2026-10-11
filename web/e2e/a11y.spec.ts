@@ -106,7 +106,8 @@ test.describe('Accessibility and Responsive Sweep (Phase 12)', () => {
             (s) => document.documentElement.setAttribute('data-scheme', s),
             scheme,
           );
-          // Wait briefly for CSS transitions/repaint
+          // Let every colour transition finish: axe reads a half-faded colour on a slow runner.
+          await page.waitForFunction(() => document.getAnimations().length === 0);
           await page.waitForTimeout(50);
 
           await assertA11y(page, `${route} (w=${width}, scheme=${scheme})`);
