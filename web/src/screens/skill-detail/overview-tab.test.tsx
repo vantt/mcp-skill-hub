@@ -70,7 +70,7 @@ describe('OverviewTab', () => {
   it('shows the routing scope and lists', () => {
     renderOverview();
     const routing = within(card('Routing'));
-    expect(routing.getByText('multi_step')).toBeInTheDocument();
+    expect(routing.getByText('Several steps')).toBeInTheDocument();
     expect(routing.getByText('review')).toBeInTheDocument();
     expect(routing.getByText('review changed code')).toBeInTheDocument();
     expect(routing.getByText('write prose')).toBeInTheDocument();
