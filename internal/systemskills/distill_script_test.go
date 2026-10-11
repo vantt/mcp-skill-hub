@@ -234,7 +234,7 @@ func TestDistillScriptLoaderMatchesReference(t *testing.T) {
 	}
 	if runtime.GOOS != "windows" {
 		if out, err := exec.Command("git", "-C", repoRoot, "ls-files", "*/.meta/distill.yaml",
-			"internal/**/testdata/*distill*.yaml").Output(); err == nil {
+			"internal/**/testdata/*-distill.yaml").Output(); err == nil {
 			for _, line := range strings.Fields(string(out)) {
 				files[line] = true
 			}
