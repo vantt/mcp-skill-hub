@@ -279,7 +279,7 @@ Copy the token as in [step 2](#2-bring-the-token-to-machine-a), then connect you
 skillhub connect -g --hub http://100.101.102.103:7420 --token-file ~/.config/skillhub/hub-token --yes
 ```
 
-You can also use machine B's name. Its short host name (`http://machine-b:7420`) works as it is. A full MagicDNS name such as `machine-b.tailnet-name.ts.net` must be accepted by the listener first: add `--allow-host machine-b.tailnet-name.ts.net` to `skillhub serve mcp` on machine B.
+You can also use machine B's name. Its short name (`http://machine-b:7420`) works as it is when it equals machine B's host name, which is Tailscale's default. Any other name, for example the full MagicDNS name `machine-b.tailnet-name.ts.net`, must be accepted by the listener first: add `--allow-host machine-b.tailnet-name.ts.net` to `skillhub serve mcp` on machine B.
 
 Prefer `-g` for a Tailscale hub. `doctor` sends the token only to a hub on this machine (an SSH tunnel) or to a hub your user account names, never to a hub that only a project's files name, because a cloned repository could name any address. For such a project-only hub, `doctor` checks that it answers and tells you to check the token with the `connect --hub` preview, which writes nothing.
 
