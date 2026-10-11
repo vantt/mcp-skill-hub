@@ -1,11 +1,15 @@
 package systemskills
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"fmt"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"reflect"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 
@@ -156,4 +160,189 @@ func TestCuratorFrontmatterDeclaresCompatibilityMetadata(t *testing.T) {
 	if !reflect.DeepEqual(got, metadata) {
 		t.Fatalf("SKILL.md frontmatter = %#v\nCuratorMetadata  = %#v", got, metadata)
 	}
+}
+
+// readSkillTree reads every file under root the way a directory go:embed does:
+// names that start with "." or "_" are skipped at any depth.
+func readSkillTree(t *testing.T, root string) map[string][]byte {
+	t.Helper()
+	files := map[string][]byte{}
+	err := filepath.WalkDir(root, func(name string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if name != root && (strings.HasPrefix(entry.Name(), ".") || strings.HasPrefix(entry.Name(), "_")) {
+			if entry.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(root, name)
+		if err != nil {
+			return err
+		}
+		content, err := os.ReadFile(name)
+		if err != nil {
+			return err
+		}
+		files[filepath.ToSlash(rel)] = content
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk %s: %v", root, err)
+	}
+	return files
+}
+
+func TestDistillLabMirrorEqualsSource(t *testing.T) {
+	t.Parallel()
+
+	const fix = "copy .agents/skills/distill-lab/ over internal/systemskills/distill-lab/ (the .agents copy is the editable source)"
+	source := readSkillTree(t, filepath.Join("..", "..", ".agents", "skills", "distill-lab"))
+	mirror := readSkillTree(t, "distill-lab")
+	if len(source) == 0 {
+		t.Fatal(".agents/skills/distill-lab/ holds no files")
+	}
+	for path, content := range source {
+		got, ok := mirror[path]
+		if !ok {
+			t.Errorf("%s is missing from the embed mirror; %s", path, fix)
+			continue
+		}
+		if !bytes.Equal(got, content) {
+			t.Errorf("%s differs between the source and the embed mirror; %s", path, fix)
+		}
+	}
+	for path := range mirror {
+		if _, ok := source[path]; !ok {
+			t.Errorf("%s exists only in the embed mirror; %s", path, fix)
+		}
+	}
+
+	var embedded map[string][]byte
+	for _, skill := range SystemSkills() {
+		if skill.ID == DistillSkillID {
+			embedded = map[string][]byte{}
+			for _, file := range skill.Files {
+				embedded[file.Path] = file.Content
+			}
+		}
+	}
+	if !reflect.DeepEqual(embedded, mirror) {
+		t.Fatalf("embedded distill-lab files differ from internal/systemskills/distill-lab/ on disk")
+	}
+}
+
+func TestSystemSkillsListsBundlesInOrder(t *testing.T) {
+	t.Parallel()
+
+	skills := SystemSkills()
+	if len(skills) != 2 || skills[0].ID != CuratorSkillID || skills[1].ID != DistillSkillID {
+		t.Fatalf("system skill ids = %v, want [%s %s]", skillIDs(skills), CuratorSkillID, DistillSkillID)
+	}
+
+	curator, distill := skills[0], skills[1]
+	if curator.Version != CuratorSkillVersion || curator.HubOnly || !curator.ServedOverMCP {
+		t.Fatalf("curator = %s@%s hubOnly=%v servedOverMCP=%v", curator.ID, curator.Version, curator.HubOnly, curator.ServedOverMCP)
+	}
+	if len(curator.Files) != 1 || string(curator.Files[0].Content) != CuratorSkill {
+		t.Fatal("curator bundle is not exactly the embedded CuratorSkill")
+	}
+	if distill.Version != DistillSkillVersion || DistillSkillVersion != "0.1.0" || !distill.HubOnly || distill.ServedOverMCP {
+		t.Fatalf("distill-lab = %s@%s hubOnly=%v servedOverMCP=%v", distill.ID, distill.Version, distill.HubOnly, distill.ServedOverMCP)
+	}
+
+	for _, skill := range skills {
+		if len(skill.Files) == 0 || skill.Files[0].Path != "SKILL.md" {
+			t.Fatalf("%s: first file is not SKILL.md", skill.ID)
+		}
+		rest := make([]string, 0, len(skill.Files)-1)
+		for _, file := range skill.Files {
+			if len(file.Content) == 0 {
+				t.Errorf("%s: %s is empty", skill.ID, file.Path)
+			}
+			if file.Path != "SKILL.md" {
+				rest = append(rest, file.Path)
+			}
+		}
+		if !sort.StringsAreSorted(rest) {
+			t.Errorf("%s: files after SKILL.md are not sorted: %v", skill.ID, rest)
+		}
+		if !strings.Contains(string(skill.Files[0].Content), "\nname: "+skill.ID+"\n") {
+			t.Errorf("%s: SKILL.md does not declare its name", skill.ID)
+		}
+	}
+}
+
+func TestSystemSkillsReturnsDeepCopies(t *testing.T) {
+	t.Parallel()
+
+	first := SystemSkills()
+	first[0].ID = "mutated"
+	first[1].Files[0].Content[0] = 'X'
+	first[1].Files[0].Path = "mutated"
+	first[1].Files = first[1].Files[:0]
+
+	second := SystemSkills()
+	if second[0].ID != CuratorSkillID {
+		t.Fatal("mutating a returned skill changed the next result's id")
+	}
+	if len(second[1].Files) == 0 || second[1].Files[0].Path != "SKILL.md" || second[1].Files[0].Content[0] != '-' {
+		t.Fatal("mutating a returned skill changed the next result's files")
+	}
+}
+
+func TestKnownFileDigest(t *testing.T) {
+	t.Parallel()
+
+	wellFormed := regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+	for id, paths := range knownDigests {
+		for path, digests := range paths {
+			for _, digest := range digests {
+				if !wellFormed.MatchString(digest) {
+					t.Errorf("%s %s: malformed digest %q", id, path, digest)
+				}
+				if !KnownFileDigest(id, path, digest) {
+					t.Errorf("%s %s: listed digest %q is not recognized", id, path, digest)
+				}
+			}
+		}
+	}
+
+	for _, skill := range SystemSkills() {
+		for _, file := range skill.Files {
+			digest := FileDigest(file.Content)
+			if !KnownFileDigest(skill.ID, file.Path, digest) {
+				t.Errorf("%s %s: current bundle bytes are not recognized", skill.ID, file.Path)
+			}
+			if KnownFileDigest(skill.ID, file.Path+".other", digest) {
+				t.Errorf("%s %s: digest is recognized under another path", skill.ID, file.Path)
+			}
+		}
+	}
+
+	if CuratorBundle().Digest != FileDigest([]byte(CuratorSkill)) {
+		t.Fatal("FileDigest and CuratorBundle disagree on the digest form")
+	}
+	arbitrary := FileDigest([]byte("content Skill Hub never wrote\n"))
+	for _, id := range []string{CuratorSkillID, DistillSkillID, "unknown"} {
+		if KnownFileDigest(id, "SKILL.md", arbitrary) {
+			t.Errorf("%s: arbitrary digest is recognized", id)
+		}
+	}
+	curatorDigest := FileDigest([]byte(CuratorSkill))
+	if KnownFileDigest(DistillSkillID, "SKILL.md", curatorDigest) {
+		t.Error("curator bytes are recognized as a distill-lab file")
+	}
+}
+
+func skillIDs(skills []SystemSkill) []string {
+	ids := make([]string, len(skills))
+	for i, skill := range skills {
+		ids[i] = skill.ID
+	}
+	return ids
 }
