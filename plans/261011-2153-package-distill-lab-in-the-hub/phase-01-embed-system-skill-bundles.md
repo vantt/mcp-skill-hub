@@ -10,6 +10,8 @@ dependencies: []
 
 # Phase 1: Embed system skill bundles and distill-lab
 
+<!-- Validation: vendored folder is scripts/lib/ (renamed for the repo hook); release is 0.5.0 (was written 5.0.0) -->
+
 ## Context (traced)
 
 - Today one system skill is embedded as a string: `//go:embed curator/SKILL.md` into `CuratorSkill`
@@ -54,7 +56,7 @@ dependencies: []
    Curator: `HubOnly=false`, `ServedOverMCP=true`. distill-lab: `HubOnly=true`, `ServedOverMCP=false`.
    Return defensive copies.
 2. Embed distill-lab with `//go:embed distill-lab` into an `embed.FS`; walk it to build `Files`, so every file
-   Phase 2 adds (`scripts/distill.mjs`, `scripts/vendor/js-yaml.mjs`, `scripts/vendor/js-yaml.LICENSE`) is part of
+   Phase 2 adds (`scripts/distill.mjs`, `scripts/lib/js-yaml.mjs`, `scripts/lib/js-yaml.LICENSE`) is part of
    the bundle without further code. `embed.FS` skips dot and underscore files by default.
 3. `DistillSkillID = "distill-lab"`, `DistillSkillVersion = "0.1.0"`. The version is asserted against the
    SKILL.md frontmatter once Phase 3 adds the `version:` field; until then the test checks the constant only.
@@ -63,8 +65,8 @@ dependencies: []
    map `id -> skill-relative path -> []sha256` of previously shipped bytes, generated once from Git history and
    pasted in, with a comment explaining how it was produced (no plan or phase ids). Sources:
    - every committed blob of `internal/systemskills/curator/SKILL.md` and `system-skills/curator/SKILL.md`
-     (12 commits before 5.0.0: `git log --format=%H -- <path>` then `git show <sha>:<path> | sha256sum`; run it
-     on the post-5.0.0 main so the curator text edits made by the onboarding plan are included);
+     (12 commits before 0.5.0: `git log --format=%H -- <path>` then `git show <sha>:<path> | sha256sum`; run it
+     on the post-0.5.0 main so the curator text edits made by the onboarding plan are included);
    - every committed blob of the old dev `.claude/skills/distill-lab/SKILL.md`, keyed as `SKILL.md`, so an
      unedited hand copy in an owner's hub is recognized and replaced by the wrapper. These digests stay valid
      after Phase 9 because the key is the path inside the skill folder, not the repo path.
@@ -80,6 +82,11 @@ dependencies: []
    on the next commit, not on a user's upgrade. The test skips when the checkout has no tags or no Git, unless
    `SKILLHUB_REQUIRE_TAGS=1`, then it fails; the CI `lint` job (full history) and release verify set it (workflow
    lines owned by Phase 2). Tags `v0.1.0` to `v0.5.0-alpha.1` exist today and each holds the curator file.
+   <!-- Validation: per-tag enforcement --> Coverage differs by id and should be stated in the test comment: the
+   curator table holds every committed blob (enforced for tagged ones), while distill-lab files enter the table only
+   as they ship in a tag, so an intermediate distill-lab version written by an untagged dev build is "unknown" and
+   blocked (low impact, dev users only). The lint job has `fetch-depth: 0` but today runs only `make lint`; Phase 2
+   adds the test step there and `fetch-depth: 0` to release verify.
 5. Do not change `CuratorSkill`, `CuratorBundle()` or `CuratorMetadata()` signatures or bytes.
 6. Repo `/.gitignore`: replace the line `.agents/` with anchored patterns that keep everything under `.agents/`
    ignored except the distill-lab source:

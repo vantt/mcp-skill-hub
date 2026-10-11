@@ -15,8 +15,10 @@ dependencies: [4]
 extends `requiredIgnoreEntries`. File renamed from phase-05-local-exclude-and-tracked-finding.md. -->
 <!-- Red team: Phase 5 ordering and ownership. Moved from wave 1 to wave 3 after Phase 4, because its notices go
 through the adapter Phase 4 creates (`internal/app/system_skill_doctor.go`). -->
+<!-- Validation: the adapter is now `systemSkillProvider`, a `CheckProvider` registered through the onboarding
+plan's `RegisterProvider`; its checks return `notice` Findings. Release is 0.5.0 (was written 5.0.0). -->
 
-## Context (traced on main `ef535de`; re-verify on the post-5.0.0 main)
+## Context (traced on main `ef535de`; re-verify on the post-0.5.0 main)
 
 - `requiredIgnoreEntries` (`internal/workspace/workspace.go:38-41`) are the hub `.gitignore` lines Skill Hub
   requires. `Inspect` reports a fixable `gitignore_entry_missing` finding for each missing line
@@ -40,7 +42,7 @@ through the adapter Phase 4 creates (`internal/app/system_skill_doctor.go`). -->
 
 - Modify: `internal/workspace/workspace.go` (`requiredIgnoreEntries` only).
 - Modify: `internal/app/system_skill_doctor.go` and its test (created by Phase 4): the tracked-file and
-  not-Skill-Hub-file notices.
+  not-Skill-Hub-file checks of `systemSkillProvider`. <!-- Validation: onboarding extension point -->
 - Modify: `internal/workspace/machine_files_test.go` only if it asserts the exact `requiredIgnoreEntries` list
   (grep at start; otherwise create `internal/workspace/system_skill_ignore_test.go`).
 - Not owned: `machine_file_tracked`, `trackedMachineFiles`, `init`, the onboarding plan's doctor/status check set.
@@ -56,21 +58,23 @@ through the adapter Phase 4 creates (`internal/app/system_skill_doctor.go`). -->
    fixable `gitignore_entry_missing` finding per new entry until `doctor --fix` appends them (the fix shows as a
    `.gitignore` change the owner commits). Phase 7 adds this to the release-note lines.
 3. <!-- Red team: system_skill_tracked blocks doctor --fix; tracked fix untracks user files --> Tracked notice
-   `system_skill_tracked`, non-blocking: in the adapter (not a `workspace.Finding`), list with
+   `system_skill_tracked`, non-blocking: in `systemSkillProvider` (not a `workspace.Finding`), list with
    `git ls-files -z --` the tracked files under the four folders. For each tracked file whose bytes Skill Hub owns
-   (current or known bundle bytes, or an owned wrapper; ownership from Phase 4), add one doctor warning: "Git tracks
-   <path>, which Skill Hub regenerates from its version. To stop tracking it, run `git rm --cached -- <path>` and
-   commit." The command is printed, never run, names exactly that file (never `-r`, never a folder), and the warning
-   never changes the doctor status or blocks `--fix`. A tracked file Skill Hub does not own is the user's: it is
+   (current or known bundle bytes, or an owned wrapper; ownership from Phase 4), return one
+   <!-- Validation: onboarding extension point -->`Finding{Code: "system_skill_tracked", Severity: notice, Message:
+   "Git tracks <path>, which Skill Hub regenerates from its version.", Fix: nil, Manual: "git rm --cached -- <path>"
+   (then commit)}`. The command is printed, never run, names exactly that file (never `-r`, never a folder), and a
+   notice never changes the doctor status or blocks `--fix`. A tracked file Skill Hub does not own is the user's: it is
    reported by Phase 4 as a blocked item if it sits at a Skill Hub path, otherwise left alone, and no untracking
    command is ever suggested for it.
 4. <!-- Red team: exclude hides user-owned files --> User files are never hidden silently: the folder entries make
-   Git ignore any *untracked* file in those four folders, so the adapter adds one warning per untracked file there
-   that Skill Hub does not own ("<path> is ignored by .gitignore and was not written by Skill Hub; move it to
-   another skill folder or add it with `git add -f`"). A hand-copied `scripts/distill.py` next to a migrated
-   wrapper is the typical case.
-5. Both notices go through the adapter of plan decision 10 (Phase 4 design 16), so re-homing onto the onboarding
-   plan's check set touches only that adapter.
+   Git ignore any *untracked* file in those four folders, so the provider returns one `notice` Finding (code
+   `system_skill_unowned_ignored`, `Fix` nil) per untracked file there that Skill Hub does not own ("<path> is
+   ignored by .gitignore and was not written by Skill Hub"; `Manual`: "move it to another skill folder or run
+   `git add -f -- <path>`"). A hand-copied `scripts/distill.py` next to a migrated wrapper is the typical case.
+5. <!-- Validation: onboarding extension point --> Both checks run inside `systemSkillProvider`, registered through
+   the onboarding plan's `RegisterProvider` (`internal/app/health.go`, their phase-04:33-63; plan decision 10,
+   Phase 4 design 16), for the hub role at full depth only. Neither touches the renderers or `health.go`.
 
 ## Tests
 
@@ -78,18 +82,18 @@ through the adapter Phase 4 creates (`internal/app/system_skill_doctor.go`). -->
   --untracked-files=all` lists none of the four folders; init's first commit contains none of their files.
 - Old hub without the entries: doctor reports `gitignore_entry_missing` for each; `doctor --fix` appends them;
   second doctor reports none.
-- A hub with `git add -f .claude/skills/system-curator/SKILL.md` committed (the 5.0.0 init case): doctor shows one
-  `system_skill_tracked` warning with `git rm --cached -- .claude/skills/system-curator/SKILL.md`; status is
+- A hub with `git add -f .claude/skills/system-curator/SKILL.md` committed (the 0.5.0 init case): doctor shows one
+  `system_skill_tracked` notice (severity `notice`, `Manual` holding the command) with `git rm --cached -- .claude/skills/system-curator/SKILL.md`; status is
   unchanged; `doctor --fix` still runs the host repairs (wrapper migration, distill-lab install).
 - A tracked file under `.claude/skills/distill-lab/` that Skill Hub does not own: no untracking command anywhere
   in the output.
-- An untracked `.claude/skills/distill-lab/scripts/distill.py`: one "not written by Skill Hub" warning naming it;
+- An untracked `.claude/skills/distill-lab/scripts/distill.py`: one `system_skill_unowned_ignored` notice naming it;
   a user skill under `.claude/skills/my-skill/` gets no warning and is not ignored.
 - Windows: entries use forward slashes (CI runs the tests on Windows).
 
 ## Steps
 
-1. Entries and their test; notices in the adapter with tests; `go test ./internal/workspace/... ./internal/app/...`.
+1. Entries and their test; the two checks in `systemSkillProvider` with tests; `go test ./internal/workspace/... ./internal/app/...`.
 2. Commit: `feat(workspace): keep generated system skill files out of Git through the hub .gitignore`.
 
 ## Risks

@@ -17,8 +17,10 @@ stays last so the wrapper text is the one Phase 4 renders and Phase 8 verified w
 
 ## Context
 
+<!-- Validation: the vendored folder is scripts/lib/ (renamed for the repo hook) -->
+
 - After Phases 1-3 the editable source is `.agents/skills/distill-lab/` (SKILL.md, `scripts/distill.mjs`,
-  `scripts/vendor/js-yaml.*`), mirrored in `internal/systemskills/distill-lab/` (plan decision 3).
+  `scripts/lib/js-yaml.*`), mirrored in `internal/systemskills/distill-lab/` (plan decision 3).
 - `.claude/skills/distill-lab/` still holds the old full dev copy: `SKILL.md` and `scripts/distill.py`, both
   tracked although `.claude/` is ignored (`/.gitignore`). It is a third, diverging copy and the only remaining
   Python file.

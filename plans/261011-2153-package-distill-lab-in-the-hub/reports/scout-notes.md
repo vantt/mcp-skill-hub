@@ -43,17 +43,23 @@ Evidence gathered on 2026-10-11 at `c86b295` (main, clean). Paths are relative t
 
 - `.claude/worktrees/agent-a5c101367df3589e1/plans/261011-2250-onboarding-ux-redesign/plan.md`: `DetectRole` (its
   phase 2) feeds status and doctor; its phase 5 deletes `docs/getting-started.md`. Everything in this file that
-  cites pre-5.0.0 lines is re-verified at implementation start (plan.md "Re-verify at start").
+  cites pre-0.5.0 lines is re-verified at implementation start (plan.md "Re-verify at start").
 - Contract change from that plan's owner (mcp-skill-hub-cb), 2026-10-11, superseding its earlier `.git/info/exclude`
   design: no local-exclude helper; the hub keeps the `.gitignore` mechanism on main since `b734bc9`
   (`requiredIgnoreEntries`, fixable `gitignore_entry_missing`, `machine_file_tracked`; `init` appends missing
-  entries). The hidden stdio launcher keeps the name `mcp serve` (no rename, no registration migration). Its
-  doctor/status extension point is named by its phase 4 after its red team.
+  entries). The hidden stdio launcher keeps the name `mcp serve` (no rename, no registration migration).
+  <!-- Validation: onboarding extension point --> Its extension point is named in its phase-04:33-63:
+  `internal/app/health.go`, `CheckProvider`, `Finding{Code, Label, Severity ok|notice|problem|skipped, Message,
+  Fix *FixAction, Manual}`, `RegisterProvider`; its plan.md:208 and phase-04:62-63 expect this plan to register
+  integrity there too (answered in plan.md decision 10). The connection summary `connection written: claude-code,
+  codex-cli, gemini-cli` comes from its `connectionSummaryLine` (phase-02:147-148, plan.md:210).
+- <!-- Validation: release version --> The release that carries the onboarding redesign is 0.5.0 (tags are `v0.x`;
+  latest stable `v0.4.1`, latest tag `v0.5.0-alpha.1`).
 
 ## Node and js-yaml (checked 2026-10-11)
 
 - Prior art: `.claude/skills/distill/scripts/distill.mjs` imports a vendored js-yaml 4.3.2
-  (`scripts/vendor/js-yaml.mjs`, 104205 bytes, header line added and source-map line removed, so not
+  (its own `scripts/vendor/js-yaml.mjs`, an existing path of that other skill, 104205 bytes, header line added and source-map line removed, so not
   byte-identical to the published file; `js-yaml.LICENSE` equals the published LICENSE).
 - npm registry: js-yaml 4.3.2 published 2026-08-26, MIT, `exports["."].import = ./dist/js-yaml.mjs`, no `engines`,
   no provenance attestation; tarball `https://registry.npmjs.org/js-yaml/-/js-yaml-4.3.2.tgz`, `dist.integrity`
@@ -61,11 +67,20 @@ Evidence gathered on 2026-10-11 at `c86b295` (main, clean). Paths are relative t
   `8e44fb14a2643c59726bb15787b5f1512cb3d3fb` (`npm view`, 2026-10-11);
   `dist/js-yaml.mjs` 104118 bytes, sha256 `cea276c7e15f409a1adbe5d177aba7824398a474f7cf702bd57962c7d570636f`,
   no `import` statements; `LICENSE` 1084 bytes, sha256 `a07bc24468b9654ce76a547d47a2db282d07733b715db4c73a98bd63961f9550`.
-  Latest 5.4.3 (2026-10-05) depends on `argparse`.
+  Latest 5.4.3 (2026-10-05) depends on `argparse`, and so does 4.3.2 (`^2.0.1`, for its command-line tool); 4.3.2
+  is the `v4-legacy` dist-tag. <!-- Validation: js-yaml facts -->
 - Node ESM docs (https://nodejs.org/api/esm.html): unflagged in v12.17.0/v13.2.0, stable in v14.17.0/v15.3.0,
   `node:` imports from v14.13.1/v12.20.0.
-- GitHub runner images (actions/runner-images readmes for Ubuntu 24.04, Windows 2025, macOS 15 arm64): Node 22.23.x
-  installed by default, 24.x cached. CI `verify` job runs `go test ./...` on all three without a Node setup step
+- <!-- Validation: runner images --> GitHub runner images (actions/runner-images README and image readmes, images
+  dated 2026-10-04 / 2026-09-07):
+
+  | Label | Image | Default Node | Cached Node |
+  |---|---|---|---|
+  | `ubuntu-latest` | Ubuntu 24.04 | 22.23.3 | 22.23.3, 24.21.0 |
+  | `windows-latest` | Windows Server 2025 | 22.23.3 | 22.23.3, 24.21.0 |
+  | `macos-latest` | macOS 26 arm64 | 24.20.0 | 22.23.2, 24.20.0 |
+
+  None ships Node 18, so `actions/setup-node` with `node-version: 18` is required. CI `verify` job runs `go test ./...` on all three without a Node setup step
   (`.github/workflows/ci.yml:11-57`); `release.yml` "Verify release candidate" does the same
   (`.github/workflows/release.yml:100-168`, `go test -timeout 30m ./...` at `:150`); the web job uses
   `actions/setup-node` with `web/.nvmrc` (24) (`ci.yml:147`); the `lint` job checks out with `fetch-depth: 0`
@@ -80,7 +95,9 @@ Evidence gathered on 2026-10-11 at `c86b295` (main, clean). Paths are relative t
 
 - Adapters: `internal/hostintegration/integration.go:34-36` (Claude `.claude/skills/system-curator/SKILL.md`,
   Codex `.agents/skills/system-curator/SKILL.md`, Gemini `.gemini/skills/system-curator/SKILL.md`, same in user scope).
-  `SkillRelativePath` used only in `types.go:69,72,95,97` and three tests in the package.
+  `SkillRelativePath` used only in `types.go:69,72,95,97`, the adapter literals at `integration.go:34-36`, and
+  three tests in the package (`curator-source_test.go:34`, `doctor-skew_test.go:23,37,69`, `remote_test.go:196,214`).
+  <!-- Validation: SkillRelativePath callers -->
 - `prepare()` native skill branch: `integration.go:143-156`; `prepareNativeCurator` `curator-source.go:7-24`;
   ownership `curator-source.go:27-29` (byte equality with the current bundle only); removal on remote/remove
   plans `remote.go:483-498`.
@@ -88,8 +105,15 @@ Evidence gathered on 2026-10-11 at `c86b295` (main, clean). Paths are relative t
 - Inspection is grouped by host (`types.go:141-154`). Consumers that assume a host per file: kind lists
   `integration.go:87`, `internal/app/workspace.go:485`; conflict pre-checks `internal/app/connect.go:53-67`,
   `internal/app/connect_remote.go:196-211`, `internal/app/workspace.go:377-392`; `levels[...]`
-  `connect.go:79,93`, `connect_remote.go:226`, `workspace.go:403,450`; item ID `workspace.go:502`, parsed by
-  `internal/delivery/cli/connect_remote.go:118-146`. Tests/goldens pinning the three copies outside the package:
+  `connect.go:79,94`, `connect_remote.go:226,244`, `workspace.go:403,450` (maps built at `connect.go:52`,
+  `connect_remote.go:196`, `workspace.go:377,437`); item ID `workspace.go:501-503`, parsed by
+  `internal/delivery/cli/connect_remote.go:123` (`hostChangeLines`), `internal/delivery/cli/connect.go:120` (`renderConnectResult`),
+  `internal/delivery/cli/workspace.go:47` (init summary), compared exactly in `connect.go:104-105`
+  (`connectCurationGuidance`); `formatChangeKind` hard-codes "curator skill" (`connect.go:194-195`). Apply's kind
+  rank: `files.go:289-302`, checked at `:158`. `DoctorFix` gate `internal/app/workspace.go:228-230`;
+  `applyHostIntegration` `:418-456`. Status schema `schemas/curation-home-v1.schema.json` (`actionItem`
+  `additionalProperties: false`, `:59-65`), checked by `internal/delivery/cli/status_schema_test.go:27`.
+  <!-- Validation: consumer citations --> Tests/goldens pinning the three copies outside the package:
   `internal/app/workspace_test.go:337-346`, `internal/delivery/cli/onboarding_test.go:293`,
   `connect_regression_test.go:96-100` + `testdata/connect-workspace/{project,global}-files.golden`,
   `connect_remote_test.go:630`. `scopeRegistration` returns remote registrations too (`remote.go:156-164`;
@@ -142,7 +166,8 @@ Evidence gathered on 2026-10-11 at `c86b295` (main, clean). Paths are relative t
 - `docs/sources-and-learning.md:8,178,183`; `docs/web-ui.md:140,161`; `docs/getting-started.md:217`;
   `docs/user-guide.md:66-72,100`; `docs/remote-hub-guide.md:132,154`; `docs/design/05-curation-lifecycle.md:611,620`;
   `docs/use-cases/02-core-curation-use-cases.md:271-273`, `03-cli-and-curator-mcp-mapping.md:276-277,383` (still true).
-  `docs/command-reference.md` and `docs/troubleshooting.md` have no distill mention.
+  `docs/command-reference.md` has no distill-lab mention (`:65` mentions lessons and "Distill with Curator Agent");
+  `docs/troubleshooting.md` has no distill mention. <!-- Validation: command-reference citation -->
 
 ## Host skill loading (official docs, fetched 2026-10-11)
 
@@ -150,6 +175,11 @@ Evidence gathered on 2026-10-11 at `c86b295` (main, clean). Paths are relative t
   up to the repo root), `~/.claude/skills/`, enterprise, `--add-dir`, plugins. No mention of `.agents/skills`.
   Skill entries may be symlinks to directories. `${CLAUDE_SKILL_DIR}` is substituted in skill content and in
   `allowed-tools` Bash rules.
+- <!-- Validation: host docs --> Claude Code permissions (https://code.claude.com/docs/en/permissions): read-only
+  reads need no approval only "within the working directory and additional directories", so a user-scope wrapper
+  reading `~/.agents/skills/` from another project is expected to prompt in Manual mode.
+- Gemini CLI reads `.agents/skills` from v0.28.0 (PR #18151, merged 2026-02-03; v0.28.0 stable 2026-02-10).
+  Git 2.45.0 first has `--no-lazy-fetch` and documents `GIT_NO_LAZY_FETCH`.
 - Gemini CLI (https://geminicli.com/docs/cli/skills/): user `~/.gemini/skills/` or the `~/.agents/skills/` alias;
   workspace `.gemini/skills/` or the `.agents/skills/` alias; within a tier `.agents/skills/` takes precedence;
   higher-precedence location wins on name conflicts. Symlinks not documented.

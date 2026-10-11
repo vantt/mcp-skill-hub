@@ -3,7 +3,7 @@ title: "Package distill-lab in the hub and keep system skills once in .agents/sk
 description: "Ship distill-lab as a self-contained Node system skill installed only in the hub folder, keep system skill content once in .agents/skills with one thin wrapper for Claude Code, and make every distill instruction runnable."
 status: pending
 priority: P2
-effort: 52h
+effort: 57h
 branch: main
 tags: [system-skills, distill, node, hostintegration, init, doctor, web, docs]
 blockedBy: [261011-2250-onboarding-ux-redesign]
@@ -33,8 +33,9 @@ Full evidence with `file:line` is in [reports/scout-notes.md](reports/scout-note
 ## Outcome and acceptance criteria
 
 <!-- Red team: criteria updated for the adjudicated findings and the onboarding contract change -->
+<!-- Validation: vendored folder renamed scripts/lib (the repo hook blocks Bash paths containing that segment); release is 0.5.0 -->
 - [ ] After `skillhub init` creates a hub (exact form per the onboarding plan) the hub folder holds `.agents/skills/distill-lab/SKILL.md`,
-      `scripts/distill.mjs`, `scripts/vendor/js-yaml.mjs` and `scripts/vendor/js-yaml.LICENSE`, byte-equal to the
+      `scripts/distill.mjs`, `scripts/lib/js-yaml.mjs` and `scripts/lib/js-yaml.LICENSE`, byte-equal to the
       embedded bundle, plus one thin wrapper at `.claude/skills/distill-lab/SKILL.md`. Nothing is written under
       `.gemini/skills/`. The four generated system-skill folders are entries of the hub's `.gitignore` (via
       `requiredIgnoreEntries`), are not in `init`'s first commit, and `git status` stays clean.
@@ -56,7 +57,9 @@ Full evidence with `file:line` is in [reports/scout-notes.md](reports/scout-note
 - [ ] A hub created by the previous binary (three full curator copies) is migrated by `doctor --fix` to
       canonical + Claude wrapper, and its owned `.gemini/skills/system-curator/SKILL.md` is removed, with the Gemini
       notice; an edited copy (Claude or Gemini path) is reported as a blocked item naming its path and stays
-      unchanged, while every other repair in the same run is applied.
+      unchanged, while every other repair in the same run is applied, including the project and user-scope
+      repairs that `doctor --fix` runs after the hub (<!-- Validation: DoctorFix status gate -->the gate at
+      `internal/app/workspace.go:228-230` no longer skips them because of a blocked hub item).
 - [ ] Unknown content at a system-skill path (canonical file, wrapper, legacy copy) is a blocked item that is
       left unchanged and blocks only itself; when a canonical file is blocked, that id's owned Claude wrapper is
       removed. Known older shipped versions still upgrade silently (decided behaviour change, test
@@ -79,19 +82,22 @@ Full evidence with `file:line` is in [reports/scout-notes.md](reports/scout-note
 - [ ] The skill is self-contained (decision 12): the distill-lab folder copied alone to a scratch folder outside
       any hub runs `node scripts/distill.mjs --help` and `list <fixture>` with exit 0, and a hub-needing command
       (`check` without `--no-where` on a file outside a hub) exits with a clear `ERROR/WHY/FIX` message, not a
-      stack trace. It needs only Node 18 or newer and `git`; it never calls the `skillhub` binary, an MCP tool or
+      stack trace. It needs only Node 18 or newer and Git 2.45.0 or newer (<!-- Validation: Git minimum version -->decision 12); it never calls the `skillhub` binary, an MCP tool or
       npm, and the script itself opens no network connection (only the mirror clone/fetch steps the skill
       describes use the network).
-- [ ] `skillhub doctor` in a hub without Node (or with Node older than 18) keeps its status and adds one warning
-      naming what is missing and how to install it.
+- [ ] `skillhub doctor` in a hub without Node (or with Node older than 18) keeps its status and adds one
+      notice-severity finding (<!-- Validation: onboarding extension point -->registered through the onboarding
+      plan's `RegisterProvider`) naming what is missing and how to install it.
 - [ ] `skillhub status` prints the `review_lessons` next step as an absolute, quoted command that runs from any
       folder (`node '<hub>/.agents/skills/distill-lab/scripts/distill.mjs' list '<hub>/<path>'`; on Windows the
-      double-quoted form without `&&`), JSON and MCP carry `script`, `file` and `hub_relative`, and the command is
+      double-quoted form without `&&`), JSON and MCP carry `script`, `file` and `hub_relative` (<!-- Validation: status JSON schema -->and
+      `schemas/curation-home-v1.schema.json`, checked by `internal/delivery/cli/status_schema_test.go:27`, accepts
+      them), and the command is
       emitted only when every canonical distill-lab file matches the current bundle; the command runs in the
       sandbox.
 - [ ] After an upgrade, `status`, the web Home and `doctor` report host integration missing and
       `gitignore_entry_missing` until `doctor --fix`; both are in the release notes, and a tracked generated file
-      produces a non-blocking warning with a printed (never executed) `git rm --cached -- <file>`.
+      produces a non-blocking notice-severity finding with a printed (never executed) `git rm --cached -- <file>`.
 - [ ] The web handoff, Distill tab note, source confirmation text and user docs say where distill runs (an agent
       started in the hub folder) and what it needs (Node); no doc says the skill is not shipped, needs Python, or
       is fully offline.
@@ -143,10 +149,17 @@ compatibility matrix; reserving the `distill-lab` id for workspace skills; anyth
      precedence over `.gemini/skills`, so a wrapper would be shadowed or show the skill twice.
    - <!-- Red team: user-scope wrapper unverified --> Evidence limits, stated honestly: only Claude Code is
      verified end to end in this project (`docs/mcp-compatibility-matrix.json`). Wrapper-following is verified only
-     by Phase 8's manual check in project scope; the user-scope wrapper (`~/.claude/skills/` to
-     `~/.agents/skills/`) stays unverified unless the owner opts into the real-home check, and the docs say so.
-     Gemini CLI and Codex loading from `.agents/skills` rests on their official docs and is unverified here.
-     <!-- Red team: older Gemini CLI --> A Gemini CLI too old to read `.agents/skills` loses the curator entirely,
+     by Phase 8's manual check in project scope. <!-- Validation: Claude Code permissions docs --> The project-scope
+     wrapper reads `<root>/.agents/skills/...`, inside the working directory, without a prompt. The user-scope
+     wrapper (`~/.claude/skills/` to `~/.agents/skills/`) is expected to prompt for reads outside the working
+     directory in Manual mode, per the permissions docs (read-only reads need no approval only "within the working
+     directory and additional directories", https://code.claude.com/docs/en/permissions); the docs say so, and the
+     owner may confirm it with the optional real-home check. `${CLAUDE_SKILL_DIR}` substitution in skill content is
+     documented (https://code.claude.com/docs/en/skills).
+     Gemini CLI and Codex loading from `.agents/skills` rests on their official docs and is unverified here;
+     <!-- Validation: Gemini CLI minimum version --> Gemini CLI reads `.agents/skills` from v0.28.0 (PR #18151,
+     https://github.com/google-gemini/gemini-cli/pull/18151, https://geminicli.com/docs/cli/creating-skills/).
+     <!-- Red team: older Gemini CLI --> A Gemini CLI older than v0.28.0 cannot read `.agents/skills` and loses the curator entirely,
      because MCP hides it from every Gemini session (`internal/delivery/mcpserver/server.go:399-411`); the owner's
      decision stands, and the release note and a doctor notice name the effect (Phase 4 design 15).
 3. **Bundle model and single source of truth.** `internal/systemskills` exposes a list of system skills, each with
@@ -172,7 +185,7 @@ compatibility matrix; reserving the `distill-lab` id for workspace skills; anyth
    of the old dev `SKILL.md` (so an unedited hand copy in a hub is recognized and replaced by the wrapper). It
    holds no `distill.py` digest: Skill Hub never installed that file (it existed only in the dev copy), so a
    hand-copied `distill.py` is the user's and is left alone (and, being under an ignored folder, is named by a
-   doctor warning, Phase 5). <!-- Red team: wrapper ownership has no history --> A wrapper is ours when its bytes
+   doctor notice, Phase 5). <!-- Red team: wrapper ownership has no history --> A wrapper is ours when its bytes
    equal the current render or a previously shipped render listed in `known-wrappers.go`; the description found in
    the file is never trusted, so an edited description is the user's. <!-- Red team: hand-maintained known digests -->
    Tag-derived tests (`git tag -l 'v*'`) enforce both tables. Anything else is the user's: it is reported as a
@@ -188,8 +201,10 @@ compatibility matrix; reserving the `distill-lab` id for workspace skills; anyth
 5. **Executable bit.** Scripts are written `0644` and always invoked as `node <path>`, the same command on
    Windows. No step relies on the exec bit, so Windows and `embed.FS` (which drops modes) behave the same.
 6. **Hub-only distill-lab.** distill-lab is planned for install only when the plan is local, project scope, and
-   `Root == Workspace` (the hub folder itself). `connect` from a project sets `Root` to the project
-   (`internal/app/host-connections.go:23`) and `-g` sets it to home (`:26`), so neither installs it. Removal
+   `Root == Workspace` (the hub folder itself). `connect` from a project sets `Root` to the project and `-g` sets
+   it to home (<!-- Validation: decision 6 citation -->`ConnectService.target`, `internal/app/connect.go:131-160`;
+   doctor's project and user checks do the same in `internal/app/host-connections.go:23,26`), so neither installs
+   it unless the project is the hub folder itself. Removal
    plans consider distill-lab only when the root contains `.skillhub/schema-version`
    (`internal/workspace/workspace.go:75`), because remote and removal plans carry no workspace
    (`internal/app/connect_remote.go:159,441`) and this code repo holds a tracked distill-lab that matches the
@@ -204,12 +219,14 @@ compatibility matrix; reserving the `distill-lab` id for workspace skills; anyth
    and a clone on another machine regenerates them on `init`/`doctor --fix`; because `.gitignore` is committed,
    the entries hold for every clone. Existing hubs see `gitignore_entry_missing` for the new entries until
    `doctor --fix` (release note). <!-- Red team: system_skill_tracked blocks doctor --fix; check-ignore; untracking user files -->
-   Already tracked generated files (every hub created by 5.0.0 commits its curator copies) are detected with
-   `git ls-files` (`git check-ignore` never reports tracked paths) and reported as the non-blocking warning
-   `system_skill_tracked`, only for files whose bytes Skill Hub owns, with a printed, never executed
+   Already tracked generated files (every hub created by 0.5.0 commits its curator copies) are detected with
+   `git ls-files` (`git check-ignore` never reports tracked paths) and reported as the non-blocking
+   `system_skill_tracked` finding, only for files whose bytes Skill Hub owns, with a printed, never executed
    `git rm --cached -- <file>`; it is not a `workspace.Finding`, so it cannot stop `doctor --fix`
-   (`internal/app/workspace.go:266-270`). An untracked file in those folders that Skill Hub does not own is named in
-   a warning so it is never hidden silently. Other skills a user keeps under `.claude/skills/` stay tracked. If an
+   (`internal/app/workspace.go:266-270`). <!-- Validation: onboarding extension point --> It is a `notice`-severity
+   `Finding` with `Fix` nil and the command in `Manual`, registered through the onboarding plan's
+   `RegisterProvider` (decision 10). An untracked file in those folders that Skill Hub does not own is named in
+   a notice of the same provider so it is never hidden silently. Other skills a user keeps under `.claude/skills/` stay tracked. If an
    old hub had committed `.gemini/skills/system-curator/SKILL.md`, its removal by `doctor --fix` shows as a
    deletion the owner commits.
 8. **Old Gemini copy.** An owned full copy at `.gemini/skills/system-curator/SKILL.md` (current or previously
@@ -226,14 +243,27 @@ compatibility matrix; reserving the `distill-lab` id for workspace skills; anyth
    `--remove`. A verified MCP-skills host (none today) is not delivered the curator natively: Claude drops its
    curator wrapper; the canonical curator stays while another local host in the root still needs it. distill-lab
    is never served over MCP, so its wrapper stays. Doctor repairs a wrapper whose canonical target is missing.
-10. **Doctor hint and adapter.** In the hub, doctor adds one warning (never a status change) when `node` is not on
-    `PATH` or `node --version` is older than 18: "distill-lab runs scripts/distill.mjs with Node 18 or newer; <not
-    found | found vX>. Install Node from https://nodejs.org". Wrapper and canonical integrity are reported only
-    through the host inspection items. The warnings and notices this plan adds (Node warning, Gemini notice,
-    `system_skill_tracked`, not-Skill-Hub files in ignored folders) go through one small adapter
-    (`internal/app/system_skill_doctor.go`, one function that returns them for a root), written against the
-    extension point that exists at implementation start; the onboarding plan's phase 4 names it after its red
-    team, so re-homing touches only that adapter (kept by agreement with that plan's owner).
+10. **Doctor additions through the onboarding extension point.** <!-- Validation: onboarding extension point -->
+    The onboarding plan names it (its phase-04:33-63, plan.md:208): `internal/app/health.go` with `CheckProvider`
+    (`Name`, `Applies(RoleReport)`, `Check(ctx, RoleReport, Depth) []Finding`), `Finding{Code, Label, Severity
+    ok|notice|problem|skipped, Message, Fix *FixAction, Manual}` and `RegisterProvider`. This plan registers one
+    provider, `systemSkillProvider` in `internal/app/system_skill_doctor.go` (Phase 4 creates it, Phase 5 adds two
+    checks), applied to the hub role and run at full depth (doctor) only. It returns three kinds of `notice`
+    Findings, all with `Fix` nil, so none changes the doctor status or blocks `doctor --fix`:
+    - Node missing or older than 18 (code `distill_lab_node_missing`): "distill-lab runs scripts/distill.mjs with
+      Node 18 or newer; <not found | found vX>." `Manual`: "Install Node from https://nodejs.org".
+    - a generated system-skill file tracked by Git (`system_skill_tracked`, Phase 5), `Manual`:
+      `git rm --cached -- <file>`;
+    - a file Skill Hub did not write in an ignored system-skill folder (`system_skill_unowned_ignored`, Phase 5),
+      `Manual`: move it or `git add -f <path>`.
+    Wrapper and canonical *integrity* (missing, outdated, blocked, the old-layout migration and the Gemini notice
+    of decision 8) stays in the host inspection items of the existing hub doctor and host-connection checks, which
+    the onboarding plan wraps as providers itself. Reason, given as the answer to the onboarding plan's expectation
+    that this plan registers "wrapper/canonical integrity with a `--fix` migration" through `RegisterProvider`
+    (their plan.md:208, phase-04:62-63): those repairs need Plan/Apply semantics (preimage digests, desired bytes
+    re-derived at apply time, the dependency rank check, symlink refusal, per-item blocking,
+    `apply`, `expectedChange` and `changeOrder` in `internal/hostintegration/files.go:123-302`); a `FixAction.Apply` closure would either duplicate that engine or
+    bypass its checks, and it would report the same files twice.
 11. **Runnable product text.** <!-- Red team: review_lessons over MCP; Windows; tampered bundle --> The
     `review_lessons` action carries structured fields (`script` and `file`, both hub-relative, and
     `hub_relative: true`) plus a human `command` documented as "run from the hub folder", so JSON and MCP output
@@ -243,9 +273,9 @@ compatibility matrix; reserving the `distill-lab` id for workspace skills; anyth
     when every canonical distill-lab file equals the current bundle; the web texts name the skill and its script
     but print no command line, because the browser has no integrity information.
 12. **Self-contained Node skill (owner decision).** distill-lab's script is one ES module, `scripts/distill.mjs`,
-    that imports js-yaml from `scripts/vendor/js-yaml.mjs` by relative path: no npm install, no bundler.
+    that imports js-yaml from `scripts/lib/js-yaml.mjs` by relative path: no npm install, no bundler.
     Requirements for the shipped SKILL.md and script:
-    - they need only Node 18 or newer and `git`; never Python, the `skillhub` binary or an MCP tool;
+    - they need only Node 18 or newer and Git 2.45.0 or newer; never Python, the `skillhub` binary or an MCP tool;
     - <!-- Red team: hub lookup --> the script finds the hub from the `distill.yaml` path it is given (`parents[4]`,
       verified by `.skillhub/schema-version`), as `distill.py` does; an optional `--hub` only asserts that it
       agrees; there is no environment or current-folder lookup in the script. SKILL.md fixes only its personal
@@ -257,17 +287,29 @@ compatibility matrix; reserving the `distill-lab` id for workspace skills; anyth
       `--git-dir`, `GIT_NO_LAZY_FETCH=1`/`--no-lazy-fetch`, `GIT_TERMINAL_PROMPT=0`, `GIT_CONFIG_NOSYSTEM=1`,
       `-c safe.bareRepository=explicit`, empty `core.sshCommand` and `core.fsmonitor`, a 30 s timeout, and refuses
       symlinked or hub-tracked mirrors; a blob missing from a partial clone is reported as "blob not fetched; run
-      git fetch in the mirror". The script makes no network call; the mirror clone and fetch steps in SKILL.md do;
+      git fetch in the mirror". The script makes no network call; the mirror clone and fetch steps in SKILL.md do.
+      <!-- Validation: Git minimum version --> Git 2.45.0 is the floor: it is the first version with the
+      `--no-lazy-fetch` option and the documented `GIT_NO_LAZY_FETCH` variable
+      (https://github.com/git/git/blob/master/Documentation/RelNotes/2.45.0.adoc,
+      https://github.com/git/git/blob/v2.45.0/Documentation/git.txt); older Git fails on the unknown option;
     - <!-- Red team: untrusted upstream sources --> mirrors are bare partial clones so no upstream `CLAUDE.md` or
       `.claude/skills` lands in the hub folder, and SKILL.md warns that sources are untrusted data and that
-      `runtime/config/` and `runtime/envs/` must never be read;
+      `runtime/config/` and `runtime/envs/` must never be read while distilling (<!-- Validation: deny-read dropped -->a
+      text control only; no deny-read rule is requested, see "Risks");
+    - <!-- Validation: self-containment wording --> the bundled files (SKILL.md, `distill.mjs` and its comments, the
+      help text) never contain the words `python` or `distill.py`, because Phase 3's self-containment test bans them;
+      the deliberate differences and any port comment refer to "the previous implementation" or "the reference
+      emitter" instead;
     - <!-- Red team: atomic write --> writes `lstat` the file, `.meta` and every folder up to the hub, refuse
       symlinks, and use a random temp name opened with `wx`;
     - SKILL.md calls `node <skill folder>/scripts/distill.mjs ...` from one documented section only.
     Minimum Node, with evidence: the Node ESM docs (https://nodejs.org/api/esm.html, fetched 2026-10-11) give
     unflagged ES modules from v12.17.0/v13.2.0, stable from v14.17.0/v15.3.0, and `node:` imports from
-    v14.13.1. The plan documents Node 18 as the floor (a margin over those); CI sets up Node 18 in both Go test
-    jobs, and doctor warns below it. <!-- Red team: Node guard only in verify -->
+    v14.13.1. <!-- Validation: Node minimum --> So the technical floor is about Node 14.13.1; the plan keeps Node 18
+    as the stated minimum (a margin over that), noting that Node 18 itself reached end of life in April 2025. No
+    GitHub runner ships Node 18 (ubuntu-latest = Ubuntu 24.04 and windows-latest = Windows Server 2025 default to
+    22.23.3; macos-latest = macOS 26 arm64 defaults to 24.20.0), so CI must set up Node 18 with `actions/setup-node`
+    and `node-version: 18` in both Go test jobs; doctor warns below 18. <!-- Red team: Node guard only in verify -->
 13. **YAML output parity.** PyYAML's output is what existing `distill.yaml` files and the fixtures carry, and
     js-yaml's `dump` cannot reproduce it by options alone: its `flowLevel` is one global depth, but the layout puts
     `decision` and `score.facts` in flow style while their siblings are block; it has no per-node folded style;
@@ -286,8 +328,9 @@ compatibility matrix; reserving the `distill-lab` id for workspace skills; anyth
 ## Sequencing with the onboarding plan
 
 Another session implements [261011-2250-onboarding-ux-redesign](../../.claude/worktrees/agent-a5c101367df3589e1/plans/261011-2250-onboarding-ux-redesign/plan.md)
-(worktree branch `worktree-agent-a5c101367df3589e1`, read-only for this plan) and merges and releases 5.0.0
-first. Implementation of this plan starts in a fresh worktree from the new main only after that session announces
+(worktree branch `worktree-agent-a5c101367df3589e1`, read-only for this plan) and merges and releases the
+release that carries the onboarding redesign, 0.5.0, first. <!-- Validation: release is 0.5.0, not 5.0.0 -->
+Every "0.5.0" in this plan names that release (the repo's tags are `v0.x`; the latest stable is `v0.4.1`). Implementation of this plan starts in a fresh worktree from the new main only after that session announces
 main is final; then the "Re-verify at start" checklist runs before Phase 1.
 
 Ownership split (agreed):
@@ -299,16 +342,25 @@ Ownership split (agreed):
   examples; `init` commits automatically and stores the hub path in per-user config; no preview-then-`--yes` on
   onboarding commands), the hub `.gitignore` mechanism (`requiredIgnoreEntries`, `gitignore_entry_missing`; this
   plan only appends four entries), `machine_file_tracked` and its tests, the role-based doctor/status check set
-  and its extension point (named by their phase 4), the per-agent connection lines, `getting-started.md`
-  deletion and the README rewrite, and the text of the curator SKILL.md.
+  and its extension point (<!-- Validation: onboarding extension point -->`internal/app/health.go`: `CheckProvider`,
+  `Finding`, `FixAction`, `RegisterProvider`, their phase-04:33-63), the per-agent connection lines and the
+  connection summary wording (`connectionSummaryLine`, their phase-02:147-148 and plan.md:210),
+  `getting-started.md` deletion and the README rewrite, and the text of the curator SKILL.md.
 - **Ours:** the skill-file path: `curator-source.go`, the curator/system-skill writer in `integration.go`, its
   removal in `remote.go`, the inspection and plan shapes and every consumer of them listed in Phase 4, the
-  `internal/systemskills` restructure, distill-lab, the four ignore entries, and the doctor additions listed in
-  decision 10. `skillhub version` stays untouched (the self-updater and installers call it).
-- **Requested from the onboarding owner (mcp-skill-hub-cb):** <!-- Red team: untrusted upstream sources --> hub-scope
-  deny-read permission rules for `runtime/config/**` and `runtime/envs/**` written when an agent is connected in
-  the hub folder, so an agent running distill there cannot read the hub's secret env files. This plan does not
-  edit `cli-permissions.go`; Phase 8 check 18 records whether it shipped.
+  `internal/systemskills` restructure, distill-lab, the four ignore entries, the `systemSkillProvider` registered
+  through their `RegisterProvider` (decision 10), and the host-key collection that feeds their connection summary
+  (so the shared `agents` key never prints as an agent; Phase 4 design 12). `skillhub version` stays untouched (the
+  self-updater and installers call it).
+- <!-- Validation: deny-read dropped --> **Nothing is requested from the onboarding owner.** The red team's request
+  for hub-scope deny-read rules on `runtime/config/**` and `runtime/envs/**` is dropped: those folders are granted
+  to agents on purpose (`RuntimeAccessDirs`, `internal/hostintegration/runtime_access.go:12-23`), and the
+  bootstrap rule tells agents to source `$SKILLHUB_CONFIG_DIR/env` when they run an activated skill, so a deny
+  rule would break every skill run in the hub folder. The residual risk is recorded under "Risks".
+- **Answer to the onboarding plan's integrity expectation:** their plan.md:208 and phase-04:62-63 expect this plan
+  to register "wrapper/canonical integrity with a `--fix` migration" through `RegisterProvider`. It does not:
+  integrity stays in the host inspection items, for the reason given in decision 10; only the three notices go
+  through the provider. Tell their owner before Phase 4 starts.
 - **Order inside shared files:** our `review_lessons` change lands after their `curation_home.go` and
   `next_commands.go` edits; our distill sentences in docs, web (`handoff-brief.ts`, `DistillTab.tsx`,
   `DistillHandoffScreen.tsx`) and `source.go` come after their mechanical renames, which leave the distill
@@ -320,44 +372,52 @@ Statements in this plan that depend on the onboarding plan's final names. Check 
 update the affected phase before starting it.
 
 <!-- Red team: contract change; the local-exclude helper item is removed -->
-- [ ] `requiredIgnoreEntries`, `gitignore_entry_missing` and `init`'s append step are unchanged after 5.0.0, and
+- [ ] `requiredIgnoreEntries`, `gitignore_entry_missing` and `init`'s append step are unchanged after 0.5.0, and
       the onboarding plan did not already add any of the four entries (Phase 5).
-- [ ] The doctor/status extension point named by the onboarding plan's phase 4 after its red team (the finding or
-      warning type with code, message and optional fix), to re-home decision 10's adapter (Phases 4, 5).
+- [ ] <!-- Validation: onboarding extension point --> The extension point names still match their phase-04:33-63
+      on the merged main: `internal/app/health.go`, `CheckProvider` (`Name`, `Applies(RoleReport)`,
+      `Check(ctx, RoleReport, Depth)`), `Finding{Code, Label, Severity, Message, Fix *FixAction, Manual}`, the
+      `notice` severity (not a problem, no status change), `DepthFull`, and `RegisterProvider` (Phases 4, 5); and
+      that their hub-doctor and host-connection providers still carry the host inspection items (decision 10).
 - [ ] Hub command forms used in Phase 6 and Phase 8: `init` (no `--yes`, auto-commit, per-user hub path),
       `status`, `doctor`, `doctor --fix`, `connect`, `connect -g`, `connect --hub`, `connect --remove`,
       `--host`, and that `--workspace` is gone from examples; the stdio launcher is still `mcp serve`.
 - [ ] `cliNextCommand`/`shellArgument` and the `review_lessons` rendering after their edits to
       `internal/delivery/cli/curation.go` and `next_commands.go`; the collection id pattern (Phase 6).
-- [ ] The per-agent connection lines (today `hostChangeLines`, `internal/delivery/cli/connect_remote.go:118-146`, and
-      `hostDisplayName`, `internal/delivery/cli/connect.go:161-172`) after their phase 2, so Phase 4's shared line and
-      item-ID parsing fit them (Phase 4).
+- [ ] The per-agent connection lines (today `hostChangeLines`, `internal/delivery/cli/connect_remote.go:118-146`,
+      `renderConnectResult`, `internal/delivery/cli/connect.go:114-159`, `hostDisplayName`, `:161-172`, and
+      `formatChangeKind`, `:174-207`) and every other item-ID reader (`connectCurationGuidance`,
+      `internal/delivery/cli/connect.go:104-105`; the init summary host list, `internal/delivery/cli/workspace.go:40-50`,
+      which their `connectionSummaryLine` replaces) after their phase 2, so Phase 4's shared line, its ID parser and
+      the `agents` exclusion fit them (Phase 4). <!-- Validation: item-ID parsers -->
 - [ ] Line numbers cited from `internal/app/workspace.go`, `internal/app/connect.go`, `internal/app/connect_remote.go`,
       `internal/app/host-connections.go`, `internal/app/curation_home.go`, `internal/workspace/workspace.go`,
       `internal/delivery/cli/*`, `internal/hostintegration/*` (all phases); the curator SKILL.md text they edited
       (Phase 1 known digests and the tag-derived test must include their new curator versions).
-- [ ] Docs file set after 5.0.0: `getting-started.md` deleted, README rewritten, the distill slots in
+- [ ] Docs file set after 0.5.0: `getting-started.md` deleted, README rewritten, the distill slots in
       `docs/sources-and-learning.md` and `docs/web-ui.md` (Phase 7).
 - [ ] Whether the onboarding plan edited `.github/workflows/ci.yml` or `release.yml` (Phase 2 adds Node 18 setup,
       `SKILLHUB_REQUIRE_NODE`, and tags for the digest test).
-- [ ] <!-- Red team: untrusted upstream sources --> Whether the requested hub-scope deny-read rules for
-      `runtime/config/**` and `runtime/envs/**` were accepted and shipped by the onboarding owner (Phases 3, 8).
-- [ ] <!-- Red team: older Gemini CLI --> The first Gemini CLI version that reads `.agents/skills` (release notes),
-      for the doctor notice and the docs (Phases 4, 7).
-- [ ] <!-- Red team: network claim --> The first Git version that honours `GIT_NO_LAZY_FETCH`/`--no-lazy-fetch`
-      (Git release notes), for the script's version check and the skill's requirements (Phases 2, 3).
+<!-- Validation: deny-read item removed (request dropped); Gemini CLI and Git minimum versions filled in, see decisions 2 and 12 -->
+- [ ] `RuntimeAccessDirs` and the bootstrap's `$SKILLHUB_CONFIG_DIR/env` rule are unchanged, so the residual risk
+      in "Risks" still describes the hub (Phases 3, 8).
+- [ ] The status JSON schema `schemas/curation-home-v1.schema.json` (`actionItem`, `additionalProperties: false`)
+      and `internal/delivery/cli/status_schema_test.go:27` after their edits (Phase 6).
+- [ ] The Apply rank check (`changeOrder`, `internal/hostintegration/files.go:289-302`, called at `:158`) and the
+      `DoctorFix` gate (`internal/app/workspace.go:228-230`) after their edits (Phase 4).
 
 ## Phases
 
 <!-- Red team: efforts, dependencies and waves updated -->
+<!-- Validation: Phase 4 +4h (rank check, DoctorFix gate, applyHostIntegration, ID parsers, formatChangeKind, output goldens, several ids per host, all-adapter registrations, Blocked in MissingFinding); Phase 2 +0.5h (extraction script, test-name list, release fetch-depth); Phase 6 +0.5h (status JSON schema) -->
 | # | Phase | Effort | Depends on | File |
 |---|---|---|---|---|
 | 1 | Embed system skill bundles and distill-lab | 4h | - | [phase-01](phase-01-embed-system-skill-bundles.md) |
-| 2 | Rewrite the distill script as a self-contained Node module | 13h | 1 | [phase-02](phase-02-rewrite-distill-script-in-node.md) |
+| 2 | Rewrite the distill script as a self-contained Node module | 13.5h | 1 | [phase-02](phase-02-rewrite-distill-script-in-node.md) |
 | 3 | distill-lab skill text: hub lookup, one script section, requirements, mirrors, warning | 2h | 1, 2 | [phase-03](phase-03-distill-lab-skill-text.md) |
-| 4 | Installer: canonical folder, Claude wrapper, per-item conflicts, migration, removal, doctor hint | 16h | 1 | [phase-04](phase-04-installer-canonical-and-wrappers.md) |
+| 4 | Installer: canonical folder, Claude wrapper, per-item conflicts, migration, removal, doctor provider | 20h | 1 | [phase-04](phase-04-installer-canonical-and-wrappers.md) |
 | 5 | Ignore generated system-skill folders in the hub `.gitignore` and report tracked ones | 2.5h | 4 | [phase-05](phase-05-gitignore-entries-and-tracked-notice.md) |
-| 6 | Product text and tests (Go, web, e2e, one screenshot) | 5h | 1, 4 | [phase-06](phase-06-product-text-and-tests.md) |
+| 6 | Product text, status JSON schema and tests (Go, web, e2e, one screenshot) | 5.5h | 1, 4 | [phase-06](phase-06-product-text-and-tests.md) |
 | 7 | User docs | 3.5h | 2, 3, 4, 5, 6 | [phase-07](phase-07-docs.md) |
 | 8 | Sandbox verification | 5h | 7 | [phase-08](phase-08-sandbox-verification.md) |
 | 9 | Move the dev copy to the shared layout | 1h | 8 | [phase-09](phase-09-move-dev-copy-to-shared-layout.md) |
@@ -367,8 +427,8 @@ update the affected phase before starting it.
 | Wave | Phases | Owned files (no overlap inside a wave) |
 |---|---|---|
 | 1 | 1 | P1: `internal/systemskills/{embed.go,embed_test.go,bundles.go,known-digests.go,known_digests_test.go}`, `internal/systemskills/distill-lab/SKILL.md`, `.agents/skills/distill-lab/SKILL.md` (create), repo `/.gitignore` (own first commit) |
-| 2 | 2, 4 | P2: `.agents/skills/distill-lab/scripts/**`, `internal/systemskills/distill-lab/scripts/**`, new `internal/systemskills/distill_script_test.go`, new `internal/systemskills/testdata/distill/**`, `web/scripts/notices.mjs`, `web/THIRD_PARTY_NOTICES.md`, `.github/workflows/ci.yml`, `.github/workflows/release.yml`. P4: `internal/hostintegration/**`, `docs/mcp-compatibility-matrix.json`, `internal/app/{connect.go,connect_remote.go,workspace.go,host-connections.go}`, `internal/app/curation_home.go:150-157`, new `internal/app/system_skill_doctor.go` (+ test), `internal/delivery/cli/{connect.go,connect_remote.go}`, tests and goldens `internal/app/workspace_test.go`, `internal/delivery/cli/{onboarding_test.go,connect_regression_test.go,connect_remote_test.go}`, `internal/delivery/cli/testdata/connect-workspace/{project-files,global-files}.golden` |
-| 3 | 3, 5, 6 | P3: `.agents/skills/distill-lab/SKILL.md`, `internal/systemskills/distill-lab/SKILL.md`, `internal/systemskills/embed_test.go`. P5: `internal/workspace/workspace.go` (`requiredIgnoreEntries` only), its test, `internal/app/system_skill_doctor.go` (+ test). P6: `internal/app/curation_home.go` (`ActionItem`, `countCandidateLessons`, `review_lessons` block), `internal/app/curation_home_test.go`, new `internal/app/distill_lab_intact.go`, `internal/app/source.go`, `internal/delivery/cli/source.go`, `internal/delivery/cli/source_test.go`, `internal/delivery/cli/curation.go`, `internal/delivery/cli/workspace_next_steps_test.go`, `internal/distill/distill_model.go`, `web/src/domain/handoff-brief*.ts`, `web/src/screens/skill-detail/DistillTab.tsx`, `web/src/screens/distill/*`, `web/e2e/tier3.spec.ts`, `web/e2e/journeys.spec.ts`, `docs/images/web/distill-handoff.png` + its manifest entry |
+| 2 | 2, 4 | P2: `.agents/skills/distill-lab/scripts/**`, `internal/systemskills/distill-lab/scripts/**`, new `internal/systemskills/distill_script_test.go`, new `internal/systemskills/testdata/distill/**`, `web/scripts/notices.mjs`, `web/THIRD_PARTY_NOTICES.md`, `.github/workflows/ci.yml`, `.github/workflows/release.yml`. P4: `internal/hostintegration/**`, `docs/mcp-compatibility-matrix.json`, `internal/app/{connect.go,connect_remote.go,workspace.go,host-connections.go}`, `internal/app/curation_home.go:150-157`, new `internal/app/system_skill_doctor.go` (+ test), `internal/delivery/cli/{connect.go,connect_remote.go}`, new `internal/delivery/cli/host_item_id.go` (+ test), the host-key collection that feeds the connection summary (today `internal/delivery/cli/workspace.go:40-50`; after the onboarding merge, the input of `connectionSummaryLine`; not its wording), tests and goldens `internal/app/workspace_test.go`, `internal/delivery/cli/{onboarding_test.go,connect_regression_test.go,connect_remote_test.go}`, `internal/delivery/cli/testdata/connect-workspace/{project-files,global-files,project-output,global-output}.golden` <!-- Validation: owned parsers and output goldens --> |
+| 3 | 3, 5, 6 | P3: `.agents/skills/distill-lab/SKILL.md`, `internal/systemskills/distill-lab/SKILL.md`, `internal/systemskills/embed_test.go`. P5: `internal/workspace/workspace.go` (`requiredIgnoreEntries` only), its test, `internal/app/system_skill_doctor.go` (+ test). P6: `internal/app/curation_home.go` (`ActionItem`, `countCandidateLessons`, `review_lessons` block), `schemas/curation-home-v1.schema.json` (`actionItem`; public contract) and `internal/delivery/cli/status_schema_test.go` <!-- Validation: status JSON schema -->, `internal/app/curation_home_test.go`, new `internal/app/distill_lab_intact.go`, `internal/app/source.go`, `internal/delivery/cli/source.go`, `internal/delivery/cli/source_test.go`, `internal/delivery/cli/curation.go`, `internal/delivery/cli/workspace_next_steps_test.go`, `internal/distill/distill_model.go`, `web/src/domain/handoff-brief*.ts`, `web/src/screens/skill-detail/DistillTab.tsx`, `web/src/screens/distill/*`, `web/e2e/tier3.spec.ts`, `web/e2e/journeys.spec.ts`, `docs/images/web/distill-handoff.png` + its manifest entry |
 | 4 | 7 | `docs/*.md` listed in the phase, `docs/design/05-curation-lifecycle.md`, `AGENTS.md` |
 | 5 | 8 | none (scratch sandbox only; fixes go back to the owning phase) |
 | 6 | 9 | `.claude/skills/distill-lab/**` of this code repo, new `internal/hostintegration/repo_wrapper_test.go` |
@@ -377,11 +437,17 @@ update the affected phase before starting it.
 Phase 2 starts as soon as Phase 1's first commit (the repo `.gitignore` edit) lands, because before it the new
 `scripts/**` files are ignored; it writes only under `scripts/**`, its test data and the workflows. Phase 4 runs
 beside it: its tests read bytes through the bundle API, never literal content, so Phase 2 and 3 edits do not break
-them. Phase 5 needs Phase 4's adapter file and ownership helpers; Phase 6 needs the bundle API (Phase 1) and runs
+them. Phase 5 needs Phase 4's provider file and ownership helpers; Phase 6 needs the bundle API (Phase 1) and runs
 after Phase 4 because both edit `internal/app/curation_home.go` (different blocks). In wave 3, P5 and P6 do not
 share a file (P6 does not touch `system_skill_doctor.go`). Between Phase 1 and Phase 9 this repo briefly holds the
 old full dev copy (with `distill.py`) in `.claude/skills/distill-lab/` next to the new source; Phase 9 ends that.
-Critical path: 1 -> 4 -> 6 -> 7 -> 8 -> 9 (34.5h); the script path 1 -> 2 -> 3 (19h) ends before Phase 7 needs it.
+Critical path: 1 -> 4 -> 6 -> 7 -> 8 -> 9 (39h); the script path 1 -> 2 -> 3 (19.5h) ends before Phase 7 needs it.
+<!-- Validation: critical path 34.5h -> 39h, script path 19h -> 19.5h, total 52h -> 57h -->
+Bash commands in every phase avoid the path segments the repo hook `.claude/hooks/scout-block.cjs` blocks for
+agent sessions (`node_modules`, `dist`, `build`, `vendor`, `target`, `.git`, `coverage` and a few more, listed in
+`.claude/hooks/scout-block/pattern-matcher.cjs:15-34`; there is no `.claude/.ckignore`). That is why the vendored
+folder is `scripts/lib/` and why Phase 2 and Phase 8 use small Node script files for the tarball and the Node
+binary. <!-- Validation: repo hook blocks vendor/dist paths -->
 
 ## Risks
 
@@ -392,15 +458,18 @@ Critical path: 1 -> 4 -> 6 -> 7 -> 8 -> 9 (34.5h); the script path 1 -> 2 -> 3 (
 | Python-compatible details are missed (`round(x, 2)` ties, `45.0` floats, YAML 1.1 quoting such as `yes` or all-digit SHAs, line folding at width 88, sort by code point) | M x M | Phase 2 lists each rule with a dedicated test input; differential run covers them. |
 | A planted mirror config runs commands or triggers a network fetch during `check` | M x H | Hardened git environment and options, explicit `--git-dir`, `cat-file` only, no lazy fetch, timeout, refusal of symlinked or hub-tracked mirrors; Phase 2 tests and Phase 8 checks 14-15. |
 | A symlink at the write path redirects `format`/`decide` output | L x H | `lstat` chain to the hub, random `wx` temp name; Phase 2 test and Phase 8 check 16. |
-| An agent distilling untrusted sources in the hub folder reads the hub's secret env files | M x H | Bare mirrors (no upstream agent files), skill warning; hard control requested from the onboarding owner (deny-read for `runtime/config/**`, `runtime/envs/**`), tracked in "Re-verify at start". |
-| Node missing or too old on the hub machine | M x M | Doctor warning, docs requirement line; the binary never needs Node. |
+| An agent distilling untrusted sources in the hub folder reads the hub's secret env files | M x H | <!-- Validation: deny-read dropped --> Bare mirrors (no upstream agent files), the untrusted-content warning in SKILL.md, hardened offline git. **Residual risk, accepted:** an agent run in the hub folder can read the hub's secret env files under `runtime/config/` and `runtime/envs/` by design, because skills run there need them (`RuntimeAccessDirs`, `internal/hostintegration/runtime_access.go:12-23`, and the bootstrap rule to source `$SKILLHUB_CONFIG_DIR/env`). A prompt injected through a source can therefore try to read them; the only control is the skill text and the agent's own judgement. No deny-read rule is requested, because it would break skills run in the hub. |
+| Node missing or too old on the hub machine | M x M | Doctor notice (`notice` Finding through `RegisterProvider`), docs requirement line; the binary never needs Node. |
 | The vendored js-yaml differs from the published file or misses its license notice | L x M | Pinned tarball URL and registry sha512 integrity, sha256 of both files asserted by a test; license beside it and in the release notices; update procedure in `AGENTS.md`. |
 | Node-executing test is silently skipped in CI | L x M | Node 18 set up and `SKILLHUB_REQUIRE_NODE=1` in both `ci.yml` verify and `release.yml` verify. |
 | A release changes a bundled file or the wrapper template without recording the shipped digest, so every unedited copy becomes "unknown" | M x H | Tag-derived tests over `git tag -l 'v*'` in Phase 1 and Phase 4, required in CI `lint` and release verify. |
 | Claude Code does not follow the wrapper and runs with the wrapper text only | M x H | Wrapper body is a single imperative instruction with an explicit path; Phase 8 checks Claude Code by hand in project scope; docs state what is verified. |
-| User-scope Claude wrapper prompts for `~/.agents` or does not load | M x M | Stated as unverified; optional owner-run real-home check in Phase 8; if a prompt appears, a read-only allow rule agreed with the onboarding owner; `~/.agents` never joins `additionalDirectories`. |
-| Gemini CLI or Codex does not load `.agents/skills` (old version, undocumented edge); an old Gemini CLI loses the curator entirely because MCP hides it | M x M | Both document it; docs and release note name the minimum Gemini version; doctor notice on migration; Phase 8 records them as unverified. No `.gemini` fallback by owner decision. |
-| The onboarding plan (5.0.0) renames commands, options, files or the doctor extension point this plan cites | H x M | Implementation starts only after that plan is merged and main is announced final; the "Re-verify at start" checklist lists every dependent statement; doctor additions sit behind one adapter. |
+| User-scope Claude wrapper prompts for `~/.agents` | H x M | <!-- Validation: Claude Code permissions docs --> Expected to prompt for reads outside the working directory in Manual mode, per the permissions docs; the docs say so; optional owner-run real-home check in Phase 8; a read-only allow rule can be agreed with the onboarding owner later; `~/.agents` never joins `additionalDirectories`. The project-scope wrapper reads inside the working directory without a prompt. |
+| Gemini CLI or Codex does not load `.agents/skills` (old version, undocumented edge); a Gemini CLI older than v0.28.0 loses the curator entirely because MCP hides it | M x M | Both document it; docs and release note name v0.28.0 (PR #18151); the migration item carries the Gemini notice; Phase 8 records them as unverified. No `.gemini` fallback by owner decision. |
+| The onboarding plan (0.5.0) renames commands, options, files or the doctor extension point this plan cites | H x M | Implementation starts only after that plan is merged and main is announced final; the "Re-verify at start" checklist lists every dependent statement, including the `health.go` names; the doctor notices sit in one provider. |
+| <!-- Validation: Apply rank check --> A plan that mixes canonical writes, wrapper removals and canonical removals is rejected by Apply as "not dependency ordered" | H x H | Phase 4 replaces `changeOrder(kind)` with a rank per change (kind and removal) used by both `buildPlan` and Apply; tests for migration, blocked-canonical and remote-removal plans. |
+| <!-- Validation: DoctorFix status gate --> A blocked hub item stops `doctor --fix` before the project and user repairs | H x M | Phase 4 changes the gate at `internal/app/workspace.go:228-230` so blocked system-skill items do not skip `applyExternalConnections`; the final status is computed after both. |
+| <!-- Validation: status JSON schema --> New `review_lessons` fields fail the strict status schema | H x M | Phase 6 extends `schemas/curation-home-v1.schema.json` (`actionItem`) as a public contract change, with the release note. |
 | `connect --remove` in this code repo deletes the tracked distill-lab source or its wrapper (bytes match the shipped ones) | M x H | Decision 6: distill-lab is planned only in a root with the hub marker; Phase 4 test and Phase 8 check in a repo-shaped folder. |
 | The repo `.gitignore` change un-ignores more than `.agents/skills/distill-lab/` | L x M | Anchored negation patterns; Phase 1 validates with `git check-ignore` and an empty `git status` diff. |
 | The experimental `distill.yaml` schema is now frozen by shipped fixtures and `internal/distill` | M x M | Keep the schema unchanged in this plan; version the skill (`version:` frontmatter) so later schema changes are visible. |
@@ -441,6 +510,11 @@ Critical path: 1 -> 4 -> 6 -> 7 -> 8 -> 9 (34.5h); the script path 1 -> 2 -> 3 (
    (decisions 12, 13). Doctor warns when Node is missing.
 6. The red-team adjudication below (2026-10-11), including the onboarding owner's contract change: hub
    `.gitignore` entries instead of a local exclude, and the stdio launcher keeps the name `mcp serve`.
+7. <!-- Validation: lead decisions --> The validation decisions of 2026-10-11, taken by the lead with the owner's
+   authority (listed in "Validation Log"): release 0.5.0; Gemini CLI v0.28.0 and Git 2.45.0 floors; Node 18 kept as
+   the stated minimum; the user-scope wrapper is expected to prompt; the deny-read request is dropped and the
+   residual risk accepted; doctor notices go through `RegisterProvider` while integrity stays in host items; the
+   vendored folder is `scripts/lib/`; bundled files never say `python` or `distill.py`.
 
 ## Owner follow-ups
 
@@ -450,11 +524,14 @@ that work is not affected.
 
 ## Open questions
 
-None blocking the plan's design. Residual items are evidential or external and are tracked in "Re-verify at
-start": the minimum Gemini CLI and Git versions, the onboarding owner's answer on the deny-read rules, and their
-doctor extension point. Gemini CLI and Codex loading from `.agents/skills` and the user-scope Claude wrapper are
-unverified in this project (Phase 8 records them), and full byte parity with PyYAML is proven only for the inputs
-the differential run covers (decision 13 fallback).
+<!-- Validation: open questions updated -->
+None blocking the plan's design. The minimum Gemini CLI and Git versions are filled in, the deny-read request is
+dropped and the doctor extension point is named; "Re-verify at start" only checks that the names still match.
+Remaining evidential limits: Gemini CLI and Codex loading from `.agents/skills` are unverified in this project, the
+user-scope Claude wrapper is expected to prompt (docs, not tested; Phase 8 records them), Codex following symlinked
+skill folders was not re-fetched (not relied on: the plan writes no symlinks), and full byte parity with PyYAML is
+proven only for the inputs the differential run covers (decision 13 fallback). The onboarding owner must be told
+that integrity is not registered through `RegisterProvider` (Sequencing).
 
 ## Red Team Review
 
@@ -548,7 +625,8 @@ Reconciled: frontmatter effort, phase table, wave table, critical path, acceptan
 owner decisions, open questions, the "Re-verify at start" list and `reports/scout-notes.md` (onboarding contract,
 CI jobs, js-yaml integrity, consumers of the inspection shape, distill.py write path).
 
-Unresolved (none contradicts the design; each blocks only the named step):
+Unresolved (none contradicts the design; each blocks only the named step). <!-- Validation: superseded --> All five
+items below are closed or changed by the "Validation Log" that follows; they are kept as the red-team record:
 
 - The minimum Gemini CLI version that reads `.agents/skills` (text of the Phase 4 notice and Phase 7 docs).
 - The minimum Git version honouring `GIT_NO_LAZY_FETCH` (Phase 2 version check, Phase 3 requirement).
@@ -557,3 +635,151 @@ Unresolved (none contradicts the design; each blocks only the named step):
 - The onboarding plan's doctor extension point name (adapter target, Phases 4 and 5).
 - Whether the onboarding plan's per-agent output parses item IDs the same way as `hostChangeLines` today (Phase 4
   design 12 adapts to it).
+
+## Validation Log
+
+### Session 1 (2026-10-11)
+
+Full-tier validation against main `e3403e8`; every citation changed in this session was re-checked with
+`git grep`/`sed` on main `944cfbf` (the only commit since is a test change in `internal/delivery/mcpserver`). The
+onboarding worktree held plan files only. Edits are marked `<!-- Validation: ... -->`.
+
+**Claims checked: 155. Verified: 143. Failed: 10. Unverified: 2.**
+
+| Phase | Checked | Failed |
+|---|---|---|
+| P1 | 19 | 0 |
+| P2 | 25 | 2 |
+| P3 | 9 | 0 |
+| P4 | 38 | 4 |
+| P5 | 11 | 0 |
+| P6 | 22 | 1 |
+| P7 | 15 | 1 |
+| P8 | 8 (+1 unverified) | 0 |
+| P9 | 5 | 0 |
+| Scout notes | 3 | 2 |
+
+The four Phase 4 failures are items 1-4 below (item 4 is plan.md decision 6, counted with Phase 4).
+
+FAILED claims and the fix applied:
+
+1. Phase 4 note: "connection written ..." exists "neither on main nor in the onboarding plan". It is in the
+   onboarding plan (plan.md:210, phase-02:147-148, `connectionSummaryLine`). Fix: note rewritten; the string comes
+   from their `connectionSummaryLine` and is reused unchanged; this plan only keeps `agents` out of its host list
+   (Phase 4 design 12, note after design 16; scout notes).
+2. Phase 4 context: `levels[change.Host]` at `connect.go:79,93`, `connect_remote.go:226`. Fix: `connect.go:79,94`,
+   `connect_remote.go:226,244`, plus the maps built at `connect.go:52`, `connect_remote.go:196`,
+   `workspace.go:377,437` (Phase 4, scout notes).
+3. Phase 4 owned files missed `internal/delivery/cli/testdata/connect-workspace/{project-output,global-output}.golden`
+   (used at `connect_regression_test.go:231,248`). Fix: owned in Phase 4 and the wave table, with expected content.
+4. Decision 6 cited `host-connections.go:23,26` for `connect`. Fix: `ConnectService.target`,
+   `internal/app/connect.go:131-160`; the host-connections lines kept for doctor's project and user checks
+   (decision 6, Phase 4).
+5. Phase 2: 5.4.3 "declares an `argparse` dependency" as the reason against it. Fix: 4.3.2 declares `argparse ^2.0.1`
+   too and is the `v4-legacy` dist-tag (`npm view`, re-checked); the choice now rests on the import-free ESM file,
+   the version already used in this repo and the young major (Phase 2, scout notes).
+6. Phase 2 test-name rule listed only three patterns. Fix: `Performance` (`release.yml:160`) and
+   `Fault|Hardening|DiskFull|ReadOnly|ConcurrentFrames` (`release.yml:168`).
+7. Phase 6 missed `schemas/curation-home-v1.schema.json` (`actionItem` `additionalProperties: false`, `:59-65`;
+   `internal/delivery/cli/status_schema_test.go:27`). Fix: Phase 6 owns it and the schema test as a public contract
+   change; `command` stays required (empty when gated); release-note line in Phase 7.
+8. Phase 7: `command-reference.md` "no distill mention". Fix: "no distill-lab mention"; `:65` mentions lessons and
+   "Distill with Curator Agent".
+9. Scout notes: runners "macOS 15 arm64, Node 22.23.x default". Fix: runner table (macos-latest = macOS 26 arm64,
+   default Node 24.20.0; Ubuntu 24.04 and Windows 2025 default 22.23.3, 24.21.0 cached).
+10. Scout notes: `SkillRelativePath` used "only in types.go and three tests". Fix: also the adapter literals at
+    `integration.go:34-36`; test lines listed.
+
+UNVERIFIED (2), now handled: running under the official Node 18.0.0 binary is Phase 8 check 5, done with a script
+file that avoids the blocked path segment, or recorded as best effort with CI covering Node 18 via `setup-node`.
+Codex following symlinked skill folders is not relied on (the plan writes no symlinks); recorded under "Open
+questions".
+
+Answers to the validator's questions 5(a)-(e):
+
+- (a) Gemini CLI first reads `.agents/skills` in v0.28.0 (stable 2026-02-10; PR #18151 merged 2026-02-03; user and
+  workspace tiers; `.agents` wins within a tier). https://github.com/google-gemini/gemini-cli/pull/18151,
+  https://geminicli.com/docs/cli/creating-skills/. Applied: decision 2, Phase 4 design 15, Phase 7, Phase 8, risks.
+- (b) Git 2.45.0 is the first version with `--no-lazy-fetch` and documented `GIT_NO_LAZY_FETCH`; 2.39.4 to 2.44.1
+  honour only the variable. https://github.com/git/git/blob/master/Documentation/RelNotes/2.45.0.adoc,
+  https://github.com/git/git/blob/v2.45.0/Documentation/git.txt. Applied: decision 12, Phases 2, 3, 7.
+- (c) Claude Code substitutes `${CLAUDE_SKILL_DIR}` in skill content; reads need no approval only inside the working
+  directory and additional directories, so the project-scope wrapper reads without a prompt and the user-scope
+  wrapper is expected to prompt in Manual mode. https://code.claude.com/docs/en/skills,
+  https://code.claude.com/docs/en/permissions. Applied: decision 2, Phase 4 risks, Phase 7 req 4, Phase 8 check 12.
+- (d) Node: ESM unflagged from v12.17.0/v13.2.0, stable from v14.17.0/v15.3.0, `node:` imports from v14.13.1; the
+  technical floor is about 14.13.1. Node 18 stays the stated minimum; Node 18 is end of life (April 2025).
+  https://nodejs.org/api/esm.html. Applied: decision 12, Phase 2 context.
+- (e) Runners (images 2026-10-04 / 2026-09-07): ubuntu-latest Ubuntu 24.04 and windows-latest Windows Server 2025
+  default 22.23.3; macos-latest macOS 26 arm64 default 24.20.0; none ships Node 18, so `actions/setup-node` with
+  `node-version: 18` is required. https://github.com/actions/runner-images/blob/main/README.md. Applied: decision 12,
+  Phase 2 context, scout notes.
+
+Decisions taken by the lead with the owner's authority (owner decision 7):
+
+1. The release is 0.5.0, not 5.0.0; every occurrence replaced; the onboarding release is "the release that carries
+   the onboarding redesign, 0.5.0".
+2. Versions filled in: Gemini CLI v0.28.0, Git 2.45.0; Node floor ~14.13.1 technically, 18 kept as the minimum
+   (end of life noted); `setup-node` with 18 required; runner table updated.
+3. The Claude Code user-scope wrapper is "expected to prompt for reads outside the working directory in Manual
+   mode, per the permissions docs"; the project-scope wrapper reads without a prompt.
+4. The deny-read request is dropped (it conflicts with `RuntimeAccessDirs`,
+   `internal/hostintegration/runtime_access.go:12-23`, and the bootstrap rule to source `$SKILLHUB_CONFIG_DIR/env`).
+   Bare mirrors, the prompt-injection warning and git hardening stay. The residual risk is stated in "Risks",
+   Phase 3 and the docs.
+5. Onboarding extension point (`internal/app/health.go`, `CheckProvider`, `Finding`, `RegisterProvider`, their
+   phase-04:33-63): the Node notice, `system_skill_tracked` and `system_skill_unowned_ignored` are `notice` Findings
+   of `systemSkillProvider`; integrity stays in host inspection items because it needs Plan/Apply semantics
+   (decision 10, the answer to their plan.md:208 and phase-04:62-63). "Extension point unresolved" removed; a
+   "Re-verify at start" item checks the names.
+6. The vendored folder is `scripts/lib/`; the js-yaml extraction and the Node 18.0.0 download use small Node script
+   files, so no Bash command contains a segment that `.claude/hooks/scout-block.cjs` blocks; the Phase 8 safe-write
+   check no longer uses a blocked file name.
+7. Bundled files never contain `python` or `distill.py`; differences say "the previous implementation" or "the
+   reference emitter"; Phase 7 no longer writes "no Python" into docs, so its grep is consistent; Phase 8 check 4
+   greps the same words as Phase 3's test.
+8. Phase 4 design corrections: `changeRank` replaces `changeOrder` (`files.go:289-302`) in `buildPlan` and Apply;
+   the `DoctorFix` gate (`workspace.go:228-230`) no longer skips project and user repairs for a blocked hub item;
+   `applyHostIntegration` (`:418-456`) lists blocked items; one ID parser for `hostChangeLines`,
+   `renderConnectResult`, the summary host list (skipping `agents`), with only skill IDs changed so
+   `connectCurationGuidance` stays as is; `formatChangeKind` prints "<id> skill"; both output goldens owned;
+   `validateChangePath`/`expectedChange` accept several ids per host and the Gemini legacy path for removal only;
+   `prepare` reads every adapter's registrations for `needsCanonical`; `MissingFinding` reports `Blocked` as
+   `host_integration_blocked` through the existing status action (no edit to `curation_home.go:497-590`). Phase 6
+   owns the status schema. Phase 2: release verify gets `fetch-depth: 0`; distill-lab digests are enforced per tag
+   only (Phase 1).
+
+### Whole-Plan Consistency Sweep
+
+Checked with a scripted grep over `plan.md`, every phase file and `reports/scout-notes.md` after the edits:
+
+- `5.0.0`: only inside `<!-- Validation -->` comments that record the rename and in this log.
+- The vendored folder: `scripts/lib/` everywhere for this skill; the old folder name remains only for the other
+  skill's existing path (`.claude/skills/distill/scripts/...`) and in the hook's pattern list.
+- `<minimum version>`, `<floor>`, `[UNVERIFIED]`: none left.
+- `deny-read`: only where the plan records that it was dropped and in the red-team record (finding 34 and the old
+  "Unresolved" list, both marked superseded).
+- Doctor additions: "warning" for the Node, tracked and unowned checks is now "notice" (`Finding`, `Fix` nil);
+  "adapter" survives only in red-team comments and the red-team table (finding 8); the Gemini notice is an item
+  impact plus result warning, not a provider Finding (Phase 4 design 15).
+- User-scope wrapper: "expected to prompt" in decision 2, risks, Phase 4, Phase 7 and Phase 8; "unverified" remains
+  only in red-team comment labels.
+- `connection written`: Phase 4's note (now attributing it to `connectionSummaryLine`), the red-team table and the
+  scout notes.
+- "curator skill": only where the plan says it is no longer printed.
+- Effort: frontmatter 57h = 4 + 13.5 + 2 + 20 + 2.5 + 5.5 + 3.5 + 5 + 1; phase table and phase frontmatter agree;
+  critical path 1 -> 4 -> 6 -> 7 -> 8 -> 9 = 39h; script path 19.5h. Older figures (16h, 52h, 34.5h) remain only in
+  red-team and validation comments.
+- File ownership: Phase 4 gains `internal/delivery/cli/host_item_id.go`, the summary host-key collection and the two
+  output goldens; Phase 6 gains the schema and its test; no wave-3 overlap (P5 owns only
+  `system_skill_doctor.go` there, P6 never touches it).
+- Acceptance criteria, risks, "Re-verify at start", owner decisions and open questions reconciled with the above.
+
+Unresolved (none blocks the design):
+
+- The onboarding owner has not yet been told that integrity is not registered through `RegisterProvider`
+  (their plan.md:208, phase-04:62-63 expect it); the lead does this before Phase 4.
+- The connection summary host list moves into the onboarding plan's `connectionSummaryLine`; the exact file and line
+  are known only after their merge ("Re-verify at start").
+- Node 18.0.0 itself may only be best-effort in Phase 8 (CI runs the latest 18.x).
+- Gemini CLI and Codex loading from `.agents/skills`, and the user-scope prompt, stay documented rather than tested.
