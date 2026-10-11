@@ -109,12 +109,19 @@ func initialize(config Config) error {
 	if err := initializeBeforeOpen(); err != nil {
 		return fmt.Errorf("initialize telemetry: %w", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), config.OperationTimeout)
-	defer cancel()
-	if err := maintainStore(ctx, config); err != nil {
+	// Every process starting at once creates or maintains the same store, so
+	// initialization meets the same contention as event batches.
+	if err := maintainStoreRetrying(context.Background(), config); err != nil {
 		return fmt.Errorf("initialize telemetry: %w", err)
 	}
 	return nil
+}
+
+func operationTimeout(config Config) time.Duration {
+	if config.OperationTimeout <= 0 {
+		return defaultOperationTimeout
+	}
+	return config.OperationTimeout
 }
 
 // openDatabase opens the anchored store with every open-time check. Several
@@ -122,11 +129,7 @@ func initialize(config Config) error {
 // SQLITE_BUSY straight away, without SQLite waiting on busy_timeout, so a busy
 // open is retried with backoff until the context or the operation timeout ends.
 func openDatabase(ctx context.Context, config Config) (*sql.DB, error) {
-	timeout := config.OperationTimeout
-	if timeout <= 0 {
-		timeout = defaultOperationTimeout
-	}
-	giveUp := time.Now().Add(timeout)
+	giveUp := time.Now().Add(operationTimeout(config))
 	delay := 5 * time.Millisecond
 	for {
 		database, err := openDatabaseOnce(ctx, config)
@@ -179,8 +182,11 @@ func openDatabaseOnce(ctx context.Context, config Config) (*sql.DB, error) {
 	}
 	database.SetMaxOpenConns(1)
 	closeOnError := func(cause error) (*sql.DB, error) { _ = database.Close(); return nil, cause }
+	// A statement waits on another process's lock for at most the operation
+	// timeout (the default is the long-standing 5000 ms). SQLite's busy wait
+	// does not observe context cancellation, so this is what bounds the wait.
 	for _, pragma := range []string{
-		"PRAGMA busy_timeout=5000",
+		fmt.Sprintf("PRAGMA busy_timeout=%d", operationTimeout(config).Milliseconds()),
 		"PRAGMA journal_mode=WAL",
 		"PRAGMA synchronous=NORMAL",
 	} {
@@ -598,15 +604,90 @@ func (anchor *storeAnchor) identities() (os.FileInfo, os.FileInfo, error) {
 	return directory, file, nil
 }
 
+// writeRetryBudget is how many operation timeouts one store write may spend in
+// total, first attempt included, while it keeps meeting lock contention.
+const writeRetryBudget = 3
+
+// retryContended runs attempt and tries again with backoff while it fails only
+// because other processes hold the store: SQLite reported SQLITE_BUSY, or the
+// try ran out of time. On a slow or overloaded machine many writers can keep one
+// waiter off the write lock for longer than a single busy wait even though the
+// store is healthy. Any other error, the end of parent, or exhausting
+// writeRetryBudget operation timeouts returns the last error.
+//
+// Each try may run a fifth longer than SQLite's busy wait (busy_timeout is the
+// operation timeout). A contended statement therefore ends with SQLITE_BUSY
+// rather than being interrupted at the deadline: database/sql discards an
+// interrupted connection, which would force the next try through a full reopen
+// whose schema statements contend for the same lock.
+func retryContended(parent context.Context, config Config, attempt func(context.Context) error) error {
+	timeout := operationTimeout(config)
+	giveUp := time.Now().Add(writeRetryBudget * timeout)
+	if deadline, ok := parent.Deadline(); ok && deadline.Before(giveUp) {
+		giveUp = deadline
+	}
+	delay := 5 * time.Millisecond
+	for {
+		ctx, cancel := context.WithTimeout(parent, min(timeout+timeout/5, time.Until(giveUp)))
+		err := attempt(ctx)
+		contended := ctx.Err() != nil || isBusy(err)
+		cancel()
+		if err == nil || !contended || parent.Err() != nil || time.Now().Add(delay).After(giveUp) {
+			return err
+		}
+		select {
+		case <-parent.Done():
+			return err
+		case <-time.After(delay):
+		}
+		delay = min(2*delay, 100*time.Millisecond)
+	}
+}
+
+// maintainStoreRetrying runs maintenance, retrying while the store is contended.
+func maintainStoreRetrying(ctx context.Context, config Config) error {
+	return retryContended(ctx, config, func(attemptCtx context.Context) error {
+		return maintainStore(attemptCtx, config)
+	})
+}
+
+// writeEventsRetrying commits one batch, retrying while the store is contended.
+// Writing the same events again is safe: inserts ignore an existing event ID
+// and only an inserted row updates its rollups.
+func writeEventsRetrying(config Config, writer *writerConnection, events []storedEnvelope) error {
+	return retryContended(context.Background(), config, func(ctx context.Context) error {
+		return writeEvents(ctx, config, writer, events)
+	})
+}
+
+var (
+	// errBatchCommitted marks a batch error raised after the batch's
+	// transaction committed: its events are stored even though a later step
+	// failed.
+	errBatchCommitted = errors.New("telemetry batch committed")
+	// errBatchCommitFailed marks a failed COMMIT. SQLite can leave the
+	// transaction open after a failed COMMIT while database/sql already
+	// returned the connection, so that connection is never reused.
+	errBatchCommitFailed = errors.New("commit telemetry batch")
+)
+
 // writeEvents commits one batch through the recorder's write connection. A
 // failed batch closes the connection so the next one reopens with every check.
+// The one exception is SQLITE_BUSY from a statement before COMMIT, returned
+// before the deadline: the batch's transaction was rolled back on that same
+// connection, which stays usable, and a reopen would only add schema
+// statements that contend for the same lock. A deadline that ends a
+// transaction makes database/sql discard the connection, so that case reopens
+// with every check.
 func writeEvents(ctx context.Context, config Config, writer *writerConnection, events []storedEnvelope) error {
 	database, err := writer.acquire(ctx, config)
 	if err != nil {
 		return err
 	}
 	if err := writeEventBatch(ctx, database, config, events); err != nil {
-		writer.release()
+		if !isBusy(err) || ctx.Err() != nil || errors.Is(err, errBatchCommitFailed) {
+			writer.release()
+		}
 		return err
 	}
 	return nil
@@ -639,10 +720,13 @@ func writeEventBatch(ctx context.Context, database *sql.DB, config Config, event
 		return err
 	}
 	if err := transaction.Commit(); err != nil {
-		return err
+		return fmt.Errorf("%w: %w", errBatchCommitFailed, err)
 	}
 	committed = true
-	return trimPhysicalSize(ctx, database, config.Path, config.MaxSizeBytes)
+	if err := trimPhysicalSize(ctx, database, config.Path, config.MaxSizeBytes); err != nil {
+		return fmt.Errorf("%w; trim telemetry store: %w", errBatchCommitted, err)
+	}
+	return nil
 }
 
 func nullIfEmpty(value string) any {
