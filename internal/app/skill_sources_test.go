@@ -101,7 +101,48 @@ func TestSkillSources(t *testing.T) {
 		t.Fatalf("unexpected learning reference: %#v", ref)
 	}
 
-	// 3. Test ListSkillsWithUpstream
+	// 3. Skill whose upstream entry has no source id: returned as untracked
+	untrackedDir := filepath.Join(root, "skills", "default", "untracked-upstream-skill")
+	if err := os.MkdirAll(filepath.Join(untrackedDir, ".meta"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(untrackedDir, "SKILL.md"), []byte("# Untracked upstream\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	untrackedMeta := `schema_version: 1
+id: untracked-upstream-skill
+status: active
+sources:
+  - id: ""
+    kind: github
+    repo: https://github.com/owner/repo
+    ref: main
+    path: x
+    roles: [upstream]
+routing:
+  triggers: [test]
+  not_for: [none]
+  min_scope: single_step
+`
+	if err := os.WriteFile(filepath.Join(untrackedDir, ".meta", "skill.yaml"), []byte(untrackedMeta), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	resUntracked, err := sourceService.SkillSources(ctx, root, "untracked-upstream-skill")
+	if err != nil {
+		t.Fatalf("SkillSources for untracked upstream skill failed: %v", err)
+	}
+	if resUntracked.Upstream == nil {
+		t.Fatal("expected untracked Upstream, got nil")
+	}
+	if got := resUntracked.Upstream; got.Status != "untracked" || got.Repository != "https://github.com/owner/repo" || got.SourceID != "" || got.Ref != "main" || got.Path != "x" {
+		t.Fatalf("unexpected untracked upstream: %#v", got)
+	}
+	if len(resUntracked.Learning) != 0 {
+		t.Fatalf("expected empty Learning for untracked upstream skill, got %#v", resUntracked.Learning)
+	}
+
+	// 4. Test ListSkillsWithUpstream
 	listRes, err := skillService.ListSkillsWithUpstream(ctx, root, "")
 	if err != nil {
 		t.Fatalf("ListSkillsWithUpstream failed: %v", err)
