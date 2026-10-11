@@ -193,6 +193,17 @@ func TestMCPProxyStartupErrorsGolden(t *testing.T) {
 		})
 	}
 
+	t.Run("unusable token in the environment", func(t *testing.T) {
+		t.Setenv(hubTokenEnv, "short token\nwith a newline")
+		code, stdout, stderr := runCLI(t, "mcp", "proxy", "--hub", "http://127.0.0.1:7420")
+		want := "ERROR: SKILLHUB_HUB_TOKEN does not hold a usable token.\n" +
+			"WHY: A token is one line of letters, digits and the characters - . _ ~ + / =.\n" +
+			"FIX: Set SKILLHUB_HUB_TOKEN to the content of the hub's token file, or pass --token-file <path>.\n"
+		if code != 2 || stdout != "" || stderr != want {
+			t.Fatalf("exit %d, stdout %q, stderr:\n%s\nwant:\n%s", code, stdout, stderr, want)
+		}
+	})
+
 	t.Run("token file readable by others", func(t *testing.T) {
 		if runtime.GOOS == "windows" {
 			t.Skip("Windows files have no group or other permission bits")

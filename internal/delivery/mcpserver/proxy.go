@@ -37,6 +37,9 @@ const (
 	proxyResponseHeaderTimeout = 60 * time.Second
 	// proxyGCInterval rate-limits cache garbage collection in one proxy.
 	proxyGCInterval = time.Hour
+	// proxyBundleTimeout bounds one bundle download, body included, so a
+	// stalled hub cannot hold a skill's fetch lock indefinitely.
+	proxyBundleTimeout = 2 * time.Minute
 	// proxyMaxSkillMarkdown bounds the SKILL.md text returned from the cache.
 	proxyMaxSkillMarkdown = skillruntime.BundleMaxBytes
 )
@@ -84,8 +87,13 @@ type Proxy struct {
 	warn      func(string)
 	now       func() time.Time
 
-	connectMu  sync.Mutex
-	upstream   *mcp.ClientSession
+	connectMu sync.Mutex
+	upstream  *mcp.ClientSession
+	// sessionID mirrors upstream's ID so a bundle request never waits for a
+	// connection attempt in progress.
+	sessionID atomic.Value
+
+	clientMu   sync.Mutex
 	clientInfo *mcp.Implementation
 
 	mu          sync.Mutex
@@ -165,7 +173,16 @@ func NewProxy(ctx context.Context, options ProxyOptions) (*Proxy, error) {
 		hints:         map[string]skillHint{},
 		fetchLocks:    map[string]*sync.Mutex{},
 	}
-	proxy.client = &http.Client{Transport: bearerRoundTripper{token: options.Token, base: base, rejected: proxy.tokenRejected}}
+	hubHost, err := url.Parse(hubURL)
+	if err != nil {
+		return nil, err
+	}
+	proxy.client = &http.Client{
+		Transport: bearerRoundTripper{token: options.Token, host: hubHost.Host, base: base, rejected: proxy.tokenRejected},
+		// A redirect is never followed: it could send the token, or a
+		// different bundle, to another host.
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
 	if proxy.warn == nil {
 		proxy.warn = func(string) {}
 	}
@@ -229,6 +246,7 @@ func (proxy *Proxy) close() {
 	if proxy.upstream != nil {
 		_ = proxy.upstream.Close()
 		proxy.upstream = nil
+		proxy.sessionID.Store("")
 	}
 	proxy.client.CloseIdleConnections()
 }
@@ -243,8 +261,8 @@ func (proxy *Proxy) noteClient(request *mcp.CallToolRequest) {
 	if params == nil || params.ClientInfo == nil {
 		return
 	}
-	proxy.connectMu.Lock()
-	defer proxy.connectMu.Unlock()
+	proxy.clientMu.Lock()
+	defer proxy.clientMu.Unlock()
 	if proxy.clientInfo == nil {
 		info := *params.ClientInfo
 		proxy.clientInfo = &info
@@ -267,17 +285,20 @@ func newProxyTransport() *http.Transport {
 	}
 }
 
-// bearerRoundTripper adds the token to every request to the hub and notes
-// whether the hub currently refuses it.
+// bearerRoundTripper adds the token to requests to the hub's own host, and
+// notes whether the hub currently refuses it.
 type bearerRoundTripper struct {
 	token    string
+	host     string
 	base     http.RoundTripper
 	rejected *atomic.Bool
 }
 
 func (transport bearerRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
 	clone := request.Clone(request.Context())
-	clone.Header.Set("Authorization", "Bearer "+transport.token)
+	if strings.EqualFold(request.URL.Host, transport.host) {
+		clone.Header.Set("Authorization", "Bearer "+transport.token)
+	}
 	response, err := transport.base.RoundTrip(clone)
 	if err == nil && transport.rejected != nil {
 		transport.rejected.Store(response.StatusCode == http.StatusUnauthorized)
@@ -329,9 +350,11 @@ func (proxy *Proxy) session(ctx context.Context) (*mcp.ClientSession, error) {
 		return proxy.upstream, nil
 	}
 	info := &mcp.Implementation{Name: "skillhub-proxy", Version: "1"}
+	proxy.clientMu.Lock()
 	if proxy.clientInfo != nil {
 		info = proxy.clientInfo
 	}
+	proxy.clientMu.Unlock()
 	transport := &mcp.StreamableClientTransport{
 		Endpoint:             proxy.endpoint,
 		HTTPClient:           proxy.client,
@@ -343,18 +366,15 @@ func (proxy *Proxy) session(ctx context.Context) (*mcp.ClientSession, error) {
 		return nil, err
 	}
 	proxy.upstream = session
+	proxy.sessionID.Store(session.ID())
 	proxy.noteReachable(true)
 	return session, nil
 }
 
-// currentSessionID returns the hub session ID without connecting.
+// currentSessionID returns the hub session ID without connecting or waiting.
 func (proxy *Proxy) currentSessionID() string {
-	proxy.connectMu.Lock()
-	defer proxy.connectMu.Unlock()
-	if proxy.upstream == nil {
-		return ""
-	}
-	return proxy.upstream.ID()
+	id, _ := proxy.sessionID.Load().(string)
+	return id
 }
 
 func (proxy *Proxy) dropSession(session *mcp.ClientSession) {
@@ -363,6 +383,7 @@ func (proxy *Proxy) dropSession(session *mcp.ClientSession) {
 	if proxy.upstream == session {
 		_ = session.Close()
 		proxy.upstream = nil
+		proxy.sessionID.Store("")
 	}
 }
 
@@ -446,8 +467,12 @@ func (proxy *Proxy) forward(ctx context.Context, name string, request *mcp.CallT
 	}
 	result, err := proxy.callHub(ctx, name, arguments)
 	if err != nil {
-		if _, ok := hubAnswer(err); ok || errors.Is(err, context.Canceled) {
+		if _, ok := hubAnswer(err); ok {
 			return nil, err
+		}
+		if ctx.Err() != nil {
+			// The agent host cancelled the call or its deadline passed.
+			return nil, ctx.Err()
 		}
 		if proxy.tokenRejected.Load() {
 			return proxy.tokenRejectedResult(), nil
@@ -570,7 +595,8 @@ func (proxy *Proxy) skillGet(ctx context.Context, request *mcp.CallToolRequest) 
 	lock := proxy.fetchLock(skillID)
 	lock.Lock()
 	defer lock.Unlock()
-	if hint, ok := proxy.hint(skillID); ok && !hint.reviewRequired {
+	hint, hinted := proxy.hint(skillID)
+	if hinted && !hint.reviewRequired {
 		if cached, ok := proxy.cache.Lookup(proxy.hubID, skillID, hint.digest); ok {
 			return proxy.localResult(cached, remoteCacheHit, "")
 		}
@@ -578,23 +604,39 @@ func (proxy *Proxy) skillGet(ctx context.Context, request *mcp.CallToolRequest) 
 	outcome := proxy.fetchBundle(ctx, skillID)
 	switch outcome.kind {
 	case fetchInstalled:
+		proxy.rememberVersion(skillID, outcome.cached.Digest)
 		return proxy.localResult(outcome.cached, remoteCacheFetched, "")
 	case fetchNotModified:
+		proxy.rememberVersion(skillID, outcome.cached.Digest)
 		return proxy.localResult(outcome.cached, remoteCacheHit, "")
 	case fetchForward:
 		return proxy.forward(ctx, "skill_get", request)
 	case fetchUnreachable:
 		proxy.noteReachable(false)
+		// A resolution that just said the skill awaits review rules out any
+		// cached copy, even with the hub gone.
+		if hinted && hint.reviewRequired {
+			return proxy.hubUnavailable(), nil
+		}
 		if latest, ok := proxy.cache.Latest(proxy.hubID, skillID); ok {
 			return proxy.localResult(latest, remoteCacheOffline, "The hub could not be reached, so this is the copy of the skill cached on this machine; it may be older than the hub's current version.")
 		}
 		return proxy.hubUnavailable(), nil
 	default:
-		if errors.Is(outcome.err, context.Canceled) {
+		if outcome.code == "" {
+			// The agent host cancelled the call.
 			return nil, outcome.err
 		}
 		return proxy.toolFailure(outcome.code, outcome.message, outcome.action), nil
 	}
+}
+
+// rememberVersion records the version the hub just confirmed as current, like
+// a resolution does, so the next skill_get in this session needs no request.
+func (proxy *Proxy) rememberVersion(skillID, digest string) {
+	proxy.mu.Lock()
+	defer proxy.mu.Unlock()
+	proxy.hints[skillID] = skillHint{digest: digest, at: proxy.now()}
 }
 
 type fetchKind int
@@ -619,6 +661,8 @@ type fetchOutcome struct {
 // fetchBundle asks the hub for the current version of a skill in one request,
 // naming the versions already cached, and installs a new version.
 func (proxy *Proxy) fetchBundle(ctx context.Context, skillID string) fetchOutcome {
+	ctx, cancel := context.WithTimeout(ctx, proxyBundleTimeout)
+	defer cancel()
 	var held []string
 	for _, version := range proxy.cache.Versions(proxy.hubID, skillID) {
 		held = append(held, version.Digest)
@@ -653,7 +697,7 @@ func (proxy *Proxy) requestBundle(ctx context.Context, skillID string, held []st
 	}
 	response, err := proxy.client.Do(request)
 	if err != nil {
-		if ctx.Err() != nil {
+		if errors.Is(ctx.Err(), context.Canceled) {
 			return fetchOutcome{kind: fetchFailed, err: ctx.Err()}, false
 		}
 		return fetchOutcome{kind: fetchUnreachable, err: err}, false
@@ -674,8 +718,11 @@ func (proxy *Proxy) requestBundle(ctx context.Context, skillID string, held []st
 			if errors.Is(err, skillruntime.ErrBundleDigestMismatch) || errors.Is(err, skillruntime.ErrBundleInvalid) {
 				return fetchOutcome{kind: fetchFailed, err: err, code: "resource_digest_mismatch", message: "The skill bundle failed its integrity check and was discarded.", action: "Retry once; if it fails again, check the connection to the hub."}, false
 			}
-			if ctx.Err() != nil {
+			if errors.Is(ctx.Err(), context.Canceled) {
 				return fetchOutcome{kind: fetchFailed, err: ctx.Err()}, false
+			}
+			if ctx.Err() != nil {
+				return fetchOutcome{kind: fetchUnreachable, err: ctx.Err()}, false
 			}
 			return fetchOutcome{kind: fetchFailed, err: err, code: "internal_error", message: "The skill could not be stored in the local cache " + proxy.CacheDir() + ".", action: "Check free disk space and the permissions of that directory."}, false
 		}
@@ -699,7 +746,10 @@ func (proxy *Proxy) requestBundle(ctx context.Context, skillID string, held []st
 		}
 		return fetchOutcome{kind: fetchForward}, false
 	case http.StatusTooManyRequests, http.StatusServiceUnavailable, http.StatusBadGateway, http.StatusGatewayTimeout, http.StatusInternalServerError:
-		return fetchOutcome{kind: fetchUnreachable, err: fmt.Errorf("hub answered HTTP %d", response.StatusCode)}, false
+		// The hub answered but cannot serve the skill now (busy, catalog
+		// stale, or a file changed on disk). Only an unreachable hub falls
+		// back to the cache; an answer like this may concern trust or content.
+		return fetchOutcome{kind: fetchFailed, code: "hub_error", message: fmt.Sprintf("The hub could not serve this skill right now (HTTP %d).", response.StatusCode), action: "Continue without the skill and retry later; the hub's diagnostics name the cause."}, false
 	default:
 		return fetchOutcome{kind: fetchFailed, code: "hub_response_invalid", message: fmt.Sprintf("The hub answered the skill request with HTTP %d.", response.StatusCode), action: "Check that the hub runs the same skillhub version as this machine."}, false
 	}
@@ -773,7 +823,7 @@ func (proxy *Proxy) hubUnavailable() *mcp.CallToolResult {
 }
 
 func (proxy *Proxy) toolFailure(code, message, action string) *mcp.CallToolResult {
-	item := toolError{Code: code, Message: message, Retryable: code == "hub_unreachable" || code == "resource_digest_mismatch", SuggestedAction: action}
+	item := toolError{Code: code, Message: message, Retryable: code == "hub_unreachable" || code == "hub_error" || code == "resource_digest_mismatch", SuggestedAction: action}
 	result, err := structuredResult(toolOutcome[proxySkillGetResult]{SchemaVersion: SchemaVersion, Error: &item}, true)
 	if err != nil {
 		return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: message}}}

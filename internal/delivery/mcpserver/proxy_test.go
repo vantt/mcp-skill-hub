@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -297,6 +298,11 @@ func TestProxyFetchesWholeSkillsOnceAndServesThemFromTheCache(t *testing.T) {
 		if got.Remote == nil || got.Remote.Cache != remoteCacheHit {
 			t.Fatalf("skill_get = %s", encoded)
 		}
+		before = counter.count()
+		proxySkillGet(t, fresh.session, "test-audit")
+		if after := counter.count(); after.requests != before.requests {
+			t.Fatalf("a confirmed version was asked for again: %d requests", after.requests-before.requests)
+		}
 	})
 }
 
@@ -432,6 +438,89 @@ func TestProxyUsesTheCacheWhenTheHubIsDown(t *testing.T) {
 	})
 	if !resolved.IsError || !strings.Contains(string(encoded), "hub_unreachable") {
 		t.Fatalf("resolve with the hub down = %s", encoded)
+	}
+}
+
+func TestProxyServesNoCachedCopyWhenTheHubAnswersAnError(t *testing.T) {
+	root := newBundleHubFixture(t)
+	hub := startHTTPTestHub(t, root)
+	digest := hubDigest(t, root, "herdr-cook-plan")
+	_, archive := getBundle(t, hub, "herdr-cook-plan", nil)
+
+	busy := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		http.Error(writer, "the hub is busy", http.StatusServiceUnavailable)
+	}))
+	t.Cleanup(busy.Close)
+	stateDir := t.TempDir()
+	hubID, err := skillruntime.HubID(busy.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache := skillruntime.RemoteCache{Root: skillruntime.RemoteCacheDir(stateDir)}
+	if _, err := cache.Install(hubID, "herdr-cook-plan", digest, bytes.NewReader(archive)); err != nil {
+		t.Fatal(err)
+	}
+	proxied := startTestProxy(t, busy.URL, hub.token, stateDir, nil)
+	_, result, encoded := proxySkillGet(t, proxied.session, "herdr-cook-plan")
+	if !result.IsError || !strings.Contains(string(encoded), "hub_error") || strings.Contains(proxied.warnings.String(), "cannot be reached") {
+		t.Fatalf("an answering hub with an error = %s (warnings %q)", encoded, proxied.warnings.String())
+	}
+
+	busy.Close()
+	got, result, encoded := proxySkillGet(t, proxied.session, "herdr-cook-plan")
+	if result.IsError || got.Remote == nil || got.Remote.Cache != remoteCacheOffline {
+		t.Fatalf("an unreachable hub should fall back to the cached copy: %s", encoded)
+	}
+}
+
+func TestProxyServesNoCachedCopyAfterAReviewRequiredResolution(t *testing.T) {
+	root := newBundleHubFixture(t)
+	hub := startHTTPTestHub(t, root)
+	proxied := startTestProxy(t, hub.baseURL, hub.token, t.TempDir(), nil)
+	proxyResolve(t, proxied.session, root, "test-audit")
+	if got, _, encoded := proxySkillGet(t, proxied.session, "test-audit"); got.Remote == nil || got.Remote.Cache != remoteCacheFetched {
+		t.Fatalf("first fetch = %s", encoded)
+	}
+
+	// Approval is withdrawn without a content change, so the digest stays.
+	editFixtureMeta(t, root, "test-audit", markFixtureThirdParty)
+	_, encoded := callProxyTool(t, proxied.session, "skill_resolve", map[string]any{
+		"schema_version": SchemaVersion, "request_id": "REQ-review",
+		"task": map[string]any{"description": remoteBenchTaskText(t, root, "test-audit"), "scope": "multi_step"},
+	})
+	if !strings.Contains(string(encoded), `"state":"review_required"`) {
+		t.Fatalf("resolution does not flag the review: %s", encoded)
+	}
+	hub.stop(t)
+	_, result, encoded := proxySkillGet(t, proxied.session, "test-audit")
+	if !result.IsError || !strings.Contains(string(encoded), "hub_unreachable") {
+		t.Fatalf("a skill flagged for review was served from the cache: %s", encoded)
+	}
+}
+
+func TestProxyFollowsNoRedirect(t *testing.T) {
+	var elsewhere sync.Mutex
+	var leaked []string
+	other := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, request *http.Request) {
+		elsewhere.Lock()
+		defer elsewhere.Unlock()
+		leaked = append(leaked, request.Header.Get("Authorization"))
+	}))
+	t.Cleanup(other.Close)
+	redirecting := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		http.Redirect(writer, request, other.URL+request.URL.RequestURI(), http.StatusFound)
+	}))
+	t.Cleanup(redirecting.Close)
+
+	proxied := startTestProxy(t, redirecting.URL, strings.Repeat("ab", 32), t.TempDir(), nil)
+	_, result, encoded := proxySkillGet(t, proxied.session, "test-audit")
+	if !result.IsError {
+		t.Fatalf("a redirect was accepted: %s", encoded)
+	}
+	elsewhere.Lock()
+	defer elsewhere.Unlock()
+	if len(leaked) != 0 {
+		t.Fatalf("the proxy followed a redirect to another host (%d requests)", len(leaked))
 	}
 }
 

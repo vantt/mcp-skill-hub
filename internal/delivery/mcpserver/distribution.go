@@ -22,8 +22,9 @@ import (
 // an If-None-Match naming that digest gets 304 with no body.
 const HTTPBundlePath = "/mcp/bundle"
 
-// maxStdioBundleBytes keeps a base64 bundle inside one stdio frame.
-const maxStdioBundleBytes = MaxFrameBytes / 4 * 3
+// maxStdioBundleBytes keeps a base64 bundle and its JSON-RPC envelope inside
+// one stdio frame.
+const maxStdioBundleBytes = (MaxFrameBytes - 64<<10) / 4 * 3
 
 // bundleParams asks for the bundle of a skill over MCP (skills/bundle). Held
 // lists the digests the caller already has.

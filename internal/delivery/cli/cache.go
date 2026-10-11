@@ -74,6 +74,10 @@ func runCache(args []string, stdout, stderr io.Writer) int {
 	}
 	p := termui.New(stdout)
 	if len(usage) == 0 {
+		if cfg.yes {
+			// Nothing is cached, but a crash may have left staging files.
+			_, _ = cache.Clear(hubID)
+		}
 		p.Line(cacheScope(cfg.hubURL, "No skills fetched from a remote hub are cached on this machine.", "No skills fetched from "+cfg.hubURL+" are cached on this machine."))
 		p.Fields(termui.Field{Label: "Cache directory", Value: cache.Root})
 		return printerCode(p)

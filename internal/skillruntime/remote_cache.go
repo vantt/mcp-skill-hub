@@ -452,6 +452,9 @@ func (cached CachedSkill) Size() int64 {
 	return total
 }
 
+// installPlaceAttempts bounds the retries of the final rename.
+const installPlaceAttempts = 5
+
 // installHook runs after a version is fully written to staging and before it
 // is renamed into place. Tests use it to simulate a crash at that moment.
 var installHook func(staging string)
@@ -592,16 +595,24 @@ func (cache RemoteCache) Install(hubID, skillID, digest string, archive io.Reade
 	if installHook != nil {
 		installHook(staging)
 	}
-	// os.Rename never replaces an existing directory here: it fails when the
-	// target exists, on every platform, and the existing copy is checked.
-	for attempt := 0; attempt < 2; attempt++ {
-		renameErr := os.Rename(staging, target)
+	// The rename fails when a non-empty target exists (POSIX may replace an
+	// empty one, which is never a valid version), and the existing copy is
+	// checked instead. A failure with no target is retried briefly: another
+	// process may have removed the empty skill directory meanwhile, or, on
+	// Windows, a virus scanner may still hold a new file open.
+	var renameErr error
+	for attempt := 0; attempt < installPlaceAttempts; attempt++ {
+		renameErr = os.Rename(staging, target)
 		if renameErr == nil {
 			placed = true
 			return cache.mustLookup(hubID, skillID, digest)
 		}
 		if _, statErr := os.Lstat(target); errors.Is(statErr, fs.ErrNotExist) {
-			return CachedSkill{}, fmt.Errorf("place the cached skill: %w", renameErr)
+			if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
+				return CachedSkill{}, fmt.Errorf("create the cache directory: %w", err)
+			}
+			time.Sleep(time.Duration(attempt+1) * 20 * time.Millisecond)
+			continue
 		}
 		if cached, ok := cache.Lookup(hubID, skillID, digest); ok {
 			// Another proxy placed the same version first.
@@ -614,7 +625,7 @@ func (cache RemoteCache) Install(hubID, skillID, digest string, archive io.Reade
 		}
 		removeTree(trash)
 	}
-	return CachedSkill{}, fmt.Errorf("place the cached skill %s: the directory kept changing", target)
+	return CachedSkill{}, fmt.Errorf("place the cached skill %s: %w", target, renameErr)
 }
 
 func (cache RemoteCache) mustLookup(hubID, skillID, digest string) (CachedSkill, error) {
