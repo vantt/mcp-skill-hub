@@ -23,6 +23,7 @@ type skillFlags struct {
 	operations, triggers, notFor, examples, counterExamples, skills, positionals   []string
 	accepts, manuals                                                               []string
 	jsonOutput, yes, fullDiff, editor, verbose, all, check, noCheck, exitCode      bool
+	guided                                                                         bool
 }
 
 // skillSubcommands lists the skill subcommands in the order `skillhub help
@@ -43,6 +44,9 @@ func runSkill(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 			return writeWorkspaceResolutionError(stdout, stderr, hasJSONFlag(args), resErr)
 		}
 		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Review `skillhub skill "+subcommand+"` arguments and retry.")
+	}
+	if flags.guided {
+		return runGuidedSkillCreateCommand(ctx, flags, stdout, stderr)
 	}
 	if subcommand == "doctor" {
 		return runSkillDoctor(ctx, flags, stdout, stderr)
@@ -522,7 +526,10 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 			return flags, errors.New("create accepts at most one positional skill ID")
 		}
 		if flags.id == "" || flags.collection == "" || flags.name == "" || flags.description == "" {
-			return flags, errors.New("create requires --id, --collection, --name, and --description")
+			if flags.name != "" || flags.description != "" || flags.jsonOutput {
+				return flags, errors.New(skillCreateMissingFlags)
+			}
+			flags.guided = true
 		}
 		if flags.proposalID != "" || flags.proposalDigest != "" || flags.baseVersion != "" {
 			return flags, errors.New("create does not accept confirmation pins")
@@ -590,6 +597,9 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 		}
 	default:
 		return flags, fmt.Errorf("unsupported skill subcommand %q", subcommand)
+	}
+	if flags.guided {
+		return flags, nil
 	}
 	resolved, resErr := resolveWorkspace(flags.workspace)
 	if resErr != nil {

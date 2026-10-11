@@ -85,7 +85,7 @@ func TestFreshHubIsHealthyAtBothDepths(t *testing.T) {
 		t.Fatalf("the pre-commit hook is a doctor-only check: light %v full %v", codesOf(light, SeverityOK), codesOf(full, SeverityOK))
 	}
 	next := StatusNext(report, light, HubInventory{Known: true})
-	if !strings.HasPrefix(next.Command, "skillhub skill create --id my-first-skill ") || !strings.HasSuffix(next.Command, " --workspace "+shellquote.Arg(root)) {
+	if next.Command != "skillhub skill create --workspace "+shellquote.Arg(root) {
 		t.Fatalf("next for an empty hub = %+v", next)
 	}
 	if next := StatusNext(report, light, HubInventory{Known: true, Skills: 2}); next.Command != "skillhub skill list --workspace "+shellquote.Arg(root) {

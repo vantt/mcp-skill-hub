@@ -66,7 +66,13 @@ Use this skill when you write a Git commit message.
    Checked-by: skillhub-demo
 ```
 
-Create the skill from inside your connected project. The flags tell the hub when the skill applies (`--trigger`, `--example`) and when it does not (`--not-for`). At least 3 examples are recommended; one is enough to start:
+Create the skill from inside your connected project. In a terminal, run `skillhub skill create` and answer the questions: a name, an id (suggested from the name), a one-sentence description, when an agent should use the skill and when it should not. Your answers are the confirmation, so the draft is saved when you give the last one. The skill gets the starter text, which you replace with the contents of `~/commit-style.md` in the file the command prints.
+
+```bash
+cd <your-project> && skillhub skill create
+```
+
+Scripts and agents, which cannot answer questions, pass flags instead. The flags tell the hub when the skill applies (`--trigger`, `--example`) and when it does not (`--not-for`). At least 3 examples are recommended; one is enough to start:
 
 ```bash
 cd <your-project> && skillhub skill create commit-style --collection core --name "Commit style" \
@@ -176,7 +182,15 @@ A new draft needs four things before agents can use it:
 
 ## Create a skill from your own workflow (`skillhub skill create`)
 
-Capture a workflow your team repeats. Write the instructions in a Markdown file first, then create the skill with all its routing fields in one command:
+Capture a workflow your team repeats. In a terminal, `skillhub skill create` asks for the name, id, description, when to use the skill and when not to, then saves a draft and prints the file to edit and the command that activates it:
+
+```bash
+skillhub skill create
+```
+
+The guided form uses the collection `core` (or the only collection you have), the minimum scope `single_step` and the operation `other`, and gives the skill starter text. When stdin or stdout is not a terminal, the command never asks: it names the missing flags instead.
+
+To script it, write the instructions in a Markdown file first, then create the skill with all its routing fields in one command:
 
 ```bash
 skillhub skill create commit-style --collection core --name "Commit style" \

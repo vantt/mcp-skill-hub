@@ -455,7 +455,7 @@ func StatusNext(report RoleReport, sections []Section, inventory HubInventory) N
 	}
 	_, hubSection := sectionOfKind(sections, SectionHub)
 	if hubSection && inventory.Known && inventory.Skills == 0 {
-		return NextStep{Label: "create your first skill (it only previews until you add --yes)", Command: report.hubCommand(`skillhub skill create --id my-first-skill --collection core --name "My first skill" --description "What this skill does"`)}
+		return NextStep{Label: "create your first skill (you will be asked a few questions)", Command: report.hubCommand("skillhub skill create")}
 	}
 	if hubSection {
 		return NextStep{Label: "list the skills of the hub", Command: report.hubCommand("skillhub skill list")}

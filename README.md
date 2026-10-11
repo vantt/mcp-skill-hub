@@ -215,8 +215,8 @@ Claude Code  ok      project entry in .mcp.json
 Codex        ok      project entry in .codex/config.toml
 Gemini CLI   ok      project entry in .gemini/settings.json
 
-Next: create your first skill (it only previews until you add --yes):
-  $ skillhub skill create --id my-first-skill --collection core --name "My first skill" --description "What this skill does"
+Next: create your first skill (you will be asked a few questions):
+  $ skillhub skill create
 ```
 
 When something is wrong, `status` names it. These are the common cases and their fix:

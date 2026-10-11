@@ -160,12 +160,11 @@ func TestStatusSuggestsRunnableCreateCommandBUG17(t *testing.T) {
 		t.Fatalf("status exit = %d: %s", code, stderr.String())
 	}
 	out := stdout.String()
-	// BUG-17: Should suggest a runnable create command, not `skill create ...`
 	if strings.Contains(out, "skill create ...") {
-		t.Errorf("status still contains unrunnable 'skill create ...' (BUG-17):\n%s", out)
+		t.Errorf("status contains an unrunnable 'skill create ...':\n%s", out)
 	}
-	if !strings.Contains(out, "skillhub skill create --id my-first-skill") {
-		t.Errorf("status missing runnable skill create suggestion:\n%s", out)
+	if !strings.Contains(out, "skillhub skill create") || strings.Contains(out, "--id my-first-skill") {
+		t.Errorf("status should suggest the guided skill create:\n%s", out)
 	}
 }
 

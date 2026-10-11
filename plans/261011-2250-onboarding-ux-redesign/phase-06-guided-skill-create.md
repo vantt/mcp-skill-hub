@@ -1,7 +1,7 @@
 ---
 phase: 6
 title: "Guided skill create (optional, later)"
-status: pending
+status: completed
 priority: P3
 effort: "0.5d"
 dependencies: [1, 4, 5]

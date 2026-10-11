@@ -152,10 +152,12 @@ command to run next.
 Subcommands:
   add <locator> [--skill <name> | --all] [--id <id>] [--collection <c>] [--ref <r>] [--path <p>] [--yes]
                                                     Add draft skills from local or remote locator
+  create                                            In a terminal, ask for the skill's name, id, description, when to use it
+                                                    and when not to, then save a draft (no --yes needed)
   create <id> --collection <c> --name <n> --description <d> [--content-file <f>]
          [--operation <o>]... [--trigger <t>]... [--not-for <n>]... [--min-scope <s>]
          [--example <e>]... [--counter-example <e>]... [--yes]
-                                                    Create a new draft skill (--id <id> remains valid)
+                                                    Create a new draft skill from flags (--id <id> remains valid)
   show <id> [--verbose]                             Show a skill in any state
   review <id> [--verbose]                           Comprehensive diagnostic review of a skill
   doctor <id> [--json]                              Check this machine against a skill's runtime block
@@ -199,6 +201,7 @@ Results describe this terminal (basis: terminal) and are cached as a hint for ag
 
 Examples:
   skillhub skill add https://github.com/anthropics/skills --path skills/pdf --yes
+  skillhub skill create
   skillhub skill create my-skill --collection core --name "My Skill" --description "Review changes" --trigger "review code" --not-for "write prose" --min-scope single_step --yes
   skillhub skill review my-skill
   skillhub skill edit my-skill --editor
