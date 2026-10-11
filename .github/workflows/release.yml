@@ -110,11 +110,16 @@ jobs:
           - ubuntu-latest
           - macos-latest
           - windows-latest
+    env:
+      # The distill-lab script tests run with Node; fail instead of skipping when it is missing.
+      SKILLHUB_REQUIRE_NODE: "1"
     steps:
       - name: Check out exact source revision
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           ref: ${{ github.sha }}
+          # Full history with tags, for the shipped system skill digest test.
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Confirm exact source commit
@@ -132,6 +137,12 @@ jobs:
         with:
           go-version: "1.26.9"
           cache: true
+
+      # The oldest Node the distill-lab script supports; no runner image ships it.
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 18
 
       # Same fix as ci.yml: the suite is file-creation heavy and ran past the 30m timeout on the
       # C: drive with real-time scanning. Keep scratch files on the D: work drive, excluded from scanning.
@@ -166,6 +177,12 @@ jobs:
       - name: Run fault-injection and hardening tests
         shell: bash
         run: go test ./internal/... -run 'Fault|Hardening|DiskFull|ReadOnly|ConcurrentFrames' -count=1
+
+      - name: Check shipped system skill digests
+        shell: bash
+        env:
+          SKILLHUB_REQUIRE_TAGS: "1"
+        run: go test -count=1 -run 'CoverReleased' ./internal/systemskills/... ./internal/hostintegration/...
 
       - name: Check formatting
         shell: bash

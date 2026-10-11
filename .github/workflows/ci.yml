@@ -16,11 +16,18 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
+    env:
+      # The distill-lab script tests run with Node; fail instead of skipping when it is missing.
+      SKILLHUB_REQUIRE_NODE: "1"
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version: "1.26.9"
+      # The oldest Node the distill-lab script supports; no runner image ships it.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 18
       # GitHub's Windows runners keep %TEMP% and the Go build cache on the slow
       # C: drive and scan every new file with Defender. The suite is dominated
       # by file creation, fsync and process spawns, and ran ~100x slower than
@@ -85,6 +92,11 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: make lint LINT_BASE="$BASE_SHA"
+      # Every system skill file a release tag shipped must stay recognized; needs the tags fetched above.
+      - name: Shipped system skill digests
+        env:
+          SKILLHUB_REQUIRE_TAGS: "1"
+        run: go test -count=1 -run 'CoverReleased' ./internal/systemskills/... ./internal/hostintegration/...
 
   installer-lifecycle:
     name: Installer lifecycle
