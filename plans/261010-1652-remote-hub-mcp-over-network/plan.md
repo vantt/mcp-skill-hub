@@ -1,7 +1,7 @@
 ---
 title: "Remote hub: agents on machine A use the hub on machine B over MCP"
 description: "Let an agent on one machine call skill_resolve, skill_get and skill_feedback against a hub running on another machine, over authenticated, encrypted MCP, with runtime tools only."
-status: pending
+status: in-progress
 priority: P3
 effort: 4d
 branch: main
@@ -96,12 +96,12 @@ skillhub connect --remove --yes                      # remove the entry for this
 
 | # | Phase | Status | Priority |
 |---|---|---|---|
-| 1 | [Baseline, budgets and decisions](./phase-01-baseline-and-decisions.md) | Pending | P1 |
-| 2 | [HTTP transport, runtime profile only](./phase-02-http-transport.md) | Pending | P1 |
-| 3 | [Skill bundle delivery and client cache (skill runs, fetch is fast)](./phase-03-bundle-delivery-and-cache.md) | Pending | P1 |
-| 4 | [Client setup: connect --hub and doctor](./phase-04-client-setup.md) | Pending | P2 |
-| 5 | [Telemetry, sessions and privacy](./phase-05-telemetry-and-privacy.md) | Pending | P2 |
-| 6 | [Benchmarks, two-machine tests and docs](./phase-06-benchmarks-tests-docs.md) | Pending | P1 |
+| 1 | [Baseline, budgets and decisions](./phase-01-baseline-and-decisions.md) | Completed | P1 |
+| 2 | [HTTP transport, runtime profile only](./phase-02-http-transport.md) | Completed | P1 |
+| 3 | [Skill bundle delivery and client cache (skill runs, fetch is fast)](./phase-03-bundle-delivery-and-cache.md) | Completed | P1 |
+| 4 | [Client setup: connect --hub and doctor](./phase-04-client-setup.md) | Completed | P2 |
+| 5 | [Telemetry, sessions and privacy](./phase-05-telemetry-and-privacy.md) | Completed | P2 |
+| 6 | [Benchmarks, two-machine tests and docs](./phase-06-benchmarks-tests-docs.md) | In progress | P1 |
 
 Phases run in order. Phase 3 is the heart of the two headline criteria and is the largest phase.
 
