@@ -86,3 +86,13 @@ func TestArgRoundTripsThroughTheShell(t *testing.T) {
 		}
 	}
 }
+
+func TestChainUsesTheSeparatorOfEachShell(t *testing.T) {
+	t.Parallel()
+	if got := ChainFor("linux", MakeDirFor("linux", "~/hub"), "cd ~/hub", "skillhub init"); got != "mkdir -p ~/hub && cd ~/hub && skillhub init" {
+		t.Fatalf("POSIX chain = %q", got)
+	}
+	if got := ChainFor("windows", MakeDirFor("windows", "~/hub"), "cd ~/hub", "skillhub init"); got != "mkdir -Force ~/hub; cd ~/hub; skillhub init" {
+		t.Fatalf("PowerShell chain = %q", got)
+	}
+}

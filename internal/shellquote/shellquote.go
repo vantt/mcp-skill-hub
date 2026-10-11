@@ -50,3 +50,29 @@ func plain(r rune, windows bool) bool {
 	}
 	return false
 }
+
+// Chain joins commands that run one after another in the shell of this
+// platform: `a && b` in POSIX sh, `a; b` in PowerShell, because Windows
+// PowerShell 5.1 has no `&&`.
+func Chain(commands ...string) string { return ChainFor(runtime.GOOS, commands...) }
+
+// ChainFor is Chain for the shell of the named GOOS.
+func ChainFor(goos string, commands ...string) string {
+	if goos == "windows" {
+		return strings.Join(commands, "; ")
+	}
+	return strings.Join(commands, " && ")
+}
+
+// MakeDir returns the command that creates dir with its parents and succeeds
+// when it already exists. dir is inserted as it is, so a caller can pass a
+// ~ path for the shell to expand.
+func MakeDir(dir string) string { return MakeDirFor(runtime.GOOS, dir) }
+
+// MakeDirFor is MakeDir for the shell of the named GOOS.
+func MakeDirFor(goos, dir string) string {
+	if goos == "windows" {
+		return "mkdir -Force " + dir
+	}
+	return "mkdir -p " + dir
+}
