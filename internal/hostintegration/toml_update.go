@@ -18,6 +18,21 @@ func upsertCodexTOML(raw []byte, binary, workspace string) ([]byte, error) {
 }
 
 func upsertCodexTOMLTable(raw []byte, table, binary string, args []string, workspace string) ([]byte, error) {
+	quotedArgs := make([]string, len(args))
+	for i, a := range args {
+		quotedArgs[i] = tomlString(a)
+	}
+	return upsertCodexTOMLLines(raw, table, []string{
+		"command = " + tomlString(binary),
+		"args = [" + strings.Join(quotedArgs, ", ") + "]",
+		"cwd = " + tomlString(workspace),
+		"enabled = true",
+	})
+}
+
+// upsertCodexTOMLLines sets each `key = value` line in a TOML table, adding
+// the table after existing content when it is missing.
+func upsertCodexTOMLLines(raw []byte, table string, managed []string) ([]byte, error) {
 	newline := detectNewline(raw)
 	statements, err := scanTOMLStatements(raw)
 	if err != nil {
@@ -57,16 +72,6 @@ func upsertCodexTOMLTable(raw []byte, table, binary string, args []string, works
 		}
 	}
 
-	quotedArgs := make([]string, len(args))
-	for i, a := range args {
-		quotedArgs[i] = tomlString(a)
-	}
-	managed := []string{
-		"command = " + tomlString(binary),
-		"args = [" + strings.Join(quotedArgs, ", ") + "]",
-		"cwd = " + tomlString(workspace),
-		"enabled = true",
-	}
 	tableHeader := "[" + table + "]"
 	if sectionStart < 0 {
 		return appendTOMLBlock(raw, newline, tableHeader+newline+strings.Join(managed, newline)), nil

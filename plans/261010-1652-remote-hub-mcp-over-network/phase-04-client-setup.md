@@ -1,7 +1,7 @@
 ---
 phase: 4
 title: "Client setup: connect --hub and doctor"
-status: pending
+status: completed
 priority: P2
 effort: "0.5d"
 dependencies: [3]
@@ -19,14 +19,17 @@ One command on machine A makes the agent host use the hub on machine B (through 
 - Modify: `docs/mcp-compatibility-matrix.json` only if a host needs a different entry shape
 
 ## Tasks & Steps
-1. Reuse the runtime-only entry that `connect` already writes for Claude Code; replace the command with the proxy and add the remote URL.
-2. Keep the four CLI permission rules and the runtime-only rule intact.
-3. `doctor` reports each remote check with one fix command; no check prints the token.
-4. `connect --remove` removes the entry for the scope and, on request, the cache. Switching a scope between `--workspace` and `--hub` replaces its entry; one scope points at one hub.
-5. Hand-off of the token from B to A is documented, not automated: the listener prints the command; the user copies the token file (for example with `scp`) or sets `SKILLHUB_HUB_TOKEN`.
+- [x] 1. Reuse the runtime-only entry that `connect` already writes for Claude Code; replace the command with the proxy and add the remote URL.
+- [x] 2. Keep the four CLI permission rules and the runtime-only rule intact.
+- [x] 3. `doctor` reports each remote check with one fix command; no check prints the token.
+- [x] 4. `connect --remove` removes the entry for the scope and, on request, the cache. Switching a scope between `--workspace` and `--hub` replaces its entry; one scope points at one hub.
+- [x] 5. Hand-off of the token from B to A is documented, not automated: the listener prints the command; the user copies the token file (for example with `scp`) or sets `SKILLHUB_HUB_TOKEN`.
 
 ## Verification
-- `connect --hub` in a temp `HOME` writes exactly the expected files and no token.
-- `connect --workspace` in a temp `HOME` writes byte-for-byte what it writes today (regression test), and `connect --workspace` followed by `connect --hub` for the same scope leaves one entry.
-- `doctor` on a stopped hub, a wrong token and an old hub version each prints a distinct, understandable message.
-- `make check` green.
+- [x] `connect --hub` in a temp `HOME` writes exactly the expected files and no token.
+- [x] `connect --workspace` in a temp `HOME` writes byte-for-byte what it writes today (regression test), and `connect --workspace` followed by `connect --hub` for the same scope leaves one entry.
+- [x] `doctor` on a stopped hub, a wrong token and an old hub version each prints a distinct, understandable message.
+- [x] `make check` green.
+
+## Implementation status (2026-10-11)
+Completed. Report: [cook-261011-remote-phase4.md](../reports/cook-261011-remote-phase4.md). The token hand-off is explained in the `connect --hub` preview and in `skillhub help connect`; the user guide is Phase 6.

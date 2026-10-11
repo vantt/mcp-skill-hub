@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -114,9 +115,16 @@ func runValidate(ctx context.Context, args []string, stdout, stderr io.Writer) i
 
 func runDoctor(args []string, stdout, stderr io.Writer) int {
 	path, jsonOutput, fix, yes, err := doctorFlags(args)
+	// Entries in this project or the user scope that start the proxy for a
+	// hub on another machine. Without any, doctor works exactly as before.
+	remotes := remoteEntriesHere()
 	if err != nil {
 		var resErr *WorkspaceResolutionError
 		if errors.As(err, &resErr) {
+			if len(remotes) > 0 && !fix && !slices.Contains(args, "--workspace") {
+				// Machine A has no workspace; its connection is the remote hub.
+				return runRemoteDoctor(remotes, jsonOutput, stdout, stderr)
+			}
 			return writeWorkspaceResolutionError(stdout, stderr, jsonOutput, resErr)
 		}
 		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub doctor --workspace <path>` or add `--fix --yes` after preview.")
@@ -127,6 +135,16 @@ func runDoctor(args []string, stdout, stderr io.Writer) int {
 	} else {
 		result, err = (app.WorkspaceService{}).Doctor(path)
 	}
+	var reports []app.RemoteHubReport
+	if len(remotes) > 0 && err == nil && result.Error == nil {
+		reports = (app.RemoteDoctorService{}).Check(context.Background(), remotes)
+		if jsonOutput {
+			return writeConnectJSON(stdout, stderr, struct {
+				app.Result
+				RemoteHubs []app.RemoteHubReport `json:"remote_hubs"`
+			}{Result: result, RemoteHubs: reports})
+		}
+	}
 	code := writeWorkspaceResult(result, err, stdout, stderr, jsonOutput)
 	if code != 0 || jsonOutput {
 		return code
@@ -135,10 +153,77 @@ func runDoctor(args []string, stdout, stderr io.Writer) int {
 	for _, action := range result.SuggestedActions {
 		p.Line("FIX: " + action.Command)
 	}
+	if len(reports) > 0 {
+		// The workspace report above came from another printer, so this one
+		// starts the remote section with its own empty line.
+		p.Raw("\n")
+		p.Line(app.RemoteDoctorResult(reports).Summary)
+		renderRemoteDoctor(p, reports)
+	}
 	if p.Err() != nil {
 		return 1
 	}
 	return 0
+}
+
+// remoteEntriesHere finds remote hub entries in the current project and in
+// the user scope.
+func remoteEntriesHere() []app.RemoteEntry {
+	project, err := os.Getwd()
+	if err != nil {
+		project = ""
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		home = ""
+	}
+	return app.FindRemoteEntries(project, home)
+}
+
+// runRemoteDoctor checks the connection of this machine to remote hubs. Each
+// failed check prints one plain-words cause and one fix line; the token is
+// never printed.
+func runRemoteDoctor(entries []app.RemoteEntry, jsonOutput bool, stdout, stderr io.Writer) int {
+	reports := (app.RemoteDoctorService{}).Check(context.Background(), entries)
+	result := app.RemoteDoctorResult(reports)
+	if jsonOutput {
+		return writeConnectJSON(stdout, stderr, struct {
+			app.Result
+			RemoteHubs []app.RemoteHubReport `json:"remote_hubs"`
+		}{Result: result, RemoteHubs: reports})
+	}
+	p := termui.New(stdout)
+	p.Line(result.Summary)
+	renderRemoteDoctor(p, reports)
+	return printerCode(p)
+}
+
+func renderRemoteDoctor(p *termui.Printer, reports []app.RemoteHubReport) {
+	for _, report := range reports {
+		p.Blank()
+		p.Fields(
+			termui.Field{Label: "Remote hub", Value: report.HubURL},
+			termui.Field{Label: "Used by", Value: strings.Join(report.UsedBy, ", ")},
+			termui.Field{Label: "Token file", Value: report.TokenFile},
+		)
+		p.Blank()
+		rows := make([][]string, 0, len(report.Checks))
+		for _, check := range report.Checks {
+			status := map[string]string{app.CheckOK: "ok", app.CheckFailed: "FAILED", app.CheckSkipped: "skipped", app.CheckInfo: ""}[check.Status]
+			rows = append(rows, []string{check.Label, status, check.Detail})
+		}
+		p.Table([]string{"Check", "Status", "Detail"}, rows)
+		var fixes []termui.Field
+		for _, check := range report.Checks {
+			if check.Status == app.CheckFailed && check.Fix != "" {
+				fixes = append(fixes, termui.Field{Label: "FIX", Value: check.Fix})
+			}
+		}
+		if len(fixes) > 0 {
+			p.Blank()
+			p.Fields(fixes...)
+		}
+	}
 }
 
 func initFlags(args []string) (path string, jsonOutput, yes, verbose, force bool, err error) {

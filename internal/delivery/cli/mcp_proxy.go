@@ -12,6 +12,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/vantt/mcp-skill-hub/internal/app"
 	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
 	"github.com/vantt/mcp-skill-hub/internal/delivery/mcpserver"
 	"github.com/vantt/mcp-skill-hub/internal/hubtoken"
@@ -20,7 +21,7 @@ import (
 
 // hubTokenEnv names the environment variable that may carry the hub token on
 // the client machine when no --token-file is given.
-const hubTokenEnv = "SKILLHUB_HUB_TOKEN"
+const hubTokenEnv = app.HubTokenEnv
 
 type mcpProxyConfig struct {
 	hubURL    string

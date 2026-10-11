@@ -1,0 +1,27 @@
+$ connect -g --workspace <WORKSPACE> --host claude,codex,gemini
+Preview only: agent connection for your user account (all projects) was not written without --yes.
+  - Claude Code: will connect (.claude.json, .claude/settings.json, curator skill, CLAUDE.md)
+  - Codex: will connect (.codex/config.toml, curator skill, AGENTS.md)
+  - Gemini CLI: will connect (.gemini/settings.json, curator skill, GEMINI.md)
+
+Claude Code: curation runs through the CLI. Commands with --yes or confirm require approval;
+--approve-content is blocked. First opening this folder shows a trust dialog listing
+Bash(skillhub:*).
+
+To write these files, run:
+  $ skillhub connect --global --workspace <WORKSPACE> --host claude-code --host codex-cli --host gemini-cli --yes
+[exit 0]
+$ connect -g --workspace <WORKSPACE> --yes
+Agent connection for your user account (all projects) written.
+  - Claude Code: connected (.claude.json, .claude/settings.json, curator skill, CLAUDE.md)
+  - Codex: connected (.codex/config.toml, curator skill, AGENTS.md)
+  - Gemini CLI: connected (.gemini/settings.json, curator skill, GEMINI.md)
+WARNING: Host activation coordination is instruction-only and best effort; each Agent Host remains
+         responsible for permissions and activation.
+
+Claude Code: curation runs through the CLI. Commands with --yes or confirm require approval;
+--approve-content is blocked. First opening this folder shows a trust dialog listing
+Bash(skillhub:*).
+
+Next: restart your agent so it loads the new MCP server, then ask it: "curate my Skill Hub"
+[exit 0]
