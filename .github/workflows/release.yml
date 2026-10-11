@@ -731,7 +731,7 @@ jobs:
           # init acts on the current folder and records the hub path in the per-user config.
           bash -l -c "cd '$smoke_ws' && SKILLHUB_USER_CONFIG_DIR='$smoke_config' skillhub init"
           serve_log="$(mktemp)"
-          bash -l -c "skillhub serve web --workspace '$smoke_ws' --loopback-only --no-open --addr 127.0.0.1:0" > "$serve_log" 2>&1 &
+          bash -l -c "skillhub serve web --workspace '$smoke_ws' --no-open --addr 127.0.0.1:0" > "$serve_log" 2>&1 &
           serve_pid=$!
 
           url_line=""
@@ -843,7 +843,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "skillhub init failed in $smokeWs" }
           $serveLog = Join-Path ([System.IO.Path]::GetTempPath()) "serve-$([System.Guid]::NewGuid().ToString()).log"
           $serveErrLog = Join-Path ([System.IO.Path]::GetTempPath()) "serve-$([System.Guid]::NewGuid().ToString()).err.log"
-          $proc = Start-Process -FilePath "skillhub" -ArgumentList "serve web --workspace `"$smokeWs`" --loopback-only --no-open --addr 127.0.0.1:0" -RedirectStandardOutput $serveLog -RedirectStandardError $serveErrLog -PassThru
+          $proc = Start-Process -FilePath "skillhub" -ArgumentList "serve web --workspace `"$smokeWs`" --no-open --addr 127.0.0.1:0" -RedirectStandardOutput $serveLog -RedirectStandardError $serveErrLog -PassThru
           try {
               $urlLine = $null
               for ($i = 0; $i -lt 50; $i++) {
