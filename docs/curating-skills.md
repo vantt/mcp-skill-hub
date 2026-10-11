@@ -10,7 +10,7 @@ Ask your connected agent:
 
 > curate my Skill Hub
 
-Your agent checks the hub and suggests one next step. You see the same suggestion in the terminal:
+The curator skill tells your agent to check the hub and suggest one next step. You see the same suggestion in the terminal:
 
 ```bash
 skillhub status
@@ -22,7 +22,7 @@ Health:     Workspace valid; search index current; Git clean.
 Inventory:  1 active, 0 draft; 0 watched sources.
 ```
 
-Output is trimmed. Your agent curates through the same `skillhub` commands, and it asks you before any command that changes files.
+Output is trimmed. Your agent curates through the same `skillhub` commands. Claude Code asks you before any `skillhub` command with `--yes` or `confirm`.
 
 Most sessions follow one path: add or create a skill, review and edit it, activate it, then commit.
 
@@ -32,7 +32,7 @@ Skill Hub changes nothing without your say-so. These rules hold for every comman
 
 - **Drafts by default.** Every skill you add or create starts as a **draft**: a skill agents are not offered yet. It becomes **active** only when you activate it.
 - **Content approval in the terminal only.** A skill copied from someone else's repository gives agents nothing until you approve its content. Only you can do that, with a terminal command; the web UI and your agent cannot.
-- **Preview before confirm.** Every command that changes files shows a preview first. Add `--yes`, or run the `skillhub skill confirm` line it prints, to apply exactly that preview.
+- **Preview before confirm.** Commands that change skills show a preview first. Add `--yes`, or run the `skillhub skill confirm` line it prints, to apply exactly that preview.
 - **Review changes nothing.** `skillhub skill review` reports facts; it never approves or activates a skill.
 
 > [!IMPORTANT]
@@ -65,7 +65,7 @@ Draft review-checklist added. Agent use: off. Changes are not committed.
 Next: skillhub skill review review-checklist
 ```
 
-Adding from a local folder works in the terminal only; your agent asks you to run it. Skill Hub copies the other files in the folder too, hidden ones included, so keep secrets out of it. A skill from your own folder needs no content approval.
+Adding from a local folder works in the terminal only. Skill Hub copies the other files in the folder too, hidden ones included, so keep secrets out of it. A skill from your own folder needs no content approval.
 
 ### Add from GitHub
 
@@ -103,7 +103,7 @@ Capture a workflow your team repeats. Write the instructions in a Markdown file 
 
 ```bash
 skillhub skill create commit-style --collection core --name "Commit style" \
-  --description "Write git commit messages in our team style" --content-file ~/commit-style.md \
+  --description "Write Git commit messages in our team style" --content-file ~/commit-style.md \
   --operation document --trigger "write a commit message" --not-for "writing release notes" \
   --min-scope single_step --example "write a commit message for my staged changes" --yes
 ```
@@ -141,7 +141,7 @@ Activation readiness
   - Missing required field: min_scope
 ```
 
-Output is trimmed. The review also shows where the skill came from and its Git status. It names the tools its scripts seem to need and flags weak routing fields. Add `--verbose` to list every file with its size.
+Output is trimmed. The full review also shows origin, Git status, the tools its scripts seem to need and weak routing fields. Add `--verbose` to list every file with its size.
 
 For a skill from GitHub, the review adds a **Content trust** block:
 
@@ -155,7 +155,7 @@ After reviewing the skill's files and runtime block, approve exactly this conten
   $ skillhub skill edit pdf --approve-content sha256:<digest>
 ```
 
-The digest is a fingerprint of the files you reviewed. Read the files, then run that exact command in your terminal. After an approved skill changes, the block lists what changed and a `git diff` command to inspect it. The web UI shows the same facts in a skill's **Review** tab, without an approve button.
+The digest is a fingerprint of the files you reviewed; read them, then run that exact command in your terminal. After an approved skill changes, the block lists what changed and a `git diff` command to inspect it. The web UI shows the same facts in a skill's **Review** tab, without an approve button.
 
 ## Edit and improve a skill (`skillhub skill edit`)
 
@@ -164,7 +164,8 @@ Edit a skill to sharpen when it gets picked, or to change its instructions. Each
 Change the description or routing fields. Fields you leave out keep their values:
 
 ```bash
-skillhub skill edit review-checklist --trigger "review a pull request" --not-for "writing new code" --min-scope single_step --yes
+skillhub skill edit review-checklist --trigger "review a pull request" \
+  --not-for "writing new code" --min-scope single_step --yes
 ```
 
 ```text
@@ -174,7 +175,8 @@ Draft skill review-checklist saved.
 Add requests that should pick the skill, and requests that should not:
 
 ```bash
-skillhub skill edit review-checklist --example "review my pull request" --example "check this PR against our checklist" --counter-example "write release notes" --yes
+skillhub skill edit review-checklist --example "review my pull request" \
+  --example "check this PR against our checklist" --counter-example "write release notes" --yes
 ```
 
 Each flag can repeat, up to 10 of each. At least 3 examples are recommended.
@@ -234,7 +236,7 @@ skillhub skill deprecate review-checklist --yes
 skillhub skill archive review-checklist --yes
 ```
 
-An active skill cannot go straight to archived; `archive` refuses with `invalid skill lifecycle transition: active -> archived`. Activation also refuses a skill with starter instructions or missing routing fields. [Activation refuses a draft](troubleshooting.md#skills) shows the fix.
+An active skill cannot go straight to archived; `archive` refuses with `invalid skill lifecycle transition: active -> archived`. Activation also refuses a skill with starter instructions or missing routing fields. [Activation refuses a draft](troubleshooting.md#activation-refuses-a-draft) shows the fix.
 
 ## Keep vendored skills up to date
 
@@ -266,7 +268,7 @@ skillhub validate
 Workspace validation passed.
 ```
 
-Stage the workspace's own folders by name, never the whole folder. `init` and `connect` write connection files into the workspace, and some hold absolute paths for this machine.
+Stage the workspace's own folders by name, never the whole folder. `init` writes connection files into the workspace, and some hold absolute paths for this machine.
 
 ```bash
 git -C ~/skillhub add .gitignore .skillhub skills sources history registry config distill evals

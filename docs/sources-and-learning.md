@@ -5,7 +5,7 @@ Your skills can keep improving after you add them. Skill Hub helps with two jobs
 A **source** is a Git repository linked to one or more skills. It plays one of two roles:
 
 - An **upstream** is the source a skill was copied from; you can pull its updates.
-- A **learning reference** is a source your curator agent reads for ideas; nothing is copied.
+- A **learning reference** is a source your **curator agent** reads for ideas; nothing is copied. Your curator agent is your own agent with the distill-lab skill.
 
 Nothing runs in the background. Skill Hub checks a source only when you run a check, from the terminal or the web UI.
 
@@ -99,10 +99,10 @@ Approval:        review required; agents get no content from this skill (content
 Content digest:  sha256:<digest>
 ```
 
-When you are satisfied, approve exactly that content:
+When you are satisfied, approve exactly that content. Here `<digest>` is the full value from the review, including `sha256:`.
 
 ```bash
-skillhub skill edit <skill-id> --approve-content sha256:<digest>
+skillhub skill edit <skill-id> --approve-content <digest>
 ```
 
 ### Track an older skill
@@ -123,10 +123,11 @@ Some repositories hold good ideas but no skill you want to copy. Link them to a 
 
 ### Watch a repository for a skill
 
-Watching links a repository to a skill and records how often you want to check it. The interval is a reminder for `--all-due`; nothing runs on a schedule.
+Watching links a repository to a skill and records how often you want to check it. The interval is a reminder for `--all-due`; nothing runs on a schedule. The skill must already exist.
 
 ```bash
-skillhub source watch https://github.com/anthropics/skills --skill-id code-review --id anthropic-skills --path skills --cadence weekly --yes
+skillhub source watch https://github.com/anthropics/skills --skill-id <skill-id> \
+  --id anthropic-skills --path skills --cadence weekly --yes
 ```
 
 ```text
@@ -163,22 +164,20 @@ skillhub source list
 ```
 
 ```text
-1 source from 1 repository; 1 candidate in intake.
+1 source from 1 repository; 0 candidates in intake.
 
 https://github.com/anthropics/skills.git
-  SOURCE            REF   ROLE             SKILLS       CHECKED   WATCH
-  anthropic-skills  main  learning-source  code-review  just now  weekly
+  SOURCE            REF   ROLE             SKILLS      CHECKED   WATCH
+  anthropic-skills  main  learning-source  <skill-id>  just now  weekly
 ```
 
-<img src="images/web/sources.png" alt="The sources list with one source and the result of its last check." width="800">
-
-*Sources: where skills learn from, and when each was last checked.*
+<img src="images/web/sources.png" alt="The sources list with one source and the result of its last check." width="800"><br><em>Sources: where skills learn from, and when each was last checked.</em>
 
 ### Hand changes to your curator agent
 
-Your **curator agent** is your own agent with the distill-lab skill. It reads sources and proposes lessons. Skill Hub does not distill by itself, and it does not ship the distill-lab skill.
+Your curator agent reads sources and proposes lessons. Skill Hub does not distill by itself, and it does not ship the distill-lab skill.
 
-1. Start the web UI with `skillhub serve web` ([Start the web UI](web-ui.md#start-the-web-ui)).
+1. Start the web UI with `skillhub serve web --loopback-only` ([Start the web UI](web-ui.md#start-the-web-ui)).
 2. Open **Sources** and choose **Distill with Curator Agent**.
 3. Pick the sources to hand over, then choose **Copy handoff**.
 4. Paste the handoff to an agent that has the distill-lab skill.
@@ -191,13 +190,17 @@ A **lesson** is a proposed improvement your curator agent records for a skill. I
 
 Read them on the skill's **Distill** tab in the web UI. The tab only shows lessons. To decide, tell your curator agent, for example "1 planned, 3 rejected: already covered".
 
-Nothing in your skill changes until you act on a lesson. Commit the new lesson file along with your other changes:
+Nothing in your skill changes until you act on a lesson. Stage the new lesson file with your other changes. [Review and commit workspace changes](curating-skills.md#review-and-commit-workspace-changes) explains why you add only these paths.
 
 ```bash
 git -C ~/skillhub add .gitignore .skillhub skills sources history registry config distill evals
 ```
 
-[Review and commit workspace changes](curating-skills.md#review-and-commit-workspace-changes) explains why you add these paths only.
+Then commit:
+
+```bash
+git -C ~/skillhub commit -m "Record lessons"
+```
 
 ## Import many skills from a repository
 
@@ -221,7 +224,7 @@ The preview also prints a `skillhub source import --proposal ... --yes` line. Ru
 
 Choose skills with `--skill <name>` (repeatable) or `--all`, but not both. `--ref <r>` picks a branch or tag; `--path <p>` picks a folder.
 
-Skills you already have are skipped, never overwritten. Import never approves content, activates a skill or watches the source. So `skillhub skill outdated` lists imported skills as **not tracked**. Review and activate each draft as in [Curating skills](curating-skills.md#review-diagnostic-facts-skillhub-skill-review).
+Skills you already have are skipped, never overwritten. Import never approves content, activates a skill or watches the source, so `skillhub skill outdated` shows them as **not tracked**. Review and activate each draft as in [Curating skills](curating-skills.md#review-diagnostic-facts-skillhub-skill-review).
 
 Sources larger than 8 MiB are refused. For a large repository, use a URL that points at the skill's folder (`/tree/<branch>/<folder>`), as above.
 

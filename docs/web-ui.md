@@ -7,10 +7,10 @@ The web UI lets you look after your skills by clicking instead of typing. It run
 
 ## Start the web UI
 
-Run this from your workspace or from a connected project. It starts the web UI and opens your browser.
+Run this from your workspace or from a connected project. It starts the web UI on this machine only and opens your browser.
 
 ```bash
-skillhub serve web
+skillhub serve web --loopback-only
 ```
 
 The command prints the address to open. The token at the end changes each time you start it.
@@ -19,17 +19,17 @@ The command prints the address to open. The token at the end changes each time y
 Skill Hub web UI: http://127.0.0.1:7421/#token=<token>
 ```
 
-The token keeps other people on your network out, so treat the address like a password. To print the address without opening a browser, run `skillhub serve web --no-open`. Press `Ctrl+C` in the terminal to stop the web UI.
+The token keeps other people on your network out, so treat the address like a password. To print the address without opening a browser, add `--no-open`. Press `Ctrl+C` in the terminal to stop the web UI.
 
 ## Do common tasks
 
-The pictures use invented skills and a demo hub, so your screens list your own skills. Each task starts from the menu on the left: **Home**, **Skills** and **Sources**.
+The pictures come from a demo hub with invented skills; your screens list your own skills. Each task starts from the menu on the left: **Home**, **Skills** and **Sources**.
 
 ### See what needs your attention
 
 Open **Home**. The **Next action** box at the top says what to do next and has one button for it.
 
-Under it, **Workspace** shows the hub's health, the search index and whether Git has uncommitted changes. **Overview** counts the sources that are ready to distill and the lessons waiting for your decision.
+Under it, **Workspace** shows the hub's health, the search index and whether Git has uncommitted changes. **Overview** counts the sources ready for your curator agent and the lessons waiting for your decision.
 
 <img src="images/web/home.png" alt="The Skill Hub home screen showing the status of the hub and the next action." width="800"><br><em>Home: what needs attention, and the one next step to take.</em>
 
@@ -67,7 +67,7 @@ If a draft is not ready, the page says so next to the **Activate skill** button.
 
 The **Resources** tab lists the skill's companion files: scripts, reference documents and other files next to its `SKILL.md`. You change `SKILL.md` itself in the **Editor** tab.
 
-- **Edit** opens a simple editor for a text file up to 1 MiB; a Markdown file also shows how it will read.
+- **Edit** opens a simple editor for a text file up to 1 MiB. A Markdown file also shows how it will read.
 - **Preview changes** shows the exact change to that one file. Nothing is written until you confirm it.
 - A binary file, or a text file larger than 1 MiB, opens read-only with **View**.
 - If the file changed on disk meanwhile, you choose to keep your edits on the latest version or discard them.
@@ -137,14 +137,17 @@ A skill added from GitHub remembers its **upstream**: the source it was copied f
 
 ### Manage one skill's sources
 
+A **source** is a Git repository linked to one or more skills. Your **curator agent** is your own agent with the distill-lab skill. It reads sources and records **lessons**, proposed improvements you decide on.
+
 Open a skill and choose the **Sources** tab. It lists the skill's upstream and every **learning reference**: a source your curator agent reads for ideas, with nothing copied. A skill with neither shows **No sources yet**.
 
-- **Add a learning reference.** Click **Add source**. **Link a watched source** picks one the hub already watches. **Watch a GitHub repository** takes an address, and optionally a branch or tag and a folder path. Click **Preview** to see the files that would be written, then **Add source** to confirm. **Unlink** removes a reference again.
-- **Track an upstream.** A skill copied from GitHub before Skill Hub tracked upstreams shows its repository as **Not tracked**. Skill Hub knows where it came from but cannot check it for updates. Click **Track upstream** to see the exact change, then confirm. Afterwards **Check now** and **Review update** work. In the terminal, the same step is `skillhub source backfill --skill <skill-id>`.
+**Add a learning reference.** Click **Add source**, then choose **Link a watched source** or **Watch a GitHub repository**. Click **Preview** to see the files that would be written, then **Add source** to confirm. **Unlink** removes a reference again.
+
+**Track an upstream.** An older skill copied from GitHub shows **Not tracked**, so the hub cannot check it for updates. Click **Track upstream** to see the exact change, then confirm. The terminal equivalent is `skillhub source backfill --skill <skill-id>`.
 
 ### Link and check sources
 
-Open **Sources**. A **source** is a Git repository linked to one or more skills, for learning or for updates. Each row shows when it was last checked and what that check found.
+Open **Sources**. It lists every source, for learning or for updates. Each row shows when it was last checked and what that check found.
 
 **Changed** means it has commits no skill has learned from yet. Checks run only when you ask: **Check now** on one row, or **Check due sources** or **Check all** for many. The terminal equivalent is `skillhub check`.
 
@@ -152,7 +155,7 @@ Open **Sources**. A **source** is a Git repository linked to one or more skills,
 
 ### Hand a source to your curator agent
 
-Your **curator agent** is your own agent with the distill-lab skill. It reads sources and records **lessons**: proposed improvements for a skill that you decide on.
+Your curator agent reads the sources you pick and records lessons for each skill.
 
 1. On **Sources**, tick the sources you want learned from and click **Distill with Curator Agent**.
 2. Click **Copy handoff** and paste the text to an agent that has the distill-lab skill.

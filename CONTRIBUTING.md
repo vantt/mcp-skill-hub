@@ -5,7 +5,11 @@ You need Go 1.26 (from `go.mod`) and, for the web UI, Node.js 24 (from `web/.nvm
 
 ## Build and test
 
-Run the full gate before you commit: gofmt check, `go vet`, new lint issues since `origin/main`, and the full test suite.
+Run the full gate before you commit. It runs:
+
+- the gofmt check and `go vet`;
+- the lint check for new issues since `origin/main`;
+- the full test suite.
 
 ```bash
 make check
@@ -40,7 +44,9 @@ The web UI has its own targets:
 
 Tests run in parallel by default. A test stays serial (no `t.Parallel()`) when it sets environment variables, changes the working directory or touches process-global state.
 
-The packages that reach agent configuration (`app`, `cli`, `mcpserver`, `web` and `hostintegration`) isolate `HOME`, `USERPROFILE` and the XDG directories in `TestMain`. This happens before parallel tests start, and subprocesses inherit it. Running the suite never reads or writes your own agent configuration.
+Some packages reach agent configuration: `app`, `cli`, `mcpserver`, `web` and `hostintegration`. They isolate `HOME`, `USERPROFILE` and the XDG directories in `TestMain`. This happens before parallel tests start, and subprocesses inherit it.
+
+Running the suite never reads or writes your own agent configuration.
 
 Before that isolation, `TestMain` fills in any missing `GOCACHE`, `GOMODCACHE` and `GOPATH` from `go env`. Subprocess builds then reuse your existing Go caches instead of filling the temporary home with read-only modules. Values you set yourself are kept.
 

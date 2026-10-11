@@ -39,7 +39,7 @@ The installer reads a few environment variables. On Linux and macOS, put them in
 | `SKILLHUB_NO_MODIFY_PATH=1` | Leaves your shell profile files (Windows: your user `PATH`) alone. | all |
 | `SKILLHUB_REQUIRE_SIGNATURE=1` | Stops unless `cosign` is installed and the signature checks out. | all |
 
-On Linux and macOS each variable also has a flag; run `sh install.sh --help` on a downloaded copy to list them.
+On Linux and macOS, each variable also has a flag. Run `sh install.sh --help` on a downloaded copy to list them.
 
 </details>
 
@@ -47,6 +47,7 @@ On Linux and macOS each variable also has a flag; run `sh install.sh --help` on 
 
 The installer always checks the SHA-256 checksum and stops on a mismatch.
 With `cosign` installed, it also checks the release's Sigstore signature and stops if that fails. Without `cosign`, it prints a notice and goes on.
+
 Set `SKILLHUB_REQUIRE_SIGNATURE=1` to require the signature check, or follow [Manual artifact verification](release-runbook.md#manual-artifact-verification) to check a download by hand.
 
 ## Upgrade
@@ -77,7 +78,7 @@ Uninstall removes the binary, its install marker and the `PATH` lines the instal
 
 ## Build from source
 
-You need Git, Go 1.26 or newer, and Node.js to build the web UI that is embedded in the binary.
+You need Git, Go 1.26 or newer, and Node.js 24. Node.js builds the web UI that is embedded in the binary.
 
 ```bash
 git clone https://github.com/vantt/mcp-skill-hub.git
