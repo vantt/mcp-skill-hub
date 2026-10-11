@@ -1,7 +1,7 @@
 ---
 phase: 3
 title: "Attach or fall back in-process"
-status: pending
+status: cancelled
 priority: P2
 effort: "0.75d"
 dependencies: [2]

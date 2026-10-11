@@ -1,7 +1,7 @@
 ---
 phase: 1
 title: "Measure and slim one process"
-status: pending
+status: completed
 priority: P1
 effort: "0.5d"
 dependencies: []

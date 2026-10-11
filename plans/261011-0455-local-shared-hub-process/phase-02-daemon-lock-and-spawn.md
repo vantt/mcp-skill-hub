@@ -1,7 +1,7 @@
 ---
 phase: 2
 title: "Daemon lock, spawn gate and detach"
-status: pending
+status: cancelled
 priority: P2
 effort: "1d"
 dependencies: [1]

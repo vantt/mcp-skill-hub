@@ -1,7 +1,7 @@
 ---
 title: "Local shared hub process: fewer processes and less memory when many agents run"
 description: "Cut the memory cost of running many agent sessions on one machine: slim each stdio process first, then add an optional per-machine daemon that sessions attach to and that exits when idle, always falling back to today's in-process serving."
-status: pending
+status: in-progress
 priority: P3
 effort: 3d
 branch: main
@@ -21,15 +21,39 @@ Measured on 2026-10-11 (Linux, throwaway workspace, 20 processes, see `plans/261
 
 | Fact | Number |
 |---|---|
-| Memory per process while working | about 32 to 42 MB (12 MB for the two idle ones on the user's machine) |
-| Memory for 20 processes | about 0.65 to 0.85 GB |
-| Telemetry loss at realistic call rates (up to about 190 calls per second in total) | none |
+| Memory per process while working (summed RSS, an over-count: see "Phase 1 result") | about 32 to 42 MB (12 MB for the two idle ones on the user's machine) |
+| Memory for 20 processes (summed RSS, over-counted; the PSS figure is 0.29 to 0.36 GB) | about 0.65 to 0.85 GB |
+| Telemetry loss at 1 call per second per process | none (at 10 per second per process 0 to 6 of 12,000 events are dropped on some runs) |
 | Telemetry loss at about 5,300 calls per second | 82% dropped (cause not established; not realistic load) |
 | Start-up per process | about 20 ms |
 
 So the case for change is memory, not correctness. This plan does the cheap thing first (slim each process), and only then adds a shared process, in a shape that cannot make anything worse than today.
 
 Not measured (the user chose to skip it): how many `mcp serve` processes exist during a real 20-agent session. If subagents share their parent's MCP connection the count may be far below 20, which would make Phases 2 to 4 unnecessary. Phase 1 ends with a go or stop on Phases 2 to 4 using the numbers it produces.
+
+## Status and decision (user, 2026-10-11)
+
+**The daemon (Phases 2 to 5) is not built. Phase 1 is done; Phase 6 is still open.**
+
+| Phase | Status | Why |
+|---|---|---|
+| 1 Measure and slim one process | Completed | Done, see "Phase 1 result" below. One change kept: free memory is returned to the system after 30 s without a request |
+| 2 Daemon lock, spawn gate, detach | Cancelled | Not needed (reasons below) |
+| 3 Attach or fall back in-process | Cancelled | Not needed |
+| 4 Idle shutdown | Cancelled | Not needed |
+| 5 Cross-OS tests and docs | Cancelled | It only tests and documents the daemon, so it goes with Phases 2 to 4 |
+| 6 Lean MCP process from one binary | Pending | Smaller than planned: Phase 1 found the web UI costs disk space, not memory, so this phase is only a guard that keeps it that way |
+
+Why the daemon is not built:
+- The saving is small. Memory was first measured with summed RSS (0.65 to 0.85 GB for 20 sessions), which counts the shared binary pages in every process. With PSS the real figure is 0.29 to 0.36 GB for 20 sessions, about 14 to 18 MB per session, below the 20 MB threshold set in decision Q1. A perfect daemon would save at most about 0.25 GB, and less if each session still keeps a stdio proxy (not measured).
+- The cost is real. A long-lived shared process adds shared fate (one fault takes down every session), memory leaks that accumulate instead of ending with the session, a stale-catalog risk, an old daemon left running after `skillhub update`, Windows-specific detach and socket work, a new local attack surface, harder debugging, and start and stop races. Every one of them needs tests on three operating systems, and the Windows CI was the hardest part of the last release.
+- Telemetry loss at high call rates, the one correctness reason that pointed at a shared writer, is fixed at its cause in the writer instead (follow-up work below).
+
+Reopen this only if a measurement on the user's real machine, with the real number of sessions, shows memory that matters. The design in Phases 2 to 5 stays on file for that case, and it follows the lessons from `~/projects/mdview` recorded below.
+
+Follow-ups found by Phase 1 and handed to separate work (not part of this plan): the telemetry writer reopens SQLite on every batch and drops a few events at 10 calls per second per process with 20 processes; and each `skill_resolve` rereads the whole workspace to check catalog freshness.
+
+Decisions Q2 to Q4 below are moot while the daemon is not built.
 
 ## Terms (so the phases read the same way)
 
@@ -148,17 +172,16 @@ GODEBUG=inittrace=1 skillhub mcp serve --profile runtime --workspace <temp works
 
 | # | Phase | Status | Priority |
 |---|---|---|---|
-| 1 | [Measure and slim one process](./phase-01-memory-per-process.md) | Pending | P1 |
-| 2 | [Daemon lock, spawn gate and detach](./phase-02-daemon-lock-and-spawn.md) | Pending | P2 |
-| 3 | [Attach or fall back in-process](./phase-03-attach-or-fallback.md) | Pending | P2 |
-| 4 | [Idle shutdown](./phase-04-idle-shutdown.md) | Pending | P3 |
-| 5 | [Cross-OS tests and docs](./phase-05-cross-os-tests-and-docs.md) | Pending | P2 |
-
+| 1 | [Measure and slim one process](./phase-01-memory-per-process.md) | Completed | P1 |
+| 2 | [Daemon lock, spawn gate and detach](./phase-02-daemon-lock-and-spawn.md) | Cancelled | P2 |
+| 3 | [Attach or fall back in-process](./phase-03-attach-or-fallback.md) | Cancelled | P2 |
+| 4 | [Idle shutdown](./phase-04-idle-shutdown.md) | Cancelled | P3 |
+| 5 | [Cross-OS tests and docs](./phase-05-cross-os-tests-and-docs.md) | Cancelled | P2 |
 | 6 | [Lean MCP process from one binary](./phase-06-lean-mcp-process-single-binary.md) | Pending | P1 |
 
-Design principle (user, 2026-10-11): the MCP process and the daemon must be as small and cheap as possible. The web UI is not a background service: the user starts it by hand with `skillhub serve web` when needed and stops it with Ctrl+C when done, exactly as today, so nothing is built for it here. It must never be started by the MCP process or the daemon. Phases 1 and 6 hold the MCP process to this; Phase 4 does it for the daemon.
+Design principle (user, 2026-10-11): the MCP process must be as small and cheap as possible. The web UI is not a background service: the user starts it by hand with `skillhub serve web` when needed and stops it with Ctrl+C when done, exactly as today, so nothing is built for it here. It must never be started by the MCP process. Phases 1 and 6 hold the MCP process to this.
 
-Run order: 1, then 6, then 2 to 5. Phase 6 (added at the user's request) keeps one `skillhub` binary but makes an `mcp serve` process, and later the daemon, load none of the web UI's start-up work; it is numbered last only to avoid renumbering. Phase 1 can end Phases 2 to 5 early. Phases 2 to 4 start only after the remote plan has an HTTP server to reuse (its Phase 2).
+Run order: 1 (done), then 6. Phases 2 to 5 are cancelled (see "Status and decision"). Phase 6 keeps one `skillhub` binary and only adds a guard that an `mcp serve` process loads none of the web UI's start-up work; it is numbered last only to avoid renumbering.
 
 ## Lessons taken from `~/projects/mdview` (read on 2026-10-11, Rust, one daemon per machine)
 

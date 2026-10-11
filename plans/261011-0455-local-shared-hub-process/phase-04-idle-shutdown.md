@@ -1,7 +1,7 @@
 ---
 phase: 4
 title: "Idle shutdown"
-status: pending
+status: cancelled
 priority: P3
 effort: "0.5d"
 dependencies: [3]

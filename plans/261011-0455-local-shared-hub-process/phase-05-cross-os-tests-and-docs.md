@@ -1,7 +1,7 @@
 ---
 phase: 5
 title: "Cross-OS tests and docs"
-status: pending
+status: cancelled
 priority: P2
 effort: "0.5d"
 dependencies: [4]
