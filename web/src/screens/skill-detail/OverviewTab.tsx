@@ -9,6 +9,7 @@ import type {
 import { Skeleton } from '../../components/Skeleton';
 import { StatusBadge } from '../../components/StatusBadge';
 import { useT } from '../../i18n';
+import { SCOPE_OPTIONS } from '../routing-hints';
 import { ProvenanceCard } from './ProvenanceCard';
 import { resourceSummaryText, upstreamStatusBadge } from './detail-format';
 
@@ -121,7 +122,7 @@ export function OverviewTab({ skill, review, sources, sourcesLoading, sourcesErr
           <span>{HELP_ROUTING}</span>
         </span>
         <div className="fg-facts">
-          <Fact label={LABEL_MIN_SCOPE}>{routing?.min_scope || LABEL_NONE}</Fact>
+          <Fact label={LABEL_MIN_SCOPE}>{scopeText(routing?.min_scope)}</Fact>
           <Fact label={LABEL_OPERATIONS}>
             <ValueList items={routing?.operations} />
           </Fact>
@@ -152,6 +153,14 @@ export function OverviewTab({ skill, review, sources, sourcesLoading, sourcesErr
       </section>
     </div>
   );
+}
+
+// The scope as a person reads it ("one step"), not the stored id ("single_step").
+function scopeText(value: string | undefined): string {
+  if (!value) return LABEL_NONE;
+  const label = SCOPE_OPTIONS.find((o) => o.value === value)?.label ?? '';
+  const [, text] = label.split(': ');
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : value;
 }
 
 function Fact({ label, children }: { label: string; children: ReactNode }) {

@@ -49,7 +49,10 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   if (token && !headers.has('Authorization')) {
     headers.set('Authorization', `Bearer ${token}`);
   }
-  if (init?.body && !headers.has('Content-Type') && typeof init.body === 'string') {
+  // The server refuses a mutating request without a JSON content type, including one with no body.
+  const method = (init?.method ?? 'GET').toUpperCase();
+  const mutating = method !== 'GET' && method !== 'HEAD';
+  if (!headers.has('Content-Type') && (mutating || typeof init?.body === 'string')) {
     headers.set('Content-Type', 'application/json');
   }
 
