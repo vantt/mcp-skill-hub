@@ -97,6 +97,16 @@ export const en = {
   'home.category.routing_evaluations': 'Routing evaluations',
   'home.unreachable_sources.one': '{count} unreachable source',
   'home.unreachable_sources.other': '{count} unreachable sources',
+  'home.action.distill_changed_sources.one': '{count} source is ready to distill',
+  'home.action.distill_changed_sources.other': '{count} sources are ready to distill',
+  'home.action.check_due_sources.one': '{count} source is due for an update check',
+  'home.action.check_due_sources.other': '{count} sources are due for an update check',
+  'home.action.retry_unavailable_sources.one': '{count} source is temporarily unavailable',
+  'home.action.retry_unavailable_sources.other': '{count} sources are temporarily unavailable',
+  'home.action.review_upstream_updates.one': '{count} skill has upstream changes to review',
+  'home.action.review_upstream_updates.other': '{count} skills have upstream changes to review',
+  'home.action.review_lessons.one': '{count} candidate lesson is ready for review',
+  'home.action.review_lessons.other': '{count} candidate lessons are ready for review',
 
   // Skills Screen
   'skills.title': 'Skills',

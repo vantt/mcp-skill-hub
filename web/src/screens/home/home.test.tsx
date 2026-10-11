@@ -3,7 +3,8 @@ import { render, screen } from '@testing-library/react';
 import { BrowserRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HomeScreen } from './HomeScreen';
-import { actionHelp, resolveActionCta } from './action-cta';
+import { actionHelp, actionTitle, resolveActionCta } from './action-cta';
+import { translate } from '../../i18n';
 import { loadGolden } from '../../test/golden';
 import type { CurationHome } from '../../api/types';
 
@@ -121,7 +122,7 @@ describe('HomeScreen', () => {
       ],
     };
     renderHomeScreen(linkBase);
-    expect(screen.getByText('Retry sources needed')).toBeInTheDocument();
+    expect(screen.getByText('1 source is temporarily unavailable')).toBeInTheDocument();
     expect(screen.getByText('Open sources →')).toBeInTheDocument();
   });
 
@@ -192,5 +193,75 @@ describe('HomeScreen', () => {
     expect(screen.getByText('Routing evaluations')).toBeInTheDocument();
     expect(screen.queryByText('Action categories')).toBeNull();
     expect(screen.getByText('Not set up')).toBeInTheDocument();
+  });
+
+  it('words count-based next actions in the singular and plural', () => {
+    const cases: Array<{ kind: string; summary: string; one: string; three: string }> = [
+      {
+        kind: 'distill_changed_sources',
+        summary: '%d source(s) are ready to distill',
+        one: '1 source is ready to distill',
+        three: '3 sources are ready to distill',
+      },
+      {
+        kind: 'check_due_sources',
+        summary: '%d source(s) are due for an update check',
+        one: '1 source is due for an update check',
+        three: '3 sources are due for an update check',
+      },
+      {
+        kind: 'retry_unavailable_sources',
+        summary: '%d source(s) are temporarily unavailable',
+        one: '1 source is temporarily unavailable',
+        three: '3 sources are temporarily unavailable',
+      },
+      {
+        kind: 'review_upstream_updates',
+        summary: '%d skill(s) have upstream changes to review',
+        one: '1 skill has upstream changes to review',
+        three: '3 skills have upstream changes to review',
+      },
+      {
+        kind: 'review_lessons',
+        summary: '%d candidate lesson(s) ready for review',
+        one: '1 candidate lesson is ready for review',
+        three: '3 candidate lessons are ready for review',
+      },
+    ];
+
+    for (const item of cases) {
+      for (const [count, want] of [
+        [1, item.one],
+        [3, item.three],
+      ] as const) {
+        const { unmount, container } = renderHomeScreen({
+          schema_version: '1',
+          status: 'action_required',
+          summary: 'counts',
+          workspace: { health: 'valid', index: 'current', git_dirty: false, git_configured: true, recovery_pending: false },
+          actions: [{ kind: item.kind, id: 'sample-skill', priority: 70, count, summary: item.summary.replace('%d', String(count)) }],
+          categories: [],
+        });
+        expect(screen.getByText(want)).toBeInTheDocument();
+        expect(container.textContent).not.toContain('(s)');
+        unmount();
+      }
+    }
+  });
+
+  it('falls back to the summary when a count kind has no usable count', () => {
+    expect(actionTitle({ kind: 'distill_changed_sources', summary: '2 source(s) are ready to distill' }, translate)).toBe(
+      '2 source(s) are ready to distill',
+    );
+    expect(
+      actionTitle({ kind: 'check_due_sources', count: 0, summary: 'due summary' }, translate),
+    ).toBe('due summary');
+    expect(actionTitle({ kind: 'future_kind', count: 2, summary: 'future summary' }, translate)).toBe('future summary');
+  });
+
+  it('keeps the help title ahead of any count sentence', () => {
+    expect(actionTitle({ kind: 'host_integration_missing', count: 3, summary: 'raw' }, translate)).toBe(
+      'Your coding agents are not connected to this hub',
+    );
   });
 });

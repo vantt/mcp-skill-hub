@@ -2,7 +2,7 @@ import { Link } from 'react-router';
 import { useHome } from '../../api/queries';
 import { Skeleton } from '../../components/Skeleton';
 import { StatusBadge } from '../../components/StatusBadge';
-import { actionHelp, resolveActionCta } from './action-cta';
+import { actionHelp, actionTitle, resolveActionCta } from './action-cta';
 import { CommandBlock } from '../../components/CommandBlock';
 import { useT } from '../../i18n';
 
@@ -91,7 +91,7 @@ export function HomeScreen() {
             }}
           >
             <span className="t-subheading" style={{ flex: '1 1 280px' }}>
-              <span>{help?.title ?? topAction.summary}</span>
+              <span>{actionTitle(topAction, t)}</span>
             </span>
 
             {cta.type === 'command' && (
