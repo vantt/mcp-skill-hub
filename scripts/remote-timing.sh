@@ -107,7 +107,7 @@ def entry_command():
         args = entry.get("args", [])
         if "proxy" not in args or "--hub" not in args:
             fail(path + " connects to a hub on this machine; this timing is for a remote hub. "
-                 "Run `skillhub connect --hub <url> --token-file <path> --yes` first, or pass --hub and --token-file.")
+                 "Run `skillhub connect --hub <url> --token-file <path>` first, or pass --hub and --token-file.")
         return [entry["command"]] + args, args[args.index("--hub") + 1], path
     fail("No Skill Hub entry for a remote hub was found in " + " or ".join(candidates) +
          ". Pass --project <dir>, or --hub <url> --token-file <path>.")

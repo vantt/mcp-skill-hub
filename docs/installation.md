@@ -4,25 +4,13 @@ The installer puts `skillhub` in `~/.local/bin` (Windows: `%LOCALAPPDATA%\skillh
 
 ## Install with one command
 
-On Linux or macOS, run this in a terminal:
+The install command for Linux, macOS and Windows is in the [README Quickstart](../README.md#install). After it runs, open a new terminal so the new `PATH` applies, then check that the command works:
 
 ```bash
-curl -fsSL https://github.com/vantt/mcp-skill-hub/releases/latest/download/install.sh | sh
+skillhub --version
 ```
 
-On Windows, run this in PowerShell:
-
-```powershell
-powershell -ExecutionPolicy ByPass -c "irm https://github.com/vantt/mcp-skill-hub/releases/latest/download/install.ps1 | iex"
-```
-
-Open a new terminal so the new `PATH` applies, then check that the command works:
-
-```bash
-skillhub version
-```
-
-It prints the version, commit and build date. Next, [create your workspace](getting-started.md#create-your-workspace).
+It prints the version, commit and build date. Next, [install the hub](../README.md#step-1-install-the-hub).
 
 ## Choose options
 
@@ -74,7 +62,7 @@ On Windows, run this in PowerShell, then close that window so the variable canno
 $env:SKILLHUB_UNINSTALL = '1'; irm https://github.com/vantt/mcp-skill-hub/releases/latest/download/install.ps1 | iex
 ```
 
-Uninstall removes the binary, its install marker and the `PATH` lines the installer added. It never deletes your workspaces, your skills or the connection files your agents use.
+Uninstall removes the binary, its install marker and the `PATH` lines the installer added. It never deletes your hubs, your skills or the connection files your agents use.
 
 ## Build from source
 
@@ -87,4 +75,4 @@ make web-build
 go build -o skillhub ./cmd/skillhub
 ```
 
-This leaves `skillhub` in the current folder. Move it to a folder on your `PATH`, then run `skillhub version`.
+This leaves `skillhub` in the current folder. Move it to a folder on your `PATH`, then run `skillhub --version`.

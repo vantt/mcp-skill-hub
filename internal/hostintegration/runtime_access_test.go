@@ -98,7 +98,7 @@ func TestRuntimeDirsAreCreatedInEmptyConfigsAndAreIdempotent(t *testing.T) {
 	assertHasAll(t, "claude", jsonStrings(t, claudeLocal(root), "permissions", "additionalDirectories"), dirs)
 	for key, want := range map[string][]string{
 		"allow": {"Bash(skillhub:*)"},
-		"ask":   {"Bash(skillhub * --yes*)", "Bash(skillhub * confirm *)"},
+		"ask":   ruleValues("ask"),
 		"deny":  {"Bash(skillhub * --approve-content*)"},
 	} {
 		if got := jsonStrings(t, claudeLocal(root), "permissions", key); !slices.Equal(got, want) {

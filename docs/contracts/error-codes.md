@@ -46,12 +46,12 @@ The machine-owned schema authority for error envelopes is [error-envelope.schema
 | `unknown_resolution` | Resolve again when appropriate | The prior resolution cannot be used; state that it is unavailable; start a new resolution. |
 | `clarification_budget_exhausted` | Do not loop | Resolution cannot safely ask again; state the unresolved discriminator; narrow the task or continue without a skill. |
 | `resolution_retry_exhausted` | Do not loop for the same scope | Resolution retries are exhausted; state that the scope remained unresolved; change the task scope before retrying. |
-| `index_stale` | Retry after repair | Derived search state does not match canonical files; state that canonical data remains intact; run `skillhub doctor --fix` or `skillhub rebuild`. |
+| `index_stale` | Retry after repair | Derived search state does not match canonical files; state that canonical data remains intact; run `skillhub doctor --fix` or `skillhub maintain rebuild`. |
 | `snapshot_expired` | Resolve again | The resolved resource version is unavailable; state that the selection expired; resolve again before loading content. |
 | `resource_digest_mismatch` | Never load automatically | Integrity verification failed; state that content was not used; inspect or repair the resource before retrying. |
 | `permission_denied` | Retry only after an authorized policy change | The requested action lacks permission; state the denied capability without exposing policy internals; obtain appropriate authorization. |
 | `internal_error` | Limited retry | An unexpected failure occurred; state only a safe correlation reference when available; retry later or inspect diagnostics. |
-| `workspace_invalid` | Retry after validation or repair | The workspace cannot safely serve the requested action; state the validation failure category; run `skillhub validate` or supported recovery path. |
+| `workspace_invalid` | Retry after validation or repair | The workspace cannot safely serve the requested action; state the validation failure category; run `skillhub maintain validate` or supported recovery path. |
 | `recovery_required` | Retry after the presented recovery choice | Earlier work needs recovery before optional work; state that active skills were not changed; choose the offered recovery action. |
 | `run_interrupted` | Explicit retry, defer, or cancel | Analysis stopped before completion; state that the analyzed position was not advanced; retry, defer the affected work, or cancel. |
 | `partial_distill_failure` | Retry failed scope only when appropriate | Part of a batch failed while other work was isolated; identify the exception summary; review the failed scope or retry it. |

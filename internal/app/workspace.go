@@ -16,47 +16,11 @@ import (
 )
 
 // WorkspaceService is the shared application service used by init and doctor --fix.
-type WorkspaceService struct{}
-
-// Init previews the same mechanical remediation used by DoctorFix until explicitly confirmed.
-func (service WorkspaceService) Init(path string, yes bool, force ...bool) (Result, error) {
-	isForce := len(force) > 0 && force[0]
-	if !isForce {
-		if root, err := workspace.Discover(path); err == nil {
-			if info, err := os.Stat(root); err == nil && info.IsDir() {
-				entries, readErr := os.ReadDir(root)
-				if readErr == nil && len(entries) > 0 {
-					skillhubPath := filepath.Join(root, ".skillhub")
-					if _, err := os.Lstat(skillhubPath); os.IsNotExist(err) {
-						return ErrorResult(NewInvalidRequestError(
-							fmt.Sprintf("Directory is not empty and is not a Skill Hub workspace: %s", root),
-							"Choose a dedicated directory like `~/skillhub`, or add `--force` to initialize here anyway. If you meant to connect this project to a workspace, run `skillhub connect --yes` instead.",
-						)), nil
-					}
-				}
-			}
-		}
-	}
-	if !yes {
-		result, err := service.doctorInternal(path, true)
-		if err != nil {
-			return Result{}, err
-		}
-		result.Status = StatusActionRequired
-		result.Summary = "Preview only: workspace initialization was not applied without --yes."
-		result.Items = append([]Item{
-			{ID: "workspace_structure", Summary: "Directory structure (skills, sources, distill, history, config, registry, evals)", Impact: "Will be created upon confirmation."},
-			{ID: "git_repository", Summary: "Git repository (.git)", Impact: "Will be initialized upon confirmation."},
-			{ID: "catalog_generation", Summary: "Search index database and schema", Impact: "Will be built upon confirmation."},
-		}, result.Items...)
-		result.SuggestedActions = []Action{{
-			Label:                "Initialize workspace",
-			Command:              "skillhub init " + path + " --yes",
-			RequiresConfirmation: true,
-		}}
-		return result, nil
-	}
-	return service.apply(path, true)
+type WorkspaceService struct {
+	// hosts limits the repair of the hub's own agent connection to these
+	// hosts; nil repairs every host. The hub checks set it when a host entry
+	// in the hub folder points at another hub on purpose.
+	hosts []hostintegration.Host
 }
 
 // Doctor reports a read-only remediation plan and canonical validation findings.
@@ -101,38 +65,22 @@ func (service WorkspaceService) doctorInternal(path string, isInit bool) (Result
 		return Result{}, err
 	}
 	defer lock.Unlock()
-	plan, err := workspace.Inspect(root)
+	state, err := inspectHubWhileLocked(context.Background(), root, nil)
 	if err != nil {
 		return Result{}, err
 	}
-	issues, err := canonical.Validate(root)
-	if err != nil {
-		return Result{}, err
-	}
-	recoveries, err := mutation.InspectRecoveryWhileLocked(root)
-	if err != nil {
-		return Result{}, err
-	}
-	result, err := doctorResult(root, plan, issues, recoveries)
-	if err != nil || len(recoveries) != 0 || len(plan.Findings) != 0 || len(issues) != 0 {
+	result, err := doctorResult(root, state.plan, state.issues, state.recoveries)
+	if err != nil || len(state.recoveries) != 0 || len(state.plan.Findings) != 0 || len(state.issues) != 0 {
 		return result, err
 	}
-	catalogStatus, err := catalogpkg.InspectWhileLocked(context.Background(), root)
-	if err != nil {
-		return Result{}, err
-	}
-	if catalogStatus.State != catalogpkg.StateHealthy {
+	if state.catalog != nil && state.catalog.State != catalogpkg.StateHealthy {
 		result.Status = StatusActionRequired
 		result.Summary = "Workspace canonical files are valid, but the derived catalog needs rebuilding."
-		result.Items = append(result.Items, Item{ID: "catalog_" + string(catalogStatus.State), Summary: "Catalog is " + string(catalogStatus.State) + ": " + catalogStatus.Detail, Impact: "Run an offline full rebuild before applying host integration changes."})
-		result.SuggestedActions = append(result.SuggestedActions, Action{Label: "Rebuild catalog", Command: "skillhub rebuild --workspace " + root, RequiresConfirmation: false})
+		result.Items = append(result.Items, Item{ID: "catalog_" + string(state.catalog.State), Summary: "Catalog is " + string(state.catalog.State) + ": " + state.catalog.Detail, Impact: "Run an offline full rebuild before applying host integration changes."})
+		result.SuggestedActions = append(result.SuggestedActions, Action{Label: "Rebuild catalog", Command: "skillhub maintain rebuild --workspace " + root, RequiresConfirmation: false})
 		return result, nil
 	}
-	inspected, err := inspectHostIntegration(context.Background(), root, result)
-	if err != nil {
-		return Result{}, err
-	}
-	return checkProjectAndGlobalConnections(context.Background(), root, inspected), nil
+	return hostIntegrationResult(root, result, state.host), nil
 }
 
 func doctorResult(root string, plan workspace.Plan, issues []canonical.Issue, recoveries []mutation.Recovery) (Result, error) {
@@ -154,7 +102,7 @@ func doctorResult(root string, plan workspace.Plan, issues []canonical.Issue, re
 			result.Items = append(result.Items, Item{ID: recovery.OperationID, Summary: "Interrupted mutation " + recovery.OperationID + " (" + string(recovery.Action) + ")", Impact: impact})
 		}
 		if fixable {
-			result.SuggestedActions = []Action{{Label: "Recover interrupted mutations", Command: "skillhub doctor --fix --workspace " + root + " --yes", RequiresConfirmation: true}}
+			result.SuggestedActions = []Action{{Label: "Recover interrupted mutations", Command: "skillhub doctor --fix --workspace " + root, RequiresConfirmation: true}}
 		}
 		return result, nil
 	}
@@ -185,25 +133,31 @@ func doctorResult(root string, plan workspace.Plan, issues []canonical.Issue, re
 		result.Status = StatusActionRequired
 		result.Summary = "Workspace needs attention; doctor is read-only."
 		if hasCanonicalMigration {
-			result.SuggestedActions = append(result.SuggestedActions, Action{Label: "Preview canonical migration", Command: "skillhub migrate --workspace " + root, RequiresConfirmation: false})
+			result.SuggestedActions = append(result.SuggestedActions, Action{Label: "Preview canonical migration", Command: "skillhub maintain migrate --workspace " + root, RequiresConfirmation: false})
 		} else if len(issues) > 0 {
-			result.SuggestedActions = append(result.SuggestedActions, Action{Label: "Correct content errors", Command: "skillhub validate --workspace " + root, RequiresConfirmation: false})
+			result.SuggestedActions = append(result.SuggestedActions, Action{Label: "Correct content errors", Command: "skillhub maintain validate --workspace " + root, RequiresConfirmation: false})
 		} else {
-			result.SuggestedActions = append(result.SuggestedActions, Action{Label: "Apply workspace remediation", Command: "skillhub doctor --fix --workspace " + root + " --yes", RequiresConfirmation: true})
+			result.SuggestedActions = append(result.SuggestedActions, Action{Label: "Apply workspace remediation", Command: "skillhub doctor --fix --workspace " + root, RequiresConfirmation: true})
 		}
 	}
 	return result, nil
 }
 
-// DoctorFix applies mechanical remediation only after explicit confirmation.
-func (service WorkspaceService) DoctorFix(path string, yes bool) (Result, error) {
-	if !yes {
+// DoctorFix applies the mechanical hub repair: it finishes interrupted
+// changes, adds missing layout and .gitignore entries, rebuilds the search
+// index and refreshes the hub's own agent connection. A tracked connection
+// file does not stop it; the hub checks report that file with its
+// `git rm --cached` command. With dryRun it only reports the repairs it would
+// make. The connections of projects and of the user account are repaired by
+// the client checks of the health engine, not here.
+func (service WorkspaceService) DoctorFix(path string, dryRun bool) (Result, error) {
+	if dryRun {
 		result, err := service.doctorInternal(path, false)
 		if err != nil {
 			return Result{}, err
 		}
 		result.Status = StatusActionRequired
-		result.Summary = "Preview only: workspace remediation was not applied without --yes."
+		result.Summary = "Dry run: workspace remediation was not applied."
 		return result, nil
 	}
 	root, err := workspace.Discover(path)
@@ -224,11 +178,7 @@ func (service WorkspaceService) DoctorFix(path string, yes bool) (Result, error)
 	}}); err != nil {
 		return Result{}, err
 	}
-	result, err := service.apply(path, false)
-	if err != nil || result.Error != nil || (result.Status != StatusApplied && result.Status != StatusReady && result.Status != StatusOK) {
-		return result, err
-	}
-	return applyExternalConnections(context.Background(), root, result)
+	return service.apply(path, false)
 }
 
 func (service WorkspaceService) apply(path string, isInit bool) (Result, error) {
@@ -237,22 +187,26 @@ func (service WorkspaceService) apply(path string, isInit bool) (Result, error) 
 		return Result{}, err
 	}
 	var workspaceResult Result
-	if _, statErr := os.Lstat(root); errors.Is(statErr, os.ErrNotExist) {
-		if !isInit {
-			return Result{}, fmt.Errorf("No Skill Hub workspace at %s.", root)
-		}
-		// Bootstrap creates the lock and canonical skeleton itself. Every repair
-		// after this point uses the mutation service.
+	_, statErr := os.Lstat(root)
+	if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
+		return Result{}, statErr
+	}
+	missing := errors.Is(statErr, os.ErrNotExist)
+	if missing && !isInit {
+		return Result{}, fmt.Errorf("No Skill Hub workspace at %s.", root)
+	}
+	if missing || (isInit && !IsHubRoot(root)) {
+		// A folder without the hub marker is created from scratch: bootstrap
+		// creates the lock and canonical skeleton itself. Every repair after
+		// this point uses the mutation service.
 		if _, err := workspace.Apply(root); err != nil {
 			return Result{}, err
 		}
-		workspaceResult, err = remediationResult(root, workspace.Plan{Root: root, Findings: []workspace.Finding{{ID: "workspace_missing", Path: ".", Summary: "Workspace directory created.", Fixable: true}}})
+		workspaceResult, err = remediationResult(root, workspace.Plan{Root: root, Findings: []workspace.Finding{{ID: "workspace_missing", Path: ".", Summary: "Hub folders created.", Fixable: true}}})
 		if err != nil {
 			return Result{}, err
 		}
-		return applyHostIntegration(context.Background(), root, workspaceResult)
-	} else if statErr != nil {
-		return Result{}, statErr
+		return applyHostIntegration(context.Background(), root, workspaceResult, service.hosts)
 	}
 
 	before, err := workspace.Inspect(root)
@@ -264,10 +218,13 @@ func (service WorkspaceService) apply(path string, isInit bool) (Result, error) 
 		return Result{}, err
 	}
 	for _, finding := range before.Findings {
-		if !finding.Fixable {
+		if blocksRemediation(finding) {
 			return doctorResult(root, before, issues, nil)
 		}
 	}
+	// A tracked connection file is reported (init and the hub checks print
+	// its `git rm --cached` command); only the fixable findings are remediated.
+	before = fixableFindings(before)
 	if len(before.Findings) == 0 && len(issues) == 0 {
 		// Runtime and host repair are derived/external maintenance, not canonical
 		// mutations, and therefore must never create an operation receipt.
@@ -275,7 +232,7 @@ func (service WorkspaceService) apply(path string, isInit bool) (Result, error) 
 		if err != nil {
 			return Result{}, err
 		}
-		return applyHostIntegration(context.Background(), root, workspaceResult)
+		return applyHostIntegration(context.Background(), root, workspaceResult, service.hosts)
 	}
 
 	lock, err := mutation.AcquireExclusiveLock(context.Background(), root, mutation.DefaultLockTimeout)
@@ -287,7 +244,7 @@ func (service WorkspaceService) apply(path string, isInit bool) (Result, error) 
 		// The state may have changed between the unlocked inspection and the
 		// lock. Findings that need migration must never be remediated here.
 		for _, finding := range before.Findings {
-			if !finding.Fixable {
+			if blocksRemediation(finding) {
 				unlockErr := lock.Unlock()
 				if unlockErr != nil {
 					return Result{}, unlockErr
@@ -299,6 +256,9 @@ func (service WorkspaceService) apply(path string, isInit bool) (Result, error) 
 				return doctorResult(root, before, lockedIssues, nil)
 			}
 		}
+	}
+	if err == nil {
+		before = fixableFindings(before)
 	}
 	if err == nil {
 		var recoveries []mutation.Recovery
@@ -342,7 +302,24 @@ func (service WorkspaceService) apply(path string, isInit bool) (Result, error) 
 	if err != nil {
 		return Result{}, err
 	}
-	return applyHostIntegration(context.Background(), root, workspaceResult)
+	return applyHostIntegration(context.Background(), root, workspaceResult, service.hosts)
+}
+
+// blocksRemediation reports whether a finding stops mechanical remediation.
+// A tracked connection file does not: it is reported with its
+// `git rm --cached` command, and every other repair still runs.
+func blocksRemediation(finding workspace.Finding) bool {
+	return !finding.Fixable && finding.ID != "machine_file_tracked"
+}
+
+func fixableFindings(plan workspace.Plan) workspace.Plan {
+	kept := workspace.Plan{Root: plan.Root}
+	for _, finding := range plan.Findings {
+		if finding.Fixable {
+			kept.Findings = append(kept.Findings, finding)
+		}
+	}
+	return kept
 }
 
 func remediationResult(root string, before workspace.Plan) (Result, error) {
@@ -365,60 +342,52 @@ func remediationResult(root string, before workspace.Plan) (Result, error) {
 	return result, nil
 }
 
-func inspectHostIntegration(ctx context.Context, root string, result Result) (Result, error) {
-	request, err := hostIntegrationRequest(root)
-	if err != nil {
-		return Result{}, err
+// hostIntegrationResult adds the state of the hub's own agent connection to
+// doctor's report.
+func hostIntegrationResult(root string, result Result, host *hubHostState) Result {
+	if host == nil {
+		return result
 	}
-	inspection, err := hostintegration.Inspect(ctx, request)
-	if err != nil {
-		return Result{}, err
+	levels := make(map[hostintegration.Host]hostintegration.IntegrationLevel, len(host.inspection.Hosts))
+	for _, inspected := range host.inspection.Hosts {
+		levels[inspected.Host] = inspected.Level
 	}
-	levels := make(map[hostintegration.Host]hostintegration.IntegrationLevel, len(inspection.Hosts))
-	hasConflict := false
-	for _, host := range inspection.Hosts {
-		levels[host.Host] = host.Level
-		for _, file := range host.Files {
-			if file.Conflict != "" {
-				hasConflict = true
-			}
-		}
-	}
-	if hasConflict {
-		appendHostInspectionItems(&result, inspection)
+	if len(host.conflicts) > 0 {
+		appendHostInspectionItems(&result, host.inspection)
 		result.Status = StatusActionRequired
 		result.Summary = "Host integration has conflicts; doctor made no changes."
-		return result, nil
+		return result
 	}
-	plan, err := hostintegration.Plan(ctx, request)
-	if err != nil {
-		return Result{}, err
-	}
-	missing := hostintegration.MissingFinding(plan)
+	missing := hostintegration.MissingFinding(host.plan)
 	impact := "Remediation is available after explicit confirmation."
 	if missing != nil {
-		impact = "Fixable: " + missing.Note + " (or run `skillhub doctor --fix --yes`)."
+		impact = "Fixable: " + missing.Note + "."
 	}
-	for _, change := range plan.Changes {
+	for _, change := range host.plan.Changes {
 		item := hostChangeItem(change.Host, levels[change.Host], change.Kind, change.Path, impact)
 		if change.Preview != "" {
 			item.Summary += "\nManaged diff preview:\n" + change.Preview
 		}
 		result.Items = append(result.Items, item)
 	}
-	if len(plan.Changes) > 0 {
+	if len(host.plan.Changes) > 0 {
 		result.Status = StatusActionRequired
 		if missing != nil {
 			result.Summary = "Workspace and catalog are healthy; host integration missing. Note: " + missing.Note + "."
 		} else {
 			result.Summary = "Workspace and catalog are healthy; host integration needs attention."
 		}
-		result.SuggestedActions = append(result.SuggestedActions, Action{Label: "Apply host integration remediation", Command: "skillhub doctor --fix --workspace " + root + " --yes", RequiresConfirmation: true})
+		result.SuggestedActions = append(result.SuggestedActions, Action{Label: "Apply host integration remediation", Command: "skillhub doctor --fix --workspace " + root, RequiresConfirmation: true})
 	}
-	return result, nil
+	return result
 }
 
-func applyHostIntegration(ctx context.Context, root string, result Result) (Result, error) {
+// applyHostIntegration writes the hub's own agent connection for hosts (nil:
+// every host; empty: none).
+func applyHostIntegration(ctx context.Context, root string, result Result, hosts []hostintegration.Host) (Result, error) {
+	if hosts != nil && len(hosts) == 0 {
+		return result, nil
+	}
 	status, err := catalogpkg.Inspect(ctx, root)
 	if err != nil {
 		return Result{}, err
@@ -430,6 +399,7 @@ func applyHostIntegration(ctx context.Context, root string, result Result) (Resu
 	if err != nil {
 		return Result{}, err
 	}
+	request.Hosts = hosts
 	inspection, err := hostintegration.Inspect(ctx, request)
 	if err != nil {
 		return Result{}, err
@@ -529,5 +499,5 @@ func renderIssues(issues []canonical.Issue) string {
 
 // NewWorkspaceInvalidError formats workspace failures consistently for every delivery adapter.
 func NewWorkspaceInvalidError(reason string) *Error {
-	return &Error{Code: ErrorWorkspaceInvalid, Render: ErrorRender{Error: "The workspace is invalid.", Why: reason, Fix: "Run `skillhub doctor --workspace <path>` to inspect safe remediation, then use `--fix --yes` only after review."}}
+	return &Error{Code: ErrorWorkspaceInvalid, Render: ErrorRender{Error: "The workspace is invalid.", Why: reason, Fix: "Run `skillhub doctor` in the hub to see what needs repair, then `skillhub doctor --fix` to repair what it can."}}
 }

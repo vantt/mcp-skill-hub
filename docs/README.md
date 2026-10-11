@@ -4,7 +4,7 @@ Find the page you need, grouped by what you want to do.
 
 ## Start here
 
-- [Get started](getting-started.md): build your own skill library and see the hub recommend a skill in about 10 minutes.
+- [Quickstart](../README.md#quickstart): install Skill Hub, install your hub, connect a project and check the setup.
 - [Installation](installation.md): install `skillhub` on Linux, macOS or Windows and verify its checksum.
 
 ## Guides
@@ -13,7 +13,7 @@ Find the page you need, grouped by what you want to do.
 - [Curating skills](curating-skills.md): add, create, review, edit and change the state of the skills in your collection.
 - [Sources and learning](sources-and-learning.md): keep copied skills up to date and learn from what others publish.
 - [Web UI guide](web-ui.md): look after your skills by clicking instead of typing, in your own browser.
-- [Use one hub from several machines](remote-hub-guide.md): let agents on other computers use this hub through an SSH tunnel or Tailscale.
+- [Use one hub from several machines](remote-hub-guide.md): let agents on other computers use this hub on your LAN, over Tailscale or through an SSH tunnel.
 - [Troubleshooting](troubleshooting.md): find the symptom you see and run the fix below it.
 
 ## Reference

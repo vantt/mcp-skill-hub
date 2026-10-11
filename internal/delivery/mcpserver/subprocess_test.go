@@ -35,13 +35,19 @@ func TestCLICreateActivateThenMCPListGetRead(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "workspace")
 	run := func(args ...string) []byte {
 		command := exec.Command(binary, args...)
+		if args[0] == "init" {
+			command.Dir = root
+		}
 		output, err := command.CombinedOutput()
 		if err != nil {
 			t.Fatalf("skillhub %s: %v\n%s", strings.Join(args, " "), err, output)
 		}
 		return output
 	}
-	run("init", root, "--yes")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	run("init")
 	run("skill", "create", "--workspace", root, "--id", "created-cli", "--collection", "core", "--name", "Created CLI", "--description", "Created through the canonical CLI lifecycle.", "--operation", "review", "--trigger", "review a created CLI skill", "--not-for", "write prose", "--min-scope", "multi_step", "--idempotency-key", "create-e2e", "--yes")
 	skillPath := filepath.Join(root, "skills", "core", "created-cli", "SKILL.md")
 	if err := os.WriteFile(skillPath, []byte("---\nname: created-cli\ndescription: Created through the canonical CLI lifecycle.\n---\n\n# Created CLI\n\nMeaningful procedures.\n"), 0o644); err != nil {

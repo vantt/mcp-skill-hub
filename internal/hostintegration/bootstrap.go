@@ -110,3 +110,11 @@ func appendBootstrap(raw []byte) []byte {
 	}
 	return result
 }
+
+// FreshInstructionFile returns the content connect writes into an instruction
+// file (CLAUDE.md, AGENTS.md, GEMINI.md) that did not exist before. init uses
+// it to recognise an instruction file in a fetched hub as its own.
+func FreshInstructionFile() []byte {
+	desired, _ := updateBootstrap(nil)
+	return desired
+}

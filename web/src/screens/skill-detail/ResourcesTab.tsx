@@ -16,7 +16,7 @@ const LABEL_VIEW = 'View';
 const LABEL_NO_RESOURCES =
   'No companion resources. This skill is only its SKILL.md. Scripts, reference documents or other files you put in the skill folder are listed here.';
 const NOTICE_RESOURCES =
-  'Changed resource: if only the catalog is out of date, run skillhub rebuild. If a file is missing, restore it or re-add the skill. Edits go through a preview you confirm; nothing is saved without it.';
+  'Changed resource: if only the catalog is out of date, run skillhub maintain rebuild. If a file is missing, restore it or re-add the skill. Edits go through a preview you confirm; nothing is saved without it.';
 const LABEL_ACTIVE = 'Active';
 const ELLIPSIS = '…';
 

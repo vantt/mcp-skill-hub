@@ -174,7 +174,7 @@ func (service SourceImportService) PreviewSourceImport(ctx context.Context, path
 		}
 	} else {
 		if record.CurrentRevision == nil {
-			return SourceImportProposal{}, fmt.Errorf("source %q has no current revision; run skillhub check %s first", sourceID, sourceID)
+			return SourceImportProposal{}, fmt.Errorf("source %q has no current revision; run skillhub source check %s first", sourceID, sourceID)
 		}
 		currentRev = *record.CurrentRevision
 	}

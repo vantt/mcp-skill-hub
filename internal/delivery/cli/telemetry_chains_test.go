@@ -140,3 +140,42 @@ func TestTelemetryCLIChainsAndFunnelCuts(t *testing.T) {
 		t.Fatalf("expected code 2 on invalid --kind, got %d", code)
 	}
 }
+
+func TestParseSinceAcceptsADateOrDays(t *testing.T) {
+	t.Parallel()
+	base := time.Date(2026, 10, 11, 15, 30, 0, 0, time.UTC)
+	for value, want := range map[string]time.Time{
+		"7d":         base.AddDate(0, 0, -7),
+		"1d":         base.AddDate(0, 0, -1),
+		"2026-09-01": time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC),
+	} {
+		got, err := parseSince(value, base)
+		if err != nil || !got.Equal(want) {
+			t.Errorf("parseSince(%q) = %v, %v; want %v", value, got, err, want)
+		}
+	}
+	for _, value := range []string{"", "0d", "-3d", "xd", "7", "2026/09/01", "yesterday"} {
+		if _, err := parseSince(value, base); err == nil || !strings.Contains(err.Error(), "use a date (YYYY-MM-DD) or a number of days (Nd") {
+			t.Errorf("parseSince(%q) error = %v", value, err)
+		}
+	}
+}
+
+// TestSinceErrorsAreTheSameForEveryTelemetryCommand checks that each command
+// taking --since rejects a bad value with the same message.
+func TestSinceErrorsAreTheSameForEveryTelemetryCommand(t *testing.T) {
+	t.Parallel()
+	root, _ := telemetryCLIWorkspace(t)
+	for _, args := range [][]string{
+		{"telemetry", "funnel", "--since", "soon", "--workspace", root},
+		{"telemetry", "baseline", "--since", "soon", "--workspace", root},
+		{"telemetry", "chains", "--since", "soon", "--workspace", root},
+		{"telemetry", "cases", "--since", "soon", "--workspace", root},
+		{"telemetry", "import-transcripts", "--project", t.TempDir(), "--since", "soon", "--workspace", root},
+	} {
+		code, _, stderr := runCLI(t, args...)
+		if flat := flatText(stderr); code != 2 || !strings.Contains(flat, `invalid --since value "soon": use a date (YYYY-MM-DD) or a number of days (Nd, for example 7d)`) {
+			t.Errorf("%v: exit %d, stderr %q", args, code, stderr)
+		}
+	}
+}

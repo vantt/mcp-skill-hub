@@ -7,16 +7,14 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/userconfig"
 )
 
 func initWorkspace(t *testing.T) string {
 	t.Helper()
-	ws := filepath.Join(t.TempDir(), "ws")
-	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"init", ws, "--yes"}, &stdout, &stderr); code != 0 {
-		t.Fatalf("init failed: %d: %s", code, stderr.String())
-	}
-	return ws
+	return initHub(t, filepath.Join(t.TempDir(), "ws"))
 }
 
 func TestWorkspaceResolutionPrecedence(t *testing.T) {
@@ -235,6 +233,7 @@ func TestWorkspaceResolutionUntrustedInput(t *testing.T) {
 
 func TestWorkspaceResolutionNeverScansHome(t *testing.T) {
 	t.Setenv(workspaceEnvVar, "")
+	t.Setenv(userconfig.DirEnv, t.TempDir())
 	fakeHome := t.TempDir()
 	t.Setenv("HOME", fakeHome)
 	t.Setenv("USERPROFILE", fakeHome)
@@ -253,7 +252,7 @@ func TestWorkspaceResolutionNeverScansHome(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected resolution to fail because home directory must never be scanned")
 	}
-	if err.Why != "No Skill Hub workspace was found from the current directory." {
+	if err.Why != "This folder is not a hub or a connected project." {
 		t.Fatalf("unexpected Why: %q", err.Why)
 	}
 
@@ -267,13 +266,14 @@ func TestWorkspaceResolutionNeverScansHome(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected resolution to stop before home directory")
 	}
-	if err.Why != "No Skill Hub workspace was found from the current directory." {
+	if err.Why != "This folder is not a hub or a connected project." {
 		t.Fatalf("unexpected Why: %q", err.Why)
 	}
 }
 
 func TestConsistentErrorMessages(t *testing.T) {
 	t.Setenv(workspaceEnvVar, "")
+	t.Setenv(userconfig.DirEnv, t.TempDir())
 
 	// 1. Non-existent path
 	_, err := resolveWorkspace("/nonexistent/workspace/path")
@@ -309,12 +309,12 @@ func TestConsistentErrorMessages(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when no workspace found")
 	}
-	expectedWhy = "No Skill Hub workspace was found from the current directory."
+	expectedWhy = "This folder is not a hub or a connected project."
 	if err.Why != expectedWhy {
 		t.Fatalf("expected Why %q, got %q", expectedWhy, err.Why)
 	}
-	if err.Fix != workspaceFix {
-		t.Fatalf("expected Fix %q, got %q", workspaceFix, err.Fix)
+	if !strings.Contains(err.Fix, app.NewHubCommand()) {
+		t.Fatalf("expected the hub creation command in Fix, got %q", err.Fix)
 	}
 }
 
@@ -326,15 +326,15 @@ func TestNoNonInteractiveUseWordingInAnyError(t *testing.T) {
 	commands := [][]string{
 		{"status"},
 		{"doctor"},
-		{"validate"},
-		{"diff"},
-		{"rebuild"},
+		{"maintain", "validate"},
+		{"maintain", "diff"},
+		{"maintain", "rebuild"},
 		{"skill", "list"},
 		{"skill", "show", "foo"},
 		{"source", "list"},
 		{"source", "capture", "https://example.com", "--reason", "test"},
-		{"check"},
-		{"migrate"},
+		{"source", "check"},
+		{"maintain", "migrate"},
 		{"resolve", "--request", "req.json"},
 		{"telemetry", "health"},
 	}
@@ -418,7 +418,7 @@ func TestDoctorFixDoesNotCreateWorkspaceAtMissingPath(t *testing.T) {
 	// doctor --fix --yes on missing path fails and creates nothing
 	stdout.Reset()
 	stderr.Reset()
-	code = Run([]string{"doctor", "--fix", "--yes", "--workspace", missingPath}, &stdout, &stderr)
+	code = Run([]string{"doctor", "--fix", "--workspace", missingPath}, &stdout, &stderr)
 	if code == 0 {
 		t.Fatal("doctor --fix --yes on missing path should fail")
 	}
@@ -447,8 +447,8 @@ func TestStatusInsideConnectedProjectSucceeds(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("status inside connected project failed (code=%d): %s", code, stderr.String())
 	}
-	if !strings.Contains(stdout.String(), "Workspace is") {
-		t.Fatalf("unexpected status output:\n%s", stdout.String())
+	if !strings.Contains(stdout.String(), ws) {
+		t.Fatalf("status inside the connected project does not name its hub %s:\n%s", ws, stdout.String())
 	}
 }
 
@@ -456,11 +456,11 @@ func TestUnknownIDsExitNonZero(t *testing.T) {
 	t.Parallel()
 	ws := initWorkspace(t)
 
-	// 1. check <unknown-id> exits non-zero and reports unknown source
+	// 1. source check <unknown-id> exits non-zero and reports unknown source
 	var stdout, stderr bytes.Buffer
-	code := Run([]string{"check", "unknown-source-id", "--workspace", ws}, &stdout, &stderr)
+	code := Run([]string{"source", "check", "unknown-source-id", "--workspace", ws}, &stdout, &stderr)
 	if code == 0 {
-		t.Fatal("check unknown-source-id should exit non-zero")
+		t.Fatal("source check unknown-source-id should exit non-zero")
 	}
 	if !strings.Contains(stderr.String(), "unknown-source-id") {
 		t.Fatalf("expected error mentioning unknown-source-id, got:\n%s", stderr.String())
@@ -493,16 +493,16 @@ func TestAllCommandFailuresExitNonZero(t *testing.T) {
 		args []string
 	}{
 		{"status missing ws", []string{"status"}},
-		{"validate missing ws", []string{"validate"}},
+		{"validate missing ws", []string{"maintain", "validate"}},
 		{"doctor missing ws", []string{"doctor"}},
-		{"diff missing ws", []string{"diff"}},
-		{"rebuild missing ws", []string{"rebuild"}},
+		{"diff missing ws", []string{"maintain", "diff"}},
+		{"rebuild missing ws", []string{"maintain", "rebuild"}},
 		{"skill list missing ws", []string{"skill", "list"}},
 		{"skill show missing id", []string{"skill", "show"}},
 		{"skill unknown subcommand", []string{"skill", "invalidsub"}},
 		{"source list missing ws", []string{"source", "list"}},
 		{"source unknown subcommand", []string{"source", "invalidsub"}},
-		{"check missing ws", []string{"check"}},
+		{"source check missing ws", []string{"source", "check"}},
 		{"resolve missing args", []string{"resolve"}},
 		{"eval unknown subcommand", []string{"eval", "invalidsub"}},
 		{"telemetry unknown subcommand", []string{"telemetry", "invalidsub"}},

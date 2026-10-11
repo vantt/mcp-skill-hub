@@ -15,21 +15,21 @@ import (
 func TestConnectClaudeCurationGuidance(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	workspace := initTestWorkspace(t)
-	for _, command := range []string{"connect", "integrate"} {
+	for _, command := range []string{"connect"} {
 		for _, jsonOutput := range []bool{false, true} {
 			project := t.TempDir()
-			args := []string{command, "--project", project, "--workspace", workspace}
+			args := []string{workspace}
 			if jsonOutput {
 				args = append(args, "--json")
 			}
 			for step, apply := range []bool{false, true, true} {
 				call := slices.Clone(args)
-				if apply {
-					call = append(call, "--yes")
+				if !apply {
+					call = append(call, "--dry-run")
 				}
-				code, stdout, stderr := runCLI(t, call...)
+				code, stdout, stderr := runConnectCLI(t, project, call...)
 				if code != 0 {
-					t.Fatalf("%v exit = %d: %s", call, code, stderr)
+					t.Fatalf("%s %v exit = %d: %s", command, call, code, stderr)
 				}
 				if jsonOutput {
 					var response struct {
@@ -81,11 +81,11 @@ func TestConnectOtherHostsOmitCurationGuidance(t *testing.T) {
 	for _, host := range []string{"codex", "gemini"} {
 		project := t.TempDir()
 		for _, jsonOutput := range []bool{false, true} {
-			args := []string{"connect", "--project", project, "--workspace", workspace, "--host", host}
+			args := []string{workspace, "--host", host}
 			if jsonOutput {
-				args = append(args, "--json", "--yes")
+				args = append(args, "--json")
 			}
-			code, stdout, stderr := runCLI(t, args...)
+			code, stdout, stderr := runConnectCLI(t, project, args...)
 			if code != 0 || strings.Contains(stdout, "curation_guidance") || strings.Contains(stdout, "select skillhub-curation") {
 				t.Fatalf("%s guidance leaked: exit=%d stdout=%s stderr=%s", host, code, stdout, stderr)
 			}
@@ -127,24 +127,32 @@ func TestDoctorMigratesLegacyClaudeConnections(t *testing.T) {
 			}
 			t.Chdir(project)
 			code, stdout, stderr := runCLI(t, "doctor", "--workspace", workspace, "--json")
-			if code != 0 {
-				t.Fatalf("legacy doctor exit = %d: %s", code, stderr)
+			if code != 1 {
+				t.Fatalf("legacy doctor exit = %d, want 1: %s", code, stderr)
 			}
-			var result app.Result
+			var result doctorJSON
 			if err := json.Unmarshal([]byte(stdout), &result); err != nil {
 				t.Fatal(err)
 			}
-			if result.Error != nil || result.Status != app.StatusActionRequired || len(result.Items) != 1 || result.Items[0].ID != "project_connection_outdated" {
-				t.Fatalf("valid legacy connection should suggest migration, not be broken: %+v", result)
+			var problems []string
+			for _, section := range result.Sections {
+				for _, finding := range section.Findings {
+					if finding.Severity == app.SeverityProblem {
+						problems = append(problems, section.Kind+":"+finding.Code)
+					}
+				}
 			}
-			if len(result.SuggestedActions) != 1 || !strings.HasPrefix(result.SuggestedActions[0].Command, "skillhub connect --project ") {
-				t.Fatalf("missing connect suggestion: %+v", result.SuggestedActions)
+			if !slices.Equal(problems, []string{"client:client_entry_outdated", "client:client_permissions_outdated"}) {
+				t.Fatalf("a valid legacy connection should be reported as outdated and fixable: %v\n%s", problems, stdout)
+			}
+			if !strings.Contains(stdout, `"fix":"update the connection of the project `) {
+				t.Fatalf("the outdated connection has no fix: %s", stdout)
 			}
 			after, err := os.ReadFile(path)
 			if err != nil || !bytes.Equal(after, legacy) {
 				t.Fatalf("doctor preview modified legacy registration: %v", err)
 			}
-			if code, _, stderr := runCLI(t, "doctor", "--workspace", workspace, "--fix", "--yes"); code != 0 {
+			if code, _, stderr := runCLI(t, "doctor", "--workspace", workspace, "--fix"); code != 0 {
 				t.Fatal(stderr)
 			}
 			after, err = os.ReadFile(path)
@@ -163,7 +171,7 @@ func TestDoctorMigratesLegacyClaudeConnections(t *testing.T) {
 			if len(config.Servers) != 1 || !slices.Equal(config.Servers["skillhub"].Args, want) {
 				t.Fatalf("doctor --fix did not migrate %s: %s", shape, after)
 			}
-			if code, stdout, stderr := runCLI(t, "doctor", "--workspace", workspace, "--json"); code != 0 || strings.Contains(stdout, "connection_outdated") {
+			if code, stdout, stderr := runCLI(t, "doctor", "--workspace", workspace, "--json"); code != 0 || strings.Contains(stdout, `"severity":"problem"`) {
 				t.Fatalf("migrated connection remains outdated: %d %s %s", code, stdout, stderr)
 			}
 		})

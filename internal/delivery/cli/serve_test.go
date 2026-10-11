@@ -37,8 +37,8 @@ func TestServeWebCommand(t *testing.T) {
 		wantStderr string
 	}{
 		{
-			name:       "serve requires web subcommand",
-			args:       []string{"serve"},
+			name:       "serve has two modes",
+			args:       []string{"serve", "webui"},
 			wantCode:   2,
 			wantStderr: "skillhub serve web",
 		},
@@ -53,16 +53,16 @@ func TestServeWebCommand(t *testing.T) {
 			wantCode: 2,
 		},
 		{
-			name:       "help serve contains loopback-only",
+			name:       "help serve names the web default address",
 			args:       []string{"help", "serve"},
 			wantCode:   0,
-			wantStdout: "--loopback-only",
+			wantStdout: "0.0.0.0:7421",
 		},
 		{
-			name:       "web --help contains alias",
+			name:       "web is not a command",
 			args:       []string{"web", "--help"},
-			wantCode:   0,
-			wantStdout: "alias",
+			wantCode:   2,
+			wantStderr: "is not supported",
 		},
 	}
 

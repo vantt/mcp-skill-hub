@@ -11,6 +11,7 @@ import (
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
 	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
+	"github.com/vantt/mcp-skill-hub/internal/shellquote"
 	"github.com/vantt/mcp-skill-hub/internal/skill"
 	"gopkg.in/yaml.v3"
 )
@@ -24,9 +25,15 @@ type skillFlags struct {
 	jsonOutput, yes, fullDiff, editor, verbose, all, check, noCheck, exitCode      bool
 }
 
+// skillSubcommands lists the skill subcommands in the order `skillhub help
+// skill` shows them; every "which subcommand" hint is built from it.
+var skillSubcommands = []string{"add", "create", "show", "review", "doctor", "env", "edit", "outdated", "upstream", "update", "activate", "deprecate", "archive", "confirm", "list"}
+
+var skillSubcommandFix = "Run `skillhub skill " + strings.Join(skillSubcommands, "|") + "`."
+
 func runSkill(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), "skill requires a subcommand", "Run `skillhub skill list|show|create|edit|review|doctor|env|add|confirm|activate|deprecate|archive|outdated|upstream|update`.")
+		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), "skill requires a subcommand", skillSubcommandFix)
 	}
 	subcommand := args[0]
 	flags, err := parseSkillFlags(subcommand, args[1:])
@@ -149,7 +156,7 @@ func runSkill(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 			return writeResult(stdout, stderr, flags.jsonOutput, r, func(p *termui.Printer) {
 				p.Line(r.Summary)
 				if r.TrustImpact.ReviewRequiredAfterApply {
-					p.Line(fmt.Sprintf("Next: skillhub skill review %s", r.SkillID))
+					p.Next("review the updated skill:", "skillhub skill review "+shellquote.Arg(r.SkillID))
 				}
 			})
 		default:
@@ -268,7 +275,7 @@ func runSkill(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 	case "activate", "deprecate", "archive":
 		preview, err = service.PreviewTransitionWithKey(ctx, flags.workspace, flags.id, subcommandTarget(subcommand), flags.fullDiff, flags.idempotencyKey)
 	default:
-		return writeInvalidRequest(stdout, stderr, flags.jsonOutput, fmt.Sprintf("unsupported skill subcommand %q", subcommand), "Run `skillhub skill list|show|create|edit|review|doctor|env|add|confirm|activate|deprecate|archive`.")
+		return writeInvalidRequest(stdout, stderr, flags.jsonOutput, fmt.Sprintf("unsupported skill subcommand %q", subcommand), skillSubcommandFix)
 	}
 	if err != nil {
 		return writeSkillErrorFor(flags.id, stdout, stderr, flags.jsonOutput, err)
@@ -704,7 +711,11 @@ func writeSkillPreview(stdout, stderr io.Writer, jsonOutput bool, preview app.Sk
 				p.Raw("\n")
 			}
 		}
-		p.Line(fmt.Sprintf("No files changed. Confirm with:\n  skillhub skill confirm --proposal %s --proposal-digest %s --base-version %s\n  (or: skillhub skill confirm %s)\nor re-run with --yes to apply directly.", pins.ProposalID, pins.ProposalDigest, pins.BaseVersion, pins.ProposalID))
+		p.Line("No files changed. Confirm with:")
+		p.Command(fmt.Sprintf("skillhub skill confirm --proposal %s --proposal-digest %s --base-version %s", shellquote.Arg(pins.ProposalID), shellquote.Arg(pins.ProposalDigest), shellquote.Arg(pins.BaseVersion)))
+		p.Line("or:")
+		p.Command("skillhub skill confirm " + shellquote.Arg(pins.ProposalID))
+		p.Line("or re-run with --yes to apply directly.")
 	})
 }
 

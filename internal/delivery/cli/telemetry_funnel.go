@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strconv"
 	"strings"
 	"time"
 
@@ -83,24 +82,12 @@ func parseFunnelDates(sinceStr, untilStr string) (time.Time, time.Time, error) {
 		until = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 	}
 
-	var since time.Time
+	since := until.AddDate(0, 0, -30)
 	if sinceStr != "" {
-		if strings.HasSuffix(sinceStr, "d") {
-			daysStr := strings.TrimSuffix(sinceStr, "d")
-			n, err := strconv.Atoi(daysStr)
-			if err != nil || n <= 0 {
-				return time.Time{}, time.Time{}, fmt.Errorf("invalid --since duration %q: expected format like 30d", sinceStr)
-			}
-			since = until.AddDate(0, 0, -n)
-		} else {
-			t, err := time.Parse("2006-01-02", sinceStr)
-			if err != nil {
-				return time.Time{}, time.Time{}, fmt.Errorf("invalid --since date %q: expected YYYY-MM-DD or Nd", sinceStr)
-			}
-			since = time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
+		var err error
+		if since, err = parseSince(sinceStr, until); err != nil {
+			return time.Time{}, time.Time{}, err
 		}
-	} else {
-		since = until.AddDate(0, 0, -30)
 	}
 
 	if since.After(until) {
@@ -246,12 +233,12 @@ func runTelemetryFunnel(ctx context.Context, args []string, stdout, stderr io.Wr
 		if errors.As(err, &resErr) {
 			return writeWorkspaceResolutionError(stdout, stderr, hasJSONFlag(args), resErr)
 		}
-		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub telemetry funnel [--since <Nd|YYYY-MM-DD>] [--until <YYYY-MM-DD>] [--skill <id>]`.")
+		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub telemetry funnel [--since <YYYY-MM-DD|Nd>] [--until <YYYY-MM-DD>] [--skill <id>]`.")
 	}
 
 	since, until, err := parseFunnelDates(flags.sinceStr, flags.untilStr)
 	if err != nil {
-		return writeInvalidRequest(stdout, stderr, flags.jsonOutput, err.Error(), "Pass `--since <Nd|YYYY-MM-DD>` and `--until <YYYY-MM-DD>`.")
+		return writeInvalidRequest(stdout, stderr, flags.jsonOutput, err.Error(), "Pass `--since <YYYY-MM-DD|Nd>` and `--until <YYYY-MM-DD>`.")
 	}
 
 	usageService := app.UsageService{}

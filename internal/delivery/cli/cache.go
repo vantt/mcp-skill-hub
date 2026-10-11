@@ -7,13 +7,13 @@ import (
 
 	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
 	"github.com/vantt/mcp-skill-hub/internal/delivery/mcpserver"
+	"github.com/vantt/mcp-skill-hub/internal/shellquote"
 	"github.com/vantt/mcp-skill-hub/internal/skillruntime"
 )
 
 type cacheClearConfig struct {
-	hub    bool
 	hubURL string
-	yes    bool
+	dryRun bool
 }
 
 func parseCacheClearFlags(args []string) (cacheClearConfig, string) {
@@ -21,33 +21,31 @@ func parseCacheClearFlags(args []string) (cacheClearConfig, string) {
 	for index := 0; index < len(args); index++ {
 		switch args[index] {
 		case "--hub":
-			cfg.hub = true
-			if index+1 < len(args) && !strings.HasPrefix(args[index+1], "-") {
-				cfg.hubURL = args[index+1]
-				index++
+			if index+1 == len(args) || strings.HasPrefix(args[index+1], "-") {
+				return cfg, "--hub requires the hub's URL; leave --hub out to clear every hub's cache"
 			}
-		case "--yes":
-			cfg.yes = true
+			cfg.hubURL = args[index+1]
+			index++
+		case "--dry-run":
+			cfg.dryRun = true
 		default:
 			return cfg, fmt.Sprintf("unknown argument %q", args[index])
 		}
 	}
-	if !cfg.hub {
-		return cfg, "cache clear needs --hub to say which cache to clear"
-	}
 	return cfg, ""
 }
 
-// runCache handles `skillhub cache clear --hub [<url>] [--yes]`: it removes
-// the copies of skills this machine fetched from remote hubs. It previews by
-// default and applies with --yes. It never contacts a hub.
+// runCache handles `skillhub cache clear [--hub <url>] [--dry-run]`: it
+// removes the copies of skills this machine fetched from remote hubs, every
+// hub's or one hub's, and prints what it removed. --dry-run only reports.
+// It never contacts a hub.
 func runCache(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 || args[0] != "clear" {
-		return writeInvalidRequest(stdout, stderr, false, "cache requires the clear subcommand", "Run `skillhub cache clear --hub`.")
+		return writeInvalidRequest(stdout, stderr, false, "cache requires the clear subcommand", "Run `skillhub cache clear [--hub <url>] [--dry-run]`.")
 	}
 	cfg, reason := parseCacheClearFlags(args[1:])
 	if reason != "" {
-		return writeInvalidRequest(stdout, stderr, false, reason, "Run `skillhub cache clear --hub` to preview, then add --yes.")
+		return writeInvalidRequest(stdout, stderr, false, reason, "Run `skillhub cache clear [--hub <url>] [--dry-run]`.")
 	}
 	hubID := ""
 	if cfg.hubURL != "" {
@@ -74,7 +72,7 @@ func runCache(args []string, stdout, stderr io.Writer) int {
 	}
 	p := termui.New(stdout)
 	if len(usage) == 0 {
-		if cfg.yes {
+		if !cfg.dryRun {
 			// Nothing is cached, but a crash may have left staging files.
 			_, _ = cache.Clear(hubID)
 		}
@@ -82,10 +80,11 @@ func runCache(args []string, stdout, stderr io.Writer) int {
 		p.Fields(termui.Field{Label: "Cache directory", Value: cache.Root})
 		return printerCode(p)
 	}
-	if !cfg.yes {
-		p.Line(cacheScope(cfg.hubURL, "This removes the copies of skills fetched from remote hubs.", "This removes the copies of skills fetched from "+cfg.hubURL+"."))
+	if cfg.dryRun {
+		p.Line(cacheScope(cfg.hubURL, "Dry run: the copies of skills fetched from remote hubs were not removed.", "Dry run: the copies of skills fetched from "+cfg.hubURL+" were not removed."))
 		p.Fields(termui.Field{Label: "Cache directory", Value: cache.Root})
 		p.Blank()
+		p.Line("Would change:")
 		writeCacheUsage(p, usage)
 		p.Blank()
 		p.Bullets(
@@ -94,7 +93,7 @@ func runCache(args []string, stdout, stderr io.Writer) int {
 			"Nothing on the hub changes.",
 		)
 		p.Blank()
-		p.Next("Apply the cleanup:", cacheClearCommand(cfg))
+		p.Next("Clear the cache:", cacheClearCommand(cfg))
 		return printerCode(p)
 	}
 	cleared, err := cache.Clear(hubID)
@@ -132,11 +131,11 @@ func cacheScope(hubURL, all, one string) string {
 }
 
 func cacheClearCommand(cfg cacheClearConfig) string {
-	command := "skillhub cache clear --hub"
+	command := "skillhub cache clear"
 	if cfg.hubURL != "" {
-		command += " " + shellQuote(cfg.hubURL)
+		command += " --hub " + shellquote.Arg(cfg.hubURL)
 	}
-	return command + " --yes"
+	return command
 }
 
 func printerCode(p *termui.Printer) int {

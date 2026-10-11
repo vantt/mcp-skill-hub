@@ -30,7 +30,7 @@ const bundleCheckSkill = "check-skill"
 func newBundleHubFixture(t *testing.T) string {
 	t.Helper()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (app.WorkspaceService{}).Init(root, true); err != nil {
+	if _, err := (app.WorkspaceService{}).Init(root, app.InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	for id, files := range remoteBenchShapes {

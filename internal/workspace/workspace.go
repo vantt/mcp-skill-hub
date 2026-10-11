@@ -281,9 +281,8 @@ func PrepareLayout(root string) (Plan, error) {
 		return Plan{}, err
 	}
 	if !isGitRepository(plan.Root) {
-		command := exec.Command("git", "init", plan.Root)
-		if output, err := command.CombinedOutput(); err != nil {
-			return Plan{}, fmt.Errorf("initialize Git repository: %w: %s", err, strings.TrimSpace(string(output)))
+		if err := InitRepository(plan.Root); err != nil {
+			return Plan{}, err
 		}
 	}
 	for _, dir := range requiredDirectories {
@@ -337,13 +336,70 @@ func safeTarget(root string) error {
 		ancestor = parent
 	}
 	if gitRoot, err := gitRoot(ancestor); err == nil && !samePath(gitRoot, root) {
-		return fmt.Errorf("refusing nested workspace inside Git repository %s; choose a directory outside it", gitRoot)
+		return fmt.Errorf("a hub must be its own Git repository, but %s is inside %s", root, gitRoot)
 	}
 	if isGitRepository(root) && looksLikeSourceCheckout(root) {
-		return fmt.Errorf("refusing source checkout as workspace: %s", root)
+		return fmt.Errorf("%s holds a source checkout (go.mod, package.json, Cargo.toml or .gitmodules), not a hub", root)
 	}
 	return nil
 }
+
+// CreatedMarker is the file init writes into a .git directory it created, so
+// a later cleanup can tell that .git from one the user made.
+const CreatedMarker = "skillhub-created"
+
+// InitRepository runs `git init -b main` in root and marks the new .git as
+// created by Skill Hub.
+func InitRepository(root string) error {
+	command := exec.Command("git", "-c", "core.fsmonitor=false", "init", "-q", "-b", "main", root)
+	if output, err := command.CombinedOutput(); err != nil {
+		return fmt.Errorf("initialize Git repository: %w: %s", err, strings.TrimSpace(string(output)))
+	}
+	marker := filepath.Join(root, ".git", CreatedMarker)
+	if err := os.WriteFile(marker, []byte("This Git repository was created by skillhub init.\n"), 0o644); err != nil {
+		return fmt.Errorf("mark the new Git repository: %w", err)
+	}
+	return nil
+}
+
+// initOwnedNames are the top-level entries init itself writes into a hub
+// folder: Git metadata, the layout, derived state, instruction files, agent
+// connection files and the generated skill folders.
+var initOwnedNames = map[string]bool{
+	".git": true, ".gitignore": true, ".skillhub": true, "runtime": true,
+	"AGENTS.md": true, "CLAUDE.md": true, "GEMINI.md": true,
+	".mcp.json": true, ".claude": true, ".codex": true, ".gemini": true, ".agents": true,
+}
+
+func init() {
+	for _, dir := range requiredDirectories {
+		initOwnedNames[strings.SplitN(dir, "/", 2)[0]] = true
+	}
+}
+
+// IsInitOwned reports whether a top-level entry name of a hub folder is one
+// that init writes itself.
+func IsInitOwned(name string) bool { return initOwnedNames[name] }
+
+// MissingIgnoreEntries lists the required .gitignore entries the hub's
+// .gitignore does not hold yet.
+func MissingIgnoreEntries(root string) ([]string, error) {
+	contents, err := readCanonicalFileBounded(filepath.Join(root, ".gitignore"), ".gitignore")
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("read .gitignore: %w", err)
+	}
+	var missing []string
+	for _, entry := range requiredIgnoreEntries {
+		if !hasLine(string(contents), entry) {
+			missing = append(missing, entry)
+		}
+	}
+	return missing, nil
+}
+
+// MachineFiles lists the agent connection files that hold paths of this
+// machine and therefore never belong in Git.
+func MachineFiles() []string { return append([]string(nil), machineFiles...) }
 
 func samePath(a, b string) bool {
 	ca := filepath.Clean(filepath.FromSlash(strings.TrimSpace(a)))

@@ -235,7 +235,7 @@ type Finding struct {
 const (
 	FindingHostIntegrationMissing = "host_integration_missing"
 	SummaryHostIntegrationMissing = "host integration missing"
-	NoteReRunIntegrate            = "re-run skillhub integrate after a pull that untracked those files"
+	NoteRunDoctorFix              = "run skillhub doctor --fix after a pull that untracked those files"
 )
 
 // MissingFinding returns a fixable Finding if the plan contains missing host files.
@@ -245,7 +245,7 @@ func MissingFinding(plan PlanResult) *Finding {
 			return &Finding{
 				ID:      FindingHostIntegrationMissing,
 				Summary: SummaryHostIntegrationMissing,
-				Note:    NoteReRunIntegrate,
+				Note:    NoteRunDoctorFix,
 				Fixable: true,
 			}
 		}

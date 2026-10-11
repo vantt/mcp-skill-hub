@@ -17,7 +17,7 @@ func TestStatusHumanJSONAndQuietUseOneModel(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
+	if code := runInitTo(t, root, &stdout, &stderr); code != 0 {
 		t.Fatalf("init exit = %d: %s", code, stderr.String())
 	}
 	commitCLIWorkspace(t, root)
@@ -71,7 +71,7 @@ func TestValidatePropagatesApplicationCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	var stdout, stderr bytes.Buffer
-	if code := RunContext(ctx, []string{"validate", "--workspace", t.TempDir(), "--json"}, &stdout, &stderr); code != 130 {
+	if code := RunContext(ctx, []string{"maintain", "validate", "--workspace", t.TempDir(), "--json"}, &stdout, &stderr); code != 130 {
 		t.Fatalf("validate exit = %d: stdout=%s stderr=%s", code, stdout.String(), stderr.String())
 	}
 	var result app.Result
@@ -87,7 +87,7 @@ func TestDiffOutputUsesRelativePaths(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
+	if code := runInitTo(t, root, &stdout, &stderr); code != 0 {
 		t.Fatal(stderr.String())
 	}
 	commitCLIWorkspace(t, root)
@@ -100,7 +100,7 @@ func TestDiffOutputUsesRelativePaths(t *testing.T) {
 	}
 	stdout.Reset()
 	stderr.Reset()
-	if code := Run([]string{"diff", "--workspace", root, "--json"}, &stdout, &stderr); code != 0 {
+	if code := Run([]string{"maintain", "diff", "--workspace", root, "--json"}, &stdout, &stderr); code != 0 {
 		t.Fatalf("diff exit = %d: %s", code, stderr.String())
 	}
 	var diff app.CurationDiff
@@ -115,7 +115,7 @@ func TestStatusInvalidWorkspaceDoesNotPrintNoSkillsYetBUG08(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
+	if code := runInitTo(t, root, &stdout, &stderr); code != 0 {
 		t.Fatal(stderr.String())
 	}
 	// Introduce an invalid file into the workspace
@@ -149,7 +149,7 @@ func TestStatusSuggestsRunnableCreateCommandBUG17(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
+	if code := runInitTo(t, root, &stdout, &stderr); code != 0 {
 		t.Fatal(stderr.String())
 	}
 
@@ -164,32 +164,14 @@ func TestStatusSuggestsRunnableCreateCommandBUG17(t *testing.T) {
 	if strings.Contains(out, "skill create ...") {
 		t.Errorf("status still contains unrunnable 'skill create ...' (BUG-17):\n%s", out)
 	}
-	if !strings.Contains(out, "skillhub skill create my-skill") {
+	if !strings.Contains(out, "skillhub skill create --id my-first-skill") {
 		t.Errorf("status missing runnable skill create suggestion:\n%s", out)
-	}
-}
-
-func TestIntegrateCommandAlias(t *testing.T) {
-	t.Parallel()
-	root := filepath.Join(t.TempDir(), "workspace")
-	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
-		t.Fatal(stderr.String())
-	}
-	stdout.Reset()
-	stderr.Reset()
-	project := t.TempDir()
-	if code := Run([]string{"integrate", "--workspace", root, "--project", project, "--yes"}, &stdout, &stderr); code != 0 {
-		t.Fatalf("integrate exit = %d: %s", code, stderr.String())
-	}
-	if _, err := os.Stat(filepath.Join(project, ".mcp.json")); err != nil {
-		t.Fatalf("integrate did not write .mcp.json: %v", err)
 	}
 }
 
 func commitCLIWorkspace(t *testing.T, root string) {
 	t.Helper()
-	for _, args := range [][]string{{"add", "-A"}, {"-c", "user.name=Skill Hub Test", "-c", "user.email=test@skillhub.invalid", "commit", "-m", "initial"}} {
+	for _, args := range [][]string{{"add", "-A"}, {"-c", "user.name=Skill Hub Test", "-c", "user.email=test@skillhub.invalid", "commit", "--allow-empty", "-m", "initial"}} {
 		command := exec.Command("git", append([]string{"-C", root}, args...)...)
 		if output, err := command.CombinedOutput(); err != nil {
 			t.Fatalf("git %v: %v: %s", args, err, output)

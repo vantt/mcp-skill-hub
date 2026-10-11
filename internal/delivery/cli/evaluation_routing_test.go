@@ -23,7 +23,7 @@ func TestEvaluationRoutingCLIExitCodesAndReporting(t *testing.T) {
 	workspace := filepath.Join(t.TempDir(), "workspace")
 
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"init", workspace, "--yes"}, &stdout, &stderr); code != 0 {
+	if code := runInitTo(t, workspace, &stdout, &stderr); code != 0 {
 		t.Fatalf("init=%d stdout=%s stderr=%s", code, stdout.String(), stderr.String())
 	}
 	copyEvaluationFixtureTree(t, filepath.Join(fixtureRoot, "workspace-overlay"), workspace)
@@ -32,7 +32,7 @@ func TestEvaluationRoutingCLIExitCodesAndReporting(t *testing.T) {
 	}
 	stdout.Reset()
 	stderr.Reset()
-	if code := Run([]string{"rebuild", "--workspace", workspace, "--json"}, &stdout, &stderr); code != 0 {
+	if code := Run([]string{"maintain", "rebuild", "--workspace", workspace, "--json"}, &stdout, &stderr); code != 0 {
 		t.Fatalf("rebuild=%d stdout=%s stderr=%s", code, stdout.String(), stderr.String())
 	}
 

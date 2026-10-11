@@ -63,7 +63,7 @@ export function AppShell({ children }: AppShellProps) {
 
   const handleCopyRebuild = async () => {
     try {
-      await navigator.clipboard.writeText('skillhub rebuild');
+      await navigator.clipboard.writeText('skillhub maintain rebuild');
     } catch {
       // Ignore clipboard write error
     }

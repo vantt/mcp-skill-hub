@@ -141,7 +141,8 @@ export function prepareDemoHub(): DemoHub {
   const runCLI = makeCLIRunner(ws, env);
   // A failure while seeding must not leave the throwaway root behind.
   try {
-    runCLI(['init', ws, '--yes']);
+    fs.mkdirSync(ws, { recursive: true });
+    runCLI(['init']);
 
     for (const skill of SKILLS) {
       createDemoSkill(runCLI, root, skill);
@@ -159,7 +160,7 @@ export function prepareDemoHub(): DemoHub {
       '# Acme agent skills\nShared release and incident practices a curator may fold into a skill.\n',
       DEMO_SKILLS.active,
     );
-    runCLI(['rebuild']);
+    runCLI(['maintain', 'rebuild']);
 
     // Commit everything so the screens show a clean workspace, as a curator would have it.
     for (const args of [['add', '-A'], ['commit', '--quiet', '-m', 'Add demo skills and source']]) {

@@ -13,6 +13,8 @@ import (
 	"testing"
 
 	"github.com/vantt/mcp-skill-hub/internal/hostintegration"
+	"github.com/vantt/mcp-skill-hub/internal/shellquote"
+	"github.com/vantt/mcp-skill-hub/internal/userconfig"
 )
 
 const testHubToken = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -186,7 +188,7 @@ func TestDoctorSendsTheTokenOnlyToHubsTheUserScopeNames(t *testing.T) {
 	}
 	if checks["hub_reachable"].Status != CheckOK || checks["token_accepted"].Status != CheckSkipped ||
 		!strings.Contains(checks["token_accepted"].Detail, "only this project's files name this hub") ||
-		!strings.Contains(checks["token_accepted"].Detail, "`skillhub connect --hub "+hub+" --token-file "+shellArgument(tokenFile)+"`") || !reports[0].Healthy() {
+		!strings.Contains(checks["token_accepted"].Detail, "`skillhub connect --hub "+hub+" --token-file "+shellquote.Arg(tokenFile)+" --dry-run`, which sends the token because you run it and writes nothing") || !reports[0].Healthy() {
 		t.Fatalf("checks of a project-only hub: %+v", reports[0].Checks)
 	}
 
@@ -330,14 +332,23 @@ func TestFindRemoteEntriesReadsProjectAndUserScopes(t *testing.T) {
 	write(filepath.Join(project, ".mcp.json"), `{"mcpServers":{"skillhub":{"args":["mcp","proxy","--hub","http://127.0.0.1:7420","--token-file","/t"]}}}`)
 	write(filepath.Join(project, ".gemini", "settings.json"), `{"mcpServers":{"skillhub":{"args":["mcp","serve","--workspace","/w"]}}}`)
 	write(filepath.Join(home, ".codex", "config.toml"), "[mcp_servers.skillhub]\nargs = [\"mcp\", \"proxy\", \"--hub\", \"http://100.64.0.2:7420\"]\n")
-	entries := FindRemoteEntries(project, home)
+	entries := FindRemoteEntries(DetectRole(project, home, userconfig.Config{}))
 	if len(entries) != 2 || entries[0].Host != hostintegration.HostClaude || entries[0].Global || entries[0].TokenFile != "/t" ||
 		entries[1].Host != hostintegration.HostCodex || !entries[1].Global || entries[1].HubURL != "http://100.64.0.2:7420" {
 		t.Fatalf("entries = %+v", entries)
 	}
-	// In the home directory the Codex project and user files are one file.
-	if entries := FindRemoteEntries(home, home); len(entries) != 1 || !entries[0].Global {
+	// The home directory itself is never scanned as a project, so its Codex
+	// file, which is also the user file, is reported once, as the user scope.
+	if entries := FindRemoteEntries(DetectRole(home, home, userconfig.Config{})); len(entries) != 1 || !entries[0].Global {
 		t.Fatalf("home as project: %+v", entries)
+	}
+	// A subfolder of the project finds the project entries by walking up.
+	sub := filepath.Join(project, "src", "pkg")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if entries := FindRemoteEntries(DetectRole(sub, home, userconfig.Config{})); len(entries) != 2 || entries[0].Root != project {
+		t.Fatalf("subfolder: %+v", entries)
 	}
 }
 
@@ -354,8 +365,43 @@ func TestRemoteDoctorGroupsHostsPerHubAndScope(t *testing.T) {
 	if len(reports) != 1 || strings.Join(reports[0].UsedBy, "; ") != "Claude Code, Codex (project /p); Gemini CLI (your user account)" {
 		t.Fatalf("reports = %+v", reports)
 	}
-	result := RemoteDoctorResult(reports)
-	if result.Status != StatusActionRequired || len(result.Items) != 1 || result.Items[0].ID != "remote_hub_reachable" {
-		t.Fatalf("result = %+v", result)
+	var failed []string
+	for _, check := range reports[0].Checks {
+		if check.Status == CheckFailed {
+			failed = append(failed, check.ID)
+		}
+	}
+	if strings.Join(failed, ",") != "hub_reachable" {
+		t.Fatalf("failed checks = %v", failed)
+	}
+}
+
+func TestRemoteFixRefusalNamesTheConnectCommand(t *testing.T) {
+	t.Parallel()
+	got := RemoteFixRefusal("http://192.168.1.20:7420", "")
+	want := "doctor --fix does not reconnect to a remote hub named in this project's files; if you trust http://192.168.1.20:7420, run: `skillhub connect --hub http://192.168.1.20:7420 --token-file ~/.skillhub-token-192.168.1.20-7420`"
+	if got != want {
+		t.Fatalf("RemoteFixRefusal without a token file =\n%s\nwant\n%s", got, want)
+	}
+	tokenFile := filepath.Join(t.TempDir(), "my token")
+	if got := RemoteFixRefusal("http://192.168.1.20:7420", tokenFile); !strings.HasSuffix(got, "--token-file "+shellquote.Arg(tokenFile)+"`") {
+		t.Fatalf("RemoteFixRefusal with a token file = %s", got)
+	}
+}
+
+func TestRemoteFixTextsNameTheCurrentServeCommand(t *testing.T) {
+	t.Parallel()
+	texts := []string{
+		tokenCopyFix("/home/a/.skillhub-token-hub-7420"),
+		unreachableFix("http://127.0.0.1:7420", "127.0.0.1:7420"),
+		unreachableFix("http://100.101.102.103:7420", "100.101.102.103:7420"),
+		reachableCheck("http://hub.example:7420", HubProbe{Outcome: ProbeHostRefused}).Fix,
+		reachableCheck("http://hub.example:7420", HubProbe{Outcome: ProbeNotAHub}).Fix,
+		reachableCheck("http://hub.example:7420", HubProbe{Outcome: ProbeHubError}).Fix,
+	}
+	for _, text := range texts {
+		if strings.Contains(text, "--trust-private-network") || strings.Contains(text, "serve mcp") || !strings.Contains(text, "`skillhub serve") {
+			t.Errorf("fix text does not name `skillhub serve` plainly: %s", text)
+		}
 	}
 }

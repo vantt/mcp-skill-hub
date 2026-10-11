@@ -732,7 +732,7 @@ func TestGetSkillAndReadResourceInvalidURI(t *testing.T) {
 func newMCPWorkspace(t *testing.T) string {
 	t.Helper()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (app.WorkspaceService{}).Init(root, true); err != nil {
+	if _, err := (app.WorkspaceService{}).Init(root, app.InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	service := app.SkillService{}

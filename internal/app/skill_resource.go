@@ -121,7 +121,7 @@ func resourceError(err error) error {
 		return &Error{Code: ErrorSnapshotExpired, Retryable: true, Render: ErrorRender{
 			Error: "The skill catalog could not be opened.",
 			Why:   "The catalog cannot be built from the current skill files; a symlink or another unsupported file in a skill folder blocks it.",
-			Fix:   "Remove symlinks and unsupported files from the skill folders, run `skillhub rebuild`, then reload.",
+			Fix:   "Remove symlinks and unsupported files from the skill folders, run `skillhub maintain rebuild`, then reload.",
 		}}
 	}
 	return err

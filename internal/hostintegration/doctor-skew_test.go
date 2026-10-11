@@ -16,7 +16,7 @@ func TestDoctorReportsNativeCuratorVersionSkew(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	root := filepath.Join(t.TempDir(), "workspace")
 	service := app.WorkspaceService{}
-	if _, err := service.Init(root, true); err != nil {
+	if _, err := service.Init(root, app.InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	for _, adapter := range hostintegration.SupportedAdapters() {
@@ -52,7 +52,7 @@ func TestDoctorReportsNativeCuratorVersionSkew(t *testing.T) {
 			t.Fatal("doctor silently overwrote stale curator")
 		}
 	}
-	command := "skillhub doctor --fix --workspace " + root + " --yes"
+	command := "skillhub doctor --fix --workspace " + root
 	found := false
 	for _, action := range result.SuggestedActions {
 		if action.Command == command && action.RequiresConfirmation {
@@ -62,7 +62,7 @@ func TestDoctorReportsNativeCuratorVersionSkew(t *testing.T) {
 	if !found {
 		t.Fatalf("missing confirmed fix command %q: %#v", command, result.SuggestedActions)
 	}
-	if _, err := service.DoctorFix(root, true); err != nil {
+	if _, err := service.DoctorFix(root, false); err != nil {
 		t.Fatal(err)
 	}
 	for _, adapter := range hostintegration.SupportedAdapters() {

@@ -83,7 +83,7 @@ func (service MigrationService) Migrate(ctx context.Context, path string, target
 		Changes: proposal.Changes,
 	}
 	result.Items = append(result.Items, Item{ID: "canonical_migration", Summary: fmt.Sprintf("Canonical schema %d -> %d (%d file change(s)).", proposal.SourceVersion, proposal.TargetVersion, len(proposal.Changes)), Impact: "Only the previewed canonical paths will change after explicit confirmation."})
-	result.SuggestedActions = []Action{{Label: "Apply this migration after reviewing the fresh preview", Command: fmt.Sprintf("skillhub migrate --workspace %s --to %d --yes", root, target), RequiresConfirmation: true}}
+	result.SuggestedActions = []Action{{Label: "Apply this migration after reviewing the fresh preview", Command: fmt.Sprintf("skillhub maintain migrate --workspace %s --to %d --yes", root, target), RequiresConfirmation: true}}
 	if !yes {
 		return result, nil
 	}

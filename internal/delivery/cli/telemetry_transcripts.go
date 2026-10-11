@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strconv"
 	"strings"
 	"time"
 
@@ -68,25 +67,6 @@ func parseImportTranscriptsFlags(args []string) (importTranscriptsFlags, error) 
 	return flags, nil
 }
 
-func parseSinceDate(sinceStr string, now time.Time) (time.Time, error) {
-	if sinceStr == "" {
-		return time.Time{}, nil
-	}
-	if strings.HasSuffix(sinceStr, "d") {
-		daysStr := strings.TrimSuffix(sinceStr, "d")
-		n, err := strconv.Atoi(daysStr)
-		if err != nil || n <= 0 {
-			return time.Time{}, fmt.Errorf("invalid --since duration %q: expected format like 14d", sinceStr)
-		}
-		return now.AddDate(0, 0, -n), nil
-	}
-	t, err := time.Parse("2006-01-02", sinceStr)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("invalid --since date %q: expected YYYY-MM-DD or Nd", sinceStr)
-	}
-	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC), nil
-}
-
 func runTelemetryImportTranscripts(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	flags, err := parseImportTranscriptsFlags(args)
 	if err != nil {
@@ -94,13 +74,16 @@ func runTelemetryImportTranscripts(ctx context.Context, args []string, stdout, s
 		if errors.As(err, &resErr) {
 			return writeWorkspaceResolutionError(stdout, stderr, hasJSONFlag(args), resErr)
 		}
-		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub telemetry import-transcripts --project <dir> [--since <Nd|YYYY-MM-DD>]`.")
+		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub telemetry import-transcripts --project <dir> [--since <YYYY-MM-DD|Nd>]`.")
 	}
 
 	now := time.Now().UTC()
-	since, err := parseSinceDate(flags.sinceStr, now)
+	var since time.Time
+	if flags.sinceStr != "" {
+		since, err = parseSince(flags.sinceStr, now)
+	}
 	if err != nil {
-		return writeInvalidRequest(stdout, stderr, flags.jsonOutput, err.Error(), "Pass `--since <Nd|YYYY-MM-DD>` with a valid duration or date.")
+		return writeInvalidRequest(stdout, stderr, flags.jsonOutput, err.Error(), sinceFix)
 	}
 
 	service := app.TranscriptImportService{}

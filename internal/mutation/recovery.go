@@ -116,6 +116,22 @@ func InspectRecovery(root string) ([]Recovery, error) {
 	return InspectRecoveryWhileLocked(root)
 }
 
+// TryInspectRecovery is InspectRecovery without the wait: when another
+// process holds the workspace lock it returns ErrWorkspaceBusy at once.
+func TryInspectRecovery(root string) ([]Recovery, error) {
+	if exists, err := transactionDirectoryExists(root); err != nil {
+		return nil, err
+	} else if !exists {
+		return []Recovery{}, nil
+	}
+	lock, err := TryAcquireSharedLock(root)
+	if err != nil {
+		return nil, err
+	}
+	defer lock.Unlock()
+	return InspectRecoveryWhileLocked(root)
+}
+
 // InspectRecoveryWhileLocked classifies recovery while the caller holds a
 // shared or exclusive workspace lock. It avoids recursively acquiring flock,
 // which is not portable across operating systems.

@@ -10,13 +10,14 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 
 	"github.com/vantt/mcp-skill-hub/internal/hostintegration"
 	"github.com/vantt/mcp-skill-hub/internal/hubtoken"
+	"github.com/vantt/mcp-skill-hub/internal/shellquote"
 	"github.com/vantt/mcp-skill-hub/internal/skillruntime"
+	"github.com/vantt/mcp-skill-hub/internal/userconfig"
 )
 
 // RemoteConnectRequest points a scope at a hub on another machine.
@@ -26,7 +27,8 @@ type RemoteConnectRequest struct {
 	Hosts     []hostintegration.Host
 	Hub       string
 	TokenFile string
-	Yes       bool
+	// DryRun reports the changes without writing them.
+	DryRun bool
 	// HubClient sends the reachability probe; nil uses the default client.
 	HubClient *http.Client
 }
@@ -128,7 +130,7 @@ func checkTokenFile(path string) (string, *Error) {
 	return absolute, nil
 }
 
-// ConnectRemote previews, or with Yes writes, host entries that start the
+// ConnectRemote writes, or with DryRun only reports, host entries that start the
 // stdio proxy for a hub on another machine. It writes no curation server and
 // no system-curator skill, because curation runs only on the hub machine, and
 // never writes the token, only the token file path.
@@ -146,6 +148,9 @@ func (service ConnectService) ConnectRemote(ctx context.Context, request RemoteC
 	}
 	root, scope, label, problem := service.target(ConnectRequest{Project: request.Project, Global: request.Global})
 	if problem != nil {
+		return ErrorResult(problem), nil, nil
+	}
+	if problem := tokenFileUsedElsewhere(root, scope == hostintegration.ScopeUser, request.Hosts, hubURL, tokenFile); problem != nil {
 		return ErrorResult(problem), nil, nil
 	}
 	binary, err := currentBinary()
@@ -166,7 +171,7 @@ func (service ConnectService) ConnectRemote(ctx context.Context, request RemoteC
 			connection.Replaces = append(connection.Replaces, entry)
 		}
 	}
-	result, err := service.planScope(ctx, hostRequest, request.Yes)
+	result, err := service.planScope(ctx, hostRequest, request.DryRun)
 	if err != nil || result.Error != nil {
 		return result, nil, err
 	}
@@ -176,8 +181,8 @@ func (service ConnectService) ConnectRemote(ctx context.Context, request RemoteC
 	case StatusReady:
 		result.Summary = "Agent connection for " + label + " to the hub at " + hubURL + " is already current; nothing to change."
 	case StatusActionRequired:
-		result.Summary = "Preview only: agent connection for " + label + " to the hub at " + hubURL + " was not written without --yes."
-		result.SuggestedActions = []Action{{Label: "Write the agent connection", Command: remoteConnectCommand(request, hubURL, tokenFile) + " --yes", RequiresConfirmation: true}}
+		result.Summary = "Dry run: agent connection for " + label + " to the hub at " + hubURL + " was not written."
+		result.SuggestedActions = []Action{{Label: "Write the agent connection", Command: remoteConnectCommand(request, hubURL, tokenFile), RequiresConfirmation: true}}
 	case StatusApplied:
 		result.Summary = "Agent connection for " + label + " to the hub at " + hubURL + " written."
 		result.Warnings = append(result.Warnings, hostBestEffortWarning())
@@ -186,9 +191,10 @@ func (service ConnectService) ConnectRemote(ctx context.Context, request RemoteC
 	return result, connection, nil
 }
 
-// planScope runs the inspect, conflict, plan and (with yes) apply sequence
-// of connect for a remote or removal request. The caller sets the summary.
-func (service ConnectService) planScope(ctx context.Context, hostRequest hostintegration.Request, yes bool) (Result, error) {
+// planScope runs the inspect, conflict, plan and (unless dryRun) apply
+// sequence of connect for a remote or removal request. The caller sets the
+// summary.
+func (service ConnectService) planScope(ctx context.Context, hostRequest hostintegration.Request, dryRun bool) (Result, error) {
 	inspection, err := hostintegration.Inspect(ctx, hostRequest)
 	if err != nil {
 		return Result{}, err
@@ -216,12 +222,12 @@ func (service ConnectService) planScope(ctx context.Context, hostRequest hostint
 	if len(plan.Changes) == 0 {
 		return NewResult(StatusReady, ""), nil
 	}
-	if !yes {
+	if dryRun {
 		result := NewResult(StatusActionRequired, "")
 		for _, change := range plan.Changes {
-			impact := "Will be written after confirmation."
+			impact := "Would be written."
 			if change.Remove {
-				impact = "Will be deleted after confirmation."
+				impact = "Would be deleted."
 			}
 			item := hostChangeItem(change.Host, levels[change.Host], change.Kind, change.Path, impact)
 			if change.Preview != "" {
@@ -291,7 +297,7 @@ func remoteConnectWarnings(hubURL string, probe HubProbe, token HubToken) []Warn
 	}
 	switch probe.Outcome {
 	case ProbeUnreachable:
-		warnings = append(warnings, Warning{Code: "hub_unreachable", Summary: "The hub does not answer at " + hubURL + " right now (" + probe.Reason + "). The connection can be written anyway; start `skillhub serve mcp --addr ...` on machine B and open the SSH tunnel or Tailscale connection before you start the agent."})
+		warnings = append(warnings, Warning{Code: "hub_unreachable", Summary: "The hub does not answer at " + hubURL + " right now (" + probe.Reason + "). The connection can be written anyway; start `skillhub serve` on machine B (and open the SSH tunnel if you use one) before you start the agent."})
 	case ProbeNotAHub, ProbeHostRefused, ProbeHubError:
 		warnings = append(warnings, Warning{Code: "hub_check_failed", Summary: reachableCheck(hubURL, probe).Detail})
 	case ProbeRejected:
@@ -304,32 +310,55 @@ func remoteConnectWarnings(hubURL string, probe HubProbe, token HubToken) []Warn
 	return warnings
 }
 
+// tokenFileUsedElsewhere refuses a token file that another entry on this
+// machine (project or user scope) already uses for a different hub: one file
+// per hub keeps a token from being sent to the wrong hub.
+// The entries this connect replaces (same scope and host) do not count.
+func tokenFileUsedElsewhere(root string, global bool, hosts []hostintegration.Host, hubURL, tokenFile string) *Error {
+	if tokenFile == "" {
+		return nil
+	}
+	project := root
+	if global {
+		project, _ = os.Getwd()
+	}
+	home, _ := os.UserHomeDir()
+	for _, entry := range DetectRole(project, home, userconfig.Config{}).Entries() {
+		if !entry.Remote() || entry.TokenFile == "" || entry.HubURL == hubURL || !samePathText(entry.TokenFile, tokenFile) {
+			continue
+		}
+		if entry.Global == global && sameDirectory(entry.Root, root) && (len(hosts) == 0 || slices.Contains(hosts, entry.Host)) {
+			continue
+		}
+		scope := "project " + entry.Root
+		if entry.Global {
+			scope = "your user account"
+		}
+		return NewInvalidRequestError(
+			"The token file "+tokenFile+" is already used for the hub at "+entry.HubURL+" ("+HostDisplayName(entry.Host)+" in "+scope+").",
+			"Keep one token file per hub: copy the token of "+hubURL+" to "+hubtoken.ClientPath(hubURL)+" and pass `--token-file "+hubtoken.ClientPath(hubURL)+"`.",
+		)
+	}
+	return nil
+}
+
+func samePathText(a, b string) bool {
+	return filepath.Clean(a) == filepath.Clean(b)
+}
+
 func remoteConnectCommand(request RemoteConnectRequest, hubURL, tokenFile string) string {
 	parts := []string{"skillhub connect"}
 	if request.Global {
 		parts = append(parts, "--global")
-	} else if request.Project != "" {
-		parts = append(parts, "--project", shellArgument(request.Project))
 	}
 	parts = append(parts, "--hub", hubURL)
 	if tokenFile != "" {
-		parts = append(parts, "--token-file", shellArgument(tokenFile))
+		parts = append(parts, "--token-file", shellquote.Arg(tokenFile))
 	}
 	for _, host := range request.Hosts {
 		parts = append(parts, "--host", string(host))
 	}
 	return strings.Join(parts, " ")
-}
-
-// shellArgument quotes a path for a printed command when it needs quoting.
-func shellArgument(value string) string {
-	if value != "" && !strings.ContainsAny(value, " \t\n'\"\\$`!*?[](){};&|<>#~") {
-		return value
-	}
-	if runtime.GOOS == "windows" {
-		return `"` + value + `"`
-	}
-	return "'" + strings.ReplaceAll(value, "'", `'\''`) + "'"
 }
 
 // DisconnectRequest removes the Skill Hub connection of a scope.
@@ -340,7 +369,8 @@ type DisconnectRequest struct {
 	// ClearCache also removes the skills this machine fetched from the remote
 	// hubs the removed entries pointed at.
 	ClearCache bool
-	Yes        bool
+	// DryRun reports the removal without changing anything.
+	DryRun bool
 }
 
 // Disconnection describes what a removal takes out.
@@ -358,7 +388,7 @@ type CacheUsage struct {
 	Bytes    int64  `json:"bytes"`
 }
 
-// Disconnect previews, or with Yes applies, the removal of every Skill Hub
+// Disconnect applies, or with DryRun only reports, the removal of every Skill Hub
 // surface connect wrote in a scope, for a local or a remote hub: the MCP
 // entries, their allowed directories and permission rules, the instruction
 // block and an unchanged system-curator skill. Unrelated host configuration
@@ -425,7 +455,7 @@ func (service ConnectService) Disconnect(ctx context.Context, request Disconnect
 			warnings = append(warnings, sharedHubWarnings(hubs, request.Global, root)...)
 		}
 	}
-	if request.Yes && request.ClearCache {
+	if !request.DryRun && request.ClearCache {
 		// The cache goes first: if clearing fails, the connection is still
 		// in place and the same command can be run again.
 		for _, hub := range hubs {
@@ -439,7 +469,7 @@ func (service ConnectService) Disconnect(ctx context.Context, request Disconnect
 		}
 	}
 	hostRequest := hostintegration.Request{Root: root, Scope: scope, Binary: binary, Hosts: request.Hosts, Remove: true}
-	result, err := service.planScope(ctx, hostRequest, request.Yes)
+	result, err := service.planScope(ctx, hostRequest, request.DryRun)
 	if err != nil || result.Error != nil {
 		return result, nil, err
 	}
@@ -451,10 +481,10 @@ func (service ConnectService) Disconnect(ctx context.Context, request Disconnect
 		result.Summary = "No Skill Hub connection in " + label + "; nothing to remove."
 		return result, disconnection, nil
 	}
-	if !request.Yes {
+	if request.DryRun {
 		result.Status = StatusActionRequired
-		result.Summary = "Preview only: the Skill Hub connection for " + label + " was not removed without --yes."
-		result.SuggestedActions = []Action{{Label: "Remove the agent connection", Command: disconnectCommand(request) + " --yes", RequiresConfirmation: true}}
+		result.Summary = "Dry run: the Skill Hub connection for " + label + " was not removed."
+		result.SuggestedActions = []Action{{Label: "Remove the agent connection", Command: disconnectCommand(request), RequiresConfirmation: true}}
 		return result, disconnection, nil
 	}
 	result.Status = StatusApplied
@@ -476,16 +506,13 @@ func removesInstructions(result Result) bool {
 // is about to be cleared: the user account when a project is disconnected,
 // the current project when the user account is.
 func sharedHubWarnings(hubs []string, global bool, root string) []Warning {
-	project, home := "", ""
-	if global {
-		if current, err := os.Getwd(); err == nil && filepath.Clean(current) != filepath.Clean(root) {
-			project = current
-		}
-	} else if userHome, err := os.UserHomeDir(); err == nil && filepath.Clean(userHome) != filepath.Clean(root) {
-		home = userHome
-	}
 	var warnings []Warning
-	for _, entry := range FindRemoteEntries(project, home) {
+	for _, entry := range FindRemoteEntries(DetectRoleHere()) {
+		// Only the other scope can still use the hub: the user account when a
+		// project is disconnected, the current project when the user account is.
+		if entry.Global == global || sameDirectory(entry.Root, root) {
+			continue
+		}
 		if slices.Contains(hubs, entry.HubURL) {
 			warnings = append(warnings, Warning{Code: "hub_cache_shared", Summary: HostDisplayName(entry.Host) + " in " + entry.ScopeLabel() + " still uses " + entry.HubURL + "; its agents fetch the skills again after the cache is cleared."})
 		}
@@ -497,8 +524,6 @@ func disconnectCommand(request DisconnectRequest) string {
 	parts := []string{"skillhub connect --remove"}
 	if request.Global {
 		parts = append(parts, "--global")
-	} else if request.Project != "" {
-		parts = append(parts, "--project", shellArgument(request.Project))
 	}
 	for _, host := range request.Hosts {
 		parts = append(parts, "--host", string(host))

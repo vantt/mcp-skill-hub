@@ -103,14 +103,14 @@ func runTelemetryCases(ctx context.Context, args []string, stdout, stderr io.Wri
 		if errors.As(err, &resErr) {
 			return writeWorkspaceResolutionError(stdout, stderr, hasJSONFlag(args), resErr)
 		}
-		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub telemetry cases [enable|disable|status|list] [--since <Nd|YYYY-MM-DD>] [--kind override|after_no_skill|...]`.")
+		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub telemetry cases [enable|disable|status|list] [--since <YYYY-MM-DD|Nd>] [--kind override|after_no_skill|...]`.")
 	}
 
 	var since time.Time
 	if flags.sinceStr != "" {
-		parsedSince, err := parseChainsSince(flags.sinceStr)
+		parsedSince, err := parseSince(flags.sinceStr, time.Now().UTC())
 		if err != nil {
-			return writeInvalidRequest(stdout, stderr, flags.jsonOutput, err.Error(), "Pass `--since <Nd|YYYY-MM-DD>`.")
+			return writeInvalidRequest(stdout, stderr, flags.jsonOutput, err.Error(), sinceFix)
 		}
 		since = parsedSince
 	}

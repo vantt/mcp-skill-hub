@@ -63,6 +63,7 @@ func (m machine) env() []string {
 		"XDG_CONFIG_HOME="+filepath.Join(m.root, "config"), "XDG_DATA_HOME="+filepath.Join(m.root, "data"),
 		"XDG_CACHE_HOME="+filepath.Join(m.root, "cache"), "XDG_STATE_HOME="+m.state(),
 		"XDG_RUNTIME_DIR="+filepath.Join(m.root, "runtime"),
+		"SKILLHUB_USER_CONFIG_DIR="+filepath.Join(m.root, "config", "skillhub-user"),
 		"SKILLHUB_WORKSPACE=", app.HubTokenEnv+"=",
 	)
 }
@@ -284,7 +285,8 @@ func TestRemoteHubEndToEndThroughATunnel(t *testing.T) {
 	if err := os.MkdirAll(project, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	connect := exec.Command(binary, "connect", "--project", project, "--hub", tunnel.url, "--token-file", tokenCopy, "--host", "claude", "--yes")
+	connect := exec.Command(binary, "connect", "--hub", tunnel.url, "--token-file", tokenCopy, "--host", "claude")
+	connect.Dir = project
 	connect.Env = machineA.env()
 	connectOutput, err := connect.CombinedOutput()
 	if err != nil || !strings.Contains(string(connectOutput), "reachable, token accepted") {

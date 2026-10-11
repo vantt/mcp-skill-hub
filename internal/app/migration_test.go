@@ -61,11 +61,11 @@ func TestMigrationServicePreviewThenApply(t *testing.T) {
 func TestDoctorDirectsLegacyWorkspaceToMigrationWithoutChangingIt(t *testing.T) {
 	t.Parallel()
 	root := newLegacyAppWorkspace(t)
-	result, err := (WorkspaceService{}).DoctorFix(root, true)
+	result, err := (WorkspaceService{}).DoctorFix(root, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Status != StatusActionRequired || len(result.SuggestedActions) != 1 || !strings.Contains(result.SuggestedActions[0].Command, "skillhub migrate") {
+	if result.Status != StatusActionRequired || len(result.SuggestedActions) != 1 || !strings.Contains(result.SuggestedActions[0].Command, "skillhub maintain migrate") {
 		t.Fatalf("doctor result = %#v", result)
 	}
 	if _, err := os.Stat(filepath.Join(root, ".skillhub", "schema-version")); !os.IsNotExist(err) {
@@ -91,7 +91,7 @@ func TestRebuildNeverUpgradesIncompatibleCanonicalVersion(t *testing.T) {
 func TestDerivedOnlyIncompatibilityAutoRebuildsWhenCanonicalIsValid(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	markerBefore, err := os.ReadFile(filepath.Join(root, ".skillhub", "schema-version"))
@@ -133,7 +133,7 @@ func TestDerivedOnlyIncompatibilityAutoRebuildsWhenCanonicalIsValid(t *testing.T
 func newLegacyAppWorkspace(t *testing.T) string {
 	t.Helper()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Remove(filepath.Join(root, ".skillhub", "schema-version")); err != nil {
@@ -152,11 +152,11 @@ func TestDoctorFixDoesNotWriteMarkerForLegacyCloneWithoutControlDirectory(t *tes
 	if err := os.RemoveAll(filepath.Join(root, ".skillhub")); err != nil {
 		t.Fatal(err)
 	}
-	result, err := (WorkspaceService{}).DoctorFix(root, true)
+	result, err := (WorkspaceService{}).DoctorFix(root, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Status != StatusActionRequired || len(result.SuggestedActions) != 1 || !strings.Contains(result.SuggestedActions[0].Command, "skillhub migrate") {
+	if result.Status != StatusActionRequired || len(result.SuggestedActions) != 1 || !strings.Contains(result.SuggestedActions[0].Command, "skillhub maintain migrate") {
 		t.Fatalf("doctor result = %#v", result)
 	}
 	if _, err := os.Stat(filepath.Join(root, ".skillhub", "schema-version")); !os.IsNotExist(err) {
@@ -187,7 +187,7 @@ func TestMigrateReplayFailsWhenMarkerWasLostAfterApply(t *testing.T) {
 func TestMigrationServiceV2ToV3(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	marker := filepath.Join(root, ".skillhub", "schema-version")
@@ -218,7 +218,7 @@ func TestMigrationServiceV2ToV3(t *testing.T) {
 func TestLocalSkillMigrationKeepsThirdPartyFalse(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	marker := filepath.Join(root, ".skillhub", "schema-version")

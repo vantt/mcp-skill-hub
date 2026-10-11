@@ -6,70 +6,180 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
 	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
+	"github.com/vantt/mcp-skill-hub/internal/shellquote"
 )
 
-func runInit(args []string, stdout, stderr io.Writer) int {
-	path, jsonOutput, yes, verbose, force, err := initFlags(args)
+func runInit(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	dir, err := os.Getwd()
 	if err != nil {
-		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub init [path]` to preview, then add `--yes` to apply.")
+		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), "The current folder cannot be determined: "+err.Error(), "Run `skillhub init` from the folder that becomes the hub.")
 	}
-	result, err := (app.WorkspaceService{}).Init(path, yes, force)
-	compact := err == nil && !jsonOutput && !verbose && result.Error == nil &&
-		(result.Status == app.StatusApplied || result.Status == app.StatusReady)
-	if !compact {
-		return writeWorkspaceResult(result, err, stdout, stderr, jsonOutput)
-	}
-	absolute, absErr := filepath.Abs(path)
-	if absErr != nil {
-		absolute = path
-	}
-	renderInitSummary(stdout, absolute, result)
-	return 0
+	return runInitIn(ctx, dir, args, stdout, stderr)
 }
 
-// renderInitSummary prints the short first-run summary. Generation IDs, digests,
-// and row counts stay available through --verbose and --json.
-func renderInitSummary(stdout io.Writer, workspacePath string, result app.Result) {
+// runInitIn runs init for dir, which stands for the current folder. Tests
+// call it directly so they never change the process working directory.
+func runInitIn(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) int {
+	if errors.Is(ctx.Err(), context.Canceled) {
+		return writeWorkspaceResult(app.Result{}, context.Canceled, stdout, stderr, hasJSONFlag(args))
+	}
+	source, jsonOutput, dryRun, verbose, err := initFlags(args)
+	if err != nil {
+		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub init` in an empty folder, or `skillhub init <git-url>` to start from a repository; add `--dry-run` to see what it would do.")
+	}
+	var options app.InitOptions
+	options.DryRun = dryRun
+	if source != "" {
+		classified, problem := app.ClassifyInitSource(source)
+		if problem != nil {
+			return writeWorkspaceResult(app.ErrorResult(problem), nil, stdout, stderr, jsonOutput)
+		}
+		options.Source = classified
+	}
+	result, err := (app.WorkspaceService{}).Init(dir, options)
+	report, _ := result.Details[app.InitDetailsKey].(*app.InitReport)
+	code := 0
+	if report != nil && report.Remote != nil && report.Remote.PushError != "" {
+		code = 1
+	}
+	switch {
+	case err == nil && result.Error != nil && !jsonOutput:
+		return writeInitError(stderr, result)
+	case dryRun:
+		return writeDryRunResult(result, err, stdout, stderr, jsonOutput)
+	case err != nil || jsonOutput || report == nil:
+		written := writeWorkspaceResult(result, err, stdout, stderr, jsonOutput)
+		if err == nil && result.Error != nil && result.Error.Code == app.ErrorGitFailed && written == 2 {
+			// A Git failure is a runtime failure, not a refused request.
+			return 1
+		}
+		if written != 0 {
+			return written
+		}
+		if err == nil && result.Error == nil && result.Status != app.StatusApplied {
+			// The folder is a hub, but init stopped before it could store it.
+			p := termui.New(stdout)
+			for _, action := range result.SuggestedActions {
+				p.Line("FIX: " + action.Label + ":")
+				p.Command(action.Command)
+			}
+			return 2
+		}
+		return code
+	case verbose:
+		if written := writeWorkspaceResult(result, nil, stdout, stderr, false); written != 0 {
+			return written
+		}
+	}
 	p := termui.New(stdout)
-	created := false
+	renderInitSummary(p, result, report)
+	if p.Err() != nil {
+		return 1
+	}
+	return code
+}
+
+// writeInitError prints a refusal or Git failure of init: what happened, Git's
+// own message kept as it is, and the one command to run instead.
+func writeInitError(stderr io.Writer, result app.Result) int {
+	p := termui.New(stderr)
+	render := result.Error.Render
+	if result.Error.Code == app.ErrorGitFailed {
+		p.Line("ERROR: " + render.Error)
+		for _, line := range strings.Split(strings.TrimRight(render.Why, "\n"), "\n") {
+			p.Raw("  " + line + "\n")
+		}
+		p.Line(render.Fix)
+		return 1
+	}
+	p.Error(render.Error, render.Why, render.Fix)
+	for _, action := range result.SuggestedActions {
+		p.Command(action.Command)
+	}
+	return 2
+}
+
+// renderInitSummary prints what init changed and the one next command.
+// Generation IDs and row counts stay available through --verbose and --json.
+func renderInitSummary(p *termui.Printer, result app.Result, report *app.InitReport) {
+	// Lines that hold a path or URL are not wrapped, so they can be copied whole.
+	p.Raw(result.Summary + "\n")
+	p.Line(connectionSummaryLine(result))
+	if remote := report.Remote; remote != nil && remote.Fetched {
+		p.Raw(fmt.Sprintf("Fetched the hub from %s (branch %s); origin is set.\n", remote.URL, remote.Branch))
+	}
+	if report.Commit != "" {
+		p.Line(fmt.Sprintf("First commit %s: %q.", shortCommit(report.Commit), "Initialize Skill Hub hub"))
+		p.Line("Git hooks and commit signing were skipped for this first commit.")
+		if report.FallbackIdentity {
+			p.Line("Git has no user name or email set, so this commit is by Skill Hub <skillhub@localhost>.")
+		}
+	}
+	if remote := report.Remote; remote != nil && !remote.Fetched {
+		switch {
+		case remote.PushError != "":
+			p.Blank()
+			p.Raw("The hub is ready here, but the push to " + remote.URL + " failed:\n")
+			for _, line := range strings.Split(remote.PushError, "\n") {
+				p.Raw("  " + line + "\n")
+			}
+			p.Line("Fix what Git reports, then run the same `skillhub init` command again to push.")
+		case remote.Pushed != "":
+			p.Raw(fmt.Sprintf("Pushed %s to %s (branch %s); origin is set.\n", shortCommit(remote.Pushed), remote.URL, remote.Branch))
+		default:
+			p.Raw(fmt.Sprintf("Connected to %s (branch %s); origin is set.\n", remote.URL, remote.Branch))
+		}
+	}
+	if len(report.GitignoreAdded) > 0 {
+		p.Line(".gitignore: added " + strings.Join(report.GitignoreAdded, " ") + " (not committed; commit .gitignore when you are ready).")
+	}
+	for _, path := range report.TrackedMachineFiles {
+		p.Line("Git tracks " + path + ", which holds paths of this machine. Stop tracking it (the file stays on disk):")
+		p.Command("git rm --cached " + shellquote.Arg(path))
+	}
+	for _, warning := range result.Warnings {
+		// Only what init found about this hub; routine notes of the steps it
+		// ran stay in --verbose and --json.
+		if warning.Code == "git_ssh_command" || warning.Code == "hub_tracks_agent_config" {
+			p.Warning(warning.Summary)
+		}
+	}
+	if report.Stored {
+		p.Line("This is now the hub of this machine; `skillhub connect` uses it.")
+	} else if report.StoreError != "" {
+		p.Warning("The hub path could not be recorded for `skillhub connect`: " + report.StoreError)
+	}
+	p.Blank()
+	p.Next("connect a project to this hub:", report.Next)
+}
+
+func shortCommit(commit string) string {
+	if len(commit) > 12 {
+		return commit[:12]
+	}
+	return commit
+}
+
+// connectionSummaryLine names the agents whose connection files a result
+// wrote, in one wording shared by init and connect:
+// "Agent connection written: claude-code, codex-cli, gemini-cli."
+func connectionSummaryLine(result app.Result) string {
 	var hosts []string
 	for _, item := range result.Items {
-		if item.ID == "workspace_missing" {
-			created = true
-		}
 		// Host item IDs are host_<host>_<change-kind>; neither part contains "_".
 		if parts := strings.Split(item.ID, "_"); len(parts) == 3 && parts[0] == "host" && !slices.Contains(hosts, parts[1]) {
 			hosts = append(hosts, parts[1])
 		}
 	}
-	if created {
-		p.Line(fmt.Sprintf("Workspace created at %s.", workspacePath))
-	} else {
-		p.Line(fmt.Sprintf("Workspace ready at %s.", workspacePath))
+	if len(hosts) == 0 {
+		return "Agent connection already in place."
 	}
-	if len(hosts) > 0 {
-		p.Line(fmt.Sprintf("Agent connection for this workspace written: %s.", strings.Join(hosts, ", ")))
-	} else {
-		p.Line("Agent connection for this workspace is already in place.")
-	}
-	p.Blank()
-	p.Line("Next:")
-	p.Line(fmt.Sprintf("  1. Commit the workspace: %s && git -C %s commit -m \"Initialize Skill Hub workspace\"", stageWorkspaceCommand(workspacePath), workspacePath))
-	p.Line(fmt.Sprintf("  2. Connect another project: cd <project> && skillhub connect --workspace %s --yes", workspacePath))
-	p.Line(fmt.Sprintf("     (add -g instead to connect every project: skillhub connect -g --workspace %s --yes)", workspacePath))
-	p.Line("  3. Open your agent there and ask: \"curate my Skill Hub\"")
-}
-
-// stageWorkspaceCommand stages the folders Skill Hub owns by name. The connection files that init
-// and connect write hold paths of this machine, so the whole folder is never staged at once.
-func stageWorkspaceCommand(path string) string {
-	return fmt.Sprintf("git -C %s add .gitignore .skillhub skills sources history registry config distill evals", path)
+	return "Agent connection written: " + strings.Join(hosts, ", ") + "."
 }
 
 func runValidate(ctx context.Context, args []string, stdout, stderr io.Writer) int {
@@ -82,7 +192,7 @@ func runValidate(ctx context.Context, args []string, stdout, stderr io.Writer) i
 		if errors.As(err, &resErr) {
 			return writeWorkspaceResolutionError(stdout, stderr, jsonOutput, resErr)
 		}
-		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub validate [--staged] [--workspace <path>]`.")
+		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub maintain validate [--staged] [--workspace <path>]`.")
 	}
 	result, err := executeValidate(ctx, path, staged)
 	if err != nil {
@@ -119,141 +229,28 @@ func runValidate(ctx context.Context, args []string, stdout, stderr io.Writer) i
 	return 0
 }
 
-func runDoctor(args []string, stdout, stderr io.Writer) int {
-	path, jsonOutput, fix, yes, err := doctorFlags(args)
-	// Entries in this project or the user scope that start the proxy for a
-	// hub on another machine. Without any, doctor works exactly as before.
-	remotes := remoteEntriesHere()
-	if err != nil {
-		var resErr *WorkspaceResolutionError
-		if errors.As(err, &resErr) {
-			if len(remotes) > 0 && !fix && !slices.Contains(args, "--workspace") {
-				// Machine A has no workspace; its connection is the remote hub.
-				return runRemoteDoctor(remotes, jsonOutput, stdout, stderr)
-			}
-			return writeWorkspaceResolutionError(stdout, stderr, jsonOutput, resErr)
-		}
-		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub doctor --workspace <path>` or add `--fix --yes` after preview.")
-	}
-	var result app.Result
-	if fix {
-		result, err = (app.WorkspaceService{}).DoctorFix(path, yes)
-	} else {
-		result, err = (app.WorkspaceService{}).Doctor(path)
-	}
-	var reports []app.RemoteHubReport
-	if len(remotes) > 0 && err == nil && result.Error == nil {
-		reports = (app.RemoteDoctorService{}).Check(context.Background(), remotes)
-		if jsonOutput {
-			return writeConnectJSON(stdout, stderr, struct {
-				app.Result
-				RemoteHubs []app.RemoteHubReport `json:"remote_hubs"`
-			}{Result: result, RemoteHubs: reports})
-		}
-	}
-	code := writeWorkspaceResult(result, err, stdout, stderr, jsonOutput)
-	if code != 0 || jsonOutput {
-		return code
-	}
-	p := termui.New(stdout)
-	for _, action := range result.SuggestedActions {
-		p.Line("FIX: " + action.Command)
-	}
-	if len(reports) > 0 {
-		// The workspace report above came from another printer, so this one
-		// starts the remote section with its own empty line.
-		p.Raw("\n")
-		p.Line(app.RemoteDoctorResult(reports).Summary)
-		renderRemoteDoctor(p, reports)
-	}
-	if p.Err() != nil {
-		return 1
-	}
-	return 0
-}
-
-// remoteEntriesHere finds remote hub entries in the current project and in
-// the user scope.
-func remoteEntriesHere() []app.RemoteEntry {
-	project, err := os.Getwd()
-	if err != nil {
-		project = ""
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		home = ""
-	}
-	return app.FindRemoteEntries(project, home)
-}
-
-// runRemoteDoctor checks the connection of this machine to remote hubs. Each
-// failed check prints one plain-words cause and one fix line; the token is
-// never printed.
-func runRemoteDoctor(entries []app.RemoteEntry, jsonOutput bool, stdout, stderr io.Writer) int {
-	reports := (app.RemoteDoctorService{}).Check(context.Background(), entries)
-	result := app.RemoteDoctorResult(reports)
-	if jsonOutput {
-		return writeConnectJSON(stdout, stderr, struct {
-			app.Result
-			RemoteHubs []app.RemoteHubReport `json:"remote_hubs"`
-		}{Result: result, RemoteHubs: reports})
-	}
-	p := termui.New(stdout)
-	p.Line(result.Summary)
-	renderRemoteDoctor(p, reports)
-	return printerCode(p)
-}
-
-func renderRemoteDoctor(p *termui.Printer, reports []app.RemoteHubReport) {
-	for _, report := range reports {
-		p.Blank()
-		p.Fields(
-			termui.Field{Label: "Remote hub", Value: report.HubURL},
-			termui.Field{Label: "Used by", Value: strings.Join(report.UsedBy, ", ")},
-			termui.Field{Label: "Token file", Value: report.TokenFile},
-		)
-		p.Blank()
-		rows := make([][]string, 0, len(report.Checks))
-		for _, check := range report.Checks {
-			status := map[string]string{app.CheckOK: "ok", app.CheckFailed: "FAILED", app.CheckSkipped: "skipped", app.CheckInfo: ""}[check.Status]
-			rows = append(rows, []string{check.Label, status, check.Detail})
-		}
-		p.Table([]string{"Check", "Status", "Detail"}, rows)
-		var fixes []termui.Field
-		for _, check := range report.Checks {
-			if check.Status == app.CheckFailed && check.Fix != "" {
-				fixes = append(fixes, termui.Field{Label: "FIX", Value: check.Fix})
-			}
-		}
-		if len(fixes) > 0 {
-			p.Blank()
-			p.Fields(fixes...)
-		}
-	}
-}
-
-func initFlags(args []string) (path string, jsonOutput, yes, verbose, force bool, err error) {
+// initFlags parses init's flags. init takes no folder: it acts on the
+// current folder; its one optional argument is a Git repository.
+func initFlags(args []string) (source string, jsonOutput, dryRun, verbose bool, err error) {
 	for _, arg := range args {
 		switch arg {
 		case "--json":
 			jsonOutput = true
-		case "--yes":
-			yes = true
+		case "--dry-run":
+			dryRun = true
 		case "--verbose":
 			verbose = true
-		case "--force":
-			force = true
 		default:
-			if strings.HasPrefix(arg, "-") || path != "" {
-				return "", jsonOutput, yes, verbose, force, fmt.Errorf("init accepts at most one workspace path")
+			if strings.HasPrefix(arg, "-") {
+				return "", jsonOutput, dryRun, verbose, fmt.Errorf("unknown argument %q", arg)
 			}
-			path = arg
+			if source != "" {
+				return "", jsonOutput, dryRun, verbose, fmt.Errorf("init accepts at most one Git URL")
+			}
+			source = arg
 		}
 	}
-	if path == "" {
-		path = "."
-	}
-	return path, jsonOutput, yes, verbose, force, nil
+	return source, jsonOutput, dryRun, verbose, nil
 }
 
 func workspaceFlag(args []string) (path string, jsonOutput bool, err error) {
@@ -276,35 +273,6 @@ func workspaceFlag(args []string) (path string, jsonOutput bool, err error) {
 		return "", jsonOutput, resErr
 	}
 	return resolved, jsonOutput, nil
-}
-
-func doctorFlags(args []string) (path string, jsonOutput, fix, yes bool, err error) {
-	for i := 0; i < len(args); i++ {
-		switch args[i] {
-		case "--json":
-			jsonOutput = true
-		case "--fix":
-			fix = true
-		case "--yes":
-			yes = true
-		case "--workspace":
-			if i+1 == len(args) || strings.HasPrefix(args[i+1], "-") {
-				return "", jsonOutput, fix, yes, fmt.Errorf("--workspace requires a path")
-			}
-			path = args[i+1]
-			i++
-		default:
-			return "", jsonOutput, fix, yes, fmt.Errorf("unknown argument %q", args[i])
-		}
-	}
-	if yes && !fix {
-		return "", jsonOutput, fix, yes, fmt.Errorf("--yes requires --fix")
-	}
-	resolved, resErr := resolveWorkspace(path)
-	if resErr != nil {
-		return "", jsonOutput, fix, yes, resErr
-	}
-	return resolved, jsonOutput, fix, yes, nil
 }
 
 func writeWorkspaceResult(result app.Result, err error, stdout, stderr io.Writer, jsonOutput bool) int {
@@ -354,15 +322,38 @@ func writeWorkspaceResult(result app.Result, err error, stdout, stderr io.Writer
 	return 0
 }
 
+// writeDryRunResult prints what a --dry-run would change under a "Would
+// change:" heading. Errors and --json output are the same as without
+// --dry-run.
+func writeDryRunResult(result app.Result, err error, stdout, stderr io.Writer, jsonOutput bool) int {
+	if err != nil || jsonOutput || result.Error != nil {
+		return writeWorkspaceResult(result, err, stdout, stderr, jsonOutput)
+	}
+	p := termui.New(stdout)
+	p.Line(result.Summary)
+	var bullets []string
+	for _, item := range result.Items {
+		bullets = append(bullets, item.Summary)
+	}
+	if len(bullets) > 0 {
+		p.Line("Would change:")
+		p.Bullets(bullets...)
+	}
+	for _, warning := range result.Warnings {
+		p.Warning(warning.Summary)
+	}
+	return printerCode(p)
+}
+
 func writeInvalidWorkspace(stdout, stderr io.Writer, jsonOutput bool, cause error) int {
 	var resErr *WorkspaceResolutionError
 	if errors.As(cause, &resErr) {
 		return writeWorkspaceResolutionError(stdout, stderr, jsonOutput, resErr)
 	}
 	why := cause.Error()
-	fix := "Run `skillhub doctor --workspace <path>` to inspect safe remediation, then use `--fix --yes` only after review."
+	fix := "Run `skillhub doctor` in the hub to see what needs repair, then `skillhub doctor --fix` to repair what it can."
 	if strings.Contains(why, "canonical validation failed") {
-		fix = "Correct the content errors in the affected file (or use `skillhub skill edit <id>`), then run `skillhub validate`."
+		fix = "Correct the content errors in the affected file (or use `skillhub skill edit <id>`), then run `skillhub maintain validate`."
 	}
 	result := app.ErrorResult(&app.Error{
 		Code: app.ErrorWorkspaceInvalid,

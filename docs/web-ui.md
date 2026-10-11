@@ -1,16 +1,16 @@
 # The web UI
 
-The web UI lets you look after your skills by clicking instead of typing. It runs on your own machine, in your browser, and reads the same workspace as the `skillhub` command.
+The web UI lets you look after your skills by clicking instead of typing. It runs on your own machine, in your browser, and reads the same hub as the `skillhub` command.
 
 > [!IMPORTANT]
 > The web UI never commits, never pushes and never approves content for you. The steps that need the terminal are shown as commands you can copy.
 
 ## Start the web UI
 
-Run this from your workspace or from a connected project. It starts the web UI on this machine only and opens your browser.
+Run this in your hub or in a connected project. `--addr 127.0.0.1:7421` keeps the web UI on this machine; the command opens your browser.
 
 ```bash
-skillhub serve web --loopback-only
+cd ~/skill-hub && skillhub serve web --addr 127.0.0.1:7421
 ```
 
 The command prints the address to open. The token at the end changes each time you start it.
@@ -19,7 +19,7 @@ The command prints the address to open. The token at the end changes each time y
 Skill Hub web UI: http://127.0.0.1:7421/#token=<token>
 ```
 
-The token keeps other people on your network out, so treat the address like a password. To print the address without opening a browser, add `--no-open`. Press `Ctrl+C` in the terminal to stop the web UI.
+The token keeps other people out, so treat the address like a password: anyone who has it can change your skills. To print the address without opening a browser, add `--no-open`. Press `Ctrl+C` in the terminal to stop the web UI.
 
 ## Do common tasks
 
@@ -149,7 +149,7 @@ Open a skill and choose the **Sources** tab. It lists the skill's upstream and e
 
 Open **Sources**. It lists every source, for learning or for updates. Each row shows when it was last checked and what that check found.
 
-**Changed** means it has commits no skill has learned from yet. Checks run only when you ask: **Check now** on one row, or **Check due sources** or **Check all** for many. The terminal equivalent is `skillhub check`.
+**Changed** means it has commits no skill has learned from yet. Checks run only when you ask: **Check now** on one row, or **Check due sources** or **Check all** for many. The terminal equivalent is `skillhub source check`.
 
 <img src="images/web/sources.png" alt="The sources list with one source and the result of its last check." width="800"><br><em>Sources: where skills learn from, and when each was last checked.</em>
 
@@ -171,25 +171,24 @@ Use the appearance button at the top right of any screen to switch between light
 
 ## Keep it safe on your network
 
-The web UI speaks plain HTTP and guards each session with the token in its address.
+The web UI speaks plain HTTP and guards each session with the token in its address. Without `--addr`, it listens on every network interface (`0.0.0.0:7421`), so other devices on your network can reach it.
 
 > [!WARNING]
-> Traffic is not encrypted. Anyone who can watch your network can read the token. Use `--loopback-only` on shared networks, and never expose the web UI to a public network without a TLS reverse proxy.
+> Traffic is not encrypted, and the web UI can change skills. Anyone who can watch your network can read the token and then add or edit the skills every connected agent uses. Use `--addr 127.0.0.1:7421` on any network you do not trust, and never expose the web UI to a public network without a TLS reverse proxy.
 
 <details>
 <summary>How the web UI chooses an address, and how to change it</summary>
 
-When your machine has two or more IPv4 addresses besides `127.0.0.1`, the web UI listens on all of them. Wi-Fi, Ethernet, Docker bridges and a VPN each add one. It then prints a warning and one extra address per network interface:
+Without `--addr`, the web UI listens on all interfaces. It prints a warning and one address per network interface other devices can use; virtual interfaces such as Docker bridges are left out:
 
 ```text
-WARNING: The web UI is reachable from other devices over plain HTTP. Anyone who can observe this traffic can read the session token. Use --loopback-only to keep it on this machine.
+WARNING: Listening on all network interfaces over plain HTTP; use --addr 127.0.0.1:7421 to keep it on this machine.
+Anyone with this URL can change the skills every connected agent uses.
 Skill Hub web UI: http://127.0.0.1:7421/#token=<token>
   <interface>: http://<ip>:7421/#token=<token>
 ```
 
-On a machine with one network address, it listens only on `127.0.0.1`. To keep it on this machine in every case, run `skillhub serve web --loopback-only`.
-
-To choose the address and port yourself, use `--addr`, for example `skillhub serve web --addr 127.0.0.1:8080`.
+To keep it on this machine, run `skillhub serve web --addr 127.0.0.1:7421`. To choose another address or port, pass it to `--addr`, for example `skillhub serve web --addr 127.0.0.1:8080`. `--addr` takes up to three addresses separated by commas, all with the same token.
 
 To reach the web UI through another hostname, such as a reverse proxy, add `--allow-host <host[:port]>`. You can repeat the flag. Requests with any other hostname get `421 Misdirected Request`, which blocks DNS rebinding attacks.
 

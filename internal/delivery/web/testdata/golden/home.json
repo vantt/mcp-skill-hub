@@ -1,17 +1,17 @@
 {
   "schema_version": "1",
   "status": "action_required",
-  "summary": "Git has uncommitted canonical changes.",
+  "summary": "The hub has changes that are not committed to Git.",
   "items": [
     {
       "id": "review_git_changes",
-      "summary": "Git has uncommitted canonical changes",
+      "summary": "The hub has changes that are not committed to Git",
       "impact": "This local work remains pending."
     }
   ],
   "suggested_actions": [
     {
-      "label": "Review uncommitted changes",
+      "label": "Commit the changes of the hub",
       "command": "workspace_diff"
     }
   ],
@@ -29,7 +29,7 @@
       "kind": "review_git_changes",
       "count": 1,
       "priority": 10,
-      "summary": "Git has uncommitted canonical changes",
+      "summary": "The hub has changes that are not committed to Git",
       "command": "workspace_diff"
     }
   ],

@@ -630,7 +630,7 @@ func TestNextAction(t *testing.T) {
 func TestSkillWithEmptyProvenanceSourceIDRemainsUntracked(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 

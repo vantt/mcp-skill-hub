@@ -12,7 +12,7 @@ import (
 func TestEnsureCatalogKeepsHealthyGenerationAndRebuildsMissingPointer(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	before, err := catalog.Inspect(context.Background(), root)
@@ -43,7 +43,7 @@ func TestEnsureCatalogKeepsHealthyGenerationAndRebuildsMissingPointer(t *testing
 func TestCatalogServiceInspectAndAssessSkill(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 

@@ -9,21 +9,28 @@ import (
 	"time"
 )
 
-func TestServeWildcardAnswersOnLoopback(t *testing.T) {
+// TestServeSeveralListenersWithOneToken serves one web server on two
+// loopback listeners: the session token works on both ports and the Host
+// check accepts each bound port.
+func TestServeSeveralListenersWithOneToken(t *testing.T) {
 	root := newWebWorkspace(t)
-	ln, err := net.Listen("tcp4", "0.0.0.0:0")
-	if err != nil {
-		t.Fatalf("failed to listen: %v", err)
+	var listeners []net.Listener
+	var addresses []net.Addr
+	for range 2 {
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatalf("failed to listen: %v", err)
+		}
+		defer ln.Close()
+		listeners = append(listeners, ln)
+		addresses = append(addresses, ln.Addr())
 	}
-	defer ln.Close()
 
-	port := ln.Addr().(*net.TCPAddr).Port
-	token := "wildcard-token"
-
+	token := "multi-listener-token"
 	srv, err := New(Options{
-		Workspace:  root,
-		Token:      token,
-		ListenPort: port,
+		Workspace:   root,
+		Token:       token,
+		ListenAddrs: addresses,
 	})
 	if err != nil {
 		t.Fatalf("failed to create server: %v", err)
@@ -34,40 +41,33 @@ func TestServeWildcardAnswersOnLoopback(t *testing.T) {
 
 	serveErrCh := make(chan error, 1)
 	go func() {
-		serveErrCh <- srv.Serve(ctx, ln)
+		serveErrCh <- srv.Serve(ctx, listeners)
 	}()
 
-	sessionURL := fmt.Sprintf("http://127.0.0.1:%d/api/v1/session", port)
-
-	// 1. With token -> 200
-	req, err := http.NewRequest(http.MethodGet, sessionURL, nil)
-	if err != nil {
-		t.Fatalf("failed to create request: %v", err)
+	status := func(port int, authorization string) int {
+		t.Helper()
+		req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/api/v1/session", port), nil)
+		if err != nil {
+			t.Fatalf("failed to create request: %v", err)
+		}
+		if authorization != "" {
+			req.Header.Set("Authorization", authorization)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
 	}
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("request with token failed: %v", err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("status with token = %d, want 200", resp.StatusCode)
-	}
-
-	// 2. Without token -> 401
-	reqNoToken, err := http.NewRequest(http.MethodGet, sessionURL, nil)
-	if err != nil {
-		t.Fatalf("failed to create request: %v", err)
-	}
-
-	respNoToken, err := http.DefaultClient.Do(reqNoToken)
-	if err != nil {
-		t.Fatalf("request without token failed: %v", err)
-	}
-	respNoToken.Body.Close()
-	if respNoToken.StatusCode != http.StatusUnauthorized {
-		t.Errorf("status without token = %d, want 401", respNoToken.StatusCode)
+	for _, address := range addresses {
+		port := address.(*net.TCPAddr).Port
+		if got := status(port, "Bearer "+token); got != http.StatusOK {
+			t.Errorf("port %d with token = %d, want 200", port, got)
+		}
+		if got := status(port, ""); got != http.StatusUnauthorized {
+			t.Errorf("port %d without token = %d, want 401", port, got)
+		}
 	}
 
 	cancel()

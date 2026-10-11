@@ -51,24 +51,16 @@ func TestSourceWatchRejectsLocalFolders(t *testing.T) {
 	}
 }
 
-func TestSourceCheckAliasParity(t *testing.T) {
+func TestSourceCheckIsTheOnlyCheckCommand(t *testing.T) {
 	t.Parallel()
 	root := initTestWorkspace(t)
 
-	// Compare `check --all` and `source check --all`
 	var stdoutTop, stderrTop bytes.Buffer
-	codeTop := Run([]string{"check", "--workspace", root, "--all"}, &stdoutTop, &stderrTop)
-
+	if code := Run([]string{"check", "--workspace", root, "--all"}, &stdoutTop, &stderrTop); code != 2 || !strings.Contains(stderrTop.String(), `The command "check" is not supported.`) {
+		t.Errorf("top-level check: exit %d, stderr %q", code, stderrTop.String())
+	}
 	var stdoutSub, stderrSub bytes.Buffer
-	codeSub := Run([]string{"source", "check", "--workspace", root, "--all"}, &stdoutSub, &stderrSub)
-
-	if codeTop != codeSub {
-		t.Errorf("exit codes differ: top=%d, sub=%d", codeTop, codeSub)
-	}
-	if stdoutTop.String() != stdoutSub.String() {
-		t.Errorf("stdout differs:\ntop=%s\nsub=%s", stdoutTop.String(), stdoutSub.String())
-	}
-	if stderrTop.String() != stderrSub.String() {
-		t.Errorf("stderr differs:\ntop=%s\nsub=%s", stderrTop.String(), stderrSub.String())
+	if code := Run([]string{"source", "check", "--workspace", root, "--all"}, &stdoutSub, &stderrSub); code != 0 || !strings.Contains(stdoutSub.String(), "Source checks completed") {
+		t.Errorf("source check: exit %d, stdout %q, stderr %q", code, stdoutSub.String(), stderrSub.String())
 	}
 }

@@ -39,7 +39,7 @@ test.describe('Accessibility and Responsive Sweep (Phase 12)', () => {
     const resource = path.join(seed.ws, RESOURCE_PATH);
     fs.mkdirSync(path.dirname(resource), { recursive: true });
     fs.writeFileSync(resource, '---\ntitle: Review checklist\n---\n\n# Review checklist\n\n- Read the change description first.\n');
-    execFileSync(binaryPath, ['rebuild'], { env: { ...process.env, SKILLHUB_WORKSPACE: seed.ws }, stdio: 'pipe' });
+    execFileSync(binaryPath, ['maintain', 'rebuild'], { env: { ...process.env, SKILLHUB_WORKSPACE: seed.ws }, stdio: 'pipe' });
     server = await startServer({ workspace: seed.ws });
   });
 

@@ -5,235 +5,64 @@ import (
 	"net"
 	"strings"
 	"testing"
+
+	"github.com/vantt/mcp-skill-hub/internal/delivery/hostpolicy"
 )
 
-func TestListenRule(t *testing.T) {
-	tests := []struct {
-		name         string
-		explicit     string
-		loopbackOnly bool
-		port         int
-		ifaces       []InterfaceInfo
-		wantAddr     string
-		wantErr      bool
-	}{
-		{
-			name:     "zero usable",
-			port:     7421,
-			ifaces:   []InterfaceInfo{},
-			wantAddr: "127.0.0.1:7421",
-		},
-		{
-			name: "one usable",
-			port: 7421,
-			ifaces: []InterfaceInfo{
-				{
-					Name: "eth0",
-					Up:   true,
-					IPs:  []net.IP{net.ParseIP("192.168.1.100")},
-				},
-			},
-			wantAddr: "127.0.0.1:7421",
-		},
-		{
-			name: "two usable on two interfaces",
-			port: 7421,
-			ifaces: []InterfaceInfo{
-				{
-					Name: "eth0",
-					Up:   true,
-					IPs:  []net.IP{net.ParseIP("192.168.1.100")},
-				},
-				{
-					Name: "wlan0",
-					Up:   true,
-					IPs:  []net.IP{net.ParseIP("10.0.0.5")},
-				},
-			},
-			wantAddr: "0.0.0.0:7421",
-		},
-		{
-			name: "two IPs on one interface",
-			port: 7421,
-			ifaces: []InterfaceInfo{
-				{
-					Name: "eth0",
-					Up:   true,
-					IPs: []net.IP{
-						net.ParseIP("192.168.1.100"),
-						net.ParseIP("192.168.1.101"),
-					},
-				},
-			},
-			wantAddr: "0.0.0.0:7421",
-		},
-		{
-			name: "a down interface with two IPs (counts 0)",
-			port: 7421,
-			ifaces: []InterfaceInfo{
-				{
-					Name: "eth0",
-					Up:   false,
-					IPs: []net.IP{
-						net.ParseIP("192.168.1.100"),
-						net.ParseIP("192.168.1.101"),
-					},
-				},
-			},
-			wantAddr: "127.0.0.1:7421",
-		},
-		{
-			name: "IPv6-only interface",
-			port: 7421,
-			ifaces: []InterfaceInfo{
-				{
-					Name: "eth0",
-					Up:   true,
-					IPs:  []net.IP{net.ParseIP("fe80::1"), net.ParseIP("2001:db8::1")},
-				},
-			},
-			wantAddr: "127.0.0.1:7421",
-		},
-		{
-			name: "link-local 169.254.1.1 plus one usable (counts 1)",
-			port: 7421,
-			ifaces: []InterfaceInfo{
-				{
-					Name: "eth0",
-					Up:   true,
-					IPs: []net.IP{
-						net.ParseIP("169.254.1.1"),
-						net.ParseIP("10.0.0.5"),
-					},
-				},
-			},
-			wantAddr: "127.0.0.1:7421",
-		},
-		{
-			name:         "loopbackOnly with three usable",
-			loopbackOnly: true,
-			port:         7421,
-			ifaces: []InterfaceInfo{
-				{
-					Name: "eth0",
-					Up:   true,
-					IPs:  []net.IP{net.ParseIP("192.168.1.10"), net.ParseIP("192.168.1.11")},
-				},
-				{
-					Name: "wlan0",
-					Up:   true,
-					IPs:  []net.IP{net.ParseIP("10.0.0.5")},
-				},
-			},
-			wantAddr: "127.0.0.1:7421",
-		},
-		{
-			name:     "explicit 10.0.0.5:8080 with three usable",
-			explicit: "10.0.0.5:8080",
-			port:     7421,
-			ifaces: []InterfaceInfo{
-				{
-					Name: "eth0",
-					Up:   true,
-					IPs:  []net.IP{net.ParseIP("192.168.1.10"), net.ParseIP("192.168.1.11")},
-				},
-				{
-					Name: "wlan0",
-					Up:   true,
-					IPs:  []net.IP{net.ParseIP("10.0.0.5")},
-				},
-			},
-			wantAddr: "10.0.0.5:8080",
-		},
-		{
-			name:     "explicit bad -> error",
-			explicit: "bad",
-			port:     7421,
-			wantErr:  true,
-		},
-		{
-			name:     "explicit 127.0.0.1:0 accepted",
-			explicit: "127.0.0.1:0",
-			port:     7421,
-			wantAddr: "127.0.0.1:0",
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			addr, err := ChooseListenAddr(tc.explicit, tc.loopbackOnly, tc.port, tc.ifaces)
-			if tc.wantErr {
-				if err == nil {
-					t.Fatalf("expected error, got nil")
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if addr != tc.wantAddr {
-				t.Errorf("got addr %q, want %q", addr, tc.wantAddr)
-			}
-		})
-	}
-}
-
 func TestStartupOutput(t *testing.T) {
-	ifaces := []InterfaceInfo{
-		{
-			Name: "eth0",
-			Up:   true,
-			IPs:  []net.IP{net.ParseIP("192.168.1.10")},
-		},
-		{
-			Name: "wlan0",
-			Up:   true,
-			IPs:  []net.IP{net.ParseIP("10.0.0.5")},
-		},
+	interfaces := []hostpolicy.Interface{
+		{Name: "lo", Up: true, Loopback: true, IPs: []net.IP{net.ParseIP("127.0.0.1")}},
+		{Name: "eth0", Up: true, IPs: []net.IP{net.ParseIP("192.168.1.10")}},
+		{Name: "tailscale0", Up: true, IPs: []net.IP{net.ParseIP("100.101.102.103")}},
+		{Name: "docker0", Up: true, IPs: []net.IP{net.ParseIP("172.17.0.1")}},
+		{Name: "br-0f3e", Up: true, IPs: []net.IP{net.ParseIP("172.18.0.1")}},
 	}
+	tcp := func(ip string, port int) net.Addr { return &net.TCPAddr{IP: net.ParseIP(ip), Port: port} }
 
-	t.Run("wildcard case", func(t *testing.T) {
+	t.Run("wildcard", func(t *testing.T) {
 		var buf bytes.Buffer
-		WriteStartup(&buf, "0.0.0.0", 7421, "test-token", ifaces)
-		out := buf.String()
-
-		if !strings.Contains(out, "WARNING: The web UI is reachable from other devices over plain HTTP.") {
-			t.Errorf("expected warning in wildcard output, got:\n%s", out)
+		primary := WriteStartup(&buf, []net.Addr{tcp("0.0.0.0", 7421)}, "test-token", interfaces)
+		want := "WARNING: Listening on all network interfaces over plain HTTP; use --addr 127.0.0.1:7421 to keep it on this machine.\n" +
+			"Anyone with this URL can change the skills every connected agent uses.\n" +
+			"Skill Hub web UI: http://127.0.0.1:7421/#token=test-token\n" +
+			"  eth0: http://192.168.1.10:7421/#token=test-token\n" +
+			"  Tailscale: http://100.101.102.103:7421/#token=test-token\n"
+		if buf.String() != want {
+			t.Fatalf("wildcard banner:\n%s\nwant:\n%s", buf.String(), want)
 		}
-		if !strings.Contains(out, "Skill Hub web UI: http://127.0.0.1:7421/#token=test-token") {
-			t.Errorf("expected loopback URL in wildcard output, got:\n%s", out)
-		}
-		if !strings.Contains(out, "  eth0: http://192.168.1.10:7421/#token=test-token") {
-			t.Errorf("expected eth0 URL in wildcard output, got:\n%s", out)
-		}
-		if !strings.Contains(out, "  wlan0: http://10.0.0.5:7421/#token=test-token") {
-			t.Errorf("expected wlan0 URL in wildcard output, got:\n%s", out)
+		if primary != "http://127.0.0.1:7421/#token=test-token" {
+			t.Fatalf("primary URL = %q", primary)
 		}
 	})
 
-	t.Run("loopback case", func(t *testing.T) {
+	t.Run("loopback listeners with resolved ports", func(t *testing.T) {
 		var buf bytes.Buffer
-		WriteStartup(&buf, "127.0.0.1", 7421, "test-token", ifaces)
-		out := buf.String()
-
-		if strings.Contains(out, "WARNING") {
-			t.Errorf("did not expect WARNING in loopback output, got:\n%s", out)
+		primary := WriteStartup(&buf, []net.Addr{tcp("127.0.0.1", 50123), tcp("::1", 50124)}, "test-token", interfaces)
+		want := "Skill Hub web UI: http://127.0.0.1:50123/#token=test-token\n" +
+			"  ::1: http://[::1]:50124/#token=test-token\n"
+		if buf.String() != want {
+			t.Fatalf("loopback banner:\n%s\nwant:\n%s", buf.String(), want)
 		}
-		if !strings.Contains(out, "Skill Hub web UI: http://127.0.0.1:7421/#token=test-token") {
-			t.Errorf("expected loopback URL, got:\n%s", out)
+		if primary != "http://127.0.0.1:50123/#token=test-token" {
+			t.Fatalf("primary URL = %q", primary)
+		}
+		// The release smoke test reads the fifth field of this line.
+		if fields := strings.Fields(strings.SplitN(buf.String(), "\n", 2)[0]); len(fields) != 5 || fields[4] != primary {
+			t.Fatalf("first line fields = %q", fields)
 		}
 	})
 
-	t.Run("specific non-loopback IP case", func(t *testing.T) {
+	t.Run("specific network address", func(t *testing.T) {
 		var buf bytes.Buffer
-		WriteStartup(&buf, "10.0.0.5", 7421, "test-token", ifaces)
-		out := buf.String()
-
-		if !strings.Contains(out, "WARNING: The web UI is reachable from other devices over plain HTTP.") {
-			t.Errorf("expected warning in specific IP output, got:\n%s", out)
+		primary := WriteStartup(&buf, []net.Addr{tcp("192.168.1.10", 7421)}, "test-token", interfaces)
+		want := "WARNING: Listening on a network address over plain HTTP; use --addr 127.0.0.1:7421 to keep it on this machine.\n" +
+			"Anyone with this URL can change the skills every connected agent uses.\n" +
+			"Skill Hub web UI: http://192.168.1.10:7421/#token=test-token\n"
+		if buf.String() != want {
+			t.Fatalf("specific banner:\n%s\nwant:\n%s", buf.String(), want)
 		}
-		if !strings.Contains(out, "Skill Hub web UI: http://10.0.0.5:7421/#token=test-token") {
-			t.Errorf("expected specific IP URL, got:\n%s", out)
+		if primary != "http://192.168.1.10:7421/#token=test-token" {
+			t.Fatalf("primary URL = %q", primary)
 		}
 	})
 }

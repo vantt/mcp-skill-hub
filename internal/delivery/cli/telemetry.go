@@ -12,6 +12,7 @@ import (
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
 	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
+	"github.com/vantt/mcp-skill-hub/internal/shellquote"
 	"github.com/vantt/mcp-skill-hub/internal/telemetry"
 )
 
@@ -244,7 +245,7 @@ func writeTelemetryError(err error, workspacePath string, stdout, stderr io.Writ
 	result := app.ErrorResult(&app.Error{Code: app.ErrorInternal, Render: app.ErrorRender{
 		Error: "Telemetry storage is degraded.",
 		Why:   err.Error(),
-		Fix:   "Run `skillhub telemetry purge --workspace " + shellQuote(workspacePath) + " --yes` to discard and recreate the disposable telemetry store.",
+		Fix:   "Run `skillhub telemetry purge --workspace " + shellquote.Arg(workspacePath) + " --yes` to discard and recreate the disposable telemetry store.",
 	}})
 	if jsonOutput {
 		if writeErr := writeJSON(stdout, result); writeErr != nil {
@@ -257,14 +258,6 @@ func writeTelemetryError(err error, workspacePath string, stdout, stderr io.Writ
 	p := termui.New(stderr)
 	p.Error(result.Error.Render.Error, result.Error.Render.Why, result.Error.Render.Fix)
 	return 2
-}
-func shellQuote(value string) string {
-	if value != "" && strings.IndexFunc(value, func(r rune) bool {
-		return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("/._-:+@%", r))
-	}) < 0 {
-		return value
-	}
-	return "'" + strings.ReplaceAll(value, "'", `'\''`) + "'"
 }
 
 func validateTelemetryOutputPath(path string) error {

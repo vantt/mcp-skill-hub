@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -41,6 +42,37 @@ var ErrInvalidToken = errors.New("the token file does not contain a valid token"
 // directories that hold other local secrets.
 func DefaultPath(workspaceRoot string) string {
 	return filepath.Join(workspaceRoot, "runtime", "config", FileName)
+}
+
+// ClientPath returns the suggested path of a client machine's copy of the
+// token of the hub at hubURL: ~/.skillhub-token-<host>-<port>. One file per
+// hub keeps the tokens of different hubs apart. The host keeps only letters,
+// digits, dots and dashes (IPv6 brackets and colons are dropped); a URL
+// without a port uses its scheme's default. The leading ~ is for a command
+// printed for the user's shell on that machine.
+func ClientPath(hubURL string) string {
+	host, port := "hub", ""
+	if parsed, err := url.Parse(strings.TrimSpace(hubURL)); err == nil {
+		if name := parsed.Hostname(); name != "" {
+			host = name
+		}
+		port = parsed.Port()
+		if port == "" {
+			port = map[string]string{"http": "80", "https": "443"}[parsed.Scheme]
+		}
+	}
+	var sanitized strings.Builder
+	for _, character := range host {
+		switch {
+		case character >= 'a' && character <= 'z', character >= 'A' && character <= 'Z', character >= '0' && character <= '9', character == '.', character == '-':
+			sanitized.WriteRune(character)
+		}
+	}
+	name := "~/.skillhub-token-" + sanitized.String()
+	if port != "" {
+		name += "-" + port
+	}
+	return name
 }
 
 // Ensure creates the token file with a new random token when it does not

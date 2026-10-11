@@ -16,14 +16,14 @@ func TestResolveCLIExposesStructuredApplicationContractWithoutActivating(t *test
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
+	if code := runInitTo(t, root, &stdout, &stderr); code != 0 {
 		t.Fatalf("init=%d: %s", code, stderr.String())
 	}
 	writeResolverFixture(t, root, "skills/core/code-review/skill.meta.yaml", "schema_version: 1\nid: code-review\nname: Code Review\nstatus: active\ndescription: Review code changes for defects.\naliases: [patch inspection]\nrouting:\n  operations: [review]\n  triggers: [review code changes pull requests]\n  not_for: [write marketing prose]\n  min_scope: multi_step\nquality:\n  reviewed: true\n")
 	writeResolverFixture(t, root, "skills/core/code-review/SKILL.md", "---\nname: code-review\ndescription: Review code changes for defects.\n---\n\n# Code Review\nInspect evidence.\n")
 	stdout.Reset()
 	stderr.Reset()
-	if code := Run([]string{"rebuild", "--workspace", root, "--json"}, &stdout, &stderr); code != 0 {
+	if code := Run([]string{"maintain", "rebuild", "--workspace", root, "--json"}, &stdout, &stderr); code != 0 {
 		t.Fatalf("rebuild=%d: %s %s", code, stdout.String(), stderr.String())
 	}
 	requestPath := filepath.Join(t.TempDir(), "request.json")
@@ -82,14 +82,14 @@ func TestResolveCLIClarificationRoundTripAndErrorClassification(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
+	if code := runInitTo(t, root, &stdout, &stderr); code != 0 {
 		t.Fatalf("init=%d: %s", code, stderr.String())
 	}
 	writeResolverFixture(t, root, "skills/core/code-review/skill.meta.yaml", "schema_version: 1\nid: code-review\nname: Code Review\nstatus: active\ndescription: Review code changes for defects.\nrouting:\n  operations: [review]\n  triggers: [review code changes pull requests]\n  not_for: [write marketing prose]\n  min_scope: multi_step\nquality:\n  reviewed: true\n")
 	writeResolverFixture(t, root, "skills/core/code-review/SKILL.md", "---\nname: code-review\ndescription: Review code changes for defects.\n---\n\n# Code Review\n")
 	stdout.Reset()
 	stderr.Reset()
-	if code := Run([]string{"rebuild", "--workspace", root, "--json"}, &stdout, &stderr); code != 0 {
+	if code := Run([]string{"maintain", "rebuild", "--workspace", root, "--json"}, &stdout, &stderr); code != 0 {
 		t.Fatalf("rebuild=%d: %s %s", code, stdout.String(), stderr.String())
 	}
 	resolve := func(request string) (int, string) {
@@ -138,12 +138,12 @@ func TestResolveCLIClarificationHintNestsTheAnswerInsideTask(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
+	if code := runInitTo(t, root, &stdout, &stderr); code != 0 {
 		t.Fatalf("init=%d: %s", code, stderr.String())
 	}
 	writeResolverFixture(t, root, "skills/core/code-review/skill.meta.yaml", "schema_version: 1\nid: code-review\nname: Code Review\nstatus: active\ndescription: Review code changes for defects.\naliases: [patch inspection]\nrouting:\n  operations: [review]\n  triggers: [review code changes pull requests]\n  not_for: [write marketing prose]\n  min_scope: multi_step\nquality:\n  reviewed: true\n")
 	writeResolverFixture(t, root, "skills/core/code-review/SKILL.md", "---\nname: code-review\ndescription: Review code changes for defects.\n---\n\n# Code Review\n")
-	if code := Run([]string{"rebuild", "--workspace", root, "--json"}, &stdout, &stderr); code != 0 {
+	if code := Run([]string{"maintain", "rebuild", "--workspace", root, "--json"}, &stdout, &stderr); code != 0 {
 		t.Fatalf("rebuild=%d: %s %s", code, stdout.String(), stderr.String())
 	}
 	path := filepath.Join(t.TempDir(), "request.json")

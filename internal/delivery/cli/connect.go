@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -13,16 +14,16 @@ import (
 	"github.com/vantt/mcp-skill-hub/internal/hostintegration"
 )
 
-const connectFix = "Run `skillhub connect [--project <dir>] [-g|--global] [--workspace <path>] [--host claude|codex|gemini] [--yes]`."
+const connectFix = "Run `skillhub connect [<path>] [-g|--global] [--host claude|codex|gemini] [--dry-run]` in the project folder, or `skillhub connect --hub <url> --token-file <file>` for a hub on another machine."
 
 type connectFlags struct {
-	project, workspace   string
+	// hubPath is the optional folder of a hub on this machine.
+	hubPath              string
 	hub, tokenFile       string
 	hosts                []hostintegration.Host
-	global, yes, json    bool
+	global, dryRun, json bool
 	remove, cache        bool
 	hubSet, tokenFileSet bool
-	workspaceSet         bool
 }
 
 // connectUsageError is a flag combination connect refuses, with its own
@@ -32,6 +33,17 @@ type connectUsageError struct{ what, why, fix string }
 func (e *connectUsageError) Error() string { return e.what + " " + e.why }
 
 func runConnect(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	dir, err := os.Getwd()
+	if err != nil {
+		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), "The current folder cannot be determined: "+err.Error(), "Run `skillhub connect` in the project folder.")
+	}
+	return runConnectIn(ctx, dir, args, stdout, stderr)
+}
+
+// runConnectIn runs connect for the project folder dir, which stands for the
+// current folder. Tests call it directly so they never change the process
+// working directory.
+func runConnectIn(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) int {
 	flags, err := parseConnectFlags(args)
 	if err != nil {
 		var usage *connectUsageError
@@ -42,16 +54,12 @@ func runConnect(ctx context.Context, args []string, stdout, stderr io.Writer) in
 	}
 	switch {
 	case flags.remove:
-		return runConnectRemove(ctx, flags, stdout, stderr)
+		return runConnectRemove(ctx, dir, flags, stdout, stderr)
 	case flags.hubSet:
-		return runConnectHub(ctx, flags, stdout, stderr)
-	}
-	ws, resErr := resolveWorkspace(flags.workspace)
-	if resErr != nil {
-		return writeWorkspaceResolutionError(stdout, stderr, flags.json, resErr)
+		return runConnectHub(ctx, dir, flags, stdout, stderr)
 	}
 	result, err := (app.ConnectService{}).Connect(ctx, app.ConnectRequest{
-		Project: flags.project, Workspace: ws, Global: flags.global, Hosts: flags.hosts, Yes: flags.yes,
+		Project: dir, Workspace: flags.hubPath, Global: flags.global, Hosts: flags.hosts, DryRun: flags.dryRun,
 	})
 	if err != nil {
 		if code, handled := writeConnectSymlinkError(err, stdout, stderr, flags.json); handled {
@@ -93,7 +101,7 @@ func writeConnectSymlinkError(err error, stdout, stderr io.Writer, jsonOutput bo
 	if symlinkPath != "" {
 		why = fmt.Sprintf("Host integration path %s contains a symbolic link. Skill Hub will not write through symlinks.", symlinkPath)
 	}
-	fix := "Connect per project using `skillhub connect --yes`, select unaffected hosts with `--host <name>`, or replace the symlink with a regular directory."
+	fix := "Connect per project using `skillhub connect`, select unaffected hosts with `--host <name>`, or replace the symlink with a regular directory."
 	return writeInvalidRequest(stdout, stderr, jsonOutput, why, fix), true
 }
 
@@ -103,17 +111,23 @@ func connectCurationGuidance(result app.Result) string {
 	for _, item := range result.Items {
 		if item.ID == "host_"+string(hostintegration.HostClaude)+"_"+string(hostintegration.ChangeMCP) ||
 			item.ID == "host_"+string(hostintegration.HostClaude)+"_"+string(hostintegration.ChangeHostPermissions) {
-			return "Claude Code: curation runs through the CLI. Commands with --yes or confirm require approval; --approve-content is blocked. First opening this folder shows a trust dialog listing Bash(skillhub:*)."
+			return "Claude Code: curation runs through the CLI. It asks before skillhub commands that change the hub, its connections, the token or the cache (init, connect, doctor --fix, serve, token rotate, cache clear, and commands with --yes or confirm); --approve-content is blocked. First opening this folder shows a trust dialog listing Bash(skillhub:*)."
 		}
 	}
 	return ""
 }
 
 // renderConnectResult prints one line per managed file. Full managed diffs stay
-// in the --json items so the preview remains readable.
+// in the --json items so a dry run remains readable.
 func renderConnectResult(stdout io.Writer, result app.Result) {
 	p := termui.New(stdout)
 	p.Line(result.Summary)
+	if result.Status == app.StatusApplied {
+		p.Line(connectionSummaryLine(result))
+	}
+	if result.Status == app.StatusActionRequired {
+		p.Line("Would change:")
+	}
 	hostFiles := make(map[string][]string)
 	var hostOrder []string
 	for _, item := range result.Items {
@@ -154,7 +168,7 @@ func renderConnectResult(stdout io.Writer, result app.Result) {
 		}
 	case app.StatusApplied:
 		p.Blank()
-		p.Next("restart your agent so it loads the new MCP server, then ask it: \"curate my Skill Hub\"", "")
+		p.Next("restart your agent and ask it: \"curate my Skill Hub\"", "")
 	}
 }
 
@@ -219,22 +233,10 @@ func parseConnectFlags(args []string) (connectFlags, error) {
 		switch args[index] {
 		case "--json":
 			flags.json = true
-		case "--yes":
-			flags.yes = true
+		case "--dry-run":
+			flags.dryRun = true
 		case "-g", "--global":
 			flags.global = true
-		case "--project":
-			item, err := value(&index)
-			if err != nil {
-				return flags, err
-			}
-			flags.project = item
-		case "--workspace":
-			item, err := value(&index)
-			if err != nil {
-				return flags, err
-			}
-			flags.workspace, flags.workspaceSet = item, true
 		case "--hub":
 			item, err := value(&index)
 			if err != nil {
@@ -264,24 +266,27 @@ func parseConnectFlags(args []string) (connectFlags, error) {
 				flags.hosts = append(flags.hosts, host)
 			}
 		default:
-			return flags, fmt.Errorf("unknown argument %q", args[index])
+			if strings.HasPrefix(args[index], "-") {
+				return flags, fmt.Errorf("unknown argument %q", args[index])
+			}
+			if flags.hubPath != "" {
+				return flags, fmt.Errorf("connect accepts at most one hub folder")
+			}
+			flags.hubPath = args[index]
 		}
-	}
-	if flags.global && flags.project != "" {
-		return flags, fmt.Errorf("--global and --project cannot be combined")
 	}
 	switch {
-	case flags.remove && (flags.workspaceSet || flags.hubSet || flags.tokenFileSet):
+	case flags.remove && (flags.hubPath != "" || flags.hubSet || flags.tokenFileSet):
 		return flags, &connectUsageError{
-			what: "--remove cannot be combined with --workspace, --hub or --token-file.",
+			what: "--remove cannot be combined with a hub folder, --hub or --token-file.",
 			why:  "--remove takes out the Skill Hub entry of the scope, whichever hub it points at.",
-			fix:  "Run `skillhub connect --remove [--project <dir>] [-g|--global] [--host <name>] --yes`.",
+			fix:  "Run `skillhub connect --remove [-g|--global] [--host <name>]` in the project folder.",
 		}
-	case flags.workspaceSet && flags.hubSet:
+	case flags.hubPath != "" && flags.hubSet:
 		return flags, &connectUsageError{
-			what: "--workspace and --hub cannot be used together.",
-			why:  "--workspace connects a hub on this machine and --hub a hub on another machine; one scope points at one hub.",
-			fix:  "Run `skillhub connect --workspace <path> --yes` for the hub on this machine, or `skillhub connect --hub <url> --token-file <path> --yes` for a hub on another machine.",
+			what: "A hub folder and --hub cannot be used together.",
+			why:  "A folder is a hub on this machine and --hub a hub on another machine; one scope points at one hub.",
+			fix:  "Run `skillhub connect <path>` for the hub on this machine, or `skillhub connect --hub <url> --token-file <file>` for a hub on another machine.",
 		}
 	case flags.tokenFileSet && !flags.hubSet:
 		return flags, &connectUsageError{

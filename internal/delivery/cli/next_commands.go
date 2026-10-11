@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/shellquote"
 )
 
 // commandOutput carries invocation context without process-global state. JSON
@@ -74,7 +75,7 @@ func cliJSONValue(value any, workspace string) any {
 				command = "skillhub source import"
 			}
 			pins := policy.Confirmation.Pins
-			result.CLI = cliWorkspace(fmt.Sprintf("%s --proposal %s --proposal-digest %s --base-version %s%s", command, shellArgument(pins.ProposalID), shellArgument(pins.ProposalDigest), shellArgument(pins.BaseVersion), yes), workspace)
+			result.CLI = cliWorkspace(fmt.Sprintf("%s --proposal %s --proposal-digest %s --base-version %s%s", command, shellquote.Arg(pins.ProposalID), shellquote.Arg(pins.ProposalDigest), shellquote.Arg(pins.BaseVersion), yes), workspace)
 		}
 	}
 	if len(result.SuggestedActions) > 0 {
@@ -108,29 +109,29 @@ func cliJSONValue(value any, workspace string) any {
 
 func cliNextCommand(command, id, workspace string) string {
 	if strings.HasPrefix(command, "skillhub init ") {
-		path := strings.TrimSuffix(strings.TrimPrefix(command, "skillhub init "), " --yes")
-		return "skillhub init " + shellArgument(path) + " --yes --json"
+		// The application already quotes the path of an init command.
+		return command + " --json"
 	}
 	if strings.HasPrefix(command, "skillhub ") {
 		if workspace != "" {
-			command = strings.ReplaceAll(command, "--workspace "+workspace, "--workspace "+shellArgument(workspace))
+			command = strings.ReplaceAll(command, "--workspace "+workspace, "--workspace "+shellquote.Arg(workspace))
 		}
 		return cliWorkspace(command, workspace)
 	}
 	target := ""
 	if id != "" {
-		target = " " + shellArgument(id)
+		target = " " + shellquote.Arg(id)
 	}
 	var cli string
 	switch command {
 	case "workspace_validate", "ValidateWorkspace":
-		cli = "skillhub validate"
+		cli = "skillhub maintain validate"
 	case "workspace_rebuild":
-		cli = "skillhub rebuild"
+		cli = "skillhub maintain rebuild"
 	case "workspace_diff", "GetCurationDiff":
-		cli = "skillhub diff"
+		cli = "skillhub maintain diff"
 	case "source_check":
-		cli = "skillhub check"
+		cli = "skillhub source check"
 	case "skill_upstream_status":
 		cli = "skillhub skill outdated"
 	case "skill_review":
@@ -167,17 +168,10 @@ func cliNextCommand(command, id, workspace string) string {
 
 func cliWorkspace(command, workspace string) string {
 	if workspace != "" && !strings.Contains(command, " --workspace ") {
-		command += " --workspace " + shellArgument(workspace)
+		command += " --workspace " + shellquote.Arg(workspace)
 	}
 	if !strings.Contains(command, " --json") {
 		command += " --json"
 	}
 	return command
-}
-
-func shellArgument(value string) string {
-	if value != "" && !strings.ContainsAny(value, " \t\r\n'\"`$;&|<>*?(){}[]!\\") {
-		return value
-	}
-	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
 }

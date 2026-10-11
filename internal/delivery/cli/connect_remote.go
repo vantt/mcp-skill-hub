@@ -8,18 +8,21 @@ import (
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
 	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
+	"github.com/vantt/mcp-skill-hub/internal/hubtoken"
 )
 
 // tokenHandOff tells how the hub's token reaches this machine. It is printed
-// in the preview of `connect --hub`; the token itself is never printed.
-const tokenHandOff = "To get the token to this machine, copy the hub's token file from machine B (the hub prints its path when `skillhub serve mcp --addr ...` starts, and `skillhub token show` there shows it), for example `scp <machine-b>:<workspace>/runtime/config/.hub-token ~/.config/skillhub/hub-token`, then `chmod 600` it; or set " + app.HubTokenEnv + " in the environment the agent host starts the proxy with."
+// by `connect --hub --dry-run`; the token itself is never printed.
+func tokenHandOff(hubURL string) string {
+	return "To get the token to this machine, run the scp line that `skillhub serve` prints on machine B, for example `scp -p <user>@<machine-b>:<hub-folder>/runtime/config/.hub-token " + hubtoken.ClientPath(hubURL) + "`, which keeps the file private (mode 0600); or set " + app.HubTokenEnv + " in the environment the agent host starts the proxy with."
+}
 
 // runConnectHub handles `skillhub connect --hub <url>`: the host entry starts
 // the stdio proxy for a hub on another machine.
-func runConnectHub(ctx context.Context, flags connectFlags, stdout, stderr io.Writer) int {
+func runConnectHub(ctx context.Context, dir string, flags connectFlags, stdout, stderr io.Writer) int {
 	result, connection, err := (app.ConnectService{}).ConnectRemote(ctx, app.RemoteConnectRequest{
-		Project: flags.project, Global: flags.global, Hosts: flags.hosts,
-		Hub: flags.hub, TokenFile: flags.tokenFile, Yes: flags.yes,
+		Project: dir, Global: flags.global, Hosts: flags.hosts,
+		Hub: flags.hub, TokenFile: flags.tokenFile, DryRun: flags.dryRun,
 	})
 	if err != nil || result.Error != nil {
 		if code, handled := writeConnectSymlinkError(err, stdout, stderr, flags.json); handled {
@@ -38,10 +41,11 @@ func runConnectHub(ctx context.Context, flags connectFlags, stdout, stderr io.Wr
 	return printerCode(p)
 }
 
-// renderRemoteConnect prints the preview or the result of `connect --hub`.
+// renderRemoteConnect prints the result of `connect --hub`, or with
+// --dry-run what it would change.
 func renderRemoteConnect(p *termui.Printer, result app.Result, connection *app.RemoteConnection) {
 	p.Line(result.Summary)
-	p.Bullets(hostChangeLines(result, false)...)
+	writeChangeLines(p, result, hostChangeLines(result, false))
 	if len(connection.Replaces) > 0 {
 		verb := "This replaces:"
 		if result.Status == app.StatusApplied {
@@ -69,7 +73,7 @@ func renderRemoteConnect(p *termui.Printer, result app.Result, connection *app.R
 		p.Blank()
 		notes := []string{"Curation stays on the hub machine: no curation server and no system-curator skill are installed here."}
 		if result.Status == app.StatusActionRequired {
-			notes = append(notes, tokenHandOff)
+			notes = append(notes, tokenHandOff(connection.Hub))
 		}
 		p.Bullets(notes...)
 	}
@@ -128,7 +132,7 @@ func hostChangeLines(result app.Result, removal bool) []string {
 			order = append(order, parts[1])
 		}
 		description := formatChangeKind(parts[2], item.Summary)
-		if deleted := strings.HasPrefix(item.Impact, "Will be deleted") || item.Impact == "Deleted."; deleted && removal {
+		if deleted := item.Impact == "Would be deleted." || item.Impact == "Deleted."; deleted && removal {
 			description += " deleted"
 		} else if deleted {
 			description = "remove " + description
@@ -148,9 +152,9 @@ func hostChangeLines(result app.Result, removal bool) []string {
 
 // runConnectRemove handles `skillhub connect --remove`: it takes the Skill
 // Hub entry out of a scope, for a local or a remote hub.
-func runConnectRemove(ctx context.Context, flags connectFlags, stdout, stderr io.Writer) int {
+func runConnectRemove(ctx context.Context, dir string, flags connectFlags, stdout, stderr io.Writer) int {
 	result, disconnection, err := (app.ConnectService{}).Disconnect(ctx, app.DisconnectRequest{
-		Project: flags.project, Global: flags.global, Hosts: flags.hosts, ClearCache: flags.cache, Yes: flags.yes,
+		Project: dir, Global: flags.global, Hosts: flags.hosts, ClearCache: flags.cache, DryRun: flags.dryRun,
 	})
 	if err != nil || result.Error != nil {
 		if code, handled := writeConnectSymlinkError(err, stdout, stderr, flags.json); handled {
@@ -177,7 +181,7 @@ func renderConnectRemove(p *termui.Printer, result app.Result, removal *app.Disc
 		}
 		return
 	}
-	p.Bullets(hostChangeLines(result, true)...)
+	writeChangeLines(p, result, hostChangeLines(result, true))
 	remote := false
 	if len(removal.Entries) > 0 {
 		label := "The entries point at:"
@@ -234,6 +238,15 @@ func renderConnectRemove(p *termui.Printer, result app.Result, removal *app.Disc
 		p.Blank()
 		p.Next("restart your agent so it stops starting the Skill Hub server", "")
 	}
+}
+
+// writeChangeLines prints one line per host; a dry run puts them under a
+// "Would change:" heading.
+func writeChangeLines(p *termui.Printer, result app.Result, lines []string) {
+	if result.Status == app.StatusActionRequired && len(lines) > 0 {
+		p.Line("Would change:")
+	}
+	p.Bullets(lines...)
 }
 
 func writeConnectJSON(stdout, stderr io.Writer, value any) int {

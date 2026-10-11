@@ -45,8 +45,8 @@ test.describe('Shipped User Flow Journeys (Spec 04 §3)', () => {
     const updatedMeta = `${metaContent.trimEnd()}\nprovenance:\n    origin:\n        kind: github\n        repository: https://github.com/example/skills\n        commit: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n`;
     fs.writeFileSync(metaPath, updatedMeta);
 
-    // 2. Run skillhub rebuild
-    execFileSync(binaryPath, ['rebuild', '--workspace', ws], { stdio: 'pipe' });
+    // 2. Run skillhub maintain rebuild
+    execFileSync(binaryPath, ['maintain', 'rebuild', '--workspace', ws], { stdio: 'pipe' });
 
     // 3. Store SECRET_API_KEY with secret value piped on stdin
     const secretValue = 'SECRET-API-KEY-VALUE-DO-NOT-LEAK-1234';

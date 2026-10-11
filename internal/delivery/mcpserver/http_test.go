@@ -3,7 +3,6 @@ package mcpserver
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -18,6 +17,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/delivery/hostpolicy"
 	"github.com/vantt/mcp-skill-hub/internal/hubtoken"
 	"golang.org/x/time/rate"
 )
@@ -43,7 +43,7 @@ func (b *lockedBuffer) String() string {
 }
 
 // fakeAddrListener reports a chosen address while accepting on a real
-// loopback socket, so the non-loopback rule can be tested without binding a
+// loopback socket, so a wildcard bind can be tested without binding a
 // reachable interface.
 type fakeAddrListener struct {
 	net.Listener
@@ -99,11 +99,11 @@ func startHTTPTestHubOn(t *testing.T, root string, listener net.Listener, option
 	options.Workspace = root
 	options.TokenFile = tokenFile
 	options.Diagnostics = diagnostics
-	ready := make(chan net.Addr, 1)
-	options.Ready = func(address net.Addr) { ready <- address }
+	ready := make(chan []net.Addr, 1)
+	options.Ready = func(addresses []net.Addr) { ready <- addresses }
 	ctx, cancel := context.WithCancel(context.Background())
 	hub := &httpTestHub{root: root, token: token, tokenFile: tokenFile, diagnostics: diagnostics, cancel: cancel, done: make(chan error, 1)}
-	go func() { hub.done <- ServeHTTP(ctx, listener, options) }()
+	go func() { hub.done <- ServeHTTP(ctx, []net.Listener{listener}, options) }()
 	select {
 	case <-ready:
 	case err := <-hub.done:
@@ -305,63 +305,110 @@ func TestHTTPShutdownClosesOpenSessions(t *testing.T) {
 	}
 }
 
-func TestCheckListenAddress(t *testing.T) {
-	for _, address := range []string{"127.0.0.1:7420", "[::1]:0", "localhost:0", "127.0.0.2:7420"} {
-		if err := CheckListenAddress(address, false); err != nil {
-			t.Errorf("CheckListenAddress(%q) = %v, want loopback accepted", address, err)
-		}
-	}
-	for _, address := range []string{"0.0.0.0:7420", "[::]:7420", ":7420", "192.168.1.5:7420", "100.101.102.103:7420", "hub.example:7420"} {
-		if err := CheckListenAddress(address, false); !errors.Is(err, ErrNonLoopbackAddress) {
-			t.Errorf("CheckListenAddress(%q, false) = %v, want ErrNonLoopbackAddress", address, err)
-		}
-	}
-	for _, address := range []string{"192.168.1.5:7420", "100.101.102.103:7420", "hub.example:7420"} {
-		if err := CheckListenAddress(address, true); err != nil {
-			t.Errorf("CheckListenAddress(%q, true) = %v, want accepted", address, err)
-		}
-	}
-	for _, address := range []string{"0.0.0.0:7420", "[::]:7420", ":7420"} {
-		if err := CheckListenAddress(address, true); !errors.Is(err, ErrWildcardAddress) {
-			t.Errorf("CheckListenAddress(%q, true) = %v, want ErrWildcardAddress", address, err)
-		}
-	}
-	for _, address := range []string{"7420", "127.0.0.1", "127.0.0.1:notaport", "127.0.0.1:99999"} {
-		err := CheckListenAddress(address, true)
-		if err == nil || errors.Is(err, ErrNonLoopbackAddress) {
-			t.Errorf("CheckListenAddress(%q) = %v, want an invalid address error", address, err)
-		}
-	}
-}
-
-func TestHTTPNonLoopbackNeedsTrustedPrivateNetwork(t *testing.T) {
-	root := newMCPWorkspace(t)
-	reported := &net.TCPAddr{IP: net.ParseIP("192.0.2.10"), Port: 7420}
-
-	refusedListener, err := net.Listen("tcp", "127.0.0.1:0")
+// TestHTTPWildcardAcceptsIPLiteralsButKeepsOriginStrict covers a listener
+// bound to every interface: a client may name this machine by any IP address
+// in the Host header (a LAN or Tailscale address, also one that appears after
+// start), while a browser page from a foreign IP address is still refused by
+// the Origin check.
+func TestHTTPWildcardAcceptsIPLiteralsButKeepsOriginStrict(t *testing.T) {
+	inner, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer refusedListener.Close()
+	reported := &net.TCPAddr{IP: net.IPv4zero, Port: 7420}
+	hub := startHTTPTestHubOn(t, newMCPWorkspace(t), fakeAddrListener{Listener: inner, addr: reported}, HTTPOptions{})
+	authorized := func(host, origin string) func(*http.Request) {
+		return func(r *http.Request) {
+			r.Header.Set("Authorization", "Bearer "+hub.token)
+			if host != "" {
+				r.Host = host
+			}
+			if origin != "" {
+				r.Header.Set("Origin", origin)
+			}
+		}
+	}
+	for _, host := range []string{"203.0.113.9:7420", "[2001:db8::9]:7420", "100.64.1.2"} {
+		if response := postInitialize(t, hub.endpoint, authorized(host, "")); response.StatusCode != http.StatusOK {
+			t.Errorf("Host %s on a wildcard listener status = %d, want 200", host, response.StatusCode)
+		}
+	}
+	if response := postInitialize(t, hub.endpoint, authorized("evil.example:7420", "")); response.StatusCode != http.StatusForbidden {
+		t.Errorf("a foreign name on a wildcard listener status = %d, want 403", response.StatusCode)
+	}
+	if response := postInitialize(t, hub.endpoint, authorized("", "http://203.0.113.9:7420")); response.StatusCode != http.StatusForbidden {
+		t.Errorf("Origin from a foreign IP status = %d, want 403", response.StatusCode)
+	}
+	if response := postInitialize(t, hub.endpoint, authorized("203.0.113.9:7420", "http://203.0.113.9:7420")); response.StatusCode != http.StatusOK {
+		t.Errorf("a same-origin request by IP status = %d, want 200", response.StatusCode)
+	}
+	if response := postInitialize(t, hub.endpoint, authorized("203.0.113.9:7420", "http://localhost:7420")); response.StatusCode != http.StatusOK {
+		t.Errorf("Origin localhost status = %d, want 200", response.StatusCode)
+	}
+	hub.stop(t)
+}
+
+// TestHTTPServesSeveralListenersWithOneToken starts one server on two
+// loopback listeners: the same token works on both, and both stop together.
+func TestHTTPServesSeveralListenersWithOneToken(t *testing.T) {
+	var listeners []net.Listener
+	for range 2 {
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		listeners = append(listeners, listener)
+	}
 	tokenFile := hubtoken.DefaultPath(t.TempDir())
 	if _, err := hubtoken.Ensure(tokenFile); err != nil {
 		t.Fatal(err)
 	}
-	err = ServeHTTP(t.Context(), fakeAddrListener{Listener: refusedListener, addr: reported}, HTTPOptions{Workspace: root, TokenFile: tokenFile})
-	if !errors.Is(err, ErrNonLoopbackAddress) {
-		t.Fatalf("ServeHTTP on a non-loopback address without trust = %v, want ErrNonLoopbackAddress", err)
-	}
-
-	trustedListener, err := net.Listen("tcp", "127.0.0.1:0")
+	token, err := hubtoken.Read(tokenFile)
 	if err != nil {
 		t.Fatal(err)
 	}
-	hub := startHTTPTestHubOn(t, root, fakeAddrListener{Listener: trustedListener, addr: reported}, HTTPOptions{TrustPrivateNetwork: true})
-	session := connectHTTPClient(t, hub.endpoint, hub.token)
-	if _, err := session.ListTools(t.Context(), nil); err != nil {
-		t.Fatalf("trusted private network listener does not serve: %v", err)
+	ready := make(chan []net.Addr, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		done <- ServeHTTP(ctx, listeners, HTTPOptions{Workspace: newMCPWorkspace(t), TokenFile: tokenFile, Diagnostics: &lockedBuffer{}, Ready: func(addresses []net.Addr) { ready <- addresses }})
+	}()
+	var addresses []net.Addr
+	select {
+	case addresses = <-ready:
+	case err := <-done:
+		t.Fatalf("ServeHTTP stopped before it was ready: %v", err)
+	case <-time.After(30 * time.Second):
+		t.Fatal("ServeHTTP was not ready in time")
 	}
-	hub.stop(t)
+	if len(addresses) != 2 || addresses[0].String() == addresses[1].String() {
+		t.Fatalf("Ready addresses = %v, want two distinct listeners", addresses)
+	}
+	for _, address := range addresses {
+		endpoint := "http://" + address.String() + HTTPEndpointPath
+		if response := postInitialize(t, endpoint, func(r *http.Request) { r.Header.Set("Authorization", "Bearer "+token) }); response.StatusCode != http.StatusOK {
+			t.Errorf("%s with the token status = %d, want 200", address, response.StatusCode)
+		}
+		if response := postInitialize(t, endpoint, nil); response.StatusCode != http.StatusUnauthorized {
+			t.Errorf("%s without the token status = %d, want 401", address, response.StatusCode)
+		}
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("ServeHTTP returned %v", err)
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("ServeHTTP did not stop")
+	}
+	for _, address := range addresses {
+		if connection, err := net.DialTimeout("tcp", address.String(), time.Second); err == nil {
+			connection.Close()
+			t.Errorf("%s still accepts connections after shutdown", address)
+		}
+	}
 }
 
 func TestHTTPAllowHostOnLoopbackListener(t *testing.T) {
@@ -414,7 +461,7 @@ func TestHTTPRefusesToStartWithoutToken(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer listener.Close()
-	err = ServeHTTP(t.Context(), listener, HTTPOptions{Workspace: newMCPWorkspace(t), TokenFile: hubtoken.DefaultPath(t.TempDir())})
+	err = ServeHTTP(t.Context(), []net.Listener{listener}, HTTPOptions{Workspace: newMCPWorkspace(t), TokenFile: hubtoken.DefaultPath(t.TempDir())})
 	if err == nil || !strings.Contains(err.Error(), "hub token") {
 		t.Fatalf("ServeHTTP without a token file = %v, want a token error", err)
 	}
@@ -436,8 +483,10 @@ func newTestGate(t *testing.T) (*httpGate, *Server, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	listenAddress := &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 7420}
-	gate := newHTTPGate(server, hubtoken.NewSource(tokenFile), allowedHosts(listenAddress, []string{"hub.tailnet.example"}), adapter.logger)
+	listenAddresses := []net.Addr{&net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 7420}}
+	allow := []string{"hub.tailnet.example"}
+	hosts := hostpolicy.New(hostpolicy.Options{Listeners: listenAddresses, AllowHosts: allow})
+	gate := newHTTPGate(server, hubtoken.NewSource(tokenFile), hosts, originHosts(listenAddresses, allow), adapter.logger)
 	return gate, adapter, token
 }
 

@@ -748,7 +748,7 @@ fi
 if [ "$is_same_version" -eq 1 ]; then
 	printf 'skillhub %s is already installed at %s\n' "$SKILLHUB_VERSION" "$SKILLHUB_TARGET"
 	skillhub_configure_path
-	printf 'Next step:\n  skillhub init ~/skillhub --yes\n'
+	printf 'Next step:\n  mkdir -p ~/skill-hub && cd ~/skill-hub && skillhub init\n'
 	exit 0
 fi
 
@@ -808,4 +808,4 @@ else
 fi
 
 skillhub_configure_path
-printf 'Next step:\n  skillhub init ~/skillhub --yes\n'
+printf 'Next step:\n  mkdir -p ~/skill-hub && cd ~/skill-hub && skillhub init\n'

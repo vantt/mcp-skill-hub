@@ -272,7 +272,7 @@ func TestBaselineRawRetentionPruned(t *testing.T) {
 
 func TestBaselineCustomRetentionPrunedAndFullWindow(t *testing.T) {
 	temp := t.TempDir()
-	if _, err := (WorkspaceService{}).Init(temp, true); err != nil {
+	if _, err := (WorkspaceService{}).Init(temp, InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 

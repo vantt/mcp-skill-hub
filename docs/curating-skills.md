@@ -2,7 +2,7 @@
 
 A good collection makes your agent reliably pick the right skill. This guide shows how to build one: add, create, review, edit, activate, commit, and check how well skills get picked.
 
-Finish [Get started](getting-started.md) first. It creates your workspace, connects Claude Code and makes your first skill. Run the commands below inside a connected project, or anywhere with `--workspace ~/skillhub`.
+Finish the [Quickstart](../README.md#quickstart) first. It installs your hub and connects a project. Run the commands below inside the hub or a connected project, for example `cd <your-project> && skillhub skill list`.
 
 ## Start with the hub, not a command
 
@@ -22,7 +22,7 @@ Health:     Workspace valid; search index current; Git clean.
 Inventory:  1 active, 0 draft; 0 watched sources.
 ```
 
-Output is trimmed. Your agent curates through the same `skillhub` commands. Claude Code asks you before any `skillhub` command with `--yes` or `confirm`.
+Output is trimmed. Your agent curates through the same `skillhub` commands. Claude Code asks you before any `skillhub` command with `--yes` or `confirm`, and before commands that change the hub, its connections, the token or the cache, such as `skillhub doctor --fix`. Codex and Gemini CLI do not ask first.
 
 Most sessions follow one path: add or create a skill, review and edit it, activate it, then commit.
 
@@ -36,17 +36,94 @@ Skill Hub changes nothing without your say-so. These rules hold for every comman
 - **Review changes nothing.** `skillhub skill review` reports facts; it never approves or activates a skill.
 
 > [!IMPORTANT]
-> Skill Hub never commits or pushes for you. You check each change and commit it yourself.
+> Skill Hub never commits or pushes your skill changes for you. You check each change and commit it yourself. Only `skillhub init` makes the hub's first commit, and pushes it to an empty repository when you give it one.
 
 <details>
 <summary>More detail on approval and previews</summary>
 
 - Any change to a copied skill's files or runtime block clears its content approval. You review and approve it again.
-- Content approval is a guard against mistakes by a cooperative agent. It does not stop a program that can write to the workspace folder directly.
+- Content approval is a guard against mistakes by a cooperative agent. It does not stop a program that can write to the hub folder directly.
 - The short form `skillhub skill confirm <proposal-id>` is for you in the terminal. Agents and scripts pass the full `--proposal`, `--proposal-digest` and `--base-version` values from the preview. That way they apply exactly what was previewed.
 - If a skill or source with the same ID already exists, the command stops instead of overwriting it.
 
 </details>
+
+## Create your first skill
+
+A **skill** is a folder with a `SKILL.md` your agent follows and a small file that says when it applies. This one teaches your team's commit style. Its last rule adds a marker line, so you can tell when the skill was used.
+
+Save this text as `~/commit-style.md`:
+
+```markdown
+# Commit style
+
+Use this skill when you write a Git commit message.
+
+1. Start with a short summary line in the imperative mood, at most 50 characters.
+2. Leave one blank line, then explain what changed and why in plain sentences.
+3. End every commit message with this exact line:
+
+   Checked-by: skillhub-demo
+```
+
+Create the skill from inside your connected project. The flags tell the hub when the skill applies (`--trigger`, `--example`) and when it does not (`--not-for`). At least 3 examples are recommended; one is enough to start:
+
+```bash
+cd <your-project> && skillhub skill create commit-style --collection core --name "Commit style" \
+  --description "Write Git commit messages in our team style" --content-file ~/commit-style.md \
+  --operation document --trigger "write a commit message" --not-for "writing release notes" \
+  --min-scope single_step --example "write a commit message for my staged changes" --yes
+```
+
+```text
+Draft skill commit-style saved.
+```
+
+New skills start as a **draft**: a skill agents are not offered yet. Make it **active**, so agents can be offered it:
+
+```bash
+skillhub skill activate commit-style --yes
+```
+
+```text
+Skill commit-style is now active.
+```
+
+### See your first win
+
+Your agent needs a staged change to write about. In a connected project, change a file and stage it with `git add <file>`. Then ask your agent:
+
+> write a commit message for my staged changes
+
+Your agent is told to ask the hub which skill fits. The hub sends back a **recommendation**: the skill that fits, or "no skill fits". If your agent used the skill, the commit message ends with this line:
+
+```text
+Checked-by: skillhub-demo
+```
+
+[How the agent picks a skill](user-guide.md#how-the-agent-picks-a-skill) shows how to run the same lookup by hand.
+
+### Commit the new skill
+
+The new skill is a set of files in your hub, not yet committed. `skillhub status` names them and prints the exact Git line that commits them by name:
+
+```bash
+skillhub status
+```
+
+```text
+Status:     The hub has changes that are not committed to Git.
+Health:     Workspace valid; search index current; Git has uncommitted changes.
+Inventory:  1 active, 0 draft; 0 watched sources.
+
+Check  Status  Detail
+Git    notice  4 changed files are not committed to Git yet.
+
+NOTE:  Git: run
+       `git -C <home>/skill-hub add -- history skills && git -C <home>/skill-hub commit -m 'Update skills'`.
+```
+
+Output is trimmed. Run that line, or commit the same paths with a message of your own.
 
 ## Add a skill (`skillhub skill add`)
 
@@ -78,8 +155,8 @@ skillhub skill add https://github.com/anthropics/skills --path skills/pdf
 ```text
 Add pdf as a draft from https://github.com/anthropics/skills.git at <commit>.
 11 files, 57.3 KB. Origin retained. Agent use: off.
-Upstream: tracked by new source anthropics-skills (checked weekly by `skillhub check`; nothing runs
-in the background).
+Upstream: tracked by new source anthropics-skills (checked weekly by `skillhub source check`; nothing
+runs in the background).
 No collection files changed.
 Next: skillhub skill confirm PROP-<id>
 ```
@@ -112,7 +189,7 @@ skillhub skill create commit-style --collection core --name "Commit style" \
 Draft skill commit-style saved.
 ```
 
-[Create your first skill](getting-started.md#create-your-first-skill) walks through this example end to end. What each flag tells the hub:
+[Create your first skill](#create-your-first-skill) walks through this example end to end. What each flag tells the hub:
 
 - `--trigger`: a phrase for when the skill applies. `--not-for`: when it does not.
 - `--min-scope`: the smallest task it fits: `single_step`, `multi_step` or `project`.
@@ -123,7 +200,7 @@ Always pass `--content-file`. Without it, the skill gets starter text, and activ
 
 ## Review diagnostic facts (`skillhub skill review`)
 
-Run a review before you activate a skill and after every change. It reads the workspace files and changes nothing:
+Run a review before you activate a skill and after every change. It reads the hub files and changes nothing:
 
 ```bash
 skillhub skill review review-checklist
@@ -187,7 +264,7 @@ Edit the instructions in your editor (`$VISUAL` or `$EDITOR`):
 skillhub skill edit review-checklist --editor
 ```
 
-If the skill changes while your editor is open, Skill Hub refuses the edit. Your text stays in a recovery file under `runtime/edits/` in the workspace. To replace the instructions from a file instead, use `--content-file <file>`.
+If the skill changes while your editor is open, Skill Hub refuses the edit. Your text stays in a recovery file under `runtime/edits/` in the hub. To replace the instructions from a file instead, use `--content-file <file>`.
 
 Declare the tools and variables a skill's scripts need with a runtime file:
 
@@ -252,50 +329,50 @@ Moved to [Workspace and index](troubleshooting.md#workspace-and-index); the full
 
 ## Review and commit workspace changes
 
-Your workspace is a Git repository, and you decide what goes into it. See what changed since your last commit:
+Your hub is a Git repository, and you decide what goes into it. See what changed since your last commit:
 
 ```bash
-skillhub diff
+cd ~/skill-hub && skillhub maintain diff
 ```
 
-Check that every workspace file is valid:
+Check that every hub file is valid:
 
 ```bash
-skillhub validate
+cd ~/skill-hub && skillhub maintain validate
 ```
 
 ```text
 Workspace validation passed.
 ```
 
-Stage the workspace's own folders by name, never the whole folder. `init` writes connection files into the workspace, and some hold absolute paths for this machine.
+Stage the hub's own paths by name, never the whole folder. `init` writes connection files into the hub, and some hold absolute paths for this machine. `skillhub status` prints a Git line that stages exactly the changed paths, for example:
 
 ```bash
-git -C ~/skillhub add .gitignore .skillhub skills sources history registry config distill evals
+cd ~/skill-hub && git add -- history skills
 ```
 
 Check exactly what you staged, without touching any other file:
 
 ```bash
-skillhub validate --staged
+cd ~/skill-hub && skillhub maintain validate --staged
 ```
 
 Then commit:
 
 ```bash
-git -C ~/skillhub commit -m "Curate skills"
+cd ~/skill-hub && git commit -m "Curate skills"
 ```
 
-`skillhub diff` and `skillhub status` suggest a command that stages everything; stage by name instead. Push to your own remote with `git push` when you want a backup.
+Push to your own remote with `git push` when you want a backup.
 
-To run the check on every commit, add it to a Git hook, such as `.git/hooks/pre-commit` in the workspace:
+To run the check on every commit, add it to a Git hook, such as `.git/hooks/pre-commit` in the hub:
 
 ```sh
 #!/bin/sh
-skillhub validate --staged
+skillhub maintain validate --staged
 ```
 
-Skill Hub does not install hooks for you; any hook manager works.
+Skill Hub does not install hooks for you; any hook manager works. A hook written for an earlier release runs the old top-level validate command, which no longer exists. `skillhub doctor` reports such a hook, and `skillhub doctor --fix` changes that one command and keeps the rest of the hook.
 
 ## Measure usage (`skillhub telemetry funnel`)
 

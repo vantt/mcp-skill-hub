@@ -274,7 +274,7 @@ func TestSkillPublicationFailureIsRecoveredByDoctorBeforeFinalization(t *testing
 	if err != nil || len(pending) != 1 {
 		t.Fatalf("pending = %#v, %v", pending, err)
 	}
-	if _, err := (WorkspaceService{}).DoctorFix(root, true); err != nil {
+	if _, err := (WorkspaceService{}).DoctorFix(root, false); err != nil {
 		t.Fatal(err)
 	}
 	status, err := catalog.Inspect(ctx, root)
@@ -483,7 +483,7 @@ func TestDigestPinnedReadReturnsSnapshotExpiredAfterExternalChange(t *testing.T)
 func newSkillWorkspace(t *testing.T) string {
 	t.Helper()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	return root

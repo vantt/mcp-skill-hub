@@ -138,7 +138,7 @@ describe('ResourceFileView', () => {
     renderView({ startInEdit: true, data: file({ editable: false, reason: 'missing', content: undefined, digest: '' }) });
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     expect(screen.getByRole('note')).toHaveTextContent('This file cannot be edited here.');
-    expect(screen.getByRole('note')).toHaveTextContent('skillhub rebuild');
+    expect(screen.getByRole('note')).toHaveTextContent('skillhub maintain rebuild');
   });
 
   it('previews the edit, confirms with the pins, clears the draft and refreshes every view of the file', async () => {

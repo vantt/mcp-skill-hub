@@ -610,7 +610,7 @@ func computeNextAction(id, relDir, status string, valid bool, canonicalIssues []
 		return fmt.Sprintf("Preview activation with `skillhub skill activate %s`.", id)
 	case "active":
 		if diverged {
-			return fmt.Sprintf("Rebuild catalog with `skillhub rebuild` to publish %d modified canonical file(s).", len(changed)+len(missing))
+			return fmt.Sprintf("Rebuild catalog with `skillhub maintain rebuild` to publish %d modified canonical file(s).", len(changed)+len(missing))
 		}
 		if served.Known && !served.Servable {
 			return fmt.Sprintf("Resolve servability issue: %s.", served.ServableReason)

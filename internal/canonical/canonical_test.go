@@ -528,3 +528,20 @@ func TestDistillYamlDoesNotChangeCatalogSnapshot(t *testing.T) {
 		t.Fatal("writing .meta/skill.yaml did not change CatalogSnapshot")
 	}
 }
+
+func TestValidateDoesNotFailOnATrackedConnectionFile(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "workspace")
+	if _, err := workspace.Apply(root); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".mcp.json"), []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if output, err := exec.Command("git", "-C", root, "add", "-f", ".mcp.json").CombinedOutput(); err != nil {
+		t.Fatalf("git add: %v: %s", err, output)
+	}
+	issues, err := Validate(root)
+	if err != nil || len(issues) != 0 {
+		t.Fatalf("a tracked connection file made validation fail: %#v, %v", issues, err)
+	}
+}

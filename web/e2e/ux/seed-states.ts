@@ -46,6 +46,7 @@ export function isolatedEnv(root: string): NodeJS.ProcessEnv {
     XDG_DATA_HOME: path.join(root, 'xdg', 'data'),
     XDG_STATE_HOME: path.join(root, 'xdg', 'state'),
     XDG_CACHE_HOME: path.join(root, 'xdg', 'cache'),
+    SKILLHUB_USER_CONFIG_DIR: path.join(root, 'xdg', 'config', 'skillhub'),
     GIT_CONFIG_GLOBAL: path.join(home, '.gitconfig'),
     GIT_CONFIG_NOSYSTEM: '1',
     GIT_TERMINAL_PROMPT: '0',
@@ -178,7 +179,7 @@ export function prepareHub(source: string | undefined = process.env.UX_HUB_SOURC
   }
 
   const runCLI = makeCLIRunner(ws, env);
-  runCLI(['rebuild']);
+  runCLI(['maintain', 'rebuild']);
   const hub: UxHub = {
     ws,
     root,
@@ -194,6 +195,6 @@ export function prepareHub(source: string | undefined = process.env.UX_HUB_SOURC
     },
   };
   seedUxStates(hub);
-  runCLI(['rebuild']);
+  runCLI(['maintain', 'rebuild']);
   return hub;
 }

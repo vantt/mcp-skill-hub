@@ -20,14 +20,25 @@ export function resolveBinaryPath(): string {
   return binaryPath;
 }
 
-// makeCLIRunner runs the built skillhub binary against one workspace. Pass env to
-// replace the inherited environment (for example an isolated HOME and XDG_*).
+let userConfigDir: string | undefined;
+
+// e2eUserConfigDir is a temporary per-user Skill Hub config directory for this test
+// process. `skillhub init` records the hub path there, never in the real user profile.
+export function e2eUserConfigDir(): string {
+  userConfigDir ??= fs.mkdtempSync(path.join(os.tmpdir(), 'skillhub-e2e-user-config-'));
+  return userConfigDir;
+}
+
+// makeCLIRunner runs the built skillhub binary against one workspace, from inside
+// that folder (`skillhub init` acts on the current folder, which must exist). Pass env
+// to replace the inherited environment (for example an isolated HOME and XDG_*).
 export function makeCLIRunner(ws: string, env: NodeJS.ProcessEnv = process.env): CLIRunner {
   const binaryPath = resolveBinaryPath();
   return (args) =>
     execFileSync(binaryPath, args, {
+      cwd: ws,
       encoding: 'utf-8',
-      env: { ...env, SKILLHUB_WORKSPACE: ws },
+      env: { SKILLHUB_USER_CONFIG_DIR: e2eUserConfigDir(), ...env, SKILLHUB_WORKSPACE: ws },
       stdio: 'pipe',
     });
 }
@@ -77,8 +88,8 @@ export function seedDistillWorkspace(env: NodeJS.ProcessEnv = process.env): Seed
   const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'skillhub-seed-distill-'));
   const runCLI = makeCLIRunner(ws, env);
 
-  // 1. init <ws> --yes; create and activate consumer-review
-  runCLI(['init', ws, '--yes']);
+  // 1. init in <ws>; create and activate consumer-review
+  runCLI(['init']);
 
   const consumerReviewMd = path.join(os.tmpdir(), `consumer-review-${Date.now()}.md`);
   fs.writeFileSync(

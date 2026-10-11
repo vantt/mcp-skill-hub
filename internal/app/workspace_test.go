@@ -17,7 +17,7 @@ func TestInitRequiresConfirmationBeforeMutation(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	service := WorkspaceService{}
-	preview, err := service.Init(root, false)
+	preview, err := service.Init(root, InitOptions{DryRun: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,7 +27,7 @@ func TestInitRequiresConfirmationBeforeMutation(t *testing.T) {
 	if _, err := os.Stat(root); !os.IsNotExist(err) {
 		t.Fatalf("init preview wrote workspace: %v", err)
 	}
-	if _, err := service.Init(root, true); err != nil {
+	if _, err := service.Init(root, InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(root, ".skillhub", "schema-version")); err != nil {
@@ -75,7 +75,7 @@ func TestDoctorFixAppliesAllHostArtifactsAndIsIdempotent(t *testing.T) {
 	t.Parallel()
 	root := healthyWorkspaceWithoutHosts(t)
 	service := WorkspaceService{}
-	applied, err := service.DoctorFix(root, true)
+	applied, err := service.DoctorFix(root, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +100,7 @@ func TestDoctorFixAppliesAllHostArtifactsAndIsIdempotent(t *testing.T) {
 		t.Fatalf("host-only integration created canonical receipts: %#v, %v", entries, err)
 	}
 
-	if _, err := service.DoctorFix(root, true); err != nil {
+	if _, err := service.DoctorFix(root, false); err != nil {
 		t.Fatal(err)
 	}
 	for relative, want := range before {
@@ -121,8 +121,8 @@ func TestRemediationRejectsSkillhubSymlink(t *testing.T) {
 		name  string
 		apply func(string) (Result, error)
 	}{
-		{name: "init", apply: func(path string) (Result, error) { return service.Init(path, true) }},
-		{name: "doctor fix", apply: func(path string) (Result, error) { return service.DoctorFix(path, true) }},
+		{name: "init", apply: func(path string) (Result, error) { return service.Init(path, InitOptions{}) }},
+		{name: "doctor fix", apply: func(path string) (Result, error) { return service.DoctorFix(path, false) }},
 	} {
 		t.Run(remediation.name, func(t *testing.T) {
 			root := t.TempDir()
@@ -130,7 +130,7 @@ func TestRemediationRejectsSkillhubSymlink(t *testing.T) {
 			if err := os.Symlink(external, filepath.Join(root, ".skillhub")); err != nil {
 				t.Skipf("symlinks unavailable: %v", err)
 			}
-			if _, err := remediation.apply(root); err == nil {
+			if result, err := remediation.apply(root); err == nil && result.Error == nil {
 				t.Fatal("remediation accepted .skillhub symlink")
 			}
 			if _, err := os.Stat(filepath.Join(external, "schema-version")); !os.IsNotExist(err) {
@@ -144,13 +144,13 @@ func TestDoctorFixRebuildsMissingRuntime(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	service := WorkspaceService{}
-	if _, err := service.Init(root, true); err != nil {
+	if _, err := service.Init(root, InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.RemoveAll(filepath.Join(root, "runtime")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.DoctorFix(root, true); err != nil {
+	if _, err := service.DoctorFix(root, false); err != nil {
 		t.Fatal(err)
 	}
 	for _, relative := range []string{"runtime/catalog/current.json", "runtime/operational.db", "runtime/telemetry.db"} {
@@ -167,7 +167,7 @@ func TestDoctorFixRebuildsMissingRuntime(t *testing.T) {
 func TestDoctorHealthyWorkspaceCreatesOnlyAdvisoryLockState(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := (WorkspaceService{}).Doctor(root); err != nil {
@@ -186,7 +186,7 @@ func TestInitIsReadOnlyAndConfirmationInitializes(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	service := WorkspaceService{}
-	preview, err := service.Init(root, false)
+	preview, err := service.Init(root, InitOptions{DryRun: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,7 +196,7 @@ func TestInitIsReadOnlyAndConfirmationInitializes(t *testing.T) {
 	if _, err := os.Stat(root); !os.IsNotExist(err) {
 		t.Fatalf("init preview wrote workspace: %v", err)
 	}
-	applied, err := service.Init(root, true)
+	applied, err := service.Init(root, InitOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +215,7 @@ func TestDoctorFixRejectsMissingWorkspace(t *testing.T) {
 	if _, err := service.Doctor(root); err == nil {
 		t.Fatal("Doctor on missing path should fail")
 	}
-	if _, err := service.DoctorFix(root, true); err == nil {
+	if _, err := service.DoctorFix(root, false); err == nil {
 		t.Fatal("DoctorFix on missing path should fail")
 	}
 	if _, err := os.Stat(root); !os.IsNotExist(err) {
@@ -227,17 +227,17 @@ func TestExistingWorkspaceDoctorFixNeverSilentlyChangesCanonicalVersion(t *testi
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	service := WorkspaceService{}
-	if _, err := service.Init(root, true); err != nil {
+	if _, err := service.Init(root, InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(root, ".skillhub", "schema-version"), []byte("outdated\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	result, err := service.DoctorFix(root, true)
+	result, err := service.DoctorFix(root, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Status != StatusActionRequired || len(result.SuggestedActions) != 1 || !strings.Contains(result.SuggestedActions[0].Command, "skillhub migrate") {
+	if result.Status != StatusActionRequired || len(result.SuggestedActions) != 1 || !strings.Contains(result.SuggestedActions[0].Command, "skillhub maintain migrate") {
 		t.Fatalf("doctor result = %#v", result)
 	}
 	if contents, err := os.ReadFile(filepath.Join(root, ".skillhub", "schema-version")); err != nil || string(contents) != "outdated\n" {
@@ -261,7 +261,7 @@ func TestExistingWorkspaceDoctorFixNeverSilentlyChangesCanonicalVersion(t *testi
 func TestDoctorPreviewsRecoveryConflictWithoutOfferingFix(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	failure := errors.New("interrupt after replacement")
@@ -296,7 +296,7 @@ func TestDoctorPreviewsRecoveryConflictWithoutOfferingFix(t *testing.T) {
 func TestDoctorReportsAndFixesPendingRecovery(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, true); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	injected := errors.New("leave prepared transaction")
@@ -314,7 +314,7 @@ func TestDoctorReportsAndFixesPendingRecovery(t *testing.T) {
 	if err != nil || result.Status != StatusRecoveryRequired || result.Error == nil || result.Error.Code != ErrorRecoveryRequired {
 		t.Fatalf("doctor recovery result = %#v, %v", result, err)
 	}
-	if _, err := service.DoctorFix(root, true); err != nil {
+	if _, err := service.DoctorFix(root, false); err != nil {
 		t.Fatal(err)
 	}
 	if pending, err := mutation.Pending(root); err != nil || len(pending) != 0 {
@@ -398,7 +398,7 @@ func TestDoctorAndStatusReportHostIntegrationMissing(t *testing.T) {
 	ctx := context.Background()
 	root := healthyWorkspaceWithoutHosts(t)
 
-	// 1. Doctor reports host integration missing as fixable with note to re-run skillhub integrate
+	// 1. Doctor reports host integration missing as fixable with note to run skillhub doctor --fix
 	docResult, err := (WorkspaceService{}).Doctor(root)
 	if err != nil {
 		t.Fatal(err)
@@ -406,12 +406,12 @@ func TestDoctorAndStatusReportHostIntegrationMissing(t *testing.T) {
 	if docResult.Status != StatusActionRequired {
 		t.Fatalf("doctor status = %q, want action_required", docResult.Status)
 	}
-	if !strings.Contains(docResult.Summary, "host integration missing") || !strings.Contains(docResult.Summary, "re-run skillhub integrate after a pull that untracked those files") {
+	if !strings.Contains(docResult.Summary, "host integration missing") || !strings.Contains(docResult.Summary, "run skillhub doctor --fix after a pull that untracked those files") {
 		t.Fatalf("doctor summary missing expected host integration text: %q", docResult.Summary)
 	}
 	hasFixableImpact := false
 	for _, item := range docResult.Items {
-		if strings.Contains(item.Impact, "Fixable") && strings.Contains(item.Impact, "re-run skillhub integrate after a pull that untracked those files") {
+		if strings.Contains(item.Impact, "Fixable") && strings.Contains(item.Impact, "run skillhub doctor --fix after a pull that untracked those files") {
 			hasFixableImpact = true
 			break
 		}
@@ -420,7 +420,7 @@ func TestDoctorAndStatusReportHostIntegrationMissing(t *testing.T) {
 		t.Fatalf("doctor items missing fixable impact with integrate note: %#v", docResult.Items)
 	}
 
-	// 2. Status reports host_integration_missing action and finding with note to re-run skillhub integrate
+	// 2. Status reports host_integration_missing action and finding with note to run skillhub doctor --fix
 	home, err := (CurationService{}).GetCurationHome(ctx, root)
 	if err != nil {
 		t.Fatal(err)
@@ -428,12 +428,12 @@ func TestDoctorAndStatusReportHostIntegrationMissing(t *testing.T) {
 	if home.Status != StatusActionRequired {
 		t.Fatalf("status = %q, want action_required", home.Status)
 	}
-	if !strings.Contains(home.Summary, "Host integration is missing; re-run skillhub integrate after a pull that untracked those files") {
+	if !strings.Contains(home.Summary, "Host integration is missing; run skillhub doctor --fix after a pull that untracked those files") {
 		t.Fatalf("status summary missing expected note: %q", home.Summary)
 	}
 	hasStatusItem := false
 	for _, item := range home.Items {
-		if item.ID == "host_integration_missing" && strings.Contains(item.Impact, "re-run skillhub integrate after a pull that untracked those files") {
+		if item.ID == "host_integration_missing" && strings.Contains(item.Impact, "run skillhub doctor --fix after a pull that untracked those files") {
 			hasStatusItem = true
 			break
 		}

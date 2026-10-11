@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/vantt/mcp-skill-hub/internal/canonical"
+	"github.com/vantt/mcp-skill-hub/internal/shellquote"
 	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
 	"github.com/vantt/mcp-skill-hub/internal/workspace"
 	"gopkg.in/yaml.v3"
@@ -50,7 +51,7 @@ func formatValidationResult(issues []canonical.Issue) Result {
 		}
 		fix := issue.Fix
 		if fix == "" {
-			fix = "Correct this file and run `skillhub validate`."
+			fix = "Correct this file and run `skillhub maintain validate`."
 		}
 		result.Items = append(result.Items, Item{
 			ID:      fmt.Sprintf("validation_issue_%d", index+1),
@@ -66,7 +67,7 @@ func formatValidationResult(issues []canonical.Issue) Result {
 			Render: ErrorRender{
 				Error: "The workspace has validation errors.",
 				Why:   fmt.Sprintf("Canonical validation found %d issue(s).", len(issues)),
-				Fix:   "Correct the findings listed above (or use `skillhub skill edit <id>`), then run `skillhub validate`.",
+				Fix:   "Correct the findings listed above (or use `skillhub skill edit <id>`), then run `skillhub maintain validate`.",
 			},
 		}
 	}
@@ -553,7 +554,7 @@ func (WorkspaceService) GetOperationDiff(ctx context.Context, path, operationID 
 	sort.Strings(paths)
 	quoted := make([]string, len(paths))
 	for index, value := range paths {
-		quoted[index] = shellQuote(value)
+		quoted[index] = shellquote.Arg(value)
 	}
 	result := OperationDiffResult{Result: NewResult(StatusOK, "Operation history loaded; retained content is shown as a bounded before/after diff and older entries are labeled digest-only metadata."), OperationID: operationID, Changes: changes, ReviewCommand: "git diff -- " + strings.Join(quoted, " "), Warning: "Skill Hub only inspects Git and never runs restore, remove, reset, checkout, or revert. Recheck current digests immediately before any manual undo."}
 	for _, change := range changes {
@@ -707,5 +708,3 @@ func inspectGitPath(root, path string) (bool, string) {
 	}
 	return true, sourcepkg.Digest(data)
 }
-
-func shellQuote(value string) string { return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'" }

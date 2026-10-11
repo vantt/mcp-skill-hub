@@ -11,86 +11,97 @@ const globalUsage = `Skill Hub keeps one curated set of agent skills and serves 
 Usage: skillhub <command> [flags]
 
 Get started:
-  1. skillhub init ~/skillhub --yes                                  Create your workspace
-  2. cd <your project> && skillhub connect --workspace ~/skillhub --yes
-     (or: skillhub connect -g --workspace ~/skillhub --yes          Connect every project)
+  1. mkdir -p ~/skill-hub && cd ~/skill-hub && skillhub init    Create your hub
+  2. cd <your project> && skillhub connect                       Connect that project
   3. Open your agent there and ask: "curate my Skill Hub"
   On another machine, use that hub through an SSH tunnel or Tailscale:
-     skillhub connect --hub <url> --token-file <path> --yes
+     skillhub connect --hub <url> --token-file <file>
 
 Setup:
-  init      Create a workspace (preview by default; --yes applies)
-  connect   Connect an agent to a workspace (-g for all projects), --hub to a hub on another machine
-  doctor    Check the workspace and agent connections; --fix repairs
-  status    Show what needs attention next
+  init      Create a hub in the current folder, or from a Git URL (--dry-run shows what it would do)
+  connect   Connect this project's agents to the hub (-g for all projects), --hub to a hub on another machine
+  doctor    Check the hub and the agent connections; --fix repairs what it can
+  status    Show the state of the hub and its connections, and the next command
 
 Skills:
   skill     List, show, create, edit, review, add, update from upstream, and change the state of skills
 
 Sources & learning:
-  source    Repositories and documents your skills come from or learn from
-  check     Check sources for updates
+  source    Repositories and documents your skills come from or learn from; source check finds updates
 
-Agent:
-  resolve   Pick the best skill for a request
-  serve mcp Run the MCP server for an agent host (stdio), or with --addr for other machines
-  mcp serve The same stdio server, the command agent hosts already launch
-  mcp proxy The stdio bridge to a hub on another machine, which agent hosts launch
-  serve web Run the local web UI
-  token     Show or rotate the shared token of the network MCP listener
+Serve:
+  serve     Let agents on other machines use this hub (listens on 0.0.0.0:7420)
+  serve web Run the web UI (listens on 0.0.0.0:7421)
+  token     Show or rotate the hub token that serve requires
 
 Maintenance:
-  validate  Validate canonical workspace files
-  rebuild   Rebuild the derived search catalog
-  migrate   Preview or apply a canonical schema migration
-  diff      Show uncommitted canonical changes
-  telemetry Inspect or export local telemetry
+  maintain  validate files, rebuild the search index, migrate the schema, show uncommitted changes
   cache     Clear the copies of skills fetched from a remote hub
-  eval      Run routing evaluations
-  resolution  Replay a recorded resolution
-  version   Print build information
   update    Update skillhub to the latest release or specified version
 
-Workspace selection: pass --workspace <path>, else set SKILLHUB_WORKSPACE, else run
-inside the workspace. Run ` + "`skillhub <command> --help`" + ` for a command's flags.
+  --version Print the skillhub version
+
+Hub selection: run inside the hub or a connected project, else pass --workspace <path>
+(a local hub folder) or set SKILLHUB_WORKSPACE; --hub always takes a URL. Run ` + "`skillhub <command> --help`" + ` for a command's flags and
+` + "`skillhub help --dev`" + ` for developer commands.
+`
+
+// devUsage lists the developer commands that the global help leaves out.
+const devUsage = `Developer commands:
+  resolve     Pick the best skill for a request
+  eval        Run routing evaluations
+  resolution  Replay a recorded resolution
+  telemetry   Inspect or export local telemetry
+
+Run ` + "`skillhub <command> --help`" + ` for a command's flags.
 `
 
 var commandUsage = map[string]string{
-	"init": `Usage: skillhub init [path] [--yes] [--force] [--verbose] [--json]
+	"init": `Usage: skillhub init [<git-url>] [--dry-run] [--verbose] [--json]
 
-Create a Skill Hub workspace at [path], or in the current directory when path
-is omitted. Without --yes the command previews what it would do (directory
-structure, git repository, agent connections, search index). --force allows
-initializing into an existing non-empty directory. --verbose adds generation
-IDs, digests, and row counts; --json prints the full machine-readable result.
+Make the current folder a hub: an empty folder or an empty Git repository
+becomes a Git repository with the hub layout, the search index, the agent
+connection of the hub folder and a first commit (Git hooks and commit signing
+are skipped for it). The hub path is stored for this machine, so
+` + "`skillhub connect`" + ` in a project finds it. Run again in a hub, init refreshes it.
+A folder with other files is refused; init takes no folder argument.
+
+  <git-url>   Start from a repository (https, ssh or file URL, user@host:path,
+              or a local repository): one that holds a hub is fetched into this
+              folder; an empty one gets this new hub pushed and becomes origin.
+              In an existing hub without origin, init connects it to the URL.
+  --dry-run   Show what init would do; write nothing (not with <git-url>)
+  --verbose   Add generation IDs, digests and row counts
+  --json      Machine-readable result
 `,
-	"connect": `Usage: skillhub connect [--project <dir>] [-g|--global] [--workspace <path>]
-                        [--host claude|codex|gemini]... [--yes] [--json]
-       skillhub connect --hub <url> [--token-file <path>] [--project <dir>] [-g|--global]
-                        [--host claude|codex|gemini]... [--yes] [--json]
-       skillhub connect --remove [--cache] [--project <dir>] [-g|--global]
-                        [--host claude|codex|gemini]... [--yes] [--json]
+	"connect": `Usage: skillhub connect [<path>] [-g|--global] [--host claude|codex|gemini]... [--dry-run] [--json]
+       skillhub connect --hub <url> --token-file <file> [-g|--global]
+                        [--host claude|codex|gemini]... [--dry-run] [--json]
+       skillhub connect --remove [--cache] [-g|--global]
+                        [--host claude|codex|gemini]... [--dry-run] [--json]
 
-Connect agents to a workspace. Writes the MCP registration, the Skill Hub
-instruction block, and the system-curator skill. Preview by default; --yes applies.
+Connect the agents of the current folder to the hub. Writes the MCP
+registration, the Skill Hub instruction block, and the system-curator skill,
+and prints what it changed. It never overwrites your own content in those
+files.
 
-  --project <dir>   Project to connect (default: current directory)
+  <path>            A hub folder on this machine (default: the hub ` + "`skillhub init`" + `
+                    set up last on this machine)
   -g, --global      Register for your user account so every project sees the hub
-  --workspace <p>   Workspace to serve (default: SKILLHUB_WORKSPACE, then discovery
-                    from the current directory)
   --host <name>     Limit to claude, codex, or gemini (repeat or comma-separate)
-  --yes             Write the files
+  --dry-run         Show what would change; write nothing
   --json            Machine-readable result
 
 A hub on another machine (through an SSH tunnel or Tailscale):
-  --hub <url>       The base URL the hub printed when ` + "`skillhub serve mcp --addr`" + `
-                    started, for example http://127.0.0.1:7420. The agent host then
+  --hub <url>       The base URL the hub printed when ` + "`skillhub serve`" + ` started,
+                    for example http://192.168.1.20:7420. The agent host then
                     starts ` + "`skillhub mcp proxy`" + `. Curation stays on the hub machine, so no
                     curation server and no system-curator skill are installed.
-  --token-file <p>  This machine's copy of the hub's token file. Copy it from the hub
-                    machine, for example with scp, and chmod 600 it; only its path is
-                    written, never the token. Without it, the agent host must start the
-                    proxy with SKILLHUB_HUB_TOKEN set.
+  --token-file <f>  This machine's copy of the hub's token file, one file per hub, for
+                    example ~/.skillhub-token-<host>-<port>. Copy it from the hub
+                    machine with scp and chmod 600 it; only its path is written,
+                    never the token. Without it, the agent host must start the proxy
+                    with SKILLHUB_HUB_TOKEN set.
 
 Undo a connection:
   --remove          Remove the Skill Hub entry of the scope (local or remote hub), its
@@ -98,22 +109,43 @@ Undo a connection:
                     host configuration stays
   --cache           With --remove, also clear the skills fetched from the remote hub
 
---workspace and --hub exclude each other: one scope points at one hub, and
-connecting it to another hub replaces its entry.
+<path> is a local folder and --hub a URL; they exclude each other: one scope
+points at one hub, and connecting it to another hub replaces its entry.
 `,
-	"doctor": `Usage: skillhub doctor [--workspace <path>] [--fix [--yes]] [--json]
+	"doctor": `Usage: skillhub doctor [--fix [--dry-run]] [--workspace <path>] [--json]
 
-Check the workspace, catalog, and agent connections for this workspace. --fix
-previews repairs; add --yes to apply them.
+Check the hub this folder is in or uses, and the agent connections of this
+project and of your user account. doctor only reports: one table per hub or
+connection, a FIX line for each problem, then "Healthy." or the number of
+problems. Exit codes: 0 healthy, 1 problems remain, 2 invalid request.
 
-When this project or your user account is connected to a remote hub (connect
---hub), doctor also checks that connection: hub reachable, token accepted,
-hub version, skill cache writable, and the last fetch. On a machine without a
-workspace it checks only the remote hub. The token is never printed.
+  --fix        Repair what doctor can, then print what changed (with the files)
+               and what it could not fix, why, and the command to run instead.
+               It re-runs connect's safe merge for the connections to a hub on
+               this machine and points them at a moved hub this machine recorded.
+               It never reconnects to a hub on another machine: that sends the
+               token, so it prints the connect command for you to run.
+  --dry-run    With --fix, show what it would repair; write nothing
+  --workspace  A local hub folder to check instead of the current one; only the
+               connections to that hub are checked and repaired
+  --json       Machine-readable result: role, sections, fixed, not_fixed
+
+For a connection to a remote hub (connect --hub) doctor checks the token file,
+that the hub is reachable, the token is accepted, the hub version, the skill
+cache and the last fetch. The token is sent only to a hub your user account
+names or a hub on this machine, and it is never printed.
 `,
 	"status": `Usage: skillhub status [--workspace <path>] [--json|--quiet]
 
-Show workspace health and the single recommended next action.
+Show the state of the hub this folder is in or uses, and of the agent
+connections, from the same checks doctor runs (a quick subset: status never
+waits for a busy hub and probes a remote hub once). It always ends with one
+command to run next.
+
+  --workspace  A local hub folder instead of the current one
+  --json       The curation home of the hub (schemas/curation-home-v1.schema.json)
+               with the role of this folder and its connection sections
+  --quiet      Print only the overall status word
 `,
 	"skill": `Usage: skillhub skill <subcommand> [flags]
 
@@ -190,7 +222,7 @@ Subcommands:
   backfill [--skill <id> [--path <p>]] [--yes]
                                       Backfill source records and provenance for legacy skills
   check SELECTOR... | --all-due | --all
-                                      Check watched sources for updates (alias of skillhub check)
+                                      Check watched sources for updates
   capture <locator> --reason <text>   Record a candidate source (applies immediately; no --yes)
   list [--status <s>]                 List candidates and sources
   show <id>                           Show one candidate or source
@@ -212,18 +244,6 @@ Watching a source does not auto-import skills; import creates draft skills that 
 Import previews contact the source and may cache a proposal in runtime. No canonical files change.
 Use --json for machine-readable output.
 `,
-	"check": `Usage: skillhub check [--workspace <path>] [--all-due | --all | <source-id>...] [--json]
-
-Check sources for updates. Contacts each watched source and records whether it
-changed; it never edits your skills. When skills track an upstream repository,
-check also reports per-skill drift.
-
-  --all-due         Check only sources whose check interval has passed
-  --all             Check every watched source
-  <source-id>...    Check the named sources
-
-Example: skillhub check --all-due
-`,
 	"resolve": `Usage: skillhub resolve --request <request.json> [--workspace <path>] [--json]
 
 Pick the best skill for a request, the same lookup your agent performs. The
@@ -240,35 +260,29 @@ experiment manifest (see ` + "`skillhub eval manifest`" + `). Developer tool.
 
 Example: skillhub resolution replay --case case.json --manifest manifest.json
 `,
-	"validate": `Usage: skillhub validate [--workspace <path>] [--staged] [--json]
+	"maintain": `Usage: skillhub maintain validate [--staged] [--workspace <path>] [--json]
+       skillhub maintain rebuild [--verbose] [--workspace <path>] [--json]
+       skillhub maintain migrate [--to <version>] [--yes] [--workspace <path>] [--json]
+       skillhub maintain diff [--workspace <path>] [--json]
 
-Validate the canonical workspace files (skills, sources, schema). Use --staged
-to validate files currently staged in the Git index without touching the working tree.
-Prints each problem with its file. Run it after editing files by hand, before ` + "`skillhub rebuild`" + `.
+Maintenance commands. skillhub doctor runs the checks and skillhub doctor --fix
+the repairs most people need; these are the single steps.
 
-Example: skillhub validate
-`,
-	"rebuild": `Usage: skillhub rebuild [--workspace <path>] [--verbose] [--json]
+  validate   Validate the hub files (skills, sources, schema) and print each
+             problem with its file. --staged validates the files staged in the
+             Git index without touching the working tree, for a pre-commit hook.
+  rebuild    Rebuild the search index from the hub files; only files that pass
+             validation are published. Safe at any time. --verbose adds progress
+             events and table row counts.
+  migrate    Preview a schema migration; --yes applies it. --to defaults to 1.
+  diff       Show the uncommitted changes of the hub's Git repository.
 
-Rebuild the search index from the workspace files. Only files that pass validation
-are published. Safe to run at any time; use it when status says the search index
-is stale. Prints a single summary line by default; add --verbose for progress events
-and detailed table row counts.
-
-Example: skillhub rebuild
-`,
-	"migrate": `Usage: skillhub migrate [--to <version>] [--yes] [--workspace <path>] [--json]
-
-Preview or apply a canonical schema migration. Without --yes it only previews.
---to defaults to 1.
-
-Example: skillhub migrate --to 1 --yes
-`,
-	"diff": `Usage: skillhub diff [--workspace <path>] [--json]
-
-Show uncommitted canonical changes in the workspace's Git repository.
-
-Example: skillhub diff
+Examples:
+  skillhub maintain validate
+  skillhub maintain validate --staged
+  skillhub maintain rebuild
+  skillhub maintain migrate --to 1 --yes
+  skillhub maintain diff
 `,
 	"telemetry": `Usage: skillhub telemetry <health|preview|export|purge|funnel|cases|chains|import-transcripts|baseline> [--workspace <path>] [--json]
 
@@ -280,18 +294,20 @@ Subcommands:
   preview                             Print the sanitized events that would be exported
   export [--output <file> --yes]      Preview, or with --yes write the sanitized file
   purge --yes                         Discard and recreate the telemetry store
-  funnel [--since <date|Nd>] [--until <date>] [--skill <id>]
+  funnel [--since <YYYY-MM-DD|Nd>] [--until <YYYY-MM-DD>] [--skill <id>]
          [--by client|operation|snapshot]
                                       Show recommendation and activation funnel report
-  cases [list] [--since <date|Nd>] [--kind <kind>]
+  cases [list] [--since <YYYY-MM-DD|Nd>] [--kind <kind>]
                                       List case journal entries (also the bare cases command)
   cases <status|enable|disable>        Inspect or toggle the case journal
-  chains [--since <date|Nd>] [--kind override|after_no_skill|reformulation]
+  chains [--since <YYYY-MM-DD|Nd>] [--kind override|after_no_skill|reformulation]
                                       Show disagreement chains
-  import-transcripts --project <dir> [--since <date|Nd>]
+  import-transcripts --project <dir> [--since <YYYY-MM-DD|Nd>]
                                       Import tool observations from Claude Code transcripts
-  baseline [--since <date|Nd>] [--until <date>] [--min-chains <n>]
+  baseline [--since <YYYY-MM-DD|Nd>] [--until <YYYY-MM-DD>] [--min-chains <n>]
            [--write <file>]            Measure baseline sufficiency and optionally save a snapshot
+
+--since takes a date (YYYY-MM-DD, UTC) or a number of days back (Nd, for example 7d).
 
 Example: skillhub telemetry import-transcripts --project ~/projects/my-app
 `,
@@ -321,13 +337,12 @@ Example: skillhub version
 	"mcp": `Usage: skillhub mcp serve [--workspace <path>] [--profile runtime|curation|all]
        skillhub mcp proxy --hub <url> [--token-file <path>]
 
-mcp serve is an alias of skillhub serve mcp, kept for the agent host
-registrations that already run it. Serve the workspace over MCP (stdio). Agent
-hosts start this for you after ` + "`skillhub connect`" + `; you rarely run it by hand.
-Run skillhub help serve for the network listener.
+mcp serve serves the workspace over MCP (stdio). Agent hosts start it for you
+after ` + "`skillhub connect`" + `; you rarely run it by hand. Run skillhub help serve
+for the network listener that agents on other machines use.
 
 mcp proxy lets an agent host on this machine use a hub on another machine
-(started there with skillhub serve mcp --addr). Agent hosts start it for you;
+(started there with skillhub serve). Agent hosts start it for you;
 you rarely run it by hand. It forwards skill_resolve and skill_feedback, and
 answers skill_get from a local cache: each skill version is fetched once, in
 one request, checked against its digest, and kept by digest, so local.path and
@@ -344,40 +359,44 @@ Options:
 
 Fetched skills live in $XDG_STATE_HOME/skillhub/remote (default
 ~/.local/state/skillhub/remote; on macOS ~/Library/Application Support/skillhub,
-on Windows %LocalAppData%\skillhub). Clear them with skillhub cache clear --hub.
+on Windows %LocalAppData%\skillhub). Clear them with skillhub cache clear.
 `,
-	"cache": `Usage: skillhub cache clear --hub [<url>] [--yes]
+	"cache": `Usage: skillhub cache clear [--hub <url>] [--dry-run]
 
 Remove the copies of skills this machine fetched from remote hubs (see skillhub
-help mcp). Without a URL every hub's copies are removed; with one, only that
-hub's. Previews by default; --yes applies. Agents fetch a skill again the next
+help mcp) and print what was removed. Without --hub every hub's copies are
+removed; with --hub, only that hub's. --hub always takes the hub's URL.
+--dry-run shows what would be removed. Agents fetch a skill again the next
 time they use it. Installed dependencies and stored secrets are kept, and
 nothing on the hub changes. Old versions are also removed automatically: three
 versions per skill are kept, versions unused for 30 days go, and each hub's
 cache stays under 512 MB.
 
 Examples:
-  skillhub cache clear --hub
-  skillhub cache clear --hub http://127.0.0.1:7420 --yes
+  skillhub cache clear --dry-run
+  skillhub cache clear --hub http://127.0.0.1:7420
 `,
 	"token": `Usage: skillhub token show [--workspace <path>] [--token-file <path>]
-       skillhub token rotate [--workspace <path>] [--token-file <path>] [--yes]
+       skillhub token rotate [--workspace <path>] [--token-file <path>] [--dry-run]
 
-Manage the shared bearer token of the network MCP listener (skillhub serve mcp
---addr). The token is created on first use in <workspace>/runtime/config/.hub-token
+Manage the shared bearer token of the network MCP listener (skillhub serve).
+The token is created on first use in <workspace>/runtime/config/.hub-token
 (mode 0600, never committed) and is never written to logs, telemetry, or URLs.
+Other machines get a copy of the file: skillhub serve prints the scp line.
 
   show              Print the token, only when standard output is a terminal;
                     otherwise refuse and print the token file path
-  rotate            Preview replacing the token; --yes applies. Every machine
-                    that connects needs the new file; a running listener uses
-                    it from its next request
+  rotate            Replace the token with a new random one; only in a
+                    terminal. --dry-run shows what would change. Every machine
+                    that connects needs the new file (rotate prints the scp
+                    line to run there); a running listener uses it from its
+                    next request
   --workspace <p>   Workspace whose token to use
   --token-file <p>  Use this token file instead of the workspace one
 
 Examples:
   skillhub token show
-  skillhub token rotate --yes
+  skillhub token rotate
 `,
 	"update": `Usage: skillhub update [--version <v>] [--check] [--json]
 
@@ -387,48 +406,43 @@ Update skillhub to the latest release or a specified version.
   --check         Check for updates without modifying the binary
   --json          Machine-readable result
 `,
-	"serve": `Usage: skillhub serve mcp [--workspace <path>] [--profile runtime|curation|all]
-       skillhub serve mcp --addr <host:port> [--trust-private-network]
-                          [--token-file <path>] [--allow-host <host>]... [--workspace <path>]
-       skillhub serve web [--workspace <path>] [--addr <host:port>]
-                          [--loopback-only] [--allow-host <host[:port]>]...
-                          [--no-open] [--dev]
+	"serve": `Usage: skillhub serve [mcp] [--addr <host:port>[,<host:port>...]] [--token-file <path>]
+                      [--allow-host <name>]... [--workspace <path>]
+       skillhub serve web [--addr <host:port>[,<host:port>...]] [--allow-host <host[:port]>]...
+                          [--no-open] [--dev] [--workspace <path>]
 
-serve mcp without --addr serves the workspace over MCP (stdio), the way agent
-hosts launch it after ` + "`skillhub connect`" + ` (skillhub mcp serve is an alias).
+skillhub serve (or serve mcp) lets agents on other machines use this hub. It
+serves the runtime tools only (skill_resolve, skill_get, skill_feedback);
+curation stays on this machine. Every request needs the hub token (see
+skillhub help token). On start it prints, for each address another machine
+can use, an scp line that copies the token file and the skillhub connect
+command to run on that machine. Agents on this machine do not need it:
+skillhub connect sets them up.
 
-serve mcp --addr runs a network listener so agents on other machines can use
-this hub. It serves the runtime tools only (skill_resolve, skill_get,
-skill_feedback); curation stays on this machine. Every request needs the shared
-token (see skillhub help token) in the Authorization header. The listener
-speaks plain HTTP: it starts on a loopback address (127.0.0.1, ::1), which you
-reach through an SSH tunnel, and refuses any other address unless you pass
---trust-private-network for a private network such as Tailscale. On start it
-prints the skillhub connect command to run on the other machine.
+skillhub serve web runs the web UI; the printed URL carries a new session
+token. Anyone with that URL can change the skills every connected agent uses.
 
-  --profile runtime|curation|all  Tool profile for stdio (default: all); with --addr only runtime
-  --addr <host:port>              Listen on the network instead of stdio
-  --trust-private-network         Allow a non-loopback address on a network you trust
-  --token-file <path>             Token file (default: <workspace>/runtime/config/.hub-token)
-  --allow-host <host>             Accept another Host name, for example a VPN DNS name (repeatable)
+Both listen on all network interfaces by default (mcp 0.0.0.0:7420, web
+0.0.0.0:7421) over plain HTTP and print a warning saying so. On a network you
+do not trust, keep the server on this machine with --addr 127.0.0.1:7420 (web:
+--addr 127.0.0.1:7421) and reach it from the other machine through an SSH
+tunnel (ssh -N -L); the banner prints the tunnel command.
 
-serve web runs the local web UI. Listens on 0.0.0.0 when this machine has two or more non-loopback IPv4 addresses, otherwise on 127.0.0.1; --addr or --loopback-only override.
-
-  --workspace <path>           Workspace to serve
-  --addr <host:port>           Explicit listen address and port
-  --loopback-only              Listen only on 127.0.0.1
-  --allow-host <host[:port]>   Allow an additional Host header (repeatable)
-  --no-open                    Do not open the browser on startup
-  --dev                        Development mode for Vite proxy
+  --addr <list>          1 to 3 comma-separated addresses, one listener each, one
+                         token; a missing port takes the default, IPv6 goes in
+                         brackets ([::1]:7420), and port 0 picks a free port
+  --token-file <path>    Hub token file (mcp; default: <hub>/runtime/config/.hub-token)
+  --allow-host <name>    Accept another Host name, for example a VPN DNS name
+                         (repeatable; web also takes <host:port>)
+  --workspace <path>     A local hub folder (default: the hub of the current folder)
+  --no-open              web: do not open the browser on start
+  --dev                  web: development mode behind the Vite dev server (loopback only)
 
 Examples:
-  skillhub serve mcp --addr 127.0.0.1:7420
-  skillhub serve mcp --addr 100.101.102.103:7420 --trust-private-network
+  skillhub serve
+  skillhub serve --addr 127.0.0.1:7420
+  skillhub serve --addr 192.168.1.20,100.101.102.103
   skillhub serve web
-`,
-	"web": `Usage: skillhub web [options]
-
-An alias of skillhub serve web. Run skillhub help serve for options.
 `,
 }
 
@@ -449,11 +463,13 @@ func writeGlobalHelp(stdout io.Writer) int {
 	return 0
 }
 
+func writeDevHelp(stdout io.Writer) int {
+	fmt.Fprint(stdout, devUsage)
+	return 0
+}
+
 // writeCommandHelp prints usage for a known command; ok is false for unknown names.
 func writeCommandHelp(stdout io.Writer, command string) (code int, ok bool) {
-	if command == "integrate" {
-		command = "connect"
-	}
 	if usage, found := commandUsage[command]; found {
 		fmt.Fprint(stdout, usage)
 		return 0, true
@@ -464,6 +480,9 @@ func writeCommandHelp(stdout io.Writer, command string) (code int, ok bool) {
 func runHelp(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
 		return writeGlobalHelp(stdout)
+	}
+	if args[0] == "--dev" {
+		return writeDevHelp(stdout)
 	}
 	if code, ok := writeCommandHelp(stdout, strings.TrimSpace(args[0])); ok {
 		return code

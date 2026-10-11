@@ -1,147 +1,146 @@
 # Use one hub from several machines
 
-This guide explains how agents on one computer use the Skill Hub that runs on another computer. If you have not set up a hub yet, follow the Quickstart in the [README](../README.md) and the [user guide](user-guide.md) first.
+This guide explains how agents on one computer use the Skill Hub on another computer. If you have not set up a hub yet, follow the [Quickstart](../README.md#quickstart) first.
 
-In this guide **machine B** is the computer that holds your workspace, curates the skills and serves them. **Machine A** is a computer whose agents use those skills. You can have several machines A.
+In this guide **machine B** is the computer that holds your hub, curates the skills and serves them. **Machine A** is a computer whose agents use those skills. You can have several machines A.
 
 ## When you need this
 
 There are two ways to have your skills on a second machine.
 
-| | Clone the workspace with Git | Use the hub on machine B over the network |
+| | Fetch the hub with Git | Use the hub on machine B over the network |
 |---|---|---|
-| How | `git clone` the workspace on machine A and run `skillhub rebuild` | Machine B runs a listener; machine A connects to it |
+| How | `skillhub init <git-url>` in an empty folder on machine A | Machine B runs `skillhub serve`; machine A connects to it |
 | New or changed skills | Reach machine A after you push on B and pull on A | Reach machine A at once, on the next `skill_resolve` |
-| Curation | On every machine that has a clone | Only on machine B |
+| Curation | On every machine that has a copy | Only on machine B |
 | Usage records (telemetry) | Each machine keeps its own | All on machine B, one place |
 | Works without a connection to B | Yes, fully | Skills already used on A keep working; new skills wait for the connection |
-| Needs | Git access to a remote | An SSH login to B, or both machines on Tailscale |
+| Needs | Git access to a remote | Both machines on one LAN or on Tailscale, or an SSH login to B |
 
-Clone with Git when machine A is often offline, or when you want to curate on A as well (see [Move to another machine](user-guide.md#move-to-another-machine)). Use one hub over the network when one machine curates and the others should always see its current skills.
+Fetch the hub with Git when machine A is often offline, or when you want to curate on A as well (see [Move to another machine](user-guide.md#move-to-another-machine)). Use one hub over the network when one machine curates and the others should always see its current skills.
 
 ## How it works
 
 ### Two ways of working
 
-1. **One machine (as before).** Your agent host starts `skillhub mcp serve` over stdio. No network port, no token and no extra process. Nothing in this guide changes this.
-2. **Machine A uses machine B.** Machine B runs `skillhub serve mcp --addr ...`, a network listener over the same workspace. On machine A, `skillhub connect --hub` registers a small stdio proxy, `skillhub mcp proxy`, which your agent host starts like any other MCP server. The proxy talks to machine B.
+1. **One machine.** Your agent starts Skill Hub over stdio. No network port, no token and no extra process. Nothing in this guide changes this.
+2. **Machine A uses machine B.** Machine B runs `skillhub serve`, a network server over the same hub. On machine A, `skillhub connect --hub` registers a small stdio proxy, `skillhub mcp proxy`, which your agent starts like any other MCP server. The proxy talks to machine B.
 
-Machine B keeps serving its own agents over stdio at the same time; the listener is a separate process over the same workspace.
+Machine B keeps serving its own agents over stdio at the same time; the server is a separate process over the same hub.
 
-Each scope (one project, or your user account with `-g`) points at one hub: `connect --workspace` for a hub on this machine, `connect --hub` for a hub on another machine. Connecting a scope to the other kind replaces its entry.
+Each scope (one project, or your user account with `-g`) points at one hub: `connect` for a hub on this machine, `connect --hub` for a hub on another machine. Connecting a scope to the other kind replaces its entry.
 
 ### What runs where
 
 | What | Where |
 |---|---|
 | `skill_resolve`, `skill_feedback` | Answered by machine B |
-| `skill_get` | Machine A fetches the whole skill folder once, in one request, checks it against its digest and keeps it in a local cache; later uses of the same version need no request at all |
+| `skill_get` | Machine A fetches the whole skill folder once, in one request, checks that it arrived intact and keeps it in a local cache; later uses of the same version need no request at all |
 | A skill's `check`, `setup` and scripts | Run on machine A, from the cached copy (`local.path` and the `SKILLHUB_*` variables point at machine A) |
-| Curation: creating, editing, approving and importing skills, the web UI | Only on machine B; the listener offers the three runtime tools and nothing else |
-| Usage records | Written on machine B; calls from machine A are labelled `remote:<host>`, for example `remote:claude-code` |
+| Curation: creating, editing, approving and importing skills, the web UI | Only on machine B; the server offers the three runtime tools and nothing else |
+| Usage records | Written on machine B; calls from machine A are labelled `remote:<agent>`, for example `remote:claude-code` |
 
 Skills whose content waits for your approval stay blocked for machine A exactly as for local agents. Fetched skills live in `~/.local/state/skillhub/remote` on Linux (`$XDG_STATE_HOME/skillhub/remote` when it is set), `~/Library/Application Support/skillhub/remote` on macOS and `%LocalAppData%\skillhub\remote` on Windows.
 
 ## Before you start
 
-- Install `skillhub` on both machines, ideally in the same version (`skillhub version`). `doctor` on machine A tells you when one side is too old for the other.
-- Machine B has a workspace, for example `~/skillhub`, connected and working as described in the user guide.
+- Install `skillhub` on both machines, ideally in the same version (`skillhub --version`). `doctor` on machine A tells you when one side is too old for the other.
+- Machine B has a hub, for example `~/skill-hub`, set up with `skillhub init` as in the Quickstart.
 - Pick how machine A reaches machine B:
-  - **SSH tunnel**: you can log in to machine B with SSH from machine A. Nothing else is needed, and the listener stays on machine B's loopback address.
-  - **Tailscale** (or another private VPN): both machines are in your tailnet.
+  - **Same LAN or Tailscale**: machine A can reach one of machine B's addresses. This is the default setup below.
+  - **SSH tunnel**: for any network you do not trust. You need an SSH login to machine B from machine A.
 
-The listener speaks plain HTTP and has no TLS. It refuses any address other machines could reach unless you say the network is private, so task text and skills never cross an open network unencrypted. SSH and Tailscale both encrypt the traffic.
+> [!WARNING]
+> `skillhub serve` listens on every network interface (`0.0.0.0`) by default, over plain HTTP. Anyone who can watch that network can read the hub token and the task text your agents send. The web UI (`skillhub serve web`) works the same way, and it can change skills: anyone who gets its address can add or edit the skills every connected agent uses. Tailscale and SSH encrypt the traffic; on any other network you do not trust, use the [SSH tunnel](#on-an-untrusted-network-use-an-ssh-tunnel).
 
-## Set up with an SSH tunnel
+## Set up on your LAN or Tailscale
 
-The listener stays on `127.0.0.1` on machine B. An SSH tunnel carries machine A's requests to it. The examples use port `7420`; any free port works.
-
-### 1. On machine B: start the listener
+### 1. On machine B: start the server
 
 ```bash
-skillhub serve mcp --addr 127.0.0.1:7420 --workspace ~/skillhub
+cd ~/skill-hub && skillhub serve
 ```
 
-The first start creates the hub token and prints what to do on machine A:
+The first start creates the hub token. For each address machine A can use, the server prints the two commands to run there:
 
 ```text
-Skill Hub MCP listener is running with the runtime tools only (skill_resolve, skill_get,
-skill_feedback).
+Skill Hub is serving skills to agents on other machines.
+It serves the runtime tools only (skill_resolve, skill_get, skill_feedback); curation stays on this
+machine.
 
-Listening on:  127.0.0.1:7420
-Workspace:     /home/you/skillhub
-Token file:    /home/you/skillhub/runtime/config/.hub-token
-Transport:     loopback only; other machines reach it through an SSH tunnel
+Hub folder:  /home/you/skill-hub
+Token file:  /home/you/skill-hub/runtime/config/.hub-token
+WARNING: Listening on all network interfaces over plain HTTP; use --addr 127.0.0.1:7420 to keep it on this machine.
 
-On machine A:
-Open the tunnel (keep it running):
-  $ ssh -N -L 7420:127.0.0.1:7420 <user>@<this-machine>
-Copy the token file to machine A (for example with scp) and pass its path there, then connect:
-  $ skillhub connect --hub http://127.0.0.1:7420 --token-file /home/you/skillhub/runtime/config/.hub-token --yes
+eth0 (192.168.1.20), on the other machine:
+  $ scp -p you@192.168.1.20:skill-hub/runtime/config/.hub-token ~/.skillhub-token-192.168.1.20-7420
+  $ skillhub connect --hub http://192.168.1.20:7420 --token-file ~/.skillhub-token-192.168.1.20-7420
 
-The token itself is never printed; `skillhub token show` prints it on a terminal. Stop the listener
-with Ctrl-C.
+Tailscale (100.101.102.103), on the other machine:
+  $ scp -p you@100.101.102.103:skill-hub/runtime/config/.hub-token ~/.skillhub-token-100.101.102.103-7420
+  $ skillhub connect --hub http://100.101.102.103:7420 --token-file ~/.skillhub-token-100.101.102.103-7420
+
+The token itself is never printed. Stop the server with Ctrl-C.
 ```
 
-Leave it running. To start it at boot, see [Keep the listener running](#keep-the-listener-running-on-machine-b).
+Virtual interfaces such as Docker bridges are left out of the list. Leave the server running. To start it at boot, see [Keep the server running](#keep-the-server-running-on-machine-b).
 
-### 2. Bring the token to machine A
+### 2. On machine A: copy the token file
 
-Every request needs the hub's token. It lives in one file on machine B, `<workspace>/runtime/config/.hub-token`, readable by you only and never committed. Copy that file to a fixed place on machine A and make it private:
+Every request needs the hub's token. It lives in one file on machine B and is never committed. Run the `scp` line the server printed:
 
 ```bash
-mkdir -p ~/.config/skillhub
-scp machine-b:skillhub/runtime/config/.hub-token ~/.config/skillhub/hub-token
-chmod 600 ~/.config/skillhub/hub-token
+scp -p you@192.168.1.20:skill-hub/runtime/config/.hub-token ~/.skillhub-token-192.168.1.20-7420
 ```
 
-The proxy refuses a token file other users can read. If you prefer not to keep a file, leave out `--token-file` in the next steps and set `SKILLHUB_HUB_TOKEN` to the token in the environment your agent host starts in. `skillhub token show` on machine B prints the token, and only on a terminal, so it never lands in a log or an agent transcript.
+Each hub gets its own token file on machine A, named after the hub's address and port, so tokens of different hubs never mix. `-p` keeps the copy readable by you only; the proxy refuses a token file other users can read. `scp` needs an SSH login to machine B; without one, copy the file by any private means and run `chmod 600` on it.
 
-### 3. On machine A: open the tunnel
+### 3. On machine A: connect your agents
+
+Run the `connect` line the server printed, inside your project:
 
 ```bash
-ssh -N -L 7420:127.0.0.1:7420 you@machine-b
+cd <your-project> && skillhub connect --hub http://192.168.1.20:7420 --token-file ~/.skillhub-token-192.168.1.20-7420
 ```
-
-This command keeps running and prints nothing. While it runs, `http://127.0.0.1:7420` on machine A reaches the listener on machine B. To keep it up without a terminal, see [Keep the tunnel up](#keep-the-tunnel-up).
-
-### 4. On machine A: connect your agents
-
-```bash
-cd your-project
-skillhub connect --hub http://127.0.0.1:7420 --token-file ~/.config/skillhub/hub-token          # preview
-skillhub connect --hub http://127.0.0.1:7420 --token-file ~/.config/skillhub/hub-token --yes    # write files
-```
-
-Add `-g` to connect every project in your user account instead, and `--host claude`, `--host codex` or `--host gemini` to limit it to one agent. The preview checks the hub before anything is written:
 
 ```text
-Preview only: agent connection for project
+Agent connection for project
 /home/you/your-project
-to the hub at http://127.0.0.1:7420 was not written without --yes.
-  - Claude Code: will connect (.mcp.json, .claude/settings.local.json, CLAUDE.md)
-  - Codex: will connect (.codex/config.toml, AGENTS.md)
-  - Gemini CLI: will connect (.gemini/settings.json, GEMINI.md)
+to the hub at http://192.168.1.20:7420 written.
+  - Claude Code: connected (.mcp.json, .claude/settings.local.json, CLAUDE.md)
+  - Codex: connected (.codex/config.toml, AGENTS.md)
+  - Gemini CLI: connected (.gemini/settings.json, GEMINI.md)
 
-Hub:          http://127.0.0.1:7420
-Token:        /home/you/.config/skillhub/hub-token
+Hub:          http://192.168.1.20:7420
+Token:        /home/you/.skillhub-token-192.168.1.20-7420
               (only this path is written, never the token)
 Hub check:    reachable, token accepted, Skill Hub <version> (this machine: <version>)
-Skill cache:  /home/you/.local/state/skillhub/remote/127.0.0.1-7420-bd74e9ccea
+Skill cache:  /home/you/.local/state/skillhub/remote/192.168.1.20-7420-<id>
 
   - Curation stays on the hub machine: no curation server and no system-curator skill are installed
     here.
-  - To get the token to this machine, copy the hub's token file from machine B (the hub prints its
-    path when `skillhub serve mcp --addr ...` starts, and `skillhub token show` there shows it), for
-    example `scp <machine-b>:<workspace>/runtime/config/.hub-token ~/.config/skillhub/hub-token`,
-    then `chmod 600` it; or set SKILLHUB_HUB_TOKEN in the environment the agent host starts the
-    proxy with.
 
-To write these files, run:
-  $ skillhub connect --hub http://127.0.0.1:7420 --token-file /home/you/.config/skillhub/hub-token --yes
+Next: restart your agent so it starts the proxy; if it cannot reach the hub, run `skillhub doctor`
 ```
 
+Output is trimmed. Add `-g` to connect every project in your user account instead, and `--host claude`, `--host codex` or `--host gemini` to limit it to one agent. `--dry-run` checks the hub and shows the changes without writing anything. `connect` refuses a token file that another connection already uses for a different hub.
+
 Then restart your agent. It now resolves skills on machine B and runs them on machine A.
+
+<details>
+<summary>Windows (PowerShell)</summary>
+
+Windows PowerShell 5.1 has no `&&`, so separate the commands with `;`. If `~` does not expand in the `scp` line, write the local path as `$HOME\.skillhub-token-<host>-<port>`:
+
+```powershell
+scp -p you@192.168.1.20:skill-hub/runtime/config/.hub-token $HOME\.skillhub-token-192.168.1.20-7420
+```
+
+```powershell
+cd <your-project>; skillhub connect --hub http://192.168.1.20:7420 --token-file $HOME\.skillhub-token-192.168.1.20-7420
+```
+
+</details>
 
 What gets written, per agent:
 
@@ -149,9 +148,81 @@ What gets written, per agent:
 |---|---|
 | MCP entry `skillhub` | `skillhub mcp proxy --hub <url> --token-file <path>`; only the token file's path, never the token |
 | Allowed directories | The skill cache of that hub, `<state>/skillhub/remote/<hub-id>` |
-| Claude Code permission rules | The same four rules as for a local hub |
-| Instruction block in `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` | The same as for a local hub |
+| Claude Code permission rules | The same rules as for a hub on this machine |
+| Instruction block in `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` | The same as for a hub on this machine |
 | `system-curator` skill and `skillhub-curation` entry | Not installed: curation stays on machine B |
+
+### Choose the addresses the server listens on
+
+`--addr` takes one to three addresses, separated by commas. Each gets its own listener, and all of them share one token. A missing port takes the default, `7420`. To listen only on machine B's Tailscale address:
+
+```bash
+cd ~/skill-hub && skillhub serve --addr 100.101.102.103:7420
+```
+
+To listen on the LAN and Tailscale addresses, but not on other interfaces:
+
+```bash
+cd ~/skill-hub && skillhub serve --addr 192.168.1.20,100.101.102.103
+```
+
+If one address cannot be opened, the server does not start and names the address and the reason.
+
+### Connect with a name instead of an address
+
+You can also use machine B's name. Its short name (`http://machine-b:7420`) works as it is when it equals machine B's host name, which is Tailscale's default. Any other name, for example the full MagicDNS name `machine-b.tailnet-name.ts.net`, must be accepted by the server first:
+
+```bash
+cd ~/skill-hub && skillhub serve --allow-host machine-b.tailnet-name.ts.net
+```
+
+### Prefer -g for a hub on another machine
+
+`status` and `doctor` send the token only to a hub on this machine (an SSH tunnel) or to a hub your user account names, never to a hub that only a project's files name. A cloned repository could name any address. For such a project-only hub, they check that it answers, and `doctor --fix` prints the `connect --hub` command for you to run instead of sending the token. Connect with `-g` so the checks can test the token too.
+
+## On an untrusted network: use an SSH tunnel
+
+Keep the server on machine B's own loopback address. An SSH tunnel carries machine A's requests to it, encrypted. The examples use port `7420`; any free port works.
+
+### 1. On machine B: start the server on this machine only
+
+```bash
+cd ~/skill-hub && skillhub serve --addr 127.0.0.1:7420
+```
+
+The server prints a tunnel block instead of addresses:
+
+```text
+This machine only (127.0.0.1:7420); on the other machine, open an SSH tunnel and keep it running:
+  $ ssh -N -L 7420:127.0.0.1:7420 you@<this-machine>
+Then, in another terminal there:
+  $ scp -p you@<this-machine>:skill-hub/runtime/config/.hub-token ~/.skillhub-token-127.0.0.1-7420
+  $ skillhub connect --hub http://127.0.0.1:7420 --token-file ~/.skillhub-token-127.0.0.1-7420
+```
+
+Output is trimmed. `<this-machine>` is the name or address you use to log in to machine B with SSH.
+
+### 2. On machine A: open the tunnel
+
+```bash
+ssh -N -L 7420:127.0.0.1:7420 you@machine-b
+```
+
+This command keeps running and prints nothing. While it runs, `http://127.0.0.1:7420` on machine A reaches the server on machine B. To keep it up without a terminal, see [Keep the tunnel up](#keep-the-tunnel-up).
+
+### 3. On machine A: copy the token file and connect
+
+In another terminal, run the `scp` line, then the `connect` line inside your project:
+
+```bash
+scp -p you@machine-b:skill-hub/runtime/config/.hub-token ~/.skillhub-token-127.0.0.1-7420
+```
+
+```bash
+cd <your-project> && skillhub connect --hub http://127.0.0.1:7420 --token-file ~/.skillhub-token-127.0.0.1-7420
+```
+
+Then restart your agent.
 
 ### Keep the tunnel up
 
@@ -201,16 +272,17 @@ systemctl --user enable --now skillhub-tunnel
 systemctl --user status skillhub-tunnel
 ```
 
-### Keep the listener running on machine B
+## Keep the server running on machine B
 
-A systemd user unit on machine B starts the listener at boot. Use the full path that `command -v skillhub` prints. Save this as `~/.config/systemd/user/skillhub-listener.service`:
+A systemd user unit on machine B starts the server at boot. Use the full path that `command -v skillhub` prints, and run the unit in the hub folder. Leave out `--addr 127.0.0.1:7420` when machine A reaches B on the LAN or over Tailscale. Save this as `~/.config/systemd/user/skillhub-server.service`:
 
 ```text
 [Unit]
-Description=Skill Hub MCP listener
+Description=Skill Hub server for other machines
 
 [Service]
-ExecStart=/home/you/.local/bin/skillhub serve mcp --addr 127.0.0.1:7420 --workspace /home/you/skillhub
+WorkingDirectory=/home/you/skill-hub
+ExecStart=/home/you/.local/bin/skillhub serve --addr 127.0.0.1:7420
 Restart=on-failure
 RestartSec=10
 
@@ -220,119 +292,85 @@ WantedBy=default.target
 
 ```bash
 systemctl --user daemon-reload
-systemctl --user enable --now skillhub-listener
+systemctl --user enable --now skillhub-server
 loginctl enable-linger "$USER"     # keep user services running when you are not logged in
 ```
 
-The listener stops cleanly on Ctrl-C or `systemctl --user stop`: running requests finish and the usage records are written.
+The server stops cleanly on Ctrl-C or `systemctl --user stop`: running requests finish and the usage records are written.
 
-## Set up with Tailscale
+## Two kinds of token
 
-With Tailscale the listener binds to machine B's Tailscale address, and no tunnel is needed. Steps 2 and 4 of the SSH setup stay the same; only the address changes.
+Skill Hub uses two different tokens. Keep both private.
 
-### On machine B: start the listener on the Tailscale address
+| | Hub token | Web session token |
+|---|---|---|
+| What it is for | Lets agents on other machines use the hub | Lets your browser use the web UI |
+| Where it lives | The file `runtime/config/.hub-token` in the hub, readable by you only; machine A keeps a copy in `~/.skillhub-token-<host>-<port>` | In the address `skillhub serve web` prints, after `#token=` |
+| How long it lasts | Until you run `skillhub token rotate` | Until that `serve web` stops; every start makes a new one |
+| Who uses it | The proxy that `connect --hub` registers on machine A | Your browser only |
+| What someone who has it can do | Resolve tasks and read approved skills, like an agent on machine A | Add and change skills in the hub, which reaches every connected agent |
 
-```bash
-tailscale ip -4                       # for example 100.101.102.103
-skillhub serve mcp --addr 100.101.102.103:7420 --trust-private-network --workspace ~/skillhub
-```
-
-`--trust-private-network` is your statement that every machine on that network is yours. Without it the listener refuses any address other machines could reach:
-
-```text
-ERROR: The MCP listener will not start on 100.101.102.103:7420.
-WHY: That address can be reached from other machines and the listener speaks plain HTTP, so task
-     text and skill content would cross the network unencrypted.
-FIX: Listen on 127.0.0.1 and reach it through an SSH tunnel, or, on a private network such as
-     Tailscale, add --trust-private-network.
-```
-
-An address that listens on every interface (`0.0.0.0`, `[::]` or `:7420`) is refused even with the flag. It would also open the hub on your Wi-Fi or office network, and the flag vouches for one private network only:
-
-```text
-ERROR: The MCP listener will not start on 0.0.0.0:7420.
-WHY: That address listens on every network interface, including any that are not private, and
-     --trust-private-network only vouches for one private network.
-FIX: Give the address of the private interface instead, for example your Tailscale address, as
-     --addr <tailscale-ip>:7420.
-```
-
-The banner then starts with a reminder that the transport is plain HTTP:
-
-```text
-Skill Hub MCP listener is running with the runtime tools only (skill_resolve, skill_get,
-skill_feedback).
-WARNING: Plain HTTP: --trust-private-network says this network is private (an SSH tunnel or a VPN
-         such as Tailscale).
-
-Listening on:  100.101.102.103:7420
-Workspace:     /home/you/skillhub
-Token file:    /home/you/skillhub/runtime/config/.hub-token
-Transport:     plain HTTP on a network you trust to be private
-```
-
-### On machine A: connect
-
-Copy the token as in [step 2](#2-bring-the-token-to-machine-a), then connect your user account with the Tailscale address:
-
-```bash
-skillhub connect -g --hub http://100.101.102.103:7420 --token-file ~/.config/skillhub/hub-token --yes
-```
-
-You can also use machine B's name. Its short name (`http://machine-b:7420`) works as it is when it equals machine B's host name, which is Tailscale's default. Any other name, for example the full MagicDNS name `machine-b.tailnet-name.ts.net`, must be accepted by the listener first: add `--allow-host machine-b.tailnet-name.ts.net` to `skillhub serve mcp` on machine B.
-
-Prefer `-g` for a Tailscale hub. `doctor` sends the token only to a hub on this machine (an SSH tunnel) or to a hub your user account names, never to a hub that only a project's files name, because a cloned repository could name any address. For such a project-only hub, `doctor` checks that it answers and tells you to check the token with the `connect --hub` preview, which writes nothing.
+The hub token is never printed. Only `skillhub token show` prints it, and only on a terminal, so it never lands in a log or an agent transcript. If you prefer not to keep a token file on machine A, leave out `--token-file` and set `SKILLHUB_HUB_TOKEN` in the environment your agent starts in.
 
 ## Check the connection
 
-Run `doctor` on machine A, in the connected project or anywhere for a `-g` connection:
+Run `status` on machine A, in the connected project. It probes the hub once and prints the next command:
 
 ```bash
-skillhub doctor
+cd <your-project> && skillhub status
+```
+
+`doctor` runs every check:
+
+```bash
+cd <your-project> && skillhub doctor
 ```
 
 ```text
-The connection to the remote hub works.
+This project uses the hub at http://192.168.1.20:7420
 
-Remote hub:  http://127.0.0.1:7420
-Used by:     Claude Code, Codex, Gemini CLI (project /home/you/your-project)
-Token file:  /home/you/.config/skillhub/hub-token
+Check             Status  Detail
+Used by           ok      Claude Code, Codex, Gemini CLI (project /home/you/your-project)
+Hub token         ok      read from /home/you/.skillhub-token-192.168.1.20-7420
+Hub reachable     ok      answered in 1 ms
+Token accepted    ok      the hub accepts the token
+Hub version       ok      <version> (this machine: <version>)
+Skill cache       ok      writable: /home/you/.local/state/skillhub/remote/192.168.1.20-7420-<id>
+Last fetch        ok      never: no skill was fetched from this hub yet
+Connection files  ok      current
 
-Check           Status  Detail
-Hub token       ok      read from /home/you/.config/skillhub/hub-token
-Hub reachable   ok      answered in 1 ms
-Token accepted  ok      the hub accepts the token
-Hub version     ok      <version> (this machine: <version>)
-Skill cache     ok      writable: /home/you/.local/state/skillhub/remote/127.0.0.1-7420-bd74e9ccea
-Last fetch              2026-10-11 16:56 (1 skill cached)
+Healthy.
 ```
 
-On a machine without a workspace, `doctor` checks only the remote hub. The token is never printed. When a check fails, `doctor` prints one cause and one fix. For example, with the tunnel closed:
+On a machine without a hub, `doctor` checks only the remote hub. The token is never printed. When a check fails, `doctor` prints one cause and one fix, and exits with `1`. For example, with the server stopped:
 
 ```text
-Hub reachable   FAILED   Nothing answers at http://127.0.0.1:7420 (connection refused): the hub is
-                         stopped, or the SSH tunnel or the Tailscale connection is down.
-Token accepted  skipped  not checked: the hub did not answer
+Hub reachable     FAILED   Nothing answers at http://127.0.0.1:7420 (connection refused): the hub
+                           is stopped, or the SSH tunnel or the Tailscale connection is down.
+Token accepted    skipped  not checked: the hub did not answer
 
-FIX:  Check that `skillhub serve mcp --addr 127.0.0.1:7420` is running on machine B and that the
-      SSH tunnel is open on this machine, for example `ssh -N -L 7420:127.0.0.1:7420 <machine-b>`;
-      if you use Tailscale instead, check `tailscale status` on both machines.
+FIX:  Hub reachable: Skill Hub cannot start a hub on another machine. Check that
+      `skillhub serve --addr 127.0.0.1:7420` is running on machine B and that the SSH tunnel is
+      open on this machine, for example `ssh -N -L 7420:127.0.0.1:7420 <machine-b>`; if you reach
+      machine B by its address instead, connect with an address `skillhub serve` prints.
 ```
+
+`doctor --fix` cannot repair a hub on another machine. It never starts a server there and never reconnects for you, because reconnecting sends the token; it prints the command to run instead.
 
 | `doctor` says | What it means | What to do |
 |---|---|---|
-| The token file ... does not exist on this machine | The path in the entry has no file | Copy the token file from machine B again and `chmod 600` it |
+| The token file ... does not exist on this machine | The path in the entry has no file | Run the `scp` line from the server's start again |
 | The token file ... can be read by other users, so the proxy refuses it | The copy is not private | `chmod 600 <token-file>` |
-| The token file ... does not hold a hub token | The wrong file was copied | Copy `<workspace>/runtime/config/.hub-token` from machine B |
-| The entry has no --token-file and SKILLHUB_HUB_TOKEN is not set in this shell | The entry relies on the environment variable | Connect again with `--token-file`, or set `SKILLHUB_HUB_TOKEN` where your agent host starts. `doctor` sees only its own shell |
-| Nothing answers at ... | The listener is stopped, or the tunnel or Tailscale is down | Start the listener on B; reopen the tunnel; `tailscale status` |
-| The hub at ... refuses requests for the host name ... | You connected with a name the listener does not know | Add `--allow-host <name>` to `skillhub serve mcp` on B, or connect with its address |
-| Something answers at ..., but it is not a Skill Hub listener | Another program uses that port | Check the port; connect with the URL the listener printed |
-| The hub refused the token | The token was rotated, or the file comes from another hub | Copy the current token file from machine B again, then restart the agent |
+| The token file ... does not hold a hub token | The wrong file was copied | Run the `scp` line from the server's start again |
+| The entry has no --token-file and SKILLHUB_HUB_TOKEN is not set in this shell | The entry relies on the environment variable | Connect again with `--token-file`, or set `SKILLHUB_HUB_TOKEN` where your agent starts. `doctor` sees only its own shell |
+| Nothing answers at ... | The server is stopped, or the tunnel or Tailscale is down | Run `skillhub serve` on B; reopen the tunnel; `tailscale status` |
+| The hub at ... refuses requests for the host name ... | You connected with a name the server does not know | Add `--allow-host <name>` to `skillhub serve` on B, or connect with its address |
+| Something answers at ..., but it is not a Skill Hub listener | Another program uses that port | Check the port; connect with a URL the server printed |
+| The hub refused the token | The token was rotated, or the file comes from another hub | Run the `scp` line from the server's start again, then restart the agent |
 | The hub is refusing requests for a minute after too many attempts with a wrong token | Several wrong tokens were tried | Wait a minute, then copy the current token file |
-| The hub on machine B runs an older Skill Hub | B was not updated | Update skillhub on B and restart the listener |
+| The hub on machine B runs an older Skill Hub | B was not updated | Update skillhub on B and restart the server |
 | This machine runs an older Skill Hub | A was not updated | `skillhub update` on A, then restart the agent |
-| The skill cache ... is not writable | Fetched skills cannot be stored | `chmod u+w <directory>`, or set `XDG_STATE_HOME` to a writable directory where the agent host starts |
+| The skill cache ... is not writable | Fetched skills cannot be stored | `chmod u+w <directory>`, or set `XDG_STATE_HOME` to a writable directory where your agent starts |
 
 ## When the hub or the tunnel is down
 
@@ -345,23 +383,24 @@ Your agent keeps working; it only loses new skills until the connection is back.
 - A skill that machine B has just marked as waiting for review is never served from the cache.
 - When the hub answers but cannot serve a skill right now (busy, or a file changed on disk), the agent gets `hub_error` and no cached copy, because such an answer may concern the skill's trust or content.
 
-As soon as the hub answers again, the next call works; you do not need to restart the agent. If the listener on machine B restarted, the proxy opens a new session by itself.
+As soon as the hub answers again, the next call works; you do not need to restart the agent. If the server on machine B restarted, the proxy opens a new session by itself.
 
 ## The skill cache on machine A
 
-Each skill version is downloaded once and kept by its digest. A changed skill is fetched again; a change of only its routing metadata on machine B is not. Three versions per skill are kept, versions unused for 30 days are removed, and each hub's cache stays under 512 MB.
+Each skill version is downloaded once and kept until it changes. A changed skill is fetched again; a change of only its routing metadata on machine B is not. Three versions per skill are kept, versions unused for 30 days are removed, and each hub's cache stays under 512 MB.
 
 To remove the cached copies yourself:
 
 ```bash
-skillhub cache clear --hub                                  # preview every hub's cache
-skillhub cache clear --hub http://127.0.0.1:7420 --yes      # clear one hub's cache
+skillhub cache clear --dry-run                         # show every hub's cache
+skillhub cache clear --hub http://127.0.0.1:7420       # clear one hub's cache
 ```
 
 ```text
-This removes the copies of skills fetched from remote hubs.
+Dry run: the copies of skills fetched from remote hubs were not removed.
 Cache directory:  /home/you/.local/state/skillhub/remote
 
+Would change:
 Hub                    Skills  Versions  Size
 http://127.0.0.1:7420  1       1         237 bytes
 
@@ -369,51 +408,62 @@ http://127.0.0.1:7420  1       1         237 bytes
   - The skills' working directories (installed dependencies) and stored secrets are kept.
   - Nothing on the hub changes.
 
-Next: Apply the cleanup:
-  $ skillhub cache clear --hub --yes
+Next: Clear the cache:
+  $ skillhub cache clear
 ```
+
+`cache clear` acts at once and prints what it removed; `--dry-run` shows it first.
 
 ## Security in plain words
 
-**What travels between the machines.** The text of each task your agent resolves, the approved skill files with their digests, the skill's runtime description (its `check` and `setup` commands), resolve results and feedback. That is why the listener accepts only loopback (an SSH tunnel) or a network you confirmed as private.
+**What travels between the machines.** The text of each task your agent resolves, the approved skill files, the skill's runtime description (its `check` and `setup` commands), resolve results and feedback. That is why the server prints a warning when it listens on a network address, and why an untrusted network needs the SSH tunnel.
 
-**What never travels.** Curation tools, the case journal, any write to your skills or the Git repository, stored secrets (`skillhub skill env set` values), paths on machine B's disk, skills waiting for your approval, and the token itself, which appears in no answer, log line, printed command or host config file.
+**What never travels.** Curation tools, the case journal, any write to your skills or the Git repository, stored secrets (`skillhub skill env set` values), paths on machine B's disk, skills waiting for your approval, and the token itself, which appears in no answer, log line, printed command or agent config file.
 
-**What a stolen token allows.** The same as an agent on machine A: resolving tasks, reading approved skills and writing usage records on machine B. It does not allow any curation, approving content, reading unapproved content or running anything on machine B. Requests without a valid token are refused, and repeated wrong tokens are slowed down.
+**What a stolen hub token allows.** The same as an agent on machine A: resolving tasks, reading approved skills and writing usage records on machine B. It does not allow any curation, approving content, reading unapproved content or running anything on machine B. Requests without a valid token are refused, and repeated wrong tokens are slowed down.
+
+**What the web UI allows.** `skillhub serve web` also listens on every network interface by default, and its address carries a session token. Anyone who has that address can add and change skills in the hub, and every connected agent on every machine then uses them. To keep it on machine B, run `cd ~/skill-hub && skillhub serve web --addr 127.0.0.1:7421`.
 
 **Where scripts run.** Only on machine A, from the copy it fetched. Machine B never runs a skill's check, setup or scripts for machine A.
 
-**What machine B records.** Calls from machine A appear in the usage records with the client `remote:<host>`, for example `remote:claude-code`. Neither the token nor machine A's address is stored.
+**What machine B records.** Calls from machine A appear in the usage records with the client `remote:<agent>`, for example `remote:claude-code`. Neither the token nor machine A's address is stored.
+
+**Who asks before setup commands.** Claude Code asks you before it runs `init`, `connect`, `doctor --fix`, `token rotate`, `cache clear` or `serve`. Codex and Gemini CLI do not prompt before them.
 
 ### Rotate the token
 
-Rotate the token when a copy may have leaked or when a machine should lose access. On machine B:
+Rotate the token when a copy may have leaked or when a machine should lose access. On machine B, in a terminal:
 
 ```bash
-skillhub token rotate --workspace ~/skillhub          # preview
-skillhub token rotate --workspace ~/skillhub --yes    # replace the token
+cd ~/skill-hub && skillhub token rotate --dry-run
 ```
 
 ```text
-This replaces the hub token with a new random one.
-Token file:  /home/you/skillhub/runtime/config/.hub-token
+Dry run: the hub token was not replaced.
+Token file:  /home/you/skill-hub/runtime/config/.hub-token
+Would change:
+  - The token is replaced with a new random one.
   - Every machine that connects to this hub stops working until it gets the new token file.
   - A running listener uses the new token from its next request; it does not need a restart.
 
-Next: Apply the rotation:
-  $ skillhub token rotate --workspace /home/you/skillhub --yes
+To replace the token, run in a terminal:
+  $ skillhub token rotate
 ```
 
-Then copy the new token file to every machine A that should keep access, as in [step 2](#2-bring-the-token-to-machine-a).
+Replace it:
+
+```bash
+cd ~/skill-hub && skillhub token rotate
+```
+
+`token rotate` acts at once, and only in a terminal: run by a script or an agent, it refuses. It prints the `scp` line to run on each machine A that should keep access.
 
 ## Go back to one machine
 
 To stop using the hub on machine B from machine A, remove the connection. `--cache` also clears the skills fetched from that hub:
 
 ```bash
-cd your-project
-skillhub connect --remove --cache            # preview
-skillhub connect --remove --cache --yes      # remove the entry and clear the cache
+cd <your-project> && skillhub connect --remove --cache
 ```
 
 ```text
@@ -425,11 +475,11 @@ removed.
   - Gemini CLI: removed (.gemini/settings.json deleted, GEMINI.md deleted)
 The removed entries pointed at:
   - Claude Code: the remote hub at http://127.0.0.1:7420 (token file
-    /home/you/.config/skillhub/hub-token)
+    /home/you/.skillhub-token-127.0.0.1-7420)
   - Codex: the remote hub at http://127.0.0.1:7420 (token file
-    /home/you/.config/skillhub/hub-token)
+    /home/you/.skillhub-token-127.0.0.1-7420)
   - Gemini CLI: the remote hub at http://127.0.0.1:7420 (token file
-    /home/you/.config/skillhub/hub-token)
+    /home/you/.skillhub-token-127.0.0.1-7420)
 
 Cleared cached skills:
 Hub                    Skills  Versions  Size
@@ -440,24 +490,24 @@ http://127.0.0.1:7420  1       1         237 bytes
 Next: restart your agent so it stops starting the Skill Hub server
 ```
 
-Files that held only the Skill Hub entry are deleted; files with other content keep it. Use `-g` to remove a user-account connection. To use a hub on machine A itself instead, connect the scope to a workspace there; this replaces the remote entry in one step:
+Files that held only the Skill Hub entry are deleted; files with other content keep it. Add `--dry-run` to see the changes first, and `-g` to remove a user-account connection. To use a hub on machine A itself instead, connect the scope to a hub folder there; this replaces the remote entry in one step:
 
 ```bash
-skillhub connect --workspace ~/skillhub --yes
+cd <your-project> && skillhub connect ~/skill-hub
 ```
 
-Then stop the tunnel and, on machine B, the listener (Ctrl-C, or `systemctl --user disable --now skillhub-listener`). You can delete the token copy on machine A, and `skillhub token rotate --yes` on machine B makes every old copy useless.
+Then stop the tunnel and, on machine B, the server (Ctrl-C, or `systemctl --user disable --now skillhub-server`). You can delete the token copy on machine A, and `skillhub token rotate` on machine B makes every old copy useless.
 
 ## Time a run from machine A
 
-To see how fast your own connection is, run `scripts/remote-timing.sh` from the Skill Hub repository on machine A. It starts the same proxy your agent host starts, with a new, empty cache, resolves a task, gets one skill twice and prints the times. It needs `python3`, and it never reads or prints the token.
+To see how fast your own connection is, run `scripts/remote-timing.sh` from the Skill Hub repository on machine A. It starts the same proxy your agent starts, with a new, empty cache, resolves a task, gets one skill twice and prints the times. It needs `python3`, and it never reads or prints the token.
 
 ```bash
-cd your-project            # a project connected with connect --hub
+cd <your-project>            # a project connected with connect --hub
 sh scripts/remote-timing.sh --skill <skill-id> --task "<a task that skill is for>"
 
 # or name the hub directly:
-sh scripts/remote-timing.sh --skill <skill-id> --hub http://127.0.0.1:7420 --token-file ~/.config/skillhub/hub-token
+sh scripts/remote-timing.sh --skill <skill-id> --hub http://127.0.0.1:7420 --token-file ~/.skillhub-token-127.0.0.1-7420
 ```
 
 ```text
@@ -485,13 +535,17 @@ On a link with a long round trip, the first call of each agent session takes a f
 
 | Task | Where | Command |
 |---|---|---|
-| Start the listener (SSH tunnel) | B | `skillhub serve mcp --addr 127.0.0.1:7420 [--workspace <path>]` |
-| Start the listener (Tailscale) | B | `skillhub serve mcp --addr <tailscale-ip>:7420 --trust-private-network [--allow-host <name>]` |
+| Start the server on every interface | B | `skillhub serve` |
+| Start the server on chosen addresses | B | `skillhub serve --addr <host:port>[,<host:port>...] [--allow-host <name>]` |
+| Start the server for an SSH tunnel | B | `skillhub serve --addr 127.0.0.1:7420` |
 | Show the token (terminal only) | B | `skillhub token show` |
-| Replace the token | B | `skillhub token rotate [--yes]` |
+| Replace the token (terminal only) | B | `skillhub token rotate [--dry-run]` |
+| Copy the token file | A | `scp -p <user>@<machine-b>:skill-hub/runtime/config/.hub-token ~/.skillhub-token-<host>-<port>` |
 | Open the tunnel | A | `ssh -N -L 7420:127.0.0.1:7420 <user>@<machine-b>` |
-| Connect to the hub | A | `skillhub connect --hub <url> --token-file <path> [-g] [--host <name>] --yes` |
-| Check the connection | A | `skillhub doctor` |
-| Clear fetched skills | A | `skillhub cache clear --hub [<url>] [--yes]` |
-| Remove the connection | A | `skillhub connect --remove [--cache] [-g] --yes` |
+| Connect to the hub | A | `skillhub connect --hub <url> --token-file <file> [-g] [--host <name>] [--dry-run]` |
+| Check the connection | A | `skillhub status`, `skillhub doctor` |
+| Clear fetched skills | A | `skillhub cache clear [--hub <url>] [--dry-run]` |
+| Remove the connection | A | `skillhub connect --remove [--cache] [-g] [--dry-run]` |
 | Time a skill fetch | A | `sh scripts/remote-timing.sh --skill <id> [--task <text>]` |
+
+Run the commands on machine B inside the hub: `cd ~/skill-hub && skillhub <command>`.

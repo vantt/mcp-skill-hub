@@ -30,7 +30,7 @@ When you do not use the recommended skill, re-resolve with `prior.kind: rejected
 Skill Hub instructions are recommendations; your agent environment controls tool permissions and execution.
 <!-- skillhub:bootstrap:v1:end -->
 === .claude/settings.json
-{"permissions":{"additionalDirectories":["<WORKSPACE>/runtime/cache/skills","<WORKSPACE>/runtime/envs","<WORKSPACE>/runtime/config"], "allow":["Bash(skillhub:*)"], "ask":["Bash(skillhub * --yes*)","Bash(skillhub * confirm *)"], "deny":["Bash(skillhub * --approve-content*)"]}}
+{"permissions":{"additionalDirectories":["<WORKSPACE>/runtime/cache/skills","<WORKSPACE>/runtime/envs","<WORKSPACE>/runtime/config"], "allow":["Bash(skillhub:*)"], "ask":["Bash(skillhub * --yes*)","Bash(skillhub * confirm *)","Bash(skillhub *init*)","Bash(skillhub *connect*)","Bash(skillhub *--fix*)","Bash(skillhub *token rotate*)","Bash(skillhub *cache clear*)","Bash(skillhub *serve*)"], "deny":["Bash(skillhub * --approve-content*)"]}}
 [no final newline]
 === .claude/skills/system-curator/SKILL.md
 <the bundled system-curator SKILL.md, unchanged>

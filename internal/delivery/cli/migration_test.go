@@ -15,7 +15,7 @@ func TestMigrateCLIJSONPreviewAndConfirmation(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
+	if code := runInitTo(t, root, &stdout, &stderr); code != 0 {
 		t.Fatalf("init exit = %d: %s", code, stderr.String())
 	}
 	if err := os.Remove(filepath.Join(root, ".skillhub", "schema-version")); err != nil {
@@ -23,7 +23,7 @@ func TestMigrateCLIJSONPreviewAndConfirmation(t *testing.T) {
 	}
 	stdout.Reset()
 	stderr.Reset()
-	if code := Run([]string{"migrate", "--workspace", root, "--to", "5", "--json"}, &stdout, &stderr); code != 0 {
+	if code := Run([]string{"maintain", "migrate", "--workspace", root, "--to", "5", "--json"}, &stdout, &stderr); code != 0 {
 		t.Fatalf("preview exit = %d: %s", code, stderr.String())
 	}
 	var preview app.MigrationResult
@@ -39,7 +39,7 @@ func TestMigrateCLIJSONPreviewAndConfirmation(t *testing.T) {
 
 	stdout.Reset()
 	stderr.Reset()
-	if code := Run([]string{"migrate", "--workspace", root, "--yes", "--json"}, &stdout, &stderr); code != 0 {
+	if code := Run([]string{"maintain", "migrate", "--workspace", root, "--yes", "--json"}, &stdout, &stderr); code != 0 {
 		t.Fatalf("confirm exit = %d: %s", code, stderr.String())
 	}
 	var applied app.MigrationResult
@@ -55,7 +55,7 @@ func TestMigrateCLIHumanPreviewIncludesPinnedDiff(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
+	if code := runInitTo(t, root, &stdout, &stderr); code != 0 {
 		t.Fatalf("init exit = %d: %s", code, stderr.String())
 	}
 	if err := os.Remove(filepath.Join(root, ".skillhub", "schema-version")); err != nil {
@@ -63,7 +63,7 @@ func TestMigrateCLIHumanPreviewIncludesPinnedDiff(t *testing.T) {
 	}
 	stdout.Reset()
 	stderr.Reset()
-	if code := Run([]string{"migrate", "--workspace", root}, &stdout, &stderr); code != 0 {
+	if code := Run([]string{"maintain", "migrate", "--workspace", root}, &stdout, &stderr); code != 0 {
 		t.Fatalf("preview exit = %d: %s", code, stderr.String())
 	}
 	output := stdout.String()
@@ -77,7 +77,7 @@ func TestMigrateCLIHumanPreviewIncludesPinnedDiff(t *testing.T) {
 func TestMigrateCLIValidatesFlags(t *testing.T) {
 	t.Parallel()
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"migrate", "--to", "nope", "--json"}, &stdout, &stderr); code != 2 {
+	if code := Run([]string{"maintain", "migrate", "--to", "nope", "--json"}, &stdout, &stderr); code != 2 {
 		t.Fatalf("invalid flags exit = %d", code)
 	}
 	if !json.Valid(stdout.Bytes()) {

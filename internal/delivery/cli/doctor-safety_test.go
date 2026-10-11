@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
@@ -39,16 +41,18 @@ func TestDoctorFixPreservesBlockedWorkspaceAndUnregisteredHosts(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Chdir(project)
-	code, stdout, stderr := runCLI(t, "doctor", "--workspace", workspace, "--fix", "--yes", "--json")
-	if code != 0 {
-		t.Fatalf("doctor failed: %d %s", code, stderr)
+	code, stdout, stderr := runCLI(t, "doctor", "--workspace", workspace, "--fix", "--json")
+	if code != 1 {
+		t.Fatalf("doctor --fix with a schema that needs a migration exit = %d, want 1: %s", code, stderr)
 	}
-	var blocked app.Result
+	var blocked doctorJSON
 	if err := json.Unmarshal([]byte(stdout), &blocked); err != nil {
 		t.Fatal(err)
 	}
-	if blocked.Status != app.StatusActionRequired {
-		t.Fatalf("blocked schema reported success: %+v", blocked)
+	if !slices.ContainsFunc(blocked.NotFixed, func(item app.NotFixedItem) bool {
+		return item.Code == "hub_schema" && strings.Contains(item.Manual, "skillhub maintain migrate")
+	}) {
+		t.Fatalf("the schema problem is not reported as not fixed with the migrate command: %s", stdout)
 	}
 	if after, err := os.ReadFile(path); err != nil || !bytes.Equal(after, legacy) {
 		t.Fatalf("blocked repair changed external registration: %s %v", after, err)
@@ -56,7 +60,7 @@ func TestDoctorFixPreservesBlockedWorkspaceAndUnregisteredHosts(t *testing.T) {
 	if err := os.WriteFile(marker, original, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if code, _, stderr := runCLI(t, "doctor", "--workspace", workspace, "--fix", "--yes"); code != 0 {
+	if code, _, stderr := runCLI(t, "doctor", "--workspace", workspace, "--fix"); code != 0 {
 		t.Fatal(stderr)
 	}
 	if after, err := os.ReadFile(codexPath); err != nil || !bytes.Equal(after, codex) {
@@ -80,7 +84,7 @@ func TestDoctorFixDoesNotRedirectOtherWorkspaceConnections(t *testing.T) {
 		}
 	}
 	t.Chdir(project)
-	if code, _, stderr := runCLI(t, "doctor", "--workspace", workspace, "--fix", "--yes"); code != 0 {
+	if code, _, stderr := runCLI(t, "doctor", "--workspace", workspace, "--fix"); code != 0 {
 		t.Fatal(stderr)
 	}
 	for _, path := range paths {
