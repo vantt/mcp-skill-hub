@@ -143,3 +143,18 @@ func TestSourceFollowsRotation(t *testing.T) {
 		t.Fatalf("Check after removal = %v, want not exist", err)
 	}
 }
+
+func TestClientPathIsOneFilePerHub(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct{ url, want string }{
+		{"http://192.168.1.20:7420", "~/.skillhub-token-192.168.1.20-7420"},
+		{"http://hub.tailnet.ts.net:7420/", "~/.skillhub-token-hub.tailnet.ts.net-7420"},
+		{"http://[fd7a:115c::1]:7420", "~/.skillhub-token-fd7a115c1-7420"},
+		{"https://hub.example", "~/.skillhub-token-hub.example-443"},
+		{"http://host_name:7420", "~/.skillhub-token-hostname-7420"},
+	} {
+		if got := ClientPath(test.url); got != test.want {
+			t.Errorf("ClientPath(%q) = %q, want %q", test.url, got, test.want)
+		}
+	}
+}
