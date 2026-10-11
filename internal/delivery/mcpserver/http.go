@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/vantt/mcp-skill-hub/internal/delivery/hostpolicy"
 	"github.com/vantt/mcp-skill-hub/internal/hubtoken"
 	"golang.org/x/time/rate"
 )
@@ -48,88 +49,39 @@ const (
 	httpMaxHeaderBytes    = 64 << 10
 )
 
-// ErrNonLoopbackAddress reports a listen address reachable from other machines
-// while the private network has not been confirmed.
-var ErrNonLoopbackAddress = errors.New("the listen address is not a loopback address")
-
-// ErrWildcardAddress reports a listen address that binds every network interface.
-// Trusting a private network does not make that safe, because the same listener
-// would also answer on any public interface, so a specific address is required.
-var ErrWildcardAddress = errors.New("the listen address binds every network interface")
-
 // HTTPOptions configures the network listener.
 type HTTPOptions struct {
 	Workspace string
 	// TokenFile holds the shared bearer token; it must exist before serving.
 	TokenFile string
-	// TrustPrivateNetwork allows a non-loopback listen address. The caller
-	// asserts that the network is private (an SSH tunnel or a VPN such as
-	// Tailscale), because the transport is plain HTTP.
-	TrustPrivateNetwork bool
 	// AllowHosts adds Host header names (for example a VPN DNS name) to the
-	// loopback names, the listen address, and this machine's host name.
+	// names the shared Host policy accepts.
 	AllowHosts []string
 	// Diagnostics receives warnings; nil discards them. It never receives the
 	// token or request content.
 	Diagnostics io.Writer
-	// Ready, when set, is called once the server accepts requests.
-	Ready func(address net.Addr)
-}
-
-// CheckListenAddress validates a host:port listen address. A non-loopback
-// address is refused with ErrNonLoopbackAddress unless trustPrivateNetwork is
-// set, because the listener speaks plain HTTP and the task text of every
-// request would cross the network unencrypted. Even then an address that binds
-// every interface (0.0.0.0, [::] or no host) is refused with ErrWildcardAddress.
-func CheckListenAddress(address string, trustPrivateNetwork bool) error {
-	host, port, err := net.SplitHostPort(address)
-	if err != nil {
-		return fmt.Errorf("invalid address %q: use host:port, for example 127.0.0.1:7420", address)
-	}
-	if port == "" {
-		return fmt.Errorf("invalid address %q: the port is missing", address)
-	}
-	if _, err := net.LookupPort("tcp", port); err != nil {
-		return fmt.Errorf("invalid port in address %q", address)
-	}
-	if isLoopbackHost(host) {
-		return nil
-	}
-	if !trustPrivateNetwork {
-		return ErrNonLoopbackAddress
-	}
-	if ip := net.ParseIP(host); host == "" || (ip != nil && ip.IsUnspecified()) {
-		return ErrWildcardAddress
-	}
-	return nil
-}
-
-// IsLoopbackAddress reports whether a host:port listen address stays on this
-// machine.
-func IsLoopbackAddress(address string) bool {
-	host, _, err := net.SplitHostPort(address)
-	return err == nil && isLoopbackHost(host)
-}
-
-func isLoopbackHost(host string) bool {
-	if strings.EqualFold(host, "localhost") {
-		return true
-	}
-	ip := net.ParseIP(strings.Trim(host, "[]"))
-	return ip != nil && ip.IsLoopback()
+	// Ready, when set, is called once the server accepts requests on every
+	// listener, with the addresses the listeners are bound to.
+	Ready func(addresses []net.Addr)
 }
 
 // ServeHTTP serves the runtime tools (skill_resolve, skill_get,
-// skill_feedback) over Streamable HTTP on listener until ctx ends. No curation
+// skill_feedback) over Streamable HTTP on every listener until ctx ends: one
+// HTTP server, one token and one Host policy for all of them. No curation
 // tool is registered on this server. Every request needs the shared bearer
-// token in the Authorization header. On shutdown it closes all sessions, stops
-// the HTTP server, and flushes the telemetry recorder.
-func ServeHTTP(ctx context.Context, listener net.Listener, options HTTPOptions) error {
-	if listener == nil {
+// token in the Authorization header. If one listener fails, the server stops
+// on all of them. On shutdown it closes all sessions, stops the HTTP server,
+// and flushes the telemetry recorder.
+func ServeHTTP(ctx context.Context, listeners []net.Listener, options HTTPOptions) error {
+	if len(listeners) == 0 {
 		return errors.New("no listener")
 	}
-	if err := CheckListenAddress(listener.Addr().String(), options.TrustPrivateNetwork); err != nil {
-		return err
+	addresses := make([]net.Addr, len(listeners))
+	for index, listener := range listeners {
+		if listener == nil {
+			return errors.New("no listener")
+		}
+		addresses[index] = listener.Addr()
 	}
 	tokens := hubtoken.NewSource(options.TokenFile)
 	if err := tokens.Check(); err != nil {
@@ -145,7 +97,9 @@ func ServeHTTP(ctx context.Context, listener net.Listener, options HTTPOptions) 
 	// path on this machine's disk.
 	adapter.remote = true
 
-	gate := newHTTPGate(server, tokens, allowedHosts(listener.Addr(), options.AllowHosts), adapter.logger)
+	hostname, _ := os.Hostname()
+	hosts := hostpolicy.New(hostpolicy.Options{Listeners: addresses, AllowHosts: options.AllowHosts, Hostname: hostname})
+	gate := newHTTPGate(server, tokens, hosts, originHosts(addresses, options.AllowHosts), adapter.logger)
 	gate.bundle = adapter.bundleHTTPHandler(server)
 	httpServer := &http.Server{
 		Handler:           gate,
@@ -154,19 +108,35 @@ func ServeHTTP(ctx context.Context, listener net.Listener, options HTTPOptions) 
 		MaxHeaderBytes:    httpMaxHeaderBytes,
 		ErrorLog:          httpErrorLog(adapter.logger),
 	}
-	served := make(chan error, 1)
-	go func() { served <- httpServer.Serve(listener) }()
+	served := make(chan error, len(listeners))
+	for _, listener := range listeners {
+		go func() { served <- httpServer.Serve(listener) }()
+	}
 	if options.Ready != nil {
-		options.Ready(listener.Addr())
+		options.Ready(addresses)
+	}
+	// remaining counts the Serve calls that have not returned yet.
+	remaining := len(listeners)
+	firstError := func(errs ...error) error {
+		for _, err := range errs {
+			if err != nil && !errors.Is(err, http.ErrServerClosed) {
+				return err
+			}
+		}
+		return nil
 	}
 
 	select {
 	case err := <-served:
+		// One listener stopped on its own: stop the others too.
+		remaining--
 		gate.closeSessions()
-		if errors.Is(err, http.ErrServerClosed) {
-			return nil
+		_ = httpServer.Close()
+		errs := []error{err}
+		for ; remaining > 0; remaining-- {
+			errs = append(errs, <-served)
 		}
-		return err
+		return firstError(errs...)
 	case <-ctx.Done():
 	}
 	// Refuse new requests, let calls already running finish (so a feedback
@@ -183,7 +153,11 @@ func ServeHTTP(ctx context.Context, listener net.Listener, options HTTPOptions) 
 		_ = httpServer.Close()
 		shutdownErr = nil
 	}
-	if err := <-served; err != nil && !errors.Is(err, http.ErrServerClosed) {
+	var errs []error
+	for ; remaining > 0; remaining-- {
+		errs = append(errs, <-served)
+	}
+	if err := firstError(errs...); err != nil {
 		return err
 	}
 	return shutdownErr
@@ -194,11 +168,14 @@ func ServeHTTP(ctx context.Context, listener net.Listener, options HTTPOptions) 
 // limit, and the session cap. The token is compared in constant time and is
 // never logged or echoed.
 type httpGate struct {
-	server   *mcp.Server
-	handler  http.Handler
-	bundle   http.Handler
-	tokens   *hubtoken.Source
-	hosts    map[string]bool
+	server  *mcp.Server
+	handler http.Handler
+	bundle  http.Handler
+	tokens  *hubtoken.Source
+	hosts   *hostpolicy.Policy
+	// origins is the strict Origin set; it does not follow the Host policy's
+	// acceptance of any IP literal (see originHosts).
+	origins  map[string]bool
 	limiter  *rate.Limiter
 	failures *authFailures
 	// maxSessions caps open sessions; a new session beyond it gets 503. The
@@ -212,7 +189,7 @@ type httpGate struct {
 	logger   *slog.Logger
 }
 
-func newHTTPGate(server *mcp.Server, tokens *hubtoken.Source, hosts map[string]bool, logger *slog.Logger) *httpGate {
+func newHTTPGate(server *mcp.Server, tokens *hubtoken.Source, hosts *hostpolicy.Policy, origins map[string]bool, logger *slog.Logger) *httpGate {
 	handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, &mcp.StreamableHTTPOptions{
 		SessionTimeout:      httpSessionIdleTimeout,
 		MaxRequestBodyBytes: MaxFrameBytes,
@@ -227,6 +204,7 @@ func newHTTPGate(server *mcp.Server, tokens *hubtoken.Source, hosts map[string]b
 		handler:     handler,
 		tokens:      tokens,
 		hosts:       hosts,
+		origins:     origins,
 		limiter:     rate.NewLimiter(rate.Limit(httpRequestsPerSecond), httpRequestBurst),
 		failures:    newAuthFailures(time.Now),
 		maxSessions: httpMaxSessions,
@@ -236,11 +214,11 @@ func newHTTPGate(server *mcp.Server, tokens *hubtoken.Source, hosts map[string]b
 
 func (gate *httpGate) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	writer.Header().Set("Cache-Control", "no-store")
-	if !gate.hosts[normalizeHost(request.Host)] {
+	if !gate.hosts.Allows(request.Host) {
 		http.Error(writer, "Forbidden: the Host header is not a name of this hub; add it with --allow-host", http.StatusForbidden)
 		return
 	}
-	if origin := request.Header.Get("Origin"); origin != "" && !gate.originAllowed(origin) {
+	if origin := request.Header.Get("Origin"); origin != "" && !gate.originAllowed(origin, request.Host) {
 		http.Error(writer, "Forbidden: cross-origin requests are not accepted", http.StatusForbidden)
 		return
 	}
@@ -324,12 +302,18 @@ func (gate *httpGate) closeSessions() {
 	}
 }
 
-func (gate *httpGate) originAllowed(origin string) bool {
+// originAllowed accepts an Origin that names a bound address, loopback,
+// localhost, an --allow-host name, or the request's own Host (a same-origin
+// request). A browser page served from any other IP address is refused even
+// when its Host header would pass, so a page on another machine of the
+// network cannot drive the listener through a visitor's browser.
+func (gate *httpGate) originAllowed(origin, requestHost string) bool {
 	parsed, err := url.Parse(origin)
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
 		return false
 	}
-	return gate.hosts[normalizeHost(parsed.Host)]
+	host := normalizeHost(parsed.Host)
+	return gate.origins[host] || host == normalizeHost(requestHost)
 }
 
 // bearerToken extracts the credential of an `Authorization: Bearer` header.
@@ -383,29 +367,28 @@ func remoteHost(remoteAddress string) string {
 	return host
 }
 
-// allowedHosts lists the Host names accepted for a listener: the loopback
-// names, the listen IP (or every interface IP for a wildcard address), this
-// machine's host name with and without ".local", and the extra names. The list
-// is fixed at start-up: if an interface address changes, restart the listener.
-func allowedHosts(address net.Addr, extra []string) map[string]bool {
+// originHosts lists the names an Origin header may carry: the loopback names,
+// each listen IP (every interface IP for a wildcard address), and the extra
+// names. The list is fixed at start-up: if an interface address changes,
+// restart the listener.
+func originHosts(addresses []net.Addr, extra []string) map[string]bool {
 	hosts := map[string]bool{"localhost": true, "127.0.0.1": true, "::1": true}
-	if tcp, ok := address.(*net.TCPAddr); ok && tcp.IP != nil {
-		if tcp.IP.IsUnspecified() {
-			if addresses, err := net.InterfaceAddrs(); err == nil {
-				for _, item := range addresses {
+	for _, address := range addresses {
+		tcp, ok := address.(*net.TCPAddr)
+		if !ok {
+			continue
+		}
+		if tcp.IP == nil || tcp.IP.IsUnspecified() {
+			if interfaceAddresses, err := net.InterfaceAddrs(); err == nil {
+				for _, item := range interfaceAddresses {
 					if network, ok := item.(*net.IPNet); ok {
 						hosts[network.IP.String()] = true
 					}
 				}
 			}
-		} else {
-			hosts[tcp.IP.String()] = true
+			continue
 		}
-	}
-	if name, err := os.Hostname(); err == nil && name != "" {
-		name = normalizeHost(name)
-		hosts[name] = true
-		hosts[name+".local"] = true
+		hosts[tcp.IP.String()] = true
 	}
 	for _, name := range extra {
 		if normalized := normalizeHost(name); normalized != "" {

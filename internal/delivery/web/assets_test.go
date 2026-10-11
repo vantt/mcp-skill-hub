@@ -20,10 +20,10 @@ func TestAssetsServing(t *testing.T) {
 	}
 
 	s, err := New(Options{
-		Workspace:  t.TempDir(),
-		Token:      "test-token",
-		ListenPort: 7421,
-		Assets:     mockFS,
+		Workspace:   t.TempDir(),
+		Token:       "test-token",
+		ListenAddrs: listenOn("127.0.0.1", 7421),
+		Assets:      mockFS,
 	})
 	if err != nil {
 		t.Fatalf("failed to create server: %v", err)
@@ -106,10 +106,10 @@ func TestAssetsServing(t *testing.T) {
 
 	t.Run("empty MapFS returns 503 not built text", func(t *testing.T) {
 		emptySrv, err := New(Options{
-			Workspace:  t.TempDir(),
-			Token:      "test-token",
-			ListenPort: 7421,
-			Assets:     fstest.MapFS{},
+			Workspace:   t.TempDir(),
+			Token:       "test-token",
+			ListenAddrs: listenOn("127.0.0.1", 7421),
+			Assets:      fstest.MapFS{},
 		})
 		if err != nil {
 			t.Fatalf("failed to create server: %v", err)

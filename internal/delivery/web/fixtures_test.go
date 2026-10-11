@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -200,18 +201,19 @@ func newWebWorkspace(t *testing.T) string {
 	return root
 }
 
+// listenOn is the listener address list of a server bound to ip:port.
+func listenOn(ip string, port int) []net.Addr {
+	return []net.Addr{&net.TCPAddr{IP: net.ParseIP(ip), Port: port}}
+}
+
 func newTestServer(t *testing.T, root string) *Server {
 	t.Helper()
-	fakeIfaces := func() ([]InterfaceInfo, error) {
-		return []InterfaceInfo{}, nil
-	}
 	srv, err := New(Options{
-		Workspace:  root,
-		Token:      "test-token",
-		ListenPort: 7421,
-		Interfaces: fakeIfaces,
-		Assets:     fstest.MapFS{},
-		Now:        func() time.Time { return time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC) },
+		Workspace:   root,
+		Token:       "test-token",
+		ListenAddrs: listenOn("127.0.0.1", 7421),
+		Assets:      fstest.MapFS{},
+		Now:         func() time.Time { return time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC) },
 	})
 	if err != nil {
 		t.Fatalf("failed to create test server: %v", err)

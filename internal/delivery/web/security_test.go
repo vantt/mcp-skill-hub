@@ -12,15 +12,6 @@ import (
 )
 
 func TestSecurityMiddleware(t *testing.T) {
-	fakeIfaces := func() ([]InterfaceInfo, error) {
-		return []InterfaceInfo{
-			{
-				Name: "wlan0",
-				Up:   true,
-				IPs:  []net.IP{net.ParseIP("10.0.0.5")},
-			},
-		}, nil
-	}
 	fakeHostname := func() (string, error) {
 		return "devbox", nil
 	}
@@ -35,6 +26,7 @@ func TestSecurityMiddleware(t *testing.T) {
 		contentType   string
 		body          io.Reader
 		allowHosts    []string
+		listen        []net.Addr
 		wantStatus    int
 		expectHandler bool
 	}
@@ -77,22 +69,77 @@ func TestSecurityMiddleware(t *testing.T) {
 			expectHandler: false,
 		},
 		{
-			name:          "Host 10.0.0.9:7421",
+			name:          "Host 10.0.0.9:7421 on a 10.0.0.5 bind",
 			method:        http.MethodGet,
 			path:          "/api/test",
 			host:          "10.0.0.9:7421",
 			token:         "correct-token",
+			listen:        listenOn("10.0.0.5", 7421),
 			wantStatus:    http.StatusMisdirectedRequest,
 			expectHandler: false,
 		},
 		{
-			name:          "Host 10.0.0.5:7421",
+			name:          "Host 10.0.0.5:7421 on a 10.0.0.5 bind",
 			method:        http.MethodGet,
 			path:          "/api/test",
 			host:          "10.0.0.5:7421",
 			token:         "correct-token",
+			listen:        listenOn("10.0.0.5", 7421),
 			wantStatus:    http.StatusOK,
 			expectHandler: true,
+		},
+		{
+			name:          "any IP literal on a wildcard bind",
+			method:        http.MethodGet,
+			path:          "/api/test",
+			host:          "203.0.113.9:7421",
+			token:         "correct-token",
+			listen:        listenOn("0.0.0.0", 7421),
+			wantStatus:    http.StatusOK,
+			expectHandler: true,
+		},
+		{
+			name:          "an IPv6 literal on a wildcard bind",
+			method:        http.MethodGet,
+			path:          "/api/test",
+			host:          "[2001:db8::9]:7421",
+			token:         "correct-token",
+			listen:        listenOn("::", 7421),
+			wantStatus:    http.StatusOK,
+			expectHandler: true,
+		},
+		{
+			name:          "a foreign name on a wildcard bind",
+			method:        http.MethodGet,
+			path:          "/api/test",
+			host:          "evil.example:7421",
+			token:         "correct-token",
+			listen:        listenOn("0.0.0.0", 7421),
+			wantStatus:    http.StatusMisdirectedRequest,
+			expectHandler: false,
+		},
+		{
+			name:          "an IP literal on a wildcard bind with another port",
+			method:        http.MethodGet,
+			path:          "/api/test",
+			host:          "203.0.113.9:8080",
+			token:         "correct-token",
+			listen:        listenOn("0.0.0.0", 7421),
+			wantStatus:    http.StatusMisdirectedRequest,
+			expectHandler: false,
+		},
+		{
+			name:          "POST with an Origin from another IP on a wildcard bind",
+			method:        http.MethodPost,
+			path:          "/api/test",
+			host:          "192.168.1.10:7421",
+			token:         "correct-token",
+			origin:        "http://203.0.113.9:7421",
+			contentType:   "application/json",
+			body:          bytes.NewBufferString("{}"),
+			listen:        listenOn("0.0.0.0", 7421),
+			wantStatus:    http.StatusForbidden,
+			expectHandler: false,
 		},
 		{
 			name:          "Host devbox:7421",
@@ -180,13 +227,16 @@ func TestSecurityMiddleware(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			listen := tc.listen
+			if listen == nil {
+				listen = listenOn("127.0.0.1", 7421)
+			}
 			s, err := New(Options{
-				Workspace:  t.TempDir(),
-				Token:      "correct-token",
-				ListenPort: 7421,
-				AllowHosts: tc.allowHosts,
-				Interfaces: fakeIfaces,
-				Hostname:   fakeHostname,
+				Workspace:   t.TempDir(),
+				Token:       "correct-token",
+				ListenAddrs: listen,
+				AllowHosts:  tc.allowHosts,
+				Hostname:    fakeHostname,
 			})
 			if err != nil {
 				t.Fatalf("failed to create server: %v", err)
@@ -237,10 +287,10 @@ func TestAuthThrottle(t *testing.T) {
 	}
 
 	s, err := New(Options{
-		Workspace:  t.TempDir(),
-		Token:      "good-token",
-		ListenPort: 7421,
-		Now:        fakeClock,
+		Workspace:   t.TempDir(),
+		Token:       "good-token",
+		ListenAddrs: listenOn("127.0.0.1", 7421),
+		Now:         fakeClock,
 	})
 	if err != nil {
 		t.Fatalf("failed to create server: %v", err)

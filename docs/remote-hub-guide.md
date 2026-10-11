@@ -234,41 +234,13 @@ With Tailscale the listener binds to machine B's Tailscale address, and no tunne
 
 ```bash
 tailscale ip -4                       # for example 100.101.102.103
-skillhub serve mcp --addr 100.101.102.103:7420 --trust-private-network --workspace ~/skillhub
+skillhub serve --addr 100.101.102.103:7420 --workspace ~/skillhub
 ```
 
-`--trust-private-network` is your statement that every machine on that network is yours. Without it the listener refuses any address other machines could reach:
+Without `--addr`, `skillhub serve` listens on every interface (`0.0.0.0:7420`), Tailscale included. Either way the transport is plain HTTP, and the banner says so in one warning line:
 
 ```text
-ERROR: The MCP listener will not start on 100.101.102.103:7420.
-WHY: That address can be reached from other machines and the listener speaks plain HTTP, so task
-     text and skill content would cross the network unencrypted.
-FIX: Listen on 127.0.0.1 and reach it through an SSH tunnel, or, on a private network such as
-     Tailscale, add --trust-private-network.
-```
-
-An address that listens on every interface (`0.0.0.0`, `[::]` or `:7420`) is refused even with the flag. It would also open the hub on your Wi-Fi or office network, and the flag vouches for one private network only:
-
-```text
-ERROR: The MCP listener will not start on 0.0.0.0:7420.
-WHY: That address listens on every network interface, including any that are not private, and
-     --trust-private-network only vouches for one private network.
-FIX: Give the address of the private interface instead, for example your Tailscale address, as
-     --addr <tailscale-ip>:7420.
-```
-
-The banner then starts with a reminder that the transport is plain HTTP:
-
-```text
-Skill Hub MCP listener is running with the runtime tools only (skill_resolve, skill_get,
-skill_feedback).
-WARNING: Plain HTTP: --trust-private-network says this network is private (an SSH tunnel or a VPN
-         such as Tailscale).
-
-Listening on:  100.101.102.103:7420
-Workspace:     /home/you/skillhub
-Token file:    /home/you/skillhub/runtime/config/.hub-token
-Transport:     plain HTTP on a network you trust to be private
+WARNING: Listening on a network address over plain HTTP; use --addr 127.0.0.1:7420 to keep it on this machine.
 ```
 
 ### On machine A: connect
@@ -489,7 +461,7 @@ On a link with a long round trip, the first call of each agent session takes a f
 | Task | Where | Command |
 |---|---|---|
 | Start the listener (SSH tunnel) | B | `skillhub serve mcp --addr 127.0.0.1:7420 [--workspace <path>]` |
-| Start the listener (Tailscale) | B | `skillhub serve mcp --addr <tailscale-ip>:7420 --trust-private-network [--allow-host <name>]` |
+| Start the listener (Tailscale) | B | `skillhub serve --addr <tailscale-ip>:7420 [--allow-host <name>]` |
 | Show the token (terminal only) | B | `skillhub token show` |
 | Replace the token | B | `skillhub token rotate [--dry-run]` |
 | Open the tunnel | A | `ssh -N -L 7420:127.0.0.1:7420 <user>@<machine-b>` |

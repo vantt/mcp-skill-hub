@@ -3,12 +3,9 @@ package web
 import (
 	"crypto/subtle"
 	"fmt"
-	"net"
 	"net/http"
-	"strconv"
 	"strings"
 	"sync/atomic"
-	"time"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
 )
@@ -27,73 +24,7 @@ func (s *Server) isHostAllowed(rawHost string) bool {
 	if s.opts.Dev && (rawHost == "127.0.0.1:5421" || rawHost == "localhost:5421") {
 		return true
 	}
-
-	host, portStr, err := net.SplitHostPort(rawHost)
-	if err != nil {
-		return false
-	}
-	port, err := strconv.Atoi(portStr)
-	if err != nil {
-		return false
-	}
-
-	for _, entry := range s.opts.AllowHosts {
-		if strings.Contains(entry, ":") {
-			if strings.EqualFold(entry, rawHost) {
-				return true
-			}
-		} else {
-			if strings.EqualFold(entry, host) && port == s.opts.ListenPort {
-				return true
-			}
-		}
-	}
-
-	if port != s.opts.ListenPort {
-		return false
-	}
-
-	hostLower := strings.ToLower(host)
-	if hostLower == "127.0.0.1" || hostLower == "localhost" || hostLower == "::1" {
-		return true
-	}
-
-	s.hostMu.Lock()
-	now := s.opts.Now()
-	if now.Sub(s.hostCacheAt) > 5*time.Second || s.cachedIPs == nil {
-		s.cachedIPs = make(map[string]bool)
-		if s.opts.Interfaces != nil {
-			ifaces, err := s.opts.Interfaces()
-			if err == nil {
-				for _, iface := range ifaces {
-					for _, ip := range iface.IPs {
-						if v4 := ip.To4(); v4 != nil {
-							s.cachedIPs[v4.String()] = true
-						}
-					}
-				}
-			}
-		}
-		if s.opts.Hostname != nil {
-			h, err := s.opts.Hostname()
-			if err == nil {
-				s.cachedHost = strings.ToLower(h)
-			}
-		}
-		s.hostCacheAt = now
-	}
-	isIP := s.cachedIPs[hostLower]
-	cachedHost := s.cachedHost
-	s.hostMu.Unlock()
-
-	if isIP {
-		return true
-	}
-	if cachedHost != "" && (hostLower == cachedHost || hostLower == cachedHost+".local") {
-		return true
-	}
-
-	return false
+	return s.hosts.Allows(rawHost)
 }
 
 func (s *Server) hostAllowlistMiddleware(next http.Handler) http.Handler {

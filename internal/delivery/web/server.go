@@ -8,32 +8,25 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/delivery/hostpolicy"
 	"github.com/vantt/mcp-skill-hub/internal/workspace"
 )
 
-// InterfaceInfo represents one network interface with its status and IP addresses.
-type InterfaceInfo struct {
-	Name     string
-	Up       bool
-	Loopback bool
-	IPs      []net.IP
-}
-
 // Options configure the web server.
 type Options struct {
-	Workspace  string
-	Token      string
-	ListenPort int
-	AllowHosts []string
-	Dev        bool
-	Now        func() time.Time
-	Interfaces func() ([]InterfaceInfo, error)
-	Hostname   func() (string, error)
-	Assets     fs.FS
+	Workspace string
+	Token     string
+	// ListenAddrs are the addresses the listeners are bound to, as each
+	// listener reports them; the Host check accepts their ports only.
+	ListenAddrs []net.Addr
+	AllowHosts  []string
+	Dev         bool
+	Now         func() time.Time
+	Hostname    func() (string, error)
+	Assets      fs.FS
 }
 
 // Server delivers the WebUI over local HTTP.
@@ -47,10 +40,7 @@ type Server struct {
 	upstream     app.UpstreamService
 	sourceImport app.SourceImportService
 	throttle     *authThrottle
-	hostMu       sync.Mutex
-	hostCacheAt  time.Time
-	cachedIPs    map[string]bool
-	cachedHost   string
+	hosts        *hostpolicy.Policy
 }
 
 var defaultAssets = func() fs.FS {
@@ -63,36 +53,6 @@ func registerRoutes(fn func(s *Server, mux *http.ServeMux)) {
 	routeRegistrars = append(routeRegistrars, fn)
 }
 
-func defaultInterfaces() ([]InterfaceInfo, error) {
-	ifaces, err := net.Interfaces()
-	if err != nil {
-		return nil, err
-	}
-	result := make([]InterfaceInfo, 0, len(ifaces))
-	for _, iface := range ifaces {
-		info := InterfaceInfo{
-			Name:     iface.Name,
-			Up:       iface.Flags&net.FlagUp != 0,
-			Loopback: iface.Flags&net.FlagLoopback != 0,
-		}
-		addrs, err := iface.Addrs()
-		if err == nil {
-			for _, a := range addrs {
-				if ipnet, ok := a.(*net.IPNet); ok {
-					info.IPs = append(info.IPs, ipnet.IP)
-				}
-			}
-		}
-		result = append(result, info)
-	}
-	return result, nil
-}
-
-// DefaultInterfaces returns system network interfaces with their flags and IPs.
-func DefaultInterfaces() ([]InterfaceInfo, error) {
-	return defaultInterfaces()
-}
-
 // New constructs a Server for the configured workspace and options.
 func New(opts Options) (*Server, error) {
 	root, err := workspace.Discover(opts.Workspace)
@@ -102,12 +62,10 @@ func New(opts Options) (*Server, error) {
 	if opts.Now == nil {
 		opts.Now = time.Now
 	}
-	if opts.Interfaces == nil {
-		opts.Interfaces = defaultInterfaces
-	}
 	if opts.Hostname == nil {
 		opts.Hostname = os.Hostname
 	}
+	hostname, _ := opts.Hostname()
 	if opts.Assets == nil {
 		opts.Assets = defaultAssets()
 	}
@@ -115,6 +73,12 @@ func New(opts Options) (*Server, error) {
 		workspace: root,
 		opts:      opts,
 		throttle:  newAuthThrottle(opts.Now),
+		hosts: hostpolicy.New(hostpolicy.Options{
+			Listeners:   opts.ListenAddrs,
+			AllowHosts:  opts.AllowHosts,
+			Hostname:    hostname,
+			RequirePort: true,
+		}),
 	}
 	_ = srv.skillAdd
 	_ = srv.sources
@@ -130,35 +94,52 @@ func (s *Server) Handler() http.Handler {
 	return s.withMiddleware(mux)
 }
 
-// Serve starts the HTTP server on ln and gracefully shuts down when ctx is cancelled.
-func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
+// Serve serves the web UI on every listener with one HTTP server and shuts
+// down gracefully when ctx is cancelled. If one listener fails, the server
+// stops on all of them.
+func (s *Server) Serve(ctx context.Context, listeners []net.Listener) error {
+	if len(listeners) == 0 {
+		return errors.New("no listener")
+	}
 	srv := &http.Server{
 		Handler:           s.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
 
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- srv.Serve(ln)
-	}()
+	errCh := make(chan error, len(listeners))
+	for _, ln := range listeners {
+		go func() { errCh <- srv.Serve(ln) }()
+	}
+	remaining := len(listeners)
+	firstError := func(errs []error) error {
+		for _, err := range errs {
+			if err != nil && !errors.Is(err, http.ErrServerClosed) {
+				return err
+			}
+		}
+		return nil
+	}
 
+	var errs []error
 	select {
 	case <-ctx.Done():
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		if err := srv.Shutdown(shutdownCtx); err != nil {
-			return err
+		shutdownErr := srv.Shutdown(shutdownCtx)
+		for ; remaining > 0; remaining-- {
+			errs = append(errs, <-errCh)
 		}
-		serveErr := <-errCh
-		if errors.Is(serveErr, http.ErrServerClosed) {
-			return nil
+		if shutdownErr != nil {
+			return shutdownErr
 		}
-		return serveErr
 	case err := <-errCh:
-		if errors.Is(err, http.ErrServerClosed) {
-			return nil
+		remaining--
+		_ = srv.Close()
+		errs = append(errs, err)
+		for ; remaining > 0; remaining-- {
+			errs = append(errs, <-errCh)
 		}
-		return err
 	}
+	return firstError(errs)
 }

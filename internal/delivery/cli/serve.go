@@ -13,141 +13,238 @@ import (
 	"strings"
 
 	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
+	"github.com/vantt/mcp-skill-hub/internal/delivery/hostpolicy"
+	"github.com/vantt/mcp-skill-hub/internal/delivery/mcpserver"
 	"github.com/vantt/mcp-skill-hub/internal/delivery/web"
 )
 
+// mcpDefaultPort is the port `skillhub serve` listens on when --addr names
+// none.
+const mcpDefaultPort = 7420
+
+const (
+	serveModeMCP = "mcp"
+	serveModeWeb = "web"
+)
+
 type serveConfig struct {
+	mode          string
 	workspacePath string
 	addrFlag      string
-	loopbackOnly  bool
+	tokenFile     string
 	allowHosts    []string
 	noOpen        bool
 	dev           bool
 }
 
-func parseServeFlags(args []string) (serveConfig, string, string) {
-	var cfg serveConfig
-	for i := 1; i < len(args); i++ {
-		switch args[i] {
-		case "--workspace":
-			if i+1 == len(args) || strings.HasPrefix(args[i+1], "-") {
-				return cfg, "--workspace requires a path", "Run `skillhub help serve`."
+// parseServeArgs reads `skillhub serve [mcp|web] [flags]`. Without a mode
+// word the mode is mcp. --token-file belongs to mcp; --no-open and --dev to
+// web.
+func parseServeArgs(args []string) (serveConfig, string, string) {
+	cfg := serveConfig{mode: serveModeMCP}
+	const fix = "Run `skillhub help serve`."
+	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+		if args[0] != serveModeMCP && args[0] != serveModeWeb {
+			return cfg, fmt.Sprintf("serve has no mode %q", args[0]), "Run `skillhub serve` for agents on other machines, or `skillhub serve web` for the web UI."
+		}
+		cfg.mode = args[0]
+		args = args[1:]
+	}
+	value := func(index int) (string, bool) {
+		if index+1 == len(args) || strings.HasPrefix(args[index+1], "-") {
+			return "", false
+		}
+		return args[index+1], true
+	}
+	for index := 0; index < len(args); index++ {
+		flag := args[index]
+		switch flag {
+		case "--workspace", "--addr", "--token-file", "--allow-host":
+			if flag == "--token-file" && cfg.mode != serveModeMCP {
+				return cfg, "--token-file only applies to `skillhub serve` (mcp); the web UI makes a new session token on every start", fix
 			}
-			cfg.workspacePath = args[i+1]
-			i++
-		case "--addr":
-			if i+1 == len(args) || strings.HasPrefix(args[i+1], "-") {
-				return cfg, "--addr requires an address", "Run `skillhub help serve`."
+			raw, ok := value(index)
+			if !ok {
+				return cfg, flag + " requires a value", fix
 			}
-			cfg.addrFlag = args[i+1]
-			i++
-		case "--loopback-only":
-			cfg.loopbackOnly = true
-		case "--allow-host":
-			if i+1 == len(args) || strings.HasPrefix(args[i+1], "-") {
-				return cfg, "--allow-host requires a host", "Run `skillhub help serve`."
+			switch flag {
+			case "--workspace":
+				cfg.workspacePath = raw
+			case "--addr":
+				if cfg.addrFlag != "" {
+					return cfg, "--addr is given twice", "List several addresses in one --addr, separated by commas, for example --addr 127.0.0.1:7420,100.64.1.2:7420."
+				}
+				cfg.addrFlag = raw
+			case "--token-file":
+				cfg.tokenFile = raw
+			case "--allow-host":
+				cfg.allowHosts = append(cfg.allowHosts, raw)
 			}
-			cfg.allowHosts = append(cfg.allowHosts, args[i+1])
-			i++
-		case "--no-open":
-			cfg.noOpen = true
-		case "--dev":
-			cfg.dev = true
+			index++
+		case "--no-open", "--dev":
+			if cfg.mode != serveModeWeb {
+				return cfg, flag + " only applies to `skillhub serve web`", fix
+			}
+			if flag == "--no-open" {
+				cfg.noOpen = true
+			} else {
+				cfg.dev = true
+			}
+		case "--profile":
+			return cfg, "serve has no --profile: it serves the runtime tools (skill_resolve, skill_get, skill_feedback) to other machines, and curation stays on this machine", "Drop --profile. Agents on this machine get every tool through `skillhub connect`."
 		default:
-			return cfg, fmt.Sprintf("unknown argument %q", args[i]), "Run `skillhub help serve`."
+			return cfg, fmt.Sprintf("unknown argument %q", flag), fix
 		}
 	}
 	return cfg, "", ""
 }
 
-func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	if len(args) > 0 && args[0] == "mcp" {
-		return runServeMCP(ctx, args[1:], stdout, stderr)
+// listenAddressesFor applies the mode's default address and port to --addr.
+// --dev listens on loopback only, because the Vite dev server in front of it
+// is a development tool.
+func listenAddressesFor(cfg serveConfig) ([]listenAddress, string, string) {
+	defaultPort := mcpDefaultPort
+	if cfg.mode == serveModeWeb {
+		defaultPort = web.DefaultPort
 	}
-	if len(args) == 0 || args[0] != "web" {
-		return writeInvalidRequest(stdout, stderr, false, "serve requires the web or mcp subcommand", "Run `skillhub serve web` for the web UI or `skillhub serve mcp` for MCP.")
-	}
-
-	cfg, parseErr, fix := parseServeFlags(args)
-	if parseErr != "" {
-		return writeInvalidRequest(stdout, stderr, false, parseErr, fix)
-	}
-
-	explicit := cfg.addrFlag
-	if explicit == "" {
-		explicit = os.Getenv("SKILLHUB_WEB_ADDR")
-	}
-
-	if cfg.dev {
-		if explicit != "" {
-			h, _, err := net.SplitHostPort(explicit)
-			if err != nil || (h != "127.0.0.1" && h != "localhost") {
-				return writeInvalidRequest(stdout, stderr, false, "--dev only listens on loopback", "Run `skillhub help serve`.")
-			}
-		} else {
-			cfg.loopbackOnly = true
+	raw := cfg.addrFlag
+	if raw == "" {
+		raw = "0.0.0.0"
+		if cfg.dev {
+			raw = "127.0.0.1"
 		}
 	}
+	addresses, err := parseListenAddresses(raw, defaultPort)
+	if err != nil {
+		return nil, err.Error(), "Run `skillhub help serve`."
+	}
+	if cfg.dev {
+		for _, address := range addresses {
+			if address.wildcard() || !net.ParseIP(address.host).IsLoopback() {
+				return nil, "--dev only listens on loopback", "Drop --addr, or pass a loopback address such as --addr 127.0.0.1:7421."
+			}
+		}
+	}
+	return addresses, "", ""
+}
 
+func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	cfg, reason, fix := parseServeArgs(args)
+	if reason != "" {
+		return writeInvalidRequest(stdout, stderr, false, reason, fix)
+	}
+	addresses, reason, fix := listenAddressesFor(cfg)
+	if reason != "" {
+		return writeInvalidRequest(stdout, stderr, false, reason, fix)
+	}
 	resolved, resErr := resolveWorkspace(cfg.workspacePath)
 	if resErr != nil {
 		return writeWorkspaceResolutionError(stdout, stderr, false, resErr)
 	}
+	if cfg.mode == serveModeWeb {
+		return runServeWeb(ctx, cfg, addresses, resolved, stdout, stderr)
+	}
+	return runServeMCP(ctx, cfg, addresses, resolved, stdout, stderr)
+}
 
+// bindOrReport binds every address or prints which one failed and why.
+func bindOrReport(addresses []listenAddress, stderr io.Writer) ([]net.Listener, int) {
+	listeners, failure := bindListeners(addresses)
+	if failure != nil {
+		termui.New(stderr).Error(
+			"Could not listen on "+failure.address.String()+": "+failure.reason()+".",
+			"Nothing was started: every address in --addr must be free before the server starts.",
+			portOwnerHint(failure.address.port),
+		)
+		return nil, 1
+	}
+	return listeners, 0
+}
+
+// runServeMCP runs the network MCP listener: the runtime tools for agents on
+// other machines, behind the hub token.
+func runServeMCP(ctx context.Context, cfg serveConfig, addresses []listenAddress, workspaceRoot string, stdout, stderr io.Writer) int {
+	tokenFile, code := ensureHubToken(workspaceRoot, cfg.tokenFile, stderr)
+	if code != 0 {
+		return code
+	}
+	listeners, code := bindOrReport(addresses, stderr)
+	if code != 0 {
+		return code
+	}
+	defer closeListeners(listeners)
+
+	err := mcpserver.ServeHTTP(ctx, listeners, mcpserver.HTTPOptions{
+		Workspace:   workspaceRoot,
+		TokenFile:   tokenFile,
+		AllowHosts:  cfg.allowHosts,
+		Diagnostics: stderr,
+		Ready: func(bound []net.Addr) {
+			interfaces, _ := hostpolicy.SystemInterfaces()
+			home, _ := os.UserHomeDir()
+			writeMCPBanner(stdout, mcpBanner{
+				addresses:  bound,
+				workspace:  workspaceRoot,
+				tokenFile:  tokenFile,
+				home:       home,
+				user:       currentUserName(),
+				interfaces: interfaces,
+			})
+		},
+	})
+	if err != nil {
+		termui.New(stderr).Error(
+			"The MCP listener stopped.",
+			err.Error(),
+			"Check workspace health with `skillhub doctor`, then start it again.",
+		)
+		return 1
+	}
+	return 0
+}
+
+// runServeWeb runs the web UI behind a new session token.
+func runServeWeb(ctx context.Context, cfg serveConfig, addresses []listenAddress, workspaceRoot string, stdout, stderr io.Writer) int {
 	tokenBytes := make([]byte, 32)
 	if _, err := rand.Read(tokenBytes); err != nil {
-		p := termui.New(stderr)
-		p.Error("Could not generate session token.", err.Error(), "Check system entropy source.")
+		termui.New(stderr).Error("Could not generate session token.", err.Error(), "Check system entropy source.")
 		return 1
 	}
 	token := hex.EncodeToString(tokenBytes)
 
-	ifaces, _ := web.DefaultInterfaces()
-	addr, err := web.ChooseListenAddr(explicit, cfg.loopbackOnly, 7421, ifaces)
-	if err != nil {
-		return writeInvalidRequest(stdout, stderr, false, err.Error(), "Run `skillhub help serve`.")
+	listeners, code := bindOrReport(addresses, stderr)
+	if code != 0 {
+		return code
 	}
+	defer closeListeners(listeners)
+	bound := listenerAddresses(listeners)
 
-	ln, err := net.Listen("tcp4", addr)
-	if err != nil {
-		p := termui.New(stderr)
-		p.Error("The web server could not listen on "+addr+".", err.Error(), "Stop the process that owns the port (for example `ss -ltnp | grep 7421`), or pass --addr.")
-		return 1
-	}
-	defer ln.Close()
-
-	port := ln.Addr().(*net.TCPAddr).Port
 	srv, err := web.New(web.Options{
-		Workspace:  resolved,
-		Token:      token,
-		ListenPort: port,
-		AllowHosts: cfg.allowHosts,
-		Dev:        cfg.dev,
+		Workspace:   workspaceRoot,
+		Token:       token,
+		ListenAddrs: bound,
+		AllowHosts:  cfg.allowHosts,
+		Dev:         cfg.dev,
 	})
 	if err != nil {
-		p := termui.New(stderr)
-		p.Error("Could not initialize web server.", err.Error(), "Check workspace health with `skillhub doctor`.")
+		termui.New(stderr).Error("Could not initialize web server.", err.Error(), "Check workspace health with `skillhub doctor`.")
 		return 1
 	}
 
-	boundHost, _, _ := net.SplitHostPort(addr)
+	openURL := ""
 	if cfg.dev {
-		termui.New(stdout).Raw(fmt.Sprintf("Skill Hub web UI (dev): http://127.0.0.1:5421/#token=%s\n", token))
+		openURL = "http://127.0.0.1:5421/#token=" + token
+		termui.New(stdout).Raw("Skill Hub web UI (dev): " + openURL + "\n")
 	} else {
-		web.WriteStartup(stdout, boundHost, port, token, ifaces)
+		interfaces, _ := hostpolicy.SystemInterfaces()
+		openURL = web.WriteStartup(stdout, bound, token, interfaces)
 	}
-
-	if !cfg.noOpen {
-		openURL := fmt.Sprintf("http://127.0.0.1:%d/#token=%s", port, token)
-		if boundHost != "0.0.0.0" && boundHost != "127.0.0.1" && boundHost != "localhost" && boundHost != "" {
-			openURL = fmt.Sprintf("http://%s:%d/#token=%s", boundHost, port, token)
-		}
+	if !cfg.noOpen && openURL != "" {
 		openBrowser(openURL, stderr)
 	}
 
-	if err := srv.Serve(ctx, ln); err != nil {
-		p := termui.New(stderr)
-		p.Error("Web server stopped with error.", err.Error(), "Check logs and workspace health.")
+	if err := srv.Serve(ctx, listeners); err != nil {
+		termui.New(stderr).Error("Web server stopped with error.", err.Error(), "Check logs and workspace health.")
 		return 1
 	}
 	return 0

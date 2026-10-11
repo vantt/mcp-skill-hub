@@ -30,9 +30,9 @@ Sources & learning:
   source    Repositories and documents your skills come from or learn from; source check finds updates
 
 Serve:
-  serve mcp Run the MCP server for an agent host (stdio), or with --addr for other machines
-  serve web Run the local web UI
-  token     Show or rotate the shared token of the network MCP listener
+  serve     Let agents on other machines use this hub (listens on 0.0.0.0:7420)
+  serve web Run the web UI (listens on 0.0.0.0:7421)
+  token     Show or rotate the hub token that serve requires
 
 Maintenance:
   validate  Validate canonical workspace files
@@ -96,8 +96,8 @@ files.
   --json            Machine-readable result
 
 A hub on another machine (through an SSH tunnel or Tailscale):
-  --hub <url>       The base URL the hub printed when ` + "`skillhub serve mcp --addr`" + `
-                    started, for example http://127.0.0.1:7420. The agent host then
+  --hub <url>       The base URL the hub printed when ` + "`skillhub serve`" + ` started,
+                    for example http://192.168.1.20:7420. The agent host then
                     starts ` + "`skillhub mcp proxy`" + `. Curation stays on the hub machine, so no
                     curation server and no system-curator skill are installed.
   --token-file <f>  This machine's copy of the hub's token file, one file per hub, for
@@ -326,13 +326,12 @@ Example: skillhub version
 	"mcp": `Usage: skillhub mcp serve [--workspace <path>] [--profile runtime|curation|all]
        skillhub mcp proxy --hub <url> [--token-file <path>]
 
-mcp serve is an alias of skillhub serve mcp, kept for the agent host
-registrations that already run it. Serve the workspace over MCP (stdio). Agent
-hosts start this for you after ` + "`skillhub connect`" + `; you rarely run it by hand.
-Run skillhub help serve for the network listener.
+mcp serve serves the workspace over MCP (stdio). Agent hosts start it for you
+after ` + "`skillhub connect`" + `; you rarely run it by hand. Run skillhub help serve
+for the network listener that agents on other machines use.
 
 mcp proxy lets an agent host on this machine use a hub on another machine
-(started there with skillhub serve mcp --addr). Agent hosts start it for you;
+(started there with skillhub serve). Agent hosts start it for you;
 you rarely run it by hand. It forwards skill_resolve and skill_feedback, and
 answers skill_get from a local cache: each skill version is fetched once, in
 one request, checked against its digest, and kept by digest, so local.path and
@@ -369,16 +368,18 @@ Examples:
 	"token": `Usage: skillhub token show [--workspace <path>] [--token-file <path>]
        skillhub token rotate [--workspace <path>] [--token-file <path>] [--dry-run]
 
-Manage the shared bearer token of the network MCP listener (skillhub serve mcp
---addr). The token is created on first use in <workspace>/runtime/config/.hub-token
+Manage the shared bearer token of the network MCP listener (skillhub serve).
+The token is created on first use in <workspace>/runtime/config/.hub-token
 (mode 0600, never committed) and is never written to logs, telemetry, or URLs.
+Other machines get a copy of the file: skillhub serve prints the scp line.
 
   show              Print the token, only when standard output is a terminal;
                     otherwise refuse and print the token file path
   rotate            Replace the token with a new random one; only in a
                     terminal. --dry-run shows what would change. Every machine
-                    that connects needs the new file; a running listener uses
-                    it from its next request
+                    that connects needs the new file (rotate prints the scp
+                    line to run there); a running listener uses it from its
+                    next request
   --workspace <p>   Workspace whose token to use
   --token-file <p>  Use this token file instead of the workspace one
 
@@ -394,43 +395,42 @@ Update skillhub to the latest release or a specified version.
   --check         Check for updates without modifying the binary
   --json          Machine-readable result
 `,
-	"serve": `Usage: skillhub serve mcp [--workspace <path>] [--profile runtime|curation|all]
-       skillhub serve mcp --addr <host:port> [--trust-private-network]
-                          [--token-file <path>] [--allow-host <host>]... [--workspace <path>]
-       skillhub serve web [--workspace <path>] [--addr <host:port>]
-                          [--loopback-only] [--allow-host <host[:port]>]...
-                          [--no-open] [--dev]
+	"serve": `Usage: skillhub serve [mcp] [--addr <host:port>[,<host:port>...]] [--token-file <path>]
+                      [--allow-host <name>]... [--workspace <path>]
+       skillhub serve web [--addr <host:port>[,<host:port>...]] [--allow-host <host[:port]>]...
+                          [--no-open] [--dev] [--workspace <path>]
 
-serve mcp without --addr serves the workspace over MCP (stdio), the way agent
-hosts launch it after ` + "`skillhub connect`" + ` (skillhub mcp serve is an alias).
+skillhub serve (or serve mcp) lets agents on other machines use this hub. It
+serves the runtime tools only (skill_resolve, skill_get, skill_feedback);
+curation stays on this machine. Every request needs the hub token (see
+skillhub help token). On start it prints, for each address another machine
+can use, an scp line that copies the token file and the skillhub connect
+command to run on that machine. Agents on this machine do not need it:
+skillhub connect sets them up.
 
-serve mcp --addr runs a network listener so agents on other machines can use
-this hub. It serves the runtime tools only (skill_resolve, skill_get,
-skill_feedback); curation stays on this machine. Every request needs the shared
-token (see skillhub help token) in the Authorization header. The listener
-speaks plain HTTP: it starts on a loopback address (127.0.0.1, ::1), which you
-reach through an SSH tunnel, and refuses any other address unless you pass
---trust-private-network for a private network such as Tailscale. On start it
-prints the skillhub connect command to run on the other machine.
+skillhub serve web runs the web UI; the printed URL carries a new session
+token. Anyone with that URL can change the skills every connected agent uses.
 
-  --profile runtime|curation|all  Tool profile for stdio (default: all); with --addr only runtime
-  --addr <host:port>              Listen on the network instead of stdio
-  --trust-private-network         Allow a non-loopback address on a network you trust
-  --token-file <path>             Token file (default: <workspace>/runtime/config/.hub-token)
-  --allow-host <host>             Accept another Host name, for example a VPN DNS name (repeatable)
+Both listen on all network interfaces by default (mcp 0.0.0.0:7420, web
+0.0.0.0:7421) over plain HTTP and print a warning saying so. On a network you
+do not trust, keep the server on this machine with --addr 127.0.0.1:7420 (web:
+--addr 127.0.0.1:7421) and reach it from the other machine through an SSH
+tunnel (ssh -N -L); the banner prints the tunnel command.
 
-serve web runs the local web UI. Listens on 0.0.0.0 when this machine has two or more non-loopback IPv4 addresses, otherwise on 127.0.0.1; --addr or --loopback-only override.
-
-  --workspace <path>           Workspace to serve
-  --addr <host:port>           Explicit listen address and port
-  --loopback-only              Listen only on 127.0.0.1
-  --allow-host <host[:port]>   Allow an additional Host header (repeatable)
-  --no-open                    Do not open the browser on startup
-  --dev                        Development mode for Vite proxy
+  --addr <list>          1 to 3 comma-separated addresses, one listener each, one
+                         token; a missing port takes the default, IPv6 goes in
+                         brackets ([::1]:7420), and port 0 picks a free port
+  --token-file <path>    Hub token file (mcp; default: <hub>/runtime/config/.hub-token)
+  --allow-host <name>    Accept another Host name, for example a VPN DNS name
+                         (repeatable; web also takes <host:port>)
+  --workspace <path>     A local hub folder (default: the hub of the current folder)
+  --no-open              web: do not open the browser on start
+  --dev                  web: development mode behind the Vite dev server (loopback only)
 
 Examples:
-  skillhub serve mcp --addr 127.0.0.1:7420
-  skillhub serve mcp --addr 100.101.102.103:7420 --trust-private-network
+  skillhub serve
+  skillhub serve --addr 127.0.0.1:7420
+  skillhub serve --addr 192.168.1.20,100.101.102.103
   skillhub serve web
 `,
 }

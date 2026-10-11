@@ -5,89 +5,52 @@ import (
 	"io"
 	"net"
 	"strconv"
+
+	"github.com/vantt/mcp-skill-hub/internal/delivery/hostpolicy"
 )
 
-// UsableIPv4 returns all IPv4 addresses from up, non-loopback interfaces that
-// are not link-local, not loopback, and are unicast.
-func UsableIPv4(ifaces []InterfaceInfo) []net.IP {
-	var result []net.IP
-	for _, iface := range ifaces {
-		if !iface.Up || iface.Loopback {
+// DefaultPort is the port `skillhub serve web` listens on when --addr names
+// none.
+const DefaultPort = 7421
+
+// WriteStartup prints the start-up banner: the warning when a listener can
+// be reached from other machines, then one URL with the session token per
+// address, built from each listener's real port. The first URL stays on this
+// machine when a listener allows it; WriteStartup returns it, so the caller
+// opens the browser there.
+func WriteStartup(w io.Writer, addresses []net.Addr, token string, interfaces []hostpolicy.Interface) string {
+	type entry struct{ label, url string }
+	link := func(ip, port string) string {
+		return "http://" + net.JoinHostPort(ip, port) + "/#token=" + token
+	}
+	var local, remote []entry
+	for _, address := range addresses {
+		tcp, ok := address.(*net.TCPAddr)
+		if !ok {
 			continue
 		}
-		for _, ip := range iface.IPs {
-			v4 := ip.To4()
-			if v4 == nil || v4.IsLoopback() || (v4[0] == 169 && v4[1] == 254) || !v4.IsGlobalUnicast() {
-				continue
-			}
-			result = append(result, v4)
+		port := strconv.Itoa(tcp.Port)
+		switch {
+		case hostpolicy.IsWildcard(address):
+			local = append(local, entry{"127.0.0.1", link("127.0.0.1", port)})
+		case hostpolicy.IsLoopback(address):
+			local = append(local, entry{tcp.IP.String(), link(tcp.IP.String(), port)})
+		}
+		for _, reachable := range hostpolicy.Reachable(address, interfaces) {
+			remote = append(remote, entry{reachable.Label, link(reachable.IP.String(), port)})
 		}
 	}
-	return result
-}
-
-// ChooseListenAddr determines the listen address based on the D14 rule.
-func ChooseListenAddr(explicit string, loopbackOnly bool, port int, ifaces []InterfaceInfo) (string, error) {
-	if explicit != "" {
-		_, portStr, err := net.SplitHostPort(explicit)
-		if err != nil {
-			return "", fmt.Errorf("invalid address %q: %w", explicit, err)
-		}
-		p, err := strconv.Atoi(portStr)
-		if err != nil || p < 0 || p > 65535 {
-			return "", fmt.Errorf("invalid port in address %q", explicit)
-		}
-		return explicit, nil
+	all := append(local, remote...)
+	if len(all) == 0 {
+		return ""
 	}
-
-	if loopbackOnly {
-		return fmt.Sprintf("127.0.0.1:%d", port), nil
+	if warning := hostpolicy.ExposureWarning(addresses, DefaultPort); warning != "" {
+		fmt.Fprintf(w, "WARNING: %s\n", warning)
+		fmt.Fprintln(w, "Anyone with this URL can change the skills every connected agent uses.")
 	}
-
-	if len(UsableIPv4(ifaces)) >= 2 {
-		return fmt.Sprintf("0.0.0.0:%d", port), nil
+	fmt.Fprintf(w, "Skill Hub web UI: %s\n", all[0].url)
+	for _, item := range all[1:] {
+		fmt.Fprintf(w, "  %s: %s\n", item.label, item.url)
 	}
-
-	return fmt.Sprintf("127.0.0.1:%d", port), nil
-}
-
-func isLoopbackHost(host string) bool {
-	if host == "127.0.0.1" || host == "localhost" || host == "::1" {
-		return true
-	}
-	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
-		return true
-	}
-	return false
-}
-
-// WriteStartup prints the startup banner and reachable URLs.
-func WriteStartup(w io.Writer, boundHost string, port int, token string, ifaces []InterfaceInfo) {
-	const warning = "WARNING: The web UI is reachable from other devices over plain HTTP. Anyone who can observe this traffic can read the session token. Use --loopback-only to keep it on this machine.\n"
-
-	if boundHost == "0.0.0.0" {
-		_, _ = io.WriteString(w, warning)
-		fmt.Fprintf(w, "Skill Hub web UI: http://127.0.0.1:%d/#token=%s\n", port, token)
-		for _, iface := range ifaces {
-			if !iface.Up || iface.Loopback {
-				continue
-			}
-			for _, ip := range iface.IPs {
-				v4 := ip.To4()
-				if v4 == nil || v4.IsLoopback() || (v4[0] == 169 && v4[1] == 254) || !v4.IsGlobalUnicast() {
-					continue
-				}
-				fmt.Fprintf(w, "  %s: http://%s:%d/#token=%s\n", iface.Name, v4.String(), port, token)
-			}
-		}
-		return
-	}
-
-	if isLoopbackHost(boundHost) {
-		fmt.Fprintf(w, "Skill Hub web UI: http://127.0.0.1:%d/#token=%s\n", port, token)
-		return
-	}
-
-	_, _ = io.WriteString(w, warning)
-	fmt.Fprintf(w, "Skill Hub web UI: http://%s:%d/#token=%s\n", boundHost, port, token)
+	return all[0].url
 }
