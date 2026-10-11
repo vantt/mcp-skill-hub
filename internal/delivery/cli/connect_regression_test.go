@@ -4,10 +4,13 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/vantt/mcp-skill-hub/internal/systemskills"
 )
@@ -32,8 +35,18 @@ func (n pathNormalizer) apply(text string) string {
 	for _, pair := range n {
 		text = strings.ReplaceAll(text, pair[0], pair[1])
 	}
+	if filepath.Separator == '\\' {
+		// The goldens spell the paths below a placeholder with forward
+		// slashes; Windows writes them with (JSON-escaped) backslashes.
+		text = placeholderPathTail.ReplaceAllStringFunc(text, func(path string) string {
+			return strings.ReplaceAll(strings.ReplaceAll(path, `\\`, "/"), `\`, "/")
+		})
+	}
 	return text
 }
+
+// placeholderPathTail matches a placeholder followed by the path below it.
+var placeholderPathTail = regexp.MustCompile(`<(?:BINARY|WORKSPACE|PROJECT|HOME)>(?:\\{1,2}[^\\"'\s,\]]+)+`)
 
 func newPathNormalizer(t *testing.T, pairs ...[2]string) pathNormalizer {
 	t.Helper()
@@ -42,6 +55,13 @@ func newPathNormalizer(t *testing.T, pairs ...[2]string) pathNormalizer {
 		t.Fatal(err)
 	}
 	all := append([][2]string{{filepath.Clean(binary), "<BINARY>"}}, pairs...)
+	// Host files are JSON or TOML, where a Windows path appears with each
+	// backslash escaped.
+	for _, pair := range all {
+		if escaped := strings.ReplaceAll(pair[0], `\`, `\\`); escaped != pair[0] {
+			all = append(all, [2]string{escaped, pair[1]})
+		}
+	}
 	// Longer paths first, so a path never loses its prefix to a shorter one.
 	sort.SliceStable(all, func(i, j int) bool { return len(all[i][0]) > len(all[j][0]) })
 	return pathNormalizer(all)
@@ -89,11 +109,17 @@ func snapshotTree(t *testing.T, root string, normalize pathNormalizer) string {
 
 // fixedLengthDir creates a directory whose absolute path always has the same
 // length, so wrapped command output does not depend on the temporary
-// directory's random name.
+// directory's random name. The directory is padded from a short root: the
+// default temporary directory is about 90 characters long on macOS, and
+// t.TempDir adds the test name.
 func fixedLengthDir(t *testing.T, length int) string {
 	t.Helper()
-	base, err := filepath.EvalSymlinks(t.TempDir())
+	base, err := os.MkdirTemp(shortTempRoot(), "sh")
 	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { removeTestDir(t, base) })
+	if base, err = filepath.EvalSymlinks(base); err != nil {
 		t.Fatal(err)
 	}
 	pad := length - len(base) - 1
@@ -105,6 +131,36 @@ func fixedLengthDir(t *testing.T, length int) string {
 		t.Fatal(err)
 	}
 	return directory
+}
+
+// shortTempRoot returns a short directory for fixedLengthDir: /tmp where it
+// exists, otherwise the system temporary directory.
+func shortTempRoot() string {
+	if runtime.GOOS != "windows" {
+		if info, err := os.Stat("/tmp"); err == nil && info.IsDir() {
+			return "/tmp"
+		}
+	}
+	return os.TempDir()
+}
+
+// removeTestDir removes a directory created outside t.TempDir. Like
+// t.TempDir it retries for a while, because on Windows a file that another
+// handle still holds open cannot be deleted until that handle closes.
+func removeTestDir(t *testing.T, directory string) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		err := os.RemoveAll(directory)
+		if err == nil {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Errorf("remove test directory: %v", err)
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 }
 
 func checkGolden(t *testing.T, name, got string) {
@@ -213,4 +269,25 @@ func TestConnectWorkspaceOutputIsPinned(t *testing.T) {
 		}
 		checkGolden(t, "connect-workspace/doctor-output.golden", transcript.String())
 	})
+}
+
+// The connect summary names each host file the same way on every platform,
+// although the item it reads names the file with the platform's separators.
+func TestConnectNamesHostFilesTheSameWayOnEveryPlatform(t *testing.T) {
+	root := t.TempDir()
+	for _, test := range []struct {
+		kind, relative, want string
+	}{
+		{"mcp", ".codex/config.toml", ".codex/config.toml"},
+		{"mcp", ".gemini/settings.json", ".gemini/settings.json"},
+		{"mcp", ".mcp.json", ".mcp.json"},
+		{"mcp", ".claude.json", ".claude.json"},
+		{"host-permissions", ".claude/settings.local.json", ".claude/settings.local.json"},
+		{"bootstrap", ".codex/AGENTS.md", "AGENTS.md"},
+	} {
+		summary := "codex-cli (native) " + test.kind + ": " + filepath.Join(root, filepath.FromSlash(test.relative))
+		if got := formatChangeKind(test.kind, summary); got != test.want {
+			t.Errorf("formatChangeKind(%q, %q) = %q, want %q", test.kind, summary, got, test.want)
+		}
+	}
 }
