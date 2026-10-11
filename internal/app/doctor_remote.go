@@ -97,21 +97,36 @@ func ProbeHub(ctx context.Context, client *http.Client, hubURL, token string) Hu
 	started := time.Now()
 	probe := probeOnce(ctx, client, hubURL+HubStatusPath, token)
 	if probe.Outcome == ProbeNotAHub && probe.HTTPStatus == http.StatusNotFound {
-		// A hub that predates the status endpoint answers 404 there before
-		// checking the token; its MCP endpoint still tells a good token from
-		// a bad one.
-		legacy := probeOnce(ctx, client, hubURL+"/mcp", token)
-		switch legacy.Outcome {
-		case ProbeRejected, ProbeNoToken, ProbeThrottled, ProbeRateLimited, ProbeHubError:
-			probe = legacy
-		case ProbeNotAHub:
-			if token != "" && legacy.HTTPStatus != http.StatusNotFound {
-				probe = HubProbe{Outcome: ProbeAccepted, Legacy: true}
-			}
-		}
+		probe = probeLegacyHub(ctx, client, hubURL, token, probe)
 	}
 	probe.ElapsedMS = time.Since(started).Milliseconds()
 	return probe
+}
+
+// probeLegacyHub checks a hub that predates the status endpoint: it answers
+// 404 there before checking the token. Its MCP endpoint must first prove it is
+// a Skill Hub listener (401 with the skillhub realm without a token); only
+// then does an answer other than 401 with the token mean the token passed.
+func probeLegacyHub(ctx context.Context, client *http.Client, hubURL, token string, notFound HubProbe) HubProbe {
+	anonymous := probeOnce(ctx, client, hubURL+"/mcp", "")
+	switch anonymous.Outcome {
+	case ProbeNoToken:
+	case ProbeUnreachable, ProbeHubError, ProbeThrottled:
+		return anonymous
+	default:
+		return notFound
+	}
+	if token == "" {
+		return anonymous
+	}
+	authenticated := probeOnce(ctx, client, hubURL+"/mcp", token)
+	if authenticated.Outcome == ProbeNotAHub {
+		if authenticated.HTTPStatus == http.StatusNotFound {
+			return notFound
+		}
+		return HubProbe{Outcome: ProbeAccepted, Legacy: true}
+	}
+	return authenticated
 }
 
 func hubProbeClient() *http.Client {
@@ -162,7 +177,15 @@ func probeOnce(ctx context.Context, client *http.Client, target, token string) H
 			probe.Outcome = ProbeThrottled
 		}
 	case response.StatusCode >= 500:
-		probe.Outcome, probe.Reason = ProbeHubError, firstLine(string(body))
+		// Only the hub's own known answers are named; any other body is never
+		// shown, because a misbehaving proxy in between could echo request
+		// headers, including the token.
+		probe.Outcome, probe.Reason = ProbeHubError, http.StatusText(response.StatusCode)
+		for _, known := range []string{"the hub is shutting down", "the hub has too many open sessions"} {
+			if strings.Contains(string(body), known) {
+				probe.Reason = known
+			}
+		}
 	default:
 		probe.Outcome = ProbeNotAHub
 	}
@@ -186,17 +209,6 @@ func networkReason(err error) string {
 		return "the network is unreachable"
 	}
 	return "the connection failed"
-}
-
-func firstLine(text string) string {
-	text = strings.TrimSpace(text)
-	if index := strings.IndexByte(text, '\n'); index >= 0 {
-		text = text[:index]
-	}
-	if len(text) > 120 {
-		text = text[:120]
-	}
-	return text
 }
 
 // HubToken is the token an entry gives the proxy, read the way the proxy
@@ -409,12 +421,36 @@ func (service RemoteDoctorService) Check(ctx context.Context, entries []RemoteEn
 		}
 	}
 	for position := range reports {
-		reports[position].Checks = service.checks(ctx, reports[position].HubURL, reports[position].TokenFile)
+		reports[position].Checks = service.checks(ctx, reports[position].HubURL, reports[position].TokenFile, tokenMaySend(reports[position].HubURL, entries))
 	}
 	return reports
 }
 
-func (service RemoteDoctorService) checks(ctx context.Context, hubURL, tokenFile string) []RemoteCheck {
+// tokenMaySend reports whether doctor may send the hub token to hubURL: when
+// the user scope names that hub, or when it is on this machine (loopback,
+// for example an SSH tunnel). A hub named only by a project's files could be
+// anyone's, for example in a cloned repository, so its token check needs the
+// user's own `connect --hub` preview.
+func tokenMaySend(hubURL string, entries []RemoteEntry) bool {
+	if parsed, err := url.Parse(hubURL); err == nil && isLoopbackName(parsed.Hostname()) {
+		return true
+	}
+	for _, entry := range entries {
+		if entry.Global && entry.HubURL == hubURL {
+			return true
+		}
+	}
+	return false
+}
+
+func (service RemoteDoctorService) checks(ctx context.Context, hubURL, tokenFile string, maySend bool) []RemoteCheck {
+	if _, problem := NormalizeConnectHubURL(hubURL); problem != nil {
+		return []RemoteCheck{{
+			ID: "hub_reachable", Label: "Hub reachable", Status: CheckFailed,
+			Detail: "The entry's hub URL cannot be used: " + problem.Render.Why,
+			Fix:    "Connect again with the URL the hub printed when it started: `skillhub connect --hub <url> --token-file <path> --yes`.",
+		}}
+	}
 	token := ReadHubToken(hubURL, tokenFile)
 	tokenCheck := RemoteCheck{ID: "token", Label: "Hub token", Status: CheckOK, Detail: "read from " + tokenFile}
 	if token.Source == "environment" {
@@ -423,9 +459,23 @@ func (service RemoteDoctorService) checks(ctx context.Context, hubURL, tokenFile
 	if token.Problem != nil {
 		tokenCheck = *token.Problem
 	}
-	probe := ProbeHub(ctx, service.Client, hubURL, token.Value)
+	sent := token.Value
+	if !maySend {
+		sent = ""
+	}
+	probe := ProbeHub(ctx, service.Client, hubURL, sent)
 	checks := []RemoteCheck{tokenCheck, reachableCheck(hubURL, probe)}
-	checks = append(checks, acceptedCheck(probe, token), versionCheck(hubURL, probe))
+	accepted, version := acceptedCheck(probe, token), versionCheck(hubURL, probe)
+	if !maySend && token.Problem == nil && probe.Outcome == ProbeNoToken {
+		command := "skillhub connect --hub " + hubURL
+		if tokenFile != "" {
+			command += " --token-file " + shellArgument(tokenFile)
+		}
+		accepted.Status = CheckSkipped
+		accepted.Detail = "not checked: only this project's files name this hub, so doctor does not send it the token; check it with `" + command + "`, a preview that writes nothing"
+		version.Detail = "not checked: the token was not sent"
+	}
+	checks = append(checks, accepted, version)
 	return append(checks, cacheChecks(hubURL)...)
 }
 

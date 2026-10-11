@@ -37,7 +37,7 @@ Doctor finds entries for remote hubs in the current project and in the user scop
 |---|---|---|
 | Hub token | token file missing / readable by others / not a token; or no `--token-file` and `SKILLHUB_HUB_TOKEN` unset | copy with scp and chmod 600 / `chmod 600 <path>` / connect with `--token-file` or set the variable |
 | Hub reachable | "Nothing answers at <url> (connection refused): the hub is stopped, or the SSH tunnel or the Tailscale connection is down." Also: host name refused, not a Skill Hub listener, hub answers an error | loopback URL: `skillhub serve mcp --addr 127.0.0.1:<port>` on machine B and `ssh -N -L <port>:127.0.0.1:<port> <machine-b>`; other URL: `--addr <host:port> --trust-private-network` and `tailscale status` |
-| Token accepted | "The hub refused the token: it is not the hub's current token (rotated, or from another hub)." / refusing for a minute after too many wrong tokens | copy the current token file again (`skillhub token show` on B shows its path) |
+| Token accepted | "The hub refused the token: it is not the hub's current token (rotated, or from another hub)." / refusing for a minute after too many wrong tokens. Skipped, with the way to check it, for a non-loopback hub that only a project's files name: the token is not sent there | copy the current token file again (`skillhub token show` on B shows its path) |
 | Hub version | "The hub on machine B runs an older Skill Hub (vX) than this machine (vY)" / "This machine runs an older Skill Hub ..." | update skillhub on B and restart the listener / `skillhub update` here |
 | Skill cache | "The skill cache <dir> is not writable (permission denied) ..." | `chmod u+w <nearest existing dir>` or set `XDG_STATE_HOME` |
 | Last fetch | information: "never: ..." or the time of the most recent fetch or cache use and the number of skills cached | none |
@@ -63,6 +63,18 @@ Commands run:
 - `GOOS=windows go vet` and `GOOS=darwin go vet` on the four packages: pass.
 - Manual run of the built binary in an isolated HOME under the session scratch directory (one listener started and stopped by its own PID): preview, switch, doctor healthy / wrong token / stopped, connect with the hub down, remove with and without `--cache`; the project directory was empty again afterwards.
 
+## Review
+
+An independent code review (one-machine regression, token handling, Apply integrity, removal) confirmed with its own live round trips that the one-machine path is unchanged, that the token is in no host file, state file or output, that Apply re-derives remote and removal changes, and that connect then remove restores a project byte for byte. Fixed after the review, with tests:
+
+- High: doctor read the token and sent it to whatever hub URL a project's `.mcp.json` named, so a cloned repository could collect it. Doctor now sends the token only to a loopback hub (an SSH tunnel; a local listener could read the token file anyway) or to a hub the user scope also names. For a hub only a project names it checks reachability without the token and says how to check the token with the user's own `connect --hub` preview, which writes nothing. Hub URLs read from host files are validated before any request (`TestDoctorSendsTheTokenOnlyToHubsTheUserScopeNames`, `TestDoctorRefusesAHubURLItCannotUse`).
+- Medium: a removal stripped only the directories of the entry it found, so directories stayed when the entry had been deleted by hand or `XDG_STATE_HOME` had changed. It now also strips directories that are recognizably Skill Hub's: `.../skillhub/remote/<hub-id>`, and the runtime directories of a directory that is a Skill Hub workspace; a look-alike user directory stays (`TestRemoveCleansUpDirectoriesOfAnEntryThatIsGone`).
+- Medium: the legacy-hub probe took any server that answered something other than 404 on `/mcp` for a hub that accepts the token. It now first requires the 401 with the `skillhub` realm without a token (`TestProbeHubDoesNotTakeACatchAllServerForALegacyHub`).
+- Medium: removing the user-scope connection also removes the instruction block projects relied on when they were connected without their own copy; the preview now warns.
+- Low: `--cache` clears the cache before removing the files, so a failed clear leaves the connection in place for a retry, and warns when the other scope still uses that hub. A 5xx answer body is never shown (a proxy in between could echo the token); only the hub's own two known messages or the HTTP status text are (`TestProbeHubNeverEchoesAnErrorBody`).
+
+Kept, with the reason: a file that held only `{}` before connect is deleted by a removal, and an empty `mcpServers` or `context` object that existed before is pruned (no user data is lost); `skillhub-curation` is removed unconditionally in remote and removal plans (see below); doctor's write test creates and deletes one temporary file in the nearest existing directory above the cache, which may be the home directory.
+
 ## Deviations and decisions to confirm
 
 - Files outside the listed ownership: `internal/app/connect_remote.go` and `internal/app/host-connections.go` (the connect service lives in `internal/app`, and the local doctor's repair had to skip remote entries), `internal/delivery/cli/workspace.go` (where `doctor` is parsed and printed) and `mcp_proxy.go` (one line, the shared env variable name). None is owned by the parallel telemetry phase. The new status handler is a separate file; `http.go` got two additive lines.
@@ -86,3 +98,4 @@ Commands run:
 1. Should `--remove` keep the CLI permission rules when the user had them before connecting? Today it removes the exact values connect adds.
 2. Should doctor exit non-zero when a remote check fails (useful for scripts)? It keeps today's convention of exit 0 with findings.
 3. Phase 6 guide: recommend a fixed place for the token copy on machine A (the preview suggests `~/.config/skillhub/hub-token`)?
+4. Doctor does not send the token to a Tailscale hub that only a project names (security fix above), so for a project-scoped Tailscale connection the token and version checks are skipped with instructions. Is a `doctor --trust-project` flag wanted, or is the `connect --hub` preview enough?

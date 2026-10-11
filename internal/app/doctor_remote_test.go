@@ -118,6 +118,97 @@ func TestProbeHubRecognizesOtherServersAndGateAnswers(t *testing.T) {
 	}
 }
 
+func TestProbeHubDoesNotTakeACatchAllServerForALegacyHub(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path == HubStatusPath {
+			http.NotFound(writer, request)
+			return
+		}
+		_, _ = writer.Write([]byte("<html>app</html>"))
+	}))
+	defer server.Close()
+	if probe := ProbeHub(context.Background(), nil, server.URL, testHubToken); probe.Outcome != ProbeNotAHub || probe.Legacy {
+		t.Fatalf("catch-all server = %+v", probe)
+	}
+}
+
+func TestProbeHubNeverEchoesAnErrorBody(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		http.Error(writer, "upstream failed for "+request.Header.Get("Authorization"), http.StatusBadGateway)
+	}))
+	defer server.Close()
+	probe := ProbeHub(context.Background(), nil, server.URL, testHubToken)
+	if probe.Outcome != ProbeHubError || probe.Reason != "Bad Gateway" {
+		t.Fatalf("probe = %+v", probe)
+	}
+}
+
+// redirectingClient sends every request to server, whatever host the URL
+// names, so a test can use a hub URL that is not on loopback.
+func redirectingClient(server *httptest.Server) *http.Client {
+	transport := &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, "tcp", server.Listener.Addr().String())
+	}}
+	return &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+}
+
+func TestDoctorSendsTheTokenOnlyToHubsTheUserScopeNames(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv(HubTokenEnv, "")
+	received := 0
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("Authorization") != "" {
+			received++
+		}
+		if request.Header.Get("Authorization") != "Bearer "+testHubToken {
+			writer.Header().Set("WWW-Authenticate", `Bearer realm="skillhub"`)
+			http.Error(writer, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		_ = json.NewEncoder(writer).Encode(CurrentHubStatus())
+	}))
+	defer server.Close()
+	tokenFile := filepath.Join(t.TempDir(), "hub-token")
+	if err := os.WriteFile(tokenFile, []byte(testHubToken+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	const hub = "http://hub.example.net:7420"
+	service := RemoteDoctorService{Client: redirectingClient(server)}
+	project := RemoteEntry{Host: hostintegration.HostClaude, Root: "/p", HubURL: hub, TokenFile: tokenFile}
+
+	reports := service.Check(context.Background(), []RemoteEntry{project})
+	if received != 0 {
+		t.Fatalf("the token was sent %d times to a hub only the project names", received)
+	}
+	checks := map[string]RemoteCheck{}
+	for _, check := range reports[0].Checks {
+		checks[check.ID] = check
+	}
+	if checks["hub_reachable"].Status != CheckOK || checks["token_accepted"].Status != CheckSkipped ||
+		!strings.Contains(checks["token_accepted"].Detail, "only this project's files name this hub") ||
+		!strings.Contains(checks["token_accepted"].Detail, "`skillhub connect --hub "+hub+" --token-file "+tokenFile+"`") || !reports[0].Healthy() {
+		t.Fatalf("checks of a project-only hub: %+v", reports[0].Checks)
+	}
+
+	global := RemoteEntry{Host: hostintegration.HostCodex, Global: true, Root: "/h", HubURL: hub, TokenFile: tokenFile}
+	reports = service.Check(context.Background(), []RemoteEntry{project, global})
+	if received == 0 || len(reports) != 1 {
+		t.Fatalf("the token was not sent to a hub the user scope names: %d, %+v", received, reports)
+	}
+	for _, check := range reports[0].Checks {
+		if (check.ID == "token_accepted" || check.ID == "hub_version") && check.Status != CheckOK {
+			t.Fatalf("checks of a user-scope hub: %+v", reports[0].Checks)
+		}
+	}
+}
+
+func TestDoctorRefusesAHubURLItCannotUse(t *testing.T) {
+	reports := (RemoteDoctorService{}).Check(context.Background(), []RemoteEntry{{Host: hostintegration.HostClaude, Root: "/p", HubURL: "http://h:1/other"}})
+	if len(reports[0].Checks) != 1 || reports[0].Checks[0].Status != CheckFailed || !strings.Contains(reports[0].Checks[0].Detail, "has the path /other") {
+		t.Fatalf("checks: %+v", reports[0].Checks)
+	}
+}
+
 func TestProbeHubFollowsNoRedirect(t *testing.T) {
 	reached := false
 	target := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { reached = true }))

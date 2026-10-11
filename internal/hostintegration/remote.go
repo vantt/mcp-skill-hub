@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -104,6 +105,52 @@ func staleAccessDirs(previous Registration, mode planMode) []string {
 	}
 	target, _ := targetAccessDirs(mode)
 	return missingEntries(target, registrationAccessDirs(previous))
+}
+
+// hubIDDirPattern matches the cache directory name skillruntime.HubID gives a
+// hub: a host label and ten hex digits of the URL hash.
+var hubIDDirPattern = regexp.MustCompile(`^[a-z0-9.-]*-[0-9a-f]{10}$`)
+
+// isSkillHubAccessDir recognizes an allowed directory connect adds even when
+// the entry that named it is gone: a remote hub's cache directory
+// (.../skillhub/remote/<hub-id>), or a runtime directory of a directory that
+// is a Skill Hub workspace.
+func isSkillHubAccessDir(dir string) bool {
+	clean := filepath.Clean(dir)
+	parent := filepath.Dir(clean)
+	if hubIDDirPattern.MatchString(filepath.Base(clean)) && filepath.Base(parent) == "remote" && filepath.Base(filepath.Dir(parent)) == "skillhub" {
+		return true
+	}
+	for _, suffix := range [][]string{{"runtime", "cache", "skills"}, {"runtime", "envs"}, {"runtime", "config"}} {
+		root := clean
+		matched := true
+		for index := len(suffix) - 1; index >= 0; index-- {
+			if filepath.Base(root) != suffix[index] {
+				matched = false
+				break
+			}
+			root = filepath.Dir(root)
+		}
+		if matched {
+			if info, err := os.Stat(filepath.Join(root, ".skillhub", "schema-version")); err == nil && info.Mode().IsRegular() {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// removalDirs adds to the directories of the removed entry every directory
+// in existing that is recognizably Skill Hub's, so a removal also cleans up
+// after an entry that was deleted by hand or a cache directory that moved.
+func removalDirs(stale, existing []string) []string {
+	dirs := append([]string(nil), stale...)
+	for _, dir := range existing {
+		if isSkillHubAccessDir(dir) && len(missingEntries(dirs, []string{dir})) > 0 {
+			dirs = append(dirs, dir)
+		}
+	}
+	return dirs
 }
 
 // scopeRegistration reads the skillhub entry of a host's config file in a scope.
@@ -223,7 +270,8 @@ func removedConfig(host Host, raw []byte, stale []string) ([]byte, bool, error) 
 	case HostClaude, HostGemini:
 		updated = raw
 		if host == HostGemini {
-			updated, err = stripJSONStringArray(updated, geminiAllowedDirsPath, stale, true)
+			existing, _ := jsonStringArrayAt(updated, geminiAllowedDirsPath)
+			updated, err = stripJSONStringArray(updated, geminiAllowedDirsPath, removalDirs(stale, existing), true)
 			if err == nil {
 				updated, err = pruneEmptyJSON(updated, geminiAllowedDirsPath)
 			}
@@ -244,7 +292,8 @@ func removedConfig(host Host, raw []byte, stale []string) ([]byte, bool, error) 
 		}
 		return updated, emptyJSONDocument(updated), nil
 	case HostCodex:
-		updated, err = stripCodexWritableRoots(raw, stale, true)
+		existing, _ := codexWritableRoots(raw)
+		updated, err = stripCodexWritableRoots(raw, removalDirs(stale, existing), true)
 		for _, table := range []string{"mcp_servers.skillhub-curation", "mcp_servers.skillhub"} {
 			if err == nil {
 				updated, err = removeCodexTOMLTableTidy(updated, table)
@@ -355,6 +404,10 @@ func prepareNonLocalPermissions(adapter Adapter, scope Scope, path, root string,
 
 func desiredNonLocalPermissions(adapter Adapter, scope Scope, root string, raw []byte, mode planMode, previous Registration) ([]byte, bool, error) {
 	stale := staleAccessDirs(previous, mode)
+	if mode.remove {
+		existing, _ := jsonStringArrayAt(raw, claudeAllowedDirsPath)
+		stale = removalDirs(stale, existing)
+	}
 	updated, err := stripJSONStringArray(raw, claudeAllowedDirsPath, stale, true)
 	if err != nil {
 		return nil, false, err

@@ -320,6 +320,50 @@ func TestRemoveLeavesAChangedCuratorSkillAndUnrelatedPermissions(t *testing.T) {
 	}
 }
 
+func TestRemoveCleansUpDirectoriesOfAnEntryThatIsGone(t *testing.T) {
+	cases := map[string]func(t *testing.T, root, binary string){
+		"remote entry deleted by hand": func(t *testing.T, root, binary string) {
+			planAndApply(t, Request{Root: root, Scope: ScopeProject, Binary: binary, Hub: &RemoteHub{URL: testHubURL}})
+			for _, adapter := range adapters {
+				if err := os.Remove(filepath.Join(root, filepath.FromSlash(adapter.ConfigRelativePath))); err != nil {
+					t.Fatal(err)
+				}
+			}
+		},
+		"state directory changed since connect": func(t *testing.T, root, binary string) {
+			planAndApply(t, Request{Root: root, Scope: ScopeProject, Binary: binary, Hub: &RemoteHub{URL: testHubURL}})
+			t.Setenv("XDG_STATE_HOME", t.TempDir())
+		},
+		"local entry deleted by hand": func(t *testing.T, root, binary string) {
+			workspace := t.TempDir()
+			writeTestFile(t, filepath.Join(workspace, ".skillhub", "schema-version"), []byte("3\n"), 0o644)
+			planAndApply(t, Request{Workspace: workspace, Root: root, Scope: ScopeProject, Binary: binary, Hosts: []Host{HostClaude}})
+			if err := os.Remove(filepath.Join(root, ".mcp.json")); err != nil {
+				t.Fatal(err)
+			}
+		},
+	}
+	for name, setup := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("XDG_STATE_HOME", t.TempDir())
+			root, binary := t.TempDir(), absoluteBinary(t)
+			setup(t, root, binary)
+			planAndApply(t, Request{Root: root, Scope: ScopeProject, Binary: binary, Remove: true})
+			if left := fileTree(t, root); len(left) != 0 {
+				t.Fatalf("files left after removal: %v", left)
+			}
+		})
+	}
+	// A directory that only looks like a runtime directory stays.
+	root, binary := t.TempDir(), absoluteBinary(t)
+	userDirs := []byte(`{"permissions":{"additionalDirectories":["/data/runtime/config","/x/skillhub/remote/notes"]}}`)
+	writeTestFile(t, filepath.Join(root, ".claude", "settings.local.json"), userDirs, 0o644)
+	planAndApply(t, Request{Root: root, Scope: ScopeProject, Binary: binary, Hosts: []Host{HostClaude}, Remove: true})
+	if got := readTestFile(t, filepath.Join(root, ".claude", "settings.local.json")); !bytes.Equal(got, userDirs) {
+		t.Fatalf("user directories changed: %s", got)
+	}
+}
+
 func TestRemovePlanIsEmptyWithoutAConnection(t *testing.T) {
 	root, binary := t.TempDir(), absoluteBinary(t)
 	seedUnrelatedHostFiles(t, root)

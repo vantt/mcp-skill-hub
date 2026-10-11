@@ -372,11 +372,19 @@ func TestConnectRemoveCacheClearsTheHubsFetchedSkills(t *testing.T) {
 	if code, _, stderr := runCLI(t, "connect", "--project", project, "--hub", hub, "--host", "claude", "--yes"); code != 0 {
 		t.Fatal(stderr)
 	}
+	if code, _, stderr := runCLI(t, "connect", "-g", "--hub", hub, "--host", "claude", "--yes"); code != 0 {
+		t.Fatal(stderr)
+	}
 	cacheSkill(t, state, hub, "alpha", strings.Repeat("a", 2048))
 	cacheSkill(t, state, "http://100.64.0.2:7420", "beta", "other hub")
 	code, stdout, _ := runCLI(t, "connect", "--remove", "--project", project, "--cache")
-	if code != 0 || !strings.Contains(stdout, "Cached skills that will be cleared:") || !strings.Contains(stdout, "http://127.0.0.1:7420  1       1         2.0 KB") {
+	if code != 0 || !strings.Contains(stdout, "Cached skills that will be cleared:") || !strings.Contains(stdout, "http://127.0.0.1:7420  1       1         2.0 KB") ||
+		!strings.Contains(flatText(stdout), "WARNING: Claude Code in your user account still uses http://127.0.0.1:7420; its agents fetch the skills again after the cache is cleared.") {
 		t.Fatalf("preview:\n%s", stdout)
+	}
+	code, stdout, _ = runCLI(t, "connect", "--remove", "-g")
+	if code != 0 || !strings.Contains(flatText(stdout), "Projects that were connected while your user account had the Skill Hub instructions did not get their own copy") {
+		t.Fatalf("global removal preview:\n%s", stdout)
 	}
 	code, stdout, _ = runCLI(t, "connect", "--remove", "--project", project, "--cache", "--json")
 	var preview struct {

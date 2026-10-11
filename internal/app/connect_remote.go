@@ -394,15 +394,12 @@ func (service ConnectService) Disconnect(ctx context.Context, request Disconnect
 			}
 		}
 	}
-	hostRequest := hostintegration.Request{Root: root, Scope: scope, Binary: binary, Hosts: request.Hosts, Remove: true}
-	result, err := service.planScope(ctx, hostRequest, request.Yes)
-	if err != nil || result.Error != nil {
-		return result, nil, err
-	}
+	var warnings []Warning
 	var cache skillruntime.RemoteCache
+	cacheToClear := false
 	if request.ClearCache {
 		if len(hubs) == 0 {
-			result.Warnings = append(result.Warnings, Warning{Code: "no_remote_hub", Summary: "--cache clears the skills fetched from a remote hub, and this scope has no remote hub entry; there is no cache to clear."})
+			warnings = append(warnings, Warning{Code: "no_remote_hub", Summary: "--cache clears the skills fetched from a remote hub, and this scope has no remote hub entry; there is no cache to clear."})
 		} else {
 			state, err := skillruntime.ClientStateDir()
 			if err != nil {
@@ -422,14 +419,34 @@ func (service ConnectService) Disconnect(ctx context.Context, request Disconnect
 				for _, entry := range usage {
 					item.Skills, item.Versions, item.Bytes = entry.Skills, entry.Versions, entry.Bytes
 				}
+				cacheToClear = cacheToClear || item.Versions > 0
 				disconnection.Cache = append(disconnection.Cache, item)
+			}
+			warnings = append(warnings, sharedHubWarnings(hubs, request.Global, root)...)
+		}
+	}
+	if request.Yes && request.ClearCache {
+		// The cache goes first: if clearing fails, the connection is still
+		// in place and the same command can be run again.
+		for _, hub := range hubs {
+			hubID, err := skillruntime.HubID(hub)
+			if err != nil {
+				continue
+			}
+			if _, err := cache.Clear(hubID); err != nil {
+				return Result{}, nil, fmt.Errorf("clear the skill cache of %s: %w", hub, err)
 			}
 		}
 	}
-	cacheToClear := false
-	for _, item := range disconnection.Cache {
-		cacheToClear = cacheToClear || item.Versions > 0
+	hostRequest := hostintegration.Request{Root: root, Scope: scope, Binary: binary, Hosts: request.Hosts, Remove: true}
+	result, err := service.planScope(ctx, hostRequest, request.Yes)
+	if err != nil || result.Error != nil {
+		return result, nil, err
 	}
+	if request.Global && removesInstructions(result) {
+		warnings = append(warnings, Warning{Code: "global_instructions_removed", Summary: "Projects that were connected while your user account had the Skill Hub instructions did not get their own copy; run `skillhub connect` in those projects again if they keep using Skill Hub."})
+	}
+	result.Warnings = append(result.Warnings, warnings...)
 	if result.Status == StatusReady && !cacheToClear {
 		result.Summary = "No Skill Hub connection in " + label + "; nothing to remove."
 		return result, disconnection, nil
@@ -440,21 +457,40 @@ func (service ConnectService) Disconnect(ctx context.Context, request Disconnect
 		result.SuggestedActions = []Action{{Label: "Remove the agent connection", Command: disconnectCommand(request) + " --yes", RequiresConfirmation: true}}
 		return result, disconnection, nil
 	}
-	for _, hub := range hubs {
-		if !request.ClearCache {
-			break
-		}
-		hubID, err := skillruntime.HubID(hub)
-		if err != nil {
-			continue
-		}
-		if _, err := cache.Clear(hubID); err != nil {
-			return Result{}, nil, fmt.Errorf("clear the skill cache of %s: %w", hub, err)
-		}
-	}
 	result.Status = StatusApplied
 	result.Summary = "Skill Hub connection for " + label + " removed."
 	return result, disconnection, nil
+}
+
+// removesInstructions reports whether a removal takes out an instruction block.
+func removesInstructions(result Result) bool {
+	for _, item := range result.Items {
+		if strings.HasSuffix(item.ID, "_"+string(hostintegration.ChangeBootstrap)) {
+			return true
+		}
+	}
+	return false
+}
+
+// sharedHubWarnings names the other scope that still uses a hub whose cache
+// is about to be cleared: the user account when a project is disconnected,
+// the current project when the user account is.
+func sharedHubWarnings(hubs []string, global bool, root string) []Warning {
+	project, home := "", ""
+	if global {
+		if current, err := os.Getwd(); err == nil && filepath.Clean(current) != filepath.Clean(root) {
+			project = current
+		}
+	} else if userHome, err := os.UserHomeDir(); err == nil && filepath.Clean(userHome) != filepath.Clean(root) {
+		home = userHome
+	}
+	var warnings []Warning
+	for _, entry := range FindRemoteEntries(project, home) {
+		if slices.Contains(hubs, entry.HubURL) {
+			warnings = append(warnings, Warning{Code: "hub_cache_shared", Summary: HostDisplayName(entry.Host) + " in " + entry.ScopeLabel() + " still uses " + entry.HubURL + "; its agents fetch the skills again after the cache is cleared."})
+		}
+	}
+	return warnings
 }
 
 func disconnectCommand(request DisconnectRequest) string {
