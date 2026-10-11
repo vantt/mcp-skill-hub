@@ -31,7 +31,14 @@ var requiredDirectories = []string{
 	"registry/collections", "config/schemas", "evals/routing/cases", "evals/routing/suites",
 }
 
-var requiredIgnoreEntries = []string{"/runtime/", "/.skillhub/transactions/"}
+// machineFiles are the agent connection files init writes into the workspace. They hold absolute
+// paths of this machine, so they are ignored and never travel with the repository.
+var machineFiles = []string{".mcp.json", ".claude/settings.local.json", ".codex/config.toml", ".gemini/settings.json"}
+
+var requiredIgnoreEntries = []string{
+	"/runtime/", "/.skillhub/transactions/",
+	"/.mcp.json", "/.claude/settings.local.json", "/.codex/", "/.gemini/settings.json",
+}
 
 // Finding describes a workspace problem and whether the mechanical remediation can fix it.
 type Finding struct {
@@ -167,7 +174,30 @@ func InspectWithOptions(root string, detached bool) (Plan, error) {
 			findings = append(findings, Finding{"gitignore_entry_missing", ".gitignore", "Required Git ignore entry is missing: " + entry, true})
 		}
 	}
+	for _, path := range trackedMachineFiles(root) {
+		findings = append(findings, Finding{"machine_file_tracked", path, "Git tracks a connection file that holds paths of this machine.", false})
+	}
 	return Plan{Root: root, Findings: findings}, nil
+}
+
+// trackedMachineFiles lists the machine files Git already tracks. It reports nothing when the
+// workspace is not a Git repository or Git cannot be run.
+func trackedMachineFiles(root string) []string {
+	if !isGitRepository(root) {
+		return nil
+	}
+	args := append([]string{"-C", root, "ls-files", "-z", "--"}, machineFiles...)
+	output, err := exec.Command("git", args...).Output()
+	if err != nil {
+		return nil
+	}
+	var tracked []string
+	for _, path := range strings.Split(string(output), "\x00") {
+		if path != "" {
+			tracked = append(tracked, path)
+		}
+	}
+	return tracked
 }
 
 // hasCanonicalContent reports whether any canonical entity or skill file exists.

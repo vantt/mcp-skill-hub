@@ -166,7 +166,9 @@ func doctorResult(root string, plan workspace.Plan, issues []canonical.Issue, re
 			finding.Summary = "Workspace directory will be created."
 		}
 		impact := "Mechanical workspace remediation is available."
-		if !finding.Fixable {
+		if finding.ID == "machine_file_tracked" {
+			impact = "Stop tracking it with `git rm --cached " + finding.Path + "`; the file stays on disk."
+		} else if !finding.Fixable {
 			impact = "Doctor will not change canonical schema files; review an explicit migration preview."
 			if finding.ID == "canonical_schema_incompatible" {
 				hasCanonicalMigration = true
