@@ -19,7 +19,7 @@ Additionally, releases publish `install.sh`, `install.ps1`, `checksums.txt`, SPD
 
 ## Release preflight and gate
 
-Before tagging a release, run local tests and the release preflight script:
+Before tagging a release, run local tests and the release preflight script. [Contributing](../CONTRIBUTING.md#build-and-test) describes the everyday `make` gates; the release gate below also runs the installer lifecycle test.
 
 ```bash
 # 1. Run local test gates
@@ -66,6 +66,7 @@ Pushing a `v*.*.*` tag initiates the automated GitHub Actions release workflow (
    - Upgrade flow from previous stable release (if available).
    - **Web UI release smoke:** Starts `skillhub serve web --loopback-only --no-open --addr 127.0.0.1:0` in the background on a freshly initialized workspace, extracts the URL and token, verifies authenticated `GET /api/v1/session` (200), unauthenticated request refusal (401), and HTML root element rendering (`id="root"`), then terminates the server.
    - Complete uninstallation via `SKILLHUB_UNINSTALL=1` and verification of binary removal.
+
 Prerelease tags (such as `v0.1.0-rc.1`) are published as GitHub prereleases and do not update the `latest` release pointer.
 
 ## Signature policy and verification
@@ -110,44 +111,9 @@ gh attestation verify skillhub-${VERSION}-linux-amd64.tar.gz --repo ${OWNER}/${R
 
 ## Install, upgrade, and uninstall
 
-### Standard one-liners
+User install, upgrade and uninstall steps are in [Installation](installation.md).
 
-Linux / macOS:
-```bash
-curl -fsSL https://github.com/vantt/mcp-skill-hub/releases/latest/download/install.sh | sh
-```
-
-Windows (PowerShell):
-```powershell
-powershell -ExecutionPolicy ByPass -c "irm https://github.com/vantt/mcp-skill-hub/releases/latest/download/install.ps1 | iex"
-```
-
-### Options and environment variables
-
-- `SKILLHUB_VERSION=v0.1.0`: Pin to a specific version.
-- `SKILLHUB_PREFIX=$HOME/.local`: Custom installation prefix (Unix).
-- `SKILLHUB_NO_MODIFY_PATH=1`: Do not alter shell profile or registry PATH.
-- `SKILLHUB_REQUIRE_SIGNATURE=1`: Require valid Sigstore cosign verification.
-
-### Upgrades
-
-- **In-place:** Run `skillhub update` inside a terminal. It queries GitHub Releases for newer stable versions, verifies checksums and signatures, and atomically replaces the binary.
-- **Re-running installer:** Simply re-execute the installation one-liner. Upgrades retain the prior binary as a backup until activation succeeds.
-
-### Uninstall
-
-- **Unix:**
-  ```bash
-  curl -fsSL https://github.com/vantt/mcp-skill-hub/releases/latest/download/install.sh | sh -s -- --uninstall
-  # or pass environment variable:
-  SKILLHUB_UNINSTALL=1 sh install.sh
-  ```
-- **Windows:**
-  ```powershell
-  powershell -ExecutionPolicy ByPass -c "$env:SKILLHUB_UNINSTALL='1'; irm https://github.com/vantt/mcp-skill-hub/releases/latest/download/install.ps1 | iex"
-  ```
-
-Uninstall removes only the managed binary and install metadata marker. User workspaces, skills, and host connection files are never deleted by the uninstaller.
+The uninstaller removes only what the installer manages: the binary, the install marker and the `PATH` lines the installer added. It never deletes user workspaces, skills or host connection files.
 
 ## Canonical schema migration
 
