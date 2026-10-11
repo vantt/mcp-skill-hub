@@ -619,6 +619,20 @@ export interface SourceProposal {
   warnings?: Array<{ code: string; summary: string }>;
 }
 
+export interface BackfillCandidate {
+  skill_id: string;
+  // "origin_without_source" | "source_without_origin"
+  kind: string;
+  source_id: string;
+  repo_path: string;
+  create_source: boolean;
+}
+
+export interface UpstreamTrackProposal extends SourceProposal {
+  full_diff?: string;
+  candidate?: BackfillCandidate;
+}
+
 export interface SourceMutationResult {
   schema_version: string;
   status: string;

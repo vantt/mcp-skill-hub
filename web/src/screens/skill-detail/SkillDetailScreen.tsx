@@ -19,6 +19,7 @@ import { Skeleton } from '../../components/Skeleton';
 import { StatusBadge } from '../../components/StatusBadge';
 import { Toast } from '../../components/Toast';
 import { EditorTab } from './EditorTab';
+import { OverviewTab } from './OverviewTab';
 import { ResourcesTab } from './ResourcesTab';
 import { ReviewTab } from './ReviewTab';
 import { UsagePanel } from './UsagePanel';
@@ -28,6 +29,7 @@ import { DistillTab } from './DistillTab';
 import { activationChecklist } from './activation-checklist';
 import { useT } from '../../i18n';
 
+const LABEL_TAB_OVERVIEW = 'Overview';
 const LABEL_TAB_REVIEW = 'Review';
 const LABEL_TAB_EDITOR = 'Editor';
 const LABEL_TAB_RESOURCES = 'Resources';
@@ -87,7 +89,7 @@ export function SkillDetailScreen() {
   const { id } = useParams<{ id: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const activeTab = searchParams.get('tab') || 'review';
+  const activeTab = searchParams.get('tab') || 'overview';
   const skillId = id || '';
 
   const { data: session } = useSession();
@@ -95,7 +97,7 @@ export function SkillDetailScreen() {
 
   const { data: skill, isLoading: skillLoading, error: skillError } = useSkillDetail(skillId);
   const { data: review, isLoading: reviewLoading } = useSkillReview(skillId);
-  const { data: sourcesData } = useSkillSources(skillId);
+  const { data: sourcesData, isLoading: sourcesLoading, error: sourcesError } = useSkillSources(skillId);
   const hasSourcesUpdate =
     sourcesData?.upstream?.status === 'update_available' ||
     sourcesData?.upstream?.status === 'diverged';
@@ -321,6 +323,15 @@ export function SkillDetailScreen() {
       <div className="fg-tabs app-tabs" role="tablist" style={{ overflowX: 'auto' }}>
         <button
           type="button"
+          className={`fg-tab ${activeTab === 'overview' ? 'fg-tab--active' : ''}`}
+          role="tab"
+          aria-selected={activeTab === 'overview'}
+          onClick={() => setTab('overview')}
+        >
+          <span>{LABEL_TAB_OVERVIEW}</span>
+        </button>
+        <button
+          type="button"
           className={`fg-tab ${activeTab === 'review' ? 'fg-tab--active' : ''}`}
           role="tab"
           aria-selected={activeTab === 'review'}
@@ -400,6 +411,17 @@ export function SkillDetailScreen() {
       </div>
 
       {/* Tab Panels */}
+      {activeTab === 'overview' && (
+        <OverviewTab
+          skill={skill}
+          review={review}
+          sources={sourcesData}
+          sourcesLoading={sourcesLoading}
+          sourcesError={sourcesError}
+          onOpenTab={setTab}
+        />
+      )}
+
       {activeTab === 'review' && (
         <ReviewTab
           skill={skill}

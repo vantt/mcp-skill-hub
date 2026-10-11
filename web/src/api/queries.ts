@@ -22,6 +22,7 @@ import type {
   SourceListResult,
   SourceMutationResult,
   SourceProposal,
+  UpstreamTrackProposal,
   UpstreamUpdatePreview,
   UpstreamUpdateResult,
 } from './types';
@@ -267,6 +268,13 @@ export async function previewDetachSource(id: string, sourceId: string): Promise
 
 export async function previewUnwatchSource(sourceId: string): Promise<SourceProposal> {
   return apiFetch<SourceProposal>(`/sources/${encodeURIComponent(sourceId)}/unwatch/preview`, {
+    method: 'POST',
+  });
+}
+
+// Previews linking a skill's untracked upstream to a source record; confirm with confirmSourceProposal.
+export async function previewTrackUpstream(id: string): Promise<UpstreamTrackProposal> {
+  return apiFetch<UpstreamTrackProposal>(`/skills/${encodeURIComponent(id)}/upstream/track/preview`, {
     method: 'POST',
   });
 }
