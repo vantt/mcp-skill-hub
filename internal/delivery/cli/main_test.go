@@ -1,16 +1,28 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"testing"
 )
 
+// cliHelperEnv makes the test binary act as the skillhub command, so a test
+// can run a command as a real subprocess (for example a stdio MCP server).
+const cliHelperEnv = "SKILLHUB_CLI_TEST_HELPER"
+
 // Isolate host configuration before parallel tests or subprocesses run.
 func TestMain(m *testing.M) {
+	if os.Getenv(cliHelperEnv) == "1" {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+		code := RunContext(ctx, os.Args[1:], os.Stdout, os.Stderr)
+		stop()
+		os.Exit(code)
+	}
 	// Preserve HOME/XDG-derived Go paths so subprocess builds do not populate
 	// the isolated home with read-only module cache files.
 	args := []string{"env", "-json"}

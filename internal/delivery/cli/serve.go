@@ -61,8 +61,11 @@ func parseServeFlags(args []string) (serveConfig, string, string) {
 }
 
 func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "mcp" {
+		return runServeMCP(ctx, args[1:], stdout, stderr)
+	}
 	if len(args) == 0 || args[0] != "web" {
-		return writeInvalidRequest(stdout, stderr, false, "serve requires the web subcommand", "Run `skillhub serve web`.")
+		return writeInvalidRequest(stdout, stderr, false, "serve requires the web or mcp subcommand", "Run `skillhub serve web` for the web UI or `skillhub serve mcp` for MCP.")
 	}
 
 	cfg, parseErr, fix := parseServeFlags(args)

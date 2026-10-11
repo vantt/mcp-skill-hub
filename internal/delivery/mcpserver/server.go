@@ -1,4 +1,5 @@
-// Package mcpserver exposes Skill Hub application services over MCP stdio.
+// Package mcpserver exposes Skill Hub application services over MCP, on stdio
+// for a local agent host and over Streamable HTTP for agents on other machines.
 package mcpserver
 
 import (
@@ -107,6 +108,25 @@ func New(workspacePath string, diagnostics io.Writer, profiles ...Profile) (*Ser
 
 // Serve performs startup validation/rebuild before accepting stdio frames.
 func Serve(ctx context.Context, workspacePath string, diagnostics io.Writer, profiles ...Profile) error {
+	_, server, stop, err := startServing(ctx, workspacePath, diagnostics, profiles...)
+	if err != nil {
+		return err
+	}
+	defer stop()
+	err = server.Run(ctx, &mcp.StdioTransport{MaxLineLength: MaxFrameBytes})
+	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, io.EOF) {
+		return nil
+	}
+	return err
+}
+
+// startServing prepares one long-lived server for any transport: it ensures
+// the catalog, registers the tools of the profile, starts the idle memory
+// releaser, collects old snapshots, and opens the telemetry recorder. Every
+// session of the returned server shares the same tools, activation tracker,
+// and recorder. stop flushes and closes the recorder, then stops the releaser;
+// call it once, after the transport has stopped.
+func startServing(ctx context.Context, workspacePath string, diagnostics io.Writer, profiles ...Profile) (*Server, *mcp.Server, func(), error) {
 	if _, err := (app.CatalogService{}).EnsureCatalog(ctx, workspacePath); err != nil {
 		if diagnostics == nil {
 			diagnostics = os.Stderr
@@ -115,7 +135,7 @@ func Serve(ctx context.Context, workspacePath string, diagnostics io.Writer, pro
 	}
 	adapter, server, err := New(workspacePath, diagnostics, profiles...)
 	if err != nil {
-		return err
+		return nil, nil, nil, err
 	}
 	releaser := &idleMemoryReleaser{release: debug.FreeOSMemory}
 	releaser.noteActivity(time.Now())
@@ -126,28 +146,32 @@ func Serve(ctx context.Context, workspacePath string, diagnostics io.Writer, pro
 		defer close(releaseDone)
 		releaser.run(releaseContext, memoryReleaseCheckInterval, memoryReleaseIdleAfter)
 	}()
-	defer func() {
-		stopRelease()
-		<-releaseDone
-	}()
 	if gcErr := adapter.snapshots.CollectGarbage(ctx, adapter.workspace, app.SnapshotGCMinAge); gcErr != nil {
 		adapter.logger.Warn("local skill snapshot garbage collection failed", "error", gcErr)
 	}
-	if recorder, telemetryErr := (app.TelemetryService{}).Open(adapter.workspace); telemetryErr != nil {
+	recorder, telemetryErr := (app.TelemetryService{}).Open(adapter.workspace)
+	if telemetryErr != nil {
 		adapter.logger.Warn("MCP telemetry recorder could not be opened")
+		recorder = nil
 	} else {
-		adapter.telemetry = recorder
-		adapter.resolver.Telemetry = recorder
-		adapter.feedback.Recorder = recorder
-		adapter.source.Telemetry = recorder
-		adapter.curationUX.Recorder = recorder
-		defer closeServeTelemetry(recorder, adapter.logger)
+		adapter.useRecorder(recorder)
 	}
-	err = server.Run(ctx, &mcp.StdioTransport{MaxLineLength: MaxFrameBytes})
-	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, io.EOF) {
-		return nil
+	stop := func() {
+		if recorder != nil {
+			closeServeTelemetry(recorder, adapter.logger)
+		}
+		stopRelease()
+		<-releaseDone
 	}
-	return err
+	return adapter, server, stop, nil
+}
+
+func (adapter *Server) useRecorder(recorder *telemetry.Recorder) {
+	adapter.telemetry = recorder
+	adapter.resolver.Telemetry = recorder
+	adapter.feedback.Recorder = recorder
+	adapter.source.Telemetry = recorder
+	adapter.curationUX.Recorder = recorder
 }
 
 const (

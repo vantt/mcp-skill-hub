@@ -31,8 +31,10 @@ Sources & learning:
 
 Agent:
   resolve   Pick the best skill for a request
-  mcp serve Run the MCP server for an agent host
+  serve mcp Run the MCP server for an agent host (stdio), or with --addr for other machines
+  mcp serve The same stdio server, the command agent hosts already launch
   serve web Run the local web UI
+  token     Show or rotate the shared token of the network MCP listener
 
 Maintenance:
   validate  Validate canonical workspace files
@@ -286,12 +288,33 @@ Example: skillhub version
 `,
 	"mcp": `Usage: skillhub mcp serve [--workspace <path>] [--profile runtime|curation|all]
 
-Serve the workspace over MCP (stdio). Agent hosts start this for you after
-` + "`skillhub connect`" + `; you rarely run it by hand.
+An alias of skillhub serve mcp, kept for the agent host registrations that
+already run it. Serve the workspace over MCP (stdio). Agent hosts start this
+for you after ` + "`skillhub connect`" + `; you rarely run it by hand. Run
+skillhub help serve for the network listener.
 
 Options:
   --workspace <path>             Workspace to serve
   --profile runtime|curation|all Tool profile to expose (default: all)
+`,
+	"token": `Usage: skillhub token show [--workspace <path>] [--token-file <path>]
+       skillhub token rotate [--workspace <path>] [--token-file <path>] [--yes]
+
+Manage the shared bearer token of the network MCP listener (skillhub serve mcp
+--addr). The token is created on first use in <workspace>/runtime/config/.hub-token
+(mode 0600, never committed) and is never written to logs, telemetry, or URLs.
+
+  show              Print the token, only when standard output is a terminal;
+                    otherwise refuse and print the token file path
+  rotate            Preview replacing the token; --yes applies. Every machine
+                    that connects needs the new file; a running listener uses
+                    it from its next request
+  --workspace <p>   Workspace whose token to use
+  --token-file <p>  Use this token file instead of the workspace one
+
+Examples:
+  skillhub token show
+  skillhub token rotate --yes
 `,
 	"update": `Usage: skillhub update [--version <v>] [--check] [--json]
 
@@ -301,11 +324,32 @@ Update skillhub to the latest release or a specified version.
   --check         Check for updates without modifying the binary
   --json          Machine-readable result
 `,
-	"serve": `Usage: skillhub serve web [--workspace <path>] [--addr <host:port>]
-                           [--loopback-only] [--allow-host <host[:port]>]...
-                           [--no-open] [--dev]
+	"serve": `Usage: skillhub serve mcp [--workspace <path>] [--profile runtime|curation|all]
+       skillhub serve mcp --addr <host:port> [--trust-private-network]
+                          [--token-file <path>] [--allow-host <host>]... [--workspace <path>]
+       skillhub serve web [--workspace <path>] [--addr <host:port>]
+                          [--loopback-only] [--allow-host <host[:port]>]...
+                          [--no-open] [--dev]
 
-Run the local web UI. Listens on 0.0.0.0 when this machine has two or more non-loopback IPv4 addresses, otherwise on 127.0.0.1; --addr or --loopback-only override.
+serve mcp without --addr serves the workspace over MCP (stdio), the way agent
+hosts launch it after ` + "`skillhub connect`" + ` (skillhub mcp serve is an alias).
+
+serve mcp --addr runs a network listener so agents on other machines can use
+this hub. It serves the runtime tools only (skill_resolve, skill_get,
+skill_feedback); curation stays on this machine. Every request needs the shared
+token (see skillhub help token) in the Authorization header. The listener
+speaks plain HTTP: it starts on a loopback address (127.0.0.1, ::1), which you
+reach through an SSH tunnel, and refuses any other address unless you pass
+--trust-private-network for a private network such as Tailscale. On start it
+prints the skillhub connect command to run on the other machine.
+
+  --profile runtime|curation|all  Tool profile for stdio (default: all); with --addr only runtime
+  --addr <host:port>              Listen on the network instead of stdio
+  --trust-private-network         Allow a non-loopback address on a network you trust
+  --token-file <path>             Token file (default: <workspace>/runtime/config/.hub-token)
+  --allow-host <host>             Accept another Host name, for example a VPN DNS name (repeatable)
+
+serve web runs the local web UI. Listens on 0.0.0.0 when this machine has two or more non-loopback IPv4 addresses, otherwise on 127.0.0.1; --addr or --loopback-only override.
 
   --workspace <path>           Workspace to serve
   --addr <host:port>           Explicit listen address and port
@@ -313,6 +357,11 @@ Run the local web UI. Listens on 0.0.0.0 when this machine has two or more non-l
   --allow-host <host[:port]>   Allow an additional Host header (repeatable)
   --no-open                    Do not open the browser on startup
   --dev                        Development mode for Vite proxy
+
+Examples:
+  skillhub serve mcp --addr 127.0.0.1:7420
+  skillhub serve mcp --addr 100.101.102.103:7420 --trust-private-network
+  skillhub serve web
 `,
 	"web": `Usage: skillhub web [options]
 
