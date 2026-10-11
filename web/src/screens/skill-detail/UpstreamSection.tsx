@@ -1,16 +1,22 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { checkSkillUpstream } from '../../api/queries';
-import type { SkillUpstream } from '../../api/types';
+import { checkSkillUpstream, confirmSourceProposal, previewTrackUpstream } from '../../api/queries';
+import type { SkillUpstream, UpstreamTrackProposal } from '../../api/types';
 import { CommandBlock } from '../../components/CommandBlock';
+import { ProposalPreview } from '../../components/ProposalPreview';
 import { StatusBadge } from '../../components/StatusBadge';
+import { proposalPins, sourceErrorText } from './AddSourceForm';
+import { isUpstreamTracked, upstreamStatusBadge } from './detail-format';
 
 const TITLE_UPSTREAM = 'Upstream repository';
 const BTN_CHECK_NOW = 'Check now';
 const BTN_CHECKING = 'Checking…';
 const BTN_REVIEW_UPDATE = 'Review update';
+const BTN_TRACK = 'Track upstream';
+const BTN_TRACK_PREVIEWING = 'Preparing preview…';
 const LABEL_UNTRACKED_HINT =
-  'This skill does not have an attached upstream source record. Run backfill to link it:';
+  'Skill Hub knows where this skill came from, but no source record tracks that repository yet, so it cannot check for or review updates. Track the upstream to link it; you see the exact change first.';
+const LABEL_FALLBACK = 'Or run this in a terminal:';
 const BANNER_UPSTREAM_REMOVED =
   'Skill removed in upstream repository. Your local copy continues working as a custom skill and no upstream updates can be applied.';
 const LABEL_REPOSITORY = 'Repository';
@@ -26,12 +32,20 @@ interface UpstreamSectionProps {
   skillId: string;
   upstream: SkillUpstream | null;
   onReviewUpdate: () => void;
+  onTracked: (message: string) => void;
 }
 
-export function UpstreamSection({ skillId, upstream, onReviewUpdate }: UpstreamSectionProps) {
+export function UpstreamSection({ skillId, upstream, onReviewUpdate, onTracked }: UpstreamSectionProps) {
   const queryClient = useQueryClient();
   const [checking, setChecking] = useState(false);
   const [checkError, setCheckError] = useState<string | null>(null);
+  const [trackPreviewing, setTrackPreviewing] = useState(false);
+  const [trackError, setTrackError] = useState<string | null>(null);
+  const [trackInfo, setTrackInfo] = useState<string | null>(null);
+  const [trackProposal, setTrackProposal] = useState<UpstreamTrackProposal | null>(null);
+  const [trackConfirming, setTrackConfirming] = useState(false);
+  const [trackConfirmError, setTrackConfirmError] = useState<string | null>(null);
+  const [trackAttempt, setTrackAttempt] = useState(0);
 
   if (!upstream) {
     return null;
@@ -51,33 +65,51 @@ export function UpstreamSection({ skillId, upstream, onReviewUpdate }: UpstreamS
     }
   };
 
-  const getStatusProps = (status: string): { tone: 'success' | 'warning' | 'danger' | 'neutral'; label: string } => {
-    switch (status) {
-      case 'up_to_date':
-        return { tone: 'success', label: 'Up to date' };
-      case 'update_available':
-        return { tone: 'warning', label: 'Update available' };
-      case 'modified':
-        return { tone: 'warning', label: 'Modified locally' };
-      case 'unknown':
-        return { tone: 'warning', label: 'Not checked' };
-      case 'diverged':
-        return { tone: 'danger', label: 'Diverged' };
-      case 'upstream_removed':
-        return { tone: 'danger', label: 'Removed upstream' };
-      case 'unavailable':
-        return { tone: 'danger', label: 'Unreachable' };
-      case 'pinned':
-        return { tone: 'neutral', label: 'Pinned' };
-      case 'untracked':
-        return { tone: 'neutral', label: 'Not tracked' };
-      default:
-        return { tone: 'neutral', label: status };
+  const handleTrackPreview = async () => {
+    setTrackPreviewing(true);
+    setTrackError(null);
+    setTrackInfo(null);
+    try {
+      const res = await previewTrackUpstream(skillId);
+      if (proposalPins(res)) {
+        setTrackConfirmError(null);
+        setTrackProposal(res);
+      } else {
+        setTrackInfo(res.summary);
+      }
+    } catch (err) {
+      setTrackError(sourceErrorText(err, 'Failed to preview tracking the upstream'));
+    } finally {
+      setTrackPreviewing(false);
     }
   };
 
-  const statusProps = getStatusProps(upstream.status);
-  const canReview = upstream.status === 'update_available' || upstream.status === 'diverged';
+  const handleTrackConfirm = async (pins: { proposalId: string; proposalDigest: string; baseVersion: string }) => {
+    setTrackConfirming(true);
+    setTrackConfirmError(null);
+    try {
+      const res = await confirmSourceProposal(pins.proposalId, {
+        proposal_digest: pins.proposalDigest,
+        base_version: pins.baseVersion,
+      });
+      for (const queryKey of [['skill-sources', skillId], ['skill-review', skillId], ['skill', skillId], ['skills'], ['sources']]) {
+        void queryClient.invalidateQueries({ queryKey });
+      }
+      setTrackProposal(null);
+      onTracked(res.summary || `Tracking the upstream of ${skillId}.`);
+    } catch (err) {
+      setTrackConfirmError(sourceErrorText(err, 'Failed to track the upstream'));
+      setTrackAttempt((n) => n + 1);
+    } finally {
+      setTrackConfirming(false);
+    }
+  };
+
+  const statusProps = upstreamStatusBadge(upstream.status);
+  const tracked = isUpstreamTracked(upstream);
+  const canReview =
+    tracked && (upstream.status === 'update_available' || upstream.status === 'diverged');
+  const trackPins = trackProposal ? proposalPins(trackProposal) : null;
   const shortBase = upstream.base_commit ? upstream.base_commit.slice(0, 12) : '-';
   const shortLatest = upstream.latest_commit ? upstream.latest_commit.slice(0, 12) : '-';
   const commitDate = upstream.latest_committed_at ? upstream.latest_committed_at.slice(0, 10) : '-';
@@ -94,7 +126,7 @@ export function UpstreamSection({ skillId, upstream, onReviewUpdate }: UpstreamS
             type="button"
             className="fg-btn fg-btn--secondary fg-btn--small"
             onClick={handleCheckNow}
-            disabled={checking}
+            disabled={checking || !tracked}
           >
             <span>{checking ? BTN_CHECKING : BTN_CHECK_NOW}</span>
           </button>
@@ -115,11 +147,31 @@ export function UpstreamSection({ skillId, upstream, onReviewUpdate }: UpstreamS
         </div>
       )}
 
-      {upstream.status === 'untracked' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-          <span style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>
-            {LABEL_UNTRACKED_HINT}
-          </span>
+      {!tracked && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+          <p style={{ margin: 0, fontSize: '13px', color: 'var(--color-text-muted)', maxWidth: '72ch' }}>
+            <span>{LABEL_UNTRACKED_HINT}</span>
+          </p>
+          <button
+            type="button"
+            className="fg-btn fg-btn--primary"
+            style={{ width: 'fit-content' }}
+            onClick={() => void handleTrackPreview()}
+            disabled={trackPreviewing}
+          >
+            <span>{trackPreviewing ? BTN_TRACK_PREVIEWING : BTN_TRACK}</span>
+          </button>
+          {trackError && (
+            <div className="fg-banner fg-banner--danger" role="alert" style={{ fontSize: '13px' }}>
+              <span>{trackError}</span>
+            </div>
+          )}
+          {trackInfo && (
+            <div className="fg-banner fg-banner--info" role="status" style={{ fontSize: '13px' }}>
+              <span>{trackInfo}</span>
+            </div>
+          )}
+          <span style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>{LABEL_FALLBACK}</span>
           <CommandBlock command={`skillhub source backfill --skill ${skillId}`} />
         </div>
       )}
@@ -209,6 +261,35 @@ export function UpstreamSection({ skillId, upstream, onReviewUpdate }: UpstreamS
           <span>{upstream.next_action}</span>
         </div>
       )}
+
+      {trackProposal && trackPins && (
+        <ProposalPreview
+          key={trackAttempt}
+          open
+          title={`Track upstream for ${skillId}?`}
+          target={upstream.repository || skillId}
+          impact={trackImpact(trackProposal)}
+          paths={[...(trackProposal.diff?.added ?? []), ...(trackProposal.diff?.modified ?? [])]}
+          warning={trackProposal.warnings?.[0]?.summary}
+          diff={trackProposal.full_diff ?? ''}
+          proposalId={trackPins.proposal_id}
+          proposalDigest={trackPins.proposal_digest}
+          baseVersion={trackPins.base_version}
+          confirmLabel={BTN_TRACK}
+          isLoading={trackConfirming}
+          networkError={trackConfirmError}
+          onConfirm={(p) => void handleTrackConfirm(p)}
+          onCancel={() => setTrackProposal(null)}
+        />
+      )}
     </section>
   );
+}
+
+function trackImpact(p: UpstreamTrackProposal): string {
+  const c = p.candidate;
+  if (!c) return p.summary;
+  return c.create_source
+    ? `Creates a new source record ${c.source_id} and links this skill's upstream to it.`
+    : `Links this skill's upstream to the existing source record ${c.source_id}; no new source record is created.`;
 }
