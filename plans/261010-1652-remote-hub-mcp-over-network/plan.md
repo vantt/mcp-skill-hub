@@ -116,11 +116,11 @@ The two headline criteria come first; the security criteria below them are the p
 - [ ] Unapproved skill content stays blocked for remote callers exactly as it is for local ones.
 
 **2. Getting a skill is fast.**
-Proposed budgets (Phase 1 measures the local stdio baseline first and confirms or adjusts them; numbers are targets, not measurements):
-- [ ] `skill_resolve` over a LAN adds at most 50 ms at p95 over the local stdio time (one round trip, no extra calls).
-- [ ] The first `skill_get` of `herdr-cook-plan` (the largest skill) takes one network exchange for the whole folder, not one per file, and finishes within 500 ms on a LAN and 2 s on a 100 ms-RTT link.
-- [ ] Every later use of the same skill version costs no file transfer at all (local cache keyed by the skill digest): at most 20 ms and zero bytes of skill content.
-- [ ] A changed skill refetches only that skill (digest changed), and a metadata-only hub change refetches nothing.
+Budgets, checked by Phase 1 against the stdio baseline on 2026-10-11 (`make remote-baseline`, tables in `docs/design/remote-hub.md`); numbers are targets for the remote path:
+- [ ] `skill_resolve` over a LAN adds at most 50 ms at p95 over the local stdio time (one round trip, no extra calls). Confirmed: local stdio p95 is 14 to 23 ms for the first resolve of a session, so the remote p95 must stay at or below about 75 ms.
+- [ ] The first `skill_get` of `herdr-cook-plan` (the largest skill: 13 served files and 186,343 bytes, plus hub metadata under `.meta/` that is not served) takes one network exchange for the whole folder, not one per file, and finishes within 500 ms on a LAN and 2 s on a 100 ms-RTT link. Confirmed: today it takes 16 sequential round trips, 248 to 266 ms p50 and 336 to 392 ms p95 on stdio, projected 1.85 s at 100 ms RTT.
+- [ ] Every later use of the same skill version costs no file transfer at all (local cache keyed by the skill digest): at most 20 ms and zero bytes of skill content. Confirmed: a repeat fetch costs 61 to 78 ms and up to 68 KB today.
+- [ ] A changed skill refetches only that skill (digest changed), and a metadata-only hub change refetches nothing. Yes/no test, unchanged.
 - [ ] A reproducible benchmark (`make remote-bench`) reports these numbers for stdio, loopback HTTP and a simulated 100 ms link, and the plan fails if a budget is missed.
 
 **3. Safe to expose.**

@@ -2,7 +2,7 @@ GOLANGCI_LINT ?= go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v
 # Lint only issues introduced after this revision; existing findings are tracked debt.
 LINT_BASE ?= origin/main
 
-.PHONY: test test-race test-perf mcp-fanout lint lint-all fmt fmt-check vet check web-install web-build web-test web-check web-e2e web-ux web-shots web-dev
+.PHONY: test test-race test-perf mcp-fanout remote-baseline lint lint-all fmt fmt-check vet check web-install web-build web-test web-check web-e2e web-ux web-shots web-dev
 
 ## test: full suite, same as CI
 test:
@@ -21,6 +21,12 @@ test-perf:
 MCP_FANOUT_RATES ?= 1 10
 mcp-fanout:
 	bash scripts/mcp-fanout-bench.sh $(MCP_FANOUT_RATES)
+
+## remote-baseline: time and round trips to fetch whole skill folders over stdio today
+## REMOTE_HUB: hub repository to clone into a temp dir (never written); empty = fixture skills of the same shape
+REMOTE_HUB ?=
+remote-baseline:
+	SKILLHUB_PERF=1 SKILLHUB_REMOTE_HUB=$(REMOTE_HUB) go test -count=1 -run '^TestRemoteFetchBench$$' -v ./internal/delivery/mcpserver/
 
 ## lint: new issues since LINT_BASE (override: make lint LINT_BASE=<rev>)
 lint:
