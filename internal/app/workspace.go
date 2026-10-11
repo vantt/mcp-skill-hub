@@ -499,5 +499,5 @@ func renderIssues(issues []canonical.Issue) string {
 
 // NewWorkspaceInvalidError formats workspace failures consistently for every delivery adapter.
 func NewWorkspaceInvalidError(reason string) *Error {
-	return &Error{Code: ErrorWorkspaceInvalid, Render: ErrorRender{Error: "The workspace is invalid.", Why: reason, Fix: "Run `skillhub doctor --workspace <path>` to inspect safe remediation, then `skillhub doctor --fix --workspace <path>` to apply it."}}
+	return &Error{Code: ErrorWorkspaceInvalid, Render: ErrorRender{Error: "The workspace is invalid.", Why: reason, Fix: "Run `skillhub doctor` in the hub to see what needs repair, then `skillhub doctor --fix` to repair what it can."}}
 }

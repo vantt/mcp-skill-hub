@@ -23,7 +23,7 @@ func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer) in
 	}
 	result, err := (app.MigrationService{}).Migrate(ctx, workspacePath, target, yes)
 	if err != nil {
-		return writeInvalidRequest(stdout, stderr, jsonOutput, err.Error(), "Run `skillhub doctor --workspace <path>` and review a fresh migration preview before retrying.")
+		return writeInvalidRequest(stdout, stderr, jsonOutput, err.Error(), "Run `skillhub doctor` in the hub and review a fresh `skillhub maintain migrate` preview before retrying.")
 	}
 	return writeResult(stdout, stderr, jsonOutput, result, func(p *termui.Printer) {
 		p.Line(result.Summary)

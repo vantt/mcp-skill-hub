@@ -351,7 +351,7 @@ func writeInvalidWorkspace(stdout, stderr io.Writer, jsonOutput bool, cause erro
 		return writeWorkspaceResolutionError(stdout, stderr, jsonOutput, resErr)
 	}
 	why := cause.Error()
-	fix := "Run `skillhub doctor --workspace <path>` to inspect safe remediation, then `skillhub doctor --fix --workspace <path>` to apply it."
+	fix := "Run `skillhub doctor` in the hub to see what needs repair, then `skillhub doctor --fix` to repair what it can."
 	if strings.Contains(why, "canonical validation failed") {
 		fix = "Correct the content errors in the affected file (or use `skillhub skill edit <id>`), then run `skillhub maintain validate`."
 	}
