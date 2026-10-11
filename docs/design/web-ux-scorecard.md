@@ -1,7 +1,7 @@
 # Web UI curation scorecard
 
 Scores for each flow, judged with [the rubric](web-ux-rubric.md) from the capture harness output
-(`make web-ux`). Scale: 0 fail, 1 weak, 2 good. Plan: `plans/261010-1454-web-curation-ux-evaluation/plan.md`.
+(`make web-ux`). Scale: 0 fail, 1 weak, 2 good. Plan: `archive/plans/261010-1454-web-curation-ux-evaluation/plan.md`.
 
 Columns: Task, Next step, Wording, State, Safety, Copyable, Mobile, Access.
 
@@ -228,8 +228,8 @@ critical axe finding on any flow at either width, and the visible text of every 
 
 No 0 remains in any tier. These are scores from reading screenshots and metrics; they say what is broken,
 unclear or inconsistent, not what feels pleasant. That judgement belongs to the user's walk-through
-([script and empty notes](web-ux-walkthrough.md)), which has **not happened yet**, so the plan's walk-through
-criterion is still open.
+([script and notes](web-ux-walkthrough.md)), which took place on 2026-10-11 and was signed off after
+the items it found were fixed.
 
 ### Regression guards
 

@@ -1,7 +1,7 @@
 ---
 phase: 5
 title: "Regression guard and user walk-through"
-status: in-progress
+status: completed
 priority: P2
 effort: "0.5d"
 dependencies: [2, 3, 4]

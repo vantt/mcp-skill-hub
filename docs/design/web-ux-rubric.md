@@ -1,7 +1,7 @@
 # Web UI curation rubric
 
 How the web UI is judged, one flow at a time. The capture harness produces the evidence; this page says
-how to score it. Plan: `plans/261010-1454-web-curation-ux-evaluation/plan.md`.
+how to score it. Plan: `archive/plans/261010-1454-web-curation-ux-evaluation/plan.md`.
 
 ## Run the capture
 

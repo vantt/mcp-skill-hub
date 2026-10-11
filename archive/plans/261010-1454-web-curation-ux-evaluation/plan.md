@@ -1,7 +1,7 @@
 ---
 title: "Web curation UX: test, score and fix, most-used flows first"
 description: "Evaluate how easy and understandable the skill-curation web UI is, with repeatable screenshot and task runs on a hub clone, ordered by how often each feature is used; fix what the evaluation finds."
-status: pending
+status: completed
 priority: P1
 effort: 3.5d
 branch: main
@@ -85,20 +85,20 @@ Assumption: the web UI records no usage, so the order below is reasoned from the
 | 2 | [Tier 1: daily flows, test and fix](./phase-02-tier1-daily-flows.md) | Complete | P1 |
 | 3 | [Tier 2: weekly flows, test and fix](./phase-03-tier2-weekly-flows.md) | Complete | P2 |
 | 4 | [Tier 3: occasional flows, dead screens](./phase-04-tier3-occasional-flows.md) | Complete | P2 |
-| 5 | [Regression guard and user walk-through](./phase-05-regression-and-walkthrough.md) | In progress (walk-through open) | P2 |
+| 5 | [Regression guard and user walk-through](./phase-05-regression-and-walkthrough.md) | Complete | P2 |
 | 6 | [Screenshots for README and user guide](./phase-06-screenshots-for-readme-and-guide.md) | Complete | P2 |
 
 Phases run in order so the most-used flows are fixed first. Phase 2 can ship alone. Phase 6 needs Phases 2 to 4 so the images show the fixed screens, and it can run in parallel with Phase 5.
 
 ## Success Criteria
 
-- [ ] Every flow in the test-order table has a recorded score for each rubric item, with screenshots at 1280 and 390 px.
-- [ ] D1 and D2 are fixed and no Tier 1 or Tier 2 screen shows a raw API error, a truncated command or a dead end.
-- [ ] No screen mentions runs, insights or `curation_run_start`.
-- [ ] axe reports no serious or critical issue on any screen; the mobile layout has no clipped primary action.
-- [ ] The UX checks run in `make web-e2e` and fail when a dead route or truncated copy command comes back.
-- [ ] `docs/images/web/` holds demo-hub screenshots (no private data, 200 KB each at most), and `README.md` and `docs/user-guide.md` use them.
-- [ ] The user walked through the top five flows and signed off, or listed what is still wrong.
+- [x] Every flow in the test-order table has a recorded score for each rubric item, with screenshots at 1280 and 390 px.
+- [x] D1 and D2 are fixed and no Tier 1 or Tier 2 screen shows a raw API error, a truncated command or a dead end.
+- [x] No screen mentions runs, insights or `curation_run_start`.
+- [x] axe reports no serious or critical issue on any screen; the mobile layout has no clipped primary action.
+- [x] The UX checks run in `make web-e2e` and fail when a dead route or truncated copy command comes back.
+- [x] `docs/images/web/` holds demo-hub screenshots (no private data, 200 KB each at most), and `README.md` and `docs/user-guide.md` use them.
+- [x] The user walked through the top five flows and signed off, or listed what is still wrong.
 
 ## Risks
 
