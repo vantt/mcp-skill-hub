@@ -497,9 +497,13 @@ func (r *Recorder) nextRequest() request {
 }
 
 func (r *Recorder) writeBatch(events []storedEnvelope) {
-	ctx, cancel := context.WithTimeout(context.Background(), r.config.OperationTimeout)
-	defer cancel()
-	if err := writeEvents(ctx, r.config, &r.writer, events); err != nil {
+	if err := writeEventsRetrying(r.config, &r.writer, events); err != nil {
+		if errors.Is(err, errBatchCommitted) {
+			// The events are stored; only the size trim after the commit failed.
+			r.written.Add(uint64(len(events)))
+			r.recordFailure("write telemetry: " + err.Error())
+			return
+		}
 		r.dropped.Add(uint64(len(events)))
 		r.recordFailure("write telemetry: " + err.Error())
 		return
@@ -516,7 +520,7 @@ func (r *Recorder) handleOperation(item request) bool {
 	result := response{}
 	switch item.op {
 	case opFlush:
-		result.err = maintainStore(item.ctx, r.config)
+		result.err = maintainStoreRetrying(item.ctx, r.config)
 	case opPurge:
 		result.err = purgeStore(item.ctx, r.config)
 		if result.err == nil {
@@ -537,7 +541,7 @@ func (r *Recorder) handleOperation(item request) bool {
 	case opRawEvents:
 		result.rawEvents, result.err = rawEventsStore(item.ctx, r.config, item.from, item.to)
 	case opHealth:
-		result.err = maintainStore(item.ctx, r.config)
+		result.err = maintainStoreRetrying(item.ctx, r.config)
 		if result.err == nil {
 			if totals, err := loadCounters(item.ctx, r.config); err == nil {
 				r.stateMu.Lock()
@@ -546,7 +550,7 @@ func (r *Recorder) handleOperation(item request) bool {
 			}
 		}
 	case opClose:
-		result.err = maintainStore(item.ctx, r.config)
+		result.err = maintainStoreRetrying(item.ctx, r.config)
 		if result.err == nil {
 			// Best effort: counter persistence must never fail shutdown.
 			_ = persistCounters(item.ctx, r.config, [len(counterMetaKeys)]uint64{r.accepted.Load(), r.written.Load(), r.dropped.Load(), r.rejected.Load(), r.errors.Load()})

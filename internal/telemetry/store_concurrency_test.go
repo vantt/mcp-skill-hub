@@ -24,6 +24,12 @@ const (
 	writerHelperCountEnv  = "SKILLHUB_TELEMETRY_WRITER_COUNT"
 )
 
+// writerHelperBacklog is how many queued events make a writer helper wait
+// before producing more. A fast machine never queues this many. On a slow one
+// it keeps every batch small, so one writer's wait for the write lock stays
+// near "writers times one small batch" instead of growing with the backlog.
+const writerHelperBacklog = 8
+
 func TestConcurrentRecordersOnOneStoreLoseNoEvents(t *testing.T) {
 	workspace := t.TempDir()
 	path := filepath.Join(workspace, "runtime", "telemetry.db")
@@ -68,9 +74,13 @@ func TestConcurrentRecordersOnOneStoreLoseNoEvents(t *testing.T) {
 
 // TestWriterProcessesOnOneStoreLoseNoEvents runs several writer processes on
 // one store while another writer is killed mid-stream. Every surviving writer
-// must store every event it accepted, no write may fail (a write that waits past
-// the operation timeout fails and drops its batch), and the store must remain
-// intact and writable after the crash.
+// must store every event it produced, no write may fail (a write still
+// contended after its retry budget fails and drops its batch), and the store
+// must remain intact and writable after the crash.
+//
+// The outcome does not depend on machine speed: each writer produces no faster
+// than its store writes drain (see writerHelperBacklog), so a slow machine
+// makes the test take longer instead of overflowing a writer's bounded queue.
 func TestWriterProcessesOnOneStoreLoseNoEvents(t *testing.T) {
 	if testing.Short() {
 		t.Skip("starts writer processes")
@@ -78,7 +88,7 @@ func TestWriterProcessesOnOneStoreLoseNoEvents(t *testing.T) {
 	workspace := t.TempDir()
 	path := filepath.Join(workspace, "runtime", "telemetry.db")
 	const writers, events = 10, 400
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
 	crasher := writerHelperCommand(ctx, workspace, "evt_crash", 0)
@@ -171,13 +181,19 @@ func TestTelemetryWriterHelperProcess(t *testing.T) {
 	pace := writerHelperPace
 	if runtime.GOOS == "windows" {
 		// Windows serializes the eleven processes' SQLite file locks far more
-		// slowly, so at the Unix pace a writer's bounded queue overflows and
-		// Record drops events by design. The pace sets the offered load; what
-		// this test checks (no failed write, every accepted event stored, an
-		// intact store after a crash) does not depend on it.
+		// slowly. The pace sets the offered load; what this test checks (no
+		// failed write, every event stored, an intact store after a crash) does
+		// not depend on it.
 		pace *= 4
 	}
 	for item := 0; count == 0 || item < count; item++ {
+		// A slow machine stores events more slowly than the fixed pace offers
+		// them. Holding back while writerHelperBacklog events are queued keeps the
+		// offered load within what the store absorbs, so the bounded queue never
+		// refuses an event and the test measures lost writes, not machine speed.
+		for len(recorder.queue) >= writerHelperBacklog {
+			time.Sleep(pace)
+		}
 		event := validEvent(EventResolutionCompleted)
 		event.ID = fmt.Sprintf("%s_%06d", prefix, item)
 		recorder.Record(event)
