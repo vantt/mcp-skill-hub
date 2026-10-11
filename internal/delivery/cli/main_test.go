@@ -56,6 +56,7 @@ func TestMain(m *testing.M) {
 	for _, key := range []string{
 		"HOME", "USERPROFILE", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME",
 		"XDG_STATE_HOME", "XDG_RUNTIME_DIR", "XDG_CONFIG_DIRS", "XDG_DATA_DIRS",
+		"APPDATA", "LOCALAPPDATA", "SKILLHUB_USER_CONFIG_DIR",
 	} {
 		directory := filepath.Join(root, key)
 		err = os.Mkdir(directory, 0o700)
