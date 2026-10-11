@@ -100,7 +100,7 @@ func TestStatusChecksNeverWaitForABusyHub(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer lock.Unlock()
+	defer func() { _ = lock.Unlock() }()
 	report := RoleReport{Cwd: root, Hub: &HubRef{Root: root}}
 	started := time.Now()
 	sections := Run(t.Context(), report, DepthLight)

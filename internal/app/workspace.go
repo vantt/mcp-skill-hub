@@ -35,7 +35,7 @@ func (service WorkspaceService) doctorInternal(path string, isInit bool) (Result
 	}
 	if _, statErr := os.Lstat(root); errors.Is(statErr, os.ErrNotExist) {
 		if !isInit {
-			return Result{}, fmt.Errorf("No Skill Hub workspace at %s.", root)
+			return Result{}, fmt.Errorf("no Skill Hub workspace at %s", root)
 		}
 		// A missing workspace has no lock file yet. Keeping this preview purely
 		// read-only is the documented new-workspace bootstrap exception.
@@ -165,7 +165,7 @@ func (service WorkspaceService) DoctorFix(path string, dryRun bool) (Result, err
 		return Result{}, err
 	}
 	if _, statErr := os.Lstat(root); errors.Is(statErr, os.ErrNotExist) {
-		return Result{}, fmt.Errorf("No Skill Hub workspace at %s.", root)
+		return Result{}, fmt.Errorf("no Skill Hub workspace at %s", root)
 	} else if statErr != nil {
 		return Result{}, statErr
 	}
@@ -193,7 +193,7 @@ func (service WorkspaceService) apply(path string, isInit bool) (Result, error) 
 	}
 	missing := errors.Is(statErr, os.ErrNotExist)
 	if missing && !isInit {
-		return Result{}, fmt.Errorf("No Skill Hub workspace at %s.", root)
+		return Result{}, fmt.Errorf("no Skill Hub workspace at %s", root)
 	}
 	if missing || (isInit && !IsHubRoot(root)) {
 		// A folder without the hub marker is created from scratch: bootstrap

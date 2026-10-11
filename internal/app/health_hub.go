@@ -106,18 +106,6 @@ func contentIssues(state hubState) []canonical.Issue {
 	return issues
 }
 
-// blockingFinding returns the first workspace finding that stops the hub
-// repair: one that needs a person, except a tracked connection file, which is
-// reported with its `git rm --cached` command while every other fix runs.
-func blockingFinding(plan workspace.Plan) *workspace.Finding {
-	for index, finding := range plan.Findings {
-		if blocksRemediation(finding) {
-			return &plan.Findings[index]
-		}
-	}
-	return nil
-}
-
 // hubCheck is the built-in hub provider: the Git repository, the layout and
 // schema, the content, pending recovery, the search index, the hub's own
 // agent connection and, for doctor, the pre-commit hook and the local
@@ -293,13 +281,32 @@ func hubStateFindings(root string, report RoleReport, state hubState, depth Dept
 		findings = append(findings, Finding{Code: "hub_index_stale", Label: "Search index", Severity: SeverityOK, Message: "current"})
 	}
 
+	findings = append(findings, selfConnectionFindings(root, state, hosts, repair, addRepair)...)
+
+	repair.Summary = "repair the hub: " + strings.Join(repairs, ", ")
+	repair.Apply = func(context.Context) (Changed, error) { return repairHub(root, hosts) }
+	if blocked != "" {
+		for index := range findings {
+			if findings[index].Fix == repair {
+				findings[index].Fix = nil
+				findings[index].Reason = "doctor --fix repairs this after " + blocked + "."
+			}
+		}
+	}
+	return findings
+}
+
+// selfConnectionFindings checks the hub's own agent connection files and the
+// Claude Code permission rules, registering what doctor --fix would repair.
+func selfConnectionFindings(root string, state hubState, hosts []hostintegration.Host, repair *FixAction, addRepair func(string)) []Finding {
+	var out []Finding
 	switch host := state.host; {
 	case host == nil && hosts != nil && len(hosts) == 0 && state.catalog != nil:
-		findings = append(findings, Finding{Code: "hub_self_connection", Label: "Agent connection", Severity: SeverityOK, Message: "every agent of the hub folder uses another hub"})
+		out = append(out, Finding{Code: "hub_self_connection", Label: "Agent connection", Severity: SeverityOK, Message: "every agent of the hub folder uses another hub"})
 	case host == nil:
-		findings = append(findings, Finding{Code: "hub_self_connection", Label: "Agent connection", Severity: SeveritySkipped, Message: "not checked: the search index must be current first"})
+		out = append(out, Finding{Code: "hub_self_connection", Label: "Agent connection", Severity: SeveritySkipped, Message: "not checked: the search index must be current first"})
 	case len(host.conflicts) > 0:
-		findings = append(findings, Finding{Code: "hub_self_connection", Label: "Agent connection", Severity: SeverityProblem,
+		out = append(out, Finding{Code: "hub_self_connection", Label: "Agent connection", Severity: SeverityProblem,
 			Message: "The hub's agent connection files cannot be updated safely: " + strings.Join(host.conflicts, "; "),
 			Reason:  "Fix or remove the conflicting managed content in those files; doctor --fix never overwrites it."})
 	default:
@@ -320,29 +327,18 @@ func hubStateFindings(root string, report RoleReport, state hubState, depth Dept
 			if missing := hostintegration.MissingFinding(host.plan); missing != nil {
 				message += " Some are missing (" + missing.Note + ")."
 			}
-			findings = append(findings, Finding{Code: "hub_self_connection", Label: "Agent connection", Severity: SeverityProblem, Message: message, Fix: repair, Detail: changePreviews(connectionChanges)})
+			out = append(out, Finding{Code: "hub_self_connection", Label: "Agent connection", Severity: SeverityProblem, Message: message, Fix: repair, Detail: changePreviews(connectionChanges)})
 			addRepair("refresh the hub's agent connection files")
 		} else {
-			findings = append(findings, Finding{Code: "hub_self_connection", Label: "Agent connection", Severity: SeverityOK, Message: "current"})
+			out = append(out, Finding{Code: "hub_self_connection", Label: "Agent connection", Severity: SeverityOK, Message: "current"})
 		}
 		if len(permissions) > 0 {
-			findings = append(findings, Finding{Code: "client_permissions_outdated", Label: "Claude permission rules", Severity: SeverityProblem,
+			out = append(out, Finding{Code: "client_permissions_outdated", Label: "Claude permission rules", Severity: SeverityProblem,
 				Message: "The Claude Code permission rules are not the current set: " + strings.Join(permissions, "; ") + ".", Fix: repair, Detail: changePreviews(permissionChanges)})
 			addRepair("update the Claude Code permission rules (your own rules stay)")
 		}
 	}
-
-	repair.Summary = "repair the hub: " + strings.Join(repairs, ", ")
-	repair.Apply = func(context.Context) (Changed, error) { return repairHub(root, hosts) }
-	if blocked != "" {
-		for index := range findings {
-			if findings[index].Fix == repair {
-				findings[index].Fix = nil
-				findings[index].Reason = "doctor --fix repairs this after " + blocked + "."
-			}
-		}
-	}
-	return findings
+	return out
 }
 
 // hubFolderHosts returns the hosts whose own connection the hub checks and
@@ -483,11 +479,11 @@ func precommitFinding(ctx context.Context, root string) Finding {
 func precommitHookPath(ctx context.Context, root string) (string, error) {
 	output, err := offlineGitCommand(ctx, root, "rev-parse", "--git-path", "hooks/pre-commit").Output()
 	if err != nil {
-		return "", fmt.Errorf("Git cannot name the hooks folder: %w", err)
+		return "", fmt.Errorf("git cannot name the hooks folder: %w", err)
 	}
 	path := strings.TrimSpace(string(output))
 	if path == "" {
-		return "", errors.New("Git named no hooks folder")
+		return "", errors.New("git named no hooks folder")
 	}
 	if !filepath.IsAbs(path) {
 		path = filepath.Join(root, filepath.FromSlash(path))

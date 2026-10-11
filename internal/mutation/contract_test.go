@@ -651,7 +651,7 @@ func TestTryLockNeverWaitsForAWriter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer writer.Unlock()
+	defer func() { _ = writer.Unlock() }()
 	started := time.Now()
 	if _, err := TryAcquireSharedLock(root); !errors.Is(err, ErrWorkspaceBusy) {
 		t.Fatalf("reader while a writer holds the lock: %v", err)

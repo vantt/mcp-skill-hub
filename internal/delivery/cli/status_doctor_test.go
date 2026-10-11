@@ -331,7 +331,7 @@ func TestStatusAndDoctorAgreeInEveryRole(t *testing.T) {
 			}
 			want := slices.Clone(fixture.problems)
 			slices.Sort(want)
-			if got := problemCodes(full); !slices.Equal(got, want) && !(len(got) == 0 && len(want) == 0) {
+			if got := problemCodes(full); !slices.Equal(got, want) && (len(got) != 0 || len(want) != 0) {
 				t.Fatalf("doctor problems %v, want %v\n%+v", got, want, full)
 			}
 
@@ -400,7 +400,7 @@ func TestStatusAndDoctorAgreeInEveryRole(t *testing.T) {
 			after := problemCodes(app.Run(ctx, report, app.DepthFull))
 			wantAfter := slices.Clone(fixture.afterFix)
 			slices.Sort(wantAfter)
-			if !slices.Equal(after, wantAfter) && !(len(after) == 0 && len(wantAfter) == 0) {
+			if !slices.Equal(after, wantAfter) && (len(after) != 0 || len(wantAfter) != 0) {
 				t.Fatalf("problems after doctor --fix %v, want %v\n%s", after, wantAfter, stdout)
 			}
 		})

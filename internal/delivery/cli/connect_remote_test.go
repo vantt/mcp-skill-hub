@@ -20,7 +20,6 @@ import (
 	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
 	"github.com/vantt/mcp-skill-hub/internal/hostintegration"
 	"github.com/vantt/mcp-skill-hub/internal/hubtoken"
-	"github.com/vantt/mcp-skill-hub/internal/shellquote"
 )
 
 // startStoppableListener runs `skillhub serve --addr 127.0.0.1:0` in
@@ -96,10 +95,6 @@ func isolateClient(t *testing.T) (home, state string) {
 func containsPath(text, path string) bool {
 	return strings.Contains(text, path) || strings.Contains(text, strings.ReplaceAll(path, `\`, `\\`))
 }
-
-// commandLineArg is how a printed command line shows a temporary path,
-// quoted for the shell of this platform where it needs it.
-func commandLineArg(path string) string { return shellquote.Arg(path) }
 
 // flatText joins wrapped output into one line of single-spaced words.
 func flatText(text string) string { return strings.Join(strings.Fields(text), " ") }

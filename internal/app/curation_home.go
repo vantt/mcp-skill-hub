@@ -108,7 +108,7 @@ func (service CurationService) GetCurationHome(ctx context.Context, path string)
 		if err != nil {
 			return CurationHome{}, err
 		}
-		defer lock.Unlock()
+		defer func() { _ = lock.Unlock() }()
 		inspectRecovery = mutation.InspectRecoveryWhileLocked
 	}
 	recoveries, err := inspectRecovery(root)

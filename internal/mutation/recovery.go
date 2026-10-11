@@ -64,7 +64,7 @@ func Pending(root string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer lock.Unlock()
+	defer func() { _ = lock.Unlock() }()
 	return pendingUnlocked(root)
 }
 
@@ -112,7 +112,7 @@ func InspectRecovery(root string) ([]Recovery, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer lock.Unlock()
+	defer func() { _ = lock.Unlock() }()
 	return InspectRecoveryWhileLocked(root)
 }
 
@@ -128,7 +128,7 @@ func TryInspectRecovery(root string) ([]Recovery, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer lock.Unlock()
+	defer func() { _ = lock.Unlock() }()
 	return InspectRecoveryWhileLocked(root)
 }
 
@@ -162,7 +162,7 @@ func RollForwardWithOptions(root string, options Options) error {
 	if err != nil {
 		return err
 	}
-	defer lock.Unlock()
+	defer func() { _ = lock.Unlock() }()
 	plans, err := preflightRecovery(root, true)
 	if err != nil {
 		return err
@@ -219,7 +219,7 @@ func RollBack(root string) error {
 	if err != nil {
 		return err
 	}
-	defer lock.Unlock()
+	defer func() { _ = lock.Unlock() }()
 	plans, err := preflightRollback(root)
 	if err != nil {
 		return err
