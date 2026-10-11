@@ -57,6 +57,10 @@ type Server struct {
 	telemetry    app.TelemetrySink
 	tracker      *activationTracker
 	logger       *slog.Logger
+	// remote marks a server whose sessions arrive through the network
+	// listener; their telemetry client names carry the remote label. It is set
+	// once before the listener accepts requests and never changes afterwards.
+	remote bool
 }
 
 var activeDiagnostics atomic.Pointer[slog.Logger]
@@ -254,13 +258,25 @@ func closeServeTelemetry(recorder *telemetry.Recorder, logger *slog.Logger) {
 }
 
 func (adapter *Server) clientForReq(req mcp.Request) telemetry.Client {
-	client := telemetry.Client{Name: "other"}
+	var session *mcp.ServerSession
 	if req != nil {
-		if s, ok := req.GetSession().(*mcp.ServerSession); ok && s != nil {
-			if params := s.InitializeParams(); params != nil && params.ClientInfo != nil {
-				client = NormalizeClient(params.ClientInfo.Name, params.ClientInfo.Version)
-			}
+		session, _ = req.GetSession().(*mcp.ServerSession)
+	}
+	return adapter.sessionClient(session)
+}
+
+// sessionClient names the host of a session for telemetry: the normalized
+// clientInfo from the initialize handshake ("other" when absent), labelled
+// remote when the session came through the network listener.
+func (adapter *Server) sessionClient(session *mcp.ServerSession) telemetry.Client {
+	client := telemetry.Client{Name: "other"}
+	if session != nil {
+		if params := session.InitializeParams(); params != nil && params.ClientInfo != nil {
+			client = NormalizeClient(params.ClientInfo.Name, params.ClientInfo.Version)
 		}
+	}
+	if adapter.remote {
+		client = telemetry.RemoteClient(client)
 	}
 	return client
 }
@@ -479,6 +495,12 @@ func (adapter *Server) recordLoad(ctx context.Context, session *mcp.ServerSessio
 	load.EventID = telemetry.NewEventID()
 	if adapter.tracker != nil {
 		load.ResolutionID, load.Attribution, load.CatalogSnapshot, load.PolicyRevision, load.Client = adapter.tracker.attributeDetails(session, load.SkillID)
+		if adapter.remote {
+			// A local load without a prior resolution is labelled "skillhub";
+			// a remote one keeps its remote host label so it is not counted as
+			// a local load.
+			load.Client = adapter.sessionClient(session)
+		}
 		load.SessionIDHash = adapter.tracker.sessionHash(session)
 		if !load.Blocked && load.ResourceKind == "entrypoint" {
 			load.FirstActivation = adapter.tracker.markActivation(session, load.ResolutionID, load.SkillID)
@@ -518,12 +540,7 @@ func (adapter *Server) recordLoad(ctx context.Context, session *mcp.ServerSessio
 
 func (adapter *Server) callerContext(session *mcp.ServerSession) app.CallerContext {
 	sessionHash := ""
-	client := telemetry.Client{Name: "other"}
-	if session != nil {
-		if params := session.InitializeParams(); params != nil && params.ClientInfo != nil {
-			client = NormalizeClient(params.ClientInfo.Name, params.ClientInfo.Version)
-		}
-	}
+	client := adapter.sessionClient(session)
 	var verifier func(string) bool
 	if adapter.tracker != nil && session != nil {
 		sessionHash = adapter.tracker.sessionHash(session)

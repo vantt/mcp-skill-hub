@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -138,6 +140,9 @@ func ServeHTTP(ctx context.Context, listener net.Listener, options HTTPOptions) 
 		return err
 	}
 	defer stop()
+	// Every session of this server is a remote caller; set before the first
+	// request so telemetry labels its client as remote.
+	adapter.remote = true
 
 	gate := newHTTPGate(server, tokens, allowedHosts(listener.Addr(), options.AllowHosts), adapter.logger)
 	httpServer := &http.Server{
@@ -145,7 +150,7 @@ func ServeHTTP(ctx context.Context, listener net.Listener, options HTTPOptions) 
 		ReadHeaderTimeout: httpReadHeaderTimeout,
 		IdleTimeout:       httpKeepAliveIdle,
 		MaxHeaderBytes:    httpMaxHeaderBytes,
-		ErrorLog:          slog.NewLogLogger(adapter.logger.Handler(), slog.LevelWarn),
+		ErrorLog:          httpErrorLog(adapter.logger),
 	}
 	served := make(chan error, 1)
 	go func() { served <- httpServer.Serve(listener) }()
@@ -337,6 +342,26 @@ func normalizeHost(value string) string {
 	}
 	value = strings.Trim(value, "[]")
 	return strings.TrimSuffix(strings.ToLower(value), ".")
+}
+
+// networkAddressPattern matches an IPv4 address with an optional port and a
+// bracketed IPv6 address with a port, the forms net/http prints for a peer.
+var networkAddressPattern = regexp.MustCompile(`\[[0-9A-Fa-f:.%]+\]:[0-9]+|\b[0-9]{1,3}(?:\.[0-9]{1,3}){3}(?::[0-9]+)?\b`)
+
+// httpErrorLog routes net/http's own error log to the diagnostics logger with
+// network addresses removed. net/http names the client address in some lines,
+// for example when it recovers a handler panic ("http: panic serving
+// 192.0.2.1:5000: ..."), and the hub never keeps a client address.
+func httpErrorLog(logger *slog.Logger) *log.Logger {
+	return log.New(addressScrubbingWriter{logger: logger}, "", 0)
+}
+
+type addressScrubbingWriter struct{ logger *slog.Logger }
+
+func (writer addressScrubbingWriter) Write(line []byte) (int, error) {
+	message := networkAddressPattern.ReplaceAllString(strings.TrimRight(string(line), "\n"), "<address>")
+	writer.logger.Warn(message)
+	return len(line), nil
 }
 
 func remoteHost(remoteAddress string) string {
