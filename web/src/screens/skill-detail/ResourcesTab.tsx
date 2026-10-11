@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { useSearchParams } from 'react-router';
 import { ApiError } from '../../api/client';
 import { useSkillResources } from '../../api/queries';
@@ -64,6 +65,22 @@ export function ResourcesTab({ skill, workspaceId, thirdParty }: ResourcesTabPro
     });
   };
 
+  // Keeps the address in step with the view, so a reload after saving opens the saved file to read.
+  const syncEditParam = useCallback(
+    (mode: 'read' | 'edit') => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (mode === 'edit') next.set(PARAM_EDIT, '1');
+          else next.delete(PARAM_EDIT);
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
   if (openFile) {
     return (
       <ResourceFileView
@@ -73,6 +90,7 @@ export function ResourcesTab({ skill, workspaceId, thirdParty }: ResourcesTabPro
         startInEdit={searchParams.get(PARAM_EDIT) === '1'}
         thirdParty={thirdParty}
         onClose={closeResource}
+        onModeChange={syncEditParam}
       />
     );
   }

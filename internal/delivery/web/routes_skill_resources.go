@@ -21,10 +21,27 @@ func (s *Server) registerSkillResourceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/skills/{id}/resources/preview", s.handleSkillResourcePreview)
 }
 
+// writeResourceError answers a resource request that failed. A skill or file that is not there gets a
+// plain statement instead of the generic message the shared classifier gives to a missing object.
+func writeResourceError(w http.ResponseWriter, err error, preview bool) {
+	if errors.Is(err, skill.ErrNotFound) {
+		writeJSON(w, http.StatusNotFound, app.ErrorResult(app.NewInvalidRequestError(
+			"That skill or file is not in the workspace.",
+			"Go back to the Resources tab and pick a file from the list.",
+		)))
+		return
+	}
+	if preview {
+		writePreviewError(w, err, false)
+		return
+	}
+	writeError(w, err, false)
+}
+
 func (s *Server) handleSkillResources(w http.ResponseWriter, r *http.Request) {
 	list, err := s.skills.ListSkillResources(r.Context(), s.workspace, r.PathValue("id"))
 	if err != nil {
-		writeError(w, err, errors.Is(err, skill.ErrNotFound))
+		writeResourceError(w, err, false)
 		return
 	}
 	writeJSON(w, http.StatusOK, list)
@@ -41,7 +58,7 @@ func (s *Server) handleSkillResourceContent(w http.ResponseWriter, r *http.Reque
 	}
 	content, err := s.skills.ReadSkillResource(r.Context(), s.workspace, r.PathValue("id"), resourcePath)
 	if err != nil {
-		writeError(w, err, errors.Is(err, skill.ErrNotFound))
+		writeResourceError(w, err, false)
 		return
 	}
 	writeJSON(w, http.StatusOK, content)
@@ -64,7 +81,7 @@ func (s *Server) handleSkillResourcePreview(w http.ResponseWriter, r *http.Reque
 		Path: req.Path, Content: []byte(req.Content), ExpectedDigest: req.ExpectedDigest, IdempotencyKey: req.IdempotencyKey,
 	})
 	if err != nil {
-		writePreviewError(w, err, errors.Is(err, skill.ErrNotFound))
+		writeResourceError(w, err, true)
 		return
 	}
 	writeJSON(w, http.StatusOK, proposal)

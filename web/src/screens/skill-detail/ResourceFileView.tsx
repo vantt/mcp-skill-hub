@@ -78,6 +78,8 @@ export interface ResourceFileViewProps {
   startInEdit: boolean; // true when opened with Edit
   thirdParty: boolean;
   onClose: () => void;
+  // Told whenever the view switches between reading and editing, so the address can follow.
+  onModeChange?: (mode: 'read' | 'edit') => void;
 }
 
 // The unsaved edit kept in browser storage. It records the digest it was based on, so a draft
@@ -166,7 +168,7 @@ interface ResourceFileBodyProps extends ResourceFileViewProps {
   initialFile: SkillResourceContent;
 }
 
-function ResourceFileBody({ skill, workspaceId, path, startInEdit, thirdParty, onClose, initialFile }: ResourceFileBodyProps) {
+function ResourceFileBody({ skill, workspaceId, path, startInEdit, thirdParty, onClose, onModeChange, initialFile }: ResourceFileBodyProps) {
   const queryClient = useQueryClient();
   const skillId = skill.skill_id;
   const draftId = `${skillId}:${path}`;
@@ -190,6 +192,9 @@ function ResourceFileBody({ skill, workspaceId, path, startInEdit, thirdParty, o
       : initialFile.digest,
   );
   const [mode, setMode] = useState<'read' | 'edit'>(startInEdit && initialFile.editable ? 'edit' : 'read');
+  useEffect(() => {
+    onModeChange?.(mode);
+  }, [mode, onModeChange]);
   const [readView, setReadView] = useState<'read' | 'source'>('read');
   const [editView, setEditView] = useState<'edit' | 'preview'>('edit');
   const [isWide, setIsWide] = useState(false);
