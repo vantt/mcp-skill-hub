@@ -67,6 +67,7 @@ test.describe('Accessibility and Responsive Sweep (Phase 12)', () => {
       '/skills/consumer-review?tab=usage',
       '/skills/consumer-review?tab=runtime',
       '/skills/consumer-review?tab=sources',
+      '/skills/consumer-review?tab=overview',
       '/sources',
       '/sources/distill?source=source-c',
     ];

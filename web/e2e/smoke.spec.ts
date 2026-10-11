@@ -69,11 +69,10 @@ test('smoke: home and skills routes, theme persistence, loopback-only requests, 
     page.getByText('No sources yet. Link a repository whose ideas should improve your skills.'),
   ).toBeVisible();
 
-  // 5c. Open /skills/smoke-skill?tab=sources and verify learning empty state
+  // 5c. Open /skills/smoke-skill?tab=sources and verify the empty state of a skill with no source
   await page.goto(`${server.origin}/skills/smoke-skill?tab=sources`);
-  await expect(
-    page.getByText('No learning references yet. Link a repository or document whose ideas should improve this skill.'),
-  ).toBeVisible();
+  await expect(page.getByText('No sources yet', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(/^A source is a Git repository tied to this skill in one of two roles/)).toBeVisible();
   // 6. Assert all recorded network requests were loopback-only (origin or data:)
   expect(requestedUrls.length).toBeGreaterThan(0);
   for (const reqUrl of requestedUrls) {

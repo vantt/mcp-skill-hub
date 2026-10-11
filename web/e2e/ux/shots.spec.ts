@@ -73,14 +73,14 @@ const SHOTS: Shot[] = [
   },
   {
     file: 'skill-review',
-    route: skillPath(DEMO_SKILLS.active),
+    route: skillPath(DEMO_SKILLS.active, 'review'),
     state: 'Review tab of an active skill',
     caption: 'Review: whether agents can use this skill, and what to check first.',
     alt: 'The Review tab of an active skill showing its content check and readiness.',
   },
   {
     file: 'skill-review-draft',
-    route: skillPath(DEMO_SKILLS.draft),
+    route: skillPath(DEMO_SKILLS.draft, 'review'),
     state: 'Draft that is missing activation requirements',
     caption: 'A draft that cannot be activated yet, with links to the fields to fix.',
     alt: 'The Review tab of a draft skill listing the missing fields with links to fix each one.',
