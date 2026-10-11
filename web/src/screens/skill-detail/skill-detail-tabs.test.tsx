@@ -1,12 +1,17 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { describe, expect, it } from 'vitest';
 import type { SessionResponse, SkillDetail, SkillReviewResult, SkillSourcesResult } from '../../api/types';
 import { loadGolden } from '../../test/golden';
 import { SkillDetailScreen } from './SkillDetailScreen';
 
 const SKILL_ID = 'review-skill';
+
+function LocationProbe() {
+  const location = useLocation();
+  return <output data-testid="location-search">{location.search}</output>;
+}
 
 function renderAt(url: string) {
   const queryClient = new QueryClient({
@@ -20,7 +25,15 @@ function renderAt(url: string) {
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[url]}>
         <Routes>
-          <Route path="/skills/:id" element={<SkillDetailScreen />} />
+          <Route
+            path="/skills/:id"
+            element={
+              <>
+                <SkillDetailScreen />
+                <LocationProbe />
+              </>
+            }
+          />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -53,5 +66,18 @@ describe('SkillDetailScreen tabs', () => {
 
     expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByText('Activation readiness')).not.toBeInTheDocument();
+  });
+
+  it('drops the open resource file and edit mode when another tab is chosen', () => {
+    renderAt(`/skills/${SKILL_ID}?tab=resources&file=skills%2Fcore%2Fx%2Frun.sh&edit=1`);
+
+    expect(screen.getByRole('tab', { name: 'Resources' })).toHaveAttribute('aria-selected', 'true');
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Review' }));
+
+    const search = new URLSearchParams(screen.getByTestId('location-search').textContent ?? '');
+    expect(search.get('tab')).toBe('review');
+    expect(search.has('file')).toBe(false);
+    expect(search.has('edit')).toBe(false);
   });
 });

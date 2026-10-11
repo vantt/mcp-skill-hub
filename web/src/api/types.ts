@@ -65,6 +65,35 @@ export interface SkillResource {
   size_bytes: number;
 }
 
+// Why a companion file cannot be edited; '' when it can.
+export type ResourceUnavailableReason = '' | 'binary' | 'too_large' | 'missing' | 'not_regular';
+
+export interface SkillResourceItem {
+  path: string; // workspace-relative, same as SkillResource.path
+  kind: string;
+  size_bytes: number;
+  digest: string; // working-tree digest, "sha256:..."; "" when missing
+  editable: boolean;
+  reason: ResourceUnavailableReason;
+}
+
+export interface SkillResourceList {
+  skill_id: string;
+  items: SkillResourceItem[];
+}
+
+export interface SkillResourceContent {
+  skill_id: string;
+  path: string;
+  size_bytes: number;
+  digest: string;
+  editable: boolean;
+  reason: ResourceUnavailableReason;
+  line_ending: 'lf' | 'crlf' | 'mixed' | 'none';
+  truncated: boolean;
+  content?: string; // text files only
+}
+
 export interface SkillRouting {
   operations: string[];
   triggers: string[];

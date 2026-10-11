@@ -14,6 +14,8 @@ const ELLIPSIS = '…';
 
 interface ResourcesTabProps {
   skill: SkillDetail;
+  workspaceId: string;
+  thirdParty: boolean;
 }
 
 export function ResourcesTab({ skill }: ResourcesTabProps) {
