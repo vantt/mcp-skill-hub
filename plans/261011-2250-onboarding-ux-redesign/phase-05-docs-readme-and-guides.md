@@ -1,7 +1,7 @@
 ---
 phase: 5
 title: "Docs: README onboarding and guides"
-status: pending
+status: completed
 priority: P1
 effort: "1.5d"
 dependencies: [2, 3, 4]
@@ -121,6 +121,26 @@ same test fails on a short list of non-command bans in those files: `getting-sta
 4. Generalize the docs test with the bans; run it.
 5. Repo-wide grep gate (all names from the plan.md inventory) over `README.md` and `docs/*.md` (not `docs/design`,
    `docs/use-cases`, `docs/distillery`, `docs/plans`, `docs/brainstorm`, `docs/references`).
+
+## Todo
+
+- [x] Install the branch binary with `go install` into a scratch `GOBIN`; capture every output in an isolated sandbox
+- [x] README: Install, Step 1 (`init`, `init <git-url>` for GitHub and a second machine), Step 2 (`connect`, remote
+      hub in `<details>`), Check (`status` sample and common errors), PowerShell blocks, `#quickstart` kept
+- [x] `docs/getting-started.md` deleted; its first-skill walkthrough moved to `docs/curating-skills.md#create-your-first-skill`;
+      every link fixed; `user-guide.md#what-gets-written` and `#do-common-tasks-in-the-web-ui` kept
+- [x] `docs/installation.md` keeps details only and links to `README.md#install` and `#step-1-install-the-hub`
+- [x] `docs/remote-hub-guide.md`: LAN and Tailscale first with `serve`, `--addr` lists, SSH tunnel for untrusted
+      networks, per-hub token file and `scp` line, WARNING naming the web write access, "Two kinds of token"
+- [x] `docs/troubleshooting.md`: "Start with status", entries per step (hub, client project, remote), pre-commit hook
+- [x] Renames in `command-reference`, `user-guide`, `web-ui`, `curating-skills`, `sources-and-learning` (renames only),
+      `release-runbook`, `README` index, `contracts/web-api.md`, `contracts/error-codes.md`; one-line note on
+      `design/remote-hub.md`
+- [x] `docs_commands_test.go`: every `skillhub` command in README and six guides checked against the help, minimum
+      counts, bans (`getting-started.md`, removed flags, `skillhub init ~`, `git add -A`, `--workspace` in code blocks)
+- [x] Repo-wide grep gate for the inventory names
+- [ ] Release note: no release notes source or changelog exists (GitHub generates the notes); the text is in the
+      phase report for the release owner
 
 ## Validation
 
