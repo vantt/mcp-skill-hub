@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -173,12 +172,15 @@ func localGroupFindings(ctx context.Context, report RoleReport, group localGroup
 		return []Finding{{Code: "client_entry_outdated", Label: "Connection files", Severity: SeveritySkipped, Message: "not checked: " + plainError(err)}}
 	}
 	var connection, permissions []string
+	var connectionChanges, permissionChanges []hostintegration.Change
 	for _, change := range plan.Changes {
-		described := fmt.Sprintf("%s %s %s", change.Host, change.Kind, change.Path)
+		described := describeChange(group.root, change)
 		if change.Kind == hostintegration.ChangeHostPermissions {
 			permissions = append(permissions, described)
+			permissionChanges = append(permissionChanges, change)
 		} else {
 			connection = append(connection, described)
+			connectionChanges = append(connectionChanges, change)
 		}
 	}
 	fix := &FixAction{
@@ -193,13 +195,13 @@ func localGroupFindings(ctx context.Context, report RoleReport, group localGroup
 	var findings []Finding
 	if len(connection) > 0 {
 		findings = append(findings, Finding{Code: "client_entry_outdated", Label: "Connection files", Severity: SeverityProblem,
-			Message: "Out of date: " + strings.Join(connection, "; ") + ".", Fix: fix, Manual: manualIfNoFix(fix, command), Reason: reason})
+			Message: "Out of date: " + strings.Join(connection, "; ") + ".", Fix: fix, Manual: manualIfNoFix(fix, command), Reason: reason, Detail: changePreviews(connectionChanges)})
 	} else {
 		findings = append(findings, Finding{Code: "client_entry_outdated", Label: "Connection files", Severity: SeverityOK, Message: "current"})
 	}
 	if len(permissions) > 0 {
 		findings = append(findings, Finding{Code: "client_permissions_outdated", Label: "Claude permission rules", Severity: SeverityProblem,
-			Message: "The Claude Code permission rules are not the current set: " + strings.Join(permissions, "; ") + ".", Fix: fix, Manual: manualIfNoFix(fix, command), Reason: reason})
+			Message: "The Claude Code permission rules are not the current set: " + strings.Join(permissions, "; ") + ".", Fix: fix, Manual: manualIfNoFix(fix, command), Reason: reason, Detail: changePreviews(permissionChanges)})
 	}
 	return findings
 }
@@ -418,10 +420,11 @@ func remoteFilesFinding(ctx context.Context, entries []RemoteEntry, maySend bool
 	}
 	var changed []string
 	for _, change := range plan.Changes {
-		changed = append(changed, fmt.Sprintf("%s %s %s", change.Host, change.Kind, change.Path))
+		changed = append(changed, describeChange(first.Root, change))
 	}
 	finding.Severity = SeverityProblem
 	finding.Message = "Out of date: " + strings.Join(changed, "; ") + "."
+	finding.Detail = changePreviews(plan.Changes)
 	finding.Manual = reconnectRemoteCommand(first.HubURL, first.TokenFile, first.Global)
 	if first.Global || maySend {
 		finding.Reason = "doctor --fix does not rewrite a connection to a hub on another machine; run: `" + finding.Manual + "`"

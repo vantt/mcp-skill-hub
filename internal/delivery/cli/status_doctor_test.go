@@ -475,7 +475,7 @@ func TestStatusAndDoctorNeverSendTheTokenToAHubOnlyTheProjectNames(t *testing.T)
 		t.Fatalf("doctor exit %d: %s", code, stderr)
 	}
 	code, stdout, stderr := runDoctorCLI(ctx, project, "--fix")
-	if code != 1 || !strings.Contains(stdout, app.RemoteFixRefusal(hubURL, tokenFile)) {
+	if code != 1 || !strings.Contains(flatText(stdout), flatText(app.RemoteFixRefusal(hubURL, tokenFile))) {
 		t.Fatalf("doctor --fix exit %d\n%s%s", code, stdout, stderr)
 	}
 	if calls, tokens := recorder.seen(); calls == 0 || len(tokens) != 0 {

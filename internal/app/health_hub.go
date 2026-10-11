@@ -304,12 +304,15 @@ func hubStateFindings(root string, report RoleReport, state hubState, depth Dept
 			Reason:  "Fix or remove the conflicting managed content in those files; doctor --fix never overwrites it."})
 	default:
 		var connection, permissions []string
+		var connectionChanges, permissionChanges []hostintegration.Change
 		for _, change := range host.plan.Changes {
-			described := fmt.Sprintf("%s %s %s", change.Host, change.Kind, change.Path)
+			described := describeChange(root, change)
 			if change.Kind == hostintegration.ChangeHostPermissions {
 				permissions = append(permissions, described)
+				permissionChanges = append(permissionChanges, change)
 			} else {
 				connection = append(connection, described)
+				connectionChanges = append(connectionChanges, change)
 			}
 		}
 		if len(connection) > 0 {
@@ -317,14 +320,14 @@ func hubStateFindings(root string, report RoleReport, state hubState, depth Dept
 			if missing := hostintegration.MissingFinding(host.plan); missing != nil {
 				message += " Some are missing (" + missing.Note + ")."
 			}
-			findings = append(findings, Finding{Code: "hub_self_connection", Label: "Agent connection", Severity: SeverityProblem, Message: message, Fix: repair})
+			findings = append(findings, Finding{Code: "hub_self_connection", Label: "Agent connection", Severity: SeverityProblem, Message: message, Fix: repair, Detail: changePreviews(connectionChanges)})
 			addRepair("refresh the hub's agent connection files")
 		} else {
 			findings = append(findings, Finding{Code: "hub_self_connection", Label: "Agent connection", Severity: SeverityOK, Message: "current"})
 		}
 		if len(permissions) > 0 {
 			findings = append(findings, Finding{Code: "client_permissions_outdated", Label: "Claude permission rules", Severity: SeverityProblem,
-				Message: "The Claude Code permission rules are not the current set: " + strings.Join(permissions, "; ") + ".", Fix: repair})
+				Message: "The Claude Code permission rules are not the current set: " + strings.Join(permissions, "; ") + ".", Fix: repair, Detail: changePreviews(permissionChanges)})
 			addRepair("update the Claude Code permission rules (your own rules stay)")
 		}
 	}

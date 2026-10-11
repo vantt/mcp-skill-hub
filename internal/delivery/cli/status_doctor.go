@@ -290,6 +290,19 @@ func renderFindings(p *termui.Printer, section app.Section, attentionOnly bool, 
 		p.Blank()
 		p.Fields(lines...)
 	}
+	if attentionOnly {
+		return
+	}
+	for _, finding := range section.Findings {
+		if finding.Detail == "" || (finding.Severity != app.SeverityProblem && finding.Severity != app.SeverityNotice) {
+			continue
+		}
+		p.Blank()
+		p.Line(finding.Label + ", what the fix would change:")
+		for _, line := range strings.Split(finding.Detail, "\n") {
+			p.Raw("  " + line + "\n")
+		}
+	}
 }
 
 // fixText is the one fix line of a problem: what doctor --fix will do, or why
@@ -555,7 +568,9 @@ func renderNotFixed(p *termui.Printer, items []app.NotFixedItem) {
 	p.Line("Not fixed:")
 	for _, item := range items {
 		p.Bullets(item.Message)
-		p.Raw("    " + item.Reason + "\n")
+		for _, line := range termui.Wrap(item.Reason, p.Width()-4) {
+			p.Raw("    " + line + "\n")
+		}
 		if item.Manual != "" && !strings.Contains(item.Reason, item.Manual) {
 			p.Raw("    $ " + item.Manual + "\n")
 		}

@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
 
+	"github.com/vantt/mcp-skill-hub/internal/hostintegration"
 	"github.com/vantt/mcp-skill-hub/internal/shellquote"
 )
 
@@ -97,6 +99,10 @@ type Finding struct {
 	// Reason says why doctor --fix leaves the finding to a person; it is
 	// printed under "Not fixed:". Empty uses a generic sentence.
 	Reason string
+	// Detail is optional longer evidence, for example the managed blocks a
+	// fix would rewrite; doctor prints it below the table, status leaves it
+	// out.
+	Detail string
 }
 
 // findingJSON is the JSON form of a Finding: the fix is its summary.
@@ -108,11 +114,12 @@ type findingJSON struct {
 	Fix      string   `json:"fix,omitempty"`
 	Manual   string   `json:"manual,omitempty"`
 	Reason   string   `json:"reason,omitempty"`
+	Detail   string   `json:"detail,omitempty"`
 }
 
 // MarshalJSON writes the fix as its summary, since a function has no JSON form.
 func (finding Finding) MarshalJSON() ([]byte, error) {
-	value := findingJSON{Code: finding.Code, Label: finding.Label, Severity: finding.Severity, Message: finding.Message, Manual: finding.Manual, Reason: finding.Reason}
+	value := findingJSON{Code: finding.Code, Label: finding.Label, Severity: finding.Severity, Message: finding.Message, Manual: finding.Manual, Reason: finding.Reason, Detail: finding.Detail}
 	if finding.Fix != nil {
 		value.Fix = finding.Fix.Summary
 	}
@@ -126,7 +133,7 @@ func (finding *Finding) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &value); err != nil {
 		return err
 	}
-	*finding = Finding{Code: value.Code, Label: value.Label, Severity: value.Severity, Message: value.Message, Manual: value.Manual, Reason: value.Reason}
+	*finding = Finding{Code: value.Code, Label: value.Label, Severity: value.Severity, Message: value.Message, Manual: value.Manual, Reason: value.Reason, Detail: value.Detail}
 	if value.Fix != "" {
 		finding.Fix = &FixAction{Summary: value.Fix}
 	}
@@ -345,6 +352,28 @@ func ProblemCodes(sections []Section) []string {
 	}
 	slices.Sort(codes)
 	return codes
+}
+
+// describeChange names a host change in one line: host, kind and the file,
+// relative to root when it is inside it, with forward slashes.
+func describeChange(root string, change hostintegration.Change) string {
+	path := change.Path
+	if relative, err := filepath.Rel(root, path); err == nil && !filepath.IsAbs(relative) && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		path = filepath.ToSlash(relative)
+	}
+	return string(change.Host) + " " + string(change.Kind) + " " + path
+}
+
+// changePreviews joins the managed-block previews of host changes, one block
+// per file, for Finding.Detail.
+func changePreviews(changes []hostintegration.Change) string {
+	var blocks []string
+	for _, change := range changes {
+		if change.Preview != "" {
+			blocks = append(blocks, change.Path+":\n"+strings.TrimRight(change.Preview, "\n"))
+		}
+	}
+	return strings.Join(blocks, "\n")
 }
 
 // findFinding returns the first finding with one of the codes and the given
