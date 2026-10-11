@@ -248,9 +248,13 @@ func (t *activationTracker) markActivation(session *mcp.ServerSession, resolutio
 // skill version and session however often the caller revalidates it. digest
 // is empty for a refused (unapproved) skill, whose version the refusal does
 // not name; such a skill then counts one blocked load per session. A nil
-// session is the tracker's single "no session" state, shared by every request
-// that names no live session and never mixed with a real session.
+// session (a request that names no live session) is never deduplicated: the
+// "no session" state is shared by every client of the hub, so one client's
+// load must not hide another's. Its loads still carry the no-session hash.
 func (t *activationTracker) markBundleFetch(session *mcp.ServerSession, skillID, digest string) bool {
+	if session == nil {
+		return true
+	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
 

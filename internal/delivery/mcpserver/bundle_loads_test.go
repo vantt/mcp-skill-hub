@@ -68,7 +68,7 @@ func TestMarkBundleFetchCountsEachVersionOncePerSession(t *testing.T) {
 		{first, "skill-b", "d1", true},
 		{second, "skill-a", "d1", true},
 		{nil, "skill-a", "d1", true},
-		{nil, "skill-a", "d1", false},
+		{nil, "skill-a", "d1", true}, // shared by every client: never deduplicated
 		{first, "skill-a", "", true},
 		{first, "skill-a", "", false},
 	}
@@ -163,9 +163,16 @@ func TestBundleRequestsCountOneLoadPerVersionAndSession(t *testing.T) {
 	if len(perSession) != 1 {
 		t.Fatalf("requests without a live session were counted under %d session hashes, want exactly 1: %v", len(perSession), perSession)
 	}
+	// The no-session state is shared by every client, so its loads are not
+	// deduplicated: one client's load must not hide another's.
 	for hash, loads := range perSession {
-		if hash == "" || len(loads) != 1 || loads[0].Payload["attribution"] != "unsolicited" || loads[0].ResolutionID != "" {
-			t.Fatalf("no-session bundle loads = %d under hash %q: %+v", len(loads), hash, loads)
+		if hash == "" || len(loads) != 2 {
+			t.Fatalf("no-session bundle loads = %d under hash %q, want 2: %+v", len(loads), hash, loads)
+		}
+		for _, load := range loads {
+			if load.Payload["attribution"] != "unsolicited" || load.ResolutionID != "" {
+				t.Fatalf("no-session bundle load = %+v, want unsolicited without a resolution", load)
+			}
 		}
 	}
 }
@@ -258,6 +265,11 @@ func TestProxyCacheHitCountsOneLoadOnTheHub(t *testing.T) {
 	}
 	proxied = startTestProxy(t, slowLink, hub.token, stateDir, counter)
 	proxyResolve(t, proxied.session, root, "herdr-cook-plan")
+	// As if an earlier call had found the hub down: a background success
+	// must not tell the user the hub answers again.
+	proxied.proxy.mu.Lock()
+	proxied.proxy.unreachable = true
+	proxied.proxy.mu.Unlock()
 	before := counter.count()
 	started := time.Now()
 	got, _, encoded := proxySkillGet(t, proxied.session, "herdr-cook-plan")
@@ -274,6 +286,11 @@ func TestProxyCacheHitCountsOneLoadOnTheHub(t *testing.T) {
 	if after.bundles-before.bundles != 1 || counter.lastStatus() != http.StatusNotModified || after.bundleBytes != before.bundleBytes {
 		t.Fatalf("background confirmation: %d bundle requests, last status %d, %d content bytes; want one 304 with none", after.bundles-before.bundles, counter.lastStatus(), after.bundleBytes-before.bundleBytes)
 	}
+	defer func() {
+		if strings.Contains(proxied.warnings.String(), "answers again") {
+			t.Errorf("a background confirmation told the user the hub answers again: %q", proxied.warnings.String())
+		}
+	}()
 	waitFor(t, "the confirmation to finish", func() bool {
 		proxied.proxy.mu.Lock()
 		defer proxied.proxy.mu.Unlock()

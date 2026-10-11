@@ -714,7 +714,7 @@ func (proxy *Proxy) fetchBundle(ctx context.Context, skillID string) fetchOutcom
 		held = append(held, version.Digest)
 	}
 	for attempt := 0; attempt < 2; attempt++ {
-		outcome, retry := proxy.requestBundle(ctx, skillID, held)
+		outcome, retry := proxy.requestBundle(ctx, skillID, held, false)
 		if !retry {
 			return outcome
 		}
@@ -725,7 +725,10 @@ func (proxy *Proxy) fetchBundle(ctx context.Context, skillID string) fetchOutcom
 	return fetchOutcome{kind: fetchFailed, code: "internal_error", message: "The cached skill kept disappearing while it was being used.", action: "Retry once."}
 }
 
-func (proxy *Proxy) requestBundle(ctx context.Context, skillID string, held []string) (fetchOutcome, bool) {
+// requestBundle sends one bundle request. quiet marks a background request:
+// it tells the user nothing about the hub's reachability and leaves cache
+// garbage collection to requests the agent waits for.
+func (proxy *Proxy) requestBundle(ctx context.Context, skillID string, held []string, quiet bool) (fetchOutcome, bool) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, proxy.bundleURL+"?skill="+url.QueryEscape(skillID), nil)
 	if err != nil {
 		return fetchOutcome{kind: fetchFailed, err: err, code: "internal_error", message: "The bundle request could not be built.", action: "Retry once."}, false
@@ -753,7 +756,9 @@ func (proxy *Proxy) requestBundle(ctx context.Context, skillID string, held []st
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 64<<10))
 		_ = response.Body.Close()
 	}()
-	proxy.noteReachable(true)
+	if !quiet {
+		proxy.noteReachable(true)
+	}
 	digest := strings.Trim(strings.TrimPrefix(response.Header.Get("ETag"), "W/"), `"`)
 	switch response.StatusCode {
 	case http.StatusOK:
@@ -773,7 +778,9 @@ func (proxy *Proxy) requestBundle(ctx context.Context, skillID string, held []st
 			}
 			return fetchOutcome{kind: fetchFailed, err: err, code: "internal_error", message: "The skill could not be stored in the local cache " + proxy.CacheDir() + ".", action: "Check free disk space and the permissions of that directory."}, false
 		}
-		proxy.collectGarbage(skillID, digest)
+		if !quiet {
+			proxy.collectGarbage(skillID, digest)
+		}
 		return fetchOutcome{kind: fetchInstalled, cached: cached, sessionID: sessionID}, false
 	case http.StatusNotModified:
 		cached, ok := proxy.cache.Lookup(proxy.hubID, skillID, digest)
@@ -853,7 +860,7 @@ func (proxy *Proxy) confirmLoad(skillID string, hint skillHint) {
 		// No fetch lock: a hub that never answers must not hold up the next
 		// skill_get. The cache installs atomically and tolerates concurrent
 		// writers, as it does for several proxy processes.
-		outcome, _ := proxy.requestBundle(ctx, skillID, []string{hint.digest})
+		outcome, _ := proxy.requestBundle(ctx, skillID, []string{hint.digest}, true)
 		switch outcome.kind {
 		case fetchNotModified:
 			proxy.markCounted(outcome.sessionID, skillID, hint.digest)
@@ -863,7 +870,10 @@ func (proxy *Proxy) confirmLoad(skillID string, hint skillHint) {
 			proxy.rememberVersion(skillID, outcome.cached.Digest)
 			proxy.markCounted(outcome.sessionID, skillID, outcome.cached.Digest)
 		case fetchUnreachable:
-			proxy.reportCachedLoad(ctx, skillID, hint)
+			// A fresh deadline: the bundle request may have used up its own.
+			feedbackCtx, cancelFeedback := context.WithTimeout(proxy.background, proxyDialTimeout)
+			defer cancelFeedback()
+			proxy.reportCachedLoad(feedbackCtx, skillID, hint)
 		}
 	}()
 }
