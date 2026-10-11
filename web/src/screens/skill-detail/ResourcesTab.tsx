@@ -115,7 +115,7 @@ export function ResourcesTab({ skill, workspaceId, thirdParty }: ResourcesTabPro
       )}
 
       <div className="fg-card" style={{ padding: 0, overflow: 'auto' }}>
-        <table className="fg-table" style={{ width: '100%' }}>
+        <table className="fg-table app-resources" style={{ width: '100%' }}>
           <thead>
             <tr>
               <th>
@@ -148,13 +148,13 @@ export function ResourcesTab({ skill, workspaceId, thirdParty }: ResourcesTabPro
               const reasonText = !editable && item?.reason ? REASON_LABELS[item.reason] : '';
               return (
                 <tr key={res.path}>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
+                  <td className="app-resources__path" style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
                     <span className="app-wrap">{res.path}</span>
                   </td>
-                  <td className="t-body-sm">
+                  <td className="t-body-sm" data-label={LABEL_KIND}>
                     <span>{res.kind}</span>
                   </td>
-                  <td className="fg-table__num">
+                  <td className="fg-table__num" data-label={LABEL_SIZE}>
                     <span>{sizeText}</span>
                     {reasonText && (
                       <div className="t-caption" style={{ color: 'var(--color-text-subtle)', whiteSpace: 'nowrap' }}>
@@ -162,15 +162,18 @@ export function ResourcesTab({ skill, workspaceId, thirdParty }: ResourcesTabPro
                       </div>
                     )}
                   </td>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--color-text-muted)' }}>
+                  <td
+                    data-label={LABEL_DIGEST}
+                    style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--color-text-muted)' }}
+                  >
                     <span>{digestText}</span>
                   </td>
-                  <td>
+                  <td data-label={LABEL_STATE}>
                     <span className="fg-chip fg-chip--neutral">
                       <span>{LABEL_ACTIVE}</span>
                     </span>
                   </td>
-                  <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                  <td className="app-resources__actions" style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                     {editable ? (
                       <button
                         type="button"

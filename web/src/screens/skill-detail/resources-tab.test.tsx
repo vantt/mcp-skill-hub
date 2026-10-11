@@ -132,6 +132,17 @@ describe('ResourcesTab', () => {
     expect(screen.queryByRole('button', { name: `Edit ${NEW_DOC}` })).not.toBeInTheDocument();
   });
 
+  it('labels each cell so a narrow screen can stack a row with the action beside the path', () => {
+    renderTab(`/skills/${SKILL_ID}?tab=resources`, seedList);
+
+    const row = rowFor(SCRIPT);
+    const labels = Array.from(row.querySelectorAll('td[data-label]')).map((td) => td.getAttribute('data-label'));
+    expect(labels).toEqual(['Kind', 'Size', 'Digest', 'State']);
+    const actions = row.querySelector('td.app-resources__actions');
+    expect(actions).not.toBeNull();
+    expect(within(actions as HTMLElement).getByRole('button', { name: `Edit ${SCRIPT}` })).toBeInTheDocument();
+  });
+
   it('leaves SKILL.md out of the table', () => {
     renderTab(`/skills/${SKILL_ID}?tab=resources`, seedList);
 
