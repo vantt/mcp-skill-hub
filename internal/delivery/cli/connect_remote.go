@@ -14,7 +14,7 @@ import (
 // tokenHandOff tells how the hub's token reaches this machine. It is printed
 // by `connect --hub --dry-run`; the token itself is never printed.
 func tokenHandOff(hubURL string) string {
-	return "To get the token to this machine, copy the hub's token file from machine B (the hub prints its path when `skillhub serve mcp --addr ...` starts, and `skillhub token show` there shows it), for example `scp <machine-b>:<hub-folder>/runtime/config/.hub-token " + hubtoken.ClientPath(hubURL) + "`, then `chmod 600` it; or set " + app.HubTokenEnv + " in the environment the agent host starts the proxy with."
+	return "To get the token to this machine, run the scp line that `skillhub serve` prints on machine B, for example `scp -p <user>@<machine-b>:<hub-folder>/runtime/config/.hub-token " + hubtoken.ClientPath(hubURL) + "`, which keeps the file private (mode 0600); or set " + app.HubTokenEnv + " in the environment the agent host starts the proxy with."
 }
 
 // runConnectHub handles `skillhub connect --hub <url>`: the host entry starts

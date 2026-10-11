@@ -370,3 +370,33 @@ func TestRemoteDoctorGroupsHostsPerHubAndScope(t *testing.T) {
 		t.Fatalf("result = %+v", result)
 	}
 }
+
+func TestRemoteFixRefusalNamesTheConnectCommand(t *testing.T) {
+	t.Parallel()
+	got := RemoteFixRefusal("http://192.168.1.20:7420", "")
+	want := "doctor --fix does not reconnect to a remote hub named in this project's files; if you trust http://192.168.1.20:7420, run: `skillhub connect --hub http://192.168.1.20:7420 --token-file ~/.skillhub-token-192.168.1.20-7420`"
+	if got != want {
+		t.Fatalf("RemoteFixRefusal without a token file =\n%s\nwant\n%s", got, want)
+	}
+	tokenFile := filepath.Join(t.TempDir(), "my token")
+	if got := RemoteFixRefusal("http://192.168.1.20:7420", tokenFile); !strings.HasSuffix(got, "--token-file "+shellquote.Arg(tokenFile)+"`") {
+		t.Fatalf("RemoteFixRefusal with a token file = %s", got)
+	}
+}
+
+func TestRemoteFixTextsNameTheCurrentServeCommand(t *testing.T) {
+	t.Parallel()
+	texts := []string{
+		tokenCopyFix("/home/a/.skillhub-token-hub-7420"),
+		unreachableFix("http://127.0.0.1:7420", "127.0.0.1:7420"),
+		unreachableFix("http://100.101.102.103:7420", "100.101.102.103:7420"),
+		reachableCheck("http://hub.example:7420", HubProbe{Outcome: ProbeHostRefused}).Fix,
+		reachableCheck("http://hub.example:7420", HubProbe{Outcome: ProbeNotAHub}).Fix,
+		reachableCheck("http://hub.example:7420", HubProbe{Outcome: ProbeHubError}).Fix,
+	}
+	for _, text := range texts {
+		if strings.Contains(text, "--trust-private-network") || strings.Contains(text, "serve mcp") || !strings.Contains(text, "`skillhub serve") {
+			t.Errorf("fix text does not name `skillhub serve` plainly: %s", text)
+		}
+	}
+}

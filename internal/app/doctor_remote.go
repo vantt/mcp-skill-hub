@@ -259,7 +259,19 @@ func ReadHubToken(hubURL, tokenFile string) HubToken {
 
 // tokenCopyFix tells how to bring the hub's token file to this machine.
 func tokenCopyFix(tokenFile string) string {
-	return "Copy the token file from machine B, where the hub prints its path when it starts and `skillhub token show` shows it, for example `scp <machine-b>:<workspace>/runtime/config/.hub-token " + tokenFile + "`, then run `chmod 600 " + tokenFile + "`."
+	return "Copy the token file from machine B with the scp line `skillhub serve` prints there, for example `scp -p <user>@<machine-b>:<hub-folder>/runtime/config/.hub-token " + shellquote.Arg(tokenFile) + "`; -p keeps the file private (mode 0600)."
+}
+
+// RemoteFixRefusal is what `doctor --fix` prints for a remote hub that only
+// this project's files name. It never reconnects on its own: the URL may come
+// from a cloned repository, and connecting sends that hub this machine's
+// token. The person runs the connect command when they trust the hub.
+func RemoteFixRefusal(hubURL, tokenFile string) string {
+	file := hubtoken.ClientPath(hubURL)
+	if tokenFile != "" {
+		file = shellquote.Arg(tokenFile)
+	}
+	return "doctor --fix does not reconnect to a remote hub named in this project's files; if you trust " + hubURL + ", run: `skillhub connect --hub " + hubURL + " --token-file " + file + "`"
 }
 
 func plainError(err error) string {
@@ -469,15 +481,15 @@ func reachableCheck(hubURL string, probe HubProbe) RemoteCheck {
 			host = parsed.Hostname()
 		}
 		check.Detail = "The hub at " + hubURL + " refuses requests for the host name " + host + "."
-		check.Fix = "On machine B restart the listener with `--allow-host " + host + "` added to `skillhub serve mcp --addr ...`."
+		check.Fix = "On machine B restart `skillhub serve` with `--allow-host " + host + "` added, or connect with the IP address it prints."
 	case ProbeNotAHub:
 		check.Status = CheckFailed
 		check.Detail = fmt.Sprintf("Something answers at %s, but it is not a Skill Hub listener (HTTP %d).", hubURL, probe.HTTPStatus)
-		check.Fix = "Check the address: machine B prints the hub URL when `skillhub serve mcp --addr ...` starts; reconnect with `skillhub connect --hub <that URL>`."
+		check.Fix = "Check the address: `skillhub serve` on machine B prints the hub URLs when it starts; reconnect with the connect command it prints."
 	case ProbeHubError:
 		check.Status = CheckFailed
 		check.Detail = fmt.Sprintf("The hub at %s answers with an error (HTTP %d: %s).", hubURL, probe.HTTPStatus, probe.Reason)
-		check.Fix = "Look at the listener's output on machine B and restart `skillhub serve mcp --addr " + hostPort + "` there."
+		check.Fix = "Look at the output of `skillhub serve` on machine B and restart it there."
 	default:
 		check.Status = CheckOK
 		check.Detail = fmt.Sprintf("answered in %d ms", probe.ElapsedMS)
@@ -488,9 +500,9 @@ func reachableCheck(hubURL string, probe HubProbe) RemoteCheck {
 func unreachableFix(hubURL, hostPort string) string {
 	_, port, _ := net.SplitHostPort(hostPort)
 	if parsed, err := url.Parse(hubURL); err == nil && isLoopbackName(parsed.Hostname()) {
-		return "Check that `skillhub serve mcp --addr 127.0.0.1:" + port + "` is running on machine B and that the SSH tunnel is open on this machine, for example `ssh -N -L " + port + ":127.0.0.1:" + port + " <machine-b>`; if you use Tailscale instead, check `tailscale status` on both machines."
+		return "Check that `skillhub serve --addr 127.0.0.1:" + port + "` is running on machine B and that the SSH tunnel is open on this machine, for example `ssh -N -L " + port + ":127.0.0.1:" + port + " <machine-b>`; if you reach machine B by its address instead, connect with an address `skillhub serve` prints."
 	}
-	return "Check that `skillhub serve mcp --addr " + hostPort + " --trust-private-network` is running on machine B and that both machines are connected to Tailscale, see `tailscale status`; if you use an SSH tunnel instead, check that it is open."
+	return "Check that `skillhub serve` is running on machine B and listens on " + hostPort + " (it listens on every interface unless --addr says otherwise), and that this machine can reach that address; with Tailscale, check `tailscale status` on both machines."
 }
 
 func acceptedCheck(probe HubProbe, token HubToken) RemoteCheck {
@@ -503,11 +515,11 @@ func acceptedCheck(probe HubProbe, token HubToken) RemoteCheck {
 	case probe.Outcome == ProbeRejected || probe.Outcome == ProbeNoToken:
 		check.Status = CheckFailed
 		check.Detail = "The hub refused the token: it is not the hub's current token (the token was rotated, or the file comes from another hub)."
-		check.Fix = "Copy the current token file from machine B again, where `skillhub token show` shows its path, then restart the agent."
+		check.Fix = "Copy the current token file from machine B again with the scp line `skillhub serve` prints there, then restart the agent."
 	case probe.Outcome == ProbeThrottled:
 		check.Status = CheckFailed
 		check.Detail = "The hub is refusing requests for a minute after too many attempts with a wrong token."
-		check.Fix = "Wait a minute, then copy the current token file from machine B again, where `skillhub token show` shows its path."
+		check.Fix = "Wait a minute, then copy the current token file from machine B again with the scp line `skillhub serve` prints there."
 	default:
 		check.Status, check.Detail = CheckOK, "the hub accepts the token"
 	}
@@ -529,7 +541,7 @@ func versionCheck(hubURL string, probe HubProbe) RemoteCheck {
 		}
 		check.Status = CheckFailed
 		check.Detail = "The hub on machine B runs an older Skill Hub (" + hubVersion + ") than this machine (" + client.Version + "); some remote features will not work."
-		check.Fix = "Update skillhub on machine B, then restart `skillhub serve mcp --addr " + hubHostPort(hubURL) + "` there."
+		check.Fix = "Update skillhub on machine B, then restart `skillhub serve` there."
 	case probe.Status.RemoteAPI > client.RemoteAPI:
 		check.Status = CheckFailed
 		check.Detail = "This machine runs an older Skill Hub (" + client.Version + ") than the hub on machine B (" + probe.Status.Version + "); some remote features will not work."

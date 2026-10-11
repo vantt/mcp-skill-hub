@@ -23,7 +23,7 @@ import (
 	"github.com/vantt/mcp-skill-hub/internal/shellquote"
 )
 
-// startStoppableListener runs `skillhub serve mcp --addr 127.0.0.1:0` in
+// startStoppableListener runs `skillhub serve --addr 127.0.0.1:0` in
 // process and returns the hub URL it printed and a function that stops it.
 // The listener also stops when the test ends.
 func startStoppableListener(t *testing.T, ws string) (string, func()) {
@@ -503,7 +503,7 @@ func TestDoctorExplainsEachBrokenRemoteConnection(t *testing.T) {
 	stop()
 	stopped := doctor()
 	if flat := flatText(stopped); !strings.Contains(flat, "Nothing answers at "+hub) || !strings.Contains(flat, "the hub is stopped, or the SSH tunnel or the Tailscale connection is down") ||
-		!strings.Contains(flat, "skillhub serve mcp --addr "+strings.TrimPrefix(hub, "http://")) || !strings.Contains(flat, "ssh -N -L") {
+		!strings.Contains(flat, "skillhub serve --addr "+strings.TrimPrefix(hub, "http://")) || !strings.Contains(flat, "ssh -N -L") {
 		t.Fatalf("stopped hub:\n%s", stopped)
 	}
 
@@ -624,7 +624,7 @@ func TestRemoteConnectAndRemoveOutputGolden(t *testing.T) {
 		{ID: "host_claude-code_host-permissions", Summary: "claude-code (x) host-permissions: /home/a/app/.claude/settings.local.json", Impact: "Would be written."},
 		{ID: "host_claude-code_native-skill", Summary: "claude-code (x) native-skill: /home/a/app/.claude/skills/system-curator/SKILL.md", Impact: "Would be deleted."},
 	}
-	preview.Warnings = []app.Warning{{Code: "hub_unreachable", Summary: "The hub does not answer at http://127.0.0.1:7420 right now (connection refused). The connection can be written anyway; start `skillhub serve mcp --addr ...` on machine B and open the SSH tunnel or Tailscale connection before you start the agent."}}
+	preview.Warnings = []app.Warning{{Code: "hub_unreachable", Summary: "The hub does not answer at http://127.0.0.1:7420 right now (connection refused). The connection can be written anyway; start `skillhub serve` on machine B (and open the SSH tunnel if you use one) before you start the agent."}}
 	preview.SuggestedActions = []app.Action{{Command: "skillhub connect --hub http://127.0.0.1:7420 --token-file /home/a/.config/skillhub/hub-token"}}
 	var out strings.Builder
 	renderRemoteConnect(termui.NewWithWidth(&out, 100), preview, connection)
@@ -642,15 +642,14 @@ func TestRemoteConnectAndRemoveOutputGolden(t *testing.T) {
 		"\n" +
 		"  - Curation stays on the hub machine: no curation server and no system-curator skill are installed\n" +
 		"    here.\n" +
-		"  - To get the token to this machine, copy the hub's token file from machine B (the hub prints its\n" +
-		"    path when `skillhub serve mcp --addr ...` starts, and `skillhub token show` there shows it), for\n" +
-		"    example\n" +
-		"    `scp <machine-b>:<hub-folder>/runtime/config/.hub-token ~/.skillhub-token-127.0.0.1-7420`, then\n" +
-		"    `chmod 600` it; or set SKILLHUB_HUB_TOKEN in the environment the agent host starts the proxy\n" +
-		"    with.\n" +
+		"  - To get the token to this machine, run the scp line that `skillhub serve` prints on machine B,\n" +
+		"    for example\n" +
+		"    `scp -p <user>@<machine-b>:<hub-folder>/runtime/config/.hub-token ~/.skillhub-token-127.0.0.1-7420`,\n" +
+		"    which keeps the file private (mode 0600); or set SKILLHUB_HUB_TOKEN in the environment the agent\n" +
+		"    host starts the proxy with.\n" +
 		"WARNING: The hub does not answer at http://127.0.0.1:7420 right now (connection refused). The\n" +
-		"         connection can be written anyway; start `skillhub serve mcp --addr ...` on machine B and\n" +
-		"         open the SSH tunnel or Tailscale connection before you start the agent.\n" +
+		"         connection can be written anyway; start `skillhub serve` on machine B (and open the SSH\n" +
+		"         tunnel if you use one) before you start the agent.\n" +
 		"\n" +
 		"To write these files, run:\n" +
 		"  $ skillhub connect --hub http://127.0.0.1:7420 --token-file /home/a/.config/skillhub/hub-token\n"
@@ -721,7 +720,7 @@ func TestRemoteDoctorOutputGolden(t *testing.T) {
 			{Label: "Hub token", Status: app.CheckOK, Detail: "read from /home/a/hub-token"},
 			{Label: "Hub reachable", Status: app.CheckOK, Detail: "answered in 2 ms"},
 			{Label: "Token accepted", Status: app.CheckOK, Detail: "the hub accepts the token"},
-			{Label: "Hub version", Status: app.CheckFailed, Detail: "The hub on machine B runs an older Skill Hub (v1.0.0) than this machine (v1.1.0); some remote features will not work.", Fix: "Update skillhub on machine B, then restart `skillhub serve mcp --addr 127.0.0.1:7420` there."},
+			{Label: "Hub version", Status: app.CheckFailed, Detail: "The hub on machine B runs an older Skill Hub (v1.0.0) than this machine (v1.1.0); some remote features will not work.", Fix: "Update skillhub on machine B, then restart `skillhub serve` there."},
 			{Label: "Skill cache", Status: app.CheckFailed, Detail: "The skill cache /c is not writable (permission denied), so skills fetched from the hub cannot be stored.", Fix: "Make it writable for your user (for example `chmod u+w /c`), or set XDG_STATE_HOME to a writable directory in the environment the agent host starts in."},
 			{Label: "Last fetch", Status: app.CheckInfo, Detail: "2026-10-11 15:04 (2 skills cached)"},
 		},
@@ -746,7 +745,7 @@ func TestRemoteDoctorOutputGolden(t *testing.T) {
 		"                        from the hub cannot be stored.\n" +
 		"Last fetch              2026-10-11 15:04 (2 skills cached)\n" +
 		"\n" +
-		"FIX:  Update skillhub on machine B, then restart `skillhub serve mcp --addr 127.0.0.1:7420` there.\n" +
+		"FIX:  Update skillhub on machine B, then restart `skillhub serve` there.\n" +
 		"FIX:  Make it writable for your user (for example `chmod u+w /c`), or set XDG_STATE_HOME to a\n" +
 		"      writable directory in the environment the agent host starts in.\n"
 	if out.String() != want {

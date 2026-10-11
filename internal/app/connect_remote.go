@@ -297,7 +297,7 @@ func remoteConnectWarnings(hubURL string, probe HubProbe, token HubToken) []Warn
 	}
 	switch probe.Outcome {
 	case ProbeUnreachable:
-		warnings = append(warnings, Warning{Code: "hub_unreachable", Summary: "The hub does not answer at " + hubURL + " right now (" + probe.Reason + "). The connection can be written anyway; start `skillhub serve mcp --addr ...` on machine B and open the SSH tunnel or Tailscale connection before you start the agent."})
+		warnings = append(warnings, Warning{Code: "hub_unreachable", Summary: "The hub does not answer at " + hubURL + " right now (" + probe.Reason + "). The connection can be written anyway; start `skillhub serve` on machine B (and open the SSH tunnel if you use one) before you start the agent."})
 	case ProbeNotAHub, ProbeHostRefused, ProbeHubError:
 		warnings = append(warnings, Warning{Code: "hub_check_failed", Summary: reachableCheck(hubURL, probe).Detail})
 	case ProbeRejected:
