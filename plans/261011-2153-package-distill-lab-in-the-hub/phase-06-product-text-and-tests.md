@@ -1,5 +1,5 @@
 ---
-phase: 5
+phase: 6
 title: "Product text and tests (Go, web, e2e, one screenshot)"
 status: pending
 priority: P2
@@ -8,9 +8,14 @@ wave: 1
 dependencies: []
 ---
 
-# Phase 5: Product text and tests (Go, web, e2e, one screenshot)
+# Phase 6: Product text and tests (Go, web, e2e, one screenshot)
 
-## Context (traced)
+## Context (traced on pre-5.0.0 main; re-verify at start)
+
+These edits land after the onboarding plan's edits to `curation_home.go`, `next_commands.go` and its mechanical
+renames in docs, web and `source.go` (plan.md "Sequencing"); that plan leaves the distill sentences untouched.
+Re-read each file on the new main before editing; the line numbers below are from before 5.0.0. The
+`cd <hub> && <command>` form matches how 5.0.0 documents hub commands (`cd <hub> && skillhub <cmd>`).
 
 - `internal/app/curation_home.go:479-488`: `review_lessons` command `distill.py list <hub-relative path>`; the path
   comes from `countCandidateLessons` (`:299-303`). Test: `internal/app/curation_home_test.go:616-637`.
@@ -30,13 +35,15 @@ dependencies: []
 
 ## Owned files
 
-See plan.md wave 1, Phase 5 row. Read-only: `internal/hostintegration/**`, `internal/systemskills/**`, `web/e2e/ux/*`.
+See plan.md wave 1, Phase 6 row. Read-only: `internal/hostintegration/**`, `internal/systemskills/**`, `web/e2e/ux/*`.
 
 ## Requirements
 
-Script path (fixed by plan decision 1): `.agents/skills/distill-lab/scripts/distill.py`, relative to the hub.
+Script command (fixed by plan decisions 1 and 12): `node .agents/skills/distill-lab/scripts/distill.mjs`,
+relative to the hub. Every product string that prints a script command is listed here, so a later change of the
+command touches only these places: `curation_home.go`, `handoff-brief.ts`, `DistillTab.tsx`.
 
-1. `curation_home.go`: command becomes `python3 .agents/skills/distill-lab/scripts/distill.py list <path>` (path
+1. `curation_home.go`: command becomes `node .agents/skills/distill-lab/scripts/distill.mjs list <path>` (path
    unchanged, hub-relative). Summary text: "%d candidate lesson(s) ready for review with the distill-lab skill in
    the hub folder" (+ the high-value variant). Keep `Kind`, `ID`, `Count`, `Priority`.
 2. `curation.go`: for `action.Kind == "review_lessons"` print `cd <shellArgument(workspace)> && <command>`; all
@@ -45,26 +52,31 @@ Script path (fixed by plan decision 1): `.agents/skills/distill-lab/scripts/dist
    this hub folder and ask it to distill with the distill-lab skill; it writes .meta/distill.yaml. Porting lessons
    to skill content uses skill_update.\nWatching does not auto-import skills."
 4. `handoff-brief.ts`: keep the first line "Use the distill-lab skill ..." (e2e anchor). Add before the list:
-   "Run this in an agent started in the Skill Hub folder; Skill Hub installs the distill-lab skill there." Step 2:
-   "Record the lessons ... with the skill's script (python3 .agents/skills/distill-lab/scripts/distill.py)."
+   "Run this in an agent started in the Skill Hub folder; Skill Hub installs the distill-lab skill there. It needs
+   Node 18 or newer." Step 2: "Record the lessons ... with the skill's script (node
+   .agents/skills/distill-lab/scripts/distill.mjs)."
 5. `DistillHandoffScreen.tsx` `INTRO_BRIEF`: "Copy this handoff and paste it to an agent you start in your Skill
    Hub folder, where Skill Hub installs the distill-lab skill. It records lessons in each skill; read them in the
    skill's Distill tab, where you decide what to keep."
-6. `DistillTab.tsx` `NOTE_DECIDE`: replace the script sentence with "Or, in your hub folder, run python3
-   .agents/skills/distill-lab/scripts/distill.py decide <file> <number> --state planned|ported|rejected."
-7. `distill_model.go:39`: point the comment at `system-skills/distill-lab/scripts/distill.py`.
+6. `DistillTab.tsx` `NOTE_DECIDE`: replace the script sentence with "Or, in your hub folder, run node
+   .agents/skills/distill-lab/scripts/distill.mjs decide <file> <number> --state planned|ported|rejected."
+7. `distill_model.go:39`: point the comment at `.agents/skills/distill-lab/scripts/distill.mjs` (the editable
+   source in this repo, plan decision 3).
 8. Screenshot: re-shoot into a scratch folder and copy only `distill-handoff.png` and its manifest entry (same
    recipe as the archived Phase 11); skip with a note if the harness fails, and report.
 
 ## Tests
 
 - `curation_home_test.go`: exact new command and summary.
-- `workspace_next_steps_test.go`: status output shows `cd <ws> && python3 .agents/...distill.py list ...` with a
+- `workspace_next_steps_test.go`: status output shows `cd <ws> && node .agents/...distill.mjs list ...` with a
   workspace path that contains a space (quoted).
 - `source_test.go`: still contains "distill-lab"; add "hub folder".
-- `handoff-brief.test.ts`: contains "Use the distill-lab skill", "Skill Hub folder", ".agents/skills/distill-lab/scripts/distill.py".
+- `handoff-brief.test.ts`: contains "Use the distill-lab skill", "Skill Hub folder", "Node 18",
+  ".agents/skills/distill-lab/scripts/distill.mjs".
 - `distill.test.tsx`: intro mentions the hub folder.
 - e2e: existing anchors unchanged; add one assertion for "Skill Hub folder" in `tier3.spec.ts`.
+- `git grep -n "distill.py" -- internal web/src web/e2e ':!internal/migration/testdata'` returns nothing (the
+  fixtures keep the header the Python script wrote).
 
 ## Steps
 
