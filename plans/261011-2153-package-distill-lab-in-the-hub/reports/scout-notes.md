@@ -18,8 +18,14 @@ Evidence gathered on 2026-10-11 at `c86b295` (main, clean). Paths are relative t
 - `.claude/skills/distill-lab/SKILL.md` (493 lines) and `scripts/distill.py` (421 lines), both 100644 in Git.
 - `SKILL.md:292` "Hub root: `$SKILLHUB_WORKSPACE`, else `~/skill-hub`." `SKILL.md:341-354` script usage with
   `S=<this skill's folder>/scripts/distill.py`. `SKILL.md:386-388` mirrors at `<hub>/runtime/distill-lab/mirrors/<source-id>`.
-- `distill.py:24` `import yaml` (unguarded); `:194-201` `_git` uses `<hub>/runtime/distill-lab/mirrors/<src>`;
-  `:273-278` canonical header "Written by distill-lab/scripts/distill.py ..."; `:293-295` `hub_of` = `parents[4]`.
+- `distill.py:24` `import yaml` (unguarded); `:194-201` `_git` runs `git -C <hub>/runtime/distill-lab/mirrors/<src>`
+  with no config limits; `:183` reads files with `git show`; `:273-278` canonical header "Written by
+  distill-lab/scripts/distill.py ..."; `:288` `yaml.safe_load`; `:293-295` `hub_of` = `parents[4]` of the file
+  (the script has no personal path; only SKILL.md:292 does); `:328-330` fixed temp name `<file>.yaml.tmp`, written
+  through symlinks. PyYAML writes `1e23456` unquoted (YAML 1.1 floats need a dot); js-yaml `CORE_SCHEMA` reads it
+  as a float (red team, 2026-10-11).
+- `SKILL.md:386-388` mirrors are partial clones with a working tree inside the hub; the hub also holds secret env
+  files under `runtime/config/` and `runtime/envs/` (`internal/hostintegration/runtime_access.go:12-23`).
 - Header copies in fixtures: `internal/migration/testdata/test-audit-distill.yaml`, `phase0-distill.yaml`.
 - `internal/distill/distill_model.go:39` says the Go model follows `.claude/skills/distill-lab/scripts/distill.py`.
 - Local machine: Python 3 with PyYAML 6.0.3 available (used only for the differential run in Phase 2) and
@@ -35,18 +41,24 @@ Evidence gathered on 2026-10-11 at `c86b295` (main, clean). Paths are relative t
 
 ## Onboarding plan (read-only, checked 2026-10-11)
 
-- `.claude/worktrees/agent-a5c101367df3589e1/plans/261011-2250-onboarding-ux-redesign/plan.md`: hub connection
-  files go to `.git/info/exclude`, not `.gitignore`, because untracked files make status dirty (its decision P5);
-  `init` appends the exclude entries before its first commit; `DetectRole` (its phase 2) feeds status and doctor;
-  its phase 5 deletes `docs/getting-started.md`. Everything in this file that cites pre-5.0.0 lines is
-  re-verified at implementation start (plan.md "Re-verify at start").
+- `.claude/worktrees/agent-a5c101367df3589e1/plans/261011-2250-onboarding-ux-redesign/plan.md`: `DetectRole` (its
+  phase 2) feeds status and doctor; its phase 5 deletes `docs/getting-started.md`. Everything in this file that
+  cites pre-5.0.0 lines is re-verified at implementation start (plan.md "Re-verify at start").
+- Contract change from that plan's owner (mcp-skill-hub-cb), 2026-10-11, superseding its earlier `.git/info/exclude`
+  design: no local-exclude helper; the hub keeps the `.gitignore` mechanism on main since `b734bc9`
+  (`requiredIgnoreEntries`, fixable `gitignore_entry_missing`, `machine_file_tracked`; `init` appends missing
+  entries). The hidden stdio launcher keeps the name `mcp serve` (no rename, no registration migration). Its
+  doctor/status extension point is named by its phase 4 after its red team.
 
 ## Node and js-yaml (checked 2026-10-11)
 
 - Prior art: `.claude/skills/distill/scripts/distill.mjs` imports a vendored js-yaml 4.3.2
   (`scripts/vendor/js-yaml.mjs`, 104205 bytes, header line added and source-map line removed, so not
   byte-identical to the published file; `js-yaml.LICENSE` equals the published LICENSE).
-- npm registry: js-yaml 4.3.2 published 2026-08-26, MIT, `exports["."].import = ./dist/js-yaml.mjs`, no `engines`;
+- npm registry: js-yaml 4.3.2 published 2026-08-26, MIT, `exports["."].import = ./dist/js-yaml.mjs`, no `engines`,
+  no provenance attestation; tarball `https://registry.npmjs.org/js-yaml/-/js-yaml-4.3.2.tgz`, `dist.integrity`
+  `sha512-SFNOvSJ+Dgf/9An904Yx+CgSlIPCkIpao4qo51lpee25TIRejdH3rhR4EZMGoNx3/TP3O+wzWuiTFl4sqbltzA==`, `dist.shasum`
+  `8e44fb14a2643c59726bb15787b5f1512cb3d3fb` (`npm view`, 2026-10-11);
   `dist/js-yaml.mjs` 104118 bytes, sha256 `cea276c7e15f409a1adbe5d177aba7824398a474f7cf702bd57962c7d570636f`,
   no `import` statements; `LICENSE` 1084 bytes, sha256 `a07bc24468b9654ce76a547d47a2db282d07733b715db4c73a98bd63961f9550`.
   Latest 5.4.3 (2026-10-05) depends on `argparse`.
@@ -54,7 +66,10 @@ Evidence gathered on 2026-10-11 at `c86b295` (main, clean). Paths are relative t
   `node:` imports from v14.13.1/v12.20.0.
 - GitHub runner images (actions/runner-images readmes for Ubuntu 24.04, Windows 2025, macOS 15 arm64): Node 22.23.x
   installed by default, 24.x cached. CI `verify` job runs `go test ./...` on all three without a Node setup step
-  (`.github/workflows/ci.yml:11-56`); the web job uses `actions/setup-node` with `web/.nvmrc` (24).
+  (`.github/workflows/ci.yml:11-57`); `release.yml` "Verify release candidate" does the same
+  (`.github/workflows/release.yml:100-168`, `go test -timeout 30m ./...` at `:150`); the web job uses
+  `actions/setup-node` with `web/.nvmrc` (24) (`ci.yml:147`); the `lint` job checks out with `fetch-depth: 0`
+  (`ci.yml:77-79`). Release tags today: `v0.1.0` to `v0.5.0-alpha.1`, each holding the curator file.
 - Notices: `web/THIRD_PARTY_NOTICES.md` is generated by `web/scripts/notices.mjs` from the web lockfile and copied
   into releases (`.github/workflows/release.yml:225,407,473`). No other notices file.
 - Go reader for `distill.yaml`: `internal/distill/distill_model.go:291` (`UnmarshalDocument`), `:120`
@@ -70,6 +85,19 @@ Evidence gathered on 2026-10-11 at `c86b295` (main, clean). Paths are relative t
   ownership `curator-source.go:27-29` (byte equality with the current bundle only); removal on remote/remove
   plans `remote.go:483-498`.
 - Any conflict aborts the plan: `integration.go:91-93`. `prepareExactFile`: `integration.go:390-396`.
+- Inspection is grouped by host (`types.go:141-154`). Consumers that assume a host per file: kind lists
+  `integration.go:87`, `internal/app/workspace.go:485`; conflict pre-checks `internal/app/connect.go:53-67`,
+  `internal/app/connect_remote.go:196-211`, `internal/app/workspace.go:377-392`; `levels[...]`
+  `connect.go:79,93`, `connect_remote.go:226`, `workspace.go:403,450`; item ID `workspace.go:502`, parsed by
+  `internal/delivery/cli/connect_remote.go:118-146`. Tests/goldens pinning the three copies outside the package:
+  `internal/app/workspace_test.go:337-346`, `internal/delivery/cli/onboarding_test.go:293`,
+  `connect_regression_test.go:96-100` + `testdata/connect-workspace/{project,global}-files.golden`,
+  `connect_remote_test.go:630`. `scopeRegistration` returns remote registrations too (`remote.go:156-164`;
+  `connection.go:27` `Remote()`). MCP hides the curator from identified Gemini sessions by name only
+  (`internal/delivery/mcpserver/server.go:399-411`). `MissingFinding` (`types.go:241-254`) via `CheckMissing` in
+  status (`internal/app/curation_home.go:151-157`). Doctor stops before host repair on a non-fixable finding
+  (`internal/app/workspace.go:266-270`); `applyExternalConnections` drops applied results on error
+  (`internal/app/host-connections.go:66-73`).
 - Apply re-derives native-skill bytes: `files.go:236-252`; `validateChangePath` one skill path per host:
   `files.go:310-339`; symlinks refused: `files.go:19-35,51`; empty parents pruned: `files.go:222-224`; safe parent
   dirs on write: `files.go:413`.
@@ -87,14 +115,19 @@ Evidence gathered on 2026-10-11 at `c86b295` (main, clean). Paths are relative t
 ## Workspace Git hygiene
 
 - `internal/workspace/workspace.go:36` `machineFiles`; `:38-41` `requiredIgnoreEntries` (no `.agents`, `.claude/skills`
-  or `.gemini/skills` entries); `:172-179` findings; `:185-201` `trackedMachineFiles`; `:433-440` append on init.
-  Hub marker: `:75` `.skillhub/schema-version`.
+  or `.gemini/skills` entries); `:172-179` findings (`gitignore_entry_missing` fixable, `machine_file_tracked` not);
+  `:185-201` `trackedMachineFiles`; `:425-440` `desiredGitignore` appends missing entries. Hub marker: `:75`
+  `.skillhub/schema-version`. `git check-ignore` does not report tracked paths, so tracked files need `git ls-files`.
 - Suggested stage command adds only canonical folders: `internal/delivery/cli/workspace.go:71-73`.
 - `SKILLHUB_WORKSPACE`: `internal/delivery/cli/workspace_env.go:12`, resolution order `workspace_resolve.go:37-49`.
 
 ## Product text
 
-- `internal/app/curation_home.go:479-488` (`review_lessons`, `distill.py list <path>`); test `curation_home_test.go:616-637`.
+- `internal/app/curation_home.go:479-488` (`review_lessons`, `distill.py list <path>`, path unquoted, from an
+  unchecked glob at `:328`); `ActionItem` `:46-53`; test `curation_home_test.go:616-637`. The same home is the MCP
+  tool `hub_status` (`internal/delivery/mcpserver/workspace_tools.go:30-32`). `shellArgument` quotes POSIX-style
+  only (`internal/delivery/cli/next_commands.go:176-181`). Canonical id pattern `internal/canonical/skill.go:22`.
+  `internal/distill/distill_model.go:39,119,184` name `distill.py`.
 - Status rendering: `internal/delivery/cli/curation.go:97-101`; unknown commands pass through
   `internal/delivery/cli/next_commands.go:156-159`; quoting `shellArgument` `:176-181`.
 - `internal/app/source.go:738`, `internal/delivery/cli/source.go:717`; test `internal/delivery/cli/source_test.go:214-215`.

@@ -3,7 +3,7 @@ phase: 1
 title: "Embed system skill bundles and distill-lab"
 status: pending
 priority: P2
-effort: "3h"
+effort: "4h"
 wave: 1
 dependencies: []
 ---
@@ -32,7 +32,7 @@ dependencies: []
 
 - Create: `.agents/skills/distill-lab/SKILL.md` (verbatim copy of the dev SKILL.md),
   `internal/systemskills/distill-lab/SKILL.md` (byte-identical mirror), `internal/systemskills/bundles.go`,
-  `internal/systemskills/known-digests.go`.
+  `internal/systemskills/known-digests.go`, `internal/systemskills/known_digests_test.go` (the tag-derived test).
 - Modify: `internal/systemskills/embed.go`, `internal/systemskills/embed_test.go`, repo `/.gitignore`.
 - Not owned: `scripts/**` under either tree and `internal/systemskills/distill_script_test.go` (Phase 2).
 - Read-only: everything else, including `.claude/skills/distill-lab/**` (Phase 9 turns it into a wrapper).
@@ -72,6 +72,14 @@ dependencies: []
      never shipped. State this in the comment.
    Rule for later edits, stated in the comment: when a bundled file changes after a release, add the digest of
    the bytes that shipped.
+   <!-- Red team: hand-maintained known digests -->A test enforces the rule instead of memory:
+   `TestKnownDigestsCoverReleasedBundles` (in `known_digests_test.go`) lists release tags with `git tag -l 'v*'` and, for every tag, every file
+   under `internal/systemskills/curator/` and `internal/systemskills/distill-lab/` in that tag
+   (`git ls-tree -r --name-only <tag> -- <dir>` then `git show <tag>:<path>`), asserts its digest is known for that
+   id and skill-relative path. So a release that changes a bundled file without adding the old digest fails this test
+   on the next commit, not on a user's upgrade. The test skips when the checkout has no tags or no Git, unless
+   `SKILLHUB_REQUIRE_TAGS=1`, then it fails; the CI `lint` job (full history) and release verify set it (workflow
+   lines owned by Phase 2). Tags `v0.1.0` to `v0.5.0-alpha.1` exist today and each holds the curator file.
 5. Do not change `CuratorSkill`, `CuratorBundle()` or `CuratorMetadata()` signatures or bytes.
 6. Repo `/.gitignore`: replace the line `.agents/` with anchored patterns that keep everything under `.agents/`
    ignored except the distill-lab source:
@@ -90,12 +98,16 @@ dependencies: []
 - `SystemSkills()` returns both ids in order, SKILL.md first, no empty file, curator bytes equal `CuratorSkill`.
 - Every digest in the known list is a well-formed `sha256:` hex string; every current bundle file of both ids is
   recognized by `KnownFileDigest`; an arbitrary digest is not.
+- <!-- Red team: hand-maintained known digests --> `TestKnownDigestsCoverReleasedBundles` (requirement 4) passes
+  with `SKILLHUB_REQUIRE_TAGS=1` on a full clone; removing one entry from the table makes it fail with the tag and
+  path named.
 - Mutating a returned `SystemSkill` does not change the next call's result.
 
 ## Steps
 
-1. Edit `/.gitignore`; copy the dev SKILL.md verbatim into `.agents/skills/distill-lab/` and
-   `internal/systemskills/distill-lab/`.
+1. Edit `/.gitignore` and commit it alone first (`chore: track the distill-lab source under .agents/skills`), so
+   Phase 2 can start from that commit. <!-- Red team: Phase 2 files ignored until Phase 1 --> Then copy the dev
+   SKILL.md verbatim into `.agents/skills/distill-lab/` and `internal/systemskills/distill-lab/`.
 2. Add `bundles.go`, constants, `known-digests.go`; wire curator into the list from the existing string.
 3. Extend tests; run `go test ./internal/systemskills/...`, then `go build ./...`.
 4. Commit: `feat(systemskills): bundle distill-lab next to the curator as a multi-file system skill`.

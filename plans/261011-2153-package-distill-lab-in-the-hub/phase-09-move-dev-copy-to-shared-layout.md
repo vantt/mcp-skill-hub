@@ -4,7 +4,7 @@ title: "Move the dev copy to the shared layout"
 status: pending
 priority: P3
 effort: "1h"
-wave: 5
+wave: 6
 dependencies: [8]
 ---
 
@@ -39,8 +39,10 @@ stays last so the wrapper text is the one Phase 4 renders and Phase 8 verified w
 2. `git rm .claude/skills/distill-lab/scripts/distill.py` (single script language; the folder `scripts/` goes
    with it).
 3. Add `repo_wrapper_test.go`: `../../.claude/skills/distill-lab/SKILL.md` equals `renderWrapper("distill-lab",
-   <description from ../../.agents/skills/distill-lab/SKILL.md>)`, so a description change in the source fails
-   until the wrapper is regenerated; the failure message says how.
+   <description from ../../.agents/skills/distill-lab/SKILL.md>)` and Phase 4's
+   `testdata/wrappers/distill-lab.golden`, so a description change in the source fails until the wrapper and the
+   golden are regenerated (and, after a release, the shipped wrapper digest is added to `known-wrappers.go`); the
+   failure message says how. <!-- Red team: wrapper ownership has no history -->
 4. Check: open Claude Code in this repo with `SKILLHUB_WORKSPACE` pointing at a sandbox hub; the skill loads and
    runs `node .agents/skills/distill-lab/scripts/distill.mjs list ...`. `git grep -n "\.claude/skills/distill-lab/scripts"`
    shows no live reference outside `archive/` and `plans/`; `git ls-files .claude/skills/distill-lab` lists only

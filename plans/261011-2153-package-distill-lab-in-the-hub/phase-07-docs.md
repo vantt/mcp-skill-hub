@@ -3,8 +3,8 @@ phase: 7
 title: "User docs"
 status: pending
 priority: P2
-effort: "3h"
-wave: 3
+effort: "3.5h"
+wave: 4
 dependencies: [2, 3, 4, 5, 6]
 ---
 
@@ -45,8 +45,13 @@ distill row is added elsewhere), `docs/use-cases/*`, `docs/design/web-ux-scoreca
 1. sources-and-learning: Skill Hub installs distill-lab in the hub folder (at `init`, and on `doctor --fix` for
    older hubs); you run your agent in that folder; it needs Node 18 or newer and Git, no `npm install` and no
    Python (one line, with the nodejs.org link); the skill is self-contained and also works when copied on its own
-   (hub found by `--hub`, `SKILLHUB_WORKSPACE`, or the current folder); it is not installed in projects or on
-   machines connected with `--hub`.
+   (<!-- Red team: hub lookup -->the script finds the hub from the `distill.yaml` path it is given; outside a hub
+   only `check`/`format` with the evidence check need one); it is not installed in projects or on machines
+   connected with `--hub`. <!-- Red team: network claim; untrusted upstream sources --> Add two sentences: the
+   script makes no network call and never fetches a missing file into a partial-clone mirror (it says "not
+   fetched"); the agent's mirror clone and fetch steps do use the network. Distill reads untrusted upstream text:
+   mirrors are bare clones so no upstream agent files land in the hub, and the agent must never read
+   `runtime/config/` or `runtime/envs/`.
 2. web-ui: handoff step (in the slot the onboarding plan left) says "paste it to an agent you start in your hub
    folder".
 3. Wherever the post-5.0.0 docs (for example `docs/curating-skills.md`, which received the old getting-started
@@ -56,35 +61,65 @@ distill row is added elsewhere), `docs/use-cases/*`, `docs/design/web-ux-scoreca
    `.agents/skills/` (read directly by Codex and Gemini CLI) with a short pointer file under `.claude/skills/` for
    Claude Code; nothing under `.gemini/skills/`, and an old copy there from an earlier version is removed by
    `doctor --fix` unless you changed it. Add a sentence that in the hub folder itself `init` also writes
-   `distill-lab` the same way, and that these generated folders are kept out of Git through the hub's local
-   `.git/info/exclude`. Keep the heading text
+   `distill-lab` the same way, and that these generated folders are kept out of Git through entries in the hub's
+   `.gitignore` (added by `init`, or by `doctor --fix` in an older hub). <!-- Red team: contract change, .gitignore instead of info/exclude -->
+   <!-- Red team: user-scope wrapper unverified --> Say that Claude Code following the pointer file was checked by
+   hand in a project folder; the user-scope pointer (`~/.claude/skills/` to `~/.agents/skills/`) is not verified.
+   Keep the heading text
    (anchor `#what-gets-written`). `--remove` line: "the Skill Hub skills, unless you changed them".
 5. remote-hub-guide: "no system-curator or distill-lab skill".
 6. troubleshooting: one entry "distill-lab says Node is missing or too old" -> install Node 18 or newer; one entry
-   "connect or doctor reports that a system skill file differs" -> Skill Hub no longer overwrites a system skill
-   file it does not recognize; review it, delete it, and run the command again (this covers an edited
-   `.gemini/skills/system-curator/SKILL.md` too).
+   "connect or doctor reports that a system skill file was not written by Skill Hub" -> Skill Hub no longer
+   overwrites a system skill file it does not recognize; it skips only that file, applies every other repair, and
+   stops pointing Claude Code at it; review it, delete it, and run the command again (this covers an edited
+   `.gemini/skills/system-curator/SKILL.md` too). <!-- Red team: symlinked ~/.agents; older Gemini CLI --> One entry
+   "system skill files were skipped because a folder is a symlink" -> Skill Hub does not write through a symlinked
+   `.agents` or `.claude`; copy the skills by hand or replace the link with a folder. One entry "Gemini CLI no longer
+   shows system-curator" -> update Gemini CLI to <minimum version> or newer, which reads `.agents/skills`.
 7. installation: requirements list gains "Node 18 or newer, only to run distill-lab in the hub".
 8. 05-curation-lifecycle: add "(installed in the hub folder by init; it runs in the agent with Node, never in the
    binary)".
 9. AGENTS.md: replace line 16 with the bundled skills and their sources: curator `system-skills/curator/SKILL.md`;
    distill-lab `.agents/skills/distill-lab/` (Node script with vendored js-yaml 4.3.2; `.claude/skills/distill-lab/`
    is a generated wrapper); both mirrored into `internal/systemskills/`, kept in sync by tests; the copy command
-   for distill-lab.
+   for distill-lab. <!-- Red team: vendored js-yaml provenance; known digests --> Add the js-yaml update procedure
+   (Phase 2 requirement 1) and the release rule: a bundled file or wrapper template that changes after a release
+   needs the shipped digest in `known-digests.go`/`known-wrappers.go`, which the tag-derived tests enforce.
 10. Release-note lines, written into the phase report for the release author:
     - "Skill Hub installs the distill-lab skill in the hub folder. Its script is now Node (`distill.mjs`), so
-      Python is no longer needed; run `node .agents/skills/distill-lab/scripts/distill.mjs` from the hub."
+      Python is no longer needed; `skillhub status` prints the exact command."
     - "System skills are written once under `.agents/skills/`; Claude Code gets a pointer file and the
-      `.gemini/skills/system-curator` copy is removed."
-    - "Behaviour change: a system skill file whose content Skill Hub does not recognize is now reported as a
-      conflict and left unchanged; `doctor --fix` no longer overwrites it."
+      `.gemini/skills/system-curator` copy is removed." <!-- Red team: older Gemini CLI loses the curator -->
+      "A Gemini CLI older than <minimum version> reads only `.gemini/skills` and, because Skill Hub does not serve
+      system-curator to Gemini over MCP, no longer sees the curator; update Gemini CLI."
+    - "Behaviour change: a system skill file whose content Skill Hub does not recognize is now reported and left
+      unchanged; `connect` and `doctor --fix` skip only that file and apply every other repair."
+    - <!-- Red team: contract change, .gitignore --> "The hub `.gitignore` gains four entries for the generated
+      system skill folders. Existing hubs show `gitignore_entry_missing` until `doctor --fix` adds them; commit the
+      `.gitignore` change. If Git already tracks a generated file, doctor prints the `git rm --cached` command for
+      it; Skill Hub never runs it."
+    - <!-- Red team: status after upgrade --> "After upgrading, `status`, the web Home and `doctor` report host
+      integration missing until `doctor --fix` installs distill-lab (and, in projects connected only to Claude Code,
+      the shared curator folder)."
+    - <!-- Red team: item IDs --> "JSON items for skill files now carry the file path in their ID
+      (`host_<host>_<kind>:<path>`), and the shared `.agents/skills` files appear under `agents`."
+    - <!-- Red team: review_lessons over MCP --> "The `review_lessons` action carries `script`, `file` and
+      `hub_relative`; its command is printed only when the hub's distill-lab matches Skill Hub's copy."
+    - <!-- Red team: deliberate script differences --> "distill.mjs differs from distill.py on purpose: `--hub` only
+      checks the hub found from the file; the evidence check refuses symlinked or Git-tracked mirrors, never
+      fetches (a missing blob is reported as not fetched), and times out after 30 s per Git call; writes refuse
+      symlinks and use a random temporary file."
     - "`distill.yaml` header comments now name `distill.mjs` after the next `format`" (plus the parity-fallback
       note if Phase 2 took it).
+    - <!-- Red team: downgrade path --> Rollback note: "After downgrading, delete `.claude/skills/system-curator/`
+      and `.claude/skills/distill-lab/` if the older binary reports them; it does not know the pointer files." 
 11. Doc style follows the archived docs rewrite (plain sentences, no "(s)", no release-wave notes).
 
 ## Validation
 
 - `make check` (the repo's doc link checks, if part of it) and a relative-link check over the edited files.
+- <!-- Red team: network claim --> `git grep -n -i "no network\|never calls the network"` over the edited docs
+  returns nothing that describes distill-lab as fully offline.
 - `git grep -n "does not ship the distill-lab"` returns nothing; `git grep -n "~/skill-hub" docs` returns nothing
   new; `git grep -n -i "python\|pyyaml\|distill\.py\|py -3" -- docs AGENTS.md ':!docs/design/web-ux-scorecard.md' ':!docs/plans' ':!docs/references'`
   returns nothing about distill-lab.
