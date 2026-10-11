@@ -1,8 +1,8 @@
 # Web UI walk-through: the five flows that matter most
 
-Status: **not yet walked through.** The notes section at the end is empty on purpose: the agent that
-scored the screens cannot tell what feels clear to the person who curates the hub, so this page waits for
-your notes. Scores and fixes so far are in [the scorecard](web-ux-scorecard.md).
+Status: **walked through and signed off on 2026-10-11.** The person who curates the hub went through the
+flows by hand on the live UI and reported what was wrong; every item is fixed (see the notes at the end).
+Scores and fixes are in [the scorecard](web-ux-scorecard.md).
 
 Time: about 20 minutes. Nothing here changes your hub if you follow the "safe setup" below; every step
 that could write stops at a preview or a Cancel button.
@@ -80,12 +80,12 @@ Ask yourself: Did you know what Discover does and what comes next? Did Advanced 
 
 | Flow | Step | What was unclear or wrong | Window width (1280 or 390) | Fix before release? (yes/no) |
 |---|---|---|---|---|
-| 1 Home | | | | |
-| 2 Find a skill | | | | |
-| 3 Review one skill | | | | |
-| 4 Edit routing | | | | |
-| 5 Add from GitHub | | | | |
+| 1 Home | whole frame | Margins and padding of the layout were uneven: sidebar hugged the right edge, main hugged the left, toolbars sat too close to the top and left; scrollbars showed with no content to scroll | 1280 | yes, fixed: the body margin is reset and the sidebar has one fixed width |
+| 3 Review one skill | Editor tab | The status and Preview bar floated at the bottom and covered fields; the frontmatter preview was rendered as a heading; the description box was too short | 1280 | yes, fixed: the bar is on top in the page flow on every page that had one; frontmatter shows as a YAML block; the box is taller |
+| 3 Review one skill | Sources tab | Listed no source and offered no way to add one | 1280 | yes, fixed: untracked upstreams are listed, with Track upstream and Add source (both preview first) |
+| 3 Review one skill | tab bar | No overview of the skill's metadata and sources | 1280 | yes, fixed: an Overview tab, opened first |
+| 3 Review one skill | Resources tab | Only SKILL.md could be edited; other files could not even be read | 1280 | yes, fixed: Edit and View on each companion file, saved through a preview |
 
 Anything that is not fixed goes to [the observation backlog](../plans/2026-10-10-observation-backlog.md).
 
-Walked through by: _(name, date)_
+Walked through by: Van Tran, 2026-10-11 (by hand, on the live UI). Signed off.
