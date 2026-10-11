@@ -4,6 +4,7 @@ import { confirmSkillMutation, previewSkillUpdate } from '../../api/queries';
 import type { SkillDetail, SkillProposal } from '../../api/types';
 import { ApiError, apiFetch } from '../../api/client';
 import { proposalPatch, proposalPaths, proposalWarning } from '../../api/proposal-view';
+import { ActionBar } from '../../components/ActionBar';
 import { ConflictDrawer } from '../../components/ConflictDrawer';
 import { Markdown } from '../../components/Markdown';
 import { ProposalPreview } from '../../components/ProposalPreview';
@@ -253,6 +254,24 @@ export function EditorTab({ skill, workspaceId, focusField }: EditorTabProps) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+      {/* Status and save bar: on top and in the flow, so it never covers the fields */}
+      <ActionBar
+        status={
+          <span>
+            {dirty.length === 0 ? MSG_NO_CHANGES : lastSaved ? `${MSG_DRAFT_SAVED}. ${MSG_PREVIEW_NOTE}` : MSG_PREVIEW_NOTE}
+          </span>
+        }
+      >
+        <button
+          type="button"
+          className="fg-btn fg-btn--primary"
+          onClick={handlePreviewChanges}
+          disabled={loading || dirty.length === 0}
+        >
+          <span>{loading ? 'Validating…' : LABEL_PREVIEW_CHANGES}</span>
+        </button>
+      </ActionBar>
+
       {errorMessage && (
         <div className="fg-banner fg-banner--danger" role="alert">
           <span className="fg-banner__dot" />
@@ -385,7 +404,7 @@ export function EditorTab({ skill, workspaceId, focusField }: EditorTabProps) {
             <textarea
               id="edit-desc"
               className="fg-input fg-input--area"
-              style={{ minHeight: '64px' }}
+              style={{ minHeight: '140px' }}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
@@ -479,38 +498,6 @@ export function EditorTab({ skill, workspaceId, focusField }: EditorTabProps) {
             )}
           </div>
         </section>
-      </div>
-
-      {/* Sticky Footer */}
-      <div
-        style={{
-          position: 'sticky',
-          bottom: 0,
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 'var(--space-3)',
-          padding: 'var(--space-3) var(--space-4)',
-          background: 'var(--color-surface)',
-          border: '1px solid var(--color-border)',
-          borderRadius: 'var(--card-radius)',
-          zIndex: 10,
-        }}
-      >
-        <span className="t-caption" style={{ color: 'var(--color-text-subtle)' }}>
-          <span>
-            {dirty.length === 0 ? MSG_NO_CHANGES : lastSaved ? `${MSG_DRAFT_SAVED}. ${MSG_PREVIEW_NOTE}` : MSG_PREVIEW_NOTE}
-          </span>
-        </span>
-        <button
-          type="button"
-          className="fg-btn fg-btn--primary"
-          onClick={handlePreviewChanges}
-          disabled={loading || dirty.length === 0}
-        >
-          <span>{loading ? 'Validating…' : LABEL_PREVIEW_CHANGES}</span>
-        </button>
       </div>
 
       {/* Proposal Preview Modal */}

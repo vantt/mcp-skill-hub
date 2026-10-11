@@ -35,4 +35,21 @@ describe('Markdown', () => {
     // Assert: image alt text is rendered as span
     expect(screen.getByText('t')).toBeInTheDocument();
   });
+
+  it('shows frontmatter as a YAML block, not as a heading', () => {
+    const content = '---\nname: Demo\ndescription: A demo skill\n---\n\n# Title\n\nBody text.';
+    const { container } = render(<Markdown content={content} />);
+
+    const block = container.querySelector('pre');
+    expect(block?.textContent).toBe('name: Demo\ndescription: A demo skill');
+    expect(container.querySelectorAll('h2')).toHaveLength(0);
+    expect(container.querySelector('h1')?.textContent).toBe('Title');
+    expect(container.querySelector('hr')).toBeNull();
+  });
+
+  it('leaves content without frontmatter alone', () => {
+    const { container } = render(<Markdown content={'Intro\n\n---\n\nrest'} />);
+    expect(container.querySelector('pre')).toBeNull();
+    expect(container.querySelector('hr')).not.toBeNull();
+  });
 });

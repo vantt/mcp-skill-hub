@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { confirmSkillAdd, previewSkillAdd } from '../../api/queries';
 import type { SkillAddProposal } from '../../api/types';
 import { ApiError } from '../../api/client';
+import { ActionBar } from '../../components/ActionBar';
 import { DiffView } from '../../components/DiffView';
 import { proposalFiles, proposalPatch } from '../../api/proposal-view';
 import { StatusBadge } from '../../components/StatusBadge';
@@ -345,6 +346,33 @@ export function AddSkillScreen() {
       {/* Step 2: Review */}
       {step === 2 && proposal && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+          <ActionBar>
+            <button
+              type="button"
+              className="fg-btn fg-btn--ghost"
+              onClick={() => setStep(1)}
+              disabled={confirming}
+            >
+              <span>{LABEL_BACK}</span>
+            </button>
+            <button
+              type="button"
+              className="fg-btn fg-btn--ghost"
+              onClick={() => navigate('/skills')}
+              disabled={confirming}
+            >
+              <span>{LABEL_CANCEL}</span>
+            </button>
+            <button
+              type="button"
+              className="fg-btn fg-btn--primary"
+              onClick={handleConfirm}
+              disabled={confirming}
+            >
+              <span>{confirming ? LABEL_IMPORTING : LABEL_CONFIRM_IMPORT}</span>
+            </button>
+          </ActionBar>
+
           <div
             style={{
               display: 'grid',
@@ -508,47 +536,6 @@ export function AddSkillScreen() {
               </div>
             </details>
           )}
-
-          <div
-            style={{
-              position: 'sticky',
-              bottom: 0,
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: 'var(--space-2)',
-              justifyContent: 'flex-end',
-              padding: 'var(--space-3) var(--space-4)',
-              background: 'var(--color-surface)',
-              border: '1px solid var(--color-border)',
-              borderRadius: 'var(--card-radius)',
-              zIndex: 10,
-            }}
-          >
-            <button
-              type="button"
-              className="fg-btn fg-btn--ghost"
-              onClick={() => setStep(1)}
-              disabled={confirming}
-            >
-              <span>{LABEL_BACK}</span>
-            </button>
-            <button
-              type="button"
-              className="fg-btn fg-btn--ghost"
-              onClick={() => navigate('/skills')}
-              disabled={confirming}
-            >
-              <span>{LABEL_CANCEL}</span>
-            </button>
-            <button
-              type="button"
-              className="fg-btn fg-btn--primary"
-              onClick={handleConfirm}
-              disabled={confirming}
-            >
-              <span>{confirming ? LABEL_IMPORTING : LABEL_CONFIRM_IMPORT}</span>
-            </button>
-          </div>
         </div>
       )}
 
