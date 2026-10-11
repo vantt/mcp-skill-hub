@@ -1,7 +1,7 @@
 ---
 phase: 8
 title: "Write docs/command-reference.md"
-status: pending
+status: completed
 priority: P2
 effort: "1.5h"
 wave: 1

@@ -1,7 +1,7 @@
 ---
 phase: 1
 title: "Freeze map, anchors, glossary; verify the first win"
-status: pending
+status: completed
 priority: P2
 effort: "2h"
 wave: 0

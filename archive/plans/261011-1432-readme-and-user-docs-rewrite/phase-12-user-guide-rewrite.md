@@ -1,7 +1,7 @@
 ---
 phase: 12
 title: "Rewrite docs/user-guide.md with stubs"
-status: pending
+status: completed
 priority: P2
 effort: "2h"
 wave: 2

@@ -1,7 +1,7 @@
 ---
 phase: 10
 title: "Design the logo set"
-status: pending
+status: completed
 priority: P2
 effort: "2h"
 wave: 1

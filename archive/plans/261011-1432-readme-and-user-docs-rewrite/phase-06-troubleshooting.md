@@ -1,7 +1,7 @@
 ---
 phase: 6
 title: "Write docs/troubleshooting.md"
-status: pending
+status: completed
 priority: P2
 effort: "1.5h"
 wave: 1

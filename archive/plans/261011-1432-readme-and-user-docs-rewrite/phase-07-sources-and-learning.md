@@ -1,7 +1,7 @@
 ---
 phase: 7
 title: "Write docs/sources-and-learning.md"
-status: pending
+status: completed
 priority: P2
 effort: "1.5h"
 wave: 1

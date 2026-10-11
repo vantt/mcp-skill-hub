@@ -1,7 +1,7 @@
 ---
 title: "Rewrite the README and the user-facing docs"
 description: "Turn the README and the user guides into a reader path that sells the value, installs in a minute and reaches a first win with a local skill, with a real logo, an MIT LICENSE and a fixed Home copy."
-status: pending
+status: completed
 priority: P2
 effort: 24.5h
 branch: docs/readme-and-guides-rewrite
@@ -32,21 +32,21 @@ decisions of 2026-10-11" overrides everything above it. Decided items are not re
 
 ## Outcome and acceptance criteria
 
-- [ ] A reader goes README -> Get started -> first win with a local skill, and every command on that path was
+- [x] A reader goes README -> Get started -> first win with a local skill, and every command on that path was
       run in a sandbox with a binary built from main, with output matching what the docs show.
-- [ ] The doc set matches the decided table below, each file within its line budget.
-- [ ] No banned claim appears anywhere in the user docs (list below).
-- [ ] The three inbound anchors survive, and every H2 that left `user-guide.md` or `curating-skills.md` has a
+- [x] The doc set matches the decided table below, each file within its line budget.
+- [x] No banned claim appears anywhere in the user docs (list below).
+- [x] The three inbound anchors survive, and every H2 that left `user-guide.md` or `curating-skills.md` has a
       "Moved to" stub at its old place.
-- [ ] Every relative link and anchor in `README.md`, `CONTRIBUTING.md` and `docs/*.md` resolves; every
+- [x] Every relative link and anchor in `README.md`, `CONTRIBUTING.md` and `docs/*.md` resolves; every
       `skillhub` command in a code block matches `skillhub help <cmd>`; every image exists, has alt text and is
       <= 300 KB.
-- [ ] `LICENSE` (MIT, "Van Tran", 2026) exists and the README shows a license badge and one license line.
-- [ ] A logo set (horizontal logo and square mark, light and dark, SVG) lives in `docs/images/brand/` and the
+- [x] `LICENSE` (MIT, "Van Tran", 2026) exists and the README shows a license badge and one license line.
+- [x] A logo set (horizontal logo and square mark, light and dark, SVG) lives in `docs/images/brand/` and the
       README header shows it with `<picture>`.
-- [ ] Home says "1 source is ready to distill" (and the plural form for more), covered by a unit test;
+- [x] Home says "1 source is ready to distill" (and the plural form for more), covered by a unit test;
       `docs/images/web/home.png` and its manifest entry are refreshed.
-- [ ] `make check`, `make web-check` and `go test ./internal/hostintegration -run TestMatrixSynchronized` pass.
+- [x] `make check`, `make web-check` and `go test ./internal/hostintegration -run TestMatrixSynchronized` pass.
 
 Non-goals: changing product behavior beyond the Home copy; a starter skill; a GIF; `README.vi.md`; editing
 design records, contracts, `docs/PRD.md`, `system-skills/*`, `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`; documenting
@@ -335,7 +335,18 @@ trims (12, 13, 14) revert alone and restore the old full text; the new files rem
 reverts alone to the plain-text header from Phase 9. Phase 11 reverts alone (copy, test and image together). The
 branch is not pushed; abandoning it leaves main untouched.
 
-## Owner follow-ups (out of scope for this branch)
+## Outcome
+
+Completed 2026-10-11 and merged to main. Budgets that grew afterwards: `command-reference.md` 94 lines (rows for the
+remote hub and `connect --remove` added by later work), `user-guide.md` 252, `release-runbook.md` 182 (remote hub
+section from the remote hub work). Still open: the live Claude Code session that follows the first win (not run by
+anyone), the web UI favicon, `README.vi.md`, packaging of the distill-lab skill, and the Go-side "source(s)" text.
+
+Of the follow-ups below, 1, 2, 3, 5 and 6 were fixed after this branch merged (resolve hint, help example,
+gitignore of connection files with a `doctor` warning, `Git: clean` for untracked folders, add before commit in the
+review next step). Item 4 is partly fixed: `status` now prints a runnable command, and the empty-hub label remains.
+
+## Owner follow-ups (found while writing; see Outcome for what is already fixed)
 
 1. Resolve hint prints `task.scope` as a flat key that the API rejects.
 2. Help example `skill add https://github.com/anthropics/skills --skill pdf` fails (8 MiB source limit).

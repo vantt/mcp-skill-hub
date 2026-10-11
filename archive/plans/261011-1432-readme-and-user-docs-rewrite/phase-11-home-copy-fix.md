@@ -1,7 +1,7 @@
 ---
 phase: 11
 title: "Fix the Home count copy and refresh home.png"
-status: pending
+status: completed
 priority: P2
 effort: "1.5h"
 wave: 1

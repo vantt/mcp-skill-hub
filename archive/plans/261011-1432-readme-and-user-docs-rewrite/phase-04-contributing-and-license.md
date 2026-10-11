@@ -1,7 +1,7 @@
 ---
 phase: 4
 title: "Write CONTRIBUTING.md and LICENSE"
-status: pending
+status: completed
 priority: P2
 effort: "0.5h"
 wave: 1

@@ -1,7 +1,7 @@
 ---
 phase: 3
 title: "Write docs/installation.md"
-status: pending
+status: completed
 priority: P2
 effort: "1h"
 wave: 1

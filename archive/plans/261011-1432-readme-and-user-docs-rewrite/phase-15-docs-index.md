@@ -1,7 +1,7 @@
 ---
 phase: 15
 title: "Write docs/README.md index"
-status: pending
+status: completed
 priority: P2
 effort: "0.5h"
 wave: 2

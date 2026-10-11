@@ -1,7 +1,7 @@
 ---
 phase: 5
 title: "Write docs/web-ui.md"
-status: pending
+status: completed
 priority: P2
 effort: "1.5h"
 wave: 1

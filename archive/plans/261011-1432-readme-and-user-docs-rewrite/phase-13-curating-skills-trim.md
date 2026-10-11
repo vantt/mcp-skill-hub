@@ -1,7 +1,7 @@
 ---
 phase: 13
 title: "Trim docs/curating-skills.md with stubs"
-status: pending
+status: completed
 priority: P2
 effort: "1.5h"
 wave: 2

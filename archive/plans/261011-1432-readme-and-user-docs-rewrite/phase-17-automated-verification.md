@@ -1,7 +1,7 @@
 ---
 phase: 17
 title: "Automated verification"
-status: pending
+status: completed
 priority: P2
 effort: "1.5h"
 wave: 3

@@ -1,7 +1,7 @@
 ---
 phase: 9
 title: "Rewrite README.md body"
-status: pending
+status: completed
 priority: P2
 effort: "1.5h"
 wave: 1

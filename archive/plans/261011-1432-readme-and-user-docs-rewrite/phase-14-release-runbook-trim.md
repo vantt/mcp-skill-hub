@@ -1,7 +1,7 @@
 ---
 phase: 14
 title: "Trim docs/release-runbook.md"
-status: pending
+status: completed
 priority: P2
 effort: "0.5h"
 wave: 2

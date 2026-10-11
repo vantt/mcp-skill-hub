@@ -1,7 +1,7 @@
 ---
 phase: 16
 title: "Wire the logo and license badge into the README"
-status: pending
+status: completed
 priority: P2
 effort: "0.5h"
 wave: 2
