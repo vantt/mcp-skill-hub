@@ -1,7 +1,7 @@
 {
   "schema_version": "1",
   "status": "ok",
-  "summary": "Review for skill vendor-skill: Skill is active and available for agent routing.",
+  "summary": "Review for skill vendor-skill: Stage the skill folder with `git -C <ws> add <skill folder>`, then commit it with `git -C <ws> commit`.",
   "items": [
     {
       "id": "status",
@@ -25,12 +25,12 @@
     },
     {
       "id": "git",
-      "summary": "Git clean.",
+      "summary": "Git changes: 0 staged, 0 unstaged, 1 untracked.",
       "impact": "Repository change tracking."
     },
     {
       "id": "next_action",
-      "summary": "Skill is active and available for agent routing.",
+      "summary": "Stage the skill folder with `git -C <ws> add <skill folder>`, then commit it with `git -C <ws> commit`.",
       "impact": "Recommended next step."
     }
   ],
@@ -105,7 +105,10 @@
   },
   "git": {
     "configured": true,
-    "dirty": false
+    "dirty": true,
+    "untracked": [
+      "skills/"
+    ]
   },
   "content_trust": {
     "third_party": true,
@@ -135,6 +138,6 @@
       "pip install"
     ]
   },
-  "next_action": "Skill is active and available for agent routing."
+  "next_action": "Stage the skill folder with `git -C <ws> add <skill folder>`, then commit it with `git -C <ws> commit`."
 }
 

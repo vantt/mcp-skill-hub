@@ -520,28 +520,35 @@ func extractSkillProvenance(metaDoc skillReviewMeta) *SkillProvenance {
 	}
 }
 
+// coversSkill reports whether a Git status path belongs to the skill folder. An untracked
+// directory is listed once as "skills/core/" rather than file by file, so a path that is a
+// parent of the skill folder covers it too.
+func coversSkill(path, prefix string) bool {
+	return strings.HasPrefix(path, prefix) || (strings.HasSuffix(path, "/") && strings.HasPrefix(prefix, path))
+}
+
 func getSkillGitSummary(ctx context.Context, root, prefix string) SkillGitSummary {
 	var gitSummary SkillGitSummary
 	pathSummary, gitErr := (WorkspaceService{}).GetGitPathSummary(ctx, root)
 	if gitErr == nil && pathSummary.Configured {
 		gitSummary.Configured = true
 		for _, f := range pathSummary.Staged {
-			if strings.HasPrefix(f.Path, prefix) {
+			if coversSkill(f.Path, prefix) {
 				gitSummary.Staged = append(gitSummary.Staged, f.Path)
 			}
 		}
 		for _, f := range pathSummary.Unstaged {
-			if strings.HasPrefix(f.Path, prefix) {
+			if coversSkill(f.Path, prefix) {
 				gitSummary.Unstaged = append(gitSummary.Unstaged, f.Path)
 			}
 		}
 		for _, f := range pathSummary.Untracked {
-			if strings.HasPrefix(f.Path, prefix) {
+			if coversSkill(f.Path, prefix) {
 				gitSummary.Untracked = append(gitSummary.Untracked, f.Path)
 			}
 		}
 		for _, f := range pathSummary.Unmerged {
-			if strings.HasPrefix(f.Path, prefix) {
+			if coversSkill(f.Path, prefix) {
 				gitSummary.Unmerged = append(gitSummary.Unmerged, f.Path)
 			}
 		}
@@ -609,7 +616,7 @@ func computeNextAction(id, relDir, status string, valid bool, canonicalIssues []
 			return fmt.Sprintf("Resolve servability issue: %s.", served.ServableReason)
 		}
 		if git.Dirty {
-			return "Commit canonical changes with `git -C <ws> commit`."
+			return "Stage the skill folder with `git -C <ws> add <skill folder>`, then commit it with `git -C <ws> commit`."
 		}
 		return "Skill is active and available for agent routing."
 	case "deprecated":

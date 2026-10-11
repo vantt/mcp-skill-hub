@@ -311,3 +311,20 @@ func TestReviewSkillReportsRuntimeHints(t *testing.T) {
 		t.Fatalf("a declared runtime block must clear the missing flag: %#v", declared.RuntimeHints)
 	}
 }
+
+func TestSkillGitSummaryCountsAFolderThatIsUntrackedAsAWhole(t *testing.T) {
+	root := setupTestGitRepo(t)
+	skillFile := filepath.Join(root, "skills", "fresh", "new-skill", "SKILL.md")
+	if err := os.MkdirAll(filepath.Dir(skillFile), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(skillFile, []byte("---\nname: new-skill\n---\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	summary := getSkillGitSummary(context.Background(), root, "skills/fresh/new-skill/")
+
+	if !summary.Dirty || len(summary.Untracked) == 0 {
+		t.Fatalf("a skill inside an untracked collection folder must not read as clean: %+v", summary)
+	}
+}
