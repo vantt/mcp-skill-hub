@@ -68,6 +68,12 @@ func ValidateWithOptions(root string, opts ValidationOptions) ([]Issue, error) {
 	}
 	issues := make([]Issue, 0, len(plan.Findings))
 	for _, finding := range plan.Findings {
+		// A tracked connection file is a Git notice with its own
+		// `git rm --cached` fix, not invalid canonical content: the files are
+		// never part of the catalog, so they must not stop it from building.
+		if finding.ID == "machine_file_tracked" {
+			continue
+		}
 		issues = append(issues, Issue{Path: finding.Path, Message: finding.Summary})
 	}
 	files, err := workspace.RelativeFiles(root)
