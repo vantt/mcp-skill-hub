@@ -1,0 +1,6 @@
+$ doctor --workspace <WORKSPACE>
+Workspace is healthy.
+[exit 0]
+$ doctor
+Workspace is healthy.
+[exit 0]
