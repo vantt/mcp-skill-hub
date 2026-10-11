@@ -727,7 +727,9 @@ jobs:
           # 3b. Verify web UI serving and authentication
           echo "Verifying web UI serving and authentication..."
           smoke_ws="$(mktemp -d)"
-          bash -l -c "skillhub init '$smoke_ws'"
+          smoke_config="$(mktemp -d)"
+          # init acts on the current folder and records the hub path in the per-user config.
+          bash -l -c "cd '$smoke_ws' && SKILLHUB_USER_CONFIG_DIR='$smoke_config' skillhub init"
           serve_log="$(mktemp)"
           bash -l -c "skillhub serve web --workspace '$smoke_ws' --loopback-only --no-open --addr 127.0.0.1:0" > "$serve_log" 2>&1 &
           serve_pid=$!
@@ -834,7 +836,11 @@ jobs:
           # 3b. Verify web UI serving and authentication
           Write-Host "Verifying web UI serving and authentication..."
           $smokeWs = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString())
-          powershell -ExecutionPolicy Bypass -Command "skillhub init '$smokeWs'"
+          $smokeConfig = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString())
+          New-Item -ItemType Directory -Path $smokeWs | Out-Null
+          # init acts on the current folder and records the hub path in the per-user config.
+          powershell -ExecutionPolicy Bypass -Command "`$env:SKILLHUB_USER_CONFIG_DIR = '$smokeConfig'; Set-Location -LiteralPath '$smokeWs'; skillhub init"
+          if ($LASTEXITCODE -ne 0) { throw "skillhub init failed in $smokeWs" }
           $serveLog = Join-Path ([System.IO.Path]::GetTempPath()) "serve-$([System.Guid]::NewGuid().ToString()).log"
           $serveErrLog = Join-Path ([System.IO.Path]::GetTempPath()) "serve-$([System.Guid]::NewGuid().ToString()).err.log"
           $proc = Start-Process -FilePath "skillhub" -ArgumentList "serve web --workspace `"$smokeWs`" --loopback-only --no-open --addr 127.0.0.1:0" -RedirectStandardOutput $serveLog -RedirectStandardError $serveErrLog -PassThru

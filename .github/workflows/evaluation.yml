@@ -39,8 +39,11 @@ jobs:
           go build -o bin/skillhub ./cmd/skillhub
 
           workspace=$(mktemp -d)
-          trap 'rm -rf "$workspace"' EXIT
-          bin/skillhub init "$workspace"
+          # init records the hub path in the per-user config; keep it out of the runner's profile.
+          export SKILLHUB_USER_CONFIG_DIR="$(mktemp -d)"
+          trap 'rm -rf "$workspace" "$SKILLHUB_USER_CONFIG_DIR"' EXIT
+          skillhub_bin="$PWD/bin/skillhub"
+          (cd "$workspace" && "$skillhub_bin" init)
           cp -R testdata/evaluation/workspace-overlay/. "$workspace"/
           rm -rf "$workspace/runtime/catalog"
           bin/skillhub rebuild --workspace "$workspace" --json >/dev/null
