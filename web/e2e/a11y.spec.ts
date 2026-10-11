@@ -11,6 +11,10 @@ import { startServer, type RunningServer } from './support/server';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const binaryPath = path.resolve(__dirname, '../.e2e/skillhub');
 
+// A companion file of the seeded skill, so the resource view and editor are swept too.
+const RESOURCE_PATH = 'skills/core/consumer-review/references/checklist.md';
+const RESOURCE_ROUTE = `/skills/consumer-review?tab=resources&file=${encodeURIComponent(RESOURCE_PATH)}`;
+
 async function assertA11y(page: Page, contextName: string) {
   const scan = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
@@ -32,6 +36,10 @@ test.describe('Accessibility and Responsive Sweep (Phase 12)', () => {
 
   test.beforeAll(async () => {
     seed = seedDistillWorkspace();
+    const resource = path.join(seed.ws, RESOURCE_PATH);
+    fs.mkdirSync(path.dirname(resource), { recursive: true });
+    fs.writeFileSync(resource, '---\ntitle: Review checklist\n---\n\n# Review checklist\n\n- Read the change description first.\n');
+    execFileSync(binaryPath, ['rebuild'], { env: { ...process.env, SKILLHUB_WORKSPACE: seed.ws }, stdio: 'pipe' });
     server = await startServer({ workspace: seed.ws });
   });
 
@@ -64,6 +72,8 @@ test.describe('Accessibility and Responsive Sweep (Phase 12)', () => {
       '/skills/consumer-review',
       '/skills/consumer-review?tab=editor',
       '/skills/consumer-review?tab=resources',
+      RESOURCE_ROUTE,
+      `${RESOURCE_ROUTE}&edit=1`,
       '/skills/consumer-review?tab=usage',
       '/skills/consumer-review?tab=runtime',
       '/skills/consumer-review?tab=sources',
