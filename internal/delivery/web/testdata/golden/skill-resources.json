@@ -1,0 +1,30 @@
+{
+  "skill_id": "review-skill",
+  "items": [
+    {
+      "path": "skills/core/review-skill/assets/logo.png",
+      "kind": "asset",
+      "size_bytes": 16,
+      "digest": "<DIGEST>",
+      "editable": false,
+      "reason": "binary"
+    },
+    {
+      "path": "skills/core/review-skill/references/checks.md",
+      "kind": "reference",
+      "size_bytes": 21,
+      "digest": "<DIGEST>",
+      "editable": true,
+      "reason": ""
+    },
+    {
+      "path": "skills/core/review-skill/references/large.txt",
+      "kind": "reference",
+      "size_bytes": 1049600,
+      "digest": "<DIGEST>",
+      "editable": false,
+      "reason": "too_large"
+    }
+  ]
+}
+
