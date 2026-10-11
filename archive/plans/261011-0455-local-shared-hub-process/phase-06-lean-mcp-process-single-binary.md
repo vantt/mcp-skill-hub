@@ -1,7 +1,7 @@
 ---
 phase: 6
 title: "Lean MCP process from one binary"
-status: pending
+status: cancelled
 priority: P1
 effort: "0.75d"
 dependencies: [1]

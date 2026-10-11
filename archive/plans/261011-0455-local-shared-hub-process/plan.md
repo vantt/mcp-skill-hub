@@ -1,7 +1,7 @@
 ---
 title: "Local shared hub process: fewer processes and less memory when many agents run"
 description: "Cut the memory cost of running many agent sessions on one machine: slim each stdio process first, then add an optional per-machine daemon that sessions attach to and that exits when idle, always falling back to today's in-process serving."
-status: in-progress
+status: completed
 priority: P3
 effort: 3d
 branch: main
@@ -33,7 +33,7 @@ Not measured (the user chose to skip it): how many `mcp serve` processes exist d
 
 ## Status and decision (user, 2026-10-11)
 
-**The daemon (Phases 2 to 5) is not built. Phase 1 is done; Phase 6 is still open.**
+**Closed 2026-10-11. Phase 1 is done; Phases 2 to 6 are cancelled by the user's decision.**
 
 | Phase | Status | Why |
 |---|---|---|
@@ -42,7 +42,7 @@ Not measured (the user chose to skip it): how many `mcp serve` processes exist d
 | 3 Attach or fall back in-process | Cancelled | Not needed |
 | 4 Idle shutdown | Cancelled | Not needed |
 | 5 Cross-OS tests and docs | Cancelled | It only tests and documents the daemon, so it goes with Phases 2 to 4 |
-| 6 Lean MCP process from one binary | Pending | Smaller than planned: Phase 1 found the web UI costs disk space, not memory, so this phase is only a guard that keeps it that way |
+| 6 Lean MCP process from one binary | Cancelled | Phase 1 measured that the web UI costs disk space, not memory (package start-up 0.006 to 0.024 ms and 2 KB, the 5.6 MB of assets are never loaded), so there is nothing to cut. A single binary stays. A cheap import-boundary test (the MCP server package must not import the web or cli packages) can be added later if wanted; it is not worth a phase |
 
 Why the daemon is not built:
 - The saving is small. Memory was first measured with summed RSS (0.65 to 0.85 GB for 20 sessions), which counts the shared binary pages in every process. With PSS the real figure is 0.29 to 0.36 GB for 20 sessions, about 14 to 18 MB per session, below the 20 MB threshold set in decision Q1. A perfect daemon would save at most about 0.25 GB, and less if each session still keeps a stdio proxy (not measured).
@@ -177,11 +177,11 @@ GODEBUG=inittrace=1 skillhub mcp serve --profile runtime --workspace <temp works
 | 3 | [Attach or fall back in-process](./phase-03-attach-or-fallback.md) | Cancelled | P2 |
 | 4 | [Idle shutdown](./phase-04-idle-shutdown.md) | Cancelled | P3 |
 | 5 | [Cross-OS tests and docs](./phase-05-cross-os-tests-and-docs.md) | Cancelled | P2 |
-| 6 | [Lean MCP process from one binary](./phase-06-lean-mcp-process-single-binary.md) | Pending | P1 |
+| 6 | [Lean MCP process from one binary](./phase-06-lean-mcp-process-single-binary.md) | Cancelled | P1 |
 
 Design principle (user, 2026-10-11): the MCP process must be as small and cheap as possible. The web UI is not a background service: the user starts it by hand with `skillhub serve web` when needed and stops it with Ctrl+C when done, exactly as today, so nothing is built for it here. It must never be started by the MCP process. Phases 1 and 6 hold the MCP process to this.
 
-Run order: 1 (done), then 6. Phases 2 to 5 are cancelled (see "Status and decision"). Phase 6 keeps one `skillhub` binary and only adds a guard that an `mcp serve` process loads none of the web UI's start-up work; it is numbered last only to avoid renumbering.
+Run order: only Phase 1 was done; Phases 2 to 6 are cancelled (see "Status and decision").
 
 ## Lessons taken from `~/projects/mdview` (read on 2026-10-11, Rust, one daemon per machine)
 
