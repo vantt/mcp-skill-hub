@@ -8,6 +8,17 @@ const webDir = path.resolve(__dirname, '..');
 const lockPath = path.join(webDir, 'package-lock.json');
 const outputPath = path.join(webDir, 'THIRD_PARTY_NOTICES.md');
 
+// Files vendored outside the web bundle and embedded in the skillhub binary.
+const embeddedPackages = [
+  {
+    name: 'js-yaml',
+    version: '4.3.2',
+    license: 'MIT',
+    usedBy: 'the distill-lab system skill (scripts/lib/js-yaml.mjs)',
+    licensePath: path.join(webDir, '..', 'internal', 'systemskills', 'distill-lab', 'scripts', 'lib', 'js-yaml.LICENSE'),
+  },
+];
+
 const lock = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
 const rootDeps = Object.keys(lock.packages?.['']?.dependencies || {});
 
@@ -50,7 +61,7 @@ const packages = Array.from(reachable.values());
 packages.sort((a, b) => a.name.localeCompare(b.name));
 
 let output = '# Third-Party Software Notices\n\n';
-output += 'This document contains third-party software notices and licenses for dependencies used in the Skill Hub Web UI production bundle.\n\n';
+output += 'This document contains third-party software notices and licenses for dependencies used in the Skill Hub Web UI production bundle and files embedded in the skillhub binary.\n\n';
 
 for (const pkg of packages) {
   const fullPkgDir = path.join(webDir, pkg.path);
@@ -82,5 +93,14 @@ for (const pkg of packages) {
   }
 }
 
+output += '## Files embedded in the skillhub binary\n\n';
+for (const pkg of embeddedPackages) {
+  const licenseText = fs.readFileSync(pkg.licensePath, 'utf8').trim();
+  output += `### ${pkg.name}@${pkg.version}\n\n`;
+  output += `Used by: ${pkg.usedBy}\n\n`;
+  output += `License: ${pkg.license}\n\n`;
+  output += '```\n' + licenseText + '\n```\n\n';
+}
+
 fs.writeFileSync(outputPath, output.trimEnd() + '\n', 'utf8');
-console.log(`Generated notices for ${packages.length} packages at ${outputPath}`);
+console.log(`Generated notices for ${packages.length + embeddedPackages.length} packages at ${outputPath}`);
