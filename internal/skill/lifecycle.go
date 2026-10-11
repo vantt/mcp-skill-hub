@@ -1008,28 +1008,24 @@ func summarize(changes []mutation.Change, before map[string][]byte) DiffSummary 
 	return result
 }
 
-// RenderFullDiff renders every changed file as removed old lines followed by
-// added new lines, in path order; before holds each path's current contents.
+// RenderFullDiff renders every changed file as a unified diff in path order;
+// before holds each path's current contents. A modified file shows only the
+// changed lines with a few lines of context, a new file shows every line as
+// added, a deleted file every line as removed, and an unchanged file nothing.
 func RenderFullDiff(changes []mutation.Change, before map[string][]byte) string {
 	var output strings.Builder
 	copyChanges := append([]mutation.Change(nil), changes...)
-	sort.Slice(copyChanges, func(i, j int) bool { return copyChanges[i].Path < copyChanges[j].Path })
+	sort.SliceStable(copyChanges, func(i, j int) bool { return copyChanges[i].Path < copyChanges[j].Path })
 	for _, change := range copyChanges {
 		old := before[change.Path]
-		if bytes.Equal(old, change.Contents) && !change.Delete {
+		updated := change.Contents
+		if change.Delete {
+			updated = nil
+		} else if bytes.Equal(old, updated) {
 			continue
 		}
 		fmt.Fprintf(&output, "--- a/%s\n+++ b/%s\n", change.Path, change.Path)
-		for _, line := range strings.Split(strings.TrimSuffix(string(old), "\n"), "\n") {
-			if old != nil {
-				output.WriteString("-" + line + "\n")
-			}
-		}
-		if !change.Delete {
-			for _, line := range strings.Split(strings.TrimSuffix(string(change.Contents), "\n"), "\n") {
-				output.WriteString("+" + line + "\n")
-			}
-		}
+		writeUnifiedHunks(&output, old, updated, diffContextLines)
 	}
 	return output.String()
 }
