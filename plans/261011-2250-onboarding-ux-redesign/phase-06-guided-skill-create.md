@@ -12,7 +12,7 @@ dependencies: [1]
 ## Context
 
 `skillhub skill create <id> --collection <c> --name <n> --description <d> [...] --yes` needs many flags
-(`internal/delivery/cli/help.go:123-126`); status suggests a long template line for an empty hub
+(example at `internal/delivery/cli/help.go:170`); status suggests a long template line for an empty hub
 (`internal/delivery/cli/curation.go:75`). Decision 9: the README stops at "curate my Skill Hub"; a guided create in a
 terminal is a later, optional improvement. Flags remain for scripts and agents. This phase is not required for the
 onboarding acceptance criteria.
@@ -29,7 +29,7 @@ onboarding acceptance criteria.
   flag form, P3 in plan.md), then prints the file to edit and `skillhub skill activate <id> --yes` as the next command.
 - Not a terminal and missing required flags: today's error naming the missing flags (no prompt, ever).
 - Ctrl-C or empty input on a required question: nothing written, exit 130 or 2.
-- Status's empty-hub next command becomes `skillhub skill create`.
+- Status's empty-hub next command (Phase 4 table) becomes `skillhub skill create`.
 
 ## Files
 
