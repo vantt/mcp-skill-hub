@@ -17,6 +17,15 @@ Find out why a working `mcp serve` process uses 32 to 42 MB when an idle one use
 - Create: `scripts/mcp-fanout-bench.sh` and `make mcp-fanout` (N processes, each calling `skill_resolve` at a fixed rate; reports total memory, latency and telemetry events written against expected; uses only a temp workspace and an isolated `HOME` and `XDG_*`)
 - Modify (only if a measured gain): `internal/delivery/mcpserver/server.go` (`Serve`) or `cmd/skillhub` start-up, for memory limits or releasing memory when idle
 
+## Todo (done 2026-10-11; the numbers are in `plan.md`, section "Phase 1 result and decision Q1")
+- [x] Repeatable single-process measurement (`memory_budget_test.go`, RSS / PSS / private, run twice)
+- [x] Heap profile and memory map breakdown
+- [x] Cheap options tried one at a time; only the idle release (`debug.FreeOSMemory` after 30 s quiet) kept
+- [x] 20-process fan-out before and after (`make mcp-fanout`)
+- [x] Web UI and unrelated packages measured (baseline for Phase 6)
+- [x] Go or stop for Phases 2 to 4 written in `plan.md` (recommendation: stop)
+- [x] Q2 to Q4 listed for the user in the Phase 1 report (not asked directly, per lead instruction)
+
 ## Tasks & Steps
 1. Turn the 2026-10-11 throwaway harness into the two files above, so the numbers are repeatable. Record, for one process: resident memory right after start, after one resolve, after 1,000 resolves, and after 60 seconds idle.
 2. Find where the memory goes with a heap profile (`pprof`) on a working process: catalog load, SQLite telemetry (WAL, page cache), the resolver, Go runtime free-but-retained memory.
