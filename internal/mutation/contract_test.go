@@ -633,6 +633,40 @@ func TestSharedAndExclusiveLocksHaveBoundedWait(t *testing.T) {
 	}
 }
 
+func TestTryLockNeverWaitsForAWriter(t *testing.T) {
+	t.Parallel()
+	root := newWorkspace(t)
+	reader, err := TryAcquireSharedLock(root)
+	if err != nil {
+		t.Fatalf("free lock: %v", err)
+	}
+	another, err := TryAcquireSharedLock(root)
+	if err != nil {
+		t.Fatalf("second reader: %v", err)
+	}
+	if err := errors.Join(reader.Unlock(), another.Unlock()); err != nil {
+		t.Fatal(err)
+	}
+	writer, err := AcquireExclusiveLock(context.Background(), root, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer writer.Unlock()
+	started := time.Now()
+	if _, err := TryAcquireSharedLock(root); !errors.Is(err, ErrWorkspaceBusy) {
+		t.Fatalf("reader while a writer holds the lock: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, ".skillhub", "transactions"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := TryInspectRecovery(root); !errors.Is(err, ErrWorkspaceBusy) {
+		t.Fatalf("recovery inspection while a writer holds the lock: %v", err)
+	}
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("the try lock waited %s", elapsed)
+	}
+}
+
 func newWorkspace(t *testing.T) string {
 	t.Helper()
 	root := filepath.Join(t.TempDir(), "workspace")
