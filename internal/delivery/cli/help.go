@@ -33,6 +33,7 @@ Agent:
   resolve   Pick the best skill for a request
   serve mcp Run the MCP server for an agent host (stdio), or with --addr for other machines
   mcp serve The same stdio server, the command agent hosts already launch
+  mcp proxy The stdio bridge to a hub on another machine, which agent hosts launch
   serve web Run the local web UI
   token     Show or rotate the shared token of the network MCP listener
 
@@ -42,6 +43,7 @@ Maintenance:
   migrate   Preview or apply a canonical schema migration
   diff      Show uncommitted canonical changes
   telemetry Inspect or export local telemetry
+  cache     Clear the copies of skills fetched from a remote hub
   eval      Run routing evaluations
   resolution  Replay a recorded resolution
   version   Print build information
@@ -287,15 +289,46 @@ tree was modified.
 Example: skillhub version
 `,
 	"mcp": `Usage: skillhub mcp serve [--workspace <path>] [--profile runtime|curation|all]
+       skillhub mcp proxy --hub <url> [--token-file <path>]
 
-An alias of skillhub serve mcp, kept for the agent host registrations that
-already run it. Serve the workspace over MCP (stdio). Agent hosts start this
-for you after ` + "`skillhub connect`" + `; you rarely run it by hand. Run
-skillhub help serve for the network listener.
+mcp serve is an alias of skillhub serve mcp, kept for the agent host
+registrations that already run it. Serve the workspace over MCP (stdio). Agent
+hosts start this for you after ` + "`skillhub connect`" + `; you rarely run it by hand.
+Run skillhub help serve for the network listener.
+
+mcp proxy lets an agent host on this machine use a hub on another machine
+(started there with skillhub serve mcp --addr). Agent hosts start it for you;
+you rarely run it by hand. It forwards skill_resolve and skill_feedback, and
+answers skill_get from a local cache: each skill version is fetched once, in
+one request, checked against its digest, and kept by digest, so local.path and
+the SKILLHUB_* variables point at this machine and a skill's check, setup and
+scripts run here. If the hub cannot be reached, cached skills keep working.
+Standard output carries MCP; messages go to standard error.
 
 Options:
   --workspace <path>             Workspace to serve
   --profile runtime|curation|all Tool profile to expose (default: all)
+  --hub <url>                    Base URL of the remote hub, as its listener printed it
+  --token-file <path>            Copy of the hub's token file (mode 0600); without it the
+                                 token is read from SKILLHUB_HUB_TOKEN. Never printed.
+
+Fetched skills live in $XDG_STATE_HOME/skillhub/remote (default
+~/.local/state/skillhub/remote; on macOS ~/Library/Application Support/skillhub,
+on Windows %LocalAppData%\skillhub). Clear them with skillhub cache clear --hub.
+`,
+	"cache": `Usage: skillhub cache clear --hub [<url>] [--yes]
+
+Remove the copies of skills this machine fetched from remote hubs (see skillhub
+help mcp). Without a URL every hub's copies are removed; with one, only that
+hub's. Previews by default; --yes applies. Agents fetch a skill again the next
+time they use it. Installed dependencies and stored secrets are kept, and
+nothing on the hub changes. Old versions are also removed automatically: three
+versions per skill are kept, versions unused for 30 days go, and each hub's
+cache stays under 512 MB.
+
+Examples:
+  skillhub cache clear --hub
+  skillhub cache clear --hub http://127.0.0.1:7420 --yes
 `,
 	"token": `Usage: skillhub token show [--workspace <path>] [--token-file <path>]
        skillhub token rotate [--workspace <path>] [--token-file <path>] [--yes]

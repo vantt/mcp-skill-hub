@@ -1,7 +1,7 @@
 ---
 phase: 3
 title: "Skill bundle delivery and client cache (skill runs, fetch is fast)"
-status: pending
+status: completed
 priority: P1
 effort: "1.5d"
 dependencies: [2]
@@ -35,18 +35,25 @@ A remote client gets a complete, runnable copy of an approved skill in one excha
 - Create tests next to each file
 
 ## Tasks & Steps
-1. Implement the archive and prove it is deterministic and covers exactly the content-digest file set.
-2. Serve it over HTTP and over stdio (so local tests and the proxy share one code path).
-3. Implement the proxy and cache; extract atomically (temp directory, then rename) so a crash never leaves a half skill.
-4. Make `skill_get` through the proxy return a valid `local.path` and `local.env`.
-5. Run a real skill's `check` through the proxy end to end on loopback.
-6. Add cache garbage collection (keep the last N versions, cap total size) and a `skillhub cache clear --hub` command (clears only the client cache of fetched skills).
+- [x] 1. Implement the archive and prove it is deterministic and covers exactly the content-digest file set.
+- [x] 2. Serve it over HTTP and over stdio (so local tests and the proxy share one code path).
+- [x] 3. Implement the proxy and cache; extract atomically (temp directory, then rename) so a crash never leaves a half skill.
+- [x] 4. Make `skill_get` through the proxy return a valid `local.path` and `local.env`.
+- [x] 5. Run a real skill's `check` through the proxy end to end on loopback.
+- [x] 6. Add cache garbage collection (keep the last N versions, cap total size) and a `skillhub cache clear --hub` command (clears only the client cache of fetched skills).
 
 ## Verification
-- Digest of the extracted folder equals the hub's digest for `test-audit` and `herdr-cook-plan`.
-- One network exchange fetches a whole skill (counted in the test).
-- Second use of the same version makes zero requests for content (test with a request counter).
-- A changed skill produces a new digest and a new fetch; an unrelated hub change fetches nothing.
-- An unapproved skill returns the same blocked error as local.
-- A tampered archive is rejected by the digest check.
-- `check` command of a test skill runs on the client from the cached directory.
+- [x] Digest of the extracted folder equals the hub's digest for `test-audit` and `herdr-cook-plan`.
+- [x] One network exchange fetches a whole skill (counted in the test).
+- [x] Second use of the same version makes zero requests for content (test with a request counter).
+- [x] A changed skill produces a new digest and a new fetch; an unrelated hub change fetches nothing.
+- [x] An unapproved skill returns the same blocked error as local.
+- [x] A tampered archive is rejected by the digest check.
+- [x] `check` command of a test skill runs on the client from the cached directory.
+
+## Implementation notes (2026-10-11)
+- Bundle: `GET <hub>/mcp/bundle?skill=<id>` behind the listener's gate, `ETag` = manifest digest, `If-None-Match` gives 304; the same bytes over stdio as the MCP method `skills/bundle`. The archive is a deterministic gzip tar: a metadata entry, then exactly the files the URI digest covers (`.meta/` excluded). Skills over the catalog caps are not servable at all, so no single file is skipped.
+- Client: `skillhub mcp proxy --hub <url> [--token-file <path>]` (or `SKILLHUB_HUB_TOKEN`). Cache under `<state>/remote/<hub-id>/<skill-id>/<digest>/` with `<state>` = `$XDG_STATE_HOME/skillhub` (Windows `%LocalAppData%\skillhub`, macOS `~/Library/Application Support/skillhub`, else `~/.local/state/skillhub`); state and config directories of remote skills in `<hub-id>/.state/` survive `skillhub cache clear --hub`.
+- `skill_resolve` already returns each recommended skill's digest (`version`), so it was not changed; the proxy uses it to serve a resolved, cached version with no request.
+- The network listener no longer returns hub paths in `skill_get`, `skills/get` or `resources/read`.
+- Report with speed numbers: `plans/reports/cook-261011-remote-phase3.md`.

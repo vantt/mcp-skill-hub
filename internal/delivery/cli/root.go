@@ -75,6 +75,8 @@ func RunContext(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		return runServe(ctx, append([]string{"web"}, args[1:]...), stdout, stderr)
 	case "token":
 		return runToken(args[1:], stdout, stderr)
+	case "cache":
+		return runCache(args[1:], stdout, stderr)
 	case "update":
 		return runUpdate(ctx, args[1:], stdout, stderr)
 	default:
