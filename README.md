@@ -121,7 +121,7 @@ skillhub serve web --loopback-only
 ## Documentation
 
 - **Start:** [Get started](docs/getting-started.md) · [Installation](docs/installation.md)
-- **Guides:** [Using Skill Hub](docs/user-guide.md) · [Curating skills](docs/curating-skills.md) · [Sources and learning](docs/sources-and-learning.md) · [Web UI guide](docs/web-ui.md) · [Troubleshooting](docs/troubleshooting.md)
+- **Guides:** [Using Skill Hub](docs/user-guide.md) · [Curating skills](docs/curating-skills.md) · [Sources and learning](docs/sources-and-learning.md) · [Web UI guide](docs/web-ui.md) · [One hub from several machines](docs/remote-hub-guide.md) · [Troubleshooting](docs/troubleshooting.md)
 - **Reference:** [Command reference](docs/command-reference.md) · [All docs](docs/README.md)
 - **Maintainers:** [Contributing](CONTRIBUTING.md) · [Release runbook](docs/release-runbook.md)
 

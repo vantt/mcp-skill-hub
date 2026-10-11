@@ -14,7 +14,8 @@ Find the command for a task here. For every flag, run `skillhub help` or `skillh
 | Create your workspace | `skillhub init [path] [--force] --yes` |
 | Connect your agent to one project (also `integrate`) | `skillhub connect [--project <dir>] [--workspace <path>] [--host claude\|codex\|gemini] --yes` |
 | Connect your agent to every project | `skillhub connect -g --workspace <path> --yes` |
-| Remove a connection | `skillhub connect --remove [--project <dir>] [-g] [--host claude\|codex\|gemini] [--yes]` |
+| Connect your agent to a hub on another machine | `skillhub connect --hub <url> [--token-file <path>] [-g] [--host claude\|codex\|gemini] --yes` |
+| Remove a connection | `skillhub connect --remove [--cache] [--project <dir>] [-g] [--host claude\|codex\|gemini] [--yes]` |
 | See health and the next step | `skillhub status [--quiet]` |
 | Check the workspace and connections, and repair them | `skillhub doctor [--fix [--yes]]` |
 | Open the web UI | `skillhub serve web [--loopback-only] [--addr <host:port>] [--no-open]` |
@@ -86,5 +87,8 @@ Skill Hub never commits or pushes for you. Add the workspace's own folders by na
 | Import tool use from Claude Code transcripts | `skillhub telemetry import-transcripts --project <dir>` |
 | Preview or write a sanitized export | `skillhub telemetry export [--output <file> --yes]` |
 | Start the hub for agents by hand (your agent starts it) | `skillhub mcp serve [--profile runtime\|curation\|all]` |
+| Let agents on other machines use this hub | `skillhub serve mcp --addr <host:port> [--trust-private-network] [--token-file <path>]` |
+| Show or replace the token those agents need | `skillhub token show` · `skillhub token rotate [--yes]` |
+| Remove the skills this machine fetched from another hub | `skillhub cache clear --hub [<url>] [--yes]` |
 
 The usage record stays on your machine unless you export it. Developer tools such as `eval run` and `resolution replay` are described in `skillhub help eval` and `skillhub help resolution`.

@@ -217,6 +217,8 @@ Moved to [The web UI: Do common tasks](web-ui.md#do-common-tasks).
 
 Your skills live in Git, so moving is a clone. Before you leave the old machine, push the workspace to a remote you own.
 
+If you would rather keep one hub and let agents on other computers use it, see [Use one hub from several machines](remote-hub-guide.md).
+
 > [!IMPORTANT]
 > Skill Hub never commits or pushes for you. Commit and push the workspace yourself before you move.
 
