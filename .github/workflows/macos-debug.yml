@@ -14,12 +14,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [default, parallel2, serial]
+        mode: [go1260, go-latest]
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
-          go-version: "1.26.0"
+          go-version: ${{ matrix.mode == 'go1260' && '1.26.0' || '1.26' }}
+          check-latest: ${{ matrix.mode == 'go-latest' }}
       - name: Environment
         run: |
           which -a git
@@ -29,12 +30,9 @@ jobs:
       - name: Hammer the cli package
         shell: bash
         run: |
-          case "${{ matrix.mode }}" in
-            default) flags="" ;;
-            parallel2) flags="-parallel 2" ;;
-            serial) flags="-parallel 1" ;;
-          esac
-          for i in 1 2 3; do
+          go version
+          flags=""
+          for i in 1 2; do
             echo "=== round $i"
             go test -race -count=1 $flags ./internal/delivery/cli ./internal/app || exit 1
           done
@@ -42,4 +40,4 @@ jobs:
         if: failure()
         run: |
           ls -la ~/Library/Logs/DiagnosticReports 2>/dev/null | tail -20
-          for f in $(ls -t ~/Library/Logs/DiagnosticReports/git* 2>/dev/null | head -2); do echo "--- $f"; head -80 "$f"; done
+          for f in $(ls -t ~/Library/Logs/DiagnosticReports/* 2>/dev/null | head -2); do echo "--- $f"; head -c 6000 "$f"; done
