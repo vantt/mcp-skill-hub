@@ -600,3 +600,45 @@ func TestInitNeverPrintsAPassword(t *testing.T) {
 		}
 	}
 }
+
+func TestInitFinishesAHubWhoseFirstCommitIsMissing(t *testing.T) {
+	config := isolateInit(t)
+	dir := initHub(t, t.TempDir())
+	// The first commit failed earlier: the hub is written, HEAD has no commit.
+	fixtureGit(t, dir, "update-ref", "-d", "HEAD")
+	code, stdout, stderr := runInitCLI(t, dir)
+	if code != 0 || !strings.Contains(stdout, "First commit") {
+		t.Fatalf("exit %d\n%s%s", code, stdout, stderr)
+	}
+	assertCommittedHub(t, dir, config)
+}
+
+func TestInitNeverPushesToARemoteThatLacksTheHubsCommit(t *testing.T) {
+	isolateInit(t)
+	bare, _ := remoteHub(t, "main")
+	dir := t.TempDir()
+	if code, stdout, stderr := runInitCLI(t, dir, bare); code != 0 {
+		t.Fatalf("fetch: exit %d\n%s%s", code, stdout, stderr)
+	}
+	before := gitOutput(t, bare, "rev-parse", "main")
+	fixtureGit(t, dir, "commit", "-q", "--allow-empty", "-m", "local change")
+	code, _, stderr := runInitCLI(t, dir, bare)
+	if code != 2 || !strings.Contains(stderr, "$ git push -u origin main") {
+		t.Fatalf("exit %d\n%s", code, stderr)
+	}
+	if after := gitOutput(t, bare, "rev-parse", "main"); after != before {
+		t.Fatal("init pushed to a remote that already had commits")
+	}
+}
+
+func TestInitNamesAnSSHCommandOfAPreExistingRepository(t *testing.T) {
+	isolateInit(t)
+	bare := bareRepository(t, "main")
+	dir := t.TempDir()
+	fixtureGit(t, dir, "init", "-q", "-b", "main")
+	fixtureGit(t, dir, "config", "core.sshCommand", "ssh -i /keys/deploy")
+	code, stdout, stderr := runInitCLI(t, dir, bare)
+	if code != 0 || !strings.Contains(flatText(stdout), "This folder's Git config sets core.sshCommand (ssh -i /keys/deploy)") {
+		t.Fatalf("exit %d\n%s%s", code, stdout, stderr)
+	}
+}

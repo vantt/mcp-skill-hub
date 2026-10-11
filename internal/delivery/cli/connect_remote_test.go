@@ -770,3 +770,29 @@ func TestHelpDescribesRemoteConnect(t *testing.T) {
 		t.Fatalf("help doctor:\n%s", stdout)
 	}
 }
+
+func TestConnectRefusesATokenFileThatAnotherHubUses(t *testing.T) {
+	isolateClient(t)
+	tokenFile := filepath.Join(t.TempDir(), "hub-token")
+	if err := os.WriteFile(tokenFile, []byte(strings.Repeat("a", 64)+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	first, second := "http://127.0.0.1:9", "http://127.0.0.1:10"
+	if code, _, stderr := runCLI(t, "connect", "-g", "--hub", first, "--token-file", tokenFile, "--host", "claude"); code != 0 {
+		t.Fatalf("first hub: %s", stderr)
+	}
+	project := t.TempDir()
+	code, _, stderr := runConnectCLI(t, project, "--hub", second, "--token-file", tokenFile, "--host", "claude")
+	flat := flatText(stderr)
+	if code != 2 || !strings.Contains(flat, "is already used for the hub at "+first) || !strings.Contains(flat, hubtoken.ClientPath(second)) {
+		t.Fatalf("exit %d\n%s", code, stderr)
+	}
+	if _, err := os.Stat(filepath.Join(project, ".mcp.json")); !os.IsNotExist(err) {
+		t.Fatalf("a refused connect wrote the project entry: %v", err)
+	}
+	// Switching the user account itself to another hub replaces its entry, so
+	// the same file is not used twice.
+	if code, _, stderr := runCLI(t, "connect", "-g", "--hub", second, "--token-file", tokenFile, "--host", "claude"); code != 0 {
+		t.Fatalf("switching the same scope: %s", stderr)
+	}
+}
