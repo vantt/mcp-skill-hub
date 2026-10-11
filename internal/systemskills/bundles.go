@@ -21,8 +21,8 @@ const (
 )
 
 // distillLabFS holds the distill-lab bundle. It mirrors the editable source in
-// .agents/skills/distill-lab/ of this repository byte for byte, because
-// go:embed cannot reach outside the package folder. Like every directory embed,
+// .agents/skills/distill-lab/ of this repository byte for byte, because an
+// embed directive cannot reach outside the package folder. Like every directory embed,
 // it skips names that start with "." or "_".
 //
 //go:embed distill-lab
