@@ -130,3 +130,29 @@ const ACTION_HELP: Record<string, ActionHelp> = {
 export function actionHelp(kind?: string): ActionHelp | undefined {
   return kind ? ACTION_HELP[kind] : undefined;
 }
+
+// Kinds whose server summary is a count sentence. The title comes from the
+// plural-aware catalog so the Home screen never shows "source(s)".
+const COUNT_TITLE_KINDS = new Set([
+  'distill_changed_sources',
+  'check_due_sources',
+  'retry_unavailable_sources',
+  'review_upstream_updates',
+  'review_lessons',
+]);
+
+type Translate = (key: string, vars?: Record<string, string | number>) => string;
+
+// The heading for the next action: a help title first, then a singular or
+// plural count sentence, then the raw summary for unknown kinds or no count.
+export function actionTitle(action: ActionInput, t: Translate): string | undefined {
+  const help = actionHelp(action.kind);
+  if (help?.title) {
+    return help.title;
+  }
+  const count = action.count;
+  if (COUNT_TITLE_KINDS.has(action.kind) && typeof count === 'number' && Number.isFinite(count) && count > 0) {
+    return t(`home.action.${action.kind}`, { count });
+  }
+  return action.summary;
+}
