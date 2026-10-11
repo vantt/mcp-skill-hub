@@ -13,6 +13,7 @@ import (
 	"github.com/vantt/mcp-skill-hub/internal/catalog"
 	"github.com/vantt/mcp-skill-hub/internal/telemetry"
 	"github.com/vantt/mcp-skill-hub/internal/workspace"
+	"gopkg.in/yaml.v3"
 )
 
 func TestSourceCaptureListAndExplicitEmptyCheck(t *testing.T) {
@@ -299,6 +300,92 @@ func TestSourceCommandsPhase6(t *testing.T) {
 			t.Fatalf("expected exit 2, got %d, out=%s, err=%s", code, stdout, stderr)
 		}
 	})
+}
+
+func TestSourceBackfillFillsUpstreamIDAndKeepsOtherMetadata(t *testing.T) {
+	t.Parallel()
+	root := newSourceCLIWorkspace(t)
+	writeMeta := func(id, meta string) string {
+		t.Helper()
+		if c, _, se := runCLIForTest([]string{"skill", "create", "--workspace", root, "--id", id, "--collection", "default", "--name", id, "--description", "Backfill fixture", "--yes"}); c != 0 {
+			t.Fatalf("skill create %s failed: %s", id, se)
+		}
+		path := filepath.Join(root, "skills", "default", id, ".meta", "skill.yaml")
+		if err := os.WriteFile(path, []byte(meta), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	mixedPath := writeMeta("mixed-skill", `description: Backfill fixture
+id: mixed-skill
+name: mixed-skill
+provenance:
+    created_by: skill_add
+schema_version: 1
+sources:
+    - folder_digest: sha256:0382941395c0d6eca961c5a7005d8034c3d1ce690985e362147e35603d15c71d
+      id: ""
+      kind: github
+      ref: main
+      repo: https://github.com/example/mixed-upstream
+      roles:
+        - upstream
+    - id: notes-src
+      kind: github
+      repo: https://github.com/example/notes
+      roles:
+        - learning
+status: draft
+`)
+	lonePath := writeMeta("lone-skill", `description: Backfill fixture
+id: lone-skill
+name: lone-skill
+schema_version: 1
+sources:
+    - id: ""
+      kind: github
+      ref: main
+      repo: https://github.com/example/lone-upstream
+      roles:
+        - upstream
+status: draft
+`)
+	commitCLIWorkspace(t, root)
+
+	for _, id := range []string{"mixed-skill", "lone-skill"} {
+		code, stdout, stderr := runCLIForTest([]string{"source", "backfill", "--skill", id, "--yes", "--workspace", root})
+		if code != 0 {
+			t.Fatalf("backfill %s=%d stdout=%s stderr=%s", id, code, stdout, stderr)
+		}
+	}
+
+	type meta struct {
+		Provenance map[string]any   `yaml:"provenance"`
+		Sources    []map[string]any `yaml:"sources"`
+	}
+	read := func(path string) meta {
+		t.Helper()
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var doc meta
+		if err := yaml.Unmarshal(data, &doc); err != nil {
+			t.Fatal(err)
+		}
+		return doc
+	}
+	mixed := read(mixedPath)
+	if mixed.Provenance["created_by"] != "skill_add" {
+		t.Fatalf("provenance was not kept: %#v", mixed.Provenance)
+	}
+	if len(mixed.Sources) != 2 || mixed.Sources[0]["id"] != "mixed-upstream" || mixed.Sources[0]["folder_digest"] == nil || mixed.Sources[1]["id"] != "notes-src" {
+		t.Fatalf("mixed-skill sources = %#v", mixed.Sources)
+	}
+	lone := read(lonePath)
+	if len(lone.Sources) != 1 || lone.Sources[0]["id"] != "lone-upstream" {
+		t.Fatalf("lone-skill sources = %#v", lone.Sources)
+	}
 }
 
 func runCLIForTest(args []string) (int, string, string) {

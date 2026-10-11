@@ -475,7 +475,7 @@ func (manager Manager) plan(ctx context.Context, root, id, command string, chang
 		CreatedAt: createdAt, ExpiresAt: createdAt.Add(proposalLifetime),
 	}
 	if fullDiff {
-		proposal.FullDiff = renderFullDiff(changes, before)
+		proposal.FullDiff = RenderFullDiff(changes, before)
 	}
 	hook := manager.RoutingHook
 	if hook == nil {
@@ -1008,7 +1008,9 @@ func summarize(changes []mutation.Change, before map[string][]byte) DiffSummary 
 	return result
 }
 
-func renderFullDiff(changes []mutation.Change, before map[string][]byte) string {
+// RenderFullDiff renders every changed file as removed old lines followed by
+// added new lines, in path order; before holds each path's current contents.
+func RenderFullDiff(changes []mutation.Change, before map[string][]byte) string {
 	var output strings.Builder
 	copyChanges := append([]mutation.Change(nil), changes...)
 	sort.Slice(copyChanges, func(i, j int) bool { return copyChanges[i].Path < copyChanges[j].Path })
