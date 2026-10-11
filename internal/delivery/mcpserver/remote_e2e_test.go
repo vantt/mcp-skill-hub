@@ -467,6 +467,10 @@ func TestRemoteHubEndToEndThroughATunnel(t *testing.T) {
 type frontHub struct {
 	url  string
 	mode atomic.Value // string: "", "cut", "truncate", "stall" or "legacy"
+	// stalled receives one value each time a "stall" answer has sent its
+	// first half and stopped, so a test can act in the middle of a download
+	// instead of guessing how long the hub takes to build the bundle.
+	stalled chan struct{}
 }
 
 func startFrontHub(t *testing.T, hub *httpTestHub) *frontHub {
@@ -477,7 +481,7 @@ func startFrontHub(t *testing.T, hub *httpTestHub) *frontHub {
 	}
 	forward := httputil.NewSingleHostReverseProxy(target)
 	forward.FlushInterval = -1
-	front := &frontHub{}
+	front := &frontHub{stalled: make(chan struct{}, 4)}
 	front.mode.Store("")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		mode, _ := front.mode.Load().(string)
@@ -501,7 +505,9 @@ func startFrontHub(t *testing.T, hub *httpTestHub) *frontHub {
 // then sends nothing more until the client gives up; "truncate" announces the
 // shorter length, so the HTTP answer is complete but the archive is not.
 func (front *frontHub) damageBundle(t *testing.T, writer http.ResponseWriter, request *http.Request, hubURL, mode string) {
-	upstream, err := http.NewRequestWithContext(request.Context(), http.MethodGet, hubURL+request.URL.RequestURI(), nil)
+	// The real bundle is fetched even when the client gives up meanwhile: a
+	// client that stops waiting is what some tests play, not a failure here.
+	upstream, err := http.NewRequestWithContext(context.WithoutCancel(request.Context()), http.MethodGet, hubURL+request.URL.RequestURI(), nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -538,6 +544,10 @@ func (front *frontHub) damageBundle(t *testing.T, writer http.ResponseWriter, re
 	_, _ = writer.Write(half)
 	writer.(http.Flusher).Flush()
 	if mode == "stall" {
+		select {
+		case front.stalled <- struct{}{}:
+		default:
+		}
 		<-request.Context().Done()
 		return
 	}
@@ -548,6 +558,25 @@ func (front *frontHub) damageBundle(t *testing.T, writer http.ResponseWriter, re
 	}
 	_ = buffered.Flush()
 	_ = connection.Close()
+}
+
+// deadlineOnSignal is a context whose deadline passes when expired closes,
+// so a test decides the moment a deadline passes by an event rather than by
+// the wall clock.
+type deadlineOnSignal struct {
+	context.Context
+	expired <-chan struct{}
+}
+
+func (ctx deadlineOnSignal) Done() <-chan struct{} { return ctx.expired }
+
+func (ctx deadlineOnSignal) Err() error {
+	select {
+	case <-ctx.expired:
+		return context.DeadlineExceeded
+	default:
+		return nil
+	}
 }
 
 // assertNothingCached checks that a failed fetch left no version and no
@@ -657,7 +686,8 @@ func TestRemoteFetchFailures(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if result.IsError || got.Content != string(hubSkillMD) || (got.Local != nil && got.Local.Path != "") || bytes.Contains(encoded, []byte(root)) {
+		if result.IsError || got.Content != string(hubSkillMD) || (got.Local != nil && got.Local.Path != "") ||
+			bytes.Contains(encoded, []byte(root)) || bytes.Contains(encoded, []byte(strings.ReplaceAll(root, `\`, `\\`))) {
 			t.Fatalf("skill_get from an older hub = %s", encoded)
 		}
 		assertNothingCached(t, proxied, id)
@@ -680,10 +710,17 @@ func TestRemoteFetchFailures(t *testing.T) {
 		front.mode.Store("stall")
 		request := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Name: "skill_get", Arguments: json.RawMessage(`{"skill_id":"` + id + `"}`)}}
 
-		// The proxy's own deadline for one download, shortened.
-		ctx, cancel := context.WithTimeout(t.Context(), 500*time.Millisecond)
-		defer cancel()
-		stalled, err := proxied.proxy.skillGet(ctx, request)
+		// The proxy's own deadline for one download, shortened: it passes once
+		// the hub has sent half of the bundle and stopped.
+		expired := make(chan struct{})
+		go func() {
+			select {
+			case <-front.stalled:
+			case <-t.Context().Done():
+			}
+			close(expired)
+		}()
+		stalled, err := proxied.proxy.skillGet(deadlineOnSignal{Context: t.Context(), expired: expired}, request)
 		if err != nil {
 			t.Fatalf("stalled download: %v", err)
 		}
@@ -694,8 +731,15 @@ func TestRemoteFetchFailures(t *testing.T) {
 		}
 
 		// The agent host cancels the call in the middle of the download.
-		ctx, cancel = context.WithCancel(t.Context())
-		time.AfterFunc(300*time.Millisecond, cancel)
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		go func() {
+			select {
+			case <-front.stalled:
+			case <-ctx.Done():
+			}
+			cancel()
+		}()
 		cancelled, err := proxied.proxy.skillGet(ctx, request)
 		if !errors.Is(err, context.Canceled) || cancelled != nil {
 			t.Fatalf("a cancelled download = %+v, %v; want the cancellation", cancelled, err)

@@ -189,7 +189,8 @@ func TestSwitchingAScopeBetweenLocalAndRemoteKeepsOneEntry(t *testing.T) {
 		if registration := ReadRegistration(adapter.Host, raw); registration.HubURL != testHubURL || registration.Workspace != "" {
 			t.Fatalf("%s after switching to the remote hub: %+v", adapter.Host, registration)
 		}
-		if bytes.Contains(raw, []byte(workspace)) {
+		// A Windows path appears in JSON and TOML with each backslash escaped.
+		if bytes.Contains(raw, []byte(workspace)) || bytes.Contains(raw, []byte(strings.ReplaceAll(workspace, `\`, `\\`))) {
 			t.Fatalf("%s config still names the local workspace:\n%s", adapter.Host, raw)
 		}
 		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(adapter.SkillRelativePath))); !os.IsNotExist(err) {

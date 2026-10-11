@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"sync"
 	"testing"
@@ -167,11 +168,20 @@ func TestTelemetryWriterHelperProcess(t *testing.T) {
 	for started := time.Now(); recorder.healthSnapshot().State == "starting" && time.Since(started) < 30*time.Second; {
 		time.Sleep(time.Millisecond)
 	}
+	pace := writerHelperPace
+	if runtime.GOOS == "windows" {
+		// Windows serializes the eleven processes' SQLite file locks far more
+		// slowly, so at the Unix pace a writer's bounded queue overflows and
+		// Record drops events by design. The pace sets the offered load; what
+		// this test checks (no failed write, every accepted event stored, an
+		// intact store after a crash) does not depend on it.
+		pace *= 4
+	}
 	for item := 0; count == 0 || item < count; item++ {
 		event := validEvent(EventResolutionCompleted)
 		event.ID = fmt.Sprintf("%s_%06d", prefix, item)
 		recorder.Record(event)
-		time.Sleep(writerHelperPace)
+		time.Sleep(pace)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

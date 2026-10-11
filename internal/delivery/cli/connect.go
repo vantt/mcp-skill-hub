@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
 	"strings"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
@@ -171,6 +172,8 @@ func hostDisplayName(hostKey string) string {
 }
 
 func formatChangeKind(kind, summary string) string {
+	// The summary names the file with the platform's separators.
+	summary = filepath.ToSlash(summary)
 	switch kind {
 	case "mcp-registration", "mcp":
 		if strings.Contains(summary, ".claude.json") {

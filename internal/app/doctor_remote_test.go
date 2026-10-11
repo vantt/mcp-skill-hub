@@ -186,7 +186,7 @@ func TestDoctorSendsTheTokenOnlyToHubsTheUserScopeNames(t *testing.T) {
 	}
 	if checks["hub_reachable"].Status != CheckOK || checks["token_accepted"].Status != CheckSkipped ||
 		!strings.Contains(checks["token_accepted"].Detail, "only this project's files name this hub") ||
-		!strings.Contains(checks["token_accepted"].Detail, "`skillhub connect --hub "+hub+" --token-file "+tokenFile+"`") || !reports[0].Healthy() {
+		!strings.Contains(checks["token_accepted"].Detail, "`skillhub connect --hub "+hub+" --token-file "+shellArgument(tokenFile)+"`") || !reports[0].Healthy() {
 		t.Fatalf("checks of a project-only hub: %+v", reports[0].Checks)
 	}
 
