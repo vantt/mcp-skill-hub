@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -14,9 +13,9 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
-	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -559,16 +558,42 @@ func TestNormalizeHubURL(t *testing.T) {
 	}
 }
 
-// startDelayProxy forwards loopback connections to target, delivering every
-// chunk half a round trip after it was read in each direction, so request and
-// answer pay one full round trip, as on a slower link. The first chunk of a
-// connection waits one more round trip, the cost of the TCP handshake.
+// startDelayProxy forwards loopback connections to target through a link
+// with the given round-trip time (see startLink) and returns its URL.
 func startDelayProxy(t *testing.T, target string, rtt time.Duration) string {
+	t.Helper()
+	return startLink(t, target, rtt).url
+}
+
+// benchLink is a loopback TCP relay in front of a hub. It counts the bytes
+// that cross it in both directions and the HTTP requests sent through it, and
+// can add a round-trip time: every chunk is delivered half a round trip after
+// it was read in each direction, so a request and its answer pay one full
+// round trip, as on a slower link. The first chunk of a connection waits one
+// more round trip, the cost of the TCP handshake. It does not limit
+// bandwidth. A zero round trip relays at once, which is how a request count
+// and a byte count are taken on plain loopback.
+type benchLink struct {
+	url      string
+	bytes    atomic.Int64
+	requests atomic.Int64
+}
+
+// httpRequestLine ends the request line of every HTTP/1.1 request the proxy
+// sends; counting it in the client-to-hub stream counts requests.
+var httpRequestLine = []byte(" HTTP/1.1\r\n")
+
+func (link *benchLink) counts() (requests, bytes int64) {
+	return link.requests.Load(), link.bytes.Load()
+}
+
+func startLink(t *testing.T, target string, rtt time.Duration) *benchLink {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
+	link := &benchLink{url: "http://" + listener.Addr().String()}
 	var connections sync.WaitGroup
 	var mu sync.Mutex
 	var open []net.Conn
@@ -596,14 +621,25 @@ func startDelayProxy(t *testing.T, target string, rtt time.Duration) string {
 			open = append(open, client, server)
 			mu.Unlock()
 			connections.Add(2)
-			go func() { defer connections.Done(); delayedCopy(server, client, rtt/2, rtt) }()
-			go func() { defer connections.Done(); delayedCopy(client, server, rtt/2, 0) }()
+			var tail []byte
+			upstream := func(data []byte) {
+				link.bytes.Add(int64(len(data)))
+				joined := append(tail, data...)
+				link.requests.Add(int64(bytes.Count(joined, httpRequestLine)))
+				tail = append([]byte(nil), joined[max(0, len(joined)-len(httpRequestLine)+1):]...)
+			}
+			downstream := func(data []byte) { link.bytes.Add(int64(len(data))) }
+			go func() { defer connections.Done(); delayedCopy(server, client, rtt/2, rtt, upstream) }()
+			go func() { defer connections.Done(); delayedCopy(client, server, rtt/2, 0, downstream) }()
 		}
 	}()
-	return "http://" + listener.Addr().String()
+	return link
 }
 
-func delayedCopy(destination, source net.Conn, delay, firstExtra time.Duration) {
+// delayedCopy copies source to destination, delivering each chunk delay after
+// it was read (the first one firstExtra later still) and passing every chunk
+// to observe as it is read.
+func delayedCopy(destination, source net.Conn, delay, firstExtra time.Duration, observe func([]byte)) {
 	type chunk struct {
 		data []byte
 		at   time.Time
@@ -615,7 +651,11 @@ func delayedCopy(destination, source net.Conn, delay, firstExtra time.Duration) 
 		for {
 			n, err := source.Read(buffer)
 			if n > 0 {
-				chunks <- chunk{data: append([]byte(nil), buffer[:n]...), at: time.Now().Add(delay + firstExtra)}
+				data := append([]byte(nil), buffer[:n]...)
+				if observe != nil {
+					observe(data)
+				}
+				chunks <- chunk{data: data, at: time.Now().Add(delay + firstExtra)}
 				firstExtra = 0
 			}
 			if err != nil {
@@ -631,86 +671,4 @@ func delayedCopy(destination, source net.Conn, delay, firstExtra time.Duration) 
 	}
 	_ = destination.Close()
 	_ = source.Close()
-}
-
-// TestProxyFetchSpeed measures the first fetch of a whole skill through the
-// proxy and the cached repeat, on loopback and through a link with a
-// simulated round-trip time, against the plan's budgets. It runs only with
-// SKILLHUB_PERF=1. SKILLHUB_REMOTE_HUB measures a clone of a real hub (see
-// TestRemoteFetchBench); SKILLHUB_REMOTE_RTT sets the simulated round trip.
-func TestProxyFetchSpeed(t *testing.T) {
-	requireMemoryPerf(t)
-	runs := envInt(t, "SKILLHUB_REMOTE_RUNS", 20)
-	rtt := envDuration(t, "SKILLHUB_REMOTE_RTT", 100*time.Millisecond)
-	skillIDs := remoteBenchSkillIDs()
-	var root, source string
-	if hubRepo := os.Getenv("SKILLHUB_REMOTE_HUB"); hubRepo != "" {
-		root = cloneRemoteBenchHub(t, buildSkillHub(t), hubRepo, skillIDs)
-		source = "clone of " + hubRepo
-	} else {
-		root = newBundleHubFixture(t)
-		source = "fixture skills shaped like test-audit and herdr-cook-plan"
-	}
-	hub := startHTTPTestHub(t, root)
-	links := []struct {
-		name string
-		url  string
-	}{
-		{"loopback", hub.baseURL},
-		{fmt.Sprintf("simulated %s RTT", rtt), startDelayProxy(t, strings.TrimPrefix(hub.baseURL, "http://"), rtt)},
-	}
-	t.Logf("proxy fetch speed: %s; runs=%d", source, runs)
-	t.Logf("| skill | link | bundle KB | first skill_get after resolve p50 / p95 | first skill_get, new connection p50 / p95 | cached repeat p50 / p95 | repeat requests |")
-	t.Logf("|---|---|---|---|---|---|---|")
-	for _, id := range skillIDs {
-		for _, link := range links {
-			var afterResolve, coldConnection, repeats []time.Duration
-			var bundleKB float64
-			repeatRequests := 0
-			for run := 0; run < runs; run++ {
-				counter := newCountingTransport()
-				proxied := startTestProxy(t, link.url, hub.token, t.TempDir(), counter)
-				proxyResolve(t, proxied.session, root, id)
-				started := time.Now()
-				got, result, encoded := proxySkillGet(t, proxied.session, id)
-				afterResolve = append(afterResolve, time.Since(started))
-				if result.IsError || got.Remote.Cache != remoteCacheFetched {
-					t.Fatalf("first fetch %s = %s", id, encoded)
-				}
-				bundleKB = float64(counter.count().bundleBytes) / 1024
-				before := counter.count()
-				started = time.Now()
-				again, _, _ := proxySkillGet(t, proxied.session, id)
-				repeats = append(repeats, time.Since(started))
-				repeatRequests += counter.count().requests - before.requests
-				if again.Remote.Cache != remoteCacheHit {
-					t.Fatalf("repeat %s was not a cache hit", id)
-				}
-
-				// A new proxy has no connection yet, so this fetch also pays
-				// for opening one, as an agent's very first call would.
-				cold := startTestProxy(t, link.url, hub.token, t.TempDir(), nil)
-				started = time.Now()
-				got, result, encoded = proxySkillGet(t, cold.session, id)
-				coldConnection = append(coldConnection, time.Since(started))
-				if result.IsError || got.Remote.Cache != remoteCacheFetched {
-					t.Fatalf("cold fetch %s = %s", id, encoded)
-				}
-			}
-			t.Logf("| %s | %s | %.1f | %s / %s | %s / %s | %s / %s | %d |", id, link.name, bundleKB,
-				roundMS(durationPercentile(afterResolve, 50)), roundMS(durationPercentile(afterResolve, 95)),
-				roundMS(durationPercentile(coldConnection, 50)), roundMS(durationPercentile(coldConnection, 95)),
-				roundMS(durationPercentile(repeats, 50)), roundMS(durationPercentile(repeats, 95)), repeatRequests)
-			budget := 500 * time.Millisecond
-			if link.url != hub.baseURL {
-				budget = 2 * time.Second
-			}
-			if worst := slices.Max(coldConnection); worst > budget {
-				t.Errorf("%s over %s: first fetch took %s, budget %s", id, link.name, worst, budget)
-			}
-			if p95 := durationPercentile(repeats, 95); p95 > 20*time.Millisecond || repeatRequests != 0 {
-				t.Errorf("%s over %s: cached repeat p95 %s with %d requests, budget 20 ms and none", id, link.name, p95, repeatRequests)
-			}
-		}
-	}
 }
