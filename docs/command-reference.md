@@ -4,7 +4,8 @@ Find the command for a task here. For every flag, run `skillhub help` or `skillh
 
 - Skill and source commands need a workspace: run them in a connected project, pass `--workspace <path>`, or set `SKILLHUB_WORKSPACE`.
 - Most commands accept `--json` for machine-readable output.
-- Commands that change files show a preview first. Add `--yes` to write. `source capture` is the one exception: it writes at once.
+- Commands that change files show a preview first. Add `--yes` to write. `source capture` and `skill env set|unset` write at once.
+- Only Claude Code is verified end to end; `connect` also writes files for Codex and Gemini CLI.
 
 ## Set up
 
@@ -13,6 +14,7 @@ Find the command for a task here. For every flag, run `skillhub help` or `skillh
 | Create your workspace | `skillhub init [path] [--force] --yes` |
 | Connect your agent to one project (also `integrate`) | `skillhub connect [--project <dir>] [--workspace <path>] [--host claude\|codex\|gemini] --yes` |
 | Connect your agent to every project | `skillhub connect -g --workspace <path> --yes` |
+| Remove a connection | `skillhub connect --remove [--project <dir>] [-g] [--host claude\|codex\|gemini] [--yes]` |
 | See health and the next step | `skillhub status [--quiet]` |
 | Check the workspace and connections, and repair them | `skillhub doctor [--fix [--yes]]` |
 | Open the web UI | `skillhub serve web [--loopback-only] [--addr <host:port>] [--no-open]` |
@@ -59,7 +61,7 @@ Routing flags for `create` and `edit`: `--operation`, `--trigger`, `--not-for`, 
 | Note a repository to look at later | `skillhub source capture <locator> --reason <text>` |
 | Decide on a candidate | `skillhub source triage <candidate-id> --decision accept\|defer\|reject\|import` |
 
-`check` records whether a source changed; it never edits your skills, and nothing runs in the background. Lessons have no command: start them from **Sources** in the web UI with **Distill with Curator Agent**, then read them in the skill's **Distill** tab. See [Sources and learning](sources-and-learning.md#learn-from-other-repositories).
+`check` records whether a source changed; it never edits your skills, and nothing runs in the background. Lessons have no command: start them from **Sources** in the web UI with **Distill with Curator Agent**. Then read them in the skill's **Distill** tab ([Sources and learning](sources-and-learning.md#learn-from-other-repositories)).
 
 ## Workspace and Git
 
@@ -71,7 +73,7 @@ Routing flags for `create` and `edit`: `--operation`, `--trigger`, `--not-for`, 
 | Rebuild the search index | `skillhub rebuild [--verbose]` |
 | Preview or apply a file format migration | `skillhub migrate [--to <version>] [--yes]` |
 
-Skill Hub never commits or pushes for you. Add the workspace's own folders by name, never with `git add -A`; see [Curating skills](curating-skills.md#review-and-commit-workspace-changes).
+Skill Hub never commits or pushes for you. Add the workspace's own folders by name; never stage the whole folder. See [Curating skills](curating-skills.md#review-and-commit-workspace-changes).
 
 ## Routing and usage
 
@@ -83,6 +85,6 @@ Skill Hub never commits or pushes for you. Add the workspace's own folders by na
 | See how often skills are recommended and used | `skillhub telemetry funnel [--since <date\|Nd>] [--skill <skill-id>]` |
 | Import tool use from Claude Code transcripts | `skillhub telemetry import-transcripts --project <dir>` |
 | Preview or write a sanitized export | `skillhub telemetry export [--output <file> --yes]` |
-| Run the MCP server by hand (your agent starts it) | `skillhub mcp serve [--profile runtime\|curation\|all]` |
+| Start the hub for agents by hand (your agent starts it) | `skillhub mcp serve [--profile runtime\|curation\|all]` |
 
 The usage record stays on your machine unless you export it. Developer tools such as `eval run` and `resolution replay` are described in `skillhub help eval` and `skillhub help resolution`.
