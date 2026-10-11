@@ -275,6 +275,8 @@ If a draft is not ready, the page says so next to the **Activate skill** button 
 
 ![A draft that cannot be activated yet, with links to the fields to fix.](images/web/skill-review-draft.png)
 
+The **Resources** tab lists the skill's companion files: scripts, reference documents and other files next to its `SKILL.md` (which you change in the **Editor** tab). **Edit** opens a simple editor for a text file up to 1 MiB; a Markdown file also shows how it will read. **Preview changes** shows the exact change to that one file, and nothing is written until you confirm it. The file in the skill folder is the record and Git keeps its history, so commit the change yourself. A binary file, or a text file larger than 1 MiB, opens read-only with **View**. If the file changed on disk after you opened it, you choose between keeping your edits on the latest version and discarding them. Editing a file of a skill you added from another repository changes its content, so agents get no content from that skill until you approve it again in your terminal (see the *Content trust* card).
+
 #### Activate, deprecate or archive a skill
 
 1. Open the skill and click **Activate skill** (or **Deprecate** for an active one). The button stays off until the draft is ready.
