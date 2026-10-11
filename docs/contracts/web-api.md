@@ -22,7 +22,7 @@ The Skill Hub Web API provides a local HTTP interface for the embedded single-pa
 
 ### 1.2 Host Header Validation
 - The server inspects the HTTP `Host` header on every request.
-- Permitted hosts include `127.0.0.1`, `localhost`, the bound IP address, and any explicit hostnames or ports passed via `--allow-host <host[:port]>`.
+- Permitted hosts include loopback addresses, `localhost`, the machine's host name, the bound IP addresses (any IP literal when bound to a wildcard address such as `0.0.0.0`), on a bound port, and any explicit hostnames or ports passed via `--allow-host <host[:port]>`.
 - Requests with an unrecognized or untrusted `Host` header (for example, DNS rebinding attacks using external domains) are rejected with `HTTP 421 Misdirected Request`.
 
 ### 1.3 Origin and Referrer Restrictions
@@ -34,11 +34,9 @@ The Skill Hub Web API provides a local HTTP interface for the embedded single-pa
   - `Cache-Control: no-store`
 
 ### 1.4 Network Binding and Listen Rules
-- **Automatic Multi-IP Detection:** When the host machine has two or more non-loopback IPv4 addresses (such as Wi-Fi, Ethernet, Docker bridges, or Tailscale interfaces), the server binds to `0.0.0.0` (all interfaces) to allow browser access across local network interfaces.
-- **Single-Interface / Default:** On machines with only one non-loopback address or when loopback mode is forced, the server binds strictly to `127.0.0.1`.
+- **Default:** The server binds to `0.0.0.0:7421` (all interfaces) and prints a plain-HTTP warning plus one URL per usable interface (virtual bridges such as `docker*` and `br-*` are left out). `--dev` binds to `127.0.0.1:7421`.
 - **Flags:**
-  - `--loopback-only`: Forces listening strictly on `127.0.0.1` regardless of network interfaces.
-  - `--addr <host:port>`: Overrides the listen address and port.
+  - `--addr <host:port>[,<host:port>...]`: One to three listen addresses, one listener each, one session token; a missing port uses `7421`. `--addr 127.0.0.1:7421` keeps the server on this machine.
   - `--allow-host <host[:port]>`: Adds an allowed host header.
   - `--no-open`: Prevents automatic browser launch.
 

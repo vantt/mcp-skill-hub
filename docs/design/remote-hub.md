@@ -1,5 +1,7 @@
 # Remote hub: threat model, decisions, baseline and final numbers
 
+> Superseded in part by the onboarding redesign of 2026-10: `skillhub serve` binds `0.0.0.0` by default, `--trust-private-network` is gone, and clients connect with `skillhub connect --hub <url> --token-file <file>`; see [docs/remote-hub-guide.md](../remote-hub-guide.md).
+
 Status: implemented. Decisions settled and the stdio baseline measured on 2026-10-11 before any
 network code existed; the final command syntax and the measured numbers of the finished feature are
 below. The user-facing guide is [docs/remote-hub-guide.md](../remote-hub-guide.md).

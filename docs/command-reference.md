@@ -2,26 +2,31 @@
 
 Find the command for a task here. For every flag, run `skillhub help` or `skillhub help <command>`; the built-in help wins over this page.
 
-- Skill and source commands need a workspace: run them in a connected project, pass `--workspace <path>`, or set `SKILLHUB_WORKSPACE`.
+- Every command acts on the folder you run it in. Run hub commands inside the hub or a connected project: `cd <folder> && skillhub <command>`. For scripts, command help names `--workspace <path>` (a hub folder on this machine) and `SKILLHUB_WORKSPACE`; `--hub` always takes a URL.
 - Most commands accept `--json` for machine-readable output.
-- Commands that change files show a preview first. Add `--yes` to write. `source capture` and `skill env set|unset` write at once.
+- Setup commands (`init`, `connect`, `doctor --fix`, `token rotate`, `cache clear`) act at once and print what they changed; add `--dry-run` to see the changes first.
+- Commands that change skills or sources show a preview first. Add `--yes` to write. `source capture` and `skill env set|unset` write at once.
 - Only Claude Code is verified end to end; `connect` also writes files for Codex and Gemini CLI.
 
 ## Set up
 
 | Task | Command |
 |---|---|
-| Create your workspace | `skillhub init [path] [--force] --yes` |
-| Connect your agent to one project (also `integrate`) | `skillhub connect [--project <dir>] [--workspace <path>] [--host claude\|codex\|gemini] --yes` |
-| Connect your agent to every project | `skillhub connect -g --workspace <path> --yes` |
-| Connect your agent to a hub on another machine | `skillhub connect --hub <url> [--token-file <path>] [-g] [--host claude\|codex\|gemini] --yes` |
-| Remove a connection | `skillhub connect --remove [--cache] [--project <dir>] [-g] [--host claude\|codex\|gemini] [--yes]` |
-| See health and the next step | `skillhub status [--quiet]` |
-| Check the workspace and connections, and repair them | `skillhub doctor [--fix [--yes]]` |
-| Open the web UI | `skillhub serve web [--loopback-only] [--addr <host:port>] [--no-open]` |
-| Print build information | `skillhub version` |
+| Make the current, empty folder your hub | `skillhub init [--dry-run]` |
+| Fetch a hub from Git, or push a new hub to an empty repository | `skillhub init <git-url>` |
+| Connect this project's agents to your hub | `skillhub connect [<path>] [--host claude\|codex\|gemini] [--dry-run]` |
+| Connect your agents in every project | `skillhub connect -g [--host claude\|codex\|gemini] [--dry-run]` |
+| Connect your agents to a hub on another machine | `skillhub connect --hub <url> --token-file <file> [-g] [--host claude\|codex\|gemini] [--dry-run]` |
+| Remove a connection | `skillhub connect --remove [--cache] [-g] [--host claude\|codex\|gemini] [--dry-run]` |
+| See the state of the hub and this folder, and the next command | `skillhub status [--json\|--quiet]` |
+| Check the hub and the connections | `skillhub doctor [--json]` |
+| Repair what doctor can | `skillhub doctor --fix [--dry-run]` |
+| Open the web UI | `skillhub serve web [--addr <host:port>] [--no-open]` |
+| Print the version | `skillhub --version` |
 | Check for a new release | `skillhub update --check` |
 | Update the `skillhub` program | `skillhub update [--version <v>]` |
+
+`doctor` exits with `0` when everything is healthy, `1` when problems remain and `2` for an invalid request. `status` exits with `2` in a folder that is neither a hub nor a connected project, and prints the command that sets one up.
 
 ## Work with skills
 
@@ -48,7 +53,7 @@ Routing flags for `create` and `edit`: `--operation`, `--trigger`, `--not-for`, 
 
 | Task | Command |
 |---|---|
-| Check sources for updates | `skillhub check [--all-due\|--all\|<source-id>...]` (also `skillhub source check`) |
+| Check sources for updates | `skillhub source check [--all-due\|--all\|<source-id>...]` |
 | See which copied skills differ from upstream | `skillhub skill outdated [--check] [--all] [--exit-code]` |
 | Show one skill's upstream and drift | `skillhub skill upstream <skill-id> [--check]` |
 | Pull upstream changes into a skill | `skillhub skill update <skill-id> [--target <commit>] [--yes]` |
@@ -62,33 +67,45 @@ Routing flags for `create` and `edit`: `--operation`, `--trigger`, `--not-for`, 
 | Note a repository to look at later | `skillhub source capture <locator> --reason <text>` |
 | Decide on a candidate | `skillhub source triage <candidate-id> --decision accept\|defer\|reject\|import` |
 
-`check` records whether a source changed; it never edits your skills, and nothing runs in the background. Lessons have no command: start them from **Sources** in the web UI with **Distill with Curator Agent**. Then read them in the skill's **Distill** tab ([Sources and learning](sources-and-learning.md#learn-from-other-repositories)).
+`source check` records whether a source changed; it never edits your skills, and nothing runs in the background. Lessons have no command: start them from **Sources** in the web UI with **Distill with Curator Agent**. Then read them in the skill's **Distill** tab ([Sources and learning](sources-and-learning.md#learn-from-other-repositories)).
 
-## Workspace and Git
+## Maintain the hub
+
+`skillhub doctor` runs these checks and `skillhub doctor --fix` the repairs most people need; the `maintain` commands are the single steps.
 
 | Task | Command |
 |---|---|
-| See uncommitted workspace changes | `skillhub diff` |
-| Check the workspace files | `skillhub validate` |
-| Check only the files staged in Git | `skillhub validate --staged` |
-| Rebuild the search index | `skillhub rebuild [--verbose]` |
-| Preview or apply a file format migration | `skillhub migrate [--to <version>] [--yes]` |
+| See uncommitted hub changes | `skillhub maintain diff` |
+| Check the hub files | `skillhub maintain validate` |
+| Check only the files staged in Git, for a pre-commit hook | `skillhub maintain validate --staged` |
+| Rebuild the search index | `skillhub maintain rebuild [--verbose]` |
+| Preview or apply a file format migration | `skillhub maintain migrate [--to <version>] [--yes]` |
 
-Skill Hub never commits or pushes for you. Add the workspace's own folders by name; never stage the whole folder. See [Curating skills](curating-skills.md#review-and-commit-workspace-changes).
+Skill Hub never commits or pushes your skill changes for you. Add the hub's own paths by name; never stage the whole folder. See [Curating skills](curating-skills.md#review-and-commit-workspace-changes).
+
+## Serve other machines
+
+| Task | Command |
+|---|---|
+| Let agents on other machines use this hub | `skillhub serve [--addr <host:port>[,<host:port>...]] [--allow-host <name>]` |
+| Keep the server on this machine, for an SSH tunnel | `skillhub serve --addr 127.0.0.1:7420` |
+| Show the token those agents need (terminal only) | `skillhub token show` |
+| Replace that token (terminal only) | `skillhub token rotate [--dry-run]` |
+| Remove the skills this machine fetched from another hub | `skillhub cache clear [--hub <url>] [--dry-run]` |
+
+`serve` and `serve web` listen on every network interface by default, over plain HTTP. [Use one hub from several machines](remote-hub-guide.md) explains when to narrow that with `--addr`.
 
 ## Routing and usage
+
+These are developer commands; `skillhub help --dev` lists them.
 
 | Task | Command |
 |---|---|
 | Ask which skill fits a request | `skillhub resolve --request <request.json>` |
 | Measure routing quality across skill examples | `skillhub eval routing [--no-skill <file>] [--policy <file>]` |
 | Check the local usage record | `skillhub telemetry health` |
-| See how often skills are recommended and used | `skillhub telemetry funnel [--since <date\|Nd>] [--skill <skill-id>]` |
+| See how often skills are recommended and used | `skillhub telemetry funnel [--since <YYYY-MM-DD\|Nd>] [--skill <skill-id>]` |
 | Import tool use from Claude Code transcripts | `skillhub telemetry import-transcripts --project <dir>` |
 | Preview or write a sanitized export | `skillhub telemetry export [--output <file> --yes]` |
-| Start the hub for agents by hand (your agent starts it) | `skillhub mcp serve [--profile runtime\|curation\|all]` |
-| Let agents on other machines use this hub | `skillhub serve mcp --addr <host:port> [--trust-private-network] [--token-file <path>]` |
-| Show or replace the token those agents need | `skillhub token show` · `skillhub token rotate [--yes]` |
-| Remove the skills this machine fetched from another hub | `skillhub cache clear --hub [<url>] [--yes]` |
 
-The usage record stays on your machine unless you export it. Developer tools such as `eval run` and `resolution replay` are described in `skillhub help eval` and `skillhub help resolution`.
+Your agent starts Skill Hub by itself over stdio; you never start that by hand. The usage record stays on your machine unless you export it. Developer tools such as `eval run` and `resolution replay` are described in `skillhub help eval` and `skillhub help resolution`.

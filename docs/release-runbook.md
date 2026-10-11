@@ -56,12 +56,12 @@ If the web UI changed since the last release, rerun `make web-shots` before tagg
 
 ### Network MCP listener and remote clients
 
-`skillhub serve mcp --addr` is a network listener that serves the three runtime tools to agents on other machines, and `skillhub mcp proxy` is the client side that `skillhub connect --hub` registers (see the [remote hub guide](remote-hub-guide.md)). Before tagging a release that touches the MCP server, the proxy, the skill cache, `connect` or `doctor`:
+`skillhub serve` is a network listener that serves the three runtime tools to agents on other machines, and `skillhub mcp proxy` is the client side that `skillhub connect --hub` registers (see the [remote hub guide](remote-hub-guide.md)). Before tagging a release that touches the MCP server, the proxy, the skill cache, `connect` or `doctor`:
 
-- Run `make remote-bench`. It times stdio, loopback HTTP and a simulated 100 ms link and fails when a budget in [docs/design/remote-hub.md](design/remote-hub.md#final-numbers) is missed. The safety tests (curation tools unreachable, non-loopback and wildcard addresses refused, the token in no output) run in `go test ./...`.
+- Run `make remote-bench`. It times stdio, loopback HTTP and a simulated 100 ms link and fails when a budget in [docs/design/remote-hub.md](design/remote-hub.md#final-numbers) is missed. The safety tests (curation tools unreachable, the Host and Origin checks, a token on every request, the token in no output) run in `go test ./...`.
 - Keep remote clients and hubs of neighbouring releases compatible. Tool schemas only grow. Raise `app.RemoteAPILevel` only when a client of one level cannot work with a hub of another; `doctor` then tells users which side to update. Say in the release notes when both machines must be updated together.
 - The hub token is a per-workspace secret in `<workspace>/runtime/config/.hub-token` (mode 0600, ignored by Git). It is never part of a release artifact, and an upgrade keeps it, so connected machines keep working.
-- The listener speaks plain HTTP by design. It must keep refusing every non-loopback address without `--trust-private-network` and every wildcard address even with it.
+- The listener speaks plain HTTP by design and binds `0.0.0.0` by default (a user decision). It must keep requiring the token on every request, print the plain-HTTP warning on every start of `serve` and `serve web`, and keep the Origin check strict.
 
 ## Automated release pipeline
 
@@ -80,7 +80,7 @@ Pushing a `v*.*.*` tag initiates the automated GitHub Actions release workflow (
 7. **Post-publish smoke test:** Executes on three runners (`ubuntu-latest`, `macos-latest`, `windows-latest`) testing:
    - Literal one-liner installation and automatic PATH configuration.
    - Upgrade flow from previous stable release (if available).
-   - **Web UI release smoke:** Starts `skillhub serve web --loopback-only --no-open --addr 127.0.0.1:0` in the background on a freshly initialized workspace, extracts the URL and token, verifies authenticated `GET /api/v1/session` (200), unauthenticated request refusal (401), and HTML root element rendering (`id="root"`), then terminates the server.
+   - **Web UI release smoke:** Starts `skillhub serve web --no-open --addr 127.0.0.1:0` in the background on a freshly initialized hub, extracts the URL and token, verifies authenticated `GET /api/v1/session` (200), unauthenticated request refusal (401), and HTML root element rendering (`id="root"`), then terminates the server.
    - Complete uninstallation via `SKILLHUB_UNINSTALL=1` and verification of binary removal.
 
 Prerelease tags (such as `v0.1.0-rc.1`) are published as GitHub prereleases and do not update the `latest` release pointer.
@@ -133,12 +133,12 @@ The uninstaller removes only what the installer manages: the binary, the install
 
 ## Canonical schema migration
 
-A newer binary never modifies canonical schema files automatically during `status`, `doctor`, `rebuild`, or startup. For workspaces created with older schema revisions:
+A newer binary never modifies canonical schema files automatically during `status`, `doctor`, `maintain rebuild`, or startup. For workspaces created with older schema revisions:
 
 ```bash
-skillhub doctor --workspace /path/to/workspace
-skillhub migrate --workspace /path/to/workspace             # read-only diff
-skillhub migrate --workspace /path/to/workspace --to 1 --yes  # apply migration
+cd /path/to/hub && skillhub doctor
+cd /path/to/hub && skillhub maintain migrate               # read-only diff
+cd /path/to/hub && skillhub maintain migrate --to 1 --yes  # apply migration
 ```
 
 ## Disaster recovery: clone, rebuild, and serve
@@ -146,22 +146,22 @@ skillhub migrate --workspace /path/to/workspace --to 1 --yes  # apply migration
 Canonical Git files are the portability boundary. The runtime catalog, operational state, caches, and telemetry are disposable and can be rebuilt on any machine:
 
 ```bash
-# 1. Clone the canonical workspace into a new path
-git clone <remote-url> ~/skillhub
+# 1. Fetch the hub into a new, empty folder (builds the search index)
+mkdir -p ~/skill-hub && cd ~/skill-hub && skillhub init <remote-url>
 
 # 2. Check for pending transaction recovery
-skillhub doctor --workspace ~/skillhub
+cd ~/skill-hub && skillhub doctor
 
 # 3. If recovery is needed:
-skillhub doctor --fix --workspace ~/skillhub --yes
+cd ~/skill-hub && skillhub doctor --fix
 
 # 4. Validate canonical truth, rebuild search index offline, and re-check health
-skillhub validate --workspace ~/skillhub
-skillhub rebuild --workspace ~/skillhub
-skillhub status --workspace ~/skillhub
+cd ~/skill-hub && skillhub maintain validate
+cd ~/skill-hub && skillhub maintain rebuild
+cd ~/skill-hub && skillhub status
 
-# 5. Connect project or serve over stdio
-skillhub mcp serve --workspace ~/skillhub
+# 5. Connect a project; its agents then start the hub over stdio
+cd <your-project> && skillhub connect
 ```
 
 ## Rollback
@@ -169,8 +169,8 @@ skillhub mcp serve --workspace ~/skillhub
 - **Failed in-place update:** `skillhub update` and `install.sh` automatically restore the previous working binary if verification or activation fails.
 - **Faulty published release:** Stop rollout, mark the GitHub release as draft or delete the broken release according to repository policy, and publish a new patch version. Never retarget or overwrite an existing Git tag.
 - **Local binary rollback:** Reinstall a known good version by setting `SKILLHUB_VERSION=v0.0.X` when running the installer script.
-- **Interrupted canonical migration:** Run `skillhub doctor`, inspect any pending recovery journal, and run `skillhub doctor --fix --yes`.
-- **Corrupted derived state:** Stop any running `skillhub` processes for that workspace, delete only the disposable `runtime/` folder (never `.skillhub/transactions/` or canonical files), and run `skillhub rebuild`.
+- **Interrupted canonical migration:** Run `skillhub doctor`, inspect any pending recovery journal, and run `skillhub doctor --fix`.
+- **Corrupted derived state:** Stop any running `skillhub` processes for that workspace, delete only the disposable `runtime/` folder (never `.skillhub/transactions/` or canonical files), and run `skillhub maintain rebuild`.
 
 ## Support and compatibility
 

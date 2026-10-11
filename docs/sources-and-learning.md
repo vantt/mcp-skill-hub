@@ -9,7 +9,7 @@ A **source** is a Git repository linked to one or more skills. It plays one of t
 
 Nothing runs in the background. Skill Hub checks a source only when you run a check, from the terminal or the web UI.
 
-The commands below run inside a connected project, or anywhere with `--workspace ~/skillhub`. Each one that changes files shows a preview first; add `--yes` to apply it.
+The commands below run inside the hub or a connected project, for example `cd <your-project> && skillhub source list`. Each one that changes files shows a preview first; add `--yes` to apply it.
 
 > [!IMPORTANT]
 > Skill Hub never commits or pushes for you, and it never approves content for you. You review each change and commit it yourself.
@@ -145,10 +145,10 @@ To link a repository without watching it, use `skillhub source attach <locator> 
 A check contacts each source and records whether it changed. It never edits your skills. Check only the sources whose interval has passed:
 
 ```bash
-skillhub check --all-due
+skillhub source check --all-due
 ```
 
-Use `--all` to check every watched source, or name sources by ID. `skillhub source check` is the same command.
+Use `--all` to check every watched source, or name sources by ID.
 
 ```text
 Source checks completed; curated skills are unchanged.
@@ -177,7 +177,7 @@ https://github.com/anthropics/skills.git
 
 Your curator agent reads sources and proposes lessons. Skill Hub does not distill by itself, and it does not ship the distill-lab skill.
 
-1. Start the web UI with `skillhub serve web --loopback-only` ([Start the web UI](web-ui.md#start-the-web-ui)).
+1. Start the web UI with `skillhub serve web --addr 127.0.0.1:7421` ([Start the web UI](web-ui.md#start-the-web-ui)).
 2. Open **Sources** and choose **Distill with Curator Agent**.
 3. Pick the sources to hand over, then choose **Copy handoff**.
 4. Paste the handoff to an agent that has the distill-lab skill.
