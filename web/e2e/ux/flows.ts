@@ -1,9 +1,11 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import type { Page } from '@playwright/test';
 import { externalEdit, UX_SKILLS, UX_SOURCE, type UxHub } from './seed-states';
 
 export interface FlowContext {
   page: Page;
-  hub: Pick<UxHub, 'runCLI'>;
+  hub: Pick<UxHub, 'runCLI' | 'ws'>;
 }
 
 export interface Flow {
@@ -22,6 +24,20 @@ export interface Flow {
 }
 
 const skillPath = (id: string, tab?: string) => `/skills/${id}${tab ? `?tab=${tab}` : ''}`;
+
+// A companion file of the active skill, written on first use so the resource editor has a
+// file to open on the fixture hub and on a hub clone alike.
+const UX_RESOURCE = `skills/core/${UX_SKILLS.active}/references/checklist.md`;
+const UX_RESOURCE_BODY = '---\ntitle: Review checklist\n---\n\n# Review checklist\n\n- Read the change description first.\n- Run the checks before you approve.\n';
+
+function ensureCompanionFile(hub: FlowContext['hub']): boolean {
+  const file = path.join(hub.ws, UX_RESOURCE);
+  if (fs.existsSync(file)) return false;
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, UX_RESOURCE_BODY);
+  hub.runCLI(['rebuild']);
+  return true;
+}
 
 // Flows follow the Tier table in plan.md, most-used first. The user confirmed that
 // order on 2026-10-10 (usage is not recorded; the order is reasoned).
@@ -234,6 +250,22 @@ export const FLOWS: Flow[] = [
     route: skillPath(UX_SKILLS.active, 'resources'),
     task: 'See which files the skill carries.',
     preconditions: `${UX_SKILLS.active} is active.`,
+  },
+  {
+    id: 'skill-resource-editor',
+    row: 12,
+    tier: 3,
+    title: 'Skill tabs: Resources, edit a companion file',
+    route: `${skillPath(UX_SKILLS.active, 'resources')}&file=${encodeURIComponent(UX_RESOURCE)}&edit=1`,
+    task: 'Change a reference document and know that nothing is saved before the preview is confirmed.',
+    preconditions: `${UX_SKILLS.active} carries a reference document next to its SKILL.md.`,
+    prepare: async ({ page, hub }) => {
+      if (ensureCompanionFile(hub)) {
+        await page.reload();
+        await page.waitForLoadState('networkidle');
+      }
+      await page.getByRole('textbox', { name: 'checklist.md content' }).waitFor({ timeout: 10000 });
+    },
   },
   {
     id: 'skill-tab-usage',
