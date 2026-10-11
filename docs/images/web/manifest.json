@@ -5,7 +5,7 @@
       "route": "/",
       "state": "Home with the next action and the status of the hub",
       "width": 1280,
-      "height": 570,
+      "height": 562,
       "theme": "light",
       "caption": "Home: what needs attention, and the one next step to take.",
       "alt": "The Skill Hub home screen showing the status of the hub and the next action."
@@ -15,27 +15,27 @@
       "route": "/skills",
       "state": "List with draft, active and deprecated skills",
       "width": 1280,
-      "height": 533,
+      "height": 597,
       "theme": "light",
       "caption": "Skills: every skill with its state, and filters to find one.",
       "alt": "The skills list with a state filter and skills that are draft, active or deprecated."
     },
     {
       "file": "skill-review.png",
-      "route": "/skills/release-checklist",
+      "route": "/skills/release-checklist?…",
       "state": "Review tab of an active skill",
       "width": 1280,
-      "height": 840,
+      "height": 833,
       "theme": "light",
       "caption": "Review: whether agents can use this skill, and what to check first.",
       "alt": "The Review tab of an active skill showing its content check and readiness."
     },
     {
       "file": "skill-review-draft.png",
-      "route": "/skills/api-design-review",
+      "route": "/skills/api-design-review?…",
       "state": "Draft that is missing activation requirements",
       "width": 1280,
-      "height": 855,
+      "height": 848,
       "theme": "light",
       "caption": "A draft that cannot be activated yet, with links to the fields to fix.",
       "alt": "The Review tab of a draft skill listing the missing fields with links to fix each one."
@@ -75,7 +75,7 @@
       "route": "/skills/create",
       "state": "Create form with the field hints",
       "width": 1280,
-      "height": 1305,
+      "height": 1297,
       "theme": "light",
       "caption": "Create a skill: the form tells you which fields are needed to activate it later.",
       "alt": "The create skill form with hints under the fields."
@@ -85,7 +85,7 @@
       "route": "/skills/add",
       "state": "Add from GitHub, first step, with a placeholder address",
       "width": 1280,
-      "height": 541,
+      "height": 533,
       "theme": "light",
       "caption": "Add from GitHub: paste a repository address to find skills in it.",
       "alt": "The add from GitHub form with a repository address filled in."
@@ -105,7 +105,7 @@
       "route": "/sources/distill?…",
       "state": "Distill hand-off brief with a selected source",
       "width": 1280,
-      "height": 701,
+      "height": 693,
       "theme": "light",
       "caption": "Distill: copy the brief and give it to your curator agent.",
       "alt": "The distill hand-off screen with a brief ready to copy for the curator agent."
@@ -125,7 +125,7 @@
       "route": "/skills",
       "state": "Skills list in the dark theme",
       "width": 1280,
-      "height": 533,
+      "height": 597,
       "theme": "dark",
       "caption": "The same list in the dark theme.",
       "alt": "The skills list in the dark theme."
