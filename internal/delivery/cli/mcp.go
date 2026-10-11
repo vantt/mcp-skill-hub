@@ -148,6 +148,14 @@ func runMCPListener(ctx context.Context, cfg mcpServeConfig, stdout, stderr io.W
 			)
 			return 2
 		}
+		if errors.Is(err, mcpserver.ErrWildcardAddress) {
+			termui.New(stderr).Error(
+				"The MCP listener will not start on "+cfg.addr+".",
+				"That address listens on every network interface, including any that are not private, and --trust-private-network only vouches for one private network.",
+				"Give the address of the private interface instead, for example your Tailscale address, as --addr <tailscale-ip>:7420.",
+			)
+			return 2
+		}
 		return writeInvalidRequest(stdout, stderr, false, err.Error(), "Run `skillhub serve mcp --addr 127.0.0.1:7420`.")
 	}
 	resolved, resErr := resolveWorkspace(cfg.workspacePath)

@@ -315,8 +315,15 @@ func TestCheckListenAddress(t *testing.T) {
 		if err := CheckListenAddress(address, false); !errors.Is(err, ErrNonLoopbackAddress) {
 			t.Errorf("CheckListenAddress(%q, false) = %v, want ErrNonLoopbackAddress", address, err)
 		}
+	}
+	for _, address := range []string{"192.168.1.5:7420", "100.101.102.103:7420", "hub.example:7420"} {
 		if err := CheckListenAddress(address, true); err != nil {
 			t.Errorf("CheckListenAddress(%q, true) = %v, want accepted", address, err)
+		}
+	}
+	for _, address := range []string{"0.0.0.0:7420", "[::]:7420", ":7420"} {
+		if err := CheckListenAddress(address, true); !errors.Is(err, ErrWildcardAddress) {
+			t.Errorf("CheckListenAddress(%q, true) = %v, want ErrWildcardAddress", address, err)
 		}
 	}
 	for _, address := range []string{"7420", "127.0.0.1", "127.0.0.1:notaport", "127.0.0.1:99999"} {

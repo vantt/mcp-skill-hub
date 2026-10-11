@@ -50,6 +50,11 @@ const (
 // while the private network has not been confirmed.
 var ErrNonLoopbackAddress = errors.New("the listen address is not a loopback address")
 
+// ErrWildcardAddress reports a listen address that binds every network interface.
+// Trusting a private network does not make that safe, because the same listener
+// would also answer on any public interface, so a specific address is required.
+var ErrWildcardAddress = errors.New("the listen address binds every network interface")
+
 // HTTPOptions configures the network listener.
 type HTTPOptions struct {
 	Workspace string
@@ -72,7 +77,8 @@ type HTTPOptions struct {
 // CheckListenAddress validates a host:port listen address. A non-loopback
 // address is refused with ErrNonLoopbackAddress unless trustPrivateNetwork is
 // set, because the listener speaks plain HTTP and the task text of every
-// request would cross the network unencrypted.
+// request would cross the network unencrypted. Even then an address that binds
+// every interface (0.0.0.0, [::] or no host) is refused with ErrWildcardAddress.
 func CheckListenAddress(address string, trustPrivateNetwork bool) error {
 	host, port, err := net.SplitHostPort(address)
 	if err != nil {
@@ -84,10 +90,16 @@ func CheckListenAddress(address string, trustPrivateNetwork bool) error {
 	if _, err := net.LookupPort("tcp", port); err != nil {
 		return fmt.Errorf("invalid port in address %q", address)
 	}
-	if isLoopbackHost(host) || trustPrivateNetwork {
+	if isLoopbackHost(host) {
 		return nil
 	}
-	return ErrNonLoopbackAddress
+	if !trustPrivateNetwork {
+		return ErrNonLoopbackAddress
+	}
+	if ip := net.ParseIP(host); host == "" || (ip != nil && ip.IsUnspecified()) {
+		return ErrWildcardAddress
+	}
+	return nil
 }
 
 // IsLoopbackAddress reports whether a host:port listen address stays on this

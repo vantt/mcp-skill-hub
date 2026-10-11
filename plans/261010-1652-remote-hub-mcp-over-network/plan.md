@@ -57,7 +57,7 @@ What this means for the plan: a shared server is not needed for correctness at t
 | Q1 | Who connects | One user with several machines. One machine curates and serves the skills; the others only use them. No accounts: a single shared bearer token |
 | Q2 | How machine A reaches machine B | Both an SSH tunnel and Tailscale (or another private VPN) are supported. No TLS in this plan and no exposure to the open internet. The hub listens on loopback by default (SSH tunnel). For Tailscale the user binds it to the Tailscale address and confirms it with an explicit flag (`--trust-private-network`) |
 | Q3 | Skills with scripts, setup or check commands | Run only on the client, after the client pulls the files; never on the hub for a remote caller |
-| Q4 | Task text sent over the network | The hub refuses to listen on any non-loopback address unless `--trust-private-network` is given; plain HTTP on loopback is allowed (SSH tunnel, tests) |
+| Q4 | Task text sent over the network | The hub refuses to listen on any non-loopback address unless `--trust-private-network` is given; plain HTTP on loopback is allowed (SSH tunnel, tests). Even with the flag an address that binds every interface (`0.0.0.0`, `[::]`) is refused: give the address of the private interface, for example the Tailscale address (decided 2026-10-11) |
 | Q5 | Telemetry from remote clients | Written on the hub with a client label; the case journal stays opt-in on the hub |
 
 Go or stop (Phase 1 task 5) is settled: go. The user wants one machine to curate and serve the skills to the others, which the Git route does not do live.

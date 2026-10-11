@@ -37,3 +37,4 @@ Serve the three runtime tools over Streamable HTTP with authentication, so a rem
 - Limits chosen: 128 open sessions, 1 hour idle session timeout, 100 requests per second (burst 200) for the shared token, 20 failed authentications per minute per remote address, 4 MiB request body. `--allow-host` adds Host names such as a Tailscale MagicDNS full name.
 - `skill_get` over HTTP still returns `io.skillhub/local_path`; Phase 3 replaces it with bundle delivery.
 - Report: `plans/reports/cook-261011-remote-phase2.md`.
+- Decisions after review (2026-10-11): the limits above stay as fixed defaults, not flags (enough for about 20 agents); the hub reads its token from the file only (the environment variable `SKILLHUB_HUB_TOKEN` is for the client in Phase 4); `--trust-private-network` still refuses `0.0.0.0` and `[::]`, so a private interface address is required.

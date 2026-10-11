@@ -111,6 +111,16 @@ func TestServeMCPNetworkFlagErrors(t *testing.T) {
 				"     Tailscale, add --trust-private-network.\n",
 		},
 		{
+			name: "address on every interface even with trust",
+			args: []string{"serve", "mcp", "--addr", "0.0.0.0:7420", "--trust-private-network", "--workspace", ws},
+			code: 2,
+			want: "ERROR: The MCP listener will not start on 0.0.0.0:7420.\n" +
+				"WHY: That address listens on every network interface, including any that are not private, and\n" +
+				"     --trust-private-network only vouches for one private network.\n" +
+				"FIX: Give the address of the private interface instead, for example your Tailscale address, as\n" +
+				"     --addr <tailscale-ip>:7420.\n",
+		},
+		{
 			name: "curation profile on the network",
 			args: []string{"serve", "mcp", "--addr", "127.0.0.1:0", "--profile", "curation", "--workspace", ws},
 			code: 2,
