@@ -69,6 +69,17 @@ html, body { margin: 0; height: 100%; overflow: hidden; }
     font-size: 12px; color: var(--color-text-muted);
   }
   .app-skills td.app-skills__actions { position: absolute; top: var(--space-2); right: var(--space-2); width: auto; }
+  /* The Resources list stacks the same way; the Edit or View button stays top-right of each file. */
+  .app-resources thead { display: none; }
+  .app-resources, .app-resources tbody, .app-resources tr, .app-resources td { display: block; width: 100%; box-sizing: border-box; }
+  .app-resources tr { position: relative; padding: var(--space-3); border-bottom: 1px solid var(--color-border); }
+  .app-resources td { border: 0 !important; padding: 2px 0 !important; text-align: left !important; }
+  .app-resources td.app-resources__path { padding-right: 76px !important; }
+  .app-resources td[data-label]::before {
+    content: attr(data-label); display: inline-block; min-width: 88px;
+    font-size: 12px; color: var(--color-text-muted);
+  }
+  .app-resources td.app-resources__actions { position: absolute; top: var(--space-2); right: var(--space-2); width: auto; }
 }
 
 @media (max-width: 720px) {
