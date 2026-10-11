@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
@@ -130,5 +131,31 @@ func TestResolveCLIClarificationRoundTripAndErrorClassification(t *testing.T) {
 	code, output = resolve(prior(issued.ResolutionID))
 	if code != 2 || !bytes.Contains([]byte(output), []byte(`"code":"index_stale"`)) {
 		t.Fatalf("stale catalog resolve=%d: %s", code, output)
+	}
+}
+
+func TestResolveCLIClarificationHintNestsTheAnswerInsideTask(t *testing.T) {
+	t.Parallel()
+	root := filepath.Join(t.TempDir(), "workspace")
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"init", root, "--yes"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("init=%d: %s", code, stderr.String())
+	}
+	writeResolverFixture(t, root, "skills/core/code-review/skill.meta.yaml", "schema_version: 1\nid: code-review\nname: Code Review\nstatus: active\ndescription: Review code changes for defects.\naliases: [patch inspection]\nrouting:\n  operations: [review]\n  triggers: [review code changes pull requests]\n  not_for: [write marketing prose]\n  min_scope: multi_step\nquality:\n  reviewed: true\n")
+	writeResolverFixture(t, root, "skills/core/code-review/SKILL.md", "---\nname: code-review\ndescription: Review code changes for defects.\n---\n\n# Code Review\n")
+	if code := Run([]string{"rebuild", "--workspace", root, "--json"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("rebuild=%d: %s %s", code, stdout.String(), stderr.String())
+	}
+	path := filepath.Join(t.TempDir(), "request.json")
+	if err := os.WriteFile(path, []byte(`{"schema_version":"1","request_id":"req-hint","task":{"description":"review code changes for pull requests"},"operation":"review"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	stdout.Reset()
+	stderr.Reset()
+	if code := Run([]string{"resolve", "--workspace", root, "--request", path}, &stdout, &stderr); code != 0 {
+		t.Fatalf("resolve=%d: %s %s", code, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"scope": "`) || strings.Contains(stdout.String(), `"task.scope": "`) {
+		t.Fatalf("the sample request must put scope inside task, got:\n%s", stdout.String())
 	}
 }

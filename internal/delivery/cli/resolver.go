@@ -69,7 +69,11 @@ func runResolve(ctx context.Context, args []string, stdout, stderr io.Writer) in
 				sampleChoice = response.Question.Choices[0]
 			}
 			p.Blank()
-			p.Line(fmt.Sprintf("To answer, set %q in your request JSON, e.g.:\n  {\"task\": {\"description\": \"...\", %q: %q}}", field, field, sampleChoice))
+			if taskKey, inTask := strings.CutPrefix(field, "task."); inTask {
+				p.Line(fmt.Sprintf("To answer, set %q in your request JSON, e.g.:\n  {\"task\": {\"description\": \"...\", %q: %q}}", field, taskKey, sampleChoice))
+			} else {
+				p.Line(fmt.Sprintf("To answer, set %q in your request JSON.", field))
+			}
 			if response.ResolutionID != "" {
 				p.Line(fmt.Sprintf("or provide prior in your request:\n  {\"prior\": {\"resolution_id\": %q, \"answers\": {%q: %q}}}", response.ResolutionID, field, sampleChoice))
 			}

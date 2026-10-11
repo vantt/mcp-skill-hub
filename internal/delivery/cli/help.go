@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-const globalUsage = `Skill Hub keeps one curated set of agent skills and serves it to Claude Code, Codex, and Gemini CLI.
+const globalUsage = `Skill Hub keeps one curated set of agent skills and serves it to your AI agents over MCP.
 
 Usage: skillhub <command> [flags]
 
@@ -166,7 +166,7 @@ Results describe this terminal (basis: terminal) and are cached as a hint for ag
 2 invalid request or unknown skill.
 
 Examples:
-  skillhub skill add https://github.com/anthropics/skills --skill pdf --yes
+  skillhub skill add https://github.com/anthropics/skills --path skills/pdf --yes
   skillhub skill create my-skill --collection core --name "My Skill" --description "Review changes" --trigger "review code" --not-for "write prose" --min-scope single_step --yes
   skillhub skill review my-skill
   skillhub skill edit my-skill --editor
@@ -451,6 +451,9 @@ func writeGlobalHelp(stdout io.Writer) int {
 
 // writeCommandHelp prints usage for a known command; ok is false for unknown names.
 func writeCommandHelp(stdout io.Writer, command string) (code int, ok bool) {
+	if command == "integrate" {
+		command = "connect"
+	}
 	if usage, found := commandUsage[command]; found {
 		fmt.Fprint(stdout, usage)
 		return 0, true

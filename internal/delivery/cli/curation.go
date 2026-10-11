@@ -91,7 +91,7 @@ func renderCurationHome(writer io.Writer, home app.CurationHome, workspacePath s
 		p.Blank()
 		action := home.SuggestedActions[0]
 		if action.Label == "Review uncommitted changes" {
-			cmd := fmt.Sprintf("git -C %s add -A && git -C %s commit -m \"Update skills\"", workspacePath, workspacePath)
+			cmd := fmt.Sprintf("%s && git -C %s commit -m \"Update skills\"", stageWorkspaceCommand(workspacePath), workspacePath)
 			p.Next("Review uncommitted changes", cmd)
 		} else {
 			p.Next(action.Label, action.Command)
@@ -132,7 +132,7 @@ func runDiff(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	}
 	p.Blank()
 	p.Line("To commit these changes, run:")
-	p.Command(fmt.Sprintf("git -C %s add -A && git -C %s commit -m \"...\"", path, path))
+	p.Command(fmt.Sprintf("%s && git -C %s commit -m \"...\"", stageWorkspaceCommand(path), path))
 	return 0
 }
 

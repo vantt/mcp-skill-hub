@@ -60,10 +60,16 @@ func renderInitSummary(stdout io.Writer, workspacePath string, result app.Result
 	}
 	p.Blank()
 	p.Line("Next:")
-	p.Line(fmt.Sprintf("  1. Commit the workspace: git -C %s add -A && git -C %s commit -m \"Initialize Skill Hub workspace\"", workspacePath, workspacePath))
+	p.Line(fmt.Sprintf("  1. Commit the workspace: %s && git -C %s commit -m \"Initialize Skill Hub workspace\"", stageWorkspaceCommand(workspacePath), workspacePath))
 	p.Line(fmt.Sprintf("  2. Connect another project: cd <project> && skillhub connect --workspace %s --yes", workspacePath))
 	p.Line(fmt.Sprintf("     (add -g instead to connect every project: skillhub connect -g --workspace %s --yes)", workspacePath))
 	p.Line("  3. Open your agent there and ask: \"curate my Skill Hub\"")
+}
+
+// stageWorkspaceCommand stages the folders Skill Hub owns by name. The connection files that init
+// and connect write hold paths of this machine, so the whole folder is never staged at once.
+func stageWorkspaceCommand(path string) string {
+	return fmt.Sprintf("git -C %s add .gitignore .skillhub skills sources history registry config distill evals", path)
 }
 
 func runValidate(ctx context.Context, args []string, stdout, stderr io.Writer) int {
