@@ -28,7 +28,7 @@ Clone with Git when machine A is often offline, or when you want to curate on A 
 
 Machine B keeps serving its own agents over stdio at the same time; the listener is a separate process over the same workspace.
 
-Each scope (one project, or your user account with `-g`) points at one hub: `connect --workspace` for a hub on this machine, `connect --hub` for a hub on another machine. Connecting a scope to the other kind replaces its entry.
+Each scope (one project, or your user account with `-g`) points at one hub: `connect <path>` for a hub on this machine, `connect --hub` for a hub on another machine. Connecting a scope to the other kind replaces its entry.
 
 ### What runs where
 
@@ -446,7 +446,7 @@ Next: restart your agent so it stops starting the Skill Hub server
 Files that held only the Skill Hub entry are deleted; files with other content keep it. Use `-g` to remove a user-account connection. To use a hub on machine A itself instead, connect the scope to a workspace there; this replaces the remote entry in one step:
 
 ```bash
-skillhub connect --workspace ~/skillhub
+skillhub connect ~/skillhub
 ```
 
 Then stop the tunnel and, on machine B, the listener (Ctrl-C, or `systemctl --user disable --now skillhub-listener`). You can delete the token copy on machine A, and `skillhub token rotate` on machine B makes every old copy useless.

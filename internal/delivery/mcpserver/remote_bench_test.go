@@ -478,7 +478,15 @@ var remoteBenchShapes = map[string][]remoteBenchFile{
 func newRemoteBenchFixture(t *testing.T, binary string) string {
 	t.Helper()
 	root := filepath.Join(t.TempDir(), "workspace")
-	runRemoteBench(t, binary, "init", root)
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	initCommand := exec.Command(binary, "init")
+	initCommand.Dir = root
+	initCommand.Env = remoteBenchEnv()
+	if output, err := initCommand.CombinedOutput(); err != nil {
+		t.Fatalf("skillhub init: %v\n%s", err, output)
+	}
 	for id, files := range remoteBenchShapes {
 		directory := filepath.Join(root, "skills", "default", id)
 		metadata := fmt.Sprintf("schema_version: 1\nid: %s\nstatus: active\nquality:\n  reviewed: true\nrouting:\n  triggers: [fetch the %s fixture skill]\n  not_for: [write marketing prose]\n  min_scope: multi_step\n", id, id)

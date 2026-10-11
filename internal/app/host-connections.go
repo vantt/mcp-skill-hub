@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/vantt/mcp-skill-hub/internal/hostintegration"
+	"github.com/vantt/mcp-skill-hub/internal/shellquote"
 )
 
 type externalConnection struct {
@@ -94,12 +95,14 @@ func checkProjectAndGlobalConnections(ctx context.Context, root string, result R
 		if err == nil && len(plan.Changes) == 0 {
 			continue
 		}
-		id, summary, command := "project_connection_outdated", fmt.Sprintf("Current project connection at %s is outdated or needs repair.", target.request.Root), fmt.Sprintf("skillhub connect --project %s --workspace %s", target.request.Root, root)
-		if target.global {
-			id, summary, command = "global_connection_outdated", "Global agent connection is outdated or needs repair.", "skillhub connect -g --workspace "+root
-		}
+		hosts := ""
 		for _, host := range target.request.Hosts {
-			command += " --host " + string(host)
+			hosts += " --host " + string(host)
+		}
+		id, summary := "project_connection_outdated", fmt.Sprintf("Current project connection at %s is outdated or needs repair.", target.request.Root)
+		command := shellquote.Chain("cd "+shellquote.Arg(target.request.Root), "skillhub connect "+shellquote.Arg(root)+hosts)
+		if target.global {
+			id, summary, command = "global_connection_outdated", "Global agent connection is outdated or needs repair.", "skillhub connect -g "+shellquote.Arg(root)+hosts
 		}
 		result.Status = StatusActionRequired
 		result.Items = append(result.Items, Item{ID: id, Summary: summary, Impact: "Run `" + command + "` to update."})

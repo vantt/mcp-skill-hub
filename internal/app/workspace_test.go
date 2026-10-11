@@ -17,7 +17,7 @@ func TestInitRequiresConfirmationBeforeMutation(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	service := WorkspaceService{}
-	preview, err := service.Init(root, true)
+	preview, err := service.Init(root, InitOptions{DryRun: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,7 +27,7 @@ func TestInitRequiresConfirmationBeforeMutation(t *testing.T) {
 	if _, err := os.Stat(root); !os.IsNotExist(err) {
 		t.Fatalf("init preview wrote workspace: %v", err)
 	}
-	if _, err := service.Init(root, false); err != nil {
+	if _, err := service.Init(root, InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(root, ".skillhub", "schema-version")); err != nil {
@@ -121,7 +121,7 @@ func TestRemediationRejectsSkillhubSymlink(t *testing.T) {
 		name  string
 		apply func(string) (Result, error)
 	}{
-		{name: "init", apply: func(path string) (Result, error) { return service.Init(path, false) }},
+		{name: "init", apply: func(path string) (Result, error) { return service.Init(path, InitOptions{}) }},
 		{name: "doctor fix", apply: func(path string) (Result, error) { return service.DoctorFix(path, false) }},
 	} {
 		t.Run(remediation.name, func(t *testing.T) {
@@ -130,7 +130,7 @@ func TestRemediationRejectsSkillhubSymlink(t *testing.T) {
 			if err := os.Symlink(external, filepath.Join(root, ".skillhub")); err != nil {
 				t.Skipf("symlinks unavailable: %v", err)
 			}
-			if _, err := remediation.apply(root); err == nil {
+			if result, err := remediation.apply(root); err == nil && result.Error == nil {
 				t.Fatal("remediation accepted .skillhub symlink")
 			}
 			if _, err := os.Stat(filepath.Join(external, "schema-version")); !os.IsNotExist(err) {
@@ -144,7 +144,7 @@ func TestDoctorFixRebuildsMissingRuntime(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	service := WorkspaceService{}
-	if _, err := service.Init(root, false); err != nil {
+	if _, err := service.Init(root, InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.RemoveAll(filepath.Join(root, "runtime")); err != nil {
@@ -167,7 +167,7 @@ func TestDoctorFixRebuildsMissingRuntime(t *testing.T) {
 func TestDoctorHealthyWorkspaceCreatesOnlyAdvisoryLockState(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, false); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := (WorkspaceService{}).Doctor(root); err != nil {
@@ -186,7 +186,7 @@ func TestInitIsReadOnlyAndConfirmationInitializes(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	service := WorkspaceService{}
-	preview, err := service.Init(root, true)
+	preview, err := service.Init(root, InitOptions{DryRun: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,7 +196,7 @@ func TestInitIsReadOnlyAndConfirmationInitializes(t *testing.T) {
 	if _, err := os.Stat(root); !os.IsNotExist(err) {
 		t.Fatalf("init preview wrote workspace: %v", err)
 	}
-	applied, err := service.Init(root, false)
+	applied, err := service.Init(root, InitOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +227,7 @@ func TestExistingWorkspaceDoctorFixNeverSilentlyChangesCanonicalVersion(t *testi
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	service := WorkspaceService{}
-	if _, err := service.Init(root, false); err != nil {
+	if _, err := service.Init(root, InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(root, ".skillhub", "schema-version"), []byte("outdated\n"), 0o644); err != nil {
@@ -261,7 +261,7 @@ func TestExistingWorkspaceDoctorFixNeverSilentlyChangesCanonicalVersion(t *testi
 func TestDoctorPreviewsRecoveryConflictWithoutOfferingFix(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, false); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	failure := errors.New("interrupt after replacement")
@@ -296,7 +296,7 @@ func TestDoctorPreviewsRecoveryConflictWithoutOfferingFix(t *testing.T) {
 func TestDoctorReportsAndFixesPendingRecovery(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, false); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	injected := errors.New("leave prepared transaction")

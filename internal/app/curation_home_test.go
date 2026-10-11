@@ -207,7 +207,7 @@ func TestCurationHomePrioritizesInvalidRecoveryStaleAndGit(t *testing.T) {
 func TestGetCurationHomePrioritizesStaleIndexBeforeGitChanges(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, false); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	commitWorkspace(t, root)
@@ -234,7 +234,7 @@ func TestGetCurationHomePrioritizesStaleIndexBeforeGitChanges(t *testing.T) {
 func TestGetCurationHomeReportsUnknownIndexDuringPendingRecovery(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, false); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	injected := errors.New("leave recovery pending")
@@ -268,7 +268,7 @@ func TestGetCurationHomeReportsUnknownIndexDuringPendingRecovery(t *testing.T) {
 func TestGetCurationHomeReadsHealthyWorkspaceOffline(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, false); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	commitWorkspace(t, root)
@@ -288,7 +288,7 @@ func TestGetCurationHomeReadsHealthyWorkspaceOffline(t *testing.T) {
 
 func commitWorkspace(t *testing.T, root string) {
 	t.Helper()
-	for _, args := range [][]string{{"add", "-A"}, {"-c", "user.name=Skill Hub Test", "-c", "user.email=test@skillhub.invalid", "commit", "-m", "initial"}} {
+	for _, args := range [][]string{{"add", "-A"}, {"-c", "user.name=Skill Hub Test", "-c", "user.email=test@skillhub.invalid", "commit", "--allow-empty", "-m", "initial"}} {
 		command := exec.Command("git", append([]string{"-C", root}, args...)...)
 		if output, err := command.CombinedOutput(); err != nil {
 			t.Fatalf("git %v: %v: %s", args, err, output)
@@ -299,7 +299,7 @@ func commitWorkspace(t *testing.T, root string) {
 func TestGetCurationHomeNeverReportsCountsKnownWhenInvalid(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, false); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	commitWorkspace(t, root)
@@ -362,7 +362,7 @@ func TestGetCurationHomeNeverReportsCountsKnownWhenInvalid(t *testing.T) {
 func TestCurationHomeUpstreamUpdatesAndExcludesUpstreamOnlySources(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, false); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -505,7 +505,7 @@ func TestCandidateLessonsCountedInHomeAndSkillSources(t *testing.T) {
 	t.Parallel()
 
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, false); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	ctx := context.Background()

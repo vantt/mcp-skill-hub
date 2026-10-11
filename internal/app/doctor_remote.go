@@ -337,42 +337,15 @@ func HostDisplayName(host hostintegration.Host) string {
 	return string(host)
 }
 
-// FindRemoteEntries lists the entries for remote hubs in the project
-// directory and in the user scope. Unreadable files are skipped; a local
-// entry is not a remote entry.
-func FindRemoteEntries(project, home string) []RemoteEntry {
+// FindRemoteEntries lists the entries for remote hubs that DetectRole found:
+// the project entries (nearest folder with an entry, from the current
+// directory upward) and the user-scope entries. A local entry is not a remote
+// entry. Doctor and status read the same entries through this filter.
+func FindRemoteEntries(report RoleReport) []RemoteEntry {
 	var entries []RemoteEntry
-	scopes := []struct {
-		root   string
-		global bool
-	}{{project, false}, {home, true}}
-	// In the home directory the project and user config of Codex and Gemini
-	// CLI are the same file; it is reported once, as the user scope.
-	seen := map[string]int{}
-	for _, scope := range scopes {
-		if scope.root == "" {
-			continue
-		}
-		for _, adapter := range hostintegration.SupportedAdapters() {
-			relative := adapter.ConfigRelativePath
-			if scope.global {
-				relative = adapter.UserConfigRelativePath
-			}
-			path := filepath.Clean(filepath.Join(scope.root, filepath.FromSlash(relative)))
-			raw, err := os.ReadFile(path)
-			if err != nil {
-				continue
-			}
-			if position, duplicate := seen[path]; duplicate {
-				entries[position].Global = true
-				continue
-			}
-			registration := hostintegration.ReadRegistration(adapter.Host, raw)
-			if !registration.Remote() {
-				continue
-			}
-			seen[path] = len(entries)
-			entries = append(entries, RemoteEntry{Host: adapter.Host, Global: scope.global, Root: scope.root, HubURL: registration.HubURL, TokenFile: registration.TokenFile})
+	for _, entry := range report.Entries() {
+		if entry.Remote() {
+			entries = append(entries, RemoteEntry{Host: entry.Host, Global: entry.Global, Root: entry.Root, HubURL: entry.HubURL, TokenFile: entry.TokenFile})
 		}
 	}
 	return entries

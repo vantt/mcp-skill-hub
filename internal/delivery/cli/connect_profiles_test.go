@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/shellquote"
 )
 
 func TestConnectClaudeCurationGuidance(t *testing.T) {
@@ -18,7 +19,7 @@ func TestConnectClaudeCurationGuidance(t *testing.T) {
 	for _, command := range []string{"connect"} {
 		for _, jsonOutput := range []bool{false, true} {
 			project := t.TempDir()
-			args := []string{command, "--project", project, "--workspace", workspace}
+			args := []string{workspace}
 			if jsonOutput {
 				args = append(args, "--json")
 			}
@@ -27,9 +28,9 @@ func TestConnectClaudeCurationGuidance(t *testing.T) {
 				if !apply {
 					call = append(call, "--dry-run")
 				}
-				code, stdout, stderr := runCLI(t, call...)
+				code, stdout, stderr := runConnectCLI(t, project, call...)
 				if code != 0 {
-					t.Fatalf("%v exit = %d: %s", call, code, stderr)
+					t.Fatalf("%s %v exit = %d: %s", command, call, code, stderr)
 				}
 				if jsonOutput {
 					var response struct {
@@ -81,11 +82,11 @@ func TestConnectOtherHostsOmitCurationGuidance(t *testing.T) {
 	for _, host := range []string{"codex", "gemini"} {
 		project := t.TempDir()
 		for _, jsonOutput := range []bool{false, true} {
-			args := []string{"connect", "--project", project, "--workspace", workspace, "--host", host}
+			args := []string{workspace, "--host", host}
 			if jsonOutput {
 				args = append(args, "--json")
 			}
-			code, stdout, stderr := runCLI(t, args...)
+			code, stdout, stderr := runConnectCLI(t, project, args...)
 			if code != 0 || strings.Contains(stdout, "curation_guidance") || strings.Contains(stdout, "select skillhub-curation") {
 				t.Fatalf("%s guidance leaked: exit=%d stdout=%s stderr=%s", host, code, stdout, stderr)
 			}
@@ -137,7 +138,7 @@ func TestDoctorMigratesLegacyClaudeConnections(t *testing.T) {
 			if result.Error != nil || result.Status != app.StatusActionRequired || len(result.Items) != 1 || result.Items[0].ID != "project_connection_outdated" {
 				t.Fatalf("valid legacy connection should suggest migration, not be broken: %+v", result)
 			}
-			if len(result.SuggestedActions) != 1 || !strings.HasPrefix(result.SuggestedActions[0].Command, "skillhub connect --project ") {
+			if len(result.SuggestedActions) != 1 || !strings.Contains(result.SuggestedActions[0].Command, "skillhub connect "+shellquote.Arg(workspace)) {
 				t.Fatalf("missing connect suggestion: %+v", result.SuggestedActions)
 			}
 			after, err := os.ReadFile(path)

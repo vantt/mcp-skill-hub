@@ -14,6 +14,7 @@ import (
 
 	"github.com/vantt/mcp-skill-hub/internal/hostintegration"
 	"github.com/vantt/mcp-skill-hub/internal/shellquote"
+	"github.com/vantt/mcp-skill-hub/internal/userconfig"
 )
 
 const testHubToken = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -331,14 +332,23 @@ func TestFindRemoteEntriesReadsProjectAndUserScopes(t *testing.T) {
 	write(filepath.Join(project, ".mcp.json"), `{"mcpServers":{"skillhub":{"args":["mcp","proxy","--hub","http://127.0.0.1:7420","--token-file","/t"]}}}`)
 	write(filepath.Join(project, ".gemini", "settings.json"), `{"mcpServers":{"skillhub":{"args":["mcp","serve","--workspace","/w"]}}}`)
 	write(filepath.Join(home, ".codex", "config.toml"), "[mcp_servers.skillhub]\nargs = [\"mcp\", \"proxy\", \"--hub\", \"http://100.64.0.2:7420\"]\n")
-	entries := FindRemoteEntries(project, home)
+	entries := FindRemoteEntries(DetectRole(project, home, userconfig.Config{}))
 	if len(entries) != 2 || entries[0].Host != hostintegration.HostClaude || entries[0].Global || entries[0].TokenFile != "/t" ||
 		entries[1].Host != hostintegration.HostCodex || !entries[1].Global || entries[1].HubURL != "http://100.64.0.2:7420" {
 		t.Fatalf("entries = %+v", entries)
 	}
-	// In the home directory the Codex project and user files are one file.
-	if entries := FindRemoteEntries(home, home); len(entries) != 1 || !entries[0].Global {
+	// The home directory itself is never scanned as a project, so its Codex
+	// file, which is also the user file, is reported once, as the user scope.
+	if entries := FindRemoteEntries(DetectRole(home, home, userconfig.Config{})); len(entries) != 1 || !entries[0].Global {
 		t.Fatalf("home as project: %+v", entries)
+	}
+	// A subfolder of the project finds the project entries by walking up.
+	sub := filepath.Join(project, "src", "pkg")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if entries := FindRemoteEntries(DetectRole(sub, home, userconfig.Config{})); len(entries) != 2 || entries[0].Root != project {
+		t.Fatalf("subfolder: %+v", entries)
 	}
 }
 

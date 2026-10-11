@@ -17,6 +17,7 @@ import (
 	"github.com/vantt/mcp-skill-hub/internal/hubtoken"
 	"github.com/vantt/mcp-skill-hub/internal/shellquote"
 	"github.com/vantt/mcp-skill-hub/internal/skillruntime"
+	"github.com/vantt/mcp-skill-hub/internal/userconfig"
 )
 
 // RemoteConnectRequest points a scope at a hub on another machine.
@@ -147,6 +148,9 @@ func (service ConnectService) ConnectRemote(ctx context.Context, request RemoteC
 	}
 	root, scope, label, problem := service.target(ConnectRequest{Project: request.Project, Global: request.Global})
 	if problem != nil {
+		return ErrorResult(problem), nil, nil
+	}
+	if problem := tokenFileUsedElsewhere(root, scope == hostintegration.ScopeUser, request.Hosts, hubURL, tokenFile); problem != nil {
 		return ErrorResult(problem), nil, nil
 	}
 	binary, err := currentBinary()
@@ -306,12 +310,46 @@ func remoteConnectWarnings(hubURL string, probe HubProbe, token HubToken) []Warn
 	return warnings
 }
 
+// tokenFileUsedElsewhere refuses a token file that another entry on this
+// machine (project or user scope) already uses for a different hub: one file
+// per hub keeps a token from being sent to the wrong hub.
+// The entries this connect replaces (same scope and host) do not count.
+func tokenFileUsedElsewhere(root string, global bool, hosts []hostintegration.Host, hubURL, tokenFile string) *Error {
+	if tokenFile == "" {
+		return nil
+	}
+	project := root
+	if global {
+		project, _ = os.Getwd()
+	}
+	home, _ := os.UserHomeDir()
+	for _, entry := range DetectRole(project, home, userconfig.Config{}).Entries() {
+		if !entry.Remote() || entry.TokenFile == "" || entry.HubURL == hubURL || !samePathText(entry.TokenFile, tokenFile) {
+			continue
+		}
+		if entry.Global == global && sameDirectory(entry.Root, root) && (len(hosts) == 0 || slices.Contains(hosts, entry.Host)) {
+			continue
+		}
+		scope := "project " + entry.Root
+		if entry.Global {
+			scope = "your user account"
+		}
+		return NewInvalidRequestError(
+			"The token file "+tokenFile+" is already used for the hub at "+entry.HubURL+" ("+HostDisplayName(entry.Host)+" in "+scope+").",
+			"Keep one token file per hub: copy the token of "+hubURL+" to "+hubtoken.ClientPath(hubURL)+" and pass `--token-file "+hubtoken.ClientPath(hubURL)+"`.",
+		)
+	}
+	return nil
+}
+
+func samePathText(a, b string) bool {
+	return filepath.Clean(a) == filepath.Clean(b)
+}
+
 func remoteConnectCommand(request RemoteConnectRequest, hubURL, tokenFile string) string {
 	parts := []string{"skillhub connect"}
 	if request.Global {
 		parts = append(parts, "--global")
-	} else if request.Project != "" {
-		parts = append(parts, "--project", shellquote.Arg(request.Project))
 	}
 	parts = append(parts, "--hub", hubURL)
 	if tokenFile != "" {
@@ -468,16 +506,13 @@ func removesInstructions(result Result) bool {
 // is about to be cleared: the user account when a project is disconnected,
 // the current project when the user account is.
 func sharedHubWarnings(hubs []string, global bool, root string) []Warning {
-	project, home := "", ""
-	if global {
-		if current, err := os.Getwd(); err == nil && filepath.Clean(current) != filepath.Clean(root) {
-			project = current
-		}
-	} else if userHome, err := os.UserHomeDir(); err == nil && filepath.Clean(userHome) != filepath.Clean(root) {
-		home = userHome
-	}
 	var warnings []Warning
-	for _, entry := range FindRemoteEntries(project, home) {
+	for _, entry := range FindRemoteEntries(DetectRoleHere()) {
+		// Only the other scope can still use the hub: the user account when a
+		// project is disconnected, the current project when the user account is.
+		if entry.Global == global || sameDirectory(entry.Root, root) {
+			continue
+		}
 		if slices.Contains(hubs, entry.HubURL) {
 			warnings = append(warnings, Warning{Code: "hub_cache_shared", Summary: HostDisplayName(entry.Host) + " in " + entry.ScopeLabel() + " still uses " + entry.HubURL + "; its agents fetch the skills again after the cache is cleared."})
 		}
@@ -489,8 +524,6 @@ func disconnectCommand(request DisconnectRequest) string {
 	parts := []string{"skillhub connect --remove"}
 	if request.Global {
 		parts = append(parts, "--global")
-	} else if request.Project != "" {
-		parts = append(parts, "--project", shellquote.Arg(request.Project))
 	}
 	for _, host := range request.Hosts {
 		parts = append(parts, "--host", string(host))

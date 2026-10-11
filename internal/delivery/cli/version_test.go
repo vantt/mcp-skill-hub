@@ -50,17 +50,17 @@ func (failingWriter) Write([]byte) (int, error) {
 
 func TestInitDryRunWritesNothing(t *testing.T) {
 	t.Parallel()
-	root := filepath.Join(t.TempDir(), "workspace")
+	root := t.TempDir()
 	var stdout, stderr bytes.Buffer
-	if exitCode := Run([]string{"init", root, "--dry-run"}, &stdout, &stderr); exitCode != 0 {
+	if exitCode := runInitTo(t, root, &stdout, &stderr, "--dry-run"); exitCode != 0 {
 		t.Fatalf("init --dry-run exit code = %d, stderr = %q", exitCode, stderr.String())
 	}
-	if _, err := os.Stat(root); !os.IsNotExist(err) {
-		t.Fatalf("init --dry-run wrote workspace: %v", err)
+	if entries, err := os.ReadDir(root); err != nil || len(entries) != 0 {
+		t.Fatalf("init --dry-run wrote into the folder: %v, %v", entries, err)
 	}
 	stdout.Reset()
 	stderr.Reset()
-	if exitCode := Run([]string{"init", root}, &stdout, &stderr); exitCode != 0 {
+	if exitCode := runInitTo(t, root, &stdout, &stderr); exitCode != 0 {
 		t.Fatalf("confirmed init exit code = %d, stderr = %q", exitCode, stderr.String())
 	}
 	if _, err := os.Stat(filepath.Join(root, ".skillhub", "schema-version")); err != nil {
@@ -94,13 +94,13 @@ func TestInitDefaultsToCurrentDirectory(t *testing.T) {
 	}
 }
 
-func TestInitRejectsMultipleWorkspacePaths(t *testing.T) {
+func TestInitRejectsMoreThanOneArgument(t *testing.T) {
 	t.Parallel()
 	var stdout, stderr bytes.Buffer
 	if exitCode := Run([]string{"init", "first", "second"}, &stdout, &stderr); exitCode != 2 {
 		t.Fatalf("init exit code = %d, want 2", exitCode)
 	}
-	if !strings.Contains(stderr.String(), "init accepts at most one workspace path") {
+	if !strings.Contains(stderr.String(), "init accepts at most one Git URL") {
 		t.Fatalf("unexpected init error: %q", stderr.String())
 	}
 }

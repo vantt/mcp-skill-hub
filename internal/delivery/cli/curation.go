@@ -185,3 +185,9 @@ func curationFlags(args []string) (path string, jsonOutput, quiet bool, err erro
 	}
 	return resolved, jsonOutput, quiet, nil
 }
+
+// stageWorkspaceCommand stages the folders Skill Hub owns by name. The connection files that init
+// and connect write hold paths of this machine, so the whole folder is never staged at once.
+func stageWorkspaceCommand(path string) string {
+	return fmt.Sprintf("git -C %s add .gitignore .skillhub skills sources history registry config distill evals", path)
+}

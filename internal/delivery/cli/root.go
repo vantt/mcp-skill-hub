@@ -42,7 +42,7 @@ func RunContext(ctx context.Context, args []string, stdout, stderr io.Writer) in
 	case "status":
 		return runStatus(ctx, args[1:], stdout, stderr)
 	case "init":
-		return runInit(args[1:], stdout, stderr)
+		return runInit(ctx, args[1:], stdout, stderr)
 	case "validate":
 		return runValidate(ctx, args[1:], stdout, stderr)
 	case "rebuild":

@@ -17,7 +17,7 @@ func TestStatusHumanJSONAndQuietUseOneModel(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"init", root}, &stdout, &stderr); code != 0 {
+	if code := runInitTo(t, root, &stdout, &stderr); code != 0 {
 		t.Fatalf("init exit = %d: %s", code, stderr.String())
 	}
 	commitCLIWorkspace(t, root)
@@ -87,7 +87,7 @@ func TestDiffOutputUsesRelativePaths(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"init", root}, &stdout, &stderr); code != 0 {
+	if code := runInitTo(t, root, &stdout, &stderr); code != 0 {
 		t.Fatal(stderr.String())
 	}
 	commitCLIWorkspace(t, root)
@@ -115,7 +115,7 @@ func TestStatusInvalidWorkspaceDoesNotPrintNoSkillsYetBUG08(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"init", root}, &stdout, &stderr); code != 0 {
+	if code := runInitTo(t, root, &stdout, &stderr); code != 0 {
 		t.Fatal(stderr.String())
 	}
 	// Introduce an invalid file into the workspace
@@ -149,7 +149,7 @@ func TestStatusSuggestsRunnableCreateCommandBUG17(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"init", root}, &stdout, &stderr); code != 0 {
+	if code := runInitTo(t, root, &stdout, &stderr); code != 0 {
 		t.Fatal(stderr.String())
 	}
 
@@ -171,7 +171,7 @@ func TestStatusSuggestsRunnableCreateCommandBUG17(t *testing.T) {
 
 func commitCLIWorkspace(t *testing.T, root string) {
 	t.Helper()
-	for _, args := range [][]string{{"add", "-A"}, {"-c", "user.name=Skill Hub Test", "-c", "user.email=test@skillhub.invalid", "commit", "-m", "initial"}} {
+	for _, args := range [][]string{{"add", "-A"}, {"-c", "user.name=Skill Hub Test", "-c", "user.email=test@skillhub.invalid", "commit", "--allow-empty", "-m", "initial"}} {
 		command := exec.Command("git", append([]string{"-C", root}, args...)...)
 		if output, err := command.CombinedOutput(); err != nil {
 			t.Fatalf("git %v: %v: %s", args, err, output)

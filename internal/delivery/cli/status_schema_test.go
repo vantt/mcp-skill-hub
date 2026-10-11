@@ -16,7 +16,7 @@ func TestStatusJSONValidatesAgainstVersionedSchema(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"init", root}, &stdout, &stderr); code != 0 {
+	if code := runInitTo(t, root, &stdout, &stderr); code != 0 {
 		t.Fatalf("init exit = %d: %s", code, stderr.String())
 	}
 	stdout.Reset()

@@ -8,17 +8,20 @@ import (
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
 	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
+	"github.com/vantt/mcp-skill-hub/internal/hubtoken"
 )
 
 // tokenHandOff tells how the hub's token reaches this machine. It is printed
 // by `connect --hub --dry-run`; the token itself is never printed.
-const tokenHandOff = "To get the token to this machine, copy the hub's token file from machine B (the hub prints its path when `skillhub serve mcp --addr ...` starts, and `skillhub token show` there shows it), for example `scp <machine-b>:<workspace>/runtime/config/.hub-token ~/.config/skillhub/hub-token`, then `chmod 600` it; or set " + app.HubTokenEnv + " in the environment the agent host starts the proxy with."
+func tokenHandOff(hubURL string) string {
+	return "To get the token to this machine, copy the hub's token file from machine B (the hub prints its path when `skillhub serve mcp --addr ...` starts, and `skillhub token show` there shows it), for example `scp <machine-b>:<hub-folder>/runtime/config/.hub-token " + hubtoken.ClientPath(hubURL) + "`, then `chmod 600` it; or set " + app.HubTokenEnv + " in the environment the agent host starts the proxy with."
+}
 
 // runConnectHub handles `skillhub connect --hub <url>`: the host entry starts
 // the stdio proxy for a hub on another machine.
-func runConnectHub(ctx context.Context, flags connectFlags, stdout, stderr io.Writer) int {
+func runConnectHub(ctx context.Context, dir string, flags connectFlags, stdout, stderr io.Writer) int {
 	result, connection, err := (app.ConnectService{}).ConnectRemote(ctx, app.RemoteConnectRequest{
-		Project: flags.project, Global: flags.global, Hosts: flags.hosts,
+		Project: dir, Global: flags.global, Hosts: flags.hosts,
 		Hub: flags.hub, TokenFile: flags.tokenFile, DryRun: flags.dryRun,
 	})
 	if err != nil || result.Error != nil {
@@ -70,7 +73,7 @@ func renderRemoteConnect(p *termui.Printer, result app.Result, connection *app.R
 		p.Blank()
 		notes := []string{"Curation stays on the hub machine: no curation server and no system-curator skill are installed here."}
 		if result.Status == app.StatusActionRequired {
-			notes = append(notes, tokenHandOff)
+			notes = append(notes, tokenHandOff(connection.Hub))
 		}
 		p.Bullets(notes...)
 	}
@@ -149,9 +152,9 @@ func hostChangeLines(result app.Result, removal bool) []string {
 
 // runConnectRemove handles `skillhub connect --remove`: it takes the Skill
 // Hub entry out of a scope, for a local or a remote hub.
-func runConnectRemove(ctx context.Context, flags connectFlags, stdout, stderr io.Writer) int {
+func runConnectRemove(ctx context.Context, dir string, flags connectFlags, stdout, stderr io.Writer) int {
 	result, disconnection, err := (app.ConnectService{}).Disconnect(ctx, app.DisconnectRequest{
-		Project: flags.project, Global: flags.global, Hosts: flags.hosts, ClearCache: flags.cache, DryRun: flags.dryRun,
+		Project: dir, Global: flags.global, Hosts: flags.hosts, ClearCache: flags.cache, DryRun: flags.dryRun,
 	})
 	if err != nil || result.Error != nil {
 		if code, handled := writeConnectSymlinkError(err, stdout, stderr, flags.json); handled {

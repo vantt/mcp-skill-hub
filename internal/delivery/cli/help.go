@@ -11,16 +11,15 @@ const globalUsage = `Skill Hub keeps one curated set of agent skills and serves 
 Usage: skillhub <command> [flags]
 
 Get started:
-  1. skillhub init ~/skillhub                                  Create your workspace
-  2. cd <your project> && skillhub connect --workspace ~/skillhub
-     (or: skillhub connect -g --workspace ~/skillhub          Connect every project)
+  1. mkdir -p ~/skill-hub && cd ~/skill-hub && skillhub init    Create your hub
+  2. cd <your project> && skillhub connect                       Connect that project
   3. Open your agent there and ask: "curate my Skill Hub"
   On another machine, use that hub through an SSH tunnel or Tailscale:
-     skillhub connect --hub <url> --token-file <path>
+     skillhub connect --hub <url> --token-file <file>
 
 Setup:
-  init      Create a workspace (--dry-run shows what it would do)
-  connect   Connect an agent to a workspace (-g for all projects), --hub to a hub on another machine
+  init      Create a hub in the current folder, or from a Git URL (--dry-run shows what it would do)
+  connect   Connect this project's agents to the hub (-g for all projects), --hub to a hub on another machine
   doctor    Check the workspace and agent connections; --fix repairs
   status    Show what needs attention next
 
@@ -45,8 +44,8 @@ Maintenance:
 
   --version Print the skillhub version
 
-Workspace selection: pass --workspace <path>, else set SKILLHUB_WORKSPACE, else run
-inside the workspace. Run ` + "`skillhub <command> --help`" + ` for a command's flags and
+Hub selection: run inside the hub or a connected project, else pass --workspace <path>
+(a local hub folder) or set SKILLHUB_WORKSPACE; --hub always takes a URL. Run ` + "`skillhub <command> --help`" + ` for a command's flags and
 ` + "`skillhub help --dev`" + ` for developer commands.
 `
 
@@ -61,30 +60,37 @@ Run ` + "`skillhub <command> --help`" + ` for a command's flags.
 `
 
 var commandUsage = map[string]string{
-	"init": `Usage: skillhub init [path] [--dry-run] [--force] [--verbose] [--json]
+	"init": `Usage: skillhub init [<git-url>] [--dry-run] [--verbose] [--json]
 
-Create a Skill Hub workspace at [path], or in the current directory when path
-is omitted, and print what it created. --dry-run shows what it would do
-(directory structure, git repository, agent connections, search index) and
-writes nothing. --force allows initializing into an existing non-empty
-directory. --verbose adds generation IDs, digests, and row counts; --json
-prints the full machine-readable result.
+Make the current folder a hub: an empty folder or an empty Git repository
+becomes a Git repository with the hub layout, the search index, the agent
+connection of the hub folder and a first commit (Git hooks and commit signing
+are skipped for it). The hub path is stored for this machine, so
+` + "`skillhub connect`" + ` in a project finds it. Run again in a hub, init refreshes it.
+A folder with other files is refused; init takes no folder argument.
+
+  <git-url>   Start from a repository (https, ssh or file URL, user@host:path,
+              or a local repository): one that holds a hub is fetched into this
+              folder; an empty one gets this new hub pushed and becomes origin.
+              In an existing hub without origin, init connects it to the URL.
+  --dry-run   Show what init would do; write nothing (not with <git-url>)
+  --verbose   Add generation IDs, digests and row counts
+  --json      Machine-readable result
 `,
-	"connect": `Usage: skillhub connect [--project <dir>] [-g|--global] [--workspace <path>]
+	"connect": `Usage: skillhub connect [<path>] [-g|--global] [--host claude|codex|gemini]... [--dry-run] [--json]
+       skillhub connect --hub <url> --token-file <file> [-g|--global]
                         [--host claude|codex|gemini]... [--dry-run] [--json]
-       skillhub connect --hub <url> [--token-file <path>] [--project <dir>] [-g|--global]
-                        [--host claude|codex|gemini]... [--dry-run] [--json]
-       skillhub connect --remove [--cache] [--project <dir>] [-g|--global]
+       skillhub connect --remove [--cache] [-g|--global]
                         [--host claude|codex|gemini]... [--dry-run] [--json]
 
-Connect agents to a workspace. Writes the MCP registration, the Skill Hub
-instruction block, and the system-curator skill, and prints what it changed.
-It never overwrites your own content in those files.
+Connect the agents of the current folder to the hub. Writes the MCP
+registration, the Skill Hub instruction block, and the system-curator skill,
+and prints what it changed. It never overwrites your own content in those
+files.
 
-  --project <dir>   Project to connect (default: current directory)
+  <path>            A hub folder on this machine (default: the hub ` + "`skillhub init`" + `
+                    set up last on this machine)
   -g, --global      Register for your user account so every project sees the hub
-  --workspace <p>   Workspace to serve (default: SKILLHUB_WORKSPACE, then discovery
-                    from the current directory)
   --host <name>     Limit to claude, codex, or gemini (repeat or comma-separate)
   --dry-run         Show what would change; write nothing
   --json            Machine-readable result
@@ -94,10 +100,11 @@ A hub on another machine (through an SSH tunnel or Tailscale):
                     started, for example http://127.0.0.1:7420. The agent host then
                     starts ` + "`skillhub mcp proxy`" + `. Curation stays on the hub machine, so no
                     curation server and no system-curator skill are installed.
-  --token-file <p>  This machine's copy of the hub's token file. Copy it from the hub
-                    machine, for example with scp, and chmod 600 it; only its path is
-                    written, never the token. Without it, the agent host must start the
-                    proxy with SKILLHUB_HUB_TOKEN set.
+  --token-file <f>  This machine's copy of the hub's token file, one file per hub, for
+                    example ~/.skillhub-token-<host>-<port>. Copy it from the hub
+                    machine with scp and chmod 600 it; only its path is written,
+                    never the token. Without it, the agent host must start the proxy
+                    with SKILLHUB_HUB_TOKEN set.
 
 Undo a connection:
   --remove          Remove the Skill Hub entry of the scope (local or remote hub), its
@@ -105,8 +112,8 @@ Undo a connection:
                     host configuration stays
   --cache           With --remove, also clear the skills fetched from the remote hub
 
---workspace and --hub exclude each other: one scope points at one hub, and
-connecting it to another hub replaces its entry.
+<path> is a local folder and --hub a URL; they exclude each other: one scope
+points at one hub, and connecting it to another hub replaces its entry.
 `,
 	"doctor": `Usage: skillhub doctor [--workspace <path>] [--fix [--dry-run]] [--json]
 

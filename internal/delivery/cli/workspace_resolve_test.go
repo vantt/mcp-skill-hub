@@ -7,16 +7,14 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/mcp-skill-hub/internal/userconfig"
 )
 
 func initWorkspace(t *testing.T) string {
 	t.Helper()
-	ws := filepath.Join(t.TempDir(), "ws")
-	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"init", ws}, &stdout, &stderr); code != 0 {
-		t.Fatalf("init failed: %d: %s", code, stderr.String())
-	}
-	return ws
+	return initHub(t, filepath.Join(t.TempDir(), "ws"))
 }
 
 func TestWorkspaceResolutionPrecedence(t *testing.T) {
@@ -235,6 +233,7 @@ func TestWorkspaceResolutionUntrustedInput(t *testing.T) {
 
 func TestWorkspaceResolutionNeverScansHome(t *testing.T) {
 	t.Setenv(workspaceEnvVar, "")
+	t.Setenv(userconfig.DirEnv, t.TempDir())
 	fakeHome := t.TempDir()
 	t.Setenv("HOME", fakeHome)
 	t.Setenv("USERPROFILE", fakeHome)
@@ -253,7 +252,7 @@ func TestWorkspaceResolutionNeverScansHome(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected resolution to fail because home directory must never be scanned")
 	}
-	if err.Why != "No Skill Hub workspace was found from the current directory." {
+	if err.Why != "This folder is not a hub or a connected project." {
 		t.Fatalf("unexpected Why: %q", err.Why)
 	}
 
@@ -267,13 +266,14 @@ func TestWorkspaceResolutionNeverScansHome(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected resolution to stop before home directory")
 	}
-	if err.Why != "No Skill Hub workspace was found from the current directory." {
+	if err.Why != "This folder is not a hub or a connected project." {
 		t.Fatalf("unexpected Why: %q", err.Why)
 	}
 }
 
 func TestConsistentErrorMessages(t *testing.T) {
 	t.Setenv(workspaceEnvVar, "")
+	t.Setenv(userconfig.DirEnv, t.TempDir())
 
 	// 1. Non-existent path
 	_, err := resolveWorkspace("/nonexistent/workspace/path")
@@ -309,12 +309,12 @@ func TestConsistentErrorMessages(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when no workspace found")
 	}
-	expectedWhy = "No Skill Hub workspace was found from the current directory."
+	expectedWhy = "This folder is not a hub or a connected project."
 	if err.Why != expectedWhy {
 		t.Fatalf("expected Why %q, got %q", expectedWhy, err.Why)
 	}
-	if err.Fix != workspaceFix {
-		t.Fatalf("expected Fix %q, got %q", workspaceFix, err.Fix)
+	if !strings.Contains(err.Fix, app.NewHubCommand()) {
+		t.Fatalf("expected the hub creation command in Fix, got %q", err.Fix)
 	}
 }
 
@@ -447,8 +447,8 @@ func TestStatusInsideConnectedProjectSucceeds(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("status inside connected project failed (code=%d): %s", code, stderr.String())
 	}
-	if !strings.Contains(stdout.String(), "Workspace is") {
-		t.Fatalf("unexpected status output:\n%s", stdout.String())
+	if !strings.Contains(stdout.String(), ws) {
+		t.Fatalf("status inside the connected project does not name its hub %s:\n%s", ws, stdout.String())
 	}
 }
 

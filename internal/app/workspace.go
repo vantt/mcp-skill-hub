@@ -12,54 +12,11 @@ import (
 	catalogpkg "github.com/vantt/mcp-skill-hub/internal/catalog"
 	"github.com/vantt/mcp-skill-hub/internal/hostintegration"
 	"github.com/vantt/mcp-skill-hub/internal/mutation"
-	"github.com/vantt/mcp-skill-hub/internal/shellquote"
 	"github.com/vantt/mcp-skill-hub/internal/workspace"
 )
 
 // WorkspaceService is the shared application service used by init and doctor --fix.
 type WorkspaceService struct{}
-
-// Init creates or repairs a workspace with the same mechanical remediation
-// used by DoctorFix. With dryRun it only reports what it would do.
-func (service WorkspaceService) Init(path string, dryRun bool, force ...bool) (Result, error) {
-	isForce := len(force) > 0 && force[0]
-	if !isForce {
-		if root, err := workspace.Discover(path); err == nil {
-			if info, err := os.Stat(root); err == nil && info.IsDir() {
-				entries, readErr := os.ReadDir(root)
-				if readErr == nil && len(entries) > 0 {
-					skillhubPath := filepath.Join(root, ".skillhub")
-					if _, err := os.Lstat(skillhubPath); os.IsNotExist(err) {
-						return ErrorResult(NewInvalidRequestError(
-							fmt.Sprintf("Directory is not empty and is not a Skill Hub workspace: %s", root),
-							"Choose a dedicated directory like `~/skillhub`, or add `--force` to initialize here anyway. If you meant to connect this project to a workspace, run `skillhub connect` instead.",
-						)), nil
-					}
-				}
-			}
-		}
-	}
-	if dryRun {
-		result, err := service.doctorInternal(path, true)
-		if err != nil {
-			return Result{}, err
-		}
-		result.Status = StatusActionRequired
-		result.Summary = "Dry run: workspace initialization was not applied."
-		result.Items = append([]Item{
-			{ID: "workspace_structure", Summary: "Directory structure (skills, sources, distill, history, config, registry, evals)", Impact: "Would be created."},
-			{ID: "git_repository", Summary: "Git repository (.git)", Impact: "Would be initialized."},
-			{ID: "catalog_generation", Summary: "Search index database and schema", Impact: "Would be built."},
-		}, result.Items...)
-		result.SuggestedActions = []Action{{
-			Label:                "Initialize workspace",
-			Command:              "skillhub init " + shellquote.Arg(path),
-			RequiresConfirmation: true,
-		}}
-		return result, nil
-	}
-	return service.apply(path, true)
-}
 
 // Doctor reports a read-only remediation plan and canonical validation findings.
 func (service WorkspaceService) Doctor(path string) (Result, error) {
@@ -240,22 +197,26 @@ func (service WorkspaceService) apply(path string, isInit bool) (Result, error) 
 		return Result{}, err
 	}
 	var workspaceResult Result
-	if _, statErr := os.Lstat(root); errors.Is(statErr, os.ErrNotExist) {
-		if !isInit {
-			return Result{}, fmt.Errorf("No Skill Hub workspace at %s.", root)
-		}
-		// Bootstrap creates the lock and canonical skeleton itself. Every repair
-		// after this point uses the mutation service.
+	_, statErr := os.Lstat(root)
+	if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
+		return Result{}, statErr
+	}
+	missing := errors.Is(statErr, os.ErrNotExist)
+	if missing && !isInit {
+		return Result{}, fmt.Errorf("No Skill Hub workspace at %s.", root)
+	}
+	if missing || (isInit && !IsHubRoot(root)) {
+		// A folder without the hub marker is created from scratch: bootstrap
+		// creates the lock and canonical skeleton itself. Every repair after
+		// this point uses the mutation service.
 		if _, err := workspace.Apply(root); err != nil {
 			return Result{}, err
 		}
-		workspaceResult, err = remediationResult(root, workspace.Plan{Root: root, Findings: []workspace.Finding{{ID: "workspace_missing", Path: ".", Summary: "Workspace directory created.", Fixable: true}}})
+		workspaceResult, err = remediationResult(root, workspace.Plan{Root: root, Findings: []workspace.Finding{{ID: "workspace_missing", Path: ".", Summary: "Hub folders created.", Fixable: true}}})
 		if err != nil {
 			return Result{}, err
 		}
 		return applyHostIntegration(context.Background(), root, workspaceResult)
-	} else if statErr != nil {
-		return Result{}, statErr
 	}
 
 	before, err := workspace.Inspect(root)
@@ -267,9 +228,14 @@ func (service WorkspaceService) apply(path string, isInit bool) (Result, error) 
 		return Result{}, err
 	}
 	for _, finding := range before.Findings {
-		if !finding.Fixable {
+		if blocksRemediation(finding, isInit) {
 			return doctorResult(root, before, issues, nil)
 		}
+	}
+	if isInit {
+		// init reports tracked connection files itself and finishes; only the
+		// fixable findings are remediated here.
+		before = fixableFindings(before)
 	}
 	if len(before.Findings) == 0 && len(issues) == 0 {
 		// Runtime and host repair are derived/external maintenance, not canonical
@@ -290,7 +256,7 @@ func (service WorkspaceService) apply(path string, isInit bool) (Result, error) 
 		// The state may have changed between the unlocked inspection and the
 		// lock. Findings that need migration must never be remediated here.
 		for _, finding := range before.Findings {
-			if !finding.Fixable {
+			if blocksRemediation(finding, isInit) {
 				unlockErr := lock.Unlock()
 				if unlockErr != nil {
 					return Result{}, unlockErr
@@ -302,6 +268,9 @@ func (service WorkspaceService) apply(path string, isInit bool) (Result, error) 
 				return doctorResult(root, before, lockedIssues, nil)
 			}
 		}
+	}
+	if err == nil && isInit {
+		before = fixableFindings(before)
 	}
 	if err == nil {
 		var recoveries []mutation.Recovery
@@ -346,6 +315,23 @@ func (service WorkspaceService) apply(path string, isInit bool) (Result, error) 
 		return Result{}, err
 	}
 	return applyHostIntegration(context.Background(), root, workspaceResult)
+}
+
+// blocksRemediation reports whether a finding stops mechanical remediation.
+// A tracked connection file does not stop init: init names it with the
+// `git rm --cached` command and finishes.
+func blocksRemediation(finding workspace.Finding, isInit bool) bool {
+	return !finding.Fixable && !(isInit && finding.ID == "machine_file_tracked")
+}
+
+func fixableFindings(plan workspace.Plan) workspace.Plan {
+	kept := workspace.Plan{Root: plan.Root}
+	for _, finding := range plan.Findings {
+		if finding.Fixable {
+			kept.Findings = append(kept.Findings, finding)
+		}
+	}
+	return kept
 }
 
 func remediationResult(root string, before workspace.Plan) (Result, error) {

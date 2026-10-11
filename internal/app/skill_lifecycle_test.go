@@ -483,7 +483,7 @@ func TestDigestPinnedReadReturnsSnapshotExpiredAfterExternalChange(t *testing.T)
 func newSkillWorkspace(t *testing.T) string {
 	t.Helper()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, false); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	return root

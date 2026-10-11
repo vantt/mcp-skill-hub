@@ -151,7 +151,7 @@ func TestReviewApprovalInSkillMetaYAMLSurvivesMigrationAndReportsPostApprovalEdi
 	t.Parallel()
 
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, false); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	_ = os.WriteFile(filepath.Join(root, ".skillhub", "schema-version"), []byte("2\n"), 0o644)

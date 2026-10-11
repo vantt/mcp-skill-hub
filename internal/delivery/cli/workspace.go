@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 
@@ -15,67 +14,171 @@ import (
 	"github.com/vantt/mcp-skill-hub/internal/shellquote"
 )
 
-func runInit(args []string, stdout, stderr io.Writer) int {
-	path, jsonOutput, dryRun, verbose, force, err := initFlags(args)
+func runInit(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	dir, err := os.Getwd()
 	if err != nil {
-		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub init [path]`, or add `--dry-run` to see what it would do.")
+		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), "The current folder cannot be determined: "+err.Error(), "Run `skillhub init` from the folder that becomes the hub.")
 	}
-	result, err := (app.WorkspaceService{}).Init(path, dryRun, force)
-	if dryRun {
-		return writeDryRunResult(result, err, stdout, stderr, jsonOutput)
-	}
-	compact := err == nil && !jsonOutput && !verbose && result.Error == nil &&
-		(result.Status == app.StatusApplied || result.Status == app.StatusReady)
-	if !compact {
-		return writeWorkspaceResult(result, err, stdout, stderr, jsonOutput)
-	}
-	absolute, absErr := filepath.Abs(path)
-	if absErr != nil {
-		absolute = path
-	}
-	renderInitSummary(stdout, absolute, result)
-	return 0
+	return runInitIn(ctx, dir, args, stdout, stderr)
 }
 
-// renderInitSummary prints the short first-run summary. Generation IDs, digests,
-// and row counts stay available through --verbose and --json.
-func renderInitSummary(stdout io.Writer, workspacePath string, result app.Result) {
+// runInitIn runs init for dir, which stands for the current folder. Tests
+// call it directly so they never change the process working directory.
+func runInitIn(ctx context.Context, dir string, args []string, stdout, stderr io.Writer) int {
+	if errors.Is(ctx.Err(), context.Canceled) {
+		return writeWorkspaceResult(app.Result{}, context.Canceled, stdout, stderr, hasJSONFlag(args))
+	}
+	source, jsonOutput, dryRun, verbose, err := initFlags(args)
+	if err != nil {
+		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub init` in an empty folder, or `skillhub init <git-url>` to start from a repository; add `--dry-run` to see what it would do.")
+	}
+	var options app.InitOptions
+	options.DryRun = dryRun
+	if source != "" {
+		classified, problem := app.ClassifyInitSource(source)
+		if problem != nil {
+			return writeWorkspaceResult(app.ErrorResult(problem), nil, stdout, stderr, jsonOutput)
+		}
+		options.Source = classified
+	}
+	result, err := (app.WorkspaceService{}).Init(dir, options)
+	report, _ := result.Details[app.InitDetailsKey].(*app.InitReport)
+	code := 0
+	if report != nil && report.Remote != nil && report.Remote.PushError != "" {
+		code = 1
+	}
+	switch {
+	case err == nil && result.Error != nil && !jsonOutput:
+		return writeInitError(stderr, result)
+	case dryRun:
+		return writeDryRunResult(result, err, stdout, stderr, jsonOutput)
+	case err != nil || jsonOutput || report == nil:
+		written := writeWorkspaceResult(result, err, stdout, stderr, jsonOutput)
+		if err == nil && result.Error != nil && result.Error.Code == app.ErrorGitFailed && written == 2 {
+			// A Git failure is a runtime failure, not a refused request.
+			return 1
+		}
+		if written != 0 {
+			return written
+		}
+		if err == nil && result.Error == nil && result.Status != app.StatusApplied {
+			// The folder is a hub, but init stopped before it could store it.
+			p := termui.New(stdout)
+			for _, action := range result.SuggestedActions {
+				p.Line("FIX: " + action.Label + ":")
+				p.Command(action.Command)
+			}
+			return 2
+		}
+		return code
+	case verbose:
+		if written := writeWorkspaceResult(result, nil, stdout, stderr, false); written != 0 {
+			return written
+		}
+	}
 	p := termui.New(stdout)
-	created := false
+	renderInitSummary(p, result, report)
+	if p.Err() != nil {
+		return 1
+	}
+	return code
+}
+
+// writeInitError prints a refusal or Git failure of init: what happened, Git's
+// own message kept as it is, and the one command to run instead.
+func writeInitError(stderr io.Writer, result app.Result) int {
+	p := termui.New(stderr)
+	render := result.Error.Render
+	if result.Error.Code == app.ErrorGitFailed {
+		p.Line("ERROR: " + render.Error)
+		for _, line := range strings.Split(strings.TrimRight(render.Why, "\n"), "\n") {
+			p.Raw("  " + line + "\n")
+		}
+		p.Line(render.Fix)
+		return 1
+	}
+	p.Error(render.Error, render.Why, render.Fix)
+	for _, action := range result.SuggestedActions {
+		p.Command(action.Command)
+	}
+	return 2
+}
+
+// renderInitSummary prints what init changed and the one next command.
+// Generation IDs and row counts stay available through --verbose and --json.
+func renderInitSummary(p *termui.Printer, result app.Result, report *app.InitReport) {
+	p.Line(result.Summary)
+	p.Line(connectionSummaryLine(result))
+	if remote := report.Remote; remote != nil && remote.Fetched {
+		p.Line(fmt.Sprintf("Fetched the hub from %s (branch %s); origin is set.", remote.URL, remote.Branch))
+	}
+	if report.Commit != "" {
+		p.Line(fmt.Sprintf("First commit %s: %q.", shortCommit(report.Commit), "Initialize Skill Hub hub"))
+		p.Line("Git hooks and commit signing were skipped for this first commit.")
+		if report.FallbackIdentity {
+			p.Line("Git has no user name or email set, so this commit is by Skill Hub <skillhub@localhost>.")
+		}
+	}
+	if remote := report.Remote; remote != nil && !remote.Fetched {
+		switch {
+		case remote.PushError != "":
+			p.Blank()
+			p.Line("The hub is ready here, but the push to " + remote.URL + " failed:")
+			for _, line := range strings.Split(remote.PushError, "\n") {
+				p.Raw("  " + line + "\n")
+			}
+			p.Line("Fix what Git reports, then run the same `skillhub init` command again to push.")
+		case remote.Pushed != "":
+			p.Line(fmt.Sprintf("Pushed %s to %s (branch %s); origin is set.", shortCommit(remote.Pushed), remote.URL, remote.Branch))
+		default:
+			p.Line(fmt.Sprintf("Connected to %s (branch %s); origin is set.", remote.URL, remote.Branch))
+		}
+	}
+	if len(report.GitignoreAdded) > 0 {
+		p.Line(".gitignore: added " + strings.Join(report.GitignoreAdded, " ") + " (not committed; commit .gitignore when you are ready).")
+	}
+	for _, path := range report.TrackedMachineFiles {
+		p.Line("Git tracks " + path + ", which holds paths of this machine. Stop tracking it (the file stays on disk):")
+		p.Command("git rm --cached " + shellquote.Arg(path))
+	}
+	for _, warning := range result.Warnings {
+		// Only what init found about this hub; routine notes of the steps it
+		// ran stay in --verbose and --json.
+		if warning.Code == "git_ssh_command" || warning.Code == "hub_tracks_agent_config" {
+			p.Warning(warning.Summary)
+		}
+	}
+	if report.Stored {
+		p.Line("This is now the hub of this machine; `skillhub connect` uses it.")
+	} else if report.StoreError != "" {
+		p.Warning("The hub path could not be recorded for `skillhub connect`: " + report.StoreError)
+	}
+	p.Blank()
+	p.Next("connect a project to this hub:", report.Next)
+}
+
+func shortCommit(commit string) string {
+	if len(commit) > 12 {
+		return commit[:12]
+	}
+	return commit
+}
+
+// connectionSummaryLine names the agents whose connection files a result
+// wrote, in one wording shared by init and connect:
+// "Agent connection written: claude-code, codex-cli, gemini-cli."
+func connectionSummaryLine(result app.Result) string {
 	var hosts []string
 	for _, item := range result.Items {
-		if item.ID == "workspace_missing" {
-			created = true
-		}
 		// Host item IDs are host_<host>_<change-kind>; neither part contains "_".
 		if parts := strings.Split(item.ID, "_"); len(parts) == 3 && parts[0] == "host" && !slices.Contains(hosts, parts[1]) {
 			hosts = append(hosts, parts[1])
 		}
 	}
-	if created {
-		p.Line(fmt.Sprintf("Workspace created at %s.", workspacePath))
-	} else {
-		p.Line(fmt.Sprintf("Workspace ready at %s.", workspacePath))
+	if len(hosts) == 0 {
+		return "Agent connection already in place."
 	}
-	if len(hosts) > 0 {
-		p.Line(fmt.Sprintf("Agent connection for this workspace written: %s.", strings.Join(hosts, ", ")))
-	} else {
-		p.Line("Agent connection for this workspace is already in place.")
-	}
-	p.Blank()
-	quoted := shellquote.Arg(workspacePath)
-	p.Line("Next:")
-	p.Line("  1. Commit the workspace:")
-	p.Command(stageWorkspaceCommand(quoted) + " && git -C " + quoted + " commit -m \"Initialize Skill Hub workspace\"")
-	p.Line("  2. Connect another project (add -g to connect every project instead):")
-	p.Command("cd <project> && skillhub connect --workspace " + quoted)
-	p.Line("  3. Open your agent there and ask: \"curate my Skill Hub\"")
-}
-
-// stageWorkspaceCommand stages the folders Skill Hub owns by name. The connection files that init
-// and connect write hold paths of this machine, so the whole folder is never staged at once.
-func stageWorkspaceCommand(path string) string {
-	return fmt.Sprintf("git -C %s add .gitignore .skillhub skills sources history registry config distill evals", path)
+	return "Agent connection written: " + strings.Join(hosts, ", ") + "."
 }
 
 func runValidate(ctx context.Context, args []string, stdout, stderr io.Writer) int {
@@ -184,18 +287,10 @@ func runDoctor(args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
-// remoteEntriesHere finds remote hub entries in the current project and in
-// the user scope.
+// remoteEntriesHere finds remote hub entries in the current project (from
+// the current directory upward) and in the user scope.
 func remoteEntriesHere() []app.RemoteEntry {
-	project, err := os.Getwd()
-	if err != nil {
-		project = ""
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		home = ""
-	}
-	return app.FindRemoteEntries(project, home)
+	return app.FindRemoteEntries(app.DetectRoleHere())
 }
 
 // runRemoteDoctor checks the connection of this machine to remote hubs. Each
@@ -244,7 +339,9 @@ func renderRemoteDoctor(p *termui.Printer, reports []app.RemoteHubReport) {
 	}
 }
 
-func initFlags(args []string) (path string, jsonOutput, dryRun, verbose, force bool, err error) {
+// initFlags parses init's flags. init takes no folder: it acts on the
+// current folder; its one optional argument is a Git repository.
+func initFlags(args []string) (source string, jsonOutput, dryRun, verbose bool, err error) {
 	for _, arg := range args {
 		switch arg {
 		case "--json":
@@ -253,22 +350,17 @@ func initFlags(args []string) (path string, jsonOutput, dryRun, verbose, force b
 			dryRun = true
 		case "--verbose":
 			verbose = true
-		case "--force":
-			force = true
 		default:
 			if strings.HasPrefix(arg, "-") {
-				return "", jsonOutput, dryRun, verbose, force, fmt.Errorf("unknown argument %q", arg)
+				return "", jsonOutput, dryRun, verbose, fmt.Errorf("unknown argument %q", arg)
 			}
-			if path != "" {
-				return "", jsonOutput, dryRun, verbose, force, fmt.Errorf("init accepts at most one workspace path")
+			if source != "" {
+				return "", jsonOutput, dryRun, verbose, fmt.Errorf("init accepts at most one Git URL")
 			}
-			path = arg
+			source = arg
 		}
 	}
-	if path == "" {
-		path = "."
-	}
-	return path, jsonOutput, dryRun, verbose, force, nil
+	return source, jsonOutput, dryRun, verbose, nil
 }
 
 func workspaceFlag(args []string) (path string, jsonOutput bool, err error) {

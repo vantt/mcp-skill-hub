@@ -91,7 +91,7 @@ func TestRebuildNeverUpgradesIncompatibleCanonicalVersion(t *testing.T) {
 func TestDerivedOnlyIncompatibilityAutoRebuildsWhenCanonicalIsValid(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, false); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	markerBefore, err := os.ReadFile(filepath.Join(root, ".skillhub", "schema-version"))
@@ -133,7 +133,7 @@ func TestDerivedOnlyIncompatibilityAutoRebuildsWhenCanonicalIsValid(t *testing.T
 func newLegacyAppWorkspace(t *testing.T) string {
 	t.Helper()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, false); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Remove(filepath.Join(root, ".skillhub", "schema-version")); err != nil {
@@ -187,7 +187,7 @@ func TestMigrateReplayFailsWhenMarkerWasLostAfterApply(t *testing.T) {
 func TestMigrationServiceV2ToV3(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, false); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	marker := filepath.Join(root, ".skillhub", "schema-version")
@@ -218,7 +218,7 @@ func TestMigrationServiceV2ToV3(t *testing.T) {
 func TestLocalSkillMigrationKeepsThirdPartyFalse(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
-	if _, err := (WorkspaceService{}).Init(root, false); err != nil {
+	if _, err := (WorkspaceService{}).Init(root, InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	marker := filepath.Join(root, ".skillhub", "schema-version")

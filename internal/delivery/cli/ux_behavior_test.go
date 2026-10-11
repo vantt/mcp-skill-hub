@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/vantt/mcp-skill-hub/internal/app"
 )
 
 func createDraftSkill(t *testing.T, root, id string, extra ...string) {
@@ -167,12 +169,12 @@ func TestSkillActivateWithoutNotForNamesTheExactFix(t *testing.T) {
 	}
 }
 
-func TestStatusOnlyCallsWorkspaceNewWhenNothingHasBeenAdded(t *testing.T) {
+func TestStatusNeverCallsACommittedHubNew(t *testing.T) {
 	t.Parallel()
 	root := initTestWorkspace(t)
 	code, stdout, _ := runCLI(t, "status", "--workspace", root)
-	if code != 0 || !strings.Contains(stdout, "Workspace is new") {
-		t.Fatalf("fresh uncommitted workspace status = %d:\n%s", code, stdout)
+	if code != 0 || strings.Contains(stdout, "Workspace is new") || !strings.Contains(stdout, "Git clean") {
+		t.Fatalf("status right after init, which commits the hub = %d:\n%s", code, stdout)
 	}
 	createDraftSkill(t, root, "demo", "--not-for", "unrelated")
 	code, stdout, _ = runCLI(t, "status", "--workspace", root)
@@ -312,7 +314,7 @@ func TestSkillActivateMissingRequirementsCombinedCommand(t *testing.T) {
 	}
 }
 
-func TestInitRefusesNonEmptyDirectoryUnlessForce(t *testing.T) {
+func TestInitRefusesAFolderWithOtherFiles(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	skillDir := filepath.Join(dir, "skills", "core", "existing")
@@ -322,13 +324,15 @@ func TestInitRefusesNonEmptyDirectoryUnlessForce(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("# Existing\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	code, _, stderr := runCLI(t, "init", dir)
-	if code != 2 || !strings.Contains(stderr, "Directory is not empty") || !strings.Contains(stderr, "--force") {
-		t.Fatalf("init without --force exit = %d stderr = %s", code, stderr)
+	code, _, stderr := runInitCLI(t, dir)
+	if code != 2 || !strings.Contains(stderr, "already holds other files") || !strings.Contains(stderr, app.NewHubCommand()) {
+		t.Fatalf("init in a folder with files exit = %d stderr = %s", code, stderr)
 	}
-	code, stdout, stderr := runCLI(t, "init", dir, "--force")
-	if code != 0 {
-		t.Fatalf("init with --force exit = %d stdout = %s stderr = %s", code, stdout, stderr)
+	if _, err := os.Stat(filepath.Join(dir, ".git")); !os.IsNotExist(err) {
+		t.Fatalf("a refused init created .git: %v", err)
+	}
+	if code, _, stderr := runInitCLI(t, dir, "--force"); code != 2 || !strings.Contains(stderr, `unknown argument "--force"`) {
+		t.Fatalf("init --force exit = %d stderr = %s", code, stderr)
 	}
 }
 

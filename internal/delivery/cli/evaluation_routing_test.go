@@ -23,7 +23,7 @@ func TestEvaluationRoutingCLIExitCodesAndReporting(t *testing.T) {
 	workspace := filepath.Join(t.TempDir(), "workspace")
 
 	var stdout, stderr bytes.Buffer
-	if code := Run([]string{"init", workspace}, &stdout, &stderr); code != 0 {
+	if code := runInitTo(t, workspace, &stdout, &stderr); code != 0 {
 		t.Fatalf("init=%d stdout=%s stderr=%s", code, stdout.String(), stderr.String())
 	}
 	copyEvaluationFixtureTree(t, filepath.Join(fixtureRoot, "workspace-overlay"), workspace)

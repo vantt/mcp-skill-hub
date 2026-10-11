@@ -16,7 +16,7 @@ func TestDoctorReportsNativeCuratorVersionSkew(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	root := filepath.Join(t.TempDir(), "workspace")
 	service := app.WorkspaceService{}
-	if _, err := service.Init(root, false); err != nil {
+	if _, err := service.Init(root, app.InitOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	for _, adapter := range hostintegration.SupportedAdapters() {
