@@ -322,9 +322,15 @@ func writeBundleFile(handle *os.Root, file BundleFile, contents io.Reader) error
 		return fmt.Errorf("create %s: %w", file.Path, err)
 	}
 	sum := sha256.New()
-	written, copyErr := io.Copy(io.MultiWriter(output, sum), io.LimitReader(contents, file.Size+1))
+	source := &archiveSource{reader: io.LimitReader(contents, file.Size+1)}
+	written, copyErr := io.Copy(io.MultiWriter(output, sum), source)
 	if closeErr := output.Close(); copyErr == nil {
 		copyErr = closeErr
+	}
+	if source.err != nil {
+		// The archive ended or broke inside this file, for example because
+		// the download was cut off: the bundle is invalid, not the disk.
+		return fmt.Errorf("%w: read %s: %v", ErrBundleInvalid, file.Path, source.err)
 	}
 	if copyErr != nil {
 		return fmt.Errorf("write %s: %w", file.Path, copyErr)
@@ -333,6 +339,21 @@ func writeBundleFile(handle *os.Root, file BundleFile, contents io.Reader) error
 		return fmt.Errorf("%w: %s does not match its listed digest", ErrBundleDigestMismatch, file.Path)
 	}
 	return protectFile(handle, relative)
+}
+
+// archiveSource remembers the first error reading the archive returned, so a
+// broken archive is told apart from a failure to write the file.
+type archiveSource struct {
+	reader io.Reader
+	err    error
+}
+
+func (source *archiveSource) Read(buffer []byte) (int, error) {
+	n, err := source.reader.Read(buffer)
+	if err != nil && !errors.Is(err, io.EOF) && source.err == nil {
+		source.err = err
+	}
+	return n, err
 }
 
 func writeReadOnlyFile(handle *os.Root, relative string, data []byte) error {

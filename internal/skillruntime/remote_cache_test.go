@@ -173,6 +173,39 @@ func TestInstallRejectsTamperedArchives(t *testing.T) {
 	}
 }
 
+// An archive cut short at any point, as when the hub stops in the middle of a
+// download, is refused as an invalid bundle and never reported as a failure
+// to store the skill on this machine.
+func TestInstallRefusesAnArchiveCutShortAnywhere(t *testing.T) {
+	var large strings.Builder
+	state := uint32(1)
+	for large.Len() < 48<<10 {
+		// A simple generator keeps the text from compressing away, so many
+		// cuts land inside a file's contents.
+		state = state*1664525 + 1013904223
+		large.WriteByte(byte('a' + state>>24%26))
+	}
+	files := map[string]string{"SKILL.md": sampleSkill["SKILL.md"], "references/large.md": large.String()}
+	metadata, contents, digest := testBundle(t, "sample", files)
+	archive := writeTestBundle(t, metadata, contents)
+	for cut := 1; cut < len(archive); cut += 101 {
+		cache := RemoteCache{Root: t.TempDir()}
+		cached, err := cache.Install("hub-1", "sample", digest, bytes.NewReader(archive[:cut]))
+		if err == nil {
+			// Only the archive's closing padding and checksum were lost; every
+			// file was read in full and matched its digest.
+			if got := directoryDigest(t, cached.Directory); got != digest {
+				t.Fatalf("archive cut at %d of %d bytes was installed with digest %s, want %s", cut, len(archive), got, digest)
+			}
+			continue
+		}
+		if !errors.Is(err, ErrBundleInvalid) && !errors.Is(err, ErrBundleDigestMismatch) {
+			t.Fatalf("archive cut at %d of %d bytes: error %v, want an invalid bundle", cut, len(archive), err)
+		}
+		assertNoSkillLeftovers(t, cache, "hub-1")
+	}
+}
+
 // assertNoSkillLeftovers checks that no version directory and no staging
 // directory remains for a hub.
 func assertNoSkillLeftovers(t *testing.T, cache RemoteCache, hubID string) {
