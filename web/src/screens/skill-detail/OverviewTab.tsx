@@ -103,15 +103,15 @@ export function OverviewTab({ skill, review, sources, sourcesLoading, sourcesErr
         </span>
         <div className="fg-facts">
           <Fact label={LABEL_NAME}>{skill.name || skill.skill_id}</Fact>
-          <Fact label={LABEL_DESCRIPTION}>
-            <p className="app-wrap" style={{ margin: 0, ...(description ? undefined : HELP_STYLE) }}>
-              {description || LABEL_NO_DESCRIPTION}
-            </p>
-          </Fact>
+          <Fact label={LABEL_FILES}>{resourceSummaryText(resourceCount, totalBytes)}</Fact>
           <Fact label={LABEL_COLLECTION}>{review?.collection || LABEL_UNKNOWN}</Fact>
           <Fact label={LABEL_LIFECYCLE}>{t(`lifecycle_short.${skill.lifecycle_state}`)}</Fact>
-          <Fact label={LABEL_FILES}>{resourceSummaryText(resourceCount, totalBytes)}</Fact>
         </div>
+        <Prose label={LABEL_DESCRIPTION}>
+          <p className="app-wrap" style={{ margin: 0, ...(description ? undefined : HELP_STYLE) }}>
+            {description || LABEL_NO_DESCRIPTION}
+          </p>
+        </Prose>
       </section>
 
       <section className="fg-card" style={CARD_STYLE} aria-label={TITLE_ROUTING}>
@@ -121,13 +121,13 @@ export function OverviewTab({ skill, review, sources, sourcesLoading, sourcesErr
         <span className="t-caption" style={HELP_STYLE}>
           <span>{HELP_ROUTING}</span>
         </span>
+        <Prose label={LABEL_TRIGGERS}>
+          <TriggerText items={routing?.triggers} />
+        </Prose>
         <div className="fg-facts">
           <Fact label={LABEL_MIN_SCOPE}>{scopeText(routing?.min_scope)}</Fact>
           <Fact label={LABEL_OPERATIONS}>
             <ValueList items={routing?.operations} />
-          </Fact>
-          <Fact label={LABEL_TRIGGERS}>
-            <ValueList items={routing?.triggers} />
           </Fact>
           <Fact label={LABEL_NOT_FOR}>
             <ValueList items={routing?.not_for} />
@@ -174,6 +174,28 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
       </div>
     </div>
   );
+}
+
+// A full-width labeled block for text that reads as a sentence, not as a short fact.
+function Prose({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="fg-fact">
+      <div className="fg-fact__label">
+        <span>{label}</span>
+      </div>
+      <div className="fg-fact__value app-wrap" style={{ overflowWrap: 'anywhere', minWidth: 0 }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// Triggers are phrases about when to load the skill; they read as one paragraph.
+function TriggerText({ items }: { items?: string[] }) {
+  if (!items || items.length === 0) {
+    return <span style={HELP_STYLE}>{LABEL_NONE}</span>;
+  }
+  return <p style={{ margin: 0 }}>{items.join('; ')}</p>;
 }
 
 function ValueList({ items }: { items?: string[] }) {

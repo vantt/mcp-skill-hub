@@ -76,6 +76,20 @@ describe('OverviewTab', () => {
     expect(routing.getByText('write prose')).toBeInTheDocument();
   });
 
+  it('puts triggers first as one paragraph and the description after the facts', () => {
+    renderOverview();
+    const routing = card('Routing');
+    const triggers = within(routing).getByText('review changed code').closest('p');
+    expect(triggers?.tagName).toBe('P');
+    const scope = within(routing).getByText('Several steps');
+    expect(triggers!.compareDocumentPosition(scope) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    const about = card('About');
+    const files = within(about).getByText(/^4 files/);
+    const description = within(about).getByText('Review changed code safely.');
+    expect(files.compareDocumentPosition(description) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('reads None for empty routing lists', () => {
     const skill = loadGolden<SkillDetail>('skill-detail');
     skill.routing = { operations: [], triggers: [], not_for: [], min_scope: '' };
