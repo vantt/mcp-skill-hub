@@ -712,6 +712,15 @@ func (service SourceService) ConfirmSourceProposal(ctx context.Context, path str
 			}
 		}
 		summary = fmt.Sprintf("Unlinked %s from %s.", preview.Source.ID, skillID)
+	case "source_backfill":
+		skillID := ""
+		for _, c := range preview.planned.WriteSet.Changes {
+			if parts := strings.Split(c.Path, "/"); len(parts) >= 4 && parts[0] == "skills" && !c.Delete {
+				skillID = parts[2]
+				break
+			}
+		}
+		summary = fmt.Sprintf("Now tracking upstream %s for %s.", preview.Source.ID, skillID)
 	case "source_unwatch":
 		isRemoved := false
 		for _, c := range preview.planned.WriteSet.Changes {
