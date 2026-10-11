@@ -197,7 +197,7 @@ func TestStatusReportsStaleIndexAndRebuildAfterHandEdit(t *testing.T) {
 	}
 	file.Close()
 	code, stdout, _ := runCLI(t, "status", "--workspace", root)
-	if code != 0 || !strings.Contains(stdout, "stale") || !strings.Contains(stdout, "skillhub rebuild") || strings.Contains(stdout, "0 active skills") {
+	if code != 0 || !strings.Contains(stdout, "stale") || !strings.Contains(stdout, "Next: fix what doctor can repair") || !strings.Contains(stdout, "rebuild the search index") || strings.Contains(stdout, "0 active skills") {
 		t.Fatalf("stale status = %d:\n%s", code, stdout)
 	}
 }

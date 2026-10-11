@@ -40,7 +40,7 @@ describe('HomeScreen', () => {
     const golden = loadGolden<CurationHome>('home');
     renderHomeScreen(golden);
 
-    expect(screen.getByText('Git has uncommitted canonical changes')).toBeInTheDocument();
+    expect(screen.getByText('The hub has changes that are not committed to Git')).toBeInTheDocument();
     expect(screen.getByText('Workspace')).toBeInTheDocument();
     expect(screen.getByText('Healthy')).toBeInTheDocument();
     expect(screen.getByText('Index current')).toBeInTheDocument();

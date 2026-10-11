@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
-	"github.com/vantt/mcp-skill-hub/internal/shellquote"
 )
 
 func TestConnectClaudeCurationGuidance(t *testing.T) {
@@ -128,18 +127,26 @@ func TestDoctorMigratesLegacyClaudeConnections(t *testing.T) {
 			}
 			t.Chdir(project)
 			code, stdout, stderr := runCLI(t, "doctor", "--workspace", workspace, "--json")
-			if code != 0 {
-				t.Fatalf("legacy doctor exit = %d: %s", code, stderr)
+			if code != 1 {
+				t.Fatalf("legacy doctor exit = %d, want 1: %s", code, stderr)
 			}
-			var result app.Result
+			var result doctorJSON
 			if err := json.Unmarshal([]byte(stdout), &result); err != nil {
 				t.Fatal(err)
 			}
-			if result.Error != nil || result.Status != app.StatusActionRequired || len(result.Items) != 1 || result.Items[0].ID != "project_connection_outdated" {
-				t.Fatalf("valid legacy connection should suggest migration, not be broken: %+v", result)
+			var problems []string
+			for _, section := range result.Sections {
+				for _, finding := range section.Findings {
+					if finding.Severity == app.SeverityProblem {
+						problems = append(problems, section.Kind+":"+finding.Code)
+					}
+				}
 			}
-			if len(result.SuggestedActions) != 1 || !strings.Contains(result.SuggestedActions[0].Command, "skillhub connect "+shellquote.Arg(workspace)) {
-				t.Fatalf("missing connect suggestion: %+v", result.SuggestedActions)
+			if !slices.Equal(problems, []string{"client:client_entry_outdated", "client:client_permissions_outdated"}) {
+				t.Fatalf("a valid legacy connection should be reported as outdated and fixable: %v\n%s", problems, stdout)
+			}
+			if !strings.Contains(stdout, `"fix":"update the connection of the project `) {
+				t.Fatalf("the outdated connection has no fix: %s", stdout)
 			}
 			after, err := os.ReadFile(path)
 			if err != nil || !bytes.Equal(after, legacy) {
@@ -164,7 +171,7 @@ func TestDoctorMigratesLegacyClaudeConnections(t *testing.T) {
 			if len(config.Servers) != 1 || !slices.Equal(config.Servers["skillhub"].Args, want) {
 				t.Fatalf("doctor --fix did not migrate %s: %s", shape, after)
 			}
-			if code, stdout, stderr := runCLI(t, "doctor", "--workspace", workspace, "--json"); code != 0 || strings.Contains(stdout, "connection_outdated") {
+			if code, stdout, stderr := runCLI(t, "doctor", "--workspace", workspace, "--json"); code != 0 || strings.Contains(stdout, `"severity":"problem"`) {
 				t.Fatalf("migrated connection remains outdated: %d %s %s", code, stdout, stderr)
 			}
 		})

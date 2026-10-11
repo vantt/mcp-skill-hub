@@ -50,7 +50,7 @@ func RunContext(ctx context.Context, args []string, stdout, stderr io.Writer) in
 	case "diff":
 		return runDiff(ctx, args[1:], stdout, stderr)
 	case "doctor":
-		return runDoctor(args[1:], stdout, stderr)
+		return runDoctor(ctx, args[1:], stdout, stderr)
 	case "migrate":
 		return runMigrate(ctx, args[1:], stdout, stderr)
 	case "skill":

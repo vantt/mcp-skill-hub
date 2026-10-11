@@ -67,6 +67,82 @@ type RoleReport struct {
 	Hosts        []HostRole `json:"hosts"`
 	StoredHub    string     `json:"stored_hub,omitempty"`
 	PreviousHubs []string   `json:"previous_hubs,omitempty"`
+	// Workspace is the hub folder the person chose explicitly (--workspace or
+	// SKILLHUB_WORKSPACE); empty when none was chosen. WithWorkspace sets it.
+	Workspace string `json:"workspace,omitempty"`
+}
+
+// WithWorkspace narrows the report to an explicitly chosen hub folder: the
+// health checks look at that hub, and of the local connections only the
+// entries that point at it are kept, so `doctor --fix --workspace <hub>`
+// never touches a connection that belongs to another hub. Entries for remote
+// hubs stay; they are reported, never rewritten.
+func (report RoleReport) WithWorkspace(root string) RoleReport {
+	narrowed := report
+	narrowed.Workspace = filepath.Clean(root)
+	narrowed.Hosts = make([]HostRole, 0, len(report.Hosts))
+	keep := func(entry *ClientEntry) *ClientEntry {
+		if entry == nil || entry.Remote() || sameDirectory(entry.Workspace, narrowed.Workspace) {
+			return entry
+		}
+		return nil
+	}
+	for _, host := range report.Hosts {
+		role := HostRole{Host: host.Host, Project: keep(host.Project), User: keep(host.User)}
+		role.Effective = role.Project
+		if role.Effective == nil {
+			role.Effective = role.User
+		}
+		narrowed.Hosts = append(narrowed.Hosts, role)
+	}
+	return narrowed
+}
+
+// HealthRole is the role status and doctor report: Kind, except that an
+// explicitly chosen hub makes a folder without any role a hub.
+func (report RoleReport) HealthRole() string {
+	kind := report.Kind()
+	if kind == RoleNone && report.Workspace != "" {
+		return RoleHub
+	}
+	return kind
+}
+
+// HealthHub is the hub folder whose health status and doctor check: the hub
+// chosen explicitly, else the hub that contains the current directory, else
+// the hub on this machine that a project entry, then a user entry, points at.
+// It is empty when no hub on this machine applies.
+func (report RoleReport) HealthHub() string {
+	if report.Workspace != "" {
+		return report.Workspace
+	}
+	if report.Hub != nil {
+		return report.Hub.Root
+	}
+	for _, global := range []bool{false, true} {
+		for _, host := range report.Hosts {
+			entry := host.Project
+			if global {
+				if host.Project != nil {
+					continue
+				}
+				entry = host.User
+			}
+			if entry != nil && !entry.Remote() && IsHubRoot(entry.Workspace) {
+				return entry.Workspace
+			}
+		}
+	}
+	return ""
+}
+
+// hubCommand adds the explicitly chosen hub to a skillhub command, so a
+// printed command acts on the same hub when it is run from the same folder.
+func (report RoleReport) hubCommand(command string) string {
+	if report.Workspace == "" {
+		return command
+	}
+	return command + " --workspace " + shellquote.Arg(report.Workspace)
 }
 
 // DetectRole finds the hub and the agent connections that apply to cwd. It

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://skillhub.local/schemas/curation-home-v1.schema.json",
   "title": "Skill Hub curation home v1",
-  "description": "Versioned JSON contract emitted by skillhub status --json.",
+  "description": "Versioned JSON contract emitted by skillhub status --json. role and client_sections are optional additions: the role of the current folder and the health sections of its connections.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "status", "summary", "items", "suggested_actions", "warnings", "error", "workspace", "actions", "categories", "home_summary"],
@@ -17,7 +17,9 @@
     "workspace": {"$ref": "#/$defs/workspace"},
     "actions": {"type": "array", "items": {"$ref": "#/$defs/actionItem"}},
     "categories": {"type": "array", "items": {"$ref": "#/$defs/category"}},
-    "home_summary": {"$ref": "#/$defs/homeSummary"}
+    "home_summary": {"$ref": "#/$defs/homeSummary"},
+    "role": {"type": "string", "enum": ["hub", "client-local", "client-remote", "both", "none"]},
+    "client_sections": {"type": "array", "items": {"$ref": "#/$defs/section"}}
   },
   "$defs": {
     "item": {
@@ -70,6 +72,23 @@
       "properties": {
         "kind": {"type": "string"}, "count": {"type": "integer"},
         "availability": {"type": "string", "enum": ["available", "not_configured", "unavailable"]}
+      }
+    },
+    "section": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "root", "title", "findings"],
+      "properties": {
+        "kind": {"type": "string", "enum": ["hub", "client"]}, "root": {"type": "string"}, "title": {"type": "string"},
+        "findings": {"type": "array", "items": {"$ref": "#/$defs/finding"}}
+      }
+    },
+    "finding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["code", "label", "severity", "message"],
+      "properties": {
+        "code": {"type": "string"}, "label": {"type": "string"},
+        "severity": {"type": "string", "enum": ["ok", "notice", "problem", "skipped"]},
+        "message": {"type": "string"}, "fix": {"type": "string"}, "manual": {"type": "string"}, "reason": {"type": "string"}
       }
     },
     "homeSummary": {

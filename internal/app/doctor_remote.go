@@ -298,6 +298,10 @@ type RemoteCheck struct {
 	Status string `json:"status"`
 	Detail string `json:"detail"`
 	Fix    string `json:"fix,omitempty"`
+	// manual is the one command for the failure, when there is one: the
+	// command for the hub machine when nothing answers, or connect for an
+	// unusable URL.
+	manual string
 }
 
 // RemoteHubReport holds the checks of one remote hub that entries in the
@@ -373,6 +377,12 @@ type RemoteDoctorService struct {
 // Check runs the remote checks for every hub the entries point at, one
 // report per hub and token file, in the order the entries name them.
 func (service RemoteDoctorService) Check(ctx context.Context, entries []RemoteEntry) []RemoteHubReport {
+	return service.checkAt(ctx, entries, DepthFull)
+}
+
+// checkAt runs the checks of the given depth: DepthLight checks the token
+// file and one probe (reachable, token accepted) with a one second timeout.
+func (service RemoteDoctorService) checkAt(ctx context.Context, entries []RemoteEntry, depth Depth) []RemoteHubReport {
 	var reports []RemoteHubReport
 	index := map[string]int{}
 	// Hosts per scope, so one project lists its hosts once.
@@ -407,7 +417,7 @@ func (service RemoteDoctorService) Check(ctx context.Context, entries []RemoteEn
 		}
 	}
 	for position := range reports {
-		reports[position].Checks = service.checks(ctx, reports[position].HubURL, reports[position].TokenFile, tokenMaySend(reports[position].HubURL, entries))
+		reports[position].Checks = service.checks(ctx, reports[position].HubURL, reports[position].TokenFile, tokenMaySend(reports[position].HubURL, entries), depth)
 	}
 	return reports
 }
@@ -429,12 +439,13 @@ func tokenMaySend(hubURL string, entries []RemoteEntry) bool {
 	return false
 }
 
-func (service RemoteDoctorService) checks(ctx context.Context, hubURL, tokenFile string, maySend bool) []RemoteCheck {
+func (service RemoteDoctorService) checks(ctx context.Context, hubURL, tokenFile string, maySend bool, depth Depth) []RemoteCheck {
 	if _, problem := NormalizeConnectHubURL(hubURL); problem != nil {
 		return []RemoteCheck{{
 			ID: "hub_reachable", Label: "Hub reachable", Status: CheckFailed,
 			Detail: "The entry's hub URL cannot be used: " + problem.Render.Why,
 			Fix:    "Connect again with the URL the hub printed when it started: `skillhub connect --hub <url> --token-file <path>`.",
+			manual: "skillhub connect --hub <url> --token-file <path>",
 		}}
 	}
 	token := ReadHubToken(hubURL, tokenFile)
@@ -449,7 +460,13 @@ func (service RemoteDoctorService) checks(ctx context.Context, hubURL, tokenFile
 	if !maySend {
 		sent = ""
 	}
-	probe := ProbeHub(ctx, service.Client, hubURL, sent)
+	probeContext := ctx
+	if depth == DepthLight {
+		var cancel context.CancelFunc
+		probeContext, cancel = context.WithTimeout(ctx, lightProbeTimeout)
+		defer cancel()
+	}
+	probe := ProbeHub(probeContext, service.Client, hubURL, sent)
 	checks := []RemoteCheck{tokenCheck, reachableCheck(hubURL, probe)}
 	accepted, version := acceptedCheck(probe, token), versionCheck(hubURL, probe)
 	if !maySend && token.Problem == nil && probe.Outcome == ProbeNoToken {
@@ -462,8 +479,31 @@ func (service RemoteDoctorService) checks(ctx context.Context, hubURL, tokenFile
 		accepted.Detail = "not checked: only this project's files name this hub, so doctor does not send it the token; check it with `" + command + "`, which sends the token because you run it and writes nothing"
 		version.Detail = "not checked: the token was not sent"
 	}
+	if depth == DepthLight {
+		return append(checks, accepted)
+	}
 	checks = append(checks, accepted, version)
 	return append(checks, cacheChecks(hubURL)...)
+}
+
+// lightProbeTimeout bounds the one probe status sends to a remote hub.
+const lightProbeTimeout = time.Second
+
+// hubMachineCommand is the command that starts the hub server on the hub
+// machine so that hubURL answers.
+func hubMachineCommand(hubURL string) string {
+	parsed, err := url.Parse(hubURL)
+	if err != nil {
+		return "skillhub serve"
+	}
+	_, port, _ := net.SplitHostPort(hubHostPort(hubURL))
+	switch {
+	case isLoopbackName(parsed.Hostname()):
+		return "skillhub serve --addr 127.0.0.1:" + port
+	case port == "7420":
+		return "skillhub serve"
+	}
+	return "skillhub serve --addr 0.0.0.0:" + port
 }
 
 func reachableCheck(hubURL string, probe HubProbe) RemoteCheck {
@@ -474,6 +514,7 @@ func reachableCheck(hubURL string, probe HubProbe) RemoteCheck {
 		check.Status = CheckFailed
 		check.Detail = "Nothing answers at " + hubURL + " (" + probe.Reason + "): the hub is stopped, or the SSH tunnel or the Tailscale connection is down."
 		check.Fix = unreachableFix(hubURL, hostPort)
+		check.manual = hubMachineCommand(hubURL)
 	case ProbeHostRefused:
 		check.Status = CheckFailed
 		host := hostPort
@@ -660,29 +701,4 @@ func isLoopbackName(host string) bool {
 	}
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsLoopback()
-}
-
-// RemoteDoctorResult turns reports into a Result for the JSON output and the
-// summary line.
-func RemoteDoctorResult(reports []RemoteHubReport) Result {
-	result := NewResult(StatusReady, "The connection to the remote hub works.")
-	if len(reports) > 1 {
-		result.Summary = "The connections to the remote hubs work."
-	}
-	for _, report := range reports {
-		for _, check := range report.Checks {
-			if check.Status != CheckFailed {
-				continue
-			}
-			result.Status = StatusActionRequired
-			result.Items = append(result.Items, Item{ID: "remote_" + check.ID, Summary: report.HubURL + ": " + check.Detail, Impact: check.Fix})
-		}
-	}
-	if result.Status == StatusActionRequired {
-		result.Summary = "The connection to the remote hub needs attention."
-		if len(reports) > 1 {
-			result.Summary = "The connections to the remote hubs need attention."
-		}
-	}
-	return result
 }

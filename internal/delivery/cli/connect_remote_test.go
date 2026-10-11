@@ -304,7 +304,7 @@ func TestConnectHubEntryStartsAProxyThatResolvesAndFetchesASkill(t *testing.T) {
 	// The doctor now reports the fetch.
 	t.Chdir(project)
 	code, stdout, _ := runCLI(t, "doctor")
-	if code != 0 || !strings.Contains(stdout, "The connection to the remote hub works.") || !strings.Contains(stdout, "(1 skill cached)") {
+	if code != 0 || !strings.HasSuffix(stdout, "\nHealthy.\n") || !strings.Contains(stdout, "(1 skill cached)") {
 		t.Fatalf("doctor after a fetch:\n%s", stdout)
 	}
 }
@@ -447,8 +447,8 @@ func TestDoctorExplainsEachBrokenRemoteConnection(t *testing.T) {
 	doctor := func() string {
 		t.Helper()
 		code, stdout, stderr := runCLI(t, "doctor")
-		if code != 0 || stderr != "" {
-			t.Fatalf("doctor exit %d: %s", code, stderr)
+		if healthy := strings.HasSuffix(stdout, "\nHealthy.\n"); (healthy && code != 0) || (!healthy && code != 1) || stderr != "" {
+			t.Fatalf("doctor exit %d: %s%s", code, stdout, stderr)
 		}
 		if strings.Contains(stdout, token) {
 			t.Fatal("doctor printed the token")
@@ -470,7 +470,7 @@ func TestDoctorExplainsEachBrokenRemoteConnection(t *testing.T) {
 	}
 
 	healthy := doctor()
-	if !strings.HasPrefix(healthy, "The connection to the remote hub works.\n") || strings.Contains(healthy, "FAILED") || strings.Contains(healthy, "FIX:") {
+	if !strings.HasPrefix(healthy, "This project uses the hub at "+hub+"\n") || !strings.HasSuffix(healthy, "\nHealthy.\n") || strings.Contains(healthy, "FAILED") || strings.Contains(healthy, "FIX:") {
 		t.Fatalf("healthy:\n%s", healthy)
 	}
 
@@ -479,7 +479,7 @@ func TestDoctorExplainsEachBrokenRemoteConnection(t *testing.T) {
 		t.Fatal(err)
 	}
 	wrongToken := doctor()
-	if !strings.Contains(flatText(wrongToken), "The hub refused the token") || !strings.Contains(flatText(wrongToken), "FIX: Copy the current token file from machine B again") {
+	if !strings.Contains(flatText(wrongToken), "The hub refused the token") || !strings.Contains(flatText(wrongToken), "FIX: Token accepted: Copy the current token file from machine B again") {
 		t.Fatalf("wrong token:\n%s", wrongToken)
 	}
 	if err := os.WriteFile(tokenFile, []byte(token+"\n"), 0o600); err != nil {
@@ -529,12 +529,18 @@ func TestDoctorExplainsEachBrokenRemoteConnection(t *testing.T) {
 	}
 
 	code, stdout, _ := runCLI(t, "doctor", "--json")
-	var result struct {
-		app.Result
-		RemoteHubs []app.RemoteHubReport `json:"remote_hubs"`
-	}
-	if code != 0 || json.Unmarshal([]byte(stdout), &result) != nil || result.Status != app.StatusActionRequired || len(result.RemoteHubs) != 1 || result.Items[0].ID != "remote_hub_version" {
+	var result doctorJSON
+	if code != 1 || json.Unmarshal([]byte(stdout), &result) != nil || result.Role != app.RoleClientRemote || len(result.Sections) != 1 {
 		t.Fatalf("doctor --json:\n%s", stdout)
+	}
+	var problems []string
+	for _, finding := range result.Sections[0].Findings {
+		if finding.Severity == app.SeverityProblem {
+			problems = append(problems, finding.Code)
+		}
+	}
+	if !slices.Equal(problems, []string{"remote_version"}) || strings.Contains(stdout, token) {
+		t.Fatalf("doctor --json problems = %v:\n%s", problems, stdout)
 	}
 }
 
@@ -545,8 +551,8 @@ func TestDoctorWithAWorkspaceAlsoChecksRemoteEntries(t *testing.T) {
 		t.Fatal(stderr)
 	}
 	code, stdout, _ := runCLI(t, "doctor", "--workspace", ws)
-	if code != 0 || !strings.HasPrefix(stdout, "Workspace is healthy.\n\nThe connection to the remote hub needs attention.\n") ||
-		!strings.Contains(stdout, "Used by:     Claude Code (your user account)") || !strings.Contains(flatText(stdout), "SKILLHUB_HUB_TOKEN is not set") {
+	if code != 1 || !strings.HasPrefix(stdout, "Hub at "+ws+"\n") || !strings.Contains(stdout, "\nYour user account uses the hub at http://127.0.0.1:9\n") ||
+		!strings.Contains(flatText(stdout), "Used by ok Claude Code (your user account)") || !strings.Contains(flatText(stdout), "SKILLHUB_HUB_TOKEN is not set") {
 		t.Fatalf("doctor with a workspace and a remote entry:\n%s", stdout)
 	}
 }
@@ -712,44 +718,45 @@ func TestRemoteConnectAndRemoveOutputGolden(t *testing.T) {
 	}
 }
 
-func TestRemoteDoctorOutputGolden(t *testing.T) {
-	reports := []app.RemoteHubReport{{
-		HubURL: "http://127.0.0.1:7420", TokenFile: "/home/a/hub-token",
-		UsedBy: []string{"Claude Code, Codex (project /home/a/app)", "Gemini CLI (your user account)"},
-		Checks: []app.RemoteCheck{
-			{Label: "Hub token", Status: app.CheckOK, Detail: "read from /home/a/hub-token"},
-			{Label: "Hub reachable", Status: app.CheckOK, Detail: "answered in 2 ms"},
-			{Label: "Token accepted", Status: app.CheckOK, Detail: "the hub accepts the token"},
-			{Label: "Hub version", Status: app.CheckFailed, Detail: "The hub on machine B runs an older Skill Hub (v1.0.0) than this machine (v1.1.0); some remote features will not work.", Fix: "Update skillhub on machine B, then restart `skillhub serve` there."},
-			{Label: "Skill cache", Status: app.CheckFailed, Detail: "The skill cache /c is not writable (permission denied), so skills fetched from the hub cannot be stored.", Fix: "Make it writable for your user (for example `chmod u+w /c`), or set XDG_STATE_HOME to a writable directory in the environment the agent host starts in."},
-			{Label: "Last fetch", Status: app.CheckInfo, Detail: "2026-10-11 15:04 (2 skills cached)"},
-		},
+func TestDoctorSectionOutputGolden(t *testing.T) {
+	section := app.Section{Kind: app.SectionClient, Root: "/home/a/app", Title: "This project uses the hub at http://127.0.0.1:7420", Findings: []app.Finding{
+		{Code: "remote_used_by", Label: "Used by", Severity: app.SeverityOK, Message: "Claude Code, Codex (project /home/a/app), Gemini CLI (your user account)"},
+		{Code: "remote_token_file", Label: "Hub token", Severity: app.SeverityOK, Message: "read from /home/a/hub-token"},
+		{Code: "remote_reachable", Label: "Hub reachable", Severity: app.SeverityOK, Message: "answered in 2 ms"},
+		{Code: "remote_token_accepted", Label: "Token accepted", Severity: app.SeverityOK, Message: "the hub accepts the token"},
+		{Code: "remote_version", Label: "Hub version", Severity: app.SeverityProblem, Message: "The hub on machine B runs an older Skill Hub (v1.0.0) than this machine (v1.1.0); some remote features will not work.", Reason: "Update skillhub on machine B, then restart `skillhub serve` there."},
+		{Code: "remote_cache", Label: "Skill cache", Severity: app.SeverityProblem, Message: "The skill cache /c is not writable (permission denied), so skills fetched from the hub cannot be stored.", Reason: "Make it writable for your user (for example `chmod u+w /c`), or set XDG_STATE_HOME to a writable directory in the environment the agent host starts in."},
+		{Code: "remote_last_fetch", Label: "Last fetch", Severity: app.SeverityOK, Message: "2026-10-11 15:04 (2 skills cached)"},
+		{Code: "remote_reconnect", Label: "Connection files", Severity: app.SeverityProblem, Message: "Out of date: claude-code bootstrap-instructions /home/a/app/CLAUDE.md.", Manual: "skillhub connect --hub http://127.0.0.1:7420 --token-file /home/a/hub-token"},
+		{Code: "hub_index_stale", Label: "Search index", Severity: app.SeverityProblem, Message: "The search index is stale.", Fix: &app.FixAction{Summary: "rebuild the search index"}},
 	}}
 	var out strings.Builder
 	p := termui.NewWithWidth(&out, 100)
-	p.Line(app.RemoteDoctorResult(reports).Summary)
-	renderRemoteDoctor(p, reports)
-	want := "The connection to the remote hub needs attention.\n" +
+	p.Raw(section.Title + "\n")
+	renderFindings(p, section, false, "skillhub doctor --fix")
+	want := "This project uses the hub at http://127.0.0.1:7420\n" +
 		"\n" +
-		"Remote hub:  http://127.0.0.1:7420\n" +
-		"Used by:     Claude Code, Codex (project /home/a/app), Gemini CLI (your user account)\n" +
-		"Token file:  /home/a/hub-token\n" +
+		"Check             Status  Detail\n" +
+		"Used by           ok      Claude Code, Codex (project /home/a/app), Gemini CLI (your user account)\n" +
+		"Hub token         ok      read from /home/a/hub-token\n" +
+		"Hub reachable     ok      answered in 2 ms\n" +
+		"Token accepted    ok      the hub accepts the token\n" +
+		"Hub version       FAILED  The hub on machine B runs an older Skill Hub (v1.0.0) than this machine\n" +
+		"                          (v1.1.0); some remote features will not work.\n" +
+		"Skill cache       FAILED  The skill cache /c is not writable (permission denied), so skills fetched\n" +
+		"                          from the hub cannot be stored.\n" +
+		"Last fetch        ok      2026-10-11 15:04 (2 skills cached)\n" +
+		"Connection files  FAILED  Out of date: claude-code bootstrap-instructions /home/a/app/CLAUDE.md.\n" +
+		"Search index      FAILED  The search index is stale.\n" +
 		"\n" +
-		"Check           Status  Detail\n" +
-		"Hub token       ok      read from /home/a/hub-token\n" +
-		"Hub reachable   ok      answered in 2 ms\n" +
-		"Token accepted  ok      the hub accepts the token\n" +
-		"Hub version     FAILED  The hub on machine B runs an older Skill Hub (v1.0.0) than this machine\n" +
-		"                        (v1.1.0); some remote features will not work.\n" +
-		"Skill cache     FAILED  The skill cache /c is not writable (permission denied), so skills fetched\n" +
-		"                        from the hub cannot be stored.\n" +
-		"Last fetch              2026-10-11 15:04 (2 skills cached)\n" +
-		"\n" +
-		"FIX:  Update skillhub on machine B, then restart `skillhub serve` there.\n" +
-		"FIX:  Make it writable for your user (for example `chmod u+w /c`), or set XDG_STATE_HOME to a\n" +
-		"      writable directory in the environment the agent host starts in.\n"
+		"FIX:  Hub version: Update skillhub on machine B, then restart `skillhub serve` there.\n" +
+		"FIX:  Skill cache: Make it writable for your user (for example `chmod u+w /c`), or set\n" +
+		"      XDG_STATE_HOME to a writable directory in the environment the agent host starts in.\n" +
+		"FIX:  Connection files: Run:\n" +
+		"      `skillhub connect --hub http://127.0.0.1:7420 --token-file /home/a/hub-token`\n" +
+		"FIX:  Search index: `skillhub doctor --fix` will rebuild the search index.\n"
 	if out.String() != want {
-		t.Fatalf("remote doctor:\n%s\nwant:\n%s", out.String(), want)
+		t.Fatalf("doctor section:\n%s\nwant:\n%s", out.String(), want)
 	}
 }
 

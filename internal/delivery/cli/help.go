@@ -20,8 +20,8 @@ Get started:
 Setup:
   init      Create a hub in the current folder, or from a Git URL (--dry-run shows what it would do)
   connect   Connect this project's agents to the hub (-g for all projects), --hub to a hub on another machine
-  doctor    Check the workspace and agent connections; --fix repairs
-  status    Show what needs attention next
+  doctor    Check the hub and the agent connections; --fix repairs what it can
+  status    Show the state of the hub and its connections, and the next command
 
 Skills:
   skill     List, show, create, edit, review, add, update from upstream, and change the state of skills
@@ -115,20 +115,40 @@ Undo a connection:
 <path> is a local folder and --hub a URL; they exclude each other: one scope
 points at one hub, and connecting it to another hub replaces its entry.
 `,
-	"doctor": `Usage: skillhub doctor [--workspace <path>] [--fix [--dry-run]] [--json]
+	"doctor": `Usage: skillhub doctor [--fix [--dry-run]] [--workspace <path>] [--json]
 
-Check the workspace, catalog, and agent connections for this workspace. doctor
-only reports. --fix repairs what it can and prints what it changed; add
---dry-run to see the repairs without applying them.
+Check the hub this folder is in or uses, and the agent connections of this
+project and of your user account. doctor only reports: one table per hub or
+connection, a FIX line for each problem, then "Healthy." or the number of
+problems. Exit codes: 0 healthy, 1 problems remain, 2 invalid request.
 
-When this project or your user account is connected to a remote hub (connect
---hub), doctor also checks that connection: hub reachable, token accepted,
-hub version, skill cache writable, and the last fetch. On a machine without a
-workspace it checks only the remote hub. The token is never printed.
+  --fix        Repair what doctor can, then print what changed (with the files)
+               and what it could not fix, why, and the command to run instead.
+               It re-runs connect's safe merge for the connections to a hub on
+               this machine and points them at a moved hub this machine recorded.
+               It never reconnects to a hub on another machine: that sends the
+               token, so it prints the connect command for you to run.
+  --dry-run    With --fix, show what it would repair; write nothing
+  --workspace  A local hub folder to check instead of the current one; only the
+               connections to that hub are checked and repaired
+  --json       Machine-readable result: role, sections, fixed, not_fixed
+
+For a connection to a remote hub (connect --hub) doctor checks the token file,
+that the hub is reachable, the token is accepted, the hub version, the skill
+cache and the last fetch. The token is sent only to a hub your user account
+names or a hub on this machine, and it is never printed.
 `,
 	"status": `Usage: skillhub status [--workspace <path>] [--json|--quiet]
 
-Show workspace health and the single recommended next action.
+Show the state of the hub this folder is in or uses, and of the agent
+connections, from the same checks doctor runs (a quick subset: status never
+waits for a busy hub and probes a remote hub once). It always ends with one
+command to run next.
+
+  --workspace  A local hub folder instead of the current one
+  --json       The curation home of the hub (schemas/curation-home-v1.schema.json)
+               with the role of this folder and its connection sections
+  --quiet      Print only the overall status word
 `,
 	"skill": `Usage: skillhub skill <subcommand> [flags]
 

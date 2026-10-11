@@ -82,10 +82,16 @@ type CurationHome struct {
 }
 
 // CurationService owns the local/offline Curation Home application query.
-type CurationService struct{}
+type CurationService struct {
+	// NoWait makes GetCurationHome return an error wrapping
+	// mutation.ErrWorkspaceBusy at once when another process holds the
+	// workspace lock, instead of waiting for it. status sets it; the web Home
+	// and the MCP hub_status tool keep waiting.
+	NoWait bool
+}
 
 // GetCurationHome reads only workspace files, Git metadata, and the local derived catalog.
-func (CurationService) GetCurationHome(ctx context.Context, path string) (CurationHome, error) {
+func (service CurationService) GetCurationHome(ctx context.Context, path string) (CurationHome, error) {
 	root, err := workspace.Discover(path)
 	if err != nil {
 		return CurationHome{}, err
@@ -93,7 +99,19 @@ func (CurationService) GetCurationHome(ctx context.Context, path string) (Curati
 	if err := ctx.Err(); err != nil {
 		return CurationHome{}, err
 	}
-	recoveries, err := mutation.InspectRecovery(root)
+	inspectRecovery := mutation.InspectRecovery
+	if service.NoWait {
+		// Hold one reader lock for the whole read, taken without waiting.
+		// The reads below take their own reader locks, which a held reader
+		// lock never blocks, so none of them waits for a writer either.
+		lock, err := mutation.TryAcquireSharedLock(root)
+		if err != nil {
+			return CurationHome{}, err
+		}
+		defer lock.Unlock()
+		inspectRecovery = mutation.InspectRecoveryWhileLocked
+	}
+	recoveries, err := inspectRecovery(root)
 	if err != nil {
 		return CurationHome{}, err
 	}
@@ -492,7 +510,7 @@ func deriveCurationHome(state homeState) CurationHome {
 		if home.Status == StatusOK {
 			home.Status = StatusActionRequired
 		}
-		home.Actions = append(home.Actions, ActionItem{Kind: "review_git_changes", Count: 1, Priority: 10, Summary: "Git has uncommitted canonical changes", Command: "workspace_diff"})
+		home.Actions = append(home.Actions, ActionItem{Kind: "review_git_changes", Count: 1, Priority: 10, Summary: "The hub has changes that are not committed to Git", Command: "workspace_diff"})
 	}
 	if state.HostIntegrationFinding != nil {
 		home.HomeSummary.AttentionItems++
@@ -515,7 +533,7 @@ func deriveCurationHome(state homeState) CurationHome {
 		// sequence. Once the files are committed, or anything has been added,
 		// the workspace is ordinary again, because host connections cannot be
 		// observed from the workspace itself.
-		home.Actions = append(home.Actions, ActionItem{Kind: "first_run_commit", Count: 1, Priority: 20, Summary: "The new workspace has no skills and is not committed yet", Command: "workspace_diff"})
+		home.Actions = append(home.Actions, ActionItem{Kind: "first_run_commit", Count: 1, Priority: 20, Summary: "The new hub has no skills and is not committed to Git yet", Command: "workspace_diff"})
 	}
 	sort.SliceStable(home.Actions, func(i, j int) bool {
 		if home.Actions[i].Priority == home.Actions[j].Priority {
@@ -525,7 +543,7 @@ func deriveCurationHome(state homeState) CurationHome {
 	})
 
 	if len(home.Actions) == 0 {
-		home.SuggestedActions = []Action{{Label: "Continue normal work", Command: ""}}
+		home.SuggestedActions = []Action{{Label: "List the skills of the hub", Command: "skill_list"}}
 		return home
 	}
 	recommended := home.Actions[0]
@@ -542,9 +560,9 @@ func deriveCurationHome(state homeState) CurationHome {
 		case "review_lessons":
 			home.Summary = fmt.Sprintf("%d candidate lesson(s) are waiting for review.", recommended.Count)
 		case "review_git_changes":
-			home.Summary = "Git has uncommitted canonical changes."
+			home.Summary = "The hub has changes that are not committed to Git."
 		case "first_run_commit":
-			home.Summary = "Workspace is new; commit it, then connect an agent."
+			home.Summary = "The new hub is not committed to Git yet."
 		default:
 			home.Summary = "Skill Hub needs attention."
 		}
@@ -569,15 +587,15 @@ func recommendationLabel(kind string) string {
 		"repair_workspace":          "Run skillhub doctor --fix",
 		"recover_workspace":         "Run skillhub doctor --fix",
 		"resume_run":                "Resume the interrupted run",
-		"rebuild_index":             "Run `skillhub rebuild` to refresh the search index",
+		"rebuild_index":             "Run `skillhub maintain rebuild` to refresh the search index",
 		"host_integration_missing":  "Run skillhub doctor --fix",
 		"retry_unavailable_sources": "Retry unavailable source checks",
 		"review_upstream_updates":   "Review upstream updates with skillhub skill outdated",
 		"distill_changed_sources":   "Distill changed sources",
 		"review_lessons":            "Review candidate lessons with distill-lab",
 		"check_due_sources":         "Check all due sources",
-		"review_git_changes":        "Review uncommitted changes",
-		"first_run_commit":          "Commit the new workspace, then run `skillhub connect` in your project",
+		"review_git_changes":        "Commit the changes of the hub",
+		"first_run_commit":          "Commit the new hub, then run `skillhub connect` in your project",
 	}[kind]
 }
 

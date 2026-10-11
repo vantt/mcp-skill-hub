@@ -164,7 +164,7 @@ func TestStatusSuggestsRunnableCreateCommandBUG17(t *testing.T) {
 	if strings.Contains(out, "skill create ...") {
 		t.Errorf("status still contains unrunnable 'skill create ...' (BUG-17):\n%s", out)
 	}
-	if !strings.Contains(out, "skillhub skill create my-skill") {
+	if !strings.Contains(out, "skillhub skill create --id my-first-skill") {
 		t.Errorf("status missing runnable skill create suggestion:\n%s", out)
 	}
 }

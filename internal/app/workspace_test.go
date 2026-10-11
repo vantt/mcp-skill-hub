@@ -237,7 +237,7 @@ func TestExistingWorkspaceDoctorFixNeverSilentlyChangesCanonicalVersion(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Status != StatusActionRequired || len(result.SuggestedActions) != 1 || !strings.Contains(result.SuggestedActions[0].Command, "skillhub migrate") {
+	if result.Status != StatusActionRequired || len(result.SuggestedActions) != 1 || !strings.Contains(result.SuggestedActions[0].Command, "skillhub maintain migrate") {
 		t.Fatalf("doctor result = %#v", result)
 	}
 	if contents, err := os.ReadFile(filepath.Join(root, ".skillhub", "schema-version")); err != nil || string(contents) != "outdated\n" {

@@ -1,6 +1,64 @@
 $ doctor --workspace <WORKSPACE>
-Workspace is healthy.
+Hub at <WORKSPACE>
+
+Check               Status  Detail
+Schema version      ok      version 5
+Git ignore entries  ok      present
+Content             ok      valid
+Interrupted change  ok      none
+Search index        ok      current
+Agent connection    ok      current
+Git                 ok      clean
+Pre-commit hook     ok      no pre-commit hook
+Network server      ok      nothing listens on 127.0.0.1:7420; run `skillhub serve` when agents on
+                            another machine need this hub
+
+This project uses the hub at <WORKSPACE>
+
+Check             Status  Detail
+Claude Code       ok      project entry in .mcp.json; it wins over the entry of your user account
+Connection files  ok      current
+
+Your user account uses the hub at <WORKSPACE>
+
+Check             Status  Detail
+Claude Code       ok      user entry in ~/.claude.json; not used here, because this project's own
+                          entry wins
+Codex             ok      user entry in ~/.codex/config.toml
+Gemini CLI        ok      user entry in ~/.gemini/settings.json
+Connection files  ok      current
+
+Healthy.
 [exit 0]
 $ doctor
-Workspace is healthy.
+Hub at <WORKSPACE>
+
+Check               Status  Detail
+Schema version      ok      version 5
+Git ignore entries  ok      present
+Content             ok      valid
+Interrupted change  ok      none
+Search index        ok      current
+Agent connection    ok      current
+Git                 ok      clean
+Pre-commit hook     ok      no pre-commit hook
+Network server      ok      nothing listens on 127.0.0.1:7420; run `skillhub serve` when agents on
+                            another machine need this hub
+
+This project uses the hub at <WORKSPACE>
+
+Check             Status  Detail
+Claude Code       ok      project entry in .mcp.json; it wins over the entry of your user account
+Connection files  ok      current
+
+Your user account uses the hub at <WORKSPACE>
+
+Check             Status  Detail
+Claude Code       ok      user entry in ~/.claude.json; not used here, because this project's own
+                          entry wins
+Codex             ok      user entry in ~/.codex/config.toml
+Gemini CLI        ok      user entry in ~/.gemini/settings.json
+Connection files  ok      current
+
+Healthy.
 [exit 0]

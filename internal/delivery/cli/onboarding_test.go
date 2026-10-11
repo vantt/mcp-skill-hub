@@ -2,12 +2,16 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
 	"regexp"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
@@ -19,8 +23,25 @@ import (
 func runCLI(t *testing.T, args ...string) (int, string, string) {
 	t.Helper()
 	var stdout, stderr bytes.Buffer
-	code := Run(args, &stdout, &stderr)
+	code := RunContext(isolatedProbeContext(), args, &stdout, &stderr)
 	return code, stdout.String(), stderr.String()
+}
+
+// isolatedProbeContext makes doctor's probes refuse the default listener
+// address, so a `skillhub serve` running on the test machine never changes
+// a test's output. Probes of test servers on other ports work as usual.
+func isolatedProbeContext() context.Context {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = nil
+	dialer := &net.Dialer{}
+	transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+		if address == "127.0.0.1:7420" {
+			return nil, &net.OpError{Op: "dial", Net: network, Err: syscall.ECONNREFUSED}
+		}
+		return dialer.DialContext(ctx, network, address)
+	}
+	client := &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	return app.WithProbeClient(context.Background(), client)
 }
 
 func initTestWorkspace(t *testing.T) string {
@@ -41,8 +62,8 @@ func TestDoctorTextReportsNativeCuratorFixCommand(t *testing.T) {
 		t.Fatal(err)
 	}
 	code, stdout, stderr := runCLI(t, "doctor", "--workspace", root)
-	if code != 0 {
-		t.Fatalf("doctor exit = %d: %s", code, stderr)
+	if code != 1 {
+		t.Fatalf("doctor exit = %d, want 1 for a problem: %s", code, stderr)
 	}
 	command := "skillhub doctor --fix --workspace " + root
 	text := strings.Join(strings.Fields(stdout), " ")

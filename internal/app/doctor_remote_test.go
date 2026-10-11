@@ -365,9 +365,14 @@ func TestRemoteDoctorGroupsHostsPerHubAndScope(t *testing.T) {
 	if len(reports) != 1 || strings.Join(reports[0].UsedBy, "; ") != "Claude Code, Codex (project /p); Gemini CLI (your user account)" {
 		t.Fatalf("reports = %+v", reports)
 	}
-	result := RemoteDoctorResult(reports)
-	if result.Status != StatusActionRequired || len(result.Items) != 1 || result.Items[0].ID != "remote_hub_reachable" {
-		t.Fatalf("result = %+v", result)
+	var failed []string
+	for _, check := range reports[0].Checks {
+		if check.Status == CheckFailed {
+			failed = append(failed, check.ID)
+		}
+	}
+	if strings.Join(failed, ",") != "hub_reachable" {
+		t.Fatalf("failed checks = %v", failed)
 	}
 }
 

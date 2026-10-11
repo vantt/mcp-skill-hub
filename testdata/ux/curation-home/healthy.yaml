@@ -16,7 +16,7 @@ expect:
   status: ok
   summary: Skill Hub is up to date.
   suggested_actions:
-  - Continue normal work
+  - List the skills of the hub
   confirmation:
     policy_revision: policy_v1
     action_class: read-only
@@ -28,7 +28,7 @@ expect:
     L0:
       counts:
         attention_items: 0
-      recommended_action: Continue normal work
+      recommended_action: List the skills of the hub
     L1:
       items: []
       impact: No curation work is pending.
