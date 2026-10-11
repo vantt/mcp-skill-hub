@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { confirmSkillMutation, previewSkillCreate } from '../../api/queries';
 import type { SkillProposal } from '../../api/types';
 import { ApiError } from '../../api/client';
+import { ActionBar } from '../../components/ActionBar';
 import { ProposalPreview } from '../../components/ProposalPreview';
 import { Toast } from '../../components/Toast';
 import { proposalPatch, proposalPaths, proposalWarning } from '../../api/proposal-view';
@@ -182,6 +183,20 @@ export function CreateSkillScreen() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', maxWidth: '760px', width: '100%' }}>
+      <ActionBar>
+        <button type="button" className="fg-btn fg-btn--ghost" onClick={() => navigate('/skills')}>
+          <span>{LABEL_CANCEL}</span>
+        </button>
+        <button
+          type="button"
+          className="fg-btn fg-btn--primary"
+          onClick={handlePreview}
+          disabled={loading}
+        >
+          <span>{loading ? 'Validating…' : LABEL_PREVIEW_DRAFT}</span>
+        </button>
+      </ActionBar>
+
       {apiError && (
         <div className="fg-banner fg-banner--danger" role="alert">
           <span className="fg-banner__dot" />
@@ -472,34 +487,6 @@ export function CreateSkillScreen() {
           />
         )}
       </section>
-
-      {/* Sticky Footer */}
-      <div
-        style={{
-          position: 'sticky',
-          bottom: 0,
-          display: 'flex',
-          justifyContent: 'flex-end',
-          gap: 'var(--space-2)',
-          padding: 'var(--space-3) var(--space-4)',
-          background: 'var(--color-surface)',
-          border: '1px solid var(--color-border)',
-          borderRadius: 'var(--card-radius)',
-          zIndex: 10,
-        }}
-      >
-        <button type="button" className="fg-btn fg-btn--ghost" onClick={() => navigate('/skills')}>
-          <span>{LABEL_CANCEL}</span>
-        </button>
-        <button
-          type="button"
-          className="fg-btn fg-btn--primary"
-          onClick={handlePreview}
-          disabled={loading}
-        >
-          <span>{loading ? 'Validating…' : LABEL_PREVIEW_DRAFT}</span>
-        </button>
-      </div>
 
       {previewOpen && proposal && (
         <ProposalPreview
