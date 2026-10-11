@@ -107,6 +107,7 @@ The [user guide](docs/user-guide.md#do-common-tasks-in-the-web-ui) walks through
 
 - [Curating skills](docs/curating-skills.md): adding, creating, reviewing, editing, and lifecycle management for skills.
 - [User guide](docs/user-guide.md): setup, concepts, agent connections, moving machines, troubleshooting, and command reference.
+- [Use one hub from several machines](docs/remote-hub-guide.md): agents on other computers use this hub through an SSH tunnel or Tailscale.
 - [Release runbook](docs/release-runbook.md): how releases are built, signed, and verified.
 - [Design documents](docs/design/): architecture and decisions (written in Vietnamese).
 - [MCP compatibility matrix](docs/mcp-compatibility-matrix.json): tested agent clients.

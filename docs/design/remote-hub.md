@@ -1,6 +1,8 @@
-# Remote hub: threat model, decisions and the stdio baseline
+# Remote hub: threat model, decisions, baseline and final numbers
 
-Status: decisions settled and baseline measured on 2026-10-11, before any network code exists.
+Status: implemented. Decisions settled and the stdio baseline measured on 2026-10-11 before any
+network code existed; the final command syntax and the measured numbers of the finished feature are
+below. The user-facing guide is [docs/remote-hub-guide.md](../remote-hub-guide.md).
 Plan: [plans/261010-1652-remote-hub-mcp-over-network/plan.md](../../plans/261010-1652-remote-hub-mcp-over-network/plan.md).
 
 One user has several machines. Machine B curates the hub and serves it; machine A only uses the
@@ -26,38 +28,48 @@ Each host scope (project or global) points at one hub: `connect --workspace` for
 | Q1 | Who connects | One user with several machines. One machine curates and serves the skills; the others only use them. No accounts: a single shared bearer token |
 | Q2 | How machine A reaches machine B | Both an SSH tunnel and Tailscale (or another private VPN) are supported. No TLS in this plan and no exposure to the open internet. The hub listens on loopback by default (SSH tunnel). For Tailscale the user binds it to the Tailscale address and confirms it with an explicit flag (`--trust-private-network`) |
 | Q3 | Skills with scripts, setup or check commands | Run only on the client, after the client pulls the files; never on the hub for a remote caller |
-| Q4 | Task text sent over the network | The hub refuses to listen on any non-loopback address unless `--trust-private-network` is given; plain HTTP on loopback is allowed (SSH tunnel, tests) |
+| Q4 | Task text sent over the network | The hub refuses to listen on any non-loopback address unless `--trust-private-network` is given; plain HTTP on loopback is allowed (SSH tunnel, tests). Even with the flag an address that binds every interface (`0.0.0.0`, `[::]`) is refused: give the address of the private interface, for example the Tailscale address |
 | Q5 | Telemetry from remote clients | Written on the hub with a client label; the case journal stays opt-in on the hub |
 
 Go or stop: go. The user wants one machine to curate and serve the skills to the others, which the
 Git route (clone and `skillhub rebuild` on every machine) does not do live.
 
-## Command syntax (one pattern for every surface)
+## Command syntax (as built)
 
 Hub machine B:
 
 ```
-skillhub serve web                                   # web UI, as today
-skillhub serve mcp                                   # MCP over stdio, what hosts launch today (`mcp serve` stays as an alias)
-skillhub serve mcp --addr 127.0.0.1:7420             # network listener, loopback: reach it through an SSH tunnel
-skillhub serve mcp --addr <tailscale-ip>:7420 --trust-private-network
-skillhub token show | rotate                         # shared token; written once to $SKILLHUB_CONFIG_DIR with mode 0600
+skillhub serve web                                   # web UI, as before
+skillhub serve mcp                                   # MCP over stdio, what hosts launch (`mcp serve` stays as an alias)
+skillhub serve mcp --addr 127.0.0.1:7420             # network listener on loopback: reach it through an SSH tunnel
+skillhub serve mcp --addr <tailscale-ip>:7420 --trust-private-network [--allow-host <name>]
+skillhub token show                                  # prints the token, on a terminal only
+skillhub token rotate [--yes]                        # preview, then replace the token
 ```
+
+The token lives in `<workspace>/runtime/config/.hub-token` (mode 0600, under the untracked
+`runtime/` directory; `--token-file` overrides it), not in a skill's `$SKILLHUB_CONFIG_DIR`.
+`--allow-host` accepts a further Host name, for example a full Tailscale MagicDNS name.
 
 Machine A:
 
 ```
-skillhub connect --workspace ~/skillhub --yes        # hub on this machine (as today)
-skillhub connect --hub http://127.0.0.1:7420 --token-file <path> --yes    # via an SSH tunnel
-skillhub connect --hub http://<tailscale-name>:7420 --token-file <path> --yes
-skillhub connect --remove --yes                      # remove the entry for this scope (works for both kinds)
+skillhub connect --workspace ~/skillhub --yes                              # hub on this machine (as before)
+skillhub connect --hub http://127.0.0.1:7420 --token-file <path> --yes     # via an SSH tunnel
+skillhub connect --hub http://<tailscale-ip>:7420 --token-file <path> --yes
+skillhub connect --remove [--cache] --yes            # remove the entry of this scope (either kind); --cache also clears fetched skills
+skillhub cache clear --hub [<url>] [--yes]           # clear skills fetched from remote hubs
+skillhub doctor                                      # also checks every remote entry of this project and the user scope
 ```
 
 `--workspace` and `--hub` exclude each other. The token comes from `--token-file` or the environment
 variable `SKILLHUB_HUB_TOKEN`, and is never written into a host config file. The listener prints the
 exact `connect --hub` line to run on A when it starts, with the token file path, never the token
 itself. Network mode always serves the runtime profile only. The stdio proxy
-`skillhub mcp proxy --hub <url>` is an internal entry that `connect --hub` writes; users do not type it.
+`skillhub mcp proxy --hub <url> [--token-file <path>]` is the entry that `connect --hub` writes; users
+do not type it. On the wire the listener answers `/mcp` (MCP Streamable HTTP), `GET /mcp/bundle` (a
+whole approved skill as one digest-addressed archive, with `ETag` and `304`) and `GET /mcp/status`
+(version and remote protocol level), all behind the same bearer token.
 
 ## Threat model
 
@@ -216,3 +228,71 @@ The budgets in the plan's "Success Criteria" part 2 were checked against this ba
 | First fetch of `herdr-cook-plan`: one exchange, 500 ms on a LAN, 2 s at 100 ms RTT | 16 round trips; 248 to 266 ms p50 and 336 to 392 ms p95 on stdio; projected 1.85 s at 100 ms RTT | Confirmed: one exchange plus the measured hub time fits both, with room for TCP slow start over a tunnel |
 | Later use of the same version: at most 20 ms, zero bytes of skill content | 61 to 78 ms and up to 68 KB per repeat today | Confirmed: a digest-keyed local cache needs no exchange |
 | Changed skill refetches only itself; metadata-only change refetches nothing | not measurable today (no client cache) | Yes/no test, unchanged |
+
+## Final numbers
+
+Measured with `make remote-bench` (`scripts/remote-bench.sh`, test `TestRemoteBudgetBench` in
+`internal/delivery/mcpserver/remote_budget_bench_test.go`) on 2026-10-11: Linux, 24 cores, other work
+running on the machine; a read-only clone of the live hub (`REMOTE_HUB=/home/vantt/skill-hub`, the two
+skills approved in the clone only); 20 agent sessions per transport. The hub
+(`skillhub serve mcp --addr 127.0.0.1:0`) and every proxy (`skillhub mcp proxy`) are real processes.
+The simulated link is a loopback relay that delays every chunk by half the round trip in each
+direction and the first chunk of a connection by one more round trip; it does not limit bandwidth.
+The relay also counts the HTTP requests and the bytes between proxy and hub. Each remote session
+starts with an empty cache. The benchmark fails when a budget is missed.
+
+| Step (p50 / p95) | stdio (local hub) | loopback HTTP | simulated 100 ms link |
+|---|---|---|---|
+| Session start (process and initialize) | 23.9 / 31.6 ms | 17.3 / 37.1 ms | 16.0 / 32.6 ms |
+| `skill_resolve`, first of a session | 7.5 / 13.5 ms | 6.1 / 20.9 ms | 509.6 / 513.6 ms |
+| `skill_resolve`, warm | 6.0 / 10.9 ms | 4.7 / 13.1 ms | 105.6 / 118.4 ms |
+| `skill_get test-audit`, first | 29.2 / 45.9 ms (local snapshot) | 25.1 / 48.3 ms; 1 request, 6.7 KB | 125.2 / 133.4 ms; 1 request, 6.7 KB |
+| `skill_get test-audit`, repeat | 29.6 / 65.9 ms (local snapshot) | 1.1 / 1.8 ms; 0 requests, 0 bytes | 1.3 / 2.5 ms; 0 requests, 0 bytes |
+| `skill_get herdr-cook-plan`, first | 33.8 / 59.9 ms (local snapshot) | 33.6 / 78.2 ms; 1 request, 60.6 KB | 136.5 / 164.5 ms; 1 request, 60.6 KB |
+| `skill_get herdr-cook-plan`, repeat | 31.2 / 48.0 ms (local snapshot) | 2.6 / 6.6 ms; 0 requests, 0 bytes | 3.3 / 9.8 ms; 0 requests, 0 bytes |
+
+Changes on the hub, on both links: after a routing-only change to every skill, each `skill_get` after
+a fresh resolution was a cache hit with 0 requests and 0 bytes; after a content change to
+`herdr-cook-plan`, only that skill was fetched again (1 request, about 62 KB) and `test-audit` stayed a
+hit with 0 requests.
+
+| Budget | Measured | Verdict |
+|---|---|---|
+| Remote `skill_resolve` p95 at most 50 ms above local stdio (LAN) | first of a session 20.9 ms vs 13.5 ms; warm 13.1 ms vs 10.9 ms | Met |
+| First fetch of `herdr-cook-plan`: one exchange, 500 ms on a LAN, 2 s at 100 ms RTT | 1 request on every run; p95 78.2 ms on loopback, 164.5 ms at 100 ms RTT | Met |
+| Later use of the same version: at most 20 ms, zero bytes of skill content | p95 at most 9.8 ms; 0 requests and 0 bytes on every repeat | Met |
+| Changed skill refetches only itself; metadata-only change refetches nothing | as described above | Met |
+
+A fixture run (`make remote-bench` without `REMOTE_HUB`: skills of the same file count and sizes but
+more compressible text, so 7.3 KB on the wire for `herdr-cook-plan`) meets every budget as well.
+
+What the numbers say:
+
+- A whole skill now costs one round trip plus the transfer: 0.16 s at 100 ms RTT for
+  `herdr-cook-plan`, against 16 sequential round trips (a projected 1.85 s) in the stdio baseline. A
+  real link adds TCP slow start for the 60 KB body, about two more round trips.
+- A repeat use costs no request at all, and is faster than a local `skill_get` (about 30 ms), which
+  reads the catalog and prepares the local snapshot answer on every call.
+- The first call of each agent session over a slow link pays about five round trips (0.5 s at
+  100 ms): the TCP handshake, the MCP initialize exchange and the session's event stream, because the
+  proxy opens its hub session on the first call. Warm calls pay one round trip. The resolve budget is
+  set for a LAN, where this cost is a few milliseconds.
+- A real 100 ms link and a Tailscale address were not measured here; the user times them on the real
+  machines with `scripts/remote-timing.sh` (see the guide).
+
+Tests that cover the other criteria, all in `go test ./...`:
+
+- `TestRemoteHubEndToEndThroughATunnel`: listener and proxy as real processes, a tunnel-like relay on
+  a second port, separate homes for both machines. Every skill arrives byte-identical, matches
+  machine B's own stdio answer (content, version, skill detail, runtime spec), runs its `check` on
+  machine A, and `skill_feedback` is recorded on the hub under `remote:claude-code`. The token is in
+  no output and in no file except the two token files.
+- `TestRemoteFetchFailures`: a download cut off midway, a truncated archive, a read-only cache, and a
+  hub from before bundles; with the earlier proxy tests (wrong token, review gate, tampered archive,
+  hub error, stopped hub) and doctor's version check.
+- `TestNetworkListenerReachesNoCurationTool`: every tool of the full server is an unknown tool through
+  the listener and through the proxy, and web UI paths answer 404.
+- `TestOneMachineStdioServerOpensNoPortAndStartsNoProcess` and `TestConnectWorkspaceOutputIsPinned`:
+  the one-machine path is unchanged.
+- `TestHubServesLocalStdioAndRemoteProxiesAtOnce`: three stdio servers and two proxies resolve at the
+  same time on one workspace, and every telemetry event is written.
