@@ -64,22 +64,23 @@ func parseChainsFlags(args []string) (chainsFlags, error) {
 	return flags, nil
 }
 
-func parseChainsSince(sinceStr string) (time.Time, error) {
-	now := time.Now().UTC()
-	if strings.HasSuffix(sinceStr, "d") {
-		daysStr := strings.TrimSuffix(sinceStr, "d")
-		n, err := strconv.Atoi(daysStr)
-		if err != nil || n <= 0 {
-			return time.Time{}, fmt.Errorf("invalid --since duration %q: expected format like 7d", sinceStr)
+// parseSince reads a --since value: a date (YYYY-MM-DD, UTC midnight) or a
+// number of days back from base (Nd, for example 7d). Every telemetry command
+// that takes --since uses it, so they accept the same values and fail with
+// the same message.
+func parseSince(value string, base time.Time) (time.Time, error) {
+	if days, ok := strings.CutSuffix(value, "d"); ok {
+		if n, err := strconv.Atoi(days); err == nil && n > 0 {
+			return base.AddDate(0, 0, -n), nil
 		}
-		return now.AddDate(0, 0, -n), nil
+	} else if t, err := time.Parse("2006-01-02", value); err == nil {
+		return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC), nil
 	}
-	t, err := time.Parse("2006-01-02", sinceStr)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("invalid --since date %q: expected YYYY-MM-DD or Nd", sinceStr)
-	}
-	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC), nil
+	return time.Time{}, fmt.Errorf("invalid --since value %q: use a date (YYYY-MM-DD) or a number of days (Nd, for example 7d)", value)
 }
+
+// sinceFix is the fix line for an invalid --since value.
+const sinceFix = "Pass `--since <YYYY-MM-DD|Nd>`, for example `--since 7d`."
 
 func loadedStr(ch app.DisagreementChain) string {
 	s := ch.LoadedSkill
@@ -96,12 +97,12 @@ func runTelemetryChains(ctx context.Context, args []string, stdout, stderr io.Wr
 		if errors.As(err, &resErr) {
 			return writeWorkspaceResolutionError(stdout, stderr, hasJSONFlag(args), resErr)
 		}
-		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub telemetry chains [--since <Nd|YYYY-MM-DD>] [--kind override|after_no_skill|reformulation]`.")
+		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub telemetry chains [--since <YYYY-MM-DD|Nd>] [--kind override|after_no_skill|reformulation]`.")
 	}
 
-	since, err := parseChainsSince(flags.sinceStr)
+	since, err := parseSince(flags.sinceStr, time.Now().UTC())
 	if err != nil {
-		return writeInvalidRequest(stdout, stderr, flags.jsonOutput, err.Error(), "Pass `--since <Nd|YYYY-MM-DD>`.")
+		return writeInvalidRequest(stdout, stderr, flags.jsonOutput, err.Error(), sinceFix)
 	}
 
 	usageService := app.UsageService{}
