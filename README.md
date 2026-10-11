@@ -1,8 +1,9 @@
-<!-- header: logo, tagline, badges, link row (wired in a later step) -->
-
+<picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/brand/skill-hub-logo-dark.svg"><img src="docs/images/brand/skill-hub-logo-light.svg" alt="Skill Hub" width="280"></picture>
 # Skill Hub
 
-One skill library. Every agent. Every project.
+One skill library. Every agent. Every project.\
+[![Latest release](https://img.shields.io/github/v/release/vantt/mcp-skill-hub)](https://github.com/vantt/mcp-skill-hub/releases/latest) [![CI](https://github.com/vantt/mcp-skill-hub/actions/workflows/ci.yml/badge.svg)](https://github.com/vantt/mcp-skill-hub/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)\
+[Quickstart](#quickstart) · [User guide](docs/user-guide.md) · [Curating skills](docs/curating-skills.md)
 
 Keep your agent skills in one Git repository you own, and stop copying skill folders between projects.
 When your agent starts a task, it asks the hub which skill fits, and the hub suggests one. Nothing changes in your library without your say-so.
