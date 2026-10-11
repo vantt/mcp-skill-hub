@@ -1,0 +1,118 @@
+---
+title: "Remote hub: agents on machine A use the hub on machine B over MCP"
+description: "Let an agent on one machine call skill_resolve, skill_get and skill_feedback against a hub running on another machine, over authenticated, encrypted MCP, with runtime tools only."
+status: pending
+priority: P3
+effort: 4d
+branch: main
+tags: [mcp, remote, security, distribution, telemetry]
+blockedBy: []
+blocks: []
+created: 2026-10-10
+---
+
+# Remote hub: agents on machine A use the hub on machine B over MCP
+
+## Overview
+
+Today the MCP server only speaks stdio (`internal/delivery/mcpserver/server.go:132`, `mcp.StdioTransport`), so the hub must live on the same machine as the agent. Moving a hub to another machine works only through Git (`git clone`, `skillhub rebuild`), and each machine then keeps its own telemetry and cases.
+
+This plan adds a second way: one hub, many machines. The agent on machine A talks to `skillhub mcp serve --http` on machine B and gets the same three runtime tools. Curation stays local to the hub machine; it is never exposed over the network.
+
+Assumption: the user asked for this option on 2026-10-10 after the options discussion (Git clone, web over SSH tunnel, MCP over network, shared multi-user hub). Only the third option is planned here. If the real need is only "same skills on several machines", the Git route needs no code and this plan should stay unstarted.
+
+## What the code already gives us (checked 2026-10-10)
+
+| Fact | Where | Effect on this plan |
+|---|---|---|
+| Go MCP SDK v1.8.0 ships `NewStreamableHTTPHandler` | `go.mod`, SDK `mcp/` | The transport itself is small; no new dependency |
+| Session state is keyed by `*mcp.ServerSession`, not by process | `internal/delivery/mcpserver/activation_tracker.go` | Prior-resolution checks and the case journal keep working per HTTP session |
+| `skill_get` and resources carry `io.skillhub/local_path` | `server.go:459` | Wrong for a remote client; the path is on the server's disk |
+| The runtime profile has 3 tools (about 7 KB without output schemas) | observer plan §5.1 | Safe subset to expose |
+| The web UI already uses a session token and warns about plain HTTP | `internal/delivery/web/listen.go` | Pattern to reuse for the token; TLS must be stricter here |
+| Skill URIs are pinned to a content digest and return `snapshot_expired` with `current_uri` | `distribution.go` | Remote clients get consistent versions for free |
+
+## Measured today: one stdio process per agent session (2026-10-11)
+
+Today every agent session starts its own `skillhub mcp serve` over stdio and the process ends when the host closes stdin. The user runs up to 20 agents at once, so the plan needs to know what that costs before deciding whether a shared server is worth it. Measured on Linux, in a throwaway workspace with an isolated `HOME` and `XDG_*` (the live hub was not touched), with 20 processes each calling `skill_resolve` for 30 seconds. The catalog was nearly empty, so a real hub with many skills may cost more.
+
+| Scenario | Calls | Events written / expected | Lost | Total RSS |
+|---|---|---|---|---|
+| 1 call per second per process | 600 | 1200 / 1200 | 0 | 650 MB |
+| 10 calls per second per process (about 190 per second in total) | 5,792 | 11,584 / 11,584 | 0 | 755 MB |
+| Back-to-back calls (about 5,300 per second in total) | 160,207 | 56,197 / 320,414 | 264,217 dropped, 27 storage errors | 836 MB |
+
+- Each `skill_resolve` writes 2 telemetry events (single-process baseline: 2,744 calls, 5,488 events).
+- At realistic rates telemetry loses nothing: SQLite WAL with `busy_timeout=5000` copes with 20 writer processes. Loss appears only at a rate far beyond real use. The cause is not established; the large drop count suggests the recorder queue overflowing rather than only SQLite locking (unverified).
+- Startup is about 20 ms per process; `skill_resolve` takes about 3 ms at the median and 9 ms at p95 over stdio.
+- Memory: about 32 to 42 MB per process while working, 12 MB for the two idle processes on the user's machine. So 20 sessions cost about 0.65 to 0.85 GB, not 240 MB.
+- All 20 processes exit with code 0 when stdin closes, so a closed session leaves no orphan.
+
+What this means for the plan: a shared server is not needed for correctness at the user's load. Its benefit is memory (one process of about 40 MB instead of 20) and a single telemetry writer. Whether it is worth running a long-lived server is a decision for Phase 1, and it also depends on whether the agent hosts can talk MCP over HTTP directly (not yet checked for Claude Code, Codex or Gemini CLI); if they cannot, every session still keeps a small stdio proxy and the process count does not drop. The test harness is a throwaway Python script outside the repo; Phase 6 should turn it into a repeatable check if the user wants one.
+
+## Decisions to confirm (Phase 1 asks the user)
+
+| # | Question | Recommended |
+|---|---|---|
+| Q1 | Who connects: only the user's own machines, or other people too? | Own machines first (one shared bearer token per client); no accounts |
+| Q2 | Network exposure | Behind a private network or SSH tunnel by default; direct internet only with TLS |
+| Q3 | Skills with scripts, setup or check commands | Run only on the client, after the client pulls the files; never run on the hub for a remote caller |
+| Q4 | Task text sent over the network (the resolve request) | Allowed only over TLS or loopback; refuse plain HTTP on a non-loopback address |
+| Q5 | Telemetry from remote clients | Written on the hub with a client label; case journal stays opt-in on the hub |
+
+## Phases
+
+| # | Phase | Status | Priority |
+|---|---|---|---|
+| 1 | [Baseline, budgets and decisions](./phase-01-baseline-and-decisions.md) | Pending | P1 |
+| 2 | [HTTP transport, runtime profile only](./phase-02-http-transport.md) | Pending | P1 |
+| 3 | [Skill bundle delivery and client cache (skill runs, fetch is fast)](./phase-03-bundle-delivery-and-cache.md) | Pending | P1 |
+| 4 | [Client setup: connect --remote and doctor](./phase-04-client-setup.md) | Pending | P2 |
+| 5 | [Telemetry, sessions and privacy](./phase-05-telemetry-and-privacy.md) | Pending | P2 |
+| 6 | [Benchmarks, two-machine tests and docs](./phase-06-benchmarks-tests-docs.md) | Pending | P1 |
+
+Phases run in order; Phase 1 can end the plan early if the answer to the assumption above is "Git is enough". Phase 3 is the heart of the two headline criteria and is the largest phase.
+
+## Success Criteria (set by the user on 2026-10-10: the skill runs, and fetching it is fast)
+
+The two headline criteria come first; the security criteria below them are the price of exposing a network listener and are not optional.
+
+**1. The skill runs on the remote machine.**
+- [ ] For every approved skill in a test hub (including `herdr-cook-plan`: 14 files, about 186 KB, and `test-audit`: 4 files), the remote client gets the whole skill folder: `SKILL.md`, `references/`, `scripts/` and any other file, byte-identical to the hub (digest equal).
+- [ ] The files are materialized in a local directory on machine A, and `SKILLHUB_SKILL_DIR`, `SKILLHUB_STATE_DIR` and `SKILLHUB_CONFIG_DIR` point at it, so a skill's `check`, `setup` and scripts run exactly as they do on a local hub (an end-to-end test runs one skill's `check` command on the client).
+- [ ] The same skill gives the same result locally and remotely (same files, same digest, same runtime spec).
+- [ ] Unapproved skill content stays blocked for remote callers exactly as it is for local ones.
+
+**2. Getting a skill is fast.**
+Proposed budgets (Phase 1 measures the local stdio baseline first and confirms or adjusts them; numbers are targets, not measurements):
+- [ ] `skill_resolve` over a LAN adds at most 50 ms at p95 over the local stdio time (one round trip, no extra calls).
+- [ ] The first `skill_get` of `herdr-cook-plan` (the largest skill) takes one network exchange for the whole folder, not one per file, and finishes within 500 ms on a LAN and 2 s on a 100 ms-RTT link.
+- [ ] Every later use of the same skill version costs no file transfer at all (local cache keyed by the skill digest): at most 20 ms and zero bytes of skill content.
+- [ ] A changed skill refetches only that skill (digest changed), and a metadata-only hub change refetches nothing.
+- [ ] A reproducible benchmark (`make remote-bench`) reports these numbers for stdio, loopback HTTP and a simulated 100 ms link, and the plan fails if a budget is missed.
+
+**3. Safe to expose.**
+- [ ] Curation tools, the case journal CLI, and every write path are unreachable through the network listener (test).
+- [ ] No request is accepted without a valid bearer token, and plain HTTP is refused on any non-loopback address.
+- [ ] A remote client never receives a path on the hub's disk.
+- [ ] Session-aware cases (`verified_reformulation`, `repeated_gap`) still work per remote session.
+- [ ] `skillhub connect --remote` writes a working entry for Claude Code, and `doctor` explains a failed connection in plain words.
+
+## Risks
+
+| Risk | Mitigation |
+|---|---|
+| Token leaks or is guessed | Long random token, constant-time compare, rotate command, rate limit, no token in URLs or logs |
+| Task text and skill content travel in clear | TLS required beyond loopback; refuse otherwise |
+| The listener widens the attack surface of a curation host | Separate listener, runtime profile hard-wired, no workspace mutation reachable |
+| Skills with scripts run on the wrong machine | Q3 rule enforced in `skill_get` output and tested |
+| Hub down means no routing for remote agents | Client falls back to "no skill" with a clear message; documented |
+| Version skew between client and hub | `doctor` compares versions; tool schema stays additive |
+
+## Rules for every phase
+
+- Do not write to `/home/vantt/skill-hub`; do not push without asking.
+- Never remove telemetry event types or change `EventVersion`.
+- Tests read only the repo or a temp dir; the two-machine test uses two loopback ports and two temp workspaces.
+- Conventional commits; `make check` green before a merge.
+- Do not edit `.claude/skills/distill-lab`.
