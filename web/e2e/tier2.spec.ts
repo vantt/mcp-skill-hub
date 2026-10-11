@@ -105,7 +105,7 @@ test.describe('Tier 2 weekly flows', () => {
   });
 
   test('Go to field on the Review tab puts the cursor in that field', async ({ page }) => {
-    await page.goto(`${server.origin}/skills/smoke-skill`);
+    await page.goto(`${server.origin}/skills/smoke-skill?tab=review`);
     const row = page
       .locator('div')
       .filter({ has: page.getByText('Triggers', { exact: true }), hasText: 'Go to field' })
