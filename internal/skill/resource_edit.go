@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -182,7 +183,9 @@ func resourceSkillDir(root, id string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return skillDirFromMetadataPath(metadataPath), nil
+	// Resource paths use forward slashes on every platform; the folder must too, or on Windows no path
+	// would ever start with it.
+	return filepath.ToSlash(skillDirFromMetadataPath(metadataPath)), nil
 }
 
 // resolveResource validates a requested path against the skill folder and
