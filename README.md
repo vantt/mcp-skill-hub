@@ -1,132 +1,129 @@
+<!-- header: logo, tagline, badges, link row (wired in a later step) -->
+
 # Skill Hub
 
-Skill Hub keeps one curated, Git-backed collection of agent skills and shares it with Claude Code, Codex, and Gemini CLI across all your projects. Your agent asks the hub which skill fits the task at hand; the hub answers with a recommendation, and you stay in control of what changes. It ships as a single Go binary. Your skills are plain files in a Git repository that you own.
+One skill library. Every agent. Every project.
+
+Keep your agent skills in one Git repository you own, and stop copying skill folders between projects.
+When your agent starts a task, it asks the hub which skill fits, and the hub suggests one. Nothing changes in your library without your say-so.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/web/dark-skills-list.png">
+  <img src="docs/images/web/skills-list.png" alt="The skills list with a state filter and skills that are draft, active or deprecated." width="800">
+</picture>
+
+*Skills: every skill with its state, and filters to find one.*
+
+## Why Skill Hub
+
+- **Your agent asks for the right skill.** It sends a short task description and gets one recommendation, or "no skill fits". The full skill text loads only after the agent picks it.
+- **You approve every change.** New skills start as drafts that agents are not offered. Skills from someone else's repository reach your agent only after you approve them in the terminal.
+- **One program, nothing to keep running.** Skill Hub is a single binary. Your agent starts it when needed; nothing runs in the background.
+- **Git is the database.** Your skills are plain files in your own repository. Review them, share them with teammates, and roll them back with Git.
+- **A local web UI.** Browse, review and edit skills in your browser, on your own machine.
+
+## How it works
+
+1. You keep your skills in a workspace: the Git repository that holds your skills.
+2. You connect a project, or every project, so your agent finds the hub.
+3. Your agent is told to ask the hub which skill fits a task, and the hub answers.
+
+```mermaid
+flowchart LR
+    agent["Your AI agent<br/>Claude Code"]
+    hub{{"Skill Hub"}}
+    repo[("Your skills<br/>in a Git repo you own")]
+    you(["You"])
+    gh["GitHub repos<br/>you import from"]
+
+    agent -- "1 Which skill fits?" --> hub
+    hub -- "2 This one" --> agent
+    hub <--> repo
+    you -- "Web UI or CLI" --> hub
+    gh -. "import, check updates" .-> hub
+```
 
 ## Quickstart
 
-**1. Install Skill Hub.** Run the one-liner for your platform:
+Install Skill Hub on Linux or macOS with one command.
 
-Linux / macOS:
 ```bash
 curl -fsSL https://github.com/vantt/mcp-skill-hub/releases/latest/download/install.sh | sh
 ```
 
-Windows (PowerShell):
+<details>
+<summary>Windows (PowerShell)</summary>
+
 ```powershell
 powershell -ExecutionPolicy ByPass -c "irm https://github.com/vantt/mcp-skill-hub/releases/latest/download/install.ps1 | iex"
 ```
 
-The installer places `skillhub` in `~/.local/bin` (or `%LOCALAPPDATA%\skillhub\bin` on Windows), verifies SHA-256 checksums, and configures your `PATH`. Open a new terminal and run `skillhub version` to confirm.
+</details>
 
-**2. Create your workspace.** This is the Git repository that holds your skills:
+Open a new terminal and check it with `skillhub version`. Next, create your workspace.
 
 ```bash
 skillhub init ~/skillhub --yes
-git -C ~/skillhub add -A
+```
+
+Commit only the workspace's own files. The connection files `init` writes stay out of Git because they hold paths from your machine.
+
+```bash
+git -C ~/skillhub add .gitignore .skillhub/schema-version
 git -C ~/skillhub commit -m "Initialize Skill Hub workspace"
 ```
 
-**3. Connect a project.** Connected projects auto-resolve the workspace:
+Connect a project to Claude Code. This writes the connection files into that project folder.
 
 ```bash
-cd your-project
-skillhub connect --workspace ~/skillhub --yes
+cd <your-project>
+skillhub connect --workspace ~/skillhub --host claude --yes
 ```
 
-Tip: Connected projects find the workspace automatically from their local config. For standalone CLI use outside connected projects, run `export SKILLHUB_WORKSPACE=~/skillhub` or pass `--workspace ~/skillhub`. Add `-g` to connect every project at once: `skillhub connect -g --workspace ~/skillhub --yes`.
+Check the setup. It prints "Workspace is healthy." when everything is in place.
 
-**4. Restart your agent** in that project and ask it:
+```bash
+skillhub doctor
+```
+
+Open a new Claude Code session in that folder and ask:
 
 > curate my Skill Hub
 
-The agent shows the state of your hub and suggests one next step.
+Your agent shows the state of your hub and suggests one next step.
 
-## Installation details and options
+> [!TIP]
+> Use `skillhub connect -g --workspace ~/skillhub --yes` to connect every project at once.
 
-- **Install directory:** `$HOME/.local/bin` on Unix, `%LOCALAPPDATA%\skillhub\bin` on Windows.
-- **PATH modification:** Enabled by default (updates shell profiles on Unix, User PATH on Windows). Opt out with `SKILLHUB_NO_MODIFY_PATH=1`.
-- **Integrity and signatures:** Always verifies SHA-256 checksums. Verifies Cosign signatures when `cosign` is installed; enforce strict signature checking with `SKILLHUB_REQUIRE_SIGNATURE=1`.
-- **Pin a version:** Set `SKILLHUB_VERSION=v0.1.0` before running the installer script.
-- **Upgrade:** Run `skillhub update`, or re-run the installer one-liner.
-- **Uninstall:**
-  - Unix: `curl -fsSL https://github.com/vantt/mcp-skill-hub/releases/latest/download/install.sh | sh -s -- --uninstall` (or set `SKILLHUB_UNINSTALL=1`).
-  - Windows: `powershell -ExecutionPolicy ByPass -c "$env:SKILLHUB_UNINSTALL='1'; irm https://github.com/vantt/mcp-skill-hub/releases/latest/download/install.ps1 | iex"`.
+Add your first skill -> [Get started](docs/getting-started.md)
 
-## Other install options
+## See it
 
-**Build from source:** (requires Git, Go 1.26+, and Node.js for embedded web assets)
+Start the web UI from a connected project, on this machine only. It prints a link with a session token; open it in your browser. The [web UI guide](docs/web-ui.md) walks through each task.
 
 ```bash
-git clone https://github.com/vantt/mcp-skill-hub.git
-cd mcp-skill-hub
-make web-build
-go build -o ~/.local/bin/skillhub ./cmd/skillhub
+skillhub serve web --loopback-only
 ```
 
-## Web UI
+<img src="docs/images/web/skill-review.png" alt="The Review tab of an active skill showing its content check and readiness." width="800">
 
-Skill Hub includes an embedded local web dashboard for visual curation, diff reviews, upstream tracking, and insight drafting:
+*Review: whether agents can use this skill, and what to check first.*
 
-```bash
-skillhub serve web
-```
+## Works with
 
-On startup, Skill Hub outputs an authenticated browser URL containing a one-time session token in the URL fragment:
-```text
-Skill Hub web UI: http://127.0.0.1:7421/#token=36dee9ed...
-```
-
-Home shows what needs your attention and the one next step to take:
-
-![Home: what needs attention, and the one next step to take.](docs/images/web/home.png)
-
-Open a skill to see whether agents can use it and what is missing before a draft can be activated:
-
-![Review: whether agents can use this skill, and what to check first.](docs/images/web/skill-review.png)
-
-The screens also fit a phone-width window:
-
-<img src="docs/images/web/mobile-skills.png" alt="The skills list on a narrow phone screen." width="260">
-
-The [user guide](docs/user-guide.md#do-common-tasks-in-the-web-ui) walks through each task with a picture next to the steps. The pictures use invented demo skills.
-
-**Network and Security Behavior:**
-- **Multi-IP Detection:** On machines with multiple non-loopback IPv4 interfaces (e.g. Wi-Fi, Ethernet, Docker bridges, or Tailscale/VPNs), the server binds to `0.0.0.0` to permit access across local network interfaces. On single-interface machines, it binds strictly to `127.0.0.1`.
-- **Loopback Only:** Pass `--loopback-only` to force the server to bind exclusively to `127.0.0.1`.
-- **Allowed Hosts:** Access through custom hostnames requires `--allow-host <host[:port]>`. Requests with untrusted `Host` headers return `421 Misdirected Request` to prevent DNS rebinding attacks.
-- **Plain HTTP Warning:** Traffic is served over unencrypted HTTP. Do not expose `skillhub serve web` to untrusted public networks without a secure TLS reverse proxy.
-
-## What next
-
-- **Curate your skills.** Use the [curating skills guide](docs/curating-skills.md) to add skills (`skillhub skill add`), create workflows (`skillhub skill create`), review diagnostic facts (`skillhub skill review`), edit instructions (`skillhub skill edit --editor`), and keep vendored skills current (`skillhub skill outdated`, `skillhub skill update`).
-- **Check health and changes.** `skillhub status` shows what needs attention. `skillhub diff` shows uncommitted changes, and `skillhub validate --staged` validates commits before staging.
-- **Diagnose issues.** `skillhub doctor` checks workspace and agent connections (`--fix` to repair); `skillhub skill doctor <id>` tests executable tools and environment requirements for an individual skill.
-- **See every command.** `skillhub help`, or `skillhub help <command>`.
+| Agent | Status |
+|---|---|
+| Claude Code | Verified ([compatibility matrix](docs/mcp-compatibility-matrix.json)) |
+| Codex | `connect` writes connection files; not yet verified end to end |
+| Gemini CLI | `connect` writes connection files; not yet verified end to end |
 
 ## Documentation
 
-- [Curating skills](docs/curating-skills.md): adding, creating, reviewing, editing, and lifecycle management for skills.
-- [User guide](docs/user-guide.md): setup, concepts, agent connections, moving machines, troubleshooting, and command reference.
-- [Release runbook](docs/release-runbook.md): how releases are built, signed, and verified.
-- [Design documents](docs/design/): architecture and decisions (written in Vietnamese).
-- [MCP compatibility matrix](docs/mcp-compatibility-matrix.json): tested agent clients.
+- **Start:** [Get started](docs/getting-started.md) · [Installation](docs/installation.md)
+- **Guides:** [Using Skill Hub](docs/user-guide.md) · [Curating skills](docs/curating-skills.md) · [Sources and learning](docs/sources-and-learning.md) · [Web UI](docs/web-ui.md) · [Troubleshooting](docs/troubleshooting.md)
+- **Reference:** [Command reference](docs/command-reference.md) · [All docs](docs/README.md)
+- **Maintainers:** [Contributing](CONTRIBUTING.md) · [Release runbook](docs/release-runbook.md)
 
-## Development
+## Contributing and license
 
-```bash
-make check      # gofmt check + go vet + golangci-lint (new issues since origin/main) + full test suite
-make test-race  # full suite with the race detector
-make lint-all   # every lint finding, including existing debt
-go run ./cmd/skillhub help
-```
-
-Tests run in parallel by default. A test that sets environment variables, changes the working directory, or asserts on process-global state must stay serial (no `t.Parallel()`).
-
-Test packages that reach host integration (`app`, `cli`, `mcpserver`, `web`,
-and `hostintegration`) isolate HOME, USERPROFILE, and XDG directories in
-`TestMain`, before parallel tests start. Their subprocesses inherit that
-isolation; running the suite does not use your agent-host configuration.
-
-Missing `GOCACHE`, `GOMODCACHE`, and `GOPATH` values are resolved with `go env`
-before isolation, so subprocess builds reuse existing Go caches rather than
-filling the temporary home with read-only modules. Explicit values are preserved.
+To build, test or release Skill Hub, see [CONTRIBUTING.md](CONTRIBUTING.md). Skill Hub is released under the MIT License, see [LICENSE](LICENSE).
