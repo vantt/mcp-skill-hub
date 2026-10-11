@@ -57,6 +57,9 @@ type Server struct {
 	telemetry    app.TelemetrySink
 	tracker      *activationTracker
 	logger       *slog.Logger
+	// remoteCallers is set for the network listener: callers run on other
+	// machines, so no response may carry a path on this machine's disk.
+	remoteCallers bool
 }
 
 var activeDiagnostics atomic.Pointer[slog.Logger]
@@ -284,6 +287,9 @@ func (adapter *Server) registerSkills(server *mcp.Server) error {
 	if err := mcp.AddReceivingCustomMethod(server, "skills/get", adapter.getSkill); err != nil {
 		return err
 	}
+	if err := mcp.AddReceivingCustomMethod(server, "skills/bundle", adapter.bundleMethod); err != nil {
+		return err
+	}
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "skill://skillhub/{manifest}/{name}/{+path}",
 		Name:        "Skill Hub skill resource",
@@ -402,6 +408,9 @@ func (adapter *Server) localSkill(ctx context.Context, skillID, lifecycleState s
 		local := app.LocalSkill{Status: app.LocalStatusUnavailable, ReasonCodes: []string{app.LocalReasonNotServable}}
 		return &local
 	}
+	if adapter.remoteCallers {
+		return adapter.remoteLocalSkill(ctx, skillID)
+	}
 	local, err := adapter.snapshots.Ensure(ctx, adapter.workspace, skillID)
 	if err != nil {
 		adapter.logger.Warn("local skill snapshot could not be exported", "skill_id", skillID, "error", err)
@@ -432,7 +441,7 @@ func (adapter *Server) readResource(ctx context.Context, request *mcp.ReadResour
 			Blocked:      true,
 			ReasonCodes:  reasons,
 		})
-		return nil, invalidParams("content_review_required", fmt.Sprintf("This skill's content has not been approved, so none of it is readable; do not use the skill and ask the user to run `skillhub skill review %s`.", content.SkillID))
+		return nil, invalidParams("content_review_required", contentReviewRequiredMessage(content.SkillID))
 	}
 	var session *mcp.ServerSession
 	if request != nil {
@@ -544,6 +553,10 @@ func (adapter *Server) callerContext(session *mcp.ServerSession) app.CallerConte
 func (adapter *Server) localResourceMeta(ctx context.Context, skillID, relative string) (meta mcp.Meta, refused bool, reasons []string) {
 	if skillID == "" || skillID == systemskills.CuratorSkillID {
 		return nil, false, nil
+	}
+	if adapter.remoteCallers {
+		local := adapter.remoteLocalSkill(ctx, skillID)
+		return nil, local.Status == app.LocalStatusReviewRequired, local.ReasonCodes
 	}
 	local, err := adapter.snapshots.Ensure(ctx, adapter.workspace, skillID)
 	if err != nil {

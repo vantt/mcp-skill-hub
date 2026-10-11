@@ -138,8 +138,10 @@ func ServeHTTP(ctx context.Context, listener net.Listener, options HTTPOptions) 
 		return err
 	}
 	defer stop()
+	adapter.remoteCallers = true
 
 	gate := newHTTPGate(server, tokens, allowedHosts(listener.Addr(), options.AllowHosts), adapter.logger)
+	gate.bundle = adapter.bundleHTTPHandler(server)
 	httpServer := &http.Server{
 		Handler:           gate,
 		ReadHeaderTimeout: httpReadHeaderTimeout,
@@ -189,6 +191,7 @@ func ServeHTTP(ctx context.Context, listener net.Listener, options HTTPOptions) 
 type httpGate struct {
 	server   *mcp.Server
 	handler  http.Handler
+	bundle   http.Handler
 	tokens   *hubtoken.Source
 	hosts    map[string]bool
 	limiter  *rate.Limiter
@@ -236,7 +239,7 @@ func (gate *httpGate) ServeHTTP(writer http.ResponseWriter, request *http.Reques
 		http.Error(writer, "Forbidden: cross-origin requests are not accepted", http.StatusForbidden)
 		return
 	}
-	if request.URL.Path != HTTPEndpointPath {
+	if request.URL.Path != HTTPEndpointPath && (request.URL.Path != HTTPBundlePath || gate.bundle == nil) {
 		http.NotFound(writer, request)
 		return
 	}
@@ -267,6 +270,10 @@ func (gate *httpGate) ServeHTTP(writer http.ResponseWriter, request *http.Reques
 	if !gate.limiter.Allow() {
 		writer.Header().Set("Retry-After", "1")
 		http.Error(writer, "too many requests; slow down", http.StatusTooManyRequests)
+		return
+	}
+	if request.URL.Path == HTTPBundlePath {
+		gate.bundle.ServeHTTP(writer, request)
 		return
 	}
 	if request.Method == http.MethodPost && request.Header.Get("Mcp-Session-Id") == "" && gate.sessionCount() >= gate.maxSessions {
