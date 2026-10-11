@@ -346,11 +346,19 @@ skillhub skill edit pdf --approve-content <digest>
 
 ### Backfill legacy skills (`skillhub source backfill`)
 
-Skills vendored before Skill Hub's upstream tracking model lack `provenance.source_id` and `origin.files_digest`. Attach source records and compute missing digests using `source backfill`:
+A skill whose upstream is not tracked yet shows as "Not tracked": its `.meta/skill.yaml` names an upstream repository (an `upstream` entry in `sources:` with an empty `id`, or only `provenance.origin`) but links no source record. An imported skill can also name its source (`provenance.source_id`) without recording where the upstream lives. `source backfill` links these skills to a source record:
 
 ```bash
-skillhub source backfill --yes
+skillhub source backfill                 # preview every candidate
+skillhub source backfill --skill <id> --yes
 ```
+
+Without `--yes` it only prints the proposal. With `--yes` it:
+
+- links an existing `sources/catalog/*.yaml` record for the same repository and ref, or creates one (its ID comes from the repository name and never reuses another source or skill ID);
+- fills in the skill's first `upstream` entry in `sources:`: `id`, and `kind`, the repository (keeping the existing `repo` or `repository` key), `ref`, `path`, `commit` and `synced` where they are missing or differ. When the skill has no upstream entry, it appends one.
+
+Backfill changes nothing else. Other `sources:` entries (for example learning references), the `provenance` block, and upstream fields it does not recompute (`folder_digest`, `files_digest`, `transformations`, `added_at`) stay as they were, and the file keeps its indentation, so the diff covers only the upstream entry. Older versions replaced the whole `sources:` list and removed `provenance`; workspaces that relied on that cleanup must now remove stale entries by hand.
 
 If multiple candidate paths exist within an upstream repository, specify `--skill <id> --path <subdir>` to resolve ambiguity.
 

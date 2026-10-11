@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -80,6 +81,9 @@ type backfillContext struct {
 	existingSources   []sourcepkg.Record
 	sourcesByID       map[string]sourcepkg.Record
 	createdSourcesMap map[string]sourcepkg.Record
+	// skillIDs holds every skill ID in the workspace. Canonical IDs share one
+	// namespace, so a new source record must not reuse a skill's ID.
+	skillIDs map[string]bool
 }
 
 func (service BackfillService) PreviewBackfill(ctx context.Context, path string, input BackfillInput) (BackfillPreview, error) {
@@ -97,6 +101,11 @@ func (service BackfillService) PreviewBackfill(ctx context.Context, path string,
 	skillIDs, err := listAllSkillIDs(root)
 	if err != nil {
 		return BackfillPreview{}, err
+	}
+
+	allSkillIDs := make(map[string]bool, len(skillIDs))
+	for _, id := range skillIDs {
+		allSkillIDs[id] = true
 	}
 
 	targetSkillID := strings.TrimSpace(input.SkillID)
@@ -124,6 +133,7 @@ func (service BackfillService) PreviewBackfill(ctx context.Context, path string,
 		existingSources:   existingSources,
 		sourcesByID:       sourcesByID,
 		createdSourcesMap: make(map[string]sourcepkg.Record),
+		skillIDs:          allSkillIDs,
 	}
 
 	var candidates []BackfillCandidateItem
@@ -298,7 +308,7 @@ func (bc *backfillContext) processCandidateA(id, relDir string, metaBytes []byte
 		for {
 			_, existsInExisting := bc.sourcesByID[matchedSourceID]
 			_, existsInCreated := bc.createdSourcesMap[matchedSourceID]
-			if !existsInExisting && !existsInCreated {
+			if !existsInExisting && !existsInCreated && !bc.skillIDs[matchedSourceID] {
 				break
 			}
 			matchedSourceID = fmt.Sprintf("%s-%d", baseID, counter)
@@ -334,23 +344,12 @@ func (bc *backfillContext) processCandidateA(id, relDir string, metaBytes []byte
 		added = append(added, sourcePath)
 	}
 
+	var updatedMetaBytes []byte
+	var err error
 	if bc.schemaVersion >= 3 {
-		src := map[string]any{
-			"id":    matchedSourceID,
-			"roles": []string{"upstream"},
-			"kind":  kind,
-			"repo":  repo,
-			"ref":   ref,
-		}
-		if originPath != "" {
-			src["path"] = originPath
-		}
-		if commit != "" {
-			src["commit"] = commit
-			src["synced"] = commit
-		}
-		doc["sources"] = []any{src}
-		delete(doc, "provenance")
+		updatedMetaBytes, err = backfillUpstreamEntry(metaBytes, backfillUpstream{
+			ID: matchedSourceID, Kind: kind, Repo: repo, Ref: ref, Path: originPath, Commit: commit,
+		})
 	} else {
 		prov["source_id"] = matchedSourceID
 		if originPath != "" {
@@ -358,9 +357,8 @@ func (bc *backfillContext) processCandidateA(id, relDir string, metaBytes []byte
 		}
 		prov["origin"] = origin
 		doc["provenance"] = prov
+		updatedMetaBytes, err = yaml.Marshal(doc)
 	}
-
-	updatedMetaBytes, err := yaml.Marshal(doc)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
@@ -423,23 +421,12 @@ func (bc *backfillContext) processCandidateB(id, relDir, sourceID string, metaBy
 		commit = srcRec.CurrentRevision.Value
 	}
 
+	var updatedMetaBytes []byte
+	var err error
 	if bc.schemaVersion >= 3 {
-		src := map[string]any{
-			"id":    sourceID,
-			"roles": []string{"upstream"},
-			"kind":  originKind,
-			"repo":  srcRec.Locator.Repository,
-			"ref":   ref,
-		}
-		if repoPath != "" {
-			src["path"] = repoPath
-		}
-		if commit != "" {
-			src["commit"] = commit
-			src["synced"] = commit
-		}
-		doc["sources"] = []any{src}
-		delete(doc, "provenance")
+		updatedMetaBytes, err = backfillUpstreamEntry(metaBytes, backfillUpstream{
+			ID: sourceID, Kind: originKind, Repo: srcRec.Locator.Repository, Ref: ref, Path: repoPath, Commit: commit,
+		})
 	} else {
 		newOrigin := map[string]any{
 			"kind":       originKind,
@@ -454,9 +441,8 @@ func (bc *backfillContext) processCandidateB(id, relDir, sourceID string, metaBy
 		}
 		prov["origin"] = newOrigin
 		doc["provenance"] = prov
+		updatedMetaBytes, err = yaml.Marshal(doc)
 	}
-
-	updatedMetaBytes, err := yaml.Marshal(doc)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -520,6 +506,130 @@ func (service BackfillService) ApplyBackfill(ctx context.Context, path string, p
 		UpdatedSkills:  updatedSkills,
 		CreatedSources: createdSources,
 	}, nil
+}
+
+// backfillUpstream holds the upstream fields backfill derives for one skill.
+type backfillUpstream struct {
+	ID, Kind, Repo, Ref, Path, Commit string
+}
+
+// backfillUpstreamEntry fills the first upstream entry of a skill's
+// `sources:` list, or appends one when the skill has none, and leaves every
+// other entry, the provenance block and any upstream key backfill does not
+// derive (digests, transformations, timestamps) exactly as they were. It edits
+// the YAML node tree and re-encodes with the file's own indentation so the
+// diff stays limited to the upstream entry.
+func backfillUpstreamEntry(original []byte, fields backfillUpstream) ([]byte, error) {
+	var doc yaml.Node
+	if err := yaml.Unmarshal(original, &doc); err != nil {
+		return nil, err
+	}
+	if len(doc.Content) == 0 || doc.Content[0].Kind != yaml.MappingNode {
+		return nil, errors.New("invalid skill metadata root")
+	}
+	rootMap := doc.Content[0]
+	sourcesNode := findMappingValueNode(rootMap, "sources")
+	if sourcesNode == nil || sourcesNode.Kind != yaml.SequenceNode {
+		sourcesNode = &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
+		setMappingKey(rootMap, "sources", sourcesNode)
+	}
+	if len(sourcesNode.Content) == 0 {
+		// An empty flow list (`sources: []`) would otherwise stay in flow style.
+		sourcesNode.Style = 0
+	}
+
+	var entry *yaml.Node
+	for _, item := range sourcesNode.Content {
+		if item.Kind == yaml.MappingNode && yamlEntryHasRole(item, "upstream") {
+			entry = item
+			break
+		}
+	}
+	if entry == nil {
+		entry = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+		roles := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq", Content: []*yaml.Node{yamlString("upstream")}}
+		// Keys follow the alphabetical order the canonical encoder writes.
+		for _, pair := range [][2]string{{"commit", fields.Commit}, {"id", fields.ID}, {"kind", fields.Kind}, {"path", fields.Path}, {"ref", fields.Ref}, {"repo", fields.Repo}} {
+			if pair[1] != "" {
+				setMappingKey(entry, pair[0], yamlString(pair[1]))
+			}
+		}
+		setMappingKey(entry, "roles", roles)
+		if fields.Commit != "" {
+			setMappingKey(entry, "synced", yamlString(fields.Commit))
+		}
+		sourcesNode.Content = append(sourcesNode.Content, entry)
+	} else {
+		repoKey := "repo"
+		if findMappingValueNode(entry, "repo") == nil && findMappingValueNode(entry, "repository") != nil {
+			repoKey = "repository"
+		}
+		setYAMLStringIfChanged(entry, "id", fields.ID)
+		setYAMLStringIfChanged(entry, "kind", fields.Kind)
+		setYAMLStringIfChanged(entry, repoKey, fields.Repo)
+		setYAMLStringIfChanged(entry, "ref", fields.Ref)
+		setYAMLStringIfChanged(entry, "path", fields.Path)
+		setYAMLStringIfChanged(entry, "commit", fields.Commit)
+		setYAMLStringIfChanged(entry, "synced", fields.Commit)
+	}
+
+	var buf bytes.Buffer
+	enc := yaml.NewEncoder(&buf)
+	enc.SetIndent(detectYAMLIndent(original))
+	if err := enc.Encode(&doc); err != nil {
+		return nil, err
+	}
+	if err := enc.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func yamlString(value string) *yaml.Node {
+	return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: value}
+}
+
+func yamlEntryHasRole(entry *yaml.Node, role string) bool {
+	roles := findMappingValueNode(entry, "roles")
+	if roles == nil || roles.Kind != yaml.SequenceNode {
+		return false
+	}
+	for _, r := range roles.Content {
+		if r.Value == role {
+			return true
+		}
+	}
+	return false
+}
+
+// setYAMLStringIfChanged writes a non-empty value only when the key is absent
+// or holds a different value, so unchanged lines keep their original style.
+func setYAMLStringIfChanged(mapNode *yaml.Node, key, value string) {
+	if value == "" {
+		return
+	}
+	if existing := findMappingValueNode(mapNode, key); existing != nil && existing.Kind == yaml.ScalarNode && existing.Value == value {
+		return
+	}
+	setMappingKey(mapNode, key, yamlString(value))
+}
+
+// detectYAMLIndent returns the indentation of the first indented content line,
+// the step the file was written with, falling back to two spaces.
+func detectYAMLIndent(data []byte) int {
+	for _, line := range strings.Split(string(data), "\n") {
+		trimmed := strings.TrimLeft(line, " ")
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		if width := len(line) - len(trimmed); width > 0 {
+			if width >= 2 && width <= 9 {
+				return width
+			}
+			return 2
+		}
+	}
+	return 2
 }
 
 func deriveBackfillSourceID(repoURL, path string) string {
