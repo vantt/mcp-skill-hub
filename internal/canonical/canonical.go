@@ -71,7 +71,10 @@ func ValidateWithOptions(root string, opts ValidationOptions) ([]Issue, error) {
 		// A tracked connection file is a Git notice with its own
 		// `git rm --cached` fix, not invalid canonical content: the files are
 		// never part of the catalog, so they must not stop it from building.
-		if finding.ID == "machine_file_tracked" {
+		// A missing .gitignore entry is likewise a fixable Git notice: the
+		// hub content itself is valid, so it must not mark the workspace
+		// invalid or stop the catalog and the other checks.
+		if finding.ID == "machine_file_tracked" || finding.ID == "gitignore_entry_missing" {
 			continue
 		}
 		issues = append(issues, Issue{Path: finding.Path, Message: finding.Summary})
