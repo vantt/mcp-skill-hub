@@ -697,8 +697,8 @@ func addTool[In, Out any](server *mcp.Server, tool *mcp.Tool, handler mcp.ToolHa
 		if contractErr != nil {
 			panic(fmt.Sprintf("load committed resolver response schema: %v", contractErr))
 		}
-		if !replacePropertySchema(outputSchema, "resolution", committedResponse) {
-			panic(fmt.Sprintf("resolver output schema for %s has no resolution property", tool.Name))
+		if embedErr := embedResolverResponse(outputSchema, committedResponse); embedErr != nil {
+			panic(fmt.Sprintf("resolver output schema for %s: %v", tool.Name, embedErr))
 		}
 		schema = committedRequest
 	}
@@ -733,6 +733,34 @@ func applyToolInputEnums(toolName string, schema *jsonschema.Schema) {
 			prop.Enum = []any{"untrusted", "reviewed", "trusted"}
 		}
 	}
+}
+
+// embedResolverResponse swaps the derived resolution property for the committed
+// response schema. A committed schema without its own $id shares the output
+// schema's root resource, so its $defs move to the root where its local
+// references resolve; the result is resolved once so a dangling reference is
+// reported here as an error instead of surfacing later from tool registration.
+func embedResolverResponse(outputSchema, response *jsonschema.Schema) error {
+	embedded := response.CloneSchemas()
+	if embedded.ID == "" && len(embedded.Defs) > 0 {
+		if outputSchema.Defs == nil {
+			outputSchema.Defs = map[string]*jsonschema.Schema{}
+		}
+		for name, def := range embedded.Defs {
+			if _, taken := outputSchema.Defs[name]; taken {
+				return fmt.Errorf("committed response definition %q collides with a derived definition", name)
+			}
+			outputSchema.Defs[name] = def
+		}
+		embedded.Defs = nil
+	}
+	if !replacePropertySchema(outputSchema, "resolution", embedded) {
+		return errors.New("no resolution property")
+	}
+	if _, err := outputSchema.Resolve(&jsonschema.ResolveOptions{}); err != nil {
+		return fmt.Errorf("resolve embedded response schema: %w", err)
+	}
+	return nil
 }
 
 func replacePropertySchema(schema *jsonschema.Schema, name string, replacement *jsonschema.Schema) bool {

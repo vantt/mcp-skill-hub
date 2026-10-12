@@ -573,7 +573,7 @@ Raw rank score không tham gia calibration report như probability nếu chưa m
 - error rate theo code.
 
 *Ghi chú về đo lường Operational (O3):*
-- `unsupported_method_calls` và `unlisted_resource_reads` chưa thể đo lường tại middleware server (go-sdk từ chối unknown methods trước khi vào middleware; unlisted resource reads bị chặn bởi `ReadResource`). Trong báo cáo funnel JSON, các trường này mang giá trị `null` kèm trạng thái `unmeasured` (ví dụ `unsupported_method_calls_status: "unmeasured"`).
+- `unsupported_method_calls` và `unlisted_resource_reads` không được báo cáo: không có sự kiện telemetry nào ghi nhận chúng (go-sdk từ chối unknown methods trước khi vào middleware; unlisted resource reads bị chặn bởi `ReadResource`), nên báo cáo funnel và baseline không có các trường này.
 
 ### 9.4 Catalog health
 

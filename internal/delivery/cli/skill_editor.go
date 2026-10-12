@@ -129,7 +129,8 @@ func writeEditorSkillPreview(stdout io.Writer, preview app.SkillProposal) {
 			p.Raw("\n")
 		}
 	}
-	p.Line(fmt.Sprintf("No files changed. Confirm with:\n  skillhub skill confirm %s", pins.ProposalID))
+	p.Line("No files changed. Confirm with:")
+	p.Command(skillConfirmCommand(pins))
 }
 
 // cleanupProposalRecovery removes any recovery artifacts associated with proposalID.

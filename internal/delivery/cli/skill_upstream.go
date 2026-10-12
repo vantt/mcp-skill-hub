@@ -453,7 +453,8 @@ func renderUpstreamUpdatePreview(p *termui.Printer, skillID string, repoURL stri
 	}
 	p.Line("No collection files changed.")
 	pins := preview.Confirmation.Confirmation.Pins
-	p.Line(fmt.Sprintf("Next: skillhub skill confirm %s", pins.ProposalID))
+	p.Line("Next:")
+	p.Command(skillConfirmCommand(pins))
 }
 
 func writeConflictsFiles(dir string, files []app.UpstreamFile) error {
