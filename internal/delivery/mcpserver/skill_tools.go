@@ -13,11 +13,6 @@ import (
 	"github.com/vantt/mcp-skill-hub/internal/systemskills"
 )
 
-func (adapter *Server) registerSkillTools(server *mcp.Server) {
-	adapter.registerSkillCurationTools(server)
-	adapter.registerSkillGetTool(server)
-}
-
 func (adapter *Server) registerSkillCurationTools(server *mcp.Server) {
 	adapter.registerSkillCreateTools(server)
 	adapter.registerSkillTransitionTools(server)
@@ -63,22 +58,7 @@ func (adapter *Server) registerSkillCreateTools(server *mcp.Server) {
 		Description: "Apply a persisted draft skill creation proposal with required confirmation pins.",
 		Annotations: annotations(false, true, true, false),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input confirmationInput) (*mcp.CallToolResult, toolOutcome[app.SkillMutationResult], error) {
-		if strings.TrimSpace(input.ProposalID) == "" || strings.TrimSpace(input.ProposalDigest) == "" || strings.TrimSpace(input.BaseVersion) == "" {
-			return failure[app.SkillMutationResult](app.NewInvalidRequestError(
-				"proposal_id, proposal_digest, and base_version pins are required",
-				"Supply all confirmation pins.",
-			))
-		}
-		service := app.SkillService{}
-		preview, err := service.LoadSkillProposal(ctx, adapter.workspace, input.ProposalID)
-		if err != nil {
-			return failure[app.SkillMutationResult](err)
-		}
-		return appResult(service.ConfirmSkillMutation(ctx, adapter.workspace, preview, app.ConfirmationPins{
-			ProposalID:     input.ProposalID,
-			ProposalDigest: input.ProposalDigest,
-			BaseVersion:    input.BaseVersion,
-		}))
+		return adapter.confirmSkillMutation(ctx, input)
 	})
 }
 
@@ -120,22 +100,7 @@ func (adapter *Server) registerSkillTransitionTools(server *mcp.Server) {
 		Description: "Apply a persisted skill lifecycle transition proposal with required confirmation pins.",
 		Annotations: annotations(false, true, true, false),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input confirmationInput) (*mcp.CallToolResult, toolOutcome[app.SkillMutationResult], error) {
-		if strings.TrimSpace(input.ProposalID) == "" || strings.TrimSpace(input.ProposalDigest) == "" || strings.TrimSpace(input.BaseVersion) == "" {
-			return failure[app.SkillMutationResult](app.NewInvalidRequestError(
-				"proposal_id, proposal_digest, and base_version pins are required",
-				"Supply all confirmation pins.",
-			))
-		}
-		service := app.SkillService{}
-		preview, err := service.LoadSkillProposal(ctx, adapter.workspace, input.ProposalID)
-		if err != nil {
-			return failure[app.SkillMutationResult](err)
-		}
-		return appResult(service.ConfirmSkillMutation(ctx, adapter.workspace, preview, app.ConfirmationPins{
-			ProposalID:     input.ProposalID,
-			ProposalDigest: input.ProposalDigest,
-			BaseVersion:    input.BaseVersion,
-		}))
+		return adapter.confirmSkillMutation(ctx, input)
 	})
 }
 

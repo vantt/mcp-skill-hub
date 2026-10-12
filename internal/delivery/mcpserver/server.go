@@ -4,8 +4,6 @@ package mcpserver
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,7 +17,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/vantt/mcp-skill-hub/internal/app"
@@ -31,7 +28,6 @@ import (
 	"github.com/vantt/mcp-skill-hub/internal/telemetry"
 	"github.com/vantt/mcp-skill-hub/internal/version"
 	"github.com/vantt/mcp-skill-hub/internal/workspace"
-	contractschemas "github.com/vantt/mcp-skill-hub/schemas"
 )
 
 const (
@@ -72,9 +68,6 @@ type Server struct {
 	toolsListKey  string
 	toolsListSize int
 }
-
-var activeDiagnostics atomic.Pointer[slog.Logger]
-var correlationSequence atomic.Uint64
 
 // New constructs one stateless server surface for a configured workspace.
 func New(workspacePath string, diagnostics io.Writer, profiles ...Profile) (*Server, *mcp.Server, error) {
@@ -715,348 +708,15 @@ func (adapter *Server) registerAllTools(server *mcp.Server) {
 	adapter.registerCurationTools(server)
 }
 
-func addTool[In, Out any](server *mcp.Server, tool *mcp.Tool, handler mcp.ToolHandlerFor[In, toolOutcome[Out]]) {
-	schema, err := jsonschema.For[In](&jsonschema.ForOptions{})
-	if err != nil {
-		panic(fmt.Sprintf("derive schema for %s: %v", tool.Name, err))
+func addTool[In, Out any](server *mcp.Server, tool *mcp.Tool, handler mcp.ToolHandlerFor[In, toolOutcome[Out]], options ...toolOption) {
+	var schemaOptions toolSchemaOptions
+	for _, option := range options {
+		option(&schemaOptions)
 	}
-	closeObjectSchemas(schema)
-	applyCommonConstraints(schema)
-	if tool.Name == "curation_session_record" {
-		applyCurationSessionConstraints(schema)
-	}
-	normalizeMultiTypeSchemas(schema)
-	outputSchema, err := jsonschema.For[toolOutcome[Out]](&jsonschema.ForOptions{})
-	if err != nil {
-		panic(fmt.Sprintf("derive output schema for %s: %v", tool.Name, err))
-	}
-	normalizeMultiTypeSchemas(outputSchema)
-	shrinkOutputSchema(outputSchema)
-	if tool.Name == "skill_resolve" || tool.Name == "routing_evaluate" {
-		committedRequest, contractErr := contractschemas.ResolverRequest()
-		if contractErr != nil {
-			panic(fmt.Sprintf("load committed resolver request schema: %v", contractErr))
-		}
-		committedResponse, contractErr := contractschemas.ResolverResponse()
-		if contractErr != nil {
-			panic(fmt.Sprintf("load committed resolver response schema: %v", contractErr))
-		}
-		if embedErr := embedResolverResponse(outputSchema, committedResponse); embedErr != nil {
-			panic(fmt.Sprintf("resolver output schema for %s: %v", tool.Name, embedErr))
-		}
-		schema = committedRequest
-	}
-	applyToolInputEnums(tool.Name, schema)
-	tool.InputSchema = schema
-	tool.OutputSchema = outputSchema
+	tool.InputSchema, tool.OutputSchema = deriveToolSchemas[In, Out](tool.Name, schemaOptions)
 	mcp.AddTool(server, tool, handler)
 }
 
-func applyToolInputEnums(toolName string, schema *jsonschema.Schema) {
-	if schema == nil {
-		return
-	}
-	switch toolName {
-	case "skill_feedback":
-		enums := map[string][]any{
-			"outcome":     {"activated", "loaded", "used", "abandoned", "rejected", "completed", "failed"},
-			"reason_code": {"user_rejected", "scope_mismatch", "capability_unavailable", "constraint_conflict", "workflow_completed", "workflow_failed", "abandoned", "host_report", "setup_failed"},
-			"utility":     {"helpful", "harmful", "neutral"},
-			"basis":       {"user", "evaluator", "controlled-benchmark"},
-		}
-		for name, values := range enums {
-			if property := schema.Properties[name]; property != nil {
-				property.Enum = values
-			}
-		}
-	case "source_watch_preview":
-		if prop := schema.Properties["cadence"]; prop != nil {
-			prop.Enum = []any{"manual", "daily", "weekly"}
-		}
-		if prop := schema.Properties["trust"]; prop != nil {
-			prop.Enum = []any{"untrusted", "reviewed", "trusted"}
-		}
-	}
-}
-
-// embedResolverResponse swaps the derived resolution property for the committed
-// response schema. A committed schema without its own $id shares the output
-// schema's root resource, so its $defs move to the root where its local
-// references resolve; the result is resolved once so a dangling reference is
-// reported here as an error instead of surfacing later from tool registration.
-func embedResolverResponse(outputSchema, response *jsonschema.Schema) error {
-	embedded := response.CloneSchemas()
-	if embedded.ID == "" && len(embedded.Defs) > 0 {
-		if outputSchema.Defs == nil {
-			outputSchema.Defs = map[string]*jsonschema.Schema{}
-		}
-		for name, def := range embedded.Defs {
-			if _, taken := outputSchema.Defs[name]; taken {
-				return fmt.Errorf("committed response definition %q collides with a derived definition", name)
-			}
-			outputSchema.Defs[name] = def
-		}
-		embedded.Defs = nil
-	}
-	if !replacePropertySchema(outputSchema, "resolution", embedded) {
-		return errors.New("no resolution property")
-	}
-	if _, err := outputSchema.Resolve(&jsonschema.ResolveOptions{}); err != nil {
-		return fmt.Errorf("resolve embedded response schema: %w", err)
-	}
-	return nil
-}
-
-func replacePropertySchema(schema *jsonschema.Schema, name string, replacement *jsonschema.Schema) bool {
-	if schema == nil {
-		return false
-	}
-	replaced := false
-	if _, exists := schema.Properties[name]; exists {
-		schema.Properties[name] = replacement.CloneSchemas()
-		replaced = true
-	}
-	for _, child := range schema.Properties {
-		replaced = replacePropertySchema(child, name, replacement) || replaced
-	}
-	for _, child := range schema.Defs {
-		replaced = replacePropertySchema(child, name, replacement) || replaced
-	}
-	for _, child := range schema.AnyOf {
-		replaced = replacePropertySchema(child, name, replacement) || replaced
-	}
-	return replacePropertySchema(schema.Items, name, replacement) || replaced
-}
-
-func closeObjectSchemas(schema *jsonschema.Schema) {
-	if schema == nil {
-		return
-	}
-	if schema.Type == "object" && schema.AdditionalProperties == nil {
-		schema.AdditionalProperties = &jsonschema.Schema{Not: &jsonschema.Schema{}}
-	}
-	for _, child := range schema.Properties {
-		closeObjectSchemas(child)
-	}
-	for _, child := range schema.Defs {
-		closeObjectSchemas(child)
-	}
-	for _, child := range schema.AnyOf {
-		closeObjectSchemas(child)
-	}
-	closeObjectSchemas(schema.Items)
-}
-
-// normalizeMultiTypeSchemas preserves nullable semantics while avoiding the
-// multi-value `type` form rejected by several function-calling clients.
-func normalizeMultiTypeSchemas(schema *jsonschema.Schema) {
-	if schema == nil {
-		return
-	}
-	if len(schema.Types) > 0 {
-		for _, schemaType := range schema.Types {
-			schema.AnyOf = append(schema.AnyOf, &jsonschema.Schema{Type: schemaType})
-		}
-		schema.Types = nil
-	}
-	for _, child := range schema.Properties {
-		normalizeMultiTypeSchemas(child)
-	}
-	for _, child := range schema.Defs {
-		normalizeMultiTypeSchemas(child)
-	}
-	for _, child := range schema.AnyOf {
-		normalizeMultiTypeSchemas(child)
-	}
-	normalizeMultiTypeSchemas(schema.Items)
-}
-func shrinkOutputSchema(schema *jsonschema.Schema) {
-	if schema == nil {
-		return
-	}
-	// An embedded $id starts a separate schema resource. Its local references
-	// depend on that boundary and its definitions, so keep the resource intact.
-	if schema.ID != "" {
-		return
-	}
-	schema.Description = ""
-	schema.Title = ""
-	schema.Schema = ""
-	schema.ID = ""
-	schema.AdditionalProperties = nil
-	for _, child := range schema.Properties {
-		shrinkOutputSchema(child)
-	}
-	for _, child := range schema.Defs {
-		shrinkOutputSchema(child)
-	}
-	for _, child := range schema.AnyOf {
-		shrinkOutputSchema(child)
-	}
-	if schema.Items != nil {
-		shrinkOutputSchema(schema.Items)
-	}
-}
-
-func applyCommonConstraints(schema *jsonschema.Schema) {
-	if schema == nil {
-		return
-	}
-	if schemaHasType(schema, "array") && schema.MaxItems == nil {
-		schema.MaxItems = intPointer(paging.MaximumLimit)
-	}
-	for name, property := range schema.Properties {
-		switch name {
-		case "limit":
-			minimum, maximum := float64(1), float64(paging.MaximumLimit)
-			property.Minimum, property.Maximum = &minimum, &maximum
-		case "schema_version":
-			property.Enum = []any{SchemaVersion}
-		case "decision":
-			property.MaxLength = intPointer(64)
-		case "content":
-			property.MaxLength = intPointer(1 << 20)
-		case "cursor", "uri", "locator", "reason", "rationale", "description", "note":
-			property.MaxLength = intPointer(4096)
-		default:
-			if schemaHasType(property, "string") {
-				property.MaxLength = intPointer(2048)
-			}
-		}
-		applyCommonConstraints(property)
-	}
-	for _, child := range schema.Defs {
-		applyCommonConstraints(child)
-	}
-	applyCommonConstraints(schema.Items)
-}
-
-func applyCurationSessionConstraints(schema *jsonschema.Schema) {
-	if schema == nil {
-		return
-	}
-	for name, property := range schema.Properties {
-		switch name {
-		case "status":
-			property.Enum = []any{"completed", "partial", "failed", "abandoned"}
-		case "basis":
-			property.Enum = []any{telemetry.CurationBasisHostReported, telemetry.CurationBasisControlledBenchmark}
-		case "error_code":
-			property.Enum = []any{"capability_unavailable", "internal_error", "operation_cancelled", "partial_failure", "recovery_required", "source_unavailable", "validation_failed"}
-		case "turns_to_next_action", "unnecessary_confirmations", "prompts_per_batch", "batch_size", "routine_git_noise":
-			minimum, maximum := float64(0), float64(10_000)
-			property.Minimum, property.Maximum = &minimum, &maximum
-		case "duration_ms":
-			minimum, maximum := float64(0), float64(604_800_000)
-			property.Minimum, property.Maximum = &minimum, &maximum
-		}
-	}
-}
-
-func schemaHasType(schema *jsonschema.Schema, target string) bool {
-	if schema.Type == target {
-		return true
-	}
-	for _, schemaType := range schema.Types {
-		if schemaType == target {
-			return true
-		}
-	}
-	return false
-}
-
-func intPointer(value int) *int { return &value }
-
 func annotations(readOnly, destructive, idempotent, openWorld bool) *mcp.ToolAnnotations {
 	return &mcp.ToolAnnotations{ReadOnlyHint: readOnly, DestructiveHint: &destructive, IdempotentHint: idempotent, OpenWorldHint: &openWorld}
-}
-
-func success[T any](value T) (*mcp.CallToolResult, toolOutcome[T], error) {
-	return &mcp.CallToolResult{}, toolOutcome[T]{SchemaVersion: SchemaVersion, Result: &value}, nil
-}
-
-func failure[T any](err error) (*mcp.CallToolResult, toolOutcome[T], error) {
-	item := safeToolError(err)
-	return &mcp.CallToolResult{IsError: true}, toolOutcome[T]{SchemaVersion: SchemaVersion, Error: &item}, nil
-}
-
-func unavailable[T any](message string) (*mcp.CallToolResult, toolOutcome[T], error) {
-	item := toolError{Code: "capability_unavailable", Message: message, Retryable: false, SuggestedAction: "Use an existing CLI/application contract or wait until this semantic is implemented."}
-	return &mcp.CallToolResult{IsError: true}, toolOutcome[T]{SchemaVersion: SchemaVersion, Error: &item}, nil
-}
-
-func safeToolError(err error) toolError {
-	var originalAppErr *app.Error
-	isAppErr := errors.As(err, &originalAppErr) && originalAppErr != nil
-
-	appErr := app.ClassifyError(err)
-	if appErr == nil {
-		return toolError{}
-	}
-
-	msg := appErr.Render.Error
-	if msg == "" {
-		msg = appErr.Error()
-	}
-
-	if appErr.Code == app.ErrorInternal {
-		return internalToolError(msg)
-	}
-
-	action := appErr.Render.Fix
-	if action == "" {
-		action = "Check request parameters and retry."
-	}
-
-	retryable := appErr.Retryable
-	if isAppErr {
-		retryable = appErr.Code == app.ErrorStaleContext || appErr.Code == app.ErrorSnapshotExpired || appErr.Code == app.ErrorSourceUnavailable || appErr.Code == app.ErrorIndexStale
-	}
-
-	return toolError{
-		Code:            string(appErr.Code),
-		Message:         msg,
-		Retryable:       retryable,
-		SuggestedAction: action,
-	}
-}
-
-func internalToolError(message string) toolError {
-	correlation := correlationID()
-	if logger := activeDiagnostics.Load(); logger != nil {
-		logger.Error("MCP tool internal failure", "correlation_id", correlation)
-	}
-	return toolError{Code: "internal_error", Message: message, Retryable: true, SuggestedAction: "Retry once; if the failure persists, use the correlation ID with stderr diagnostics.", CorrelationID: correlation}
-}
-
-func correlationID() string {
-	var value [8]byte
-	if _, err := rand.Read(value[:]); err != nil {
-		return fmt.Sprintf("fallback-%016x", correlationSequence.Add(1))
-	}
-	return hex.EncodeToString(value[:])
-}
-
-func applicationError(value any) *app.Error {
-	_ = errorEnvelope{}
-	return app.ErrorOf(value, nil)
-}
-
-func appResult[T any](value T, err error) (*mcp.CallToolResult, toolOutcome[T], error) {
-	if err != nil {
-		return failure[T](err)
-	}
-	if appErr := applicationError(value); appErr != nil {
-		item := toolError{Code: string(appErr.Code), Message: appErr.Render.Error, Retryable: appErr.Retryable, SuggestedAction: appErr.Render.Fix}
-		if appErr.Code == app.ErrorInternal {
-			item.CorrelationID = correlationID()
-			item.Message = "The operation failed internally."
-			item.Retryable = true
-			if logger := activeDiagnostics.Load(); logger != nil {
-				logger.Error("MCP application internal failure", "correlation_id", item.CorrelationID)
-			}
-		}
-		return &mcp.CallToolResult{IsError: true}, toolOutcome[T]{SchemaVersion: SchemaVersion, Error: &item}, nil
-	}
-	return success(value)
 }

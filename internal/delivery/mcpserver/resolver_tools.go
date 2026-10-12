@@ -39,7 +39,7 @@ func (adapter *Server) registerResolverTools(server *mcp.Server) {
 			Resolution: response, ActivationContext: &trueValue, Feedback: &trueValue,
 			SchemaMajor: SchemaVersion, ResourceVersionPinning: true,
 		})
-	})
+	}, withCommittedResolverSchemas())
 
 	addTool(server, &mcp.Tool{
 		Name: "skill_feedback", Title: "Record skill feedback",
@@ -58,5 +58,10 @@ func (adapter *Server) registerResolverTools(server *mcp.Server) {
 			Outcome: input.Outcome, ReasonCode: input.ReasonCode, SelectedSkill: input.SelectedSkill,
 			Utility: input.Utility, Basis: input.Basis,
 		}))
-	})
+	}, withPropertyEnums(map[string][]any{
+		"outcome":     {"activated", "loaded", "used", "abandoned", "rejected", "completed", "failed"},
+		"reason_code": {"user_rejected", "scope_mismatch", "capability_unavailable", "constraint_conflict", "workflow_completed", "workflow_failed", "abandoned", "host_report", "setup_failed"},
+		"utility":     {"helpful", "harmful", "neutral"},
+		"basis":       {"user", "evaluator", "controlled-benchmark"},
+	}))
 }
