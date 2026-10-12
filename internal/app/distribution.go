@@ -150,21 +150,22 @@ func (DistributionService) LookupSkills(ctx context.Context, path string, ids []
 			continue
 		}
 		seen[id] = struct{}{}
-		if id == systemskills.CuratorSkillID {
-			entry, err := buildBundledCuratorSkill()
-			if err != nil {
-				return nil, "", err
-			}
-			entries[id] = entry
-			continue
-		}
-		entry, err := buildDistributedSkill(ctx, root, view, id)
+		entry, err := buildSkillEntry(ctx, root, view, id)
 		if err != nil {
 			return nil, "", err
 		}
 		entries[id] = entry
 	}
 	return entries, view.Pointer.CatalogSnapshot, nil
+}
+
+// buildSkillEntry returns the bundled curator entry for its reserved ID and the
+// catalog-backed entry for every other skill.
+func buildSkillEntry(ctx context.Context, root string, view *catalog.View, id string) (DistributedSkill, error) {
+	if id == systemskills.CuratorSkillID {
+		return buildBundledCuratorSkill()
+	}
+	return buildDistributedSkill(ctx, root, view, id)
 }
 
 func (DistributionService) GetSkill(ctx context.Context, path, uri string) (entry DistributedSkill, resultErr error) {
@@ -177,16 +178,9 @@ func (DistributionService) GetSkill(ctx context.Context, path, uri string) (entr
 		return entry, err
 	}
 	defer closeDistributionHandle(view, &resultErr)
-	if id == systemskills.CuratorSkillID {
-		entry, err = buildBundledCuratorSkill()
-		if err != nil {
-			return DistributedSkill{}, err
-		}
-	} else {
-		entry, err = buildDistributedSkill(ctx, root, view, id)
-		if err != nil {
-			return DistributedSkill{}, err
-		}
+	entry, err = buildSkillEntry(ctx, root, view, id)
+	if err != nil {
+		return DistributedSkill{}, err
 	}
 	if entry.Version != "sha256:"+manifestDigest || entry.URI != uri {
 		return DistributedSkill{}, &SnapshotExpiredError{URI: uri, SkillID: id, CurrentURI: entry.URI}

@@ -239,16 +239,6 @@ func healthyCurrentWhileLocked(ctx context.Context, root string) (Status, canoni
 	return status, snapshot, nil
 }
 
-func openPinnedGeneration(ctx context.Context, root string, pointer Pointer) (*Handle, error) {
-	status := Status{
-		State:       StateHealthy,
-		ServingMode: ServingCurrent,
-		Pointer:     &pointer,
-		Generation:  pointer.Generation,
-	}
-	return openPinnedGenerationWithStatus(ctx, root, pointer, status)
-}
-
 func openPinnedGenerationWithStatus(ctx context.Context, root string, pointer Pointer, status Status) (*Handle, error) {
 	pinnedOpens.Add(1)
 	pinDirectory := filepath.Join(root, "runtime", "catalog", "pins", pointer.Generation)
@@ -308,16 +298,6 @@ func OpenWithFallback(ctx context.Context, root string) (*Handle, error) {
 // generation use it so no mutation can commit between the open and the read.
 func OpenWithFallbackLocked(ctx context.Context, root string) (*Handle, error) {
 	return openWithFallback(ctx, root, true)
-}
-
-// OpenServable is an alias for OpenWithFallback.
-func OpenServable(ctx context.Context, root string) (*Handle, error) {
-	return OpenWithFallback(ctx, root)
-}
-
-// OpenServableLocked is an alias for OpenWithFallbackLocked.
-func OpenServableLocked(ctx context.Context, root string) (*Handle, error) {
-	return OpenWithFallbackLocked(ctx, root)
 }
 
 func openWithFallback(ctx context.Context, root string, keepLock bool) (*Handle, error) {

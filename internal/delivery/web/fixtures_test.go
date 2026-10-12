@@ -493,28 +493,3 @@ func (a fakeSourceAdapter) List(_ context.Context, src sourcepkg.Source, rev sou
 	}
 	return result, nil
 }
-
-func writeSourceRecord(t *testing.T, root, id, adapter string, from, to *sourcepkg.Revision) {
-	t.Helper()
-	record := sourcepkg.Record{
-		SchemaVersion:     1,
-		ID:                id,
-		Adapter:           adapter,
-		Locator:           sourcepkg.Locator{Path: "testdata"},
-		Status:            "changed",
-		Identity:          sourcepkg.Identity{Name: id, Canonical: "testdata"},
-		Trust:             sourcepkg.Trust{Source: "test", Reviewed: true},
-		Monitoring:        sourcepkg.Monitoring{Enabled: true, Cadence: "weekly"},
-		Limits:            sourcepkg.Limits{TimeoutSeconds: 20, MaxBytes: 8 << 20, MaxFiles: 100, MaxFileBytes: 2 << 20},
-		CurrentRevision:   to,
-		DistilledRevision: from,
-	}
-	data, err := sourcepkg.MarshalCanonical(record)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_ = os.MkdirAll(filepath.Join(root, "sources", "catalog"), 0o755)
-	if err := os.WriteFile(filepath.Join(root, "sources", "catalog", id+".yaml"), data, 0o644); err != nil {
-		t.Fatal(err)
-	}
-}
