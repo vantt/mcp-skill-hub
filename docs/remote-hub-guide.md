@@ -500,7 +500,7 @@ Then stop the tunnel and, on machine B, the server (Ctrl-C, or `systemctl --user
 
 ## Time a run from machine A
 
-To see how fast your own connection is, run `scripts/remote-timing.sh` from the Skill Hub repository on machine A. It starts the same proxy your agent starts, with a new, empty cache, resolves a task, gets one skill twice and prints the times. It needs `python3`, and it never reads or prints the token.
+To see how fast your own connection is, run `scripts/remote-timing.sh` from the Skill Hub repository on machine A. It starts the same proxy your agent starts, with a new, empty cache, resolves a task, gets one skill twice and prints the times. It needs `python3`, and it never reads or prints the token. There is no PowerShell version: on Windows run it in WSL or Git Bash with `python3`.
 
 ```bash
 cd <your-project>            # a project connected with connect --hub

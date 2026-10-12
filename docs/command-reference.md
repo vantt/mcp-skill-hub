@@ -26,7 +26,7 @@ Find the command for a task here. For every flag, run `skillhub help` or `skillh
 | Check for a new release | `skillhub update --check` |
 | Update the `skillhub` program | `skillhub update [--version <v>]` |
 
-`doctor` exits with `0` when everything is healthy, `1` when problems remain and `2` for an invalid request. `status` exits with `2` in a folder that is neither a hub nor a connected project, and prints the command that sets one up.
+`doctor` exits with `0` when everything is healthy, `1` when problems remain (a failed check of a hub on another machine counts, so a script can rely on the exit code) and `2` for an invalid request. `status` exits with `2` in a folder that is neither a hub nor a connected project, and prints the command that sets one up.
 
 ## Work with skills
 

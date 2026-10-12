@@ -278,7 +278,11 @@ What the numbers say:
 - The first call of each agent session over a slow link pays about five round trips (0.5 s at
   100 ms): the TCP handshake, the MCP initialize exchange and the session's event stream, because the
   proxy opens its hub session on the first call. Warm calls pay one round trip. The resolve budget is
-  set for a LAN, where this cost is a few milliseconds.
+  set for a LAN, where this cost is a few milliseconds. The proxy does not open the session eagerly
+  when it starts: the hub labels a session `remote:<host>` from the host name the first call carries
+  (a host on the newer protocol sends it only then), and an eager session would also put a hub
+  session and a token check behind every agent start, used or not. The cost is
+  accepted; measure it with `scripts/remote-timing.sh`.
 - A real 100 ms link and a Tailscale address were not measured here; the user times them on the real
   machines with `scripts/remote-timing.sh` (see the guide).
 
