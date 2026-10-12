@@ -1,6 +1,6 @@
 ---
 name: system-curator
-version: 1.6.1
+version: 1.6.2
 contract-version: "2"
 description: Guide Skill Hub maintenance through the `skillhub` CLI (with --json) when a shell is available, or the bundled curation MCP tools when it is not.
 activation-policy: explicit-only
@@ -45,7 +45,9 @@ skill, re-resolve with `prior.kind: rejected` instead of picking one yourself.
 When you use a different skill, call `skill_feedback` with the real `skill_id`.
 
 **First step, every session:** if you have a shell tool, run `skillhub version`
-before anything else, and do not search for MCP curation tools first. If it
+before anything else, and do not search for MCP curation tools first. This holds
+even when `skillhub-curation` tools are already listed, and even when the user
+names those tools: call none of them until `skillhub version` has run. If it
 prints a version, every curation action below is a `skillhub … --json` command
 from the CLI column of the intent table. The CLI is the supported interface on
 shell hosts, not a workaround: it calls the same application services as the
