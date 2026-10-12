@@ -1,7 +1,7 @@
 ---
 title: "Package distill-lab in the hub and keep system skills once in .agents/skills"
 description: "Ship distill-lab as a self-contained Node system skill installed only in the hub folder, keep system skill content once in .agents/skills with one thin wrapper for Claude Code, and make every distill instruction runnable."
-status: pending
+status: in-review
 priority: P2
 effort: 57h
 branch: main
@@ -410,17 +410,17 @@ update the affected phase before starting it.
 
 <!-- Red team: efforts, dependencies and waves updated -->
 <!-- Validation: Phase 4 +4h (rank check, DoctorFix gate, applyHostIntegration, ID parsers, formatChangeKind, output goldens, several ids per host, all-adapter registrations, Blocked in MissingFinding); Phase 2 +0.5h (extraction script, test-name list, release fetch-depth); Phase 6 +0.5h (status JSON schema) -->
-| # | Phase | Effort | Depends on | File |
-|---|---|---|---|---|
-| 1 | Embed system skill bundles and distill-lab | 4h | - | [phase-01](phase-01-embed-system-skill-bundles.md) |
-| 2 | Rewrite the distill script as a self-contained Node module | 13.5h | 1 | [phase-02](phase-02-rewrite-distill-script-in-node.md) |
-| 3 | distill-lab skill text: hub lookup, one script section, requirements, mirrors, warning | 2h | 1, 2 | [phase-03](phase-03-distill-lab-skill-text.md) |
-| 4 | Installer: canonical folder, Claude wrapper, per-item conflicts, migration, removal, doctor provider | 20h | 1 | [phase-04](phase-04-installer-canonical-and-wrappers.md) |
-| 5 | Ignore generated system-skill folders in the hub `.gitignore` and report tracked ones | 2.5h | 4 | [phase-05](phase-05-gitignore-entries-and-tracked-notice.md) |
-| 6 | Product text, status JSON schema and tests (Go, web, e2e, one screenshot) | 5.5h | 1, 4 | [phase-06](phase-06-product-text-and-tests.md) |
-| 7 | User docs | 3.5h | 2, 3, 4, 5, 6 | [phase-07](phase-07-docs.md) |
-| 8 | Sandbox verification | 5h | 7 | [phase-08](phase-08-sandbox-verification.md) |
-| 9 | Move the dev copy to the shared layout | 1h | 8 | [phase-09](phase-09-move-dev-copy-to-shared-layout.md) |
+| # | Phase | Effort | Depends on | File | Status |
+|---|---|---|---|---|---|
+| 1 | Embed system skill bundles and distill-lab | 4h | - | [phase-01](phase-01-embed-system-skill-bundles.md) | done |
+| 2 | Rewrite the distill script as a self-contained Node module | 13.5h | 1 | [phase-02](phase-02-rewrite-distill-script-in-node.md) | done |
+| 3 | distill-lab skill text: hub lookup, one script section, requirements, mirrors, warning | 2h | 1, 2 | [phase-03](phase-03-distill-lab-skill-text.md) | done |
+| 4 | Installer: canonical folder, Claude wrapper, per-item conflicts, migration, removal, doctor provider | 20h | 1 | [phase-04](phase-04-installer-canonical-and-wrappers.md) | done |
+| 5 | Ignore generated system-skill folders in the hub `.gitignore` and report tracked ones | 2.5h | 4 | [phase-05](phase-05-gitignore-entries-and-tracked-notice.md) | done |
+| 6 | Product text, status JSON schema and tests (Go, web, e2e, one screenshot) | 5.5h | 1, 4 | [phase-06](phase-06-product-text-and-tests.md) | done |
+| 7 | User docs | 3.5h | 2, 3, 4, 5, 6 | [phase-07](phase-07-docs.md) | done |
+| 8 | Sandbox verification | 5h | 7 | [phase-08](phase-08-sandbox-verification.md) | done with concerns: manual Claude Code check 12 not run ([verification](reports/verification.md)) |
+| 9 | Move the dev copy to the shared layout | 1h | 8 | [phase-09](phase-09-move-dev-copy-to-shared-layout.md) | done (step 4, the manual Claude Code check, not run) |
 
 ## Parallel execution and file ownership
 

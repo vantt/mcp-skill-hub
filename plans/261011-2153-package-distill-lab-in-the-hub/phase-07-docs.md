@@ -1,7 +1,7 @@
 ---
 phase: 7
 title: "User docs"
-status: pending
+status: done
 priority: P2
 effort: "3.5h"
 wave: 4

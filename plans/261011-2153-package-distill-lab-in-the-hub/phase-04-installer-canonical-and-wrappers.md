@@ -1,7 +1,7 @@
 ---
 phase: 4
 title: "Installer: canonical folder, Claude wrapper, migration, removal, doctor hint"
-status: pending
+status: done
 priority: P1
 effort: "20h"
 wave: 2

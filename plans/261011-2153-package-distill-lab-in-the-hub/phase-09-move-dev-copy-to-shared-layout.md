@@ -1,7 +1,7 @@
 ---
 phase: 9
 title: "Move the dev copy to the shared layout"
-status: pending
+status: done
 priority: P3
 effort: "1h"
 wave: 6

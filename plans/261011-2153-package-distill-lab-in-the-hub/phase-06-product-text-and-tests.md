@@ -1,7 +1,7 @@
 ---
 phase: 6
 title: "Product text and tests (Go, web, e2e, one screenshot)"
-status: pending
+status: done
 priority: P2
 effort: "5.5h"
 wave: 3

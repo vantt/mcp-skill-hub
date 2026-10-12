@@ -1,7 +1,7 @@
 ---
 phase: 2
 title: "Rewrite the distill script as a self-contained Node module"
-status: pending
+status: done
 priority: P1
 effort: "13.5h"
 wave: 2

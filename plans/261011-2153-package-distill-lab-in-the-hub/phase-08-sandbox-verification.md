@@ -1,7 +1,7 @@
 ---
 phase: 8
 title: "Sandbox verification"
-status: pending
+status: done-with-concerns
 priority: P1
 effort: "5h"
 wave: 5

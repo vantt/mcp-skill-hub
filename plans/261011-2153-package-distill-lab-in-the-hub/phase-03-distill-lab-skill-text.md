@@ -1,7 +1,7 @@
 ---
 phase: 3
 title: "distill-lab skill text: hub lookup, one script section, requirements"
-status: pending
+status: done
 priority: P2
 effort: "2h"
 wave: 3

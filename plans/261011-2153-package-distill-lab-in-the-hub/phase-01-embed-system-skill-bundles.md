@@ -1,7 +1,7 @@
 ---
 phase: 1
 title: "Embed system skill bundles and distill-lab"
-status: pending
+status: done
 priority: P2
 effort: "4h"
 wave: 1

@@ -1,7 +1,7 @@
 ---
 phase: 5
 title: "Ignore generated system-skill folders in the hub .gitignore and report tracked ones"
-status: pending
+status: done
 priority: P2
 effort: "2.5h"
 wave: 3
