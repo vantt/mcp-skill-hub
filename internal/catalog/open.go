@@ -506,13 +506,11 @@ func verifyPointerDatabase(ctx context.Context, root string, pointer Pointer) er
 	if err != nil {
 		return err
 	}
-	info, err := rootHandle.Lstat("runtime/catalog/" + pointer.Database)
-	_ = rootHandle.Close()
+	defer rootHandle.Close()
+	relative := "runtime/catalog/" + pointer.Database
+	before, err := canonical.StatFile(rootHandle, relative)
 	if err != nil {
 		return err
-	}
-	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-		return fmt.Errorf("generation path is not a regular file")
 	}
 	database, err := sql.Open("sqlite", sqliteDSN(path, true))
 	if err != nil {
@@ -520,12 +518,21 @@ func verifyPointerDatabase(ctx context.Context, root string, pointer Pointer) er
 	}
 	database.SetMaxOpenConns(1)
 	defer database.Close()
-	var integrity string
-	if err := database.QueryRowContext(ctx, `PRAGMA quick_check`).Scan(&integrity); err != nil || integrity != "ok" {
-		if err != nil {
-			return err
+	if !integrityVerified.known(path, before) {
+		integrityVerified.checks.Add(1)
+		checkedAt := time.Now()
+		var integrity string
+		if err := database.QueryRowContext(ctx, `PRAGMA quick_check`).Scan(&integrity); err != nil || integrity != "ok" {
+			if err != nil {
+				return err
+			}
+			return fmt.Errorf("generation quick check returned %q", integrity)
 		}
-		return fmt.Errorf("generation quick check returned %q", integrity)
+		// Remember the result only for the exact file version that was checked,
+		// and only when the file did not change while the check read it.
+		if after, err := canonical.StatFile(rootHandle, relative); err == nil && after == before && after.Settled(checkedAt) {
+			integrityVerified.remember(path, after)
+		}
 	}
 	var catalogDigest, projectionDigest, builder string
 	var canonicalVersion, derivedVersion int

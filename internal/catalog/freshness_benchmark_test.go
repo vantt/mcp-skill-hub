@@ -31,7 +31,12 @@ func BenchmarkInspectWhileLocked(b *testing.B) {
 			}
 			ageCanonicalFiles(b, root, time.Minute)
 			ctx := context.Background()
-			if _, err := BuildCatalogGeneration(ctx, root, BuildOptions{}); err != nil {
+			built, err := BuildCatalogGeneration(ctx, root, BuildOptions{})
+			if err != nil {
+				b.Fatal(err)
+			}
+			past := time.Now().Add(-time.Minute)
+			if err := os.Chtimes(generationPath(root, built.Pointer), past, past); err != nil {
 				b.Fatal(err)
 			}
 			lock, err := mutation.AcquireSharedLock(ctx, root, mutation.DefaultLockTimeout)
