@@ -11,6 +11,7 @@ import (
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
 	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
+	"github.com/vantt/mcp-skill-hub/internal/hostintegration"
 	"github.com/vantt/mcp-skill-hub/internal/shellquote"
 )
 
@@ -145,7 +146,8 @@ func renderInitSummary(p *termui.Printer, result app.Result, report *app.InitRep
 	for _, warning := range result.Warnings {
 		// Only what init found about this hub; routine notes of the steps it
 		// ran stay in --verbose and --json.
-		if warning.Code == "git_ssh_command" || warning.Code == "hub_tracks_agent_config" {
+		switch warning.Code {
+		case "git_ssh_command", "hub_tracks_agent_config", "system_skill_blocked", hostintegration.NoticeGeminiLegacy:
 			p.Warning(warning.Summary)
 		}
 	}
