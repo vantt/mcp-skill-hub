@@ -24,7 +24,12 @@ host check when a host release changes that; the matrix status stays `unverified
 ## Waiting for the user
 
 - Curator-compliance script.
-- Evaluate delivering skills through `resources/list` (Claude Code calls it; the runtime list is empty).
+
+## Decided not to do
+
+- Delivering skills through `resources/list`: the list stays empty on purpose. Resources are application-driven and
+  listing every skill would cost context tokens; skills are found through `skill_resolve`. If user-attached skills are
+  wanted later, use a `skill://{id}` template, not a full list.
 
 ## Cleanup
 
