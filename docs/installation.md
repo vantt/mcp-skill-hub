@@ -66,7 +66,7 @@ Uninstall removes the binary, its install marker and the `PATH` lines the instal
 
 ## Build from source
 
-You need Git, Go 1.26 or newer, and Node.js 24. Node.js builds the web UI that is embedded in the binary.
+You need Git, Go 1.26.9 or newer, and Node.js 24. Node.js builds the web UI that is embedded in the binary.
 
 ```bash
 git clone https://github.com/vantt/mcp-skill-hub.git
