@@ -85,7 +85,7 @@ Superseded by the backlog (F1–F8, H1–H4); kept below as history.
   then `git merge --ff-only`. Run `make check` (rerun `TestGitRevisionAt` once if it fails
   with "broken pipe") and `make web-check` when web changes. For host changes, smoke
   `connect` in a temp HOME.
-- Never edit distill-lab (`.claude/skills/distill-lab`). Never write to the live hub, migrate
+- Never edit distill-lab (the source is `.agents/skills/distill-lab/`; `.claude/skills/distill-lab/` is a generated wrapper). Never write to the live hub, migrate
   it, or push anything without the user asking. Do not touch a worktree while its agent runs.
 - Tests must not read paths outside the repo or a temp dir (fixtures live in testdata).
 - Never remove telemetry event types or change EventVersion. Use conventional commits.

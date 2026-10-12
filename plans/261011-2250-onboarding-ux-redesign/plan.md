@@ -192,7 +192,7 @@ doctor and status texts in Phase 4; docs in Phase 5.
 
 ## Coordination with the distill-lab packaging plan
 
-Session mcp-skill-hub-68 owns [plans/261011-2153-package-distill-lab-in-the-hub/](../261011-2153-package-distill-lab-in-the-hub/plan.md),
+Session mcp-skill-hub-68 owns [plans/261011-2153-package-distill-lab-in-the-hub/](../../archive/plans/261011-2153-package-distill-lab-in-the-hub/plan.md),
 which declares `blockedBy: [261011-2250-onboarding-ux-redesign]`. Agreed order: this plan lands and releases 5.0.0
 first; the other session implements afterwards from the new main.
 

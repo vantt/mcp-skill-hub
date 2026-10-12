@@ -1,7 +1,7 @@
 ---
 title: "Package distill-lab in the hub and keep system skills once in .agents/skills"
 description: "Ship distill-lab as a self-contained Node system skill installed only in the hub folder, keep system skill content once in .agents/skills with one thin wrapper for Claude Code, and make every distill instruction runnable."
-status: in-review
+status: completed
 priority: P2
 effort: 57h
 branch: main
