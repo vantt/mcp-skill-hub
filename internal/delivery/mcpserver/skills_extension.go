@@ -97,9 +97,6 @@ func (adapter *Server) getSkill(ctx context.Context, session *mcp.ServerSession,
 	if err != nil {
 		return nil, adapter.distributionRPCError(ctx, session, err)
 	}
-	if entry.SkillID == systemskills.CuratorSkillID && nativeCuratorForSession(session) {
-		return nil, invalidParams("skill_not_found", "This client uses its native system-curator skill.")
-	}
 	result := toSkillEntry(entry)
 	result.Local = adapter.localSkill(ctx, entry.SkillID, "active")
 	blocked, reasons := reviewBlock(result.Local)
