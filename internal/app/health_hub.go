@@ -398,12 +398,13 @@ func repairHub(root string, hosts []hostintegration.Host) (Changed, []string, er
 }
 
 // systemSkillNotes returns the warnings of a repair result about system skill
-// files: a file left in place, an old copy removed, a shared folder kept.
+// files: an old copy removed, a shared folder kept. A file left in place is
+// not repeated here; its own finding lists it as not fixed.
 func systemSkillNotes(result Result) []string {
 	var notes []string
 	for _, warning := range result.Warnings {
 		switch warning.Code {
-		case "system_skill_blocked", hostintegration.NoticeGeminiLegacy, hostintegration.NoticeSharedSkillKept:
+		case hostintegration.NoticeGeminiLegacy, hostintegration.NoticeSharedSkillKept:
 			if !slices.Contains(notes, warning.Summary) {
 				notes = append(notes, warning.Summary)
 			}

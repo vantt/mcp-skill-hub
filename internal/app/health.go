@@ -79,8 +79,8 @@ type FixAction struct {
 	// to run when the problem is already gone.
 	Apply func(ctx context.Context) (Changed, error)
 	// Notes may be set by Apply to sentences the person should read about
-	// what the fix did, for example that an old file was removed or that a
-	// file Skill Hub did not write was left in place.
+	// what the fix did, for example that an old file was removed and what
+	// that means for an agent.
 	Notes []string
 }
 
