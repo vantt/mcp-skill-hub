@@ -390,7 +390,7 @@ func prepareNonLocalPermissions(adapter Adapter, scope Scope, path, root string,
 	if err != nil {
 		return preparedFile{}, err
 	}
-	desired, remove, err := desiredNonLocalPermissions(adapter, scope, root, raw, mode, previous)
+	desired, remove, err := desiredNonLocalPermissions(adapter, settingsFile{scope, path}, root, raw, mode, previous)
 	if err != nil {
 		return newPreparedFile(host, ChangeHostPermissions, path, raw, raw, fileMode, exists, err.Error()), nil
 	}
@@ -402,7 +402,13 @@ func prepareNonLocalPermissions(adapter Adapter, scope Scope, path, root string,
 	return file, nil
 }
 
-func desiredNonLocalPermissions(adapter Adapter, scope Scope, root string, raw []byte, mode planMode, previous Registration) ([]byte, bool, error) {
+// settingsFile names a Claude settings file and the scope it belongs to.
+type settingsFile struct {
+	scope Scope
+	path  string
+}
+
+func desiredNonLocalPermissions(adapter Adapter, settings settingsFile, root string, raw []byte, mode planMode, previous Registration) ([]byte, bool, error) {
 	stale := staleAccessDirs(previous, mode)
 	if mode.remove {
 		existing, _ := jsonStringArrayAt(raw, claudeAllowedDirsPath)
@@ -413,8 +419,12 @@ func desiredNonLocalPermissions(adapter Adapter, scope Scope, root string, raw [
 		return nil, false, err
 	}
 	if mode.remove {
+		owned, err := managedRulesToRemove(settings.scope, settings.path)
+		if err != nil {
+			return nil, false, err
+		}
 		for _, rule := range claudeCLIRules {
-			updated, err = stripJSONStringArray(updated, []string{"permissions", rule.key}, rule.values, false)
+			updated, err = stripJSONStringArray(updated, []string{"permissions", rule.key}, owned[rule.key], false)
 			if err != nil {
 				return nil, false, err
 			}
@@ -441,7 +451,7 @@ func desiredNonLocalPermissions(adapter Adapter, scope Scope, root string, raw [
 	if err != nil {
 		return nil, false, err
 	}
-	if scope == ScopeProject && adapter.SharedPermissionsRelativePath != "" {
+	if settings.scope == ScopeProject && adapter.SharedPermissionsRelativePath != "" {
 		sharedPath := filepath.Join(root, filepath.FromSlash(adapter.SharedPermissionsRelativePath))
 		shared, _, sharedExists, readErr := readManagedFile(sharedPath, root)
 		if readErr != nil {
