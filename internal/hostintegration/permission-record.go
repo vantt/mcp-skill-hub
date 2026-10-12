@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"sync"
+	"time"
 
 	"github.com/vantt/mcp-skill-hub/internal/userconfig"
 )
@@ -21,6 +23,11 @@ import (
 const permissionRecordFile = "permission-records.json"
 
 const maxPermissionRecordBytes = 1 << 20
+
+// permissionRecordMutex serializes the read-modify-write of the record file
+// within this process, so two connections made at once do not lose each
+// other's entries.
+var permissionRecordMutex sync.Mutex
 
 // permissionRecords maps "<scope>:<settings file>" to the rules connect added,
 // by permission key.
@@ -36,7 +43,7 @@ func loadPermissionRecords() (permissionRecords, string, error) {
 		return nil, "", err
 	}
 	path := filepath.Join(dir, permissionRecordFile)
-	data, err := os.ReadFile(path)
+	data, err := readPermissionRecordFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return permissionRecords{}, path, nil
 	}
@@ -54,6 +61,22 @@ func loadPermissionRecords() (permissionRecords, string, error) {
 		return nil, path, fmt.Errorf("%s is not valid JSON; remove it to forget which permission rules connect added", path)
 	}
 	return records, path, nil
+}
+
+// readPermissionRecordFile reads the record file. Another process replacing the
+// file at that moment can make the read fail with a sharing violation on
+// Windows, so a failed read is retried briefly.
+func readPermissionRecordFile(path string) ([]byte, error) {
+	var data []byte
+	var err error
+	for attempt := 0; attempt < 5; attempt++ {
+		data, err = os.ReadFile(path)
+		if err == nil || errors.Is(err, fs.ErrNotExist) || runtime.GOOS != "windows" {
+			return data, err
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	return data, err
 }
 
 func savePermissionRecords(path string, records permissionRecords) error {
@@ -104,6 +127,8 @@ func savePermissionRecords(path string, records permissionRecords) error {
 // of the settings file at path: the ones connect recorded as its own, or every
 // managed rule when no record exists (a connection made before records).
 func managedRulesToRemove(scope Scope, path string) (map[string][]string, error) {
+	permissionRecordMutex.Lock()
+	defer permissionRecordMutex.Unlock()
 	records, _, err := loadPermissionRecords()
 	if err != nil {
 		return nil, err
@@ -125,6 +150,8 @@ func managedRulesToRemove(scope Scope, path string) (map[string][]string, error)
 // connection and no record is made, so removal keeps taking out every managed
 // rule.
 func recordAddedPermissionRules(scope Scope, path string, before, after []byte) error {
+	permissionRecordMutex.Lock()
+	defer permissionRecordMutex.Unlock()
 	records, recordPath, err := loadPermissionRecords()
 	if err != nil {
 		return err
@@ -155,6 +182,8 @@ func recordAddedPermissionRules(scope Scope, path string, before, after []byte) 
 
 // setPermissionRecord replaces the record of a settings file.
 func setPermissionRecord(scope Scope, path string, added map[string][]string) error {
+	permissionRecordMutex.Lock()
+	defer permissionRecordMutex.Unlock()
 	records, recordPath, err := loadPermissionRecords()
 	if err != nil {
 		return err
@@ -166,6 +195,8 @@ func setPermissionRecord(scope Scope, path string, added map[string][]string) er
 // forgetPermissionRecord drops the record of a settings file after connect
 // removed its rules.
 func forgetPermissionRecord(scope Scope, path string) error {
+	permissionRecordMutex.Lock()
+	defer permissionRecordMutex.Unlock()
 	records, recordPath, err := loadPermissionRecords()
 	if err != nil {
 		return err
