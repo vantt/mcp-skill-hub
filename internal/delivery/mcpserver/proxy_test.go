@@ -291,9 +291,12 @@ func TestProxyFetchesWholeSkillsOnceAndServesThemFromTheCache(t *testing.T) {
 		proxyResolve(t, session, root, "test-audit")
 		before = counter.count()
 		unchanged, _, encoded := proxySkillGet(t, session, "test-audit")
+		// A cache hit lets the hub count the load in a background request; wait
+		// for it so its timing against the hub's speed cannot decide the check.
+		proxied.proxy.backgroundTasks.Wait()
 		after = counter.count()
-		if after.requests != before.requests || unchanged.Remote.Cache != remoteCacheHit {
-			t.Fatalf("a metadata-only change refetched test-audit: %s (%d requests)", encoded, after.requests-before.requests)
+		if after.bundleBytes != before.bundleBytes || unchanged.Remote.Cache != remoteCacheHit {
+			t.Fatalf("a metadata-only change refetched test-audit: %s (%d bytes downloaded)", encoded, after.bundleBytes-before.bundleBytes)
 		}
 	})
 
