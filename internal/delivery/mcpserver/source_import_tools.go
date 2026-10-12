@@ -9,8 +9,8 @@ import (
 	"github.com/vantt/mcp-skill-hub/internal/app"
 )
 
-func (adapter *Server) registerSourceImportTools(server *mcp.Server) {
-	addTool(server, &mcp.Tool{
+func (adapter *Server) registerSourceImportTools(tools *toolRegistry) {
+	addTool(tools, &mcp.Tool{
 		Name:        "source_import_preview",
 		Title:       "Preview source skill import",
 		Description: "Discover skills in a watched source repository revision and return an import proposal preview.",
@@ -29,7 +29,7 @@ func (adapter *Server) registerSourceImportTools(server *mcp.Server) {
 		}))
 	})
 
-	addTool(server, &mcp.Tool{
+	addTool(tools, &mcp.Tool{
 		Name:        "source_import_confirm",
 		Title:       "Confirm source skill import",
 		Description: "Apply a reviewed source skill import proposal with confirmation pins.",

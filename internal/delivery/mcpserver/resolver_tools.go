@@ -9,8 +9,8 @@ import (
 	resolverpkg "github.com/vantt/mcp-skill-hub/internal/resolver"
 )
 
-func (adapter *Server) registerResolverTools(server *mcp.Server) {
-	addTool(server, &mcp.Tool{
+func (adapter *Server) registerResolverTools(tools *toolRegistry) {
+	addTool(tools, &mcp.Tool{
 		Name: "skill_resolve", Title: "Resolve a skill",
 		Description: "Recommend at most one primary skill from task evidence (task.description in English). If setup is review_required, do not use the skill and ask the user to run `skillhub skill review <id>`. This does not load skill content: load the recommended skill with skill_get, or, only when your host supports the MCP skills extension, with skills/get and resources/read.",
 		Annotations: annotations(true, false, true, false),
@@ -41,7 +41,7 @@ func (adapter *Server) registerResolverTools(server *mcp.Server) {
 		})
 	}, withCommittedResolverSchemas())
 
-	addTool(server, &mcp.Tool{
+	addTool(tools, &mcp.Tool{
 		Name: "skill_feedback", Title: "Record skill feedback",
 		Description: "Record a bounded, deduplicated runtime outcome for a prior resolution. event_id is required. Feedback never mutates routing policy.",
 		Annotations: annotations(false, false, true, false),

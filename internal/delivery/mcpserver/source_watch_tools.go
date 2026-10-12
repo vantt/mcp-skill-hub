@@ -9,8 +9,8 @@ import (
 	"github.com/vantt/mcp-skill-hub/internal/app"
 )
 
-func (adapter *Server) registerSourceWatchTools(server *mcp.Server) {
-	addTool(server, &mcp.Tool{
+func (adapter *Server) registerSourceWatchTools(tools *toolRegistry) {
+	addTool(tools, &mcp.Tool{
 		Name:        "source_watch_preview",
 		Title:       "Preview source watch",
 		Description: "Preview watching a GitHub repository and attaching it as a learning reference. Returns confirmation pins.",
@@ -38,7 +38,7 @@ func (adapter *Server) registerSourceWatchTools(server *mcp.Server) {
 		"trust":   {"untrusted", "reviewed", "trusted"},
 	}))
 
-	addTool(server, &mcp.Tool{
+	addTool(tools, &mcp.Tool{
 		Name:        "source_watch_confirm",
 		Title:       "Confirm source watch",
 		Description: "Apply an approved source watch, attach, detach, or unwatch proposal with confirmation pins.",

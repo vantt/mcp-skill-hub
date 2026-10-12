@@ -1,9 +1,6 @@
 package mcpserver
 
-import (
-	"context"
-	"testing"
-)
+import "testing"
 
 // BenchmarkServerStartup measures New for each profile: tool registration with
 // schema derivation, which every process start pays.
@@ -26,7 +23,7 @@ func BenchmarkServerStartup(b *testing.B) {
 func BenchmarkProxyRuntimeToolDefinitions(b *testing.B) {
 	b.ReportAllocs()
 	for range b.N {
-		tools, err := runtimeToolDefinitions(context.Background())
+		tools, err := runtimeToolDefinitions()
 		if err != nil {
 			b.Fatal(err)
 		}

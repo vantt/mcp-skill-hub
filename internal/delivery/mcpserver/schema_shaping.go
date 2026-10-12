@@ -3,6 +3,7 @@ package mcpserver
 import (
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/vantt/mcp-skill-hub/internal/delivery/paging"
@@ -181,14 +182,11 @@ func deriveToolSchemas[In, Out any](name string, options toolSchemaOptions) (inp
 	normalizeMultiTypeSchemas(output)
 	shrinkOutputSchema(output)
 	if options.committedResolver {
-		committedRequest, contractErr := contractschemas.ResolverRequest()
+		committed, contractErr := committedResolverSchemas()
 		if contractErr != nil {
-			panic(fmt.Sprintf("load committed resolver request schema: %v", contractErr))
+			panic(fmt.Sprintf("load committed resolver schemas: %v", contractErr))
 		}
-		committedResponse, contractErr := contractschemas.ResolverResponse()
-		if contractErr != nil {
-			panic(fmt.Sprintf("load committed resolver response schema: %v", contractErr))
-		}
+		committedRequest, committedResponse := committed[0].CloneSchemas(), committed[1].CloneSchemas()
 		if embedErr := embedResolverResponse(output, committedResponse); embedErr != nil {
 			panic(fmt.Sprintf("resolver output schema for %s: %v", name, embedErr))
 		}
@@ -196,6 +194,18 @@ func deriveToolSchemas[In, Out any](name string, options toolSchemaOptions) (inp
 	}
 	return input, output
 }
+
+// committedResolverSchemas decodes the committed resolver request and response
+// schemas once per process. Callers clone what they keep, because tools shape
+// and resolve their copies.
+var committedResolverSchemas = sync.OnceValues(func() ([2]*jsonschema.Schema, error) {
+	request, err := contractschemas.ResolverRequest()
+	if err != nil {
+		return [2]*jsonschema.Schema{}, err
+	}
+	response, err := contractschemas.ResolverResponse()
+	return [2]*jsonschema.Schema{request, response}, err
+})
 
 // embedResolverResponse swaps the derived resolution property for the committed
 // response schema. A committed schema without its own $id shares the output

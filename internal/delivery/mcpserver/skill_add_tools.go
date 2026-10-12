@@ -41,8 +41,8 @@ func validateSkillAddLocator(raw string) error {
 	return nil
 }
 
-func (adapter *Server) registerSkillAddTools(server *mcp.Server) {
-	addTool(server, &mcp.Tool{
+func (adapter *Server) registerSkillAddTools(tools *toolRegistry) {
+	addTool(tools, &mcp.Tool{
 		Name:        "skill_add_preview",
 		Title:       "Preview skill addition",
 		Description: "Preview adding a skill from a public GitHub repository. Returns an add proposal with confirmation pins.",
@@ -63,7 +63,7 @@ func (adapter *Server) registerSkillAddTools(server *mcp.Server) {
 		}))
 	})
 
-	addTool(server, &mcp.Tool{
+	addTool(tools, &mcp.Tool{
 		Name:        "skill_add_confirm",
 		Title:       "Confirm skill addition",
 		Description: "Apply an approved draft skill addition proposal with confirmation pins.",

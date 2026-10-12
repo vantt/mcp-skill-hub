@@ -46,7 +46,7 @@ func TestToolsListSerializationIsStablePerProfile(t *testing.T) {
 }
 
 func TestProxyRuntimeToolsMatchHubRuntimeProfile(t *testing.T) {
-	proxyTools, err := runtimeToolDefinitions(t.Context())
+	proxyTools, err := runtimeToolDefinitions()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,5 +54,39 @@ func TestProxyRuntimeToolsMatchHubRuntimeProfile(t *testing.T) {
 	hubSize, hubDigest := serializeToolsList(t, listProfileTools(t, ProfileRuntime).Tools)
 	if proxySize != hubSize || proxyDigest != hubDigest {
 		t.Fatalf("proxy runtime tools (%d bytes, %s) differ from the runtime profile (%d bytes, %s)", proxySize, proxyDigest, hubSize, hubDigest)
+	}
+}
+
+func TestToolsListUnchangedOnceEveryToolIsRegisteredInFull(t *testing.T) {
+	for profile, want := range toolsListDigests {
+		t.Run(string(profile), func(t *testing.T) {
+			adapter, server, err := New(newMCPWorkspace(t), nil, profile)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := adapter.tools.materializeAll(); err != nil {
+				t.Fatalf("a tool of the %s profile cannot be registered in full: %v", profile, err)
+			}
+			client := mcp.NewClient(&mcp.Implementation{Name: "digest", Version: "1"}, nil)
+			clientTransport, serverTransport := mcp.NewInMemoryTransports()
+			serverSession, err := server.Connect(t.Context(), serverTransport, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = serverSession.Close() })
+			session, err := client.Connect(t.Context(), clientTransport, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = session.Close() })
+			listed, err := session.ListTools(t.Context(), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			size, digest := serializeToolsList(t, listed.Tools)
+			if len(listed.Tools) != want.tools || size != want.bytes || digest != want.sha256 {
+				t.Fatalf("tools/list after full registration: tools=%d bytes=%d sha256=%s; pinned tools=%d bytes=%d sha256=%s", len(listed.Tools), size, digest, want.tools, want.bytes, want.sha256)
+			}
+		})
 	}
 }

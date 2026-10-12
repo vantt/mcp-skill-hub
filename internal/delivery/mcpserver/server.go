@@ -62,6 +62,9 @@ type Server struct {
 	// changes afterwards.
 	remote bool
 
+	// tools lists the tools of the profile on the server.
+	tools *toolRegistry
+
 	// toolsListSize caches the encoded size of the tools/list result for the
 	// tool set identified by toolsListKey.
 	toolsListMu   sync.Mutex
@@ -114,7 +117,8 @@ func New(workspacePath string, diagnostics io.Writer, profiles ...Profile) (*Ser
 			return nil, nil, err
 		}
 	}
-	adapter.registerTools(server)
+	adapter.tools = newToolRegistry(server)
+	adapter.registerTools(adapter.tools)
 	return adapter, server, nil
 }
 
@@ -675,46 +679,46 @@ func invalidParams(code, message string) error {
 	return &jsonrpc.Error{Code: jsonrpc.CodeInvalidParams, Message: message, Data: data}
 }
 
-func (adapter *Server) registerTools(server *mcp.Server) {
+func (adapter *Server) registerTools(tools *toolRegistry) {
 	switch adapter.profile {
 	case ProfileRuntime:
-		adapter.registerRuntimeTools(server)
+		adapter.registerRuntimeTools(tools)
 	case ProfileCuration:
-		adapter.registerCurationTools(server)
+		adapter.registerCurationTools(tools)
 	default:
-		adapter.registerAllTools(server)
+		adapter.registerAllTools(tools)
 	}
 }
 
-func (adapter *Server) registerRuntimeTools(server *mcp.Server) {
-	adapter.registerResolverTools(server)
-	adapter.registerSkillGetTool(server)
+func (adapter *Server) registerRuntimeTools(tools *toolRegistry) {
+	adapter.registerResolverTools(tools)
+	adapter.registerSkillGetTool(tools)
 }
 
-func (adapter *Server) registerCurationTools(server *mcp.Server) {
-	adapter.registerSourceTools(server)
-	adapter.registerSourceImportTools(server)
-	adapter.registerSourceWatchTools(server)
-	adapter.registerUpstreamTools(server)
-	adapter.registerInsightTools(server)
-	adapter.registerSkillCurationTools(server)
-	adapter.registerSkillAddTools(server)
-	adapter.registerSkillReviewTools(server)
-	adapter.registerWorkspaceTools(server)
+func (adapter *Server) registerCurationTools(tools *toolRegistry) {
+	adapter.registerSourceTools(tools)
+	adapter.registerSourceImportTools(tools)
+	adapter.registerSourceWatchTools(tools)
+	adapter.registerUpstreamTools(tools)
+	adapter.registerInsightTools(tools)
+	adapter.registerSkillCurationTools(tools)
+	adapter.registerSkillAddTools(tools)
+	adapter.registerSkillReviewTools(tools)
+	adapter.registerWorkspaceTools(tools)
 }
 
-func (adapter *Server) registerAllTools(server *mcp.Server) {
-	adapter.registerRuntimeTools(server)
-	adapter.registerCurationTools(server)
+func (adapter *Server) registerAllTools(tools *toolRegistry) {
+	adapter.registerRuntimeTools(tools)
+	adapter.registerCurationTools(tools)
 }
 
-func addTool[In, Out any](server *mcp.Server, tool *mcp.Tool, handler mcp.ToolHandlerFor[In, toolOutcome[Out]], options ...toolOption) {
+func addTool[In, Out any](tools *toolRegistry, tool *mcp.Tool, handler mcp.ToolHandlerFor[In, toolOutcome[Out]], options ...toolOption) {
 	var schemaOptions toolSchemaOptions
 	for _, option := range options {
 		option(&schemaOptions)
 	}
 	tool.InputSchema, tool.OutputSchema = deriveToolSchemas[In, Out](tool.Name, schemaOptions)
-	mcp.AddTool(server, tool, handler)
+	tools.add(tool, func(server *mcp.Server) { mcp.AddTool(server, tool, handler) })
 }
 
 func annotations(readOnly, destructive, idempotent, openWorld bool) *mcp.ToolAnnotations {

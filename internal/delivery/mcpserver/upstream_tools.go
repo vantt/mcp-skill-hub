@@ -12,8 +12,8 @@ import (
 
 const webUIReviewUpdateHint = "Open the skill in the Skill Hub WebUI → Sources tab → Review update."
 
-func (adapter *Server) registerUpstreamTools(server *mcp.Server) {
-	addTool(server, &mcp.Tool{
+func (adapter *Server) registerUpstreamTools(tools *toolRegistry) {
+	addTool(tools, &mcp.Tool{
 		Name:        "skill_upstream_status",
 		Title:       "Get skill upstream status",
 		Description: "Report upstream repository status, drift, and changed file counts for tracked skills without network access. Tell the user to run `skillhub skill update <id>` to apply updates.",
