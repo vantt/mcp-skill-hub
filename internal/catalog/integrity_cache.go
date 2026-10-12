@@ -27,8 +27,15 @@ var integrityVerified integrityCache
 
 type integrityCache struct {
 	mu     sync.Mutex
-	files  map[string]canonical.FileIdentity
+	files  map[string]integrityEntry
 	checks atomic.Int64 // quick checks run, so tests can tell a reused result from a repeated check
+}
+
+// integrityEntry is the file version that passed quick_check and, once a
+// request has compared them, the pointer whose metadata that file carries.
+type integrityEntry struct {
+	identity canonical.FileIdentity
+	pointer  *Pointer
 }
 
 // known reports whether the file at path still has the identity that passed.
@@ -36,19 +43,43 @@ func (cache *integrityCache) known(path string, identity canonical.FileIdentity)
 	cache.mu.Lock()
 	defer cache.mu.Unlock()
 	verified, ok := cache.files[path]
-	return ok && verified == identity
+	return ok && verified.identity == identity
+}
+
+// matches reports whether the file at path, unchanged since it passed
+// quick_check, was already found to carry exactly this pointer's metadata.
+func (cache *integrityCache) matches(path string, identity canonical.FileIdentity, pointer Pointer) bool {
+	cache.mu.Lock()
+	defer cache.mu.Unlock()
+	verified, ok := cache.files[path]
+	return ok && verified.identity == identity && verified.pointer != nil && *verified.pointer == pointer
 }
 
 func (cache *integrityCache) remember(path string, identity canonical.FileIdentity) {
+	cache.store(path, integrityEntry{identity: identity})
+}
+
+// rememberMatch records that the file version at path carries the pointer's
+// metadata. It does nothing unless that version is the one remembered as intact.
+func (cache *integrityCache) rememberMatch(path string, identity canonical.FileIdentity, pointer Pointer) {
+	cache.mu.Lock()
+	defer cache.mu.Unlock()
+	if verified, ok := cache.files[path]; ok && verified.identity == identity {
+		verified.pointer = &pointer
+		cache.files[path] = verified
+	}
+}
+
+func (cache *integrityCache) store(path string, entry integrityEntry) {
 	cache.mu.Lock()
 	defer cache.mu.Unlock()
 	if cache.files == nil {
-		cache.files = make(map[string]canonical.FileIdentity)
+		cache.files = make(map[string]integrityEntry)
 	}
 	if _, exists := cache.files[path]; !exists && len(cache.files) >= maxVerifiedGenerations {
 		clear(cache.files)
 	}
-	cache.files[path] = identity
+	cache.files[path] = entry
 }
 
 // statGeneration returns the identity of a generation database file.

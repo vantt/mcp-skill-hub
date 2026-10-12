@@ -389,12 +389,27 @@ func (service SnapshotService) Ensure(ctx context.Context, workspacePath, skillI
 	return local, err
 }
 
+// errSnapshotNeedsFiles reports that a snapshot or state directory has to be
+// written but the source was loaded without file contents.
+var errSnapshotNeedsFiles = errors.New("skill snapshot needs file contents")
+
+// ensure first works from the manifest alone: a skill whose snapshot is already
+// exported and verified needs none of its files read. When something has to be
+// written, it loads the verified contents and tries again.
 func (service SnapshotService) ensure(ctx context.Context, workspacePath, skillID string) (LocalSkill, snapshotRuntime, error) {
+	local, facts, err := service.ensureFrom(ctx, workspacePath, skillID, loadDistributedSkillManifest)
+	if errors.Is(err, errSnapshotNeedsFiles) {
+		return service.ensureFrom(ctx, workspacePath, skillID, loadDistributedSkillSource)
+	}
+	return local, facts, err
+}
+
+func (service SnapshotService) ensureFrom(ctx context.Context, workspacePath, skillID string, load func(context.Context, string, string, func(DistributedSkill, []byte) (bool, error)) (string, distributedSkillSource, error)) (LocalSkill, snapshotRuntime, error) {
 	if skillID == systemskills.CuratorSkillID || !snapshotSkillIDPattern.MatchString(skillID) {
 		return unavailableLocalSkill(LocalReasonNotServable), snapshotRuntime{}, nil
 	}
 	var trust skillTrust
-	root, source, err := loadDistributedSkillSource(ctx, workspacePath, skillID, func(entry DistributedSkill, contentJSON []byte) (bool, error) {
+	root, source, err := load(ctx, workspacePath, skillID, func(entry DistributedSkill, contentJSON []byte) (bool, error) {
 		var evalErr error
 		trust, evalErr = evaluateSkillTrust(skillID, contentJSON, entry.digests)
 		return trust.Verdict.Trusted, evalErr
@@ -593,6 +608,9 @@ func buildSnapshotStaging(stagingRoot string, expectedMarker []byte, marker snap
 	for _, file := range files {
 		if err := validateSnapshotRelativePath(file.Path); err != nil {
 			return "", err
+		}
+		if !file.Loaded {
+			return "", errSnapshotNeedsFiles
 		}
 		relative := filepath.FromSlash(file.Path)
 		if parent := filepath.Dir(relative); parent != "." {
@@ -1017,6 +1035,9 @@ func writeStateDependencies(staging string, files []distributedSkillFile) error 
 	for _, file := range files {
 		if err := validateSnapshotRelativePath(file.Path); err != nil {
 			return err
+		}
+		if !file.Loaded {
+			return errSnapshotNeedsFiles
 		}
 		relative := filepath.FromSlash(file.Path)
 		if parent := filepath.Dir(relative); parent != "." {

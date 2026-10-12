@@ -2,11 +2,10 @@ package app
 
 import (
 	"context"
-	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/vantt/mcp-skill-hub/internal/catalog"
@@ -88,36 +87,25 @@ func (SkillService) ReadSkillCore(ctx context.Context, path, id string) (core Sk
 	if err != nil {
 		return SkillCore{}, err
 	}
-	handle, err := catalog.OpenWithFallbackLocked(ctx, root)
+	view, err := catalog.ObserveWithFallbackLocked(ctx, root)
 	if err != nil {
 		return SkillCore{}, fmt.Errorf("%w: %v", skill.ErrSnapshotExpired, err)
 	}
-	defer closeDistributionHandle(handle, &resultErr)
+	defer closeDistributionHandle(view, &resultErr)
 
-	core = SkillCore{SkillID: id, CatalogSnapshot: handle.Pointer.CatalogSnapshot, Resources: []skill.Resource{}}
-	var contentJSON sql.NullString
-	err = handle.DB.QueryRowContext(ctx, `SELECT skills.name,skills.description,skills.status,canonical_entities.content_json FROM skills LEFT JOIN canonical_entities ON canonical_entities.id=skills.id WHERE skills.id=?`, id).
-		Scan(&core.Name, &core.Description, &core.Status, &contentJSON)
-	if errors.Is(err, sql.ErrNoRows) {
-		return SkillCore{}, skill.ErrNotFound
-	}
+	row, err := loadSkillRow(ctx, view, id)
 	if err != nil {
 		return SkillCore{}, err
 	}
-	core.LifecycleState = core.Status
-	if !contentJSON.Valid {
+	core = SkillCore{SkillID: id, Name: row.Name, Description: row.Description, Status: row.Status, LifecycleState: row.Status, CatalogSnapshot: view.Pointer.CatalogSnapshot, Resources: slices.Clone(row.Resources)}
+	if row.Manifest == nil {
 		return SkillCore{}, fmt.Errorf("%w: skill %s has no catalog manifest", skill.ErrSnapshotExpired, id)
 	}
-	var document map[string]any
-	if err := json.Unmarshal([]byte(contentJSON.String), &document); err != nil {
+	routing, rationale, err := row.routingAndRationale()
+	if err != nil {
 		return SkillCore{}, fmt.Errorf("decode skill %s manifest: %w", id, err)
 	}
-	core.Routing = skill.RoutingFromDocument(document)
-	core.Rationale = skill.RationaleFromDocument(document)
-
-	if err := loadCoreResources(ctx, handle, &core); err != nil {
-		return SkillCore{}, err
-	}
+	core.Routing, core.Rationale = routing, rationale
 	var entrypoint *skill.Resource
 	for index := range core.Resources {
 		if strings.HasSuffix(core.Resources[index].Path, "/SKILL.md") {
@@ -141,22 +129,6 @@ func (SkillService) ReadSkillCore(ctx context.Context, path, id string) (core Sk
 	core.Content = string(contents)
 	core.ContentDigest = entrypoint.Digest
 	return core, nil
-}
-
-func loadCoreResources(ctx context.Context, handle *catalog.Handle, core *SkillCore) error {
-	rows, err := handle.DB.QueryContext(ctx, `SELECT path,kind,digest,size_bytes FROM resources WHERE skill_id=? ORDER BY path`, core.SkillID)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var item skill.Resource
-		if err := rows.Scan(&item.Path, &item.Kind, &item.Digest, &item.SizeBytes); err != nil {
-			return err
-		}
-		core.Resources = append(core.Resources, item)
-	}
-	return rows.Err()
 }
 
 // GetSkillDetail returns the full detail and read model for a single skill:

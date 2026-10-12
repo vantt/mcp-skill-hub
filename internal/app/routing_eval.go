@@ -104,7 +104,7 @@ type routingEvalAccumulator struct {
 	skillMetrics               []RoutingSkillMetrics
 }
 
-func loadEvalPolicy(ctx context.Context, handle *catalog.Handle, opts RoutingEvalOptions) (resolverpkg.Policy, error) {
+func loadEvalPolicy(ctx context.Context, view *catalog.View, opts RoutingEvalOptions) (resolverpkg.Policy, error) {
 	if opts.Policy != nil {
 		return *opts.Policy, nil
 	}
@@ -129,7 +129,7 @@ func loadEvalPolicy(ctx context.Context, handle *catalog.Handle, opts RoutingEva
 		}
 		return p, nil
 	}
-	p, err := resolverpkg.LoadPolicy(ctx, handle.DB)
+	p, err := generationPolicy(ctx, view)
 	if err != nil {
 		return resolverpkg.Policy{}, fmt.Errorf("load catalog policy: %w", err)
 	}
@@ -146,18 +146,22 @@ func EvaluateRouting(ctx context.Context, opts RoutingEvalOptions) (RoutingEvalR
 		return RoutingEvalReport{}, err
 	}
 
-	handle, err := catalog.OpenCurrentLocked(ctx, root)
+	view, err := catalog.ObserveCurrentLocked(ctx, root)
 	if err != nil {
 		return RoutingEvalReport{}, fmt.Errorf("open current catalog: %w", err)
 	}
-	defer handle.Close()
+	defer view.Close()
 
-	policy, err := loadEvalPolicy(ctx, handle, opts)
+	policy, err := loadEvalPolicy(ctx, view, opts)
 	if err != nil {
 		return RoutingEvalReport{}, err
 	}
 
-	sqliteCatalog, err := resolverpkg.NewSQLiteCatalog(handle.DB, handle.Pointer.CatalogSnapshot)
+	database, err := view.DB(ctx)
+	if err != nil {
+		return RoutingEvalReport{}, err
+	}
+	sqliteCatalog, err := resolverpkg.NewSQLiteCatalog(database, view.Pointer.CatalogSnapshot)
 	if err != nil {
 		return RoutingEvalReport{}, err
 	}
@@ -179,14 +183,14 @@ func EvaluateRouting(ctx context.Context, opts RoutingEvalOptions) (RoutingEvalR
 	resolverService := ResolverService{Policy: policy, Telemetry: nil}
 	var acc routingEvalAccumulator
 
-	if err := evaluatePositiveCases(ctx, root, handle, activeSkills, resolverService, &acc); err != nil {
+	if err := evaluatePositiveCases(ctx, root, view, activeSkills, resolverService, &acc); err != nil {
 		return RoutingEvalReport{}, err
 	}
-	if err := evaluateCounterCases(ctx, root, handle, activeSkills, resolverService, &acc); err != nil {
+	if err := evaluateCounterCases(ctx, root, view, activeSkills, resolverService, &acc); err != nil {
 		return RoutingEvalReport{}, err
 	}
 	if opts.NoSkillFile != "" {
-		if err := evaluateNoSkillCases(ctx, root, handle, opts.NoSkillFile, resolverService, &acc); err != nil {
+		if err := evaluateNoSkillCases(ctx, root, view, opts.NoSkillFile, resolverService, &acc); err != nil {
 			return RoutingEvalReport{}, err
 		}
 	}
@@ -206,14 +210,14 @@ func EvaluateRouting(ctx context.Context, opts RoutingEvalOptions) (RoutingEvalR
 			"duration_ms":      time.Since(startedAt).Milliseconds(),
 		}
 		evt := curationTelemetryEvent(telemetry.EventEvaluationRunCompleted, evalPayload)
-		evt.CatalogSnapshot = handle.Pointer.CatalogSnapshot
+		evt.CatalogSnapshot = view.Pointer.CatalogSnapshot
 		evt.PolicyRevision = policy.Revision
 		recordCurationTelemetry(ctx, tel, root, evt)
 	}
 	return report, nil
 }
 
-func evaluatePositiveCases(ctx context.Context, root string, handle *catalog.Handle, skills []resolverpkg.Skill, svc ResolverService, acc *routingEvalAccumulator) error {
+func evaluatePositiveCases(ctx context.Context, root string, view *catalog.View, skills []resolverpkg.Skill, svc ResolverService, acc *routingEvalAccumulator) error {
 	for _, skill := range skills {
 		skillTotal := len(skill.Examples)
 		skillCorrect := 0
@@ -253,7 +257,7 @@ func evaluatePositiveCases(ctx context.Context, root string, handle *catalog.Han
 
 			inst := svc
 			inst.Cache = resolverpkg.NewCache(64)
-			resp, err := inst.resolveWithin(ctx, root, handle, req, decorator)
+			resp, err := inst.resolveWithin(ctx, root, view, req, decorator)
 			if err != nil {
 				return fmt.Errorf("resolve positive case for %s: %w", skill.ID, err)
 			}
@@ -297,7 +301,7 @@ func evaluatePositiveCases(ctx context.Context, root string, handle *catalog.Han
 	return nil
 }
 
-func evaluateCounterCases(ctx context.Context, root string, handle *catalog.Handle, skills []resolverpkg.Skill, svc ResolverService, acc *routingEvalAccumulator) error {
+func evaluateCounterCases(ctx context.Context, root string, view *catalog.View, skills []resolverpkg.Skill, svc ResolverService, acc *routingEvalAccumulator) error {
 	for _, skill := range skills {
 		facts := buildPreconditionFacts(skill)
 		caps := buildPreconditionCapabilities(skill)
@@ -335,7 +339,7 @@ func evaluateCounterCases(ctx context.Context, root string, handle *catalog.Hand
 
 			inst := svc
 			inst.Cache = resolverpkg.NewCache(64)
-			resp, err := inst.resolveWithin(ctx, root, handle, req, decorator)
+			resp, err := inst.resolveWithin(ctx, root, view, req, decorator)
 			if err != nil {
 				return fmt.Errorf("resolve counter case for %s: %w", skill.ID, err)
 			}
@@ -356,7 +360,7 @@ func evaluateCounterCases(ctx context.Context, root string, handle *catalog.Hand
 	return nil
 }
 
-func evaluateNoSkillCases(ctx context.Context, root string, handle *catalog.Handle, noSkillFile string, svc ResolverService, acc *routingEvalAccumulator) error {
+func evaluateNoSkillCases(ctx context.Context, root string, view *catalog.View, noSkillFile string, svc ResolverService, acc *routingEvalAccumulator) error {
 	suite, err := evaluation.LoadSuite(noSkillFile)
 	if err != nil {
 		return fmt.Errorf("load no-skill suite %s: %w", noSkillFile, err)
@@ -365,7 +369,7 @@ func evaluateNoSkillCases(ctx context.Context, root string, handle *catalog.Hand
 	for index, c := range suite.Cases {
 		inst := svc
 		inst.Cache = resolverpkg.NewCache(64)
-		resp, err := inst.resolveWithin(ctx, root, handle, c.Request, nil)
+		resp, err := inst.resolveWithin(ctx, root, view, c.Request, nil)
 		if err != nil {
 			return fmt.Errorf("resolve no-skill case %d: %w", index, err)
 		}

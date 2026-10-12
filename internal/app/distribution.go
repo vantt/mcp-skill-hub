@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -13,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"github.com/vantt/mcp-skill-hub/internal/catalog"
@@ -103,41 +103,25 @@ func (service DistributionService) ListSkills(ctx context.Context, path string) 
 // ListSkillsReport isolates per-skill failures: one unservable skill is reported
 // in skipped instead of failing the listing for every other skill.
 func (DistributionService) ListSkillsReport(ctx context.Context, path string) (entries []DistributedSkill, snapshot string, skipped []SkippedSkill, resultErr error) {
-	root, handle, err := openDistributionGeneration(ctx, path)
+	root, view, err := observeDistributionGeneration(ctx, path)
 	if err != nil {
 		return nil, "", nil, err
 	}
-	defer closeDistributionHandle(handle, &resultErr)
-	rows, err := handle.DB.QueryContext(ctx, `SELECT id FROM skills WHERE status='active' ORDER BY id`)
+	defer closeDistributionHandle(view, &resultErr)
+	ids, err := activeSkillIDs(ctx, view)
 	if err != nil {
-		return nil, "", nil, err
-	}
-	var ids []string
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			_ = rows.Close()
-			return nil, "", nil, err
-		}
-		ids = append(ids, id)
-	}
-	if err := rows.Err(); err != nil {
-		_ = rows.Close()
-		return nil, "", nil, err
-	}
-	if err := rows.Close(); err != nil {
 		return nil, "", nil, err
 	}
 	curator, err := buildBundledCuratorSkill()
 	if err != nil {
 		return nil, "", nil, err
 	}
-	entries = append(entries, curator)
+	entries = append(make([]DistributedSkill, 0, len(ids)+1), curator)
 	for _, id := range ids {
 		if id == systemskills.CuratorSkillID {
 			continue
 		}
-		entry, err := buildDistributedSkill(ctx, root, handle, id)
+		entry, err := buildDistributedSkill(ctx, root, view, id)
 		if err != nil {
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				return nil, "", nil, ctxErr
@@ -148,17 +132,17 @@ func (DistributionService) ListSkillsReport(ctx context.Context, path string) (e
 		entries = append(entries, entry)
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].SkillID < entries[j].SkillID })
-	return entries, handle.Pointer.CatalogSnapshot, skipped, nil
+	return entries, view.Pointer.CatalogSnapshot, skipped, nil
 }
 
 // LookupSkills resolves only the requested IDs while one immutable catalog
 // generation is pinned. Invalid unrelated skills are never parsed or loaded.
 func (DistributionService) LookupSkills(ctx context.Context, path string, ids []string) (entries map[string]DistributedSkill, snapshot string, resultErr error) {
-	root, handle, err := openDistributionGeneration(ctx, path)
+	root, view, err := observeDistributionGeneration(ctx, path)
 	if err != nil {
 		return nil, "", err
 	}
-	defer closeDistributionHandle(handle, &resultErr)
+	defer closeDistributionHandle(view, &resultErr)
 	entries = make(map[string]DistributedSkill, len(ids))
 	seen := make(map[string]struct{}, len(ids))
 	for _, id := range ids {
@@ -174,13 +158,13 @@ func (DistributionService) LookupSkills(ctx context.Context, path string, ids []
 			entries[id] = entry
 			continue
 		}
-		entry, err := buildDistributedSkill(ctx, root, handle, id)
+		entry, err := buildDistributedSkill(ctx, root, view, id)
 		if err != nil {
 			return nil, "", err
 		}
 		entries[id] = entry
 	}
-	return entries, handle.Pointer.CatalogSnapshot, nil
+	return entries, view.Pointer.CatalogSnapshot, nil
 }
 
 func (DistributionService) GetSkill(ctx context.Context, path, uri string) (entry DistributedSkill, resultErr error) {
@@ -188,18 +172,18 @@ func (DistributionService) GetSkill(ctx context.Context, path, uri string) (entr
 	if err != nil || relative != "SKILL.md" {
 		return entry, skill.ErrSnapshotExpired
 	}
-	root, handle, err := openDistributionGeneration(ctx, path)
+	root, view, err := observeDistributionGeneration(ctx, path)
 	if err != nil {
 		return entry, err
 	}
-	defer closeDistributionHandle(handle, &resultErr)
+	defer closeDistributionHandle(view, &resultErr)
 	if id == systemskills.CuratorSkillID {
 		entry, err = buildBundledCuratorSkill()
 		if err != nil {
 			return DistributedSkill{}, err
 		}
 	} else {
-		entry, err = buildDistributedSkill(ctx, root, handle, id)
+		entry, err = buildDistributedSkill(ctx, root, view, id)
 		if err != nil {
 			return DistributedSkill{}, err
 		}
@@ -215,11 +199,11 @@ func (DistributionService) ReadResource(ctx context.Context, path, uri string) (
 	if err != nil {
 		return content, skill.ErrSnapshotExpired
 	}
-	root, handle, err := openDistributionGeneration(ctx, path)
+	root, view, err := observeDistributionGeneration(ctx, path)
 	if err != nil {
 		return content, err
 	}
-	defer closeDistributionHandle(handle, &resultErr)
+	defer closeDistributionHandle(view, &resultErr)
 	var entry DistributedSkill
 	var verified map[string][]byte
 	if id == systemskills.CuratorSkillID {
@@ -227,7 +211,7 @@ func (DistributionService) ReadResource(ctx context.Context, path, uri string) (
 	} else {
 		// The build verifies every file against its pinned digest; the
 		// requested file's verified bytes are served as they were read.
-		entry, verified, err = buildDistributedSkillKeeping(ctx, root, handle, id, func(candidate string) bool { return candidate == relative })
+		entry, verified, err = buildDistributedSkillKeeping(ctx, root, view, id, func(candidate string) bool { return candidate == relative })
 	}
 	if err != nil {
 		return content, err
@@ -269,6 +253,8 @@ func (DistributionService) ReadResource(ctx context.Context, path, uri string) (
 	return DistributedContent{URI: uri, MIMEType: mimeType, Bytes: contents, SkillID: id, Path: relative}, nil
 }
 
+// openDistributionGeneration pins the current generation for a caller that
+// queries the database directly.
 func openDistributionGeneration(ctx context.Context, path string) (string, *catalog.Handle, error) {
 	root, err := workspace.Discover(path)
 	if err != nil {
@@ -281,60 +267,98 @@ func openDistributionGeneration(ctx context.Context, path string) (string, *cata
 	return root, handle, nil
 }
 
-func closeDistributionHandle(handle *catalog.Handle, resultErr *error) {
-	if err := handle.Close(); *resultErr == nil && err != nil {
+// observeDistributionGeneration observes the current generation without
+// opening its database; requests served from the generation memo never do.
+func observeDistributionGeneration(ctx context.Context, path string) (string, *catalog.View, error) {
+	root, err := workspace.Discover(path)
+	if err != nil {
+		return "", nil, err
+	}
+	view, err := catalog.ObserveWithFallbackLocked(ctx, root)
+	if err != nil {
+		return "", nil, err
+	}
+	return root, view, nil
+}
+
+// closeDistributionHandle releases a pinned handle or an observed view.
+func closeDistributionHandle(generation interface{ Close() error }, resultErr *error) {
+	if err := generation.Close(); *resultErr == nil && err != nil {
 		*resultErr = fmt.Errorf("close catalog generation: %w", err)
 	}
 }
 
-func buildDistributedSkill(ctx context.Context, root string, handle *catalog.Handle, id string) (DistributedSkill, error) {
-	entry, _, err := buildDistributedSkillKeeping(ctx, root, handle, id, nil)
+func buildDistributedSkill(ctx context.Context, root string, view *catalog.View, id string) (DistributedSkill, error) {
+	entry, _, err := buildDistributedSkillKeeping(ctx, root, view, id, nil)
 	return entry, err
 }
 
 // buildDistributedSkillKeeping builds the entry of an active skill and
 // verifies every distributed file against its pinned digest. The bytes of the
 // files for which keep returns true (by path relative to the skill folder) are
-// returned keyed by that path, so a caller that needs content does not read
-// the file a second time. A nil keep keeps nothing.
-func buildDistributedSkillKeeping(ctx context.Context, root string, handle *catalog.Handle, id string, keep func(relative string) bool) (DistributedSkill, map[string][]byte, error) {
+// returned keyed by that path, read once and hashed, so a caller that needs
+// content does not read the file a second time. A nil keep keeps nothing.
+//
+// The entry is memoized per generation. A file that nobody asked to keep is
+// verified against the digest the freshness check just computed for it, so a
+// repeated build reads only the files it is asked to keep.
+func buildDistributedSkillKeeping(ctx context.Context, root string, view *catalog.View, id string, keep func(relative string) bool) (DistributedSkill, map[string][]byte, error) {
 	if id == "" || strings.ContainsAny(id, `/\\`) {
 		return DistributedSkill{}, nil, skill.ErrNotFound
 	}
-	manifest := skill.Manifest{SkillID: id, CatalogSnapshot: handle.Pointer.CatalogSnapshot, Resources: []skill.Resource{}}
-	if err := handle.DB.QueryRowContext(ctx, `SELECT name,description,status FROM skills WHERE id=?`, id).Scan(&manifest.Name, &manifest.Description, &manifest.Status); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return DistributedSkill{}, nil, skill.ErrNotFound
-		}
-		return DistributedSkill{}, nil, err
-	}
-	if manifest.Status != "active" {
-		return DistributedSkill{}, nil, skill.ErrNotFound
-	}
-	rows, err := handle.DB.QueryContext(ctx, `SELECT path,kind,digest,size_bytes FROM resources WHERE skill_id=? ORDER BY path`, id)
+	row, err := loadSkillRow(ctx, view, id)
 	if err != nil {
 		return DistributedSkill{}, nil, err
 	}
-	for rows.Next() {
-		var resource skill.Resource
-		if err := rows.Scan(&resource.Path, &resource.Kind, &resource.Digest, &resource.SizeBytes); err != nil {
-			_ = rows.Close()
-			return DistributedSkill{}, nil, err
+	if row.Status != "active" {
+		return DistributedSkill{}, nil, skill.ErrNotFound
+	}
+	key := memoRecordPrefix + id
+	if record, ok := catalog.MemoGet[*skillRecord](view, key); ok && record.current(view) {
+		kept, err := readKeptFiles(root, record.files, keep)
+		if err != nil {
+			return DistributedSkill{}, nil, fmt.Errorf("%w: %w", catalog.ErrSkillNotServable, err)
 		}
-		manifest.Resources = append(manifest.Resources, resource)
+		return record.entry, kept, nil
 	}
-	if err := rows.Err(); err != nil {
-		_ = rows.Close()
+	record, kept, err := buildSkillRecord(root, view, id, row, keep)
+	if err != nil {
 		return DistributedSkill{}, nil, err
 	}
-	if err := rows.Close(); err != nil {
-		return DistributedSkill{}, nil, err
+	catalog.MemoPut(view, key, record)
+	return record.entry, kept, nil
+}
+
+// readKeptFiles reads, and verifies against the pinned digest, the files of a
+// record that keep selects.
+func readKeptFiles(root string, files []recordedFile, keep func(string) bool) (map[string][]byte, error) {
+	if keep == nil {
+		return nil, nil
 	}
-	digestInput := make([]manifestDigestEntry, 0, len(manifest.Resources))
-	internalPaths := make(map[string]*skill.Resource, len(manifest.Resources))
+	kept := make(map[string][]byte)
+	for _, file := range files {
+		if !keep(file.relative) {
+			continue
+		}
+		contents, err := readPinnedResource(root, file.internal, file.digest)
+		if err != nil {
+			return nil, err
+		}
+		kept[file.relative] = contents
+	}
+	return kept, nil
+}
+
+// buildSkillRecord builds the manifest of an active skill from its row. The
+// entrypoint is read and hashed, as its frontmatter is part of the entry, and so
+// is every file keep selects; the other files are checked against the freshness
+// check's digests.
+func buildSkillRecord(root string, view *catalog.View, id string, row *skillRow, keep func(string) bool) (*skillRecord, map[string][]byte, error) {
+	digestInput := make([]manifestDigestEntry, 0, len(row.Resources))
+	internalPaths := make(map[string]*skill.Resource, len(row.Resources))
 	var total int64
-	for index := range manifest.Resources {
-		resource := &manifest.Resources[index]
+	for index := range row.Resources {
+		resource := &row.Resources[index]
 		relative, ok := distributedRelativePath(resource.Path, id)
 		if !ok {
 			continue
@@ -346,17 +370,17 @@ func buildDistributedSkillKeeping(ctx context.Context, root string, handle *cata
 	entrypoint := internalPaths["SKILL.md"]
 	if entrypoint == nil {
 		if len(digestInput) == 0 || len(digestInput) > MaxDistributedSkillResources {
-			return DistributedSkill{}, nil, fmt.Errorf("%w: skill %s has %d distributed resources; supported range is 1..%d", catalog.ErrSkillNotServable, id, len(digestInput), MaxDistributedSkillResources)
+			return nil, nil, fmt.Errorf("%w: skill %s has %d distributed resources; supported range is 1..%d", catalog.ErrSkillNotServable, id, len(digestInput), MaxDistributedSkillResources)
 		}
-		return DistributedSkill{}, nil, fmt.Errorf("%w: %w: active skill has no top-level SKILL.md", catalog.ErrSkillNotServable, skill.ErrSnapshotExpired)
+		return nil, nil, fmt.Errorf("%w: %w: active skill has no top-level SKILL.md", catalog.ErrSkillNotServable, skill.ErrSnapshotExpired)
 	}
 	entrypointBytes, err := readPinnedResource(root, entrypoint.Path, entrypoint.Digest)
 	if err != nil {
-		return DistributedSkill{}, nil, fmt.Errorf("%w: %w", catalog.ErrSkillNotServable, err)
+		return nil, nil, fmt.Errorf("%w: %w", catalog.ErrSkillNotServable, err)
 	}
 	frontmatter, err := catalog.ParseServableSkill(id, entrypointBytes, len(digestInput), total)
 	if err != nil {
-		return DistributedSkill{}, nil, err
+		return nil, nil, err
 	}
 	var kept map[string][]byte
 	if keep != nil {
@@ -365,38 +389,42 @@ func buildDistributedSkillKeeping(ctx context.Context, root string, handle *cata
 			kept["SKILL.md"] = entrypointBytes
 		}
 	}
-
-	// Verify all other distributed resources of this skill match their pinned digests.
 	for _, res := range digestInput {
 		if res.Path == "SKILL.md" {
 			continue
 		}
 		internal := internalPaths[res.Path]
-		contents, err := readPinnedResource(root, internal.Path, internal.Digest)
-		if err != nil {
-			return DistributedSkill{}, nil, fmt.Errorf("%w: %w", catalog.ErrSkillNotServable, err)
-		}
 		if keep != nil && keep(res.Path) {
+			contents, err := readPinnedResource(root, internal.Path, internal.Digest)
+			if err != nil {
+				return nil, nil, fmt.Errorf("%w: %w", catalog.ErrSkillNotServable, err)
+			}
 			kept[res.Path] = contents
+		} else if err := checkCanonicalDigest(view, internal.Path, internal.Digest); err != nil {
+			return nil, nil, fmt.Errorf("%w: %w", catalog.ErrSkillNotServable, err)
 		}
 	}
 
 	sort.Slice(digestInput, func(i, j int) bool { return digestInput[i].Path < digestInput[j].Path })
 	hexDigest, err := hashDistributedManifest(digestInput)
 	if err != nil {
-		return DistributedSkill{}, nil, err
+		return nil, nil, err
 	}
 	base := "skill://skillhub/" + hexDigest + "/" + id + "/"
 	resources := make([]DistributedResource, 0, len(digestInput))
 	resourcePaths := make(map[string]string, len(digestInput))
 	digests := make([]skillruntime.ResourceDigest, 0, len(digestInput))
+	files := make([]recordedFile, 0, len(digestInput))
 	for _, resource := range digestInput {
 		digests = append(digests, skillruntime.ResourceDigest{Path: resource.Path, Digest: resource.Digest})
 		uri := base + escapeURIPath(resource.Path)
 		resources = append(resources, DistributedResource{URI: uri, Digest: resource.Digest, Size: resource.Size})
-		resourcePaths[uri] = internalPaths[resource.Path].Path
+		internal := internalPaths[resource.Path].Path
+		resourcePaths[uri] = internal
+		files = append(files, recordedFile{relative: resource.Path, internal: internal, digest: resource.Digest})
 	}
-	return DistributedSkill{URI: base + "SKILL.md", Frontmatter: frontmatter, Resources: resources, Version: "sha256:" + hexDigest, Snapshot: manifest.CatalogSnapshot, SkillID: id, resourcePaths: resourcePaths, digests: digests}, kept, nil
+	entry := DistributedSkill{URI: base + "SKILL.md", Frontmatter: frontmatter, Resources: resources, Version: "sha256:" + hexDigest, Snapshot: view.Pointer.CatalogSnapshot, SkillID: id, resourcePaths: resourcePaths, digests: digests}
+	return &skillRecord{entry: entry, files: files}, kept, nil
 }
 
 // manifestDigestEntry is one file in the distributed manifest digest input.
@@ -434,12 +462,14 @@ type distributedSkillFile struct {
 	Kind   string
 	Digest string
 	Size   int64
+	// Bytes holds the verified contents when Loaded is set.
 	Bytes  []byte
+	Loaded bool
 }
 
 // distributedSkillSource is a distributed skill together with its manifest
-// document (content_json) and the verified bytes of every distributed file,
-// all read from one pinned catalog generation.
+// document (content_json) and its distributed files, all read from one pinned
+// catalog generation.
 type distributedSkillSource struct {
 	Skill       DistributedSkill
 	ContentJSON []byte
@@ -447,56 +477,53 @@ type distributedSkillSource struct {
 }
 
 // loadDistributedSkillSource builds an active, servable skill and returns every
-// distributed file, each verified against its pinned digest and size by the
-// same read that built the entry. The catalog handle is released before
-// returning, so callers may write files without holding the shared catalog
-// lock. When admit returns false, Files stays empty; admit sees the skill entry
-// and its manifest document, which is enough to decide trust.
-func loadDistributedSkillSource(ctx context.Context, path, id string, admit func(DistributedSkill, []byte) (bool, error)) (root string, source distributedSkillSource, resultErr error) {
-	root, handle, err := openDistributionGeneration(ctx, path)
+// distributed file with its contents, each verified against its pinned digest
+// and size by the same read that built the entry. The generation is released
+// before returning, so callers may write files without holding the shared
+// catalog lock. When admit returns false, Files stays empty; admit sees the
+// skill entry and its manifest document, which is enough to decide trust.
+func loadDistributedSkillSource(ctx context.Context, path, id string, admit func(DistributedSkill, []byte) (bool, error)) (string, distributedSkillSource, error) {
+	return loadDistributedSkill(ctx, path, id, true, admit)
+}
+
+// loadDistributedSkillManifest is loadDistributedSkillSource without reading
+// any file: the files are listed with their pinned digests but not loaded. A
+// caller that finds it needs content, for instance to export a snapshot that
+// does not exist yet, loads the source again.
+func loadDistributedSkillManifest(ctx context.Context, path, id string, admit func(DistributedSkill, []byte) (bool, error)) (string, distributedSkillSource, error) {
+	return loadDistributedSkill(ctx, path, id, false, admit)
+}
+
+func loadDistributedSkill(ctx context.Context, path, id string, withBytes bool, admit func(DistributedSkill, []byte) (bool, error)) (root string, source distributedSkillSource, resultErr error) {
+	root, view, err := observeDistributionGeneration(ctx, path)
 	if err != nil {
 		return "", source, err
 	}
-	defer closeDistributionHandle(handle, &resultErr)
-	entry, verified, err := buildDistributedSkillKeeping(ctx, root, handle, id, func(string) bool { return true })
+	defer closeDistributionHandle(view, &resultErr)
+	keep := func(string) bool { return withBytes }
+	entry, verified, err := buildDistributedSkillKeeping(ctx, root, view, id, keep)
 	if err != nil {
 		return "", source, err
 	}
-	var contentJSON string
-	if err := handle.DB.QueryRowContext(ctx, `SELECT content_json FROM canonical_entities WHERE id=?`, id).Scan(&contentJSON); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return "", source, skill.ErrNotFound
-		}
+	row, err := loadSkillRow(ctx, view, id)
+	if err != nil {
 		return "", source, err
+	}
+	if row.Manifest == nil {
+		return "", source, skill.ErrNotFound
 	}
 	if admit != nil {
-		proceed, err := admit(entry, []byte(contentJSON))
+		proceed, err := admit(entry, row.Manifest)
 		if err != nil {
 			return "", source, err
 		}
 		if !proceed {
-			return root, distributedSkillSource{Skill: entry, ContentJSON: []byte(contentJSON)}, nil
+			return root, distributedSkillSource{Skill: entry, ContentJSON: row.Manifest}, nil
 		}
 	}
-	kinds := make(map[string]string, len(entry.Resources))
-	rows, err := handle.DB.QueryContext(ctx, `SELECT path,kind FROM resources WHERE skill_id=?`, id)
-	if err != nil {
-		return "", source, err
-	}
-	for rows.Next() {
-		var internal, kind string
-		if err := rows.Scan(&internal, &kind); err != nil {
-			_ = rows.Close()
-			return "", source, err
-		}
-		kinds[internal] = kind
-	}
-	if err := rows.Err(); err != nil {
-		_ = rows.Close()
-		return "", source, err
-	}
-	if err := rows.Close(); err != nil {
-		return "", source, err
+	kinds := make(map[string]string, len(row.Resources))
+	for _, resource := range row.Resources {
+		kinds[resource.Path] = resource.Kind
 	}
 	files := make([]distributedSkillFile, 0, len(entry.Resources))
 	for _, resource := range entry.Resources {
@@ -505,19 +532,29 @@ func loadDistributedSkillSource(ctx context.Context, path, id string, admit func
 		if internal == "" || !ok {
 			return "", source, fmt.Errorf("%w: resource %s has no verified workspace path", skill.ErrSnapshotExpired, resource.URI)
 		}
-		contents, found := verified[relative]
-		if !found {
-			return "", source, fmt.Errorf("%w: resource %s was not read", skill.ErrSnapshotExpired, resource.URI)
+		file := distributedSkillFile{Path: relative, Kind: kinds[internal], Digest: resource.Digest, Size: resource.Size}
+		if withBytes {
+			contents, found := verified[relative]
+			if !found {
+				return "", source, fmt.Errorf("%w: resource %s was not read", skill.ErrSnapshotExpired, resource.URI)
+			}
+			if int64(len(contents)) != resource.Size {
+				return "", source, fmt.Errorf("%w: resource %s size changed", ErrResourceContentUnavailable, relative)
+			}
+			file.Bytes, file.Loaded = contents, true
 		}
-		if int64(len(contents)) != resource.Size {
-			return "", source, fmt.Errorf("%w: resource %s size changed", ErrResourceContentUnavailable, relative)
-		}
-		files = append(files, distributedSkillFile{Path: relative, Kind: kinds[internal], Digest: resource.Digest, Size: resource.Size, Bytes: contents})
+		files = append(files, file)
 	}
-	return root, distributedSkillSource{Skill: entry, ContentJSON: []byte(contentJSON), Files: files}, nil
+	return root, distributedSkillSource{Skill: entry, ContentJSON: row.Manifest, Files: files}, nil
 }
 
-func buildBundledCuratorSkill() (DistributedSkill, error) {
+var bundledCuratorSkill = sync.OnceValues(buildBundledCuratorSkillEntry)
+
+// buildBundledCuratorSkill returns the entry of the curator skill compiled into
+// the binary. The entry never changes, so it is built once.
+func buildBundledCuratorSkill() (DistributedSkill, error) { return bundledCuratorSkill() }
+
+func buildBundledCuratorSkillEntry() (DistributedSkill, error) {
 	bundle := systemskills.CuratorBundle()
 	metadata := bundle.Metadata
 	if len(bundle.Instructions) == 0 || len(bundle.Instructions) > MaxDistributedSkillBytes {

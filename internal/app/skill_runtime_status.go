@@ -76,16 +76,15 @@ func (SkillService) RuntimeStatus(ctx context.Context, path, id string) (SkillRu
 	var setup *resolverpkg.SetupStatus
 	var doctor *SkillRuntimeDoctor
 
-	handle, err := catalog.OpenCurrentLocked(ctx, root)
+	view, err := catalog.ObserveCurrentLocked(ctx, root)
 	if err == nil {
-		defer handle.Close()
-		entry, distErr := buildDistributedSkill(ctx, root, handle, id)
+		defer view.Close()
+		entry, distErr := buildDistributedSkill(ctx, root, view, id)
 		if distErr == nil {
 			served = true
-			setup = (ResolverService{}).setupStatus(ctx, root, handle, entry)
-			var contentJSON string
-			if scanErr := handle.DB.QueryRowContext(ctx, `SELECT content_json FROM canonical_entities WHERE id=?`, id).Scan(&contentJSON); scanErr == nil {
-				if cached, readErr := cachedDoctorResult(root, entry, []byte(contentJSON)); readErr == nil && cached != nil {
+			setup = (ResolverService{}).setupStatus(ctx, root, view, entry)
+			if row, rowErr := loadSkillRow(ctx, view, id); rowErr == nil && row.Manifest != nil {
+				if cached, readErr := cachedDoctorResult(root, entry, row.Manifest); readErr == nil && cached != nil {
 					checks := cached.Checks
 					if checks == nil {
 						checks = []skillruntime.Check{}
