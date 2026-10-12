@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -52,6 +53,7 @@ func TestTelemetryCLIBaselineSufficiencyAndWrite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = recorder.Close(context.Background()) })
 
 	now := time.Now().UTC()
 	snap := "sha256:baseline_snapshot_1"
@@ -181,6 +183,7 @@ func TestTelemetryCLIBaselineSnapshotResetAndSuperseded(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = recorder.Close(context.Background()) })
 
 	now := time.Now().UTC()
 	// Older snapshot

@@ -49,6 +49,7 @@ func connectTelemetrySession(t *testing.T, root string) (*Server, *mcp.Server, *
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = recorder.Close(context.Background()) })
 	adapter.telemetry = recorder
 	adapter.resolver.Telemetry = recorder
 	adapter.feedback.Recorder = recorder

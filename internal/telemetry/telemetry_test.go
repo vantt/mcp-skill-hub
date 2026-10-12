@@ -112,6 +112,7 @@ func TestDatabaseCorruptionDegradesWithoutRecordError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = recorder.Close(context.Background()) })
 	recorder.Record(validEvent(EventResolutionCompleted))
 	if err := recorder.Flush(context.Background()); err == nil {
 		t.Fatal("Flush succeeded for corrupt database")
@@ -227,6 +228,7 @@ func TestInitializationAppliesRetentionAndBoundsPhysicalMaintenance(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = second.Close(context.Background()) })
 	deadline := time.Now().Add(2 * time.Second)
 	for second.healthSnapshot().State == "starting" && time.Now().Before(deadline) {
 		time.Sleep(time.Millisecond)
