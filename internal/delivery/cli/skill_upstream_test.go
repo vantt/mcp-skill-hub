@@ -456,7 +456,7 @@ func TestSkillUpdate(t *testing.T) {
 		if !strings.Contains(out, "No collection files changed.") {
 			t.Fatalf("missing no collection files changed line in output:\n%s", out)
 		}
-		if !strings.Contains(out, "Next: skillhub skill confirm PROP-12345") {
+		if !strings.Contains(out, "$ skillhub skill confirm --proposal PROP-12345 --proposal-digest sha256:1111111111111111111111111111111111111111111111111111111111111111 --base-version sha256:2222222222222222222222222222222222222222222222222222222222222222") {
 			t.Fatalf("missing confirm next hint in output:\n%s", out)
 		}
 	})

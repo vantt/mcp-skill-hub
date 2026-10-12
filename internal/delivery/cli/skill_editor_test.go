@@ -99,7 +99,7 @@ func TestSkillEditorRecoveryLifecycleBUG03AndBUG12(t *testing.T) {
 	if !strings.Contains(outStr, "Updated valuable instructions via editor.") {
 		t.Errorf("preview missing entrypoint diff: %s", outStr)
 	}
-	if !strings.Contains(outStr, "skillhub skill confirm") {
+	if !strings.Contains(outStr, "skillhub skill confirm --proposal") || !strings.Contains(outStr, "--proposal-digest sha256:") {
 		t.Errorf("preview missing confirm command: %s", outStr)
 	}
 	if strings.Contains(outStr, "re-run with --yes") {

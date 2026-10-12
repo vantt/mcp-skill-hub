@@ -122,7 +122,8 @@ func writeSkillAddPreview(p *termui.Printer, preview app.SkillAddProposal) {
 	}
 	p.Line("No collection files changed.")
 	pins := preview.Confirmation.Confirmation.Pins
-	p.Line(fmt.Sprintf("Next: skillhub skill confirm %s", pins.ProposalID))
+	p.Line("Next:")
+	p.Command(skillConfirmCommand(pins))
 }
 
 func writeSkillAddResult(p *termui.Printer, verbose bool, result app.SkillAddResult) {

@@ -33,8 +33,8 @@ func TestSkillAddLocalPreviewAndConfirm(t *testing.T) {
 	if !strings.Contains(stdout, "Add pdf-tools as a draft") {
 		t.Errorf("preview missing summary: %s", stdout)
 	}
-	if !strings.Contains(stdout, "skillhub skill confirm") {
-		t.Errorf("preview missing confirm guidance: %s", stdout)
+	if !strings.Contains(stdout, "skillhub skill confirm --proposal") || !strings.Contains(stdout, "--proposal-digest sha256:") || !strings.Contains(stdout, "--base-version") {
+		t.Errorf("preview confirm guidance must carry the proposal digest and base version: %s", stdout)
 	}
 	if !strings.Contains(stdout, "No collection files changed.") {
 		t.Errorf("preview should note no files changed: %s", stdout)

@@ -635,7 +635,8 @@ func writeSourceProposal(stdout, stderr io.Writer, jsonOutput bool, result app.S
 	}
 	p.Line("No files changed.")
 	if result.Confirmation.ApplicationCommand == "PreviewSkillAdd" || result.Confirmation.ApplicationCommand == "SkillAdd" {
-		p.Line(fmt.Sprintf("Next: skillhub skill confirm %s", pins.ProposalID))
+		p.Line("Next:")
+		p.Command(skillConfirmCommand(pins))
 	} else {
 		p.Line(fmt.Sprintf("Confirm with:\n  skillhub source confirm --proposal %s --proposal-digest %s --base-version %s", pins.ProposalID, pins.ProposalDigest, pins.BaseVersion))
 	}

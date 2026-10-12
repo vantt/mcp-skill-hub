@@ -722,11 +722,17 @@ func writeSkillPreview(stdout, stderr io.Writer, jsonOutput bool, preview app.Sk
 			}
 		}
 		p.Line("No files changed. Confirm with:")
-		p.Command(fmt.Sprintf("skillhub skill confirm --proposal %s --proposal-digest %s --base-version %s", shellquote.Arg(pins.ProposalID), shellquote.Arg(pins.ProposalDigest), shellquote.Arg(pins.BaseVersion)))
+		p.Command(skillConfirmCommand(pins))
 		p.Line("or:")
 		p.Command("skillhub skill confirm " + shellquote.Arg(pins.ProposalID))
 		p.Line("or re-run with --yes to apply directly.")
 	})
+}
+
+// skillConfirmCommand renders the confirm command with every pin the
+// application layer requires, so a printed next step can be run as shown.
+func skillConfirmCommand(pins app.ConfirmationPins) string {
+	return fmt.Sprintf("skillhub skill confirm --proposal %s --proposal-digest %s --base-version %s", shellquote.Arg(pins.ProposalID), shellquote.Arg(pins.ProposalDigest), shellquote.Arg(pins.BaseVersion))
 }
 
 func writeSkillMutation(stdout, stderr io.Writer, jsonOutput, verbose bool, result app.SkillMutationResult, workspacePath string) int {
