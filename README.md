@@ -20,14 +20,6 @@ When your agent starts a task, it is told to ask the hub which skill fits, and t
 
 *Skills: every skill with its state, and filters to find one.*
 
-## Why Skill Hub
-
-- **One recommendation per task.** Your agent is told to ask the hub with a short task description. It gets one recommendation, or "no skill fits", and the full skill text loads only after it picks one.
-- **You approve every skill change.** New skills start as drafts that agents are not offered. Skills from someone else's repository reach your agent only after you approve them in the terminal.
-- **One program, nothing to keep running.** Skill Hub is a single binary. Your agent starts it when needed; nothing runs in the background.
-- **Git is the database.** Your skills are plain files in your own repository. Review them, share them with teammates, and roll them back with Git.
-- **A local web UI.** Browse, review and edit skills in your browser, on your own machine.
-
 ## How it works
 
 1. You keep your skills in a hub: a folder of its own, kept in a Git repository.
@@ -47,7 +39,26 @@ flowchart LR
     hub <--> repo
     you -- "Browser or terminal" --> hub
     gh -. "import, check updates" .-> hub
+
+    classDef agentNode fill:#dbeafe,stroke:#1d4ed8,stroke-width:2px,color:#0f172a
+    classDef hubNode fill:#fde68a,stroke:#b45309,stroke-width:3px,color:#0f172a
+    classDef storeNode fill:#bbf7d0,stroke:#15803d,stroke-width:2px,color:#0f172a
+    classDef personNode fill:#fbcfe8,stroke:#be185d,stroke-width:2px,color:#0f172a
+    classDef externalNode fill:#e5e7eb,stroke:#4b5563,stroke-width:2px,color:#0f172a
+    class agent agentNode
+    class hub hubNode
+    class repo storeNode
+    class you personNode
+    class gh externalNode
 ```
+
+## Why Skill Hub
+
+- **One recommendation per task.** Your agent is told to ask the hub with a short task description. It gets one recommendation, or "no skill fits", and the full skill text loads only after it picks one.
+- **You approve every skill change.** New skills start as drafts that agents are not offered. Skills from someone else's repository reach your agent only after you approve them in the terminal.
+- **One program, nothing to keep running.** Skill Hub is a single binary. Your agent starts it when needed; nothing runs in the background.
+- **Git is the database.** Your skills are plain files in your own repository. Review them, share them with teammates, and roll them back with Git.
+- **A local web UI.** Browse, review and edit skills in your browser, on your own machine.
 
 ## Quickstart
 
