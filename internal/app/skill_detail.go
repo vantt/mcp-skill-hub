@@ -2,8 +2,10 @@ package app
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -11,7 +13,27 @@ import (
 	"github.com/vantt/mcp-skill-hub/internal/skill"
 )
 
-// SkillDetail is the shared read model for MCP skill_get, CLI, and WebUI.
+// SkillCore is the runtime read model of one skill, as MCP skill_get serves
+// it: identity, lifecycle, the verified SKILL.md, routing and the resource
+// manifest, all read from one pinned catalog generation. It carries no
+// curation judgement, so assembling it never inspects canonical state.
+type SkillCore struct {
+	SkillID         string             `json:"skill_id"`
+	Name            string             `json:"name"`
+	Description     string             `json:"description"`
+	Status          string             `json:"status"`
+	Path            string             `json:"path"`
+	CatalogSnapshot string             `json:"catalog_snapshot"`
+	Content         string             `json:"content"`
+	ContentDigest   string             `json:"content_digest"`
+	LifecycleState  string             `json:"lifecycle_state"`
+	Routing         skill.RoutingInput `json:"routing"`
+	Rationale       string             `json:"rationale,omitempty"`
+	Resources       []skill.Resource   `json:"resources"`
+}
+
+// SkillDetail is the curation read model for the CLI and WebUI: the runtime
+// core plus the assessment of canonical state against the served catalog.
 type SkillDetail struct {
 	SkillID          string             `json:"skill_id"`
 	Name             string             `json:"name"`
@@ -53,65 +75,126 @@ func (SkillService) ContentTrustFor(ctx context.Context, path, id string) (Conte
 	return reviewContentTrust(id, skillRelDir, resources, skillMetaBytes), nil
 }
 
-// GetSkillDetail returns the full detail and read model for a single skill.
-// It is the shared read model for MCP skill_get, CLI, and WebUI.
-func (service SkillService) GetSkillDetail(ctx context.Context, path, id string) (SkillDetail, error) {
-	skillResult, err := service.ReadSkill(ctx, path, id)
+// ReadSkillCore reads a skill in any lifecycle state from the pinned catalog
+// generation: one catalog open, one manifest query, and the entrypoint read
+// once and verified against its pinned digest. Routing and rationale come from
+// the catalog's copy of the skill metadata, which the same generation
+// published.
+func (SkillService) ReadSkillCore(ctx context.Context, path, id string) (core SkillCore, resultErr error) {
+	if !snapshotSkillIDPattern.MatchString(id) {
+		return SkillCore{}, errors.New("skill id must be a lowercase kebab-case identifier")
+	}
+	root, err := skill.ResolveWorkspace(path)
 	if err != nil {
-		return SkillDetail{}, err
+		return SkillCore{}, err
 	}
-
-	routing, err := service.ReadSkillRouting(ctx, path, id)
+	handle, err := catalog.OpenWithFallbackLocked(ctx, root)
 	if err != nil {
-		return SkillDetail{}, err
+		return SkillCore{}, fmt.Errorf("%w: %v", skill.ErrSnapshotExpired, err)
 	}
+	defer closeDistributionHandle(handle, &resultErr)
 
-	rationale, rationaleErr := service.ReadSkillRationale(ctx, path, id)
-	if rationaleErr != nil {
-		// An unreadable rationale is treated as absent.
-		rationale = ""
+	core = SkillCore{SkillID: id, CatalogSnapshot: handle.Pointer.CatalogSnapshot, Resources: []skill.Resource{}}
+	var contentJSON sql.NullString
+	err = handle.DB.QueryRowContext(ctx, `SELECT skills.name,skills.description,skills.status,canonical_entities.content_json FROM skills LEFT JOIN canonical_entities ON canonical_entities.id=skills.id WHERE skills.id=?`, id).
+		Scan(&core.Name, &core.Description, &core.Status, &contentJSON)
+	if errors.Is(err, sql.ErrNoRows) {
+		return SkillCore{}, skill.ErrNotFound
 	}
+	if err != nil {
+		return SkillCore{}, err
+	}
+	core.LifecycleState = core.Status
+	if !contentJSON.Valid {
+		return SkillCore{}, fmt.Errorf("%w: skill %s has no catalog manifest", skill.ErrSnapshotExpired, id)
+	}
+	var document map[string]any
+	if err := json.Unmarshal([]byte(contentJSON.String), &document); err != nil {
+		return SkillCore{}, fmt.Errorf("decode skill %s manifest: %w", id, err)
+	}
+	core.Routing = skill.RoutingFromDocument(document)
+	core.Rationale = skill.RationaleFromDocument(document)
 
-	entrypoint := ""
-	for _, res := range skillResult.Manifest.Resources {
-		if strings.HasSuffix(res.Path, "/SKILL.md") {
-			entrypoint = res.Path
+	if err := loadCoreResources(ctx, handle, &core); err != nil {
+		return SkillCore{}, err
+	}
+	var entrypoint *skill.Resource
+	for index := range core.Resources {
+		if strings.HasSuffix(core.Resources[index].Path, "/SKILL.md") {
+			entrypoint = &core.Resources[index]
 			break
 		}
 	}
+	if entrypoint == nil {
+		return SkillCore{}, fmt.Errorf("%w: skill has no SKILL.md manifest entry", skill.ErrSnapshotExpired)
+	}
+	contents, err := readPinnedResource(root, entrypoint.Path, entrypoint.Digest)
+	if err != nil {
+		if errors.Is(err, skill.ErrResourceDigestMismatch) {
+			why := fmt.Sprintf("Current canonical content for %s no longer matches published manifest digest %s.", entrypoint.Path, entrypoint.Digest)
+			fix := fmt.Sprintf("Run `skillhub maintain rebuild` to publish current canonical files, or inspect differences with `skillhub skill review %s`.", id)
+			return SkillCore{}, NewResourceContentUnavailableError(why, fix)
+		}
+		return SkillCore{}, err
+	}
+	core.Path = entrypoint.Path
+	core.Content = string(contents)
+	core.ContentDigest = entrypoint.Digest
+	return core, nil
+}
 
-	sum := sha256.Sum256([]byte(skillResult.Content))
-	contentDigest := "sha256:" + hex.EncodeToString(sum[:])
+func loadCoreResources(ctx context.Context, handle *catalog.Handle, core *SkillCore) error {
+	rows, err := handle.DB.QueryContext(ctx, `SELECT path,kind,digest,size_bytes FROM resources WHERE skill_id=? ORDER BY path`, core.SkillID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var item skill.Resource
+		if err := rows.Scan(&item.Path, &item.Kind, &item.Digest, &item.SizeBytes); err != nil {
+			return err
+		}
+		core.Resources = append(core.Resources, item)
+	}
+	return rows.Err()
+}
 
+// GetSkillDetail returns the full detail and read model for a single skill:
+// the runtime core plus the curation assessment of its canonical state. It
+// serves the CLI and WebUI; MCP skill_get serves the core alone.
+func (service SkillService) GetSkillDetail(ctx context.Context, path, id string) (SkillDetail, error) {
+	core, err := service.ReadSkillCore(ctx, path, id)
+	if err != nil {
+		return SkillDetail{}, err
+	}
 	assessment, assessErr := catalog.AssessSkillState(ctx, path, id)
 	if assessErr != nil {
 		// An assessment error falls back to empty state.
 		assessment = catalog.SkillStateAssessment{}
 	}
-
-	lifecycleState := skillResult.Manifest.Status
+	lifecycleState := core.LifecycleState
 	if lifecycleState == "" {
 		lifecycleState = assessment.Canonical.Status
 	}
 	routingEligible := (lifecycleState == "active") && (!assessment.Served.Known || assessment.Served.Servable)
 
 	return SkillDetail{
-		SkillID:          skillResult.Manifest.SkillID,
-		Name:             skillResult.Manifest.Name,
-		Description:      skillResult.Manifest.Description,
-		Status:           skillResult.Manifest.Status,
-		Path:             entrypoint,
-		CatalogSnapshot:  skillResult.Manifest.CatalogSnapshot,
-		Content:          skillResult.Content,
-		ContentDigest:    contentDigest,
+		SkillID:          core.SkillID,
+		Name:             core.Name,
+		Description:      core.Description,
+		Status:           core.Status,
+		Path:             core.Path,
+		CatalogSnapshot:  core.CatalogSnapshot,
+		Content:          core.Content,
+		ContentDigest:    core.ContentDigest,
 		StateBasis:       string(catalog.BasisCanonical),
 		LifecycleState:   lifecycleState,
 		RoutingEligible:  routingEligible,
 		Diverged:         assessment.Diverged,
 		ChangedResources: assessment.ChangedResources,
 		MissingResources: assessment.MissingResources,
-		Routing:          routing,
-		Rationale:        rationale,
-		Resources:        skillResult.Manifest.Resources,
+		Routing:          core.Routing,
+		Rationale:        core.Rationale,
+		Resources:        core.Resources,
 	}, nil
 }

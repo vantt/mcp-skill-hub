@@ -3,6 +3,7 @@ package mcpserver
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -42,17 +43,19 @@ func newLoadBenchWorkspace(tb testing.TB) string {
 	for index := range 12 {
 		write(fmt.Sprintf("skills/benchmark/%s/references/part-%02d.md", loadBenchSkillID, index), "# Part\n\n"+strings.Repeat("Reference text for the benchmark skill.\n", 400))
 	}
-	files, err := workspace.RelativeFiles(root)
-	if err != nil {
+	if _, err := catalog.BuildCatalogGeneration(context.Background(), root, catalog.BuildOptions{}); err != nil {
 		tb.Fatal(err)
 	}
+	// A hub nobody edited in the last minute: the integrity result of the
+	// published catalog is cached once its file is older than a few seconds.
 	past := time.Now().Add(-time.Minute)
-	for _, relative := range files {
-		if err := os.Chtimes(filepath.Join(root, filepath.FromSlash(relative)), past, past); err != nil {
-			tb.Fatal(err)
+	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil || entry.IsDir() {
+			return walkErr
 		}
-	}
-	if _, err := catalog.BuildCatalogGeneration(context.Background(), root, catalog.BuildOptions{}); err != nil {
+		return os.Chtimes(path, past, past)
+	})
+	if err != nil {
 		tb.Fatal(err)
 	}
 	return root

@@ -196,7 +196,7 @@ func (adapter *Server) registerSkillGetTool(server *mcp.Server) {
 		if id == "" {
 			return failure[skillGetResult](fmt.Errorf("skill_id is required"))
 		}
-		detail, err := (app.SkillService{}).GetSkillDetail(ctx, adapter.workspace, id)
+		detail, err := (app.SkillService{}).ReadSkillCore(ctx, adapter.workspace, id)
 		if err != nil {
 			if errors.Is(err, skill.ErrNotFound) {
 				item := toolError{
@@ -210,7 +210,7 @@ func (adapter *Server) registerSkillGetTool(server *mcp.Server) {
 			return failure[skillGetResult](err)
 		}
 		local := adapter.localSkill(ctx, detail.SkillID, detail.LifecycleState)
-		result := skillGetResult{SkillDetail: detail, Content: detail.Content, Local: local}
+		result := skillGetResult{SkillCore: detail, Content: detail.Content, Local: local}
 		if detail.SkillID != systemskills.CuratorSkillID && detail.LifecycleState != "active" {
 			// Snapshots exist only for active skills, so a draft or archived
 			// third-party skill is gated here from its canonical files.

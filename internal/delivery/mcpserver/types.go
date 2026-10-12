@@ -191,11 +191,11 @@ type skillGetInput struct {
 	SkillID string `json:"skill_id"`
 }
 
-// skillGetResult adds the MCP-only local snapshot to the shared skill detail.
+// skillGetResult adds the MCP-only local snapshot to the runtime skill core.
 // Content shadows the embedded field so it is omitted when the skill awaits
 // content review.
 type skillGetResult struct {
-	app.SkillDetail
+	app.SkillCore
 	Content string          `json:"content,omitempty"`
 	Local   *app.LocalSkill `json:"local,omitempty"`
 }

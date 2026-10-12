@@ -267,9 +267,6 @@ func TestSkillToolsLifecycleInMemory(t *testing.T) {
 	if got.ContentDigest != wantDigest {
 		t.Fatalf("content_digest = %q, want %q", got.ContentDigest, wantDigest)
 	}
-	if got.StateBasis != "canonical" {
-		t.Fatalf("state_basis = %q, want canonical", got.StateBasis)
-	}
 	if got.LifecycleState != "active" {
 		t.Fatalf("lifecycle_state = %q, want active", got.LifecycleState)
 	}
@@ -608,7 +605,7 @@ func TestSkillGetReturnsLocalSnapshotForActiveSkillOnly(t *testing.T) {
 		t.Fatalf("active local = %#v", local)
 	}
 	if active.SkillID != "review-skill" || active.Content == "" {
-		t.Fatalf("shared skill detail fields missing: %#v", active.SkillDetail)
+		t.Fatalf("runtime skill fields missing: %#v", active.SkillCore)
 	}
 	for _, resource := range local.Resources {
 		contents, err := os.ReadFile(resource.LocalPath)

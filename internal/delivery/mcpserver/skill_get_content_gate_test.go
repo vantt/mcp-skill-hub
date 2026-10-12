@@ -69,7 +69,7 @@ func TestSkillGetWithholdsUnapprovedThirdPartyContentInEveryLifecycleState(t *te
 				t.Fatalf("%s third-party skill must withhold content: %#v", state, withheld)
 			}
 			if withheld.LifecycleState != state || withheld.Name == "" || withheld.Description == "" {
-				t.Fatalf("identity and lifecycle must stay: %#v", withheld.SkillDetail)
+				t.Fatalf("identity and lifecycle must stay: %#v", withheld.SkillCore)
 			}
 			if withheld.Local.Path != "" || len(withheld.Local.Resources) != 0 || withheld.Local.Env != nil {
 				t.Fatalf("withheld skill leaked local paths: %#v", withheld.Local)
