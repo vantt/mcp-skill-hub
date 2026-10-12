@@ -157,17 +157,32 @@ func (registry Registry) Preview(root string, target int) (Proposal, error) {
 	}, nil
 }
 
+// layoutFindings returns the findings that describe the hub layout. A tracked
+// connection file and a missing .gitignore entry are Git notices that doctor
+// reports and fixes on their own; they say nothing about the schema, so they
+// must not stop a migration.
+func layoutFindings(plan workspace.Plan) []workspace.Finding {
+	var findings []workspace.Finding
+	for _, finding := range plan.Findings {
+		if finding.ID != "machine_file_tracked" && finding.ID != "gitignore_entry_missing" {
+			findings = append(findings, finding)
+		}
+	}
+	return findings
+}
+
 func planLegacyV0ToV1(root string) ([]mutation.Change, []FileDiff, error) {
 	plan, err := workspace.Inspect(root)
 	if err != nil {
 		return nil, nil, err
 	}
-	for _, finding := range plan.Findings {
+	findings := layoutFindings(plan)
+	for _, finding := range findings {
 		if finding.ID != "canonical_schema_incompatible" {
 			return nil, nil, fmt.Errorf("legacy v0 layout is not otherwise v1-compatible: %s: %s", finding.Path, finding.Summary)
 		}
 	}
-	if len(plan.Findings) != 1 {
+	if len(findings) != 1 {
 		return nil, nil, errors.New("legacy v0 migration requires exactly one missing schema marker finding")
 	}
 	issues, err := canonical.Validate(root)
@@ -207,12 +222,13 @@ func planV1ToV2(root string) ([]mutation.Change, []FileDiff, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	for _, finding := range plan.Findings {
+	findings := layoutFindings(plan)
+	for _, finding := range findings {
 		if finding.ID != "canonical_schema_incompatible" {
 			return nil, nil, fmt.Errorf("v1 layout is not otherwise v2-compatible: %s: %s", finding.Path, finding.Summary)
 		}
 	}
-	if len(plan.Findings) != 1 {
+	if len(findings) != 1 {
 		return nil, nil, errors.New("v1 migration requires exactly one schema marker finding")
 	}
 	issues, err := canonical.Validate(root)

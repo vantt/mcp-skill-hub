@@ -139,6 +139,20 @@ func TestLegacyMigrationRejectsOtherInvalidLayout(t *testing.T) {
 	}
 }
 
+func TestMigrationIgnoresGitNoticeFindings(t *testing.T) {
+	root := legacyWorkspace(t)
+	if err := os.WriteFile(filepath.Join(root, ".gitignore"), []byte("# nothing ignored yet\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	proposal, err := DefaultRegistry().Preview(root, CurrentVersion)
+	if err != nil {
+		t.Fatalf("a hub missing ignore entries must still migrate: %v", err)
+	}
+	if proposal.TargetVersion != CurrentVersion {
+		t.Fatalf("proposal = %#v", proposal)
+	}
+}
+
 func legacyWorkspace(t *testing.T) string {
 	t.Helper()
 	root := filepath.Join(t.TempDir(), "workspace")
