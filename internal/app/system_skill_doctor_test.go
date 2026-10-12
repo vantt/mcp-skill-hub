@@ -65,7 +65,7 @@ func TestDistillLabNodeNotice(t *testing.T) {
 		}
 		finding := findings[0]
 		if finding.Code != "distill_lab_node_missing" || finding.Severity != SeverityNotice || finding.Fix != nil ||
-			!strings.Contains(finding.Message, "Node 18 or newer") || !strings.Contains(finding.Message, test.want) || finding.Manual != "Install Node from https://nodejs.org" {
+			!strings.Contains(finding.Message, "Node 18 or newer") || !strings.Contains(finding.Message, test.want) || finding.Manual != "" || !strings.Contains(finding.Message, "https://nodejs.org") {
 			t.Errorf("%s: finding = %+v", test.name, finding)
 		}
 	}

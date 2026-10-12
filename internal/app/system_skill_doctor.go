@@ -155,8 +155,10 @@ func (provider systemSkillProvider) nodeFinding(ctx context.Context, root string
 		}
 	}
 	return Finding{Code: distillLabNodeMissing, Label: "distill-lab", Severity: SeverityNotice,
-		Message: "distill-lab runs scripts/distill.mjs with Node " + strconv.Itoa(distillLabNodeMajor) + " or newer; " + found + ".",
-		Manual:  "Install Node from https://nodejs.org"}, true
+		// Installing Node is no single command, so the advice is part of
+		// the message and Manual stays empty.
+		Message: "distill-lab runs scripts/distill.mjs with Node " + strconv.Itoa(distillLabNodeMajor) + " or newer; " + found + ". Install Node from https://nodejs.org.",
+		Reason:  "Skill Hub does not install Node; install it from https://nodejs.org."}, true
 }
 
 var nodeVersionPattern = regexp.MustCompile(`^v(\d+)\.\d+\.\d+`)
