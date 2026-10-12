@@ -9,8 +9,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/vantt/mcp-skill-hub/internal/canonical"
@@ -30,7 +32,11 @@ const (
 var ErrSkillNotServable = errors.New("skill cannot be served")
 
 // ParseSkillFrontmatter decodes SKILL.md frontmatter into the JSON data model
-// carried by skill distribution.
+// carried by skill distribution. Scalars that a YAML parser reads as something
+// JSON cannot carry faithfully keep the form written in the file: a timestamp
+// stays its text (2026-10-12, not an RFC 3339 instant) and an integer beyond
+// 2^53 stays an exact json.Number, so a host that parses the same SKILL.md
+// bytes itself sees the same values.
 func ParseSkillFrontmatter(contents []byte) (map[string]any, error) {
 	contents = bytes.ReplaceAll(contents, []byte("\r\n"), []byte("\n"))
 	if !bytes.HasPrefix(contents, []byte("---\n")) {
@@ -40,9 +46,13 @@ func ParseSkillFrontmatter(contents []byte) (map[string]any, error) {
 	if end < 0 {
 		return nil, errors.New("SKILL.md frontmatter is not terminated")
 	}
-	var value map[string]any
+	var root yaml.Node
 	decoder := yaml.NewDecoder(bytes.NewReader(contents[4 : 4+end]))
-	if err := decoder.Decode(&value); err != nil {
+	if err := decoder.Decode(&root); err != nil {
+		return nil, fmt.Errorf("parse SKILL.md frontmatter: %w", err)
+	}
+	var value map[string]any
+	if err := root.Decode(&value); err != nil {
 		return nil, fmt.Errorf("parse SKILL.md frontmatter: %w", err)
 	}
 	if value == nil {
@@ -57,6 +67,9 @@ func ParseSkillFrontmatter(contents []byte) (map[string]any, error) {
 	var normalized map[string]any
 	if err := json.Unmarshal(encoded, &normalized); err != nil {
 		return nil, err
+	}
+	if len(root.Content) == 1 {
+		keepWrittenScalars(normalized, root.Content[0])
 	}
 	return normalized, nil
 }
@@ -330,4 +343,108 @@ func AssessSkillStateWhileLocked(ctx context.Context, root, id string) (SkillSta
 	}
 
 	return assessment, nil
+}
+
+// maxExactJSONInteger is the largest magnitude a float64 holds without loss.
+var maxExactJSONInteger = big.NewInt(1 << 53)
+
+var decimalIntegerText = regexp.MustCompile(`^[-+]?[0-9][0-9_]*$`)
+
+// keepWrittenScalars walks the decoded JSON-model value alongside the YAML
+// node it came from and restores the written form of timestamp scalars and
+// the exact value of integers float64 cannot hold. Plain strings, booleans,
+// small numbers, lists and maps are left exactly as decoded.
+func keepWrittenScalars(decoded any, node *yaml.Node) {
+	for node.Kind == yaml.AliasNode && node.Alias != nil {
+		node = node.Alias
+	}
+	switch typed := decoded.(type) {
+	case map[string]any:
+		if node.Kind != yaml.MappingNode {
+			return
+		}
+		for key, current := range typed {
+			child := mappingValue(node, key, 0)
+			if child == nil {
+				continue
+			}
+			if restored, ok := writtenScalar(child); ok {
+				typed[key] = restored
+				continue
+			}
+			keepWrittenScalars(current, child)
+		}
+	case []any:
+		if node.Kind != yaml.SequenceNode || len(node.Content) != len(typed) {
+			return
+		}
+		for index, current := range typed {
+			if restored, ok := writtenScalar(node.Content[index]); ok {
+				typed[index] = restored
+				continue
+			}
+			keepWrittenScalars(current, node.Content[index])
+		}
+	}
+}
+
+// mappingValue finds the value node for key in a mapping, honoring explicit
+// keys before merged ones the way the YAML decoder does.
+func mappingValue(mapping *yaml.Node, key string, depth int) *yaml.Node {
+	if depth > 8 {
+		return nil
+	}
+	for index := 0; index+1 < len(mapping.Content); index += 2 {
+		if k := mapping.Content[index]; k.Kind == yaml.ScalarNode && k.ShortTag() != "!!merge" && k.Value == key {
+			return mapping.Content[index+1]
+		}
+	}
+	for index := 0; index+1 < len(mapping.Content); index += 2 {
+		if k := mapping.Content[index]; k.Kind != yaml.ScalarNode || k.ShortTag() != "!!merge" {
+			continue
+		}
+		sources := []*yaml.Node{mapping.Content[index+1]}
+		if sources[0].Kind == yaml.SequenceNode {
+			sources = sources[0].Content
+		}
+		for _, source := range sources {
+			for source.Kind == yaml.AliasNode && source.Alias != nil {
+				source = source.Alias
+			}
+			if source.Kind != yaml.MappingNode {
+				continue
+			}
+			if found := mappingValue(source, key, depth+1); found != nil {
+				return found
+			}
+		}
+	}
+	return nil
+}
+
+// writtenScalar returns the value to serve for a scalar node whose decoded
+// form would differ from what it says in the file, and false for any other
+// node.
+func writtenScalar(node *yaml.Node) (any, bool) {
+	for node.Kind == yaml.AliasNode && node.Alias != nil {
+		node = node.Alias
+	}
+	if node.Kind != yaml.ScalarNode {
+		return nil, false
+	}
+	switch node.ShortTag() {
+	case "!!timestamp":
+		return node.Value, true
+	case "!!int", "!!float":
+		text := strings.TrimPrefix(strings.ReplaceAll(node.Value, "_", ""), "+")
+		if node.ShortTag() == "!!float" && !decimalIntegerText.MatchString(node.Value) {
+			return nil, false
+		}
+		number, ok := new(big.Int).SetString(text, 0)
+		if !ok || new(big.Int).Abs(number).Cmp(maxExactJSONInteger) <= 0 {
+			return nil, false
+		}
+		return json.Number(number.String()), true
+	}
+	return nil, false
 }
