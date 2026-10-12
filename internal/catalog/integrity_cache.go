@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"os"
 	"sync"
 	"sync/atomic"
 
@@ -20,6 +21,8 @@ const maxVerifiedGenerations = 16
 // checked again, so corruption that arrives with a file change is still found.
 // Damage that leaves the identity untouched is not caught by an up-front check,
 // only when a query reads the damaged page. The cache lives in process memory.
+// The builder that just ran integrity_check on a generation seeds its result,
+// so the first requests after a rebuild do not repeat the check.
 var integrityVerified integrityCache
 
 type integrityCache struct {
@@ -46,4 +49,14 @@ func (cache *integrityCache) remember(path string, identity canonical.FileIdenti
 		clear(cache.files)
 	}
 	cache.files[path] = identity
+}
+
+// statGeneration returns the identity of a generation database file.
+func statGeneration(root, database string) (canonical.FileIdentity, error) {
+	rootHandle, err := os.OpenRoot(root)
+	if err != nil {
+		return canonical.FileIdentity{}, err
+	}
+	defer rootHandle.Close()
+	return canonical.StatFile(rootHandle, "runtime/catalog/"+database)
 }

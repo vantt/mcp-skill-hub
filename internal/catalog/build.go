@@ -154,8 +154,14 @@ func buildCatalogGeneration(ctx context.Context, root string, options BuildOptio
 		if current.ProjectionInputDigest != input.ProjectionInputDigest || current.CatalogSnapshot != input.CatalogSnapshot || !sameInputFiles(current.Files, input.Files) {
 			return fmt.Errorf("%w: canonical inputs changed before publish", ErrCanonicalChanged)
 		}
+		before, statErr := statGeneration(root, pointer.Database)
 		if err := verifyGeneration(ctx, databasePath, input, builderVersion, counts); err != nil {
 			return err
+		}
+		// The integrity check just ran on exactly this file version, so requests
+		// right after publication need not repeat it.
+		if after, err := statGeneration(root, pointer.Database); statErr == nil && err == nil && after == before {
+			integrityVerified.remember(databasePath, after)
 		}
 		// This is the final safe cancellation point: after pointer replacement the
 		// verified generation may already be visible and must be reported as published.
