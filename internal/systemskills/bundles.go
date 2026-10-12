@@ -1,6 +1,7 @@
 package systemskills
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"embed"
 	"fmt"
@@ -141,4 +142,31 @@ func KnownFileDigest(id, path, digest string) bool {
 		}
 	}
 	return false
+}
+
+// KnownFileContent is KnownFileDigest for the bytes of a file on disk. A copy
+// whose line endings were turned into CRLF, as Git does on checkout when
+// core.autocrlf is true on Windows, counts as the same file: every bundled
+// file and every recorded digest uses LF line endings.
+func KnownFileContent(id, path string, raw []byte) bool {
+	if KnownFileDigest(id, path, FileDigest(raw)) {
+		return true
+	}
+	normalized := NormalizeLineEndings(raw)
+	return len(normalized) != len(raw) && KnownFileDigest(id, path, FileDigest(normalized))
+}
+
+// SameContent reports whether a and b hold the same text once CRLF line
+// endings are read as LF.
+func SameContent(a, b []byte) bool {
+	return bytes.Equal(NormalizeLineEndings(a), NormalizeLineEndings(b))
+}
+
+// NormalizeLineEndings returns content with every CRLF line ending replaced
+// by LF. Content without CRLF is returned as it is.
+func NormalizeLineEndings(content []byte) []byte {
+	if !bytes.Contains(content, []byte("\r\n")) {
+		return content
+	}
+	return bytes.ReplaceAll(content, []byte("\r\n"), []byte("\n"))
 }

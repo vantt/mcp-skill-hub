@@ -74,8 +74,10 @@ func frontmatterDescription(content []byte) (string, error) {
 // wrapperOwned reports whether raw is a wrapper that Skill Hub wrote for the
 // skill: the current render or a render an earlier release shipped. The
 // description inside the file is never trusted, so an edited wrapper is the
-// user's.
+// user's. CRLF line endings, as a Windows checkout with core.autocrlf writes
+// them, are read as LF.
 func wrapperOwned(skill systemskills.SystemSkill, raw []byte) bool {
+	raw = systemskills.NormalizeLineEndings(raw)
 	if current, err := skillWrapper(skill); err == nil && bytes.Equal(raw, current) {
 		return true
 	}

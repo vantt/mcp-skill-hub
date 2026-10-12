@@ -238,7 +238,7 @@ func prepareSharedWrite(skill systemskills.SystemSkill, bundled systemskills.Ski
 		return preparedFile{}, err
 	case file.blocked != "":
 		return file.block(file.blocked), nil
-	case file.exists && !systemskills.KnownFileDigest(skill.ID, bundled.Path, systemskills.FileDigest(file.raw)):
+	case file.exists && !systemskills.KnownFileContent(skill.ID, bundled.Path, file.raw):
 		return file.block(blockedUnknownReason), nil
 	}
 	return file.write(bundled.Content), nil
@@ -253,7 +253,7 @@ func prepareSharedRemoval(skill systemskills.SystemSkill, bundled systemskills.S
 		return file.block(file.blocked), nil
 	case !file.exists:
 		return file.unchanged(), nil
-	case !systemskills.KnownFileDigest(skill.ID, bundled.Path, systemskills.FileDigest(file.raw)):
+	case !systemskills.KnownFileContent(skill.ID, bundled.Path, file.raw):
 		return file.block(blockedUnknownReason), nil
 	}
 	return file.removal("remove the bundled " + skill.ID + " file: no agent in this folder uses a local hub any more"), nil
@@ -262,7 +262,7 @@ func prepareSharedRemoval(skill systemskills.SystemSkill, bundled systemskills.S
 // fullCopyOwned reports whether raw is a full SKILL.md that Skill Hub wrote
 // for the skill under the layout of earlier releases.
 func fullCopyOwned(id string, raw []byte) bool {
-	return systemskills.KnownFileDigest(id, skillEntryFile, systemskills.FileDigest(raw))
+	return systemskills.KnownFileContent(id, skillEntryFile, raw)
 }
 
 func prepareWrapper(adapter Adapter, skill systemskills.SystemSkill, root string, remove bool) (preparedFile, error) {
@@ -362,7 +362,7 @@ func expectedSkillChange(root string, covered []systemskills.SystemSkill, change
 		var owned bool
 		switch {
 		case change.Kind == ChangeSharedSkill:
-			owned = systemskills.KnownFileDigest(target.skill.ID, target.file, systemskills.FileDigest(raw))
+			owned = systemskills.KnownFileContent(target.skill.ID, target.file, raw)
 		case target.legacy:
 			owned = fullCopyOwned(target.skill.ID, raw)
 		default:
@@ -395,7 +395,7 @@ func SystemSkillFileOwned(relPath string, raw []byte) bool {
 	rel := path.Clean(filepath.ToSlash(relPath))
 	for _, skill := range systemskills.SystemSkills() {
 		if file, found := strings.CutPrefix(rel, SharedSkillsDirRelativePath+"/"+skill.ID+"/"); found {
-			return systemskills.KnownFileDigest(skill.ID, file, systemskills.FileDigest(raw))
+			return systemskills.KnownFileContent(skill.ID, file, raw)
 		}
 		for _, adapter := range adapters {
 			if adapter.Wrapper && rel == adapter.SkillsDirRelativePath+"/"+skill.ID+"/"+skillEntryFile {

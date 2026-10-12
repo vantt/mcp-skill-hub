@@ -635,6 +635,56 @@ func TestSystemSkillFileOwned(t *testing.T) {
 	}
 }
 
+// crlf turns every LF line ending into CRLF, as a Git checkout with
+// core.autocrlf=true does on Windows.
+func crlf(content []byte) []byte {
+	return bytes.ReplaceAll(content, []byte("\n"), []byte("\r\n"))
+}
+
+func TestCRLFCheckoutOfSystemSkillFilesIsStillOwned(t *testing.T) {
+	t.Run("hub", func(t *testing.T) {
+		hub, binary := t.TempDir(), absoluteBinary(t)
+		for _, skill := range systemskills.SystemSkills() {
+			for _, file := range skill.Files {
+				writeTestFile(t, sharedSkillPath(hub, skill.ID, file.Path), crlf(file.Content), 0o644)
+			}
+			writeTestFile(t, filepath.Join(hub, ".claude", "skills", skill.ID, "SKILL.md"), crlf(currentWrapper(t, skill.ID)), 0o644)
+		}
+		request := Request{Workspace: hub, Binary: binary}
+		if plan := planFor(t, request); len(plan.Blocked) != 0 {
+			t.Fatalf("CRLF copies are blocked: %+v", plan.Blocked)
+		}
+		planAndApply(t, request)
+		assertSystemSkillLayout(t, hub, systemskills.CuratorSkillID, systemskills.DistillSkillID)
+	})
+	t.Run("old layout", func(t *testing.T) {
+		hub, project, binary := t.TempDir(), t.TempDir(), absoluteBinary(t)
+		writeOldLayout(t, project, crlf([]byte(systemCuratorInstructions())))
+		request := Request{Workspace: hub, Root: project, Binary: binary}
+		if plan := planFor(t, request); len(plan.Blocked) != 0 {
+			t.Fatalf("CRLF copies are blocked: %+v", plan.Blocked)
+		}
+		planAndApply(t, request)
+		assertSystemSkillLayout(t, project, systemskills.CuratorSkillID)
+	})
+	t.Run("ownership", func(t *testing.T) {
+		curator := crlf([]byte(systemCuratorInstructions()))
+		for path, raw := range map[string][]byte{
+			".agents/skills/system-curator/SKILL.md": curator,
+			".claude/skills/system-curator/SKILL.md": crlf(currentWrapper(t, systemskills.CuratorSkillID)),
+			".gemini/skills/system-curator/SKILL.md": curator,
+		} {
+			if !SystemSkillFileOwned(filepath.FromSlash(path), raw) {
+				t.Errorf("%s with CRLF line endings is not owned", path)
+			}
+		}
+		edited := crlf([]byte(systemCuratorInstructions() + "mine\n"))
+		if SystemSkillFileOwned(filepath.FromSlash(".agents/skills/system-curator/SKILL.md"), edited) {
+			t.Error("an edited CRLF copy is owned")
+		}
+	})
+}
+
 // TestKnownWrappersCoverReleasedRenders checks that every wrapper a release
 // tag shipped is recognized, so an unedited wrapper written by any released
 // binary is upgraded instead of reported as the user's. It needs Git and the

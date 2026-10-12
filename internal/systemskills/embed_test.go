@@ -427,6 +427,41 @@ func TestKnownFileDigest(t *testing.T) {
 	}
 }
 
+func TestKnownFileContentReadsCRLFAsLF(t *testing.T) {
+	t.Parallel()
+
+	toCRLF := func(content []byte) []byte { return bytes.ReplaceAll(content, []byte("\n"), []byte("\r\n")) }
+	for _, skill := range SystemSkills() {
+		for _, file := range skill.Files {
+			if !KnownFileContent(skill.ID, file.Path, file.Content) {
+				t.Errorf("%s %s: bundled bytes are not known", skill.ID, file.Path)
+			}
+			if !KnownFileContent(skill.ID, file.Path, toCRLF(file.Content)) {
+				t.Errorf("%s %s: a CRLF checkout of the bundled file is not known", skill.ID, file.Path)
+			}
+			if !SameContent(file.Content, toCRLF(file.Content)) {
+				t.Errorf("%s %s: CRLF copy is not the same content", skill.ID, file.Path)
+			}
+		}
+	}
+	curator := []byte(CuratorSkill)
+	unknown := map[string][]byte{
+		"edited CRLF copy":     toCRLF(append(bytes.Clone(curator), []byte("mine\n")...)),
+		"lone carriage return": bytes.ReplaceAll(curator, []byte("\n"), []byte("\r")),
+	}
+	for name, raw := range unknown {
+		if KnownFileContent(CuratorSkillID, "SKILL.md", raw) {
+			t.Errorf("%s is known", name)
+		}
+	}
+	if KnownFileContent(DistillSkillID, "SKILL.md", toCRLF(curator)) {
+		t.Error("a CRLF curator is known as a distill-lab file")
+	}
+	if SameContent(curator, append(bytes.Clone(curator), '\n')) {
+		t.Error("different text compares as the same content")
+	}
+}
+
 func skillIDs(skills []SystemSkill) []string {
 	ids := make([]string, len(skills))
 	for i, skill := range skills {
