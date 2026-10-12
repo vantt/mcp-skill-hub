@@ -42,8 +42,8 @@ func TestInspectAsksForMissingMachineFileIgnoreEntriesOnAnExistingWorkspace(t *t
 			missing++
 		}
 	}
-	if missing != 4 {
-		t.Fatalf("want 4 fixable missing entries, got %d: %#v", missing, plan.Findings)
+	if missing != len(requiredIgnoreEntries)-2 {
+		t.Fatalf("want %d fixable missing entries, got %d: %#v", len(requiredIgnoreEntries)-2, missing, plan.Findings)
 	}
 }
 

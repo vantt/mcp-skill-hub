@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vantt/mcp-skill-hub/internal/hostintegration"
+	"github.com/vantt/mcp-skill-hub/internal/shellquote"
 	"github.com/vantt/mcp-skill-hub/internal/systemskills"
 )
 
@@ -49,7 +51,82 @@ func (provider systemSkillProvider) Check(ctx context.Context, report RoleReport
 	if finding, ok := provider.nodeFinding(ctx, root); ok {
 		findings = append(findings, finding)
 	}
+	findings = append(findings, systemSkillGitFindings(ctx, root)...)
 	return findings
+}
+
+// systemSkillFolders are the hub folders, relative and with forward slashes,
+// that hold the generated system skill files; the hub .gitignore ignores them.
+func systemSkillFolders() []string {
+	var folders []string
+	for _, skill := range systemskills.SystemSkills() {
+		folders = append(folders, ".agents/skills/"+skill.ID+"/", ".claude/skills/"+skill.ID+"/")
+	}
+	return folders
+}
+
+// systemSkillGitFindings names the files in the generated system skill
+// folders whose Git state needs a person: a generated file that Git still
+// tracks (hubs created before the folders were ignored committed them), and
+// a file Skill Hub did not write that the ignore entries now hide. The
+// commands are printed for a person to run; nothing here changes Git.
+func systemSkillGitFindings(ctx context.Context, root string) []Finding {
+	var findings []Finding
+	folders := systemSkillFolders()
+	tracked, err := gitPaths(ctx, root, append([]string{"ls-files", "-z", "--"}, folders...)...)
+	if err != nil {
+		return nil
+	}
+	for _, path := range tracked {
+		if raw, ok := readGeneratedFile(root, path); ok && hostintegration.SystemSkillFileOwned(path, raw) {
+			findings = append(findings, Finding{Code: "system_skill_tracked", Label: "Tracked system skill", Severity: SeverityNotice,
+				Message: "Git tracks " + path + ", which Skill Hub regenerates from its version; stop tracking it with the command below, then commit.",
+				Manual:  "git -C " + shellquote.Arg(root) + " rm --cached -- " + shellquote.Arg(path)})
+		}
+	}
+	ignored, err := gitPaths(ctx, root, append([]string{"ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--"}, folders...)...)
+	if err != nil {
+		return findings
+	}
+	for _, path := range ignored {
+		if raw, ok := readGeneratedFile(root, path); !ok || !hostintegration.SystemSkillFileOwned(path, raw) {
+			findings = append(findings, Finding{Code: "system_skill_unowned_ignored", Label: "Ignored file", Severity: SeverityNotice,
+				Message: path + " is ignored by .gitignore and was not written by Skill Hub; move it to another skill folder, or keep it in Git with the command below.",
+				Manual:  "git -C " + shellquote.Arg(root) + " add -f -- " + shellquote.Arg(path)})
+		}
+	}
+	return findings
+}
+
+// gitPaths runs a NUL-separated git listing in root.
+func gitPaths(ctx context.Context, root string, args ...string) ([]string, error) {
+	output, err := offlineGitCommand(ctx, root, args...).Output()
+	if err != nil {
+		return nil, err
+	}
+	var paths []string
+	for _, path := range strings.Split(string(output), "\x00") {
+		if path != "" {
+			paths = append(paths, path)
+		}
+	}
+	return paths, nil
+}
+
+// maxGeneratedFileBytes bounds what the ownership check reads; every bundled
+// system skill file is far smaller.
+const maxGeneratedFileBytes = 4 << 20
+
+// readGeneratedFile reads a regular file below root by its slash path,
+// refusing symbolic links and large files.
+func readGeneratedFile(root, slashPath string) ([]byte, bool) {
+	path := filepath.Join(root, filepath.FromSlash(slashPath))
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Size() > maxGeneratedFileBytes {
+		return nil, false
+	}
+	raw, err := os.ReadFile(path)
+	return raw, err == nil
 }
 
 // nodeFinding reports a hub whose distill-lab cannot run its script: Node is

@@ -38,6 +38,12 @@ var machineFiles = []string{".mcp.json", ".claude/settings.local.json", ".codex/
 var requiredIgnoreEntries = []string{
 	"/runtime/", "/.skillhub/transactions/",
 	"/.mcp.json", "/.claude/settings.local.json", "/.codex/", "/.gemini/settings.json",
+	// The system skill folders that init and doctor --fix generate from the
+	// binary's version. The ids mirror the bundled system skills
+	// (system-curator, distill-lab); this package does not import their
+	// bundle, so they are written out here.
+	"/.agents/skills/system-curator/", "/.claude/skills/system-curator/",
+	"/.agents/skills/distill-lab/", "/.claude/skills/distill-lab/",
 }
 
 // Finding describes a workspace problem and whether the mechanical remediation can fix it.
