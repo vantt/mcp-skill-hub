@@ -105,7 +105,7 @@
       "route": "/sources/distill?…",
       "state": "Distill hand-off brief with a selected source",
       "width": 1280,
-      "height": 693,
+      "height": 774,
       "theme": "light",
       "caption": "Distill: copy the brief and give it to your curator agent.",
       "alt": "The distill hand-off screen with a brief ready to copy for the curator agent."

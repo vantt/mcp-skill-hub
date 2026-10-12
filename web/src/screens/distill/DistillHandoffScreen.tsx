@@ -21,7 +21,7 @@ const MSG_NONE_READY =
 const BTN_OPEN_SOURCES = 'Open Sources';
 const BTN_CHANGE_SELECTION = 'Change selection';
 const INTRO_BRIEF =
-  'Copy this handoff and paste it to your curator agent, an agent that has the distill-lab skill. It records lessons in each skill; read them in the skill\'s Distill tab, where you decide what to keep.';
+  'Copy this handoff and paste it to an agent you start in your Skill Hub folder, where Skill Hub installs the distill-lab skill. It records lessons in each skill; read them in the skill\'s Distill tab, where you decide what to keep.';
 const LABEL_SKILLS = 'Skills: ';
 const LABEL_NO_SKILL = 'no linked skill';
 const TITLE_BRIEF_BAR = 'Handoff for your Curator Agent';

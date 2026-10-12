@@ -62,6 +62,7 @@ test.describe('Tier 3 occasional flows', () => {
     await expect(page).toHaveURL(/\/sources\/distill\?source=/);
     const brief = await page.locator('pre').textContent();
     expect(brief).toContain('Use the distill-lab skill');
+    expect(brief).toContain('Skill Hub folder');
     expect(brief).toContain('consumer-review');
     expect(brief).not.toContain('curation_');
   });

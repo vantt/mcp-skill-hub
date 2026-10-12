@@ -8,7 +8,7 @@ const TITLE_GOAL = 'Distillation Goal';
 const MSG_NO_GOAL = 'No explicit distillation goal stated.';
 const MSG_NO_LESSONS = 'No lessons recorded yet.';
 const NOTE_DECIDE =
-  'This page only shows the lessons. Your curator agent records and decides them: tell it, for example, "1 planned, 3 rejected: already covered". Or run the distill-lab script yourself: distill.py decide <file> <number> --state planned|ported|rejected.';
+  'This page only shows the lessons. Your curator agent records and decides them: tell it, for example, "1 planned, 3 rejected: already covered". Or run the distill-lab script\'s decide command yourself in your hub folder; the skill\'s "Running the script" section shows it.';
 const LABEL_WHAT = 'What: ';
 const LABEL_NOTABLE = 'Notable: ';
 const LABEL_CONTRAST = 'Contrast: ';

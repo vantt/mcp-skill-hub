@@ -18,11 +18,13 @@ export function buildHandoffBrief(input: HandoffBriefInput): string {
 
   return `Use the distill-lab skill to learn from the sources below for the Skill Hub skills that follow them.
 
+Run this in an agent started in the Skill Hub folder; Skill Hub installs the distill-lab skill there. It needs Node 18 or newer.
+
 ${lines.join('\n')}
 
 For each line:
 1. Read the skill first, then scan the source from its saved cursor to its current commit.
-2. Record the lessons in the skill's .meta/distill.yaml with the distill-lab script (distill.py). Do not edit the skill itself and do not commit.
+2. Record the lessons in the skill's .meta/distill.yaml with the distill-lab skill's script, as its 'Running the script' section shows. Do not edit the skill itself and do not commit.
 3. If a source cannot be read, name it and carry on with the others.
 4. Finish with the lessons grouped by decision state, highest priority first, and ask me which to plan or reject.`;
 }

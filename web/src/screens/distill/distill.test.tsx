@@ -111,6 +111,7 @@ describe('DistillHandoffScreen', () => {
     expect(pre.textContent).toContain('- Distill skill-1 from source source-a');
     expect(pre.textContent).toContain('- Distill skill-2 from source source-b');
     expect(pre.textContent).not.toContain('#token=');
+    expect(screen.getByText(/paste it to an agent you start in your Skill Hub folder/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Change selection' })).toHaveAttribute('href', '/sources/distill');
   });
 
