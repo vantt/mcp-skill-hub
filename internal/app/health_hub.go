@@ -284,7 +284,11 @@ func hubStateFindings(root string, report RoleReport, state hubState, depth Dept
 	findings = append(findings, selfConnectionFindings(root, state, hosts, repair, addRepair)...)
 
 	repair.Summary = "repair the hub: " + strings.Join(repairs, ", ")
-	repair.Apply = func(context.Context) (Changed, error) { return repairHub(root, hosts) }
+	repair.Apply = func(context.Context) (Changed, error) {
+		changed, notes, err := repairHub(root, hosts)
+		repair.Notes = notes
+		return changed, err
+	}
 	if blocked != "" {
 		for index := range findings {
 			if findings[index].Fix == repair {
@@ -378,19 +382,34 @@ func hubFolderHosts(root string) (keep []hostintegration.Host, elsewhere []Findi
 }
 
 // repairHub runs the hub repair doctor --fix has always run and lists the
-// files it wrote.
-func repairHub(root string, hosts []hostintegration.Host) (Changed, error) {
+// files it wrote and the notes about system skill files.
+func repairHub(root string, hosts []hostintegration.Host) (Changed, []string, error) {
 	result, err := (WorkspaceService{hosts: hosts}).DoctorFix(root, false)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if result.Error != nil {
-		return nil, errors.New(strings.TrimSpace(result.Error.Render.Error + " " + result.Error.Render.Why))
+		return nil, nil, errors.New(strings.TrimSpace(result.Error.Render.Error + " " + result.Error.Render.Why))
 	}
 	if result.Status != StatusApplied && result.Status != StatusReady && result.Status != StatusOK {
-		return nil, errors.New(result.Summary)
+		return nil, nil, errors.New(result.Summary)
 	}
-	return changedPaths(root, result), nil
+	return changedPaths(root, result), systemSkillNotes(result), nil
+}
+
+// systemSkillNotes returns the warnings of a repair result about system skill
+// files: a file left in place, an old copy removed, a shared folder kept.
+func systemSkillNotes(result Result) []string {
+	var notes []string
+	for _, warning := range result.Warnings {
+		switch warning.Code {
+		case "system_skill_blocked", hostintegration.NoticeGeminiLegacy, hostintegration.NoticeSharedSkillKept:
+			if !slices.Contains(notes, warning.Summary) {
+				notes = append(notes, warning.Summary)
+			}
+		}
+	}
+	return notes
 }
 
 // changedPaths lists the files a hub repair result reports as written. The

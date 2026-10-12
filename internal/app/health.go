@@ -78,6 +78,10 @@ type FixAction struct {
 	// Apply makes the change and returns the files it wrote. It must be safe
 	// to run when the problem is already gone.
 	Apply func(ctx context.Context) (Changed, error)
+	// Notes may be set by Apply to sentences the person should read about
+	// what the fix did, for example that an old file was removed or that a
+	// file Skill Hub did not write was left in place.
+	Notes []string
 }
 
 // Finding is the result of one check.
@@ -264,6 +268,7 @@ type FixedItem struct {
 	Codes   []string `json:"codes"`
 	Summary string   `json:"summary"`
 	Changed Changed  `json:"changed"`
+	Notes   []string `json:"notes,omitempty"`
 }
 
 // NotFixedItem is a problem doctor --fix left alone, or a fix that failed.
@@ -316,7 +321,7 @@ func ApplyFixes(ctx context.Context, sections []Section) FixReport {
 			if changed == nil {
 				changed = Changed{}
 			}
-			report.Fixed = append(report.Fixed, FixedItem{Codes: []string{finding.Code}, Summary: finding.Fix.Summary, Changed: changed})
+			report.Fixed = append(report.Fixed, FixedItem{Codes: []string{finding.Code}, Summary: finding.Fix.Summary, Changed: changed, Notes: finding.Fix.Notes})
 			done[finding.Fix] = outcome{fixed: len(report.Fixed) - 1, failed: -1}
 		}
 	}

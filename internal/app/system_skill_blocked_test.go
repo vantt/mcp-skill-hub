@@ -161,3 +161,28 @@ func TestStatusReportsAnOldLayoutHubUntilDoctorFix(t *testing.T) {
 		t.Fatalf("old Gemini copy kept: %v", err)
 	}
 }
+
+func TestDoctorFixReportsTheRemovedGeminiCopy(t *testing.T) {
+	t.Parallel()
+	hub := healthHub(t)
+	for _, dir := range []string{".claude", ".agents", ".gemini"} {
+		if err := os.RemoveAll(filepath.Join(hub, dir, "skills")); err != nil {
+			t.Fatal(err)
+		}
+		writeFileForTest(t, filepath.Join(hub, dir, "skills", "system-curator", "SKILL.md"), systemskills.CuratorSkill)
+	}
+	report := DetectRole(hub, t.TempDir(), userconfig.Config{})
+	fixes := ApplyFixes(t.Context(), Run(t.Context(), report, DepthFull))
+	var notes []string
+	var changed Changed
+	for _, item := range fixes.Fixed {
+		notes = append(notes, item.Notes...)
+		changed = append(changed, item.Changed...)
+	}
+	if !slices.ContainsFunc(notes, func(note string) bool { return strings.Contains(note, "v0.28.0") }) {
+		t.Fatalf("no Gemini CLI note in %+v", fixes)
+	}
+	if !slices.Contains(changed, filepath.Join(hub, ".gemini", "skills", "system-curator", "SKILL.md")) {
+		t.Fatalf("removed copy not listed: %v", changed)
+	}
+}

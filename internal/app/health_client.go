@@ -183,10 +183,8 @@ func localGroupFindings(ctx context.Context, report RoleReport, group localGroup
 			connectionChanges = append(connectionChanges, change)
 		}
 	}
-	fix := &FixAction{
-		Summary: "update the connection of " + scopeName(group) + " to the hub at " + group.hub + " (connect's safe merge; your own content stays)",
-		Apply:   func(ctx context.Context) (Changed, error) { return reconnectLocal(ctx, report, group, group.hub) },
-	}
+	fix := &FixAction{Summary: "update the connection of " + scopeName(group) + " to the hub at " + group.hub + " (connect's safe merge; your own content stays)"}
+	fix.Apply = func(ctx context.Context) (Changed, error) { return reconnectLocal(ctx, fix, report, group, group.hub) }
 	reason := ""
 	if hubNeedsMigration(group.hub) {
 		fix, command = nil, "skillhub maintain migrate --workspace "+shellquote.Arg(group.hub)
@@ -235,10 +233,9 @@ func missingHubFinding(report RoleReport, group localGroup) Finding {
 	switch {
 	case recorded && storedExists && !sameDirectory(report.StoredHub, group.hub):
 		stored := filepath.Clean(report.StoredHub)
-		finding.Fix = &FixAction{
-			Summary: "point " + scopeName(group) + " at the hub at " + stored + " (was " + group.hub + ")",
-			Apply:   func(ctx context.Context) (Changed, error) { return reconnectLocal(ctx, report, group, stored) },
-		}
+		fix := &FixAction{Summary: "point " + scopeName(group) + " at the hub at " + stored + " (was " + group.hub + ")"}
+		fix.Apply = func(ctx context.Context) (Changed, error) { return reconnectLocal(ctx, fix, report, group, stored) }
+		finding.Fix = fix
 	case report.StoredHub != "" && (!storedExists || sameDirectory(report.StoredHub, group.hub)):
 		finding.Manual = shellquote.Chain("cd <new-location>", "skillhub init")
 	case storedExists:
@@ -285,7 +282,7 @@ func hostFlag(host hostintegration.Host) string {
 // reconnectLocal re-runs connect's safe merge for the group's hosts: it never
 // overwrites a person's own content and refuses on a conflicting managed
 // block.
-func reconnectLocal(ctx context.Context, report RoleReport, group localGroup, hub string) (Changed, error) {
+func reconnectLocal(ctx context.Context, fix *FixAction, report RoleReport, group localGroup, hub string) (Changed, error) {
 	service := ConnectService{HomeDir: func() (string, error) {
 		if report.Home == "" {
 			return "", errors.New("the home folder is unknown")
@@ -299,6 +296,7 @@ func reconnectLocal(ctx context.Context, report RoleReport, group localGroup, hu
 	if result.Error != nil {
 		return nil, errors.New(strings.TrimSpace(result.Error.Render.Why + " " + result.Error.Render.Fix))
 	}
+	fix.Notes = systemSkillNotes(result)
 	return changedPaths(group.root, result), nil
 }
 

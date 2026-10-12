@@ -569,7 +569,15 @@ func renderFixReport(p *termui.Printer, fixes app.FixReport, after []app.Section
 				p.Raw("    no file needed a change\n")
 			}
 			for _, path := range item.Changed {
-				p.Raw("    wrote " + path + "\n")
+				// A repair also removes files, such as an old system skill copy.
+				verb := "wrote "
+				if _, err := os.Lstat(path); errors.Is(err, os.ErrNotExist) {
+					verb = "removed "
+				}
+				p.Raw("    " + verb + path + "\n")
+			}
+			for _, note := range item.Notes {
+				p.Raw("    note: " + note + "\n")
 			}
 		}
 	}
