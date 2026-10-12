@@ -170,6 +170,10 @@ func prepare(ctx context.Context, request Request) (preparedInspection, error) {
 		host.files = append(host.files, skills.hosts[adapter.Host]...)
 		instructionPath := filepath.Join(root, filepath.FromSlash(instructionRel))
 		if mode.remove {
+			if request.KeepInstructions {
+				prepared.hosts = append(prepared.hosts, host)
+				continue
+			}
 			instructions, err := prepareInstructionsRemoval(instructionPath, root)
 			if err != nil {
 				return preparedInspection{}, err

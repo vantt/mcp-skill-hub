@@ -473,7 +473,9 @@ func (service ConnectService) Disconnect(ctx context.Context, request Disconnect
 			}
 		}
 	}
-	hostRequest := hostintegration.Request{Root: root, Scope: scope, Binary: binary, Hosts: request.Hosts, Remove: true}
+	hostRequest := hostintegration.Request{Root: root, Scope: scope, Binary: binary, Hosts: request.Hosts, Remove: true,
+		// In a hub the instruction files are committed hub content.
+		KeepInstructions: scope == hostintegration.ScopeProject && IsHubRoot(root)}
 	result, err := service.planScope(ctx, hostRequest, request.DryRun)
 	if err != nil || result.Error != nil {
 		return result, nil, err

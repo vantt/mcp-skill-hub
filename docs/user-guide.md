@@ -116,7 +116,7 @@ Claude Code asks you before any `skillhub` command with `--yes` or `confirm`, an
 
 ### Undo a connection
 
-`connect --remove` takes out the Skill Hub entry, the marked block and the Skill Hub skills, unless you changed them. Other agent settings stay as they are. Run it in the connected project:
+`connect --remove` takes out the Skill Hub entry, the marked block and the Skill Hub skills, unless you changed them. Other agent settings stay as they are. In a project, text you wrote in `CLAUDE.md`, `AGENTS.md` or `GEMINI.md` stays, and a file that held only the block is deleted. Run in the hub folder itself, it leaves those three files alone, because the hub commits them as its own content; `doctor --fix` restores the rest of the hub's connection. Run it in the connected project:
 
 ```bash
 cd <your-project> && skillhub connect --remove
