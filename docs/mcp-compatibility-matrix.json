@@ -88,7 +88,7 @@
       "assumptions": ["The host retains final tool approval and activation authority."],
       "skills_extension": {
         "status": "unverified",
-        "reason": "Executed MCP registration and native curator load do not verify SEP-2640 skills/list and skills/get. A 2026-10-12 attempt with Claude Code 2.1.296, an isolated config directory and a logging wrapper stopped at 'Not logged in', so the server was never started and no initialize was observed."
+        "reason": "Executed MCP registration and native curator load do not verify SEP-2640 skills/list and skills/get. Executed 2026-10-12 with Claude Code 2.1.296 (logged in, per-invocation MCP config, logging wrapper): protocol 2026-07-28, client capabilities roots and elicitation only (no extensions entry), requests server/discover, resources/list and tools/list; no skills/list or skills/get although the server advertised the extension."
       },
       "server_toggle": {
         "status": "verified",
@@ -118,7 +118,7 @@
       "assumptions": ["Project trust or an explicit trusted automation mode is required before Codex enables project MCP configuration."],
       "skills_extension": {
         "status": "unverified",
-        "reason": "Registration recognition does not verify SEP-2640 skills/list and skills/get; model/tool execution was blocked by authentication. A 2026-10-12 attempt with Codex CLI 0.161.0 and an isolated CODEX_HOME failed with HTTP 401 before any MCP server was started, so no initialize was observed."
+        "reason": "Registration recognition does not verify SEP-2640 skills/list and skills/get; model/tool execution was blocked by authentication. Executed 2026-10-12 with Codex CLI 0.161.0 (logged in, per-invocation MCP config, logging wrapper): protocol 2025-06-18, client capabilities experimental and elicitation (no extensions entry), requests initialize and tools/list; no skills/list or skills/get."
       },
       "server_toggle": {
         "status": "unverified",

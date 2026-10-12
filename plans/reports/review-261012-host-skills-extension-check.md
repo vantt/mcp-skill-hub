@@ -16,13 +16,11 @@ No host could be observed. Every installed host stopped at authentication before
 
 | Host | Version | Run | Observed |
 |------|---------|-----|----------|
-| Claude Code | 2.1.296 | `claude -p "say ok" --mcp-config <temp> --strict-mcp-config`, temp cwd, temp `CLAUDE_CONFIG_DIR` | "Not logged in", exit before MCP start; wrapper log empty. Blocked by authentication. |
-| Codex CLI | 0.161.0 | `codex exec`, temp `CODEX_HOME` with `[mcp_servers.skillhub]` | HTTP 401 to the responses endpoint, five reconnects, no MCP start; wrapper log empty. Blocked by authentication. |
+| Claude Code | 2.1.296 | `claude -p "<trivial prompt>" --mcp-config <temp json> --strict-mcp-config`, temp cwd, the user's logged-in account, a logging wrapper in front of `skillhub mcp serve` | Protocol 2026-07-28 (stateless: `server/discover`, no `initialize`). Client capabilities: `roots`, `elicitation`; no `extensions` entry. Methods sent: `server/discover`, `resources/list` (our runtime list is empty), `tools/list`. No `skills/list`, no `skills/get`, although the server advertised `io.modelcontextprotocol/skills` in its discover result. |
+| Codex CLI | 0.161.0 | `codex exec --skip-git-repo-check -c mcp_servers.<name>.command=<wrapper>`, logged in | Protocol 2025-06-18. Client capabilities: `experimental` (`codex/auth-change`), `elicitation`; no `extensions` entry. Methods sent: `initialize`, `notifications/initialized`, `tools/list`. No `skills/list`, no `skills/get`. |
 | Gemini CLI | not installed | `command -v gemini` found nothing | Skipped. |
 
-Logging in inside the temp config dirs would need the user's credentials. Using the real config dirs would write to `~/.claude.json` / `~/.codex`, which was out of bounds. Per instruction no workaround was attempted.
-
-To finish the check, the user can run the same wrapper with their own login: `claude -p "say ok" --mcp-config <json using wrap.sh> --strict-mcp-config` from an empty directory, then read the logged `initialize` (`capabilities.extensions`, `clientInfo`) and the method names. Note this writes to their own Claude config.
+An earlier attempt with isolated config directories stopped at authentication for both hosts; the runs above used the logged-in accounts with a per-invocation MCP config only (no change to the user's MCP configuration).
 
 ## Server side (executed)
 
@@ -39,8 +37,8 @@ So a non-declaring host still gets the full list; only identified Claude/Codex/G
 
 ## Matrix changes
 
-Only the `skills_extension.reason` text of Claude Code and Codex CLI was extended with this attempt; statuses stay `unverified`. Gemini CLI untouched. Both matrix files are kept identical.
+Only the `skills_extension.reason` text of Claude Code and Codex CLI was extended with the executed result; statuses stay `unverified` because no host used the extension. Gemini CLI untouched. Both matrix files are kept identical.
 
 ## What this means for the plan
 
-Not decided by this run. Nothing shows any stock host declares or calls the extension, so the case for building skills extension support into the proxy or stateless HTTP path rests on the spec, not on host behaviour. Until a logged-in run of Claude Code and Codex CLI is captured, keep MCP tool delivery (`skill_get`) as the primary path and treat extension work as speculative. One more reason for caution: the curator is withheld from identified native hosts on name alone, so if an identified host does not call `skills/list`, the curator reaches it only through native files.
+Neither Claude Code 2.1.296 nor Codex CLI 0.161.0 declares or calls the extension, so the case for building skills extension support into the proxy or stateless HTTP path rests on the spec, not on host behaviour. Until a logged-in run of Claude Code and Codex CLI is captured, keep MCP tool delivery (`skill_get`) as the primary path and treat extension work as speculative. One more reason for caution: the curator is withheld from identified native hosts on name alone, so if an identified host does not call `skills/list`, the curator reaches it only through native files.
