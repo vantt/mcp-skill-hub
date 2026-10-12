@@ -671,7 +671,7 @@ func TestStatusNextFollowsTheTableOrder(t *testing.T) {
 
 func TestChangedPathsReadsTheRepairItems(t *testing.T) {
 	t.Parallel()
-	root := filepath.Join(string(filepath.Separator), "h")
+	root := filepath.Join(t.TempDir(), "h")
 	result := NewResult(StatusApplied, "done")
 	result.Items = []Item{
 		{ID: "gitignore_entry_missing", Summary: ".gitignore: Required Git ignore entry is missing: /.codex/", Impact: "Remediated."},

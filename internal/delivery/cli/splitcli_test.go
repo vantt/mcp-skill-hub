@@ -1,12 +1,17 @@
 package cli
 
-import "strings"
+import (
+	"runtime"
+	"strings"
+)
 
-// splitCLI splits a printed command line the way a POSIX shell would for the
-// subset shellQuote emits: single-quoted words with '\” for embedded quotes.
-// strings.Fields would keep the quotes around Windows paths (backslashes force
-// quoting) and hand the literal quote characters to the CLI.
+// splitCLI splits a printed command line the way the shell of this platform
+// would for the subset shellquote emits: single-quoted words, with a quote
+// escaped as '\” in POSIX sh and doubled in PowerShell, where a backslash is
+// an ordinary path character. strings.Fields would keep the quotes and hand
+// them to the CLI.
 func splitCLI(line string) []string {
+	windows := runtime.GOOS == "windows"
 	var words []string
 	var cur strings.Builder
 	inWord, inQuote := false, false
@@ -14,14 +19,17 @@ func splitCLI(line string) []string {
 		c := line[i]
 		switch {
 		case inQuote:
-			if c == '\'' {
+			if c == '\'' && windows && i+1 < len(line) && line[i+1] == '\'' {
+				cur.WriteByte(c)
+				i++
+			} else if c == '\'' {
 				inQuote = false
 			} else {
 				cur.WriteByte(c)
 			}
 		case c == '\'':
 			inQuote, inWord = true, true
-		case c == '\\' && i+1 < len(line):
+		case c == '\\' && !windows && i+1 < len(line):
 			i++
 			cur.WriteByte(line[i])
 			inWord = true

@@ -294,8 +294,11 @@ func TestCaseLimitsConfigurable(t *testing.T) {
 	}
 	defer recorder.Close(context.Background())
 
+	// The daily cap counts UTC calendar days, so each day's cases are anchored at its noon: a run
+	// close to midnight must not push a later case of "day 1" onto the next day.
 	now := time.Now().UTC()
-	day1 := now.Add(-24 * time.Hour)
+	today := time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, time.UTC)
+	day1 := today.Add(-24 * time.Hour)
 
 	// 1. Test CaseDailyLimit: record 3 cases on day1, only 2 should be saved
 	for i := range 3 {
@@ -323,7 +326,7 @@ func TestCaseLimitsConfigurable(t *testing.T) {
 
 	// 2. Test CaseTotalLimit: record 2 cases on day 2.
 	// Total attempted = 2 (day1) + 2 (day2) = 4. Total cap is 3, so oldest is pruned.
-	day2 := now
+	day2 := today
 	for i := range 2 {
 		err := recorder.RecordCase(t.Context(), CaseRecord{
 			OccurredAt:   day2.Add(time.Duration(i) * time.Minute),

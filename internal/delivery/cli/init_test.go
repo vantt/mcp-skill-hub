@@ -26,6 +26,9 @@ func isolateInit(t *testing.T) string {
 		t.Fatal(err)
 	}
 	t.Setenv("GIT_CONFIG_GLOBAL", gitConfig)
+	// Git for Windows turns core.autocrlf on in its system config, which makes a clone check files
+	// out with CRLF and a status after init report them as changed.
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	return config
 }
 
