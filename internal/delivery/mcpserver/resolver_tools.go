@@ -12,7 +12,7 @@ import (
 func (adapter *Server) registerResolverTools(server *mcp.Server) {
 	addTool(server, &mcp.Tool{
 		Name: "skill_resolve", Title: "Resolve a skill",
-		Description: "Recommend at most one primary skill from task evidence (task.description in English). If setup is review_required, do not use the skill and ask the user to run `skillhub skill review <id>`. This does not load skill content; use skills/get and resources/read after approval.",
+		Description: "Recommend at most one primary skill from task evidence (task.description in English). If setup is review_required, do not use the skill and ask the user to run `skillhub skill review <id>`. This does not load skill content: load the recommended skill with skill_get, or, only when your host supports the MCP skills extension, with skills/get and resources/read.",
 		Annotations: annotations(true, false, true, false),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input resolveInput) (*mcp.CallToolResult, toolOutcome[resolveResult], error) {
 		request := resolverpkg.Request(input)
