@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -63,6 +64,12 @@ type Server struct {
 	// disk. It is set once before the listener accepts requests and never
 	// changes afterwards.
 	remote bool
+
+	// toolsListSize caches the encoded size of the tools/list result for the
+	// tool set identified by toolsListKey.
+	toolsListMu   sync.Mutex
+	toolsListKey  string
+	toolsListSize int
 }
 
 var activeDiagnostics atomic.Pointer[slog.Logger]
@@ -287,12 +294,36 @@ func (adapter *Server) telemetryMiddleware(next mcp.MethodHandler) mcp.MethodHan
 	return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
 		result, err := next(ctx, method, req)
 		if err == nil && method == "tools/list" {
-			if encoded, encErr := json.Marshal(result); encErr == nil {
-				app.RecordServerMetric(ctx, adapter.telemetry, adapter.workspace, app.ServerMetric{Name: "tools_list_bytes", Value: float64(len(encoded)), Client: adapter.clientForReq(req)})
+			if size, ok := adapter.toolsListBytes(result); ok {
+				app.RecordServerMetric(ctx, adapter.telemetry, adapter.workspace, app.ServerMetric{Name: "tools_list_bytes", Value: float64(size), Client: adapter.clientForReq(req)})
 			}
 		}
 		return result, err
 	}
+}
+
+// toolsListBytes reports the encoded size of a tools/list result. The server
+// returns the same registered tool objects until the tool set changes, so the
+// result is encoded once per tool set and the size is reused for later calls.
+func (adapter *Server) toolsListBytes(result mcp.Result) (int, bool) {
+	var key strings.Builder
+	if listed, ok := result.(*mcp.ListToolsResult); ok {
+		for _, tool := range listed.Tools {
+			fmt.Fprintf(&key, "%p;", tool)
+		}
+		key.WriteString(listed.NextCursor)
+	}
+	adapter.toolsListMu.Lock()
+	defer adapter.toolsListMu.Unlock()
+	if key.Len() > 0 && adapter.toolsListKey == key.String() {
+		return adapter.toolsListSize, true
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		return 0, false
+	}
+	adapter.toolsListKey, adapter.toolsListSize = key.String(), len(encoded)
+	return len(encoded), true
 }
 
 func (adapter *Server) registerSkills(server *mcp.Server) error {
