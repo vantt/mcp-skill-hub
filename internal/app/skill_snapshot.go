@@ -766,8 +766,18 @@ func ensureSnapshotDirectory(root, relative string, create bool) (string, error)
 	return current, nil
 }
 
+// snapshotTouchInterval is how long a directory's modification time may lag
+// behind its last use. Grace periods for garbage collection are hours or days,
+// so a read request does not write to disk on every call.
+const snapshotTouchInterval = 5 * time.Minute
+
+// touchSnapshot refreshes the modification time of a snapshot or state
+// directory that was just used, unless it is already recent.
 func touchSnapshot(directory string) {
 	now := time.Now()
+	if info, err := os.Lstat(directory); err == nil && now.Sub(info.ModTime()) < snapshotTouchInterval {
+		return
+	}
 	// A failed touch only shortens the garbage-collection grace period of a
 	// snapshot that is outdated anyway; current snapshots are never collected.
 	_ = os.Chtimes(directory, now, now)

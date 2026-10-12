@@ -711,7 +711,7 @@ func StatFiles(root string) ([]string, []fs.FileInfo, error) {
 	defer rootHandle.Close()
 
 	var found []canonicalFile
-	if err := collectCanonicalFiles(rootHandle, ".", &found); err != nil {
+	if err := collectCanonicalFiles(rootHandle, "", &found); err != nil {
 		return nil, nil, err
 	}
 	sort.Slice(found, func(i, j int) bool { return found[i].path < found[j].path })
@@ -737,8 +737,12 @@ type canonicalFile struct {
 	info fs.FileInfo
 }
 
-func collectCanonicalFiles(root *os.Root, directory string, files *[]canonicalFile) error {
-	handle, err := root.Open(directory)
+// collectCanonicalFiles lists the files below directory, a root opened on the
+// directory itself, so each subdirectory is opened by its own name instead of
+// by a path that is resolved from the workspace root every time. prefix is the
+// slash-separated path of the directory below the workspace, empty for the root.
+func collectCanonicalFiles(directory *os.Root, prefix string, files *[]canonicalFile) error {
+	handle, err := directory.Open(".")
 	if err != nil {
 		return err
 	}
@@ -748,8 +752,7 @@ func collectCanonicalFiles(root *os.Root, directory string, files *[]canonicalFi
 		// following symbolic links.
 		entries, readErr := handle.Readdir(64)
 		for _, info := range entries {
-			native := filepath.Join(directory, info.Name())
-			relative := filepath.ToSlash(strings.TrimPrefix(native, "."+string(filepath.Separator)))
+			relative := prefix + info.Name()
 			if isNonCanonicalPath(relative) {
 				continue
 			}
@@ -757,7 +760,7 @@ func collectCanonicalFiles(root *os.Root, directory string, files *[]canonicalFi
 				return fmt.Errorf("unsafe symlink: %s", relative)
 			}
 			if info.IsDir() {
-				if err := collectCanonicalFiles(root, native, files); err != nil {
+				if err := collectCanonicalSubdirectory(directory, info.Name(), relative+"/", files); err != nil {
 					return err
 				}
 				continue
@@ -774,9 +777,18 @@ func collectCanonicalFiles(root *os.Root, directory string, files *[]canonicalFi
 			return nil
 		}
 		if readErr != nil {
-			return fmt.Errorf("read canonical directory %s: %w", directory, readErr)
+			return fmt.Errorf("read canonical directory %s: %w", strings.TrimSuffix(prefix, "/"), readErr)
 		}
 	}
+}
+
+func collectCanonicalSubdirectory(parent *os.Root, name, prefix string, files *[]canonicalFile) error {
+	child, err := parent.OpenRoot(name)
+	if err != nil {
+		return err
+	}
+	defer child.Close()
+	return collectCanonicalFiles(child, prefix, files)
 }
 
 // isNonCanonicalPath excludes derived state, repository metadata, and host
