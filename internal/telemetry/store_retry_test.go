@@ -6,6 +6,7 @@ import (
 	"errors"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -118,11 +119,12 @@ func TestRecorderKeepsEventsThroughTransientLockContention(t *testing.T) {
 	if err := waitWritten(recorder, 1); err != nil {
 		t.Fatal(err)
 	}
-	// On a slow Windows runner the size trim after the commit can itself run out
-	// of time: the event is stored and counted as written, and the failed trim
-	// is reported as an error, so only the drop count is asserted there.
+	// On a slow runner the size trim after the commit can itself run out of
+	// time: the event is stored and counted as written, and the failed trim is
+	// reported as an error. That is the only error tolerated here.
 	health := recorder.healthSnapshot()
-	if health.Dropped != 0 || (runtime.GOOS != "windows" && health.Errors != 0) {
+	trimOnly := health.Errors == 0 || (health.Errors == 1 && strings.Contains(health.LastError, "committed; trim telemetry store"))
+	if health.Dropped != 0 || !trimOnly {
 		t.Fatalf("health = %+v; want no error and no drop", health)
 	}
 	if count := countEventsWithPrefix(t, recorder.config.Path, "evt_contended"); count != 1 {
