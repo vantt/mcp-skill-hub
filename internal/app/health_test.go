@@ -135,7 +135,7 @@ func TestDoctorFixRepairsTheHubAndLeavesATrackedConnectionFileToThePerson(t *tes
 	}
 	report := RoleReport{Cwd: root, Hub: &HubRef{Root: root}}
 	before := Run(t.Context(), report, DepthFull)
-	if got, want := codesOf(before, SeverityProblem), []string{"machine_file_tracked", "gitignore_entry_missing"}; !slices.Equal(got, want) {
+	if got, want := codesOf(before, SeverityProblem), []string{"machine_file_tracked", "gitignore_entry_missing", "hub_index_stale"}; !slices.Equal(got, want) {
 		t.Fatalf("problems = %v, want %v\n%+v", got, want, before)
 	}
 	tracked := findingByCode(t, before, "machine_file_tracked")
@@ -153,7 +153,7 @@ func TestDoctorFixRepairsTheHubAndLeavesATrackedConnectionFileToThePerson(t *tes
 	fixes := ApplyFixes(t.Context(), before)
 	// The one hub repair also restores the agent connection file, which the
 	// checks reach only once the layout is in order.
-	if len(fixes.Fixed) != 1 || !slices.Equal(fixes.Fixed[0].Codes, []string{"gitignore_entry_missing"}) {
+	if len(fixes.Fixed) != 1 || !slices.Equal(fixes.Fixed[0].Codes, []string{"gitignore_entry_missing", "hub_index_stale"}) {
 		t.Fatalf("fixed = %+v", fixes.Fixed)
 	}
 	if !slices.Contains(fixes.Fixed[0].Changed, ignore) || !slices.Contains(fixes.Fixed[0].Changed, skill) {

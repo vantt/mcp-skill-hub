@@ -55,9 +55,12 @@ func inspectHubWhileLocked(ctx context.Context, root string, hosts []hostintegra
 	if state.recoveries, err = mutation.InspectRecoveryWhileLocked(root); err != nil {
 		return hubState{}, err
 	}
-	// The search index is judged only when the layout is in order: a
-	// missing .gitignore entry already makes the index read as stale.
-	if len(contentIssues(state)) > 0 || len(state.recoveries) > 0 || slices.ContainsFunc(state.plan.Findings, func(finding workspace.Finding) bool { return finding.ID != "machine_file_tracked" }) {
+	// The search index is judged only when the layout is in order. Missing
+	// .gitignore entries and tracked machine files are Git notices; they do not
+	// stop the index and connection checks.
+	if len(contentIssues(state)) > 0 || len(state.recoveries) > 0 || slices.ContainsFunc(state.plan.Findings, func(finding workspace.Finding) bool {
+		return finding.ID != "machine_file_tracked" && finding.ID != "gitignore_entry_missing"
+	}) {
 		return state, nil
 	}
 	status, err := catalogpkg.InspectWhileLocked(ctx, root)

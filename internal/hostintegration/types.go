@@ -137,6 +137,10 @@ type Request struct {
 	Hosts     []Host
 	Hub       *RemoteHub
 	Remove    bool
+	// KeepInstructions leaves the instruction files (CLAUDE.md, AGENTS.md,
+	// GEMINI.md) alone on a removal. A hub commits them as its own content,
+	// so removing the connection must not delete or edit them.
+	KeepInstructions bool
 }
 
 // RemoteHub is a hub on another machine. URL is its base URL without a path;

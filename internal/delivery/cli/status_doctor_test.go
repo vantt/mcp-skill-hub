@@ -149,7 +149,7 @@ func roleFixtures() []roleFixture {
 			appendToFile(t, filepath.Join(hub, "skills", "software", "demo", "SKILL.md"), "\nhand edit\n")
 			return hub
 		}},
-		{name: "hub missing gitignore entries", role: app.RoleHub, problems: []string{"gitignore_entry_missing"}, afterFix: []string{}, build: func(t *testing.T) string {
+		{name: "hub missing gitignore entries", role: app.RoleHub, problems: []string{"gitignore_entry_missing", "hub_index_stale"}, afterFix: []string{}, build: func(t *testing.T) string {
 			hub := initHub(t, filepath.Join(t.TempDir(), "hub"))
 			replaceInFile(t, filepath.Join(hub, ".gitignore"), "/runtime/\n", "")
 			return hub
@@ -176,7 +176,7 @@ func roleFixtures() []roleFixture {
 			}
 			return hub
 		}},
-		{name: "hub whose folder is connected to another hub", role: app.RoleBoth, problems: []string{"gitignore_entry_missing"}, afterFix: []string{},
+		{name: "hub whose folder is connected to another hub", role: app.RoleBoth, problems: []string{"gitignore_entry_missing", "hub_index_stale"}, afterFix: []string{},
 			verify: func(t *testing.T, dir string) {
 				content, err := os.ReadFile(filepath.Join(dir, ".mcp.json"))
 				if workspace := hostintegration.ReadRegistration(hostintegration.HostClaude, content).Workspace; err != nil || filepath.Base(workspace) != "other" {
