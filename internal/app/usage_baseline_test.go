@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -286,6 +287,7 @@ func TestBaselineCustomRetentionPrunedAndFullWindow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = recorder.Close(context.Background()) })
 
 	now := time.Now().UTC()
 	snap := "sha256:custom_retention_snap"

@@ -73,6 +73,7 @@ func TestFeedbackOwnsRecorderWhenNotInjected(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = recorder.Close(context.Background()) })
 	seedFeedbackResolution(recorder, "res_owned")
 	if err := recorder.Close(t.Context()); err != nil {
 		t.Fatal(err)

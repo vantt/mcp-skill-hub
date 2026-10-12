@@ -539,6 +539,7 @@ func seedPromotionTelemetry(t *testing.T, root, resolutionID, skillID string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = recorder.Close(context.Background()) })
 	recorder.Record(telemetry.Event{
 		Type: telemetry.EventResolutionCompleted, ResolutionID: resolutionID, RequestID: "req-private",
 		CatalogSnapshot: "sha256:catalog", PolicyRevision: "sha256:policy", Client: telemetry.Client{Name: "test"},

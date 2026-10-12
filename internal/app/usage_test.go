@@ -66,6 +66,7 @@ func TestUsageServiceFunnel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = recorder.Close(context.Background()) })
 
 	makeEvent := func(id, eventType string, t time.Time) telemetry.Event {
 		return telemetry.Event{

@@ -83,6 +83,7 @@ func newWebWorkspace(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = recorder.Close(context.Background()) })
 
 	makeEvt := func(id, eventType string) telemetry.Event {
 		return telemetry.Event{

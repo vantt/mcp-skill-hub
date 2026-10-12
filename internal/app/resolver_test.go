@@ -204,6 +204,7 @@ func TestTelemetryPurgeAndDeletionDoNotAlterResolution(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = firstRecorder.Close(context.Background()) })
 	first, firstErr := (ResolverService{Cache: resolverpkg.NewCache(8), Telemetry: firstRecorder}).Resolve(t.Context(), root, request)
 	if err := firstRecorder.Close(t.Context()); err != nil {
 		t.Fatal(err)
@@ -221,6 +222,7 @@ func TestTelemetryPurgeAndDeletionDoNotAlterResolution(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = secondRecorder.Close(context.Background()) })
 	second, secondErr := (ResolverService{Cache: resolverpkg.NewCache(8), Telemetry: secondRecorder}).Resolve(t.Context(), root, request)
 	if err := secondRecorder.Close(t.Context()); err != nil {
 		t.Fatal(err)

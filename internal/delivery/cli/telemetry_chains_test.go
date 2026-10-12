@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -42,6 +43,7 @@ func TestTelemetryCLIChainsAndFunnelCuts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = rec.Close(context.Background()) })
 	now := time.Now().UTC()
 	rec.Record(telemetry.Event{
 		ID:              "evt_override_cli",

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -49,6 +50,7 @@ func TestTelemetryCLICases(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = recorder.Close(context.Background()) })
 	err = recorder.RecordCase(t.Context(), telemetry.CaseRecord{
 		ResolutionID:    "res_cli_case_1",
 		SessionHash:     "sess_cli_case",
