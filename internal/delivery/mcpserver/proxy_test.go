@@ -149,10 +149,21 @@ func callProxyTool(t *testing.T, session *mcp.ClientSession, name string, argume
 
 func proxyResolve(t *testing.T, session *mcp.ClientSession, root, id string) string {
 	t.Helper()
-	result, encoded := callProxyTool(t, session, "skill_resolve", map[string]any{
+	return proxyResolveOperation(t, session, root, id, "")
+}
+
+// proxyResolveOperation resolves for the given operation, which a test
+// changes to get another resolution for the same skill.
+func proxyResolveOperation(t *testing.T, session *mcp.ClientSession, root, id, operation string) string {
+	t.Helper()
+	params := map[string]any{
 		"schema_version": SchemaVersion, "request_id": "REQ-proxy-" + id,
 		"task": map[string]any{"description": remoteBenchTaskText(t, root, id), "scope": "multi_step"},
-	})
+	}
+	if operation != "" {
+		params["operation"] = operation
+	}
+	result, encoded := callProxyTool(t, session, "skill_resolve", params)
 	var outcome struct {
 		Result resolveResult `json:"result"`
 	}

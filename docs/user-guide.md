@@ -114,6 +114,8 @@ Claude Code asks you before any `skillhub` command with `--yes` or `confirm`, an
 cd <your-project> && skillhub connect --remove
 ```
 
+It also removes the Claude Code permission rules that `connect` adds (listed above) and the hub's folders it allowed. It cannot tell a rule `connect` added from an identical one you wrote yourself first, so a rule you had added by hand, such as `Bash(skillhub:*)`, goes with them: the dry-run names every rule, and you can add yours back afterwards. Every other rule stays.
+
 Add `--dry-run` to see what it would remove first. Add `-g` for the user-account connection, or `--host claude` for one agent. Your hub and your skills stay untouched.
 
 ## Curate skills

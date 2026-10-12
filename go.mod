@@ -1,6 +1,6 @@
 module github.com/vantt/mcp-skill-hub
 
-go 1.26.0
+go 1.26.9
 
 require (
 	github.com/go-git/go-git/v5 v5.19.2

@@ -82,10 +82,13 @@ func (adapter *Server) skillBundle(ctx context.Context, session *mcp.ServerSessi
 }
 
 // recordBundleLoad records load unless this session already counted the same
-// skill version through a bundle.
+// skill version through a bundle under the same resolution.
 func (adapter *Server) recordBundleLoad(ctx context.Context, session *mcp.ServerSession, digest string, load app.SkillLoad) {
-	if adapter.tracker != nil && !adapter.tracker.markBundleFetch(session, load.SkillID, digest) {
-		return
+	if adapter.tracker != nil {
+		resolutionID, _ := adapter.tracker.attribute(session, load.SkillID)
+		if !adapter.tracker.markBundleFetch(session, load.SkillID, digest, resolutionID) {
+			return
+		}
 	}
 	adapter.recordLoad(ctx, session, load)
 }

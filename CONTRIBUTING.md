@@ -1,7 +1,7 @@
 # Contributing to Skill Hub
 
 This page is for developers who build, test or release Skill Hub.
-You need Go 1.26 (from `go.mod`) and, for the web UI, Node.js 24 (from `web/.nvmrc`).
+You need Go 1.26.9 (from `go.mod`) and, for the web UI, Node.js 24 (from `web/.nvmrc`).
 
 ## Build and test
 

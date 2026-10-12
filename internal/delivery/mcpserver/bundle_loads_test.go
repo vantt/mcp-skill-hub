@@ -53,28 +53,32 @@ func withSessionAndHeld(id, digest string) func(*http.Request) {
 	}
 }
 
-func TestMarkBundleFetchCountsEachVersionOncePerSession(t *testing.T) {
+func TestMarkBundleFetchCountsEachVersionOncePerSessionAndResolution(t *testing.T) {
 	tracker := newActivationTracker(nil, t.TempDir())
 	first, second := &mcp.ServerSession{}, &mcp.ServerSession{}
 	steps := []struct {
 		session *mcp.ServerSession
 		skill   string
 		digest  string
+		res     string
 		want    bool
 	}{
-		{first, "skill-a", "d1", true},
-		{first, "skill-a", "d1", false},
-		{first, "skill-a", "d2", true},
-		{first, "skill-b", "d1", true},
-		{second, "skill-a", "d1", true},
-		{nil, "skill-a", "d1", true},
-		{nil, "skill-a", "d1", true}, // shared by every client: never deduplicated
-		{first, "skill-a", "", true},
-		{first, "skill-a", "", false},
+		{first, "skill-a", "d1", "", true},
+		{first, "skill-a", "d1", "", false},
+		{first, "skill-a", "d2", "", true},
+		{first, "skill-b", "d1", "", true},
+		{second, "skill-a", "d1", "", true},
+		{nil, "skill-a", "d1", "", true},
+		{nil, "skill-a", "d1", "", true}, // shared by every client: never deduplicated
+		{first, "skill-a", "", "", true},
+		{first, "skill-a", "", "", false},
+		{first, "skill-a", "d1", "res-2", true}, // another resolution proposing the same version
+		{first, "skill-a", "d1", "res-2", false},
+		{first, "skill-a", "d1", "", false},
 	}
 	for index, step := range steps {
-		if got := tracker.markBundleFetch(step.session, step.skill, step.digest); got != step.want {
-			t.Errorf("step %d: markBundleFetch(%s, %q) = %v, want %v", index, step.skill, step.digest, got, step.want)
+		if got := tracker.markBundleFetch(step.session, step.skill, step.digest, step.res); got != step.want {
+			t.Errorf("step %d: markBundleFetch(%s, %q, %q) = %v, want %v", index, step.skill, step.digest, step.res, got, step.want)
 		}
 	}
 	if tracker.sessionHash(nil) == tracker.sessionHash(first) || tracker.sessionHash(first) == tracker.sessionHash(second) {
@@ -174,6 +178,44 @@ func TestBundleRequestsCountOneLoadPerVersionAndSession(t *testing.T) {
 				t.Fatalf("no-session bundle load = %+v, want unsolicited without a resolution", load)
 			}
 		}
+	}
+}
+
+// A second resolution in the same session that proposes the same version
+// gives another recommended activation, as a local skill_get does, while
+// repeated fetches under one resolution still count once.
+func TestBundleLoadCountsAgainUnderANewResolution(t *testing.T) {
+	root := newBundleHubFixture(t)
+	hub := startHTTPTestHub(t, root)
+	session := connectHTTPClient(t, hub.endpoint, hub.token)
+	task := resolveArguments(remoteBenchTaskText(t, root, "test-audit"))
+	firstResolution := callSkillResolve(t, session, task).Resolution.ResolutionID
+	for range 2 {
+		getBundle(t, hub, "test-audit", withSession(session.ID()))
+	}
+	task["operation"] = "test"
+	secondResolution := callSkillResolve(t, session, task).Resolution.ResolutionID
+	if firstResolution == secondResolution {
+		t.Fatal("the two resolutions share an ID")
+	}
+	for range 2 {
+		getBundle(t, hub, "test-audit", withSession(session.ID()))
+	}
+	hub.stop(t)
+
+	loads := bundleLoads(recentRawEvents(t, openHubRecorder(t, root)))
+	if len(loads) != 2 {
+		t.Fatalf("recorded %d bundle loads, want 2 (one per resolution): %+v", len(loads), loads)
+	}
+	seen := map[string]bool{}
+	for _, load := range loads {
+		seen[load.ResolutionID] = true
+		if load.Payload["attribution"] != "recommended" || load.Payload["first_activation"] != true {
+			t.Errorf("bundle load payload = %v, want a recommended first activation", load.Payload)
+		}
+	}
+	if !seen[firstResolution] || !seen[secondResolution] {
+		t.Errorf("bundle loads cover resolutions %v, want %s and %s", seen, firstResolution, secondResolution)
 	}
 }
 
@@ -322,6 +364,57 @@ func TestProxyCacheHitCountsOneLoadOnTheHub(t *testing.T) {
 	}
 	if len(loads) != 2 || len(perSession) != 2 {
 		t.Fatalf("recorded %d bundle loads in %d sessions, want one fetch and one cache hit in two sessions: %+v", len(loads), len(perSession), loads)
+	}
+}
+
+// Cache hits count like local skill_get calls: once per resolution that
+// proposes the version, so a second resolution in the same session that
+// proposes the cached version gives a second load.
+func TestProxyCacheHitCountsAgainUnderANewResolution(t *testing.T) {
+	root := newBundleHubFixture(t)
+	hub := startHTTPTestHub(t, root)
+	stateDir := t.TempDir()
+	warm := startTestProxy(t, hub.baseURL, hub.token, stateDir, nil)
+	proxyResolve(t, warm.session, root, "test-audit")
+	proxySkillGet(t, warm.session, "test-audit")
+
+	counter := newCountingTransport()
+	proxied := startTestProxy(t, hub.baseURL, hub.token, stateDir, counter)
+	for _, operation := range []string{"review", "test"} {
+		before := counter.count()
+		proxyResolveOperation(t, proxied.session, root, "test-audit", operation)
+		for range 2 {
+			if got, _, encoded := proxySkillGet(t, proxied.session, "test-audit"); got.Remote == nil || got.Remote.Cache != remoteCacheHit {
+				t.Fatalf("skill_get of a cached version = %s", encoded)
+			}
+		}
+		waitFor(t, "the background confirmation", func() bool { return counter.count().bundles > before.bundles })
+		waitFor(t, "the confirmation to finish", func() bool {
+			proxied.proxy.mu.Lock()
+			defer proxied.proxy.mu.Unlock()
+			return len(proxied.proxy.confirming) == 0
+		})
+		if got := counter.count().bundles - before.bundles; got != 1 {
+			t.Fatalf("resolution for %s sent %d bundle requests, want 1", operation, got)
+		}
+	}
+	hub.stop(t)
+
+	resolutions := map[string]int{}
+	for _, load := range bundleLoads(recentRawEvents(t, openHubRecorder(t, root))) {
+		if load.SessionIDHash == "" || load.ResolutionID == "" || load.Payload["attribution"] != "recommended" {
+			t.Errorf("bundle load = %+v, want a recommended load of a resolution", load)
+		}
+		resolutions[load.ResolutionID]++
+	}
+	counted := 0
+	for _, loads := range resolutions {
+		if loads == 1 {
+			counted++
+		}
+	}
+	if counted < 2 {
+		t.Fatalf("bundle loads per resolution = %v, want the two resolutions of the proxied session to count once each", resolutions)
 	}
 }
 
