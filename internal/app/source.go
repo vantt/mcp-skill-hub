@@ -290,7 +290,7 @@ func (service SourceService) ListSources(ctx context.Context, path, status strin
 	}
 
 	result := SourceListResult{
-		Result:     NewResult(StatusOK, fmt.Sprintf("%d candidate(s) and %d monitored source(s).", len(candidates), len(sources))),
+		Result:     NewResult(StatusOK, fmt.Sprintf("%s and %s.", termCount(len(candidates), "candidate", "candidates"), termCount(len(sources), "monitored source", "monitored sources"))),
 		Candidates: candidates,
 		Sources:    sources,
 	}
@@ -952,7 +952,7 @@ func (service SourceService) CheckSources(ctx context.Context, path string, ids 
 	}
 	if result.Unavailable > 0 {
 		result.Status = StatusPartialFailure
-		result.Summary = fmt.Sprintf("Checked %d source(s); %d changed, %d unchanged, %d unavailable. Curated skills are unchanged.", result.Checked, result.Changed, result.Unchanged, result.Unavailable)
+		result.Summary = fmt.Sprintf("Checked %s; %d changed, %d unchanged, %d unavailable. Curated skills are unchanged.", termCount(result.Checked, "source", "sources"), result.Changed, result.Unchanged, result.Unavailable)
 	}
 	keepSkillIDs := make([]string, 0, len(allTrackedSkills))
 	for _, sk := range allTrackedSkills {

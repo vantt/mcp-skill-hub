@@ -460,7 +460,7 @@ func deriveCurationHome(state homeState) CurationHome {
 		if home.Status == StatusOK {
 			home.Status = StatusActionRequired
 		}
-		home.Actions = append(home.Actions, ActionItem{Kind: "retry_unavailable_sources", Count: state.UnavailableSources, Priority: 80, Summary: fmt.Sprintf("%d source(s) are temporarily unavailable", state.UnavailableSources), Command: "source_check"})
+		home.Actions = append(home.Actions, ActionItem{Kind: "retry_unavailable_sources", Count: state.UnavailableSources, Priority: 80, Summary: fmt.Sprintf("%s %s temporarily unavailable", termCount(state.UnavailableSources, "source", "sources"), pluralWord(state.UnavailableSources, "is", "are")), Command: "source_check"})
 	}
 	if state.Summary.UpstreamUpdates > 0 {
 		home.HomeSummary.OptionalItems += state.Summary.UpstreamUpdates
@@ -482,7 +482,7 @@ func deriveCurationHome(state homeState) CurationHome {
 		if home.Status == StatusOK {
 			home.Status = StatusActionRequired
 		}
-		home.Actions = append(home.Actions, ActionItem{Kind: "distill_changed_sources", Count: state.ChangedSources, Priority: 70, Summary: fmt.Sprintf("%d source(s) are ready to distill", state.ChangedSources), Command: "curation_run_start"})
+		home.Actions = append(home.Actions, ActionItem{Kind: "distill_changed_sources", Count: state.ChangedSources, Priority: 70, Summary: fmt.Sprintf("%s %s ready to distill", termCount(state.ChangedSources, "source", "sources"), pluralWord(state.ChangedSources, "is", "are")), Command: "curation_run_start"})
 	}
 	if state.DueSources > 0 {
 		home.HomeSummary.OptionalItems += state.DueSources
@@ -490,7 +490,7 @@ func deriveCurationHome(state homeState) CurationHome {
 		if home.Status == StatusOK {
 			home.Status = StatusActionRequired
 		}
-		home.Actions = append(home.Actions, ActionItem{Kind: "check_due_sources", Count: state.DueSources, Priority: 60, Summary: fmt.Sprintf("%d source(s) are due for an update check", state.DueSources), Command: "source_check"})
+		home.Actions = append(home.Actions, ActionItem{Kind: "check_due_sources", Count: state.DueSources, Priority: 60, Summary: fmt.Sprintf("%s %s due for an update check", termCount(state.DueSources, "source", "sources"), pluralWord(state.DueSources, "is", "are")), Command: "source_check"})
 	}
 	if state.Summary.PendingInsights > 0 {
 		home.HomeSummary.OptionalItems += state.Summary.PendingInsights
@@ -556,7 +556,7 @@ func deriveCurationHome(state homeState) CurationHome {
 		case "review_upstream_updates":
 			home.Summary = fmt.Sprintf("%d skill(s) have upstream changes to review.", recommended.Count)
 		case "distill_changed_sources":
-			home.Summary = fmt.Sprintf("%d source(s) are ready to distill.", recommended.Count)
+			home.Summary = fmt.Sprintf("%s %s ready to distill.", termCount(recommended.Count, "source", "sources"), pluralWord(recommended.Count, "is", "are"))
 		case "review_lessons":
 			home.Summary = fmt.Sprintf("%d candidate lesson(s) are waiting for review.", recommended.Count)
 		case "review_git_changes":

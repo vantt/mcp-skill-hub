@@ -169,7 +169,7 @@ func TestSourceShowPrintsWithoutListHeader(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("show=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	if strings.Contains(stdout, "candidate(s) and") || strings.Contains(stdout, "monitored source(s)") {
+	if strings.Contains(stdout, "candidates and") || strings.Contains(stdout, "monitored sources") {
 		t.Fatalf("show output should not contain list header: %s", stdout)
 	}
 	if !strings.HasPrefix(strings.TrimSpace(stdout), "- source-a") {

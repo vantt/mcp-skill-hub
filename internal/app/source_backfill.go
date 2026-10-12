@@ -502,7 +502,7 @@ func (service BackfillService) ApplyBackfill(ctx context.Context, path string, p
 	sort.Strings(createdSources)
 
 	return BackfillResult{
-		Result:         NewResult(StatusOK, fmt.Sprintf("Backfilled %d skill(s) and created %d source(s).", len(updatedSkills), len(createdSources))),
+		Result:         NewResult(StatusOK, fmt.Sprintf("Backfilled %s and created %s.", termCount(len(updatedSkills), "skill", "skills"), termCount(len(createdSources), "source", "sources"))),
 		UpdatedSkills:  updatedSkills,
 		CreatedSources: createdSources,
 	}, nil
