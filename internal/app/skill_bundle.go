@@ -131,7 +131,7 @@ func (SnapshotService) RemoteStatus(ctx context.Context, workspacePath, skillID 
 		return unavailableLocalSkill(LocalReasonNotServable), nil
 	}
 	var trust skillTrust
-	_, source, err := loadDistributedSkillSource(ctx, workspacePath, skillID, func(entry DistributedSkill, contentJSON []byte) (bool, error) {
+	_, source, err := loadDistributedSkillManifest(ctx, workspacePath, skillID, func(entry DistributedSkill, contentJSON []byte) (bool, error) {
 		var evalErr error
 		trust, evalErr = evaluateSkillTrust(skillID, contentJSON, entry.digests)
 		return false, evalErr
@@ -192,7 +192,7 @@ func ClientLocalSkill(stateRoot, skillDirectory string, metadata skillruntime.Bu
 			if err != nil {
 				return LocalSkill{}, fmt.Errorf("read dependency manifest %s: %w", file.Path, err)
 			}
-			dependencyFiles = append(dependencyFiles, distributedSkillFile{Path: file.Path, Kind: file.Kind, Digest: file.Digest, Size: file.Size, Bytes: contents})
+			dependencyFiles = append(dependencyFiles, distributedSkillFile{Path: file.Path, Kind: file.Kind, Digest: file.Digest, Size: file.Size, Bytes: contents, Loaded: true})
 		}
 	}
 	stateDirectory, err := ensureStateDir(stateRoot, skillID, metadata.DepsKey, dependencyFiles)

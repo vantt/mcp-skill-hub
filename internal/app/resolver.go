@@ -154,25 +154,25 @@ func (service ResolverService) Resolve(ctx context.Context, path string, request
 		return response, err
 	}
 	stage = "catalog_open"
-	var handle *catalog.Handle
+	var view *catalog.View
 	if request.Prior != nil {
-		handle, err = catalog.OpenCurrentLocked(ctx, root)
+		view, err = catalog.ObserveCurrentLocked(ctx, root)
 	} else {
-		handle, err = catalog.OpenWithFallbackLocked(ctx, root)
+		view, err = catalog.ObserveWithFallbackLocked(ctx, root)
 	}
 	if err != nil {
 		return response, err
 	}
-	catalogSnapshot = handle.Pointer.CatalogSnapshot
+	catalogSnapshot = view.Pointer.CatalogSnapshot
 	defer func() {
-		if closeErr := handle.Close(); resultErr == nil && closeErr != nil {
+		if closeErr := view.Close(); resultErr == nil && closeErr != nil {
 			resultErr = fmt.Errorf("close catalog generation: %w", closeErr)
 		}
 	}()
 	stage = "policy_load"
 	policy := service.Policy
 	if policy.Revision == "" {
-		policy, err = resolverpkg.LoadPolicy(ctx, handle.DB)
+		policy, err = generationPolicy(ctx, view)
 		if err != nil {
 			return response, fmt.Errorf("load recommendation policy: %w", err)
 		}
@@ -188,24 +188,28 @@ func (service ResolverService) Resolve(ctx context.Context, path string, request
 	normalizedRequest, resultErr = resolverpkg.NormalizeRequest(request)
 	if resultErr == nil {
 		request = normalizedRequest
-		response, resultErr = service.resolveWithin(ctx, root, handle, normalizedRequest, nil)
+		response, resultErr = service.resolveWithin(ctx, root, view, normalizedRequest, nil)
 	}
 	return response, resultErr
 }
 
-func (service ResolverService) resolveWithin(ctx context.Context, root string, handle *catalog.Handle, request resolverpkg.Request, decorate func(resolverpkg.Catalog) resolverpkg.Catalog) (resolverpkg.Response, error) {
-	catalogSnapshot := handle.Pointer.CatalogSnapshot
-	sqliteCatalog, err := resolverpkg.NewSQLiteCatalog(handle.DB, catalogSnapshot)
+func (service ResolverService) resolveWithin(ctx context.Context, root string, view *catalog.View, request resolverpkg.Request, decorate func(resolverpkg.Catalog) resolverpkg.Catalog) (resolverpkg.Response, error) {
+	catalogSnapshot := view.Pointer.CatalogSnapshot
+	database, err := view.DB(ctx)
 	if err != nil {
 		return resolverpkg.Response{}, err
 	}
-	var view resolverpkg.Catalog = sqliteCatalog
+	sqliteCatalog, err := resolverpkg.NewSQLiteCatalog(database, catalogSnapshot)
+	if err != nil {
+		return resolverpkg.Response{}, err
+	}
+	var generation resolverpkg.Catalog = memoSkillsCatalog{Catalog: sqliteCatalog, view: view}
 	if decorate != nil {
-		view = decorate(view)
+		generation = decorate(generation)
 	}
 	policy := service.Policy
 	if policy.Revision == "" {
-		policy, err = resolverpkg.LoadPolicy(ctx, handle.DB)
+		policy, err = generationPolicy(ctx, view)
 		if err != nil {
 			return resolverpkg.Response{}, fmt.Errorf("load recommendation policy: %w", err)
 		}
@@ -220,7 +224,7 @@ func (service ResolverService) resolveWithin(ctx context.Context, root string, h
 		if len(excluded) > 0 {
 			cache = resolverpkg.NewCache(1)
 		}
-		engine, err := resolverpkg.New(excludingCatalog{Catalog: view, excluded: excluded}, policy, cache)
+		engine, err := resolverpkg.New(excludingCatalog{Catalog: generation, excluded: excluded}, policy, cache)
 		if err != nil {
 			return resolverpkg.Response{}, err
 		}
@@ -228,13 +232,13 @@ func (service ResolverService) resolveWithin(ctx context.Context, root string, h
 		if response.Supporting == nil {
 			response.Supporting = []resolverpkg.Supporting{}
 		}
-		if handle.Status.ServingMode == catalog.ServingFallback && handle.Status.Warning != "" {
-			response.Warnings = append(response.Warnings, handle.Status.Warning)
+		if view.Status.ServingMode == catalog.ServingFallback && view.Status.Warning != "" {
+			response.Warnings = append(response.Warnings, view.Status.Warning)
 		}
 		if err != nil || response.Primary == nil {
 			return response, err
 		}
-		primary, err := buildDistributedSkill(ctx, root, handle, response.Primary.ID)
+		primary, err := buildDistributedSkill(ctx, root, view, response.Primary.ID)
 		if errors.Is(err, catalog.ErrSkillNotServable) || errors.Is(err, ErrResourceContentUnavailable) {
 			excluded[response.Primary.ID] = struct{}{}
 			continue
@@ -244,10 +248,10 @@ func (service ResolverService) resolveWithin(ctx context.Context, root string, h
 		}
 		response.Primary.URI = primary.URI
 		response.Primary.Version = primary.Version
-		response.Primary.Setup = service.setupStatus(ctx, root, handle, primary)
+		response.Primary.Setup = service.setupStatus(ctx, root, view, primary)
 		served := response.Supporting[:0]
 		for _, supporting := range response.Supporting {
-			entry, entryErr := buildDistributedSkill(ctx, root, handle, supporting.ID)
+			entry, entryErr := buildDistributedSkill(ctx, root, view, supporting.ID)
 			if errors.Is(entryErr, catalog.ErrSkillNotServable) || errors.Is(entryErr, ErrResourceContentUnavailable) {
 				continue
 			}
@@ -256,7 +260,7 @@ func (service ResolverService) resolveWithin(ctx context.Context, root string, h
 			}
 			supporting.URI = entry.URI
 			supporting.Version = entry.Version
-			supporting.Setup = service.setupStatus(ctx, root, handle, entry)
+			supporting.Setup = service.setupStatus(ctx, root, view, entry)
 			served = append(served, supporting)
 		}
 		response.Supporting = served
@@ -268,12 +272,12 @@ func (service ResolverService) resolveWithin(ctx context.Context, root string, h
 // trusted skills without a runtime block. The annotation is advisory: a manifest that cannot
 // be read here yields no annotation rather than failing or reordering the
 // resolution, and activation reports the full preflight anyway.
-func (service ResolverService) setupStatus(ctx context.Context, root string, handle *catalog.Handle, entry DistributedSkill) *resolverpkg.SetupStatus {
-	var contentJSON string
-	if err := handle.DB.QueryRowContext(ctx, `SELECT content_json FROM canonical_entities WHERE id=?`, entry.SkillID).Scan(&contentJSON); err != nil {
+func (service ResolverService) setupStatus(ctx context.Context, root string, view *catalog.View, entry DistributedSkill) *resolverpkg.SetupStatus {
+	row, err := loadSkillRow(ctx, view, entry.SkillID)
+	if err != nil || row.Manifest == nil {
 		return nil
 	}
-	status, err := setupAnnotation(root, entry, []byte(contentJSON), service.probe)
+	status, err := setupAnnotation(root, entry, row.Manifest, service.probe)
 	if err != nil {
 		return nil
 	}
