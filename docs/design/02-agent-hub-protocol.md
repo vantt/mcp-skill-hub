@@ -146,6 +146,8 @@ Hub kiểm tra platform live (`live_checks`), không chạy script bin/setup tro
 
 `skills/list` có thể là danh sách một phần: skill đang chờ duyệt content (`local.status == "review_required"`) bị bỏ khỏi listing để host làm theo listing không cố tải một skill mà mọi lần đọc đều bị từ chối. `skills/get` và `resources/read` vẫn từ chối như trên với URI mà host đã có. Extension skills (và `skills/list`) chỉ được khai báo và phục vụ ở profile `runtime` và `all`, không ở profile `curation`, để host kết nối cả hai server không thấy mỗi skill hai lần.
 
+Frontmatter trong `skills/list` và `skills/get` giữ scalar đúng dạng viết trong `SKILL.md`: ngày không đặt trong dấu nháy (`released: 2026-10-12`) vẫn là chuỗi `2026-10-12`, không thành thời điểm RFC 3339, và số nguyên vượt 2^53 vẫn chính xác, để host tự parse cùng byte `SKILL.md` thấy cùng giá trị.
+
 `skills/bundle` là vendor method nằm trong namespace của extension. Nếu chuẩn định nghĩa một cơ chế bundle khác, method này sẽ được đổi tên.
 ### 3.1 Curation system-skill tools
 

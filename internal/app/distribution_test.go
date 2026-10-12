@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"github.com/vantt/mcp-skill-hub/internal/catalog"
 	"github.com/vantt/mcp-skill-hub/internal/skill"
 	"github.com/vantt/mcp-skill-hub/internal/systemskills"
+	"gopkg.in/yaml.v3"
 )
 
 func TestDistributionServesBundledSystemCurator(t *testing.T) {
@@ -129,8 +131,12 @@ func TestDistributionRejectsWorkspaceSystemCuratorCollisionAndKeepsBundleAvailab
 
 func createActiveDistributionSkill(t *testing.T, root, id, name string) {
 	t.Helper()
+	createActiveDistributionSkillWithContent(t, root, id, name, []byte("---\nname: "+id+"\ndescription: Mutable workspace fixture.\n---\n\n# "+name+"\n"))
+}
+
+func createActiveDistributionSkillWithContent(t *testing.T, root, id, name string, content []byte) {
+	t.Helper()
 	service := SkillService{}
-	content := []byte("---\nname: " + id + "\ndescription: Mutable workspace fixture.\n---\n\n# " + name + "\n")
 	preview, err := service.PreviewCreate(t.Context(), root, skill.CreateInput{
 		ID: id, Collection: "core", Name: name, Description: "Mutable workspace fixture.", Content: content,
 		Routing: skill.RoutingInput{Operations: []string{"review"}, Triggers: []string{"mutable workspace fixture"}, NotFor: []string{"system maintenance"}, MinScope: "multi_step"},
@@ -232,5 +238,51 @@ func TestDistributionRejectsChangedResourceWithContentUnavailable(t *testing.T) 
 	_, readErr := service.ReadResource(t.Context(), root, targetURI)
 	if !errors.Is(readErr, ErrResourceContentUnavailable) {
 		t.Fatalf("ReadResource error = %v, want ErrResourceContentUnavailable", readErr)
+	}
+}
+
+func TestDistributionListedFrontmatterMatchesIndependentParseWithDate(t *testing.T) {
+	t.Parallel()
+	root := newSkillWorkspace(t)
+	content := []byte("---\nname: dated-skill\ndescription: Carries a date and a large number.\nreleased: 2026-10-12\nbuild-id: 12345678901234567890123\nhistory:\n  - 2026-01-02\n  - note\n---\n\n# Dated\n")
+	createActiveDistributionSkillWithContent(t, root, "dated-skill", "Dated", content)
+
+	entries, _, err := (DistributionService{}).ListSkills(t.Context(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var listed map[string]any
+	for _, entry := range entries {
+		if entry.SkillID == "dated-skill" {
+			listed = entry.Frontmatter
+		}
+	}
+	if listed == nil {
+		t.Fatalf("dated-skill missing from %d entries", len(entries))
+	}
+	// A host reads the same bytes with its own parser: split the header and
+	// decode it with yaml.v3 into a node tree, then compare the scalar text.
+	header := strings.SplitN(string(content), "\n---\n", 2)[0][len("---\n"):]
+	var independent map[string]yaml.Node
+	if err := yaml.Unmarshal([]byte(header), &independent); err != nil {
+		t.Fatal(err)
+	}
+	listedJSON, err := json.Marshal(listed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for key, want := range map[string]string{"released": independent["released"].Value, "build-id": independent["build-id"].Value} {
+		var decoded map[string]json.RawMessage
+		if err := json.Unmarshal(listedJSON, &decoded); err != nil {
+			t.Fatal(err)
+		}
+		got := strings.Trim(string(decoded[key]), `"`)
+		if got != want {
+			t.Errorf("listed %s = %s, SKILL.md says %s", key, decoded[key], want)
+		}
+	}
+	history, _ := listed["history"].([]any)
+	if len(history) != 2 || history[0] != independent["history"].Content[0].Value {
+		t.Errorf("listed history = %#v", listed["history"])
 	}
 }
