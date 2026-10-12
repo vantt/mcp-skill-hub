@@ -28,6 +28,7 @@ import (
 	"github.com/vantt/mcp-skill-hub/internal/skill"
 	"github.com/vantt/mcp-skill-hub/internal/systemskills"
 	"github.com/vantt/mcp-skill-hub/internal/telemetry"
+	"github.com/vantt/mcp-skill-hub/internal/version"
 	"github.com/vantt/mcp-skill-hub/internal/workspace"
 	contractschemas "github.com/vantt/mcp-skill-hub/schemas"
 )
@@ -94,8 +95,11 @@ func New(workspacePath string, diagnostics io.Writer, profiles ...Profile) (*Ser
 		Resources: &mcp.ResourceCapabilities{},
 		Tools:     &mcp.ToolCapabilities{},
 	}
-	capabilities.AddExtension("io.modelcontextprotocol/skills", map[string]any{"directoryRead": false})
-	server := mcp.NewServer(&mcp.Implementation{Name: "skillhub", Version: "1"}, &mcp.ServerOptions{
+	servesSkills := profile != ProfileCuration
+	if servesSkills {
+		capabilities.AddExtension("io.modelcontextprotocol/skills", map[string]any{"directoryRead": false})
+	}
+	server := mcp.NewServer(&mcp.Implementation{Name: "skillhub", Version: version.Current().Version}, &mcp.ServerOptions{
 		Capabilities: capabilities,
 		PageSize:     paging.MaximumLimit,
 		Logger:       logger,
@@ -105,8 +109,10 @@ func New(workspacePath string, diagnostics io.Writer, profiles ...Profile) (*Ser
 		},
 	})
 	server.AddReceivingMiddleware(adapter.telemetryMiddleware)
-	if err := adapter.registerSkills(server); err != nil {
-		return nil, nil, err
+	if servesSkills {
+		if err := adapter.registerSkills(server); err != nil {
+			return nil, nil, err
+		}
 	}
 	adapter.registerTools(server)
 	return adapter, server, nil
@@ -326,6 +332,7 @@ func (adapter *Server) listSkills(ctx context.Context, session *mcp.ServerSessio
 	for _, item := range skipped {
 		adapter.logger.Warn("skill omitted from listing because it cannot be served", "skill_id", item.SkillID, "reason", item.Reason)
 	}
+	entries = adapter.omitAwaitingReview(ctx, entries)
 	if nativeCuratorForSession(session) {
 		for index, entry := range entries {
 			if entry.SkillID == systemskills.CuratorSkillID {
@@ -352,6 +359,23 @@ func (adapter *Server) listSkills(ctx context.Context, session *mcp.ServerSessio
 		result.Skills = append(result.Skills, toSkillEntry(entry))
 	}
 	return result, nil
+}
+
+// omitAwaitingReview drops skills whose content awaits review. A listing may
+// be partial, and a host that follows the listing would otherwise try to load
+// a skill whose every read is refused. skills/get and resources/read keep
+// their refusal for a URI the host already holds.
+func (adapter *Server) omitAwaitingReview(ctx context.Context, entries []app.DistributedSkill) []app.DistributedSkill {
+	kept := make([]app.DistributedSkill, 0, len(entries))
+	for _, entry := range entries {
+		if entry.SkillID != systemskills.CuratorSkillID {
+			if adapter.remoteLocalSkill(ctx, entry.SkillID).Status == app.LocalStatusReviewRequired {
+				continue
+			}
+		}
+		kept = append(kept, entry)
+	}
+	return kept
 }
 
 func (adapter *Server) getSkill(ctx context.Context, session *mcp.ServerSession, params *getSkillParams) (*getSkillResult, error) {

@@ -25,6 +25,7 @@ import (
 	"github.com/vantt/mcp-skill-hub/internal/delivery/paging"
 	"github.com/vantt/mcp-skill-hub/internal/shellquote"
 	"github.com/vantt/mcp-skill-hub/internal/skillruntime"
+	"github.com/vantt/mcp-skill-hub/internal/version"
 )
 
 const (
@@ -220,7 +221,7 @@ func NewProxy(ctx context.Context, options ProxyOptions) (*Proxy, error) {
 	if err != nil {
 		return nil, err
 	}
-	server := mcp.NewServer(&mcp.Implementation{Name: "skillhub", Version: "1"}, &mcp.ServerOptions{
+	server := mcp.NewServer(&mcp.Implementation{Name: "skillhub", Version: version.Current().Version}, &mcp.ServerOptions{
 		Capabilities: &mcp.ServerCapabilities{Tools: &mcp.ToolCapabilities{}},
 		PageSize:     paging.MaximumLimit,
 	})
