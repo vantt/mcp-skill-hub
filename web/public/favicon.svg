@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Skill Hub">
+  <rect width="64" height="64" rx="14" fill="#2563eb"/>
+  <circle cx="32" cy="32" r="7" fill="#fff"/>
+  <g stroke="#fff" stroke-width="4" stroke-linecap="round">
+    <line x1="32" y1="25" x2="32" y2="12"/>
+    <line x1="26" y1="35" x2="14" y2="43"/>
+    <line x1="38" y1="35" x2="50" y2="43"/>
+  </g>
+  <g fill="#fff">
+    <circle cx="32" cy="11" r="4.5"/>
+    <circle cx="13" cy="44" r="4.5"/>
+    <circle cx="51" cy="44" r="4.5"/>
+  </g>
+</svg>
