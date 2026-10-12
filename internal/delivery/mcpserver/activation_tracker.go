@@ -244,14 +244,17 @@ func (t *activationTracker) markActivation(session *mcp.ServerSession, resolutio
 }
 
 // markBundleFetch reports whether this is the first fetch or confirmation of
-// a skill version's bundle in the session, so a bundle counts as one load per
-// skill version and session however often the caller revalidates it. digest
+// a skill version's bundle for the resolution it is attributed to in the
+// session, so a bundle counts as one load per skill version, session and
+// resolution however often the caller revalidates it, and a later resolution
+// that proposes the same version counts again, as a local skill_get does.
+// resolutionID is empty when the session has no resolution. digest
 // is empty for a refused (unapproved) skill, whose version the refusal does
 // not name; such a skill then counts one blocked load per session. A nil
 // session (a request that names no live session) is never deduplicated: the
 // "no session" state is shared by every client of the hub, so one client's
 // load must not hide another's. Its loads still carry the no-session hash.
-func (t *activationTracker) markBundleFetch(session *mcp.ServerSession, skillID, digest string) bool {
+func (t *activationTracker) markBundleFetch(session *mcp.ServerSession, skillID, digest, resolutionID string) bool {
 	if session == nil {
 		return true
 	}
@@ -260,7 +263,7 @@ func (t *activationTracker) markBundleFetch(session *mcp.ServerSession, skillID,
 
 	state := t.sessionState(session)
 	state.lastSeen = t.now()
-	key := "bundle\x00" + skillID + "\x00" + digest
+	key := "bundle\x00" + skillID + "\x00" + digest + "\x00" + resolutionID
 	if state.activated[key] {
 		return false
 	}

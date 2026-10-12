@@ -647,11 +647,11 @@ func (proxy *Proxy) skillGet(ctx context.Context, request *mcp.CallToolRequest) 
 	switch outcome.kind {
 	case fetchInstalled:
 		proxy.rememberVersion(skillID, outcome.cached.Digest)
-		proxy.markCounted(outcome.sessionID, skillID, outcome.cached.Digest)
+		proxy.markCounted(outcome.sessionID, hint.resolutionID, skillID, outcome.cached.Digest)
 		return proxy.localResult(outcome.cached, remoteCacheFetched, "")
 	case fetchNotModified:
 		proxy.rememberVersion(skillID, outcome.cached.Digest)
-		proxy.markCounted(outcome.sessionID, skillID, outcome.cached.Digest)
+		proxy.markCounted(outcome.sessionID, hint.resolutionID, skillID, outcome.cached.Digest)
 		return proxy.localResult(outcome.cached, remoteCacheHit, "")
 	case fetchForward:
 		return proxy.forward(ctx, "skill_get", request)
@@ -677,10 +677,13 @@ func (proxy *Proxy) skillGet(ctx context.Context, request *mcp.CallToolRequest) 
 
 // rememberVersion records the version the hub just confirmed as current, like
 // a resolution does, so the next skill_get in this session needs no request.
+// The resolution and session the skill was last proposed in stay attached, so
+// the hub's count for that resolution is not asked for again.
 func (proxy *Proxy) rememberVersion(skillID, digest string) {
 	proxy.mu.Lock()
 	defer proxy.mu.Unlock()
-	proxy.hints[skillID] = skillHint{digest: digest, at: proxy.now()}
+	previous := proxy.hints[skillID]
+	proxy.hints[skillID] = skillHint{digest: digest, at: proxy.now(), resolutionID: previous.resolutionID, sessionID: previous.sessionID}
 }
 
 type fetchKind int
@@ -813,22 +816,24 @@ func (proxy *Proxy) requestBundle(ctx context.Context, skillID string, held []st
 	}
 }
 
-// countedKey names a skill version counted by the hub in one hub session; an
-// empty sessionID is the hub's "no session" state.
-func countedKey(sessionID, skillID, digest string) string {
-	return sessionID + "\x00" + skillID + "\x00" + digest
+// countedKey names a skill version counted by the hub in one hub session for
+// one resolution, which is how the hub counts it; an empty sessionID is the
+// hub's "no session" state and an empty resolutionID a skill no resolution
+// named.
+func countedKey(sessionID, resolutionID, skillID, digest string) string {
+	return sessionID + "\x00" + resolutionID + "\x00" + skillID + "\x00" + digest
 }
 
 // markCounted notes that the hub counted this version as loaded in the hub
-// session sessionID, because it delivered or confirmed the bundle to a
-// request naming that session.
-func (proxy *Proxy) markCounted(sessionID, skillID, digest string) {
+// session sessionID for resolutionID, because it delivered or confirmed the
+// bundle to a request naming that session.
+func (proxy *Proxy) markCounted(sessionID, resolutionID, skillID, digest string) {
 	proxy.mu.Lock()
 	defer proxy.mu.Unlock()
 	if len(proxy.counted) >= proxyMaxCountedVersions {
 		proxy.counted = map[string]bool{}
 	}
-	proxy.counted[countedKey(sessionID, skillID, digest)] = true
+	proxy.counted[countedKey(sessionID, resolutionID, skillID, digest)] = true
 }
 
 // confirmLoad lets the hub count a cache hit as a load without making the
@@ -841,7 +846,7 @@ func (proxy *Proxy) markCounted(sessionID, skillID, digest string) {
 // instead. Use is never reported here: the agent reports it itself.
 func (proxy *Proxy) confirmLoad(skillID string, hint skillHint) {
 	sessionID := proxy.currentSessionID()
-	key := countedKey(sessionID, skillID, hint.digest)
+	key := countedKey(sessionID, hint.resolutionID, skillID, hint.digest)
 	proxy.mu.Lock()
 	if proxy.counted[key] || proxy.confirming[key] || proxy.background.Err() != nil {
 		proxy.mu.Unlock()
@@ -867,12 +872,12 @@ func (proxy *Proxy) confirmLoad(skillID string, hint skillHint) {
 		outcome, _ := proxy.requestBundle(ctx, skillID, []string{hint.digest}, true)
 		switch outcome.kind {
 		case fetchNotModified:
-			proxy.markCounted(outcome.sessionID, skillID, hint.digest)
+			proxy.markCounted(outcome.sessionID, hint.resolutionID, skillID, hint.digest)
 		case fetchInstalled:
 			// The hub has a newer version than the resolution named; it is
 			// now cached and the next skill_get uses it.
 			proxy.rememberVersion(skillID, outcome.cached.Digest)
-			proxy.markCounted(outcome.sessionID, skillID, outcome.cached.Digest)
+			proxy.markCounted(outcome.sessionID, hint.resolutionID, skillID, outcome.cached.Digest)
 		case fetchUnreachable:
 			// A fresh deadline: the bundle request may have used up its own.
 			feedbackCtx, cancelFeedback := context.WithTimeout(proxy.background, proxyDialTimeout)
