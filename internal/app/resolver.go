@@ -178,6 +178,8 @@ func (service ResolverService) Resolve(ctx context.Context, path string, request
 		}
 	}
 	policyRevision = policy.Revision
+	// The policy of this pinned generation is loaded once for the whole resolve.
+	service.Policy = policy
 	telemetryStarted = true
 	safeRecordTelemetry(service.Telemetry, telemetryEvent(ctx, telemetry.EventResolutionStarted, request, response, resolutionScope{Snapshot: catalogSnapshot, Policy: policyRevision}, resolutionStartPayload(ctx, request)))
 

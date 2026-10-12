@@ -167,6 +167,11 @@ func (handle *Handle) Close() error {
 	return closeErr
 }
 
+// CurrentPointer reads the published generation pointer without opening the
+// generation. Callers use it as a cheap key for data that is fixed per
+// generation.
+func CurrentPointer(root string) (Pointer, error) { return readPointer(root) }
+
 func readPointer(root string) (Pointer, error) {
 	var pointer Pointer
 	rootHandle, err := os.OpenRoot(root)

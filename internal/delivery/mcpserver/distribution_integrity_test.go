@@ -217,7 +217,7 @@ func TestResourceReadRefusesUnapprovedThirdPartyContent(t *testing.T) {
 		t.Fatalf("skill_get must withhold content of an unapproved skill: %#v", withheld)
 	}
 	if withheld.SkillID != "review-skill" || withheld.Name == "" || withheld.Description == "" || withheld.LifecycleState != "active" {
-		t.Fatalf("skill_get must keep identity and lifecycle metadata: %#v", withheld.SkillDetail)
+		t.Fatalf("skill_get must keep identity and lifecycle metadata: %#v", withheld.SkillCore)
 	}
 	if _, err := os.Lstat(filepath.Join(root, "runtime", "cache", "skills")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("a snapshot directory was created for an unapproved skill: %v", err)

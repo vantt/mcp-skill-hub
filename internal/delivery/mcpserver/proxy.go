@@ -945,7 +945,7 @@ func (proxy *Proxy) collectGarbage(skillID, digest string) {
 // skill detail, SKILL.md from the cached folder, and a local block whose
 // paths and variables point at this machine.
 func (proxy *Proxy) localResult(cached skillruntime.CachedSkill, cacheState, message string) (*mcp.CallToolResult, error) {
-	var detail app.SkillDetail
+	var detail app.SkillCore
 	if len(cached.Metadata.Detail) > 0 {
 		if err := json.Unmarshal(cached.Metadata.Detail, &detail); err != nil {
 			return proxy.toolFailure("internal_error", "The cached skill metadata could not be read.", "Run `skillhub cache clear --hub "+shellquote.Arg(proxy.hubURL)+"` and retry."), nil
@@ -960,7 +960,7 @@ func (proxy *Proxy) localResult(cached skillruntime.CachedSkill, cacheState, mes
 		return proxy.toolFailure("internal_error", "The skill's state directory on this machine could not be prepared in "+proxy.stateRoot+".", "Check the permissions of that directory and retry."), nil
 	}
 	result := proxySkillGetResult{
-		skillGetResult: skillGetResult{SkillDetail: detail, Content: content, Local: &local},
+		skillGetResult: skillGetResult{SkillCore: detail, Content: content, Local: &local},
 		Remote:         &remoteDelivery{Hub: proxy.hubURL, Cache: cacheState, Message: message},
 	}
 	return structuredResult(toolOutcome[proxySkillGetResult]{SchemaVersion: SchemaVersion, Result: &result}, false)

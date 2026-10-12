@@ -371,7 +371,7 @@ func TestRemoteHubEndToEndThroughATunnel(t *testing.T) {
 		var full struct {
 			Result *proxySkillGetResult `json:"result"`
 		}
-		if json.Unmarshal(encoded, &full) != nil || full.Result == nil || !reflect.DeepEqual(local.Result.SkillDetail, full.Result.SkillDetail) {
+		if json.Unmarshal(encoded, &full) != nil || full.Result == nil || !reflect.DeepEqual(local.Result.SkillCore, full.Result.SkillCore) {
 			t.Fatalf("%s skill detail differs:\nlocal  %s\nremote %s", id, localEncoded, encoded)
 		}
 		localPreflight, remotePreflight := local.Result.Local.Preflight, got.Local.Preflight

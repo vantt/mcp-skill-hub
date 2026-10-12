@@ -76,7 +76,7 @@ func (DistributionService) SkillBundle(ctx context.Context, workspacePath, skill
 	if notModified {
 		return SkillBundle{SkillID: skillID, Digest: digest, NotModified: true}, nil
 	}
-	detail, err := (SkillService{}).GetSkillDetail(ctx, workspacePath, skillID)
+	detail, err := (SkillService{}).ReadSkillCore(ctx, workspacePath, skillID)
 	if err != nil {
 		return SkillBundle{}, fmt.Errorf("read skill %s detail: %w", skillID, err)
 	}

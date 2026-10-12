@@ -147,12 +147,13 @@ stateDiagram-v2
 * **Tool:** `skill_get`
 * **Tham số:** `{ "skill_id": "<id>" }`
 * **Xử lý:**
-  - Tra cứu skill trong canonical workspace và catalog generation.
-  - Xác nhận skill đang ở trạng thái `active` và `routing_eligible == true`.
+  - Tra cứu skill trong một catalog generation được ghim (một lần mở catalog), không kiểm tra lại trạng thái canonical của workspace.
+  - Trả về `status`/`lifecycle_state` của skill; chỉ skill `active` mới có khối `local`. Các trường chẩn đoán dành cho curation (`diverged`, `changed_resources`, `missing_resources`, `state_basis`, `routing_eligible`) không thuộc kết quả runtime; xem chúng qua `skillhub skill review` hoặc WebUI.
   - Đọc `SKILL.md` và tập hợp danh mục tài nguyên liên kết (`Manifest.Resources`: `references/`, `scripts/`, `assets/`).
   - Sinh mã kiểm tra toàn vẹn nội dung (`content_digest` dạng `sha256:...`).
 * **Kết quả trả về:**
   - `content`: Toàn văn file `SKILL.md`.
+  - `content_digest`: Mã băm `sha256:...` của `SKILL.md`; đổi khi nội dung đổi, cùng với `local.path` (tên thư mục chứa digest).
   - `path`: Đường dẫn tương đối của entrypoint trong workspace.
   - `routing`: Cấu hình routing metadata (triggers, not-for, min-scope, operations).
   - `resources`: Danh sách các tài nguyên đi kèm sẵn sàng phục vụ khi cần.

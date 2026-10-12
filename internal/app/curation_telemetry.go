@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/vantt/mcp-skill-hub/internal/catalog"
 	resolverpkg "github.com/vantt/mcp-skill-hub/internal/resolver"
@@ -20,8 +21,8 @@ func recordCurationTelemetry(ctx context.Context, sink TelemetrySink, root strin
 	}
 	defer func() { _ = recover() }()
 
-	var handle *catalog.Handle
-	var policyRevision string
+	var pins telemetryPins
+	var pinsKnown, pinsTried bool
 	for _, event := range events {
 		event.Version = telemetry.EventVersion
 		if event.CatalogSnapshot != "" && event.PolicyRevision != "" {
@@ -31,22 +32,13 @@ func recordCurationTelemetry(ctx context.Context, sink TelemetrySink, root strin
 			safeRecordTelemetry(sink, event)
 			continue
 		}
-		if handle == nil {
-			var err error
-			handle, err = catalog.OpenCurrent(ctx, root)
-			if err != nil {
-				handle, err = catalog.OpenWithFallback(ctx, root)
-			}
-			if err == nil {
-				defer handle.Close()
-				if p, pErr := resolverpkg.LoadPolicy(ctx, handle.DB); pErr == nil {
-					policyRevision = p.Revision
-				}
-			}
+		if !pinsTried {
+			pinsTried = true
+			pins, pinsKnown = currentTelemetryPins(ctx, root)
 		}
-		if handle != nil && policyRevision != "" {
-			event.CatalogSnapshot = handle.Pointer.CatalogSnapshot
-			event.PolicyRevision = policyRevision
+		if pinsKnown {
+			event.CatalogSnapshot = pins.CatalogSnapshot
+			event.PolicyRevision = pins.PolicyRevision
 			if event.Client.Name == "" {
 				event.Client = telemetry.Client{Name: "skillhub"}
 			}
@@ -66,6 +58,51 @@ func recordCurationTelemetry(ctx context.Context, sink TelemetrySink, root strin
 			safeRecordTelemetry(sink, event)
 		}
 	}
+}
+
+// telemetryPins is the catalog snapshot and recommendation policy revision an
+// event is attributed to. Both are fixed for one published generation.
+type telemetryPins struct {
+	Generation      string
+	CatalogSnapshot string
+	PolicyRevision  string
+}
+
+var (
+	telemetryPinsMu    sync.Mutex
+	telemetryPinsCache = map[string]telemetryPins{}
+)
+
+// currentTelemetryPins returns the pins of the current generation. The
+// published pointer names the generation, so a request reads one small file
+// and opens the catalog only the first time a generation is seen.
+func currentTelemetryPins(ctx context.Context, root string) (telemetryPins, bool) {
+	pointer, err := catalog.CurrentPointer(root)
+	if err == nil {
+		telemetryPinsMu.Lock()
+		cached, found := telemetryPinsCache[root]
+		telemetryPinsMu.Unlock()
+		if found && cached.Generation == pointer.Generation {
+			return cached, true
+		}
+	}
+	handle, err := catalog.OpenCurrent(ctx, root)
+	if err != nil {
+		handle, err = catalog.OpenWithFallback(ctx, root)
+	}
+	if err != nil {
+		return telemetryPins{}, false
+	}
+	defer handle.Close()
+	policy, err := resolverpkg.LoadPolicy(ctx, handle.DB)
+	if err != nil || policy.Revision == "" {
+		return telemetryPins{}, false
+	}
+	pins := telemetryPins{Generation: handle.Pointer.Generation, CatalogSnapshot: handle.Pointer.CatalogSnapshot, PolicyRevision: policy.Revision}
+	telemetryPinsMu.Lock()
+	telemetryPinsCache[root] = pins
+	telemetryPinsMu.Unlock()
+	return pins, true
 }
 
 func curationTelemetryEvent(eventType string, payload map[string]any) telemetry.Event {

@@ -1038,6 +1038,13 @@ func ReadRouting(root, id string) (RoutingInput, error) {
 	if err != nil {
 		return RoutingInput{}, err
 	}
+	return RoutingFromDocument(document), nil
+}
+
+// RoutingFromDocument extracts the routing fields from a decoded skill
+// metadata document, whether it was parsed from the canonical YAML or from the
+// catalog's JSON copy of it.
+func RoutingFromDocument(document map[string]any) RoutingInput {
 	routing := mapValue(document, "routing")
 	list := func(key string) []string {
 		items, _ := routing[key].([]any)
@@ -1059,7 +1066,7 @@ func ReadRouting(root, id string) (RoutingInput, error) {
 	return RoutingInput{
 		Operations: list("operations"), Triggers: list("triggers"), NotFor: list("not_for"), MinScope: minScope,
 		Examples: optionalList("examples"), CounterExamples: optionalList("counter_examples"),
-	}, nil
+	}
 }
 
 // ReadRationale returns the routing_review_rationale currently stored in a
@@ -1069,9 +1076,15 @@ func ReadRationale(root, id string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	return RationaleFromDocument(document), nil
+}
+
+// RationaleFromDocument extracts the routing review rationale from a decoded
+// skill metadata document.
+func RationaleFromDocument(document map[string]any) string {
 	quality := mapValue(document, "quality")
 	rationale, _ := quality["routing_review_rationale"].(string)
-	return rationale, nil
+	return rationale
 }
 
 // ReadEditableSkill returns the current canonical entrypoint and its digest for a draft or
