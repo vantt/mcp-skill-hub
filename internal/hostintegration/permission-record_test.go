@@ -8,6 +8,9 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/gofrs/flock"
 )
 
 func connectClaude(t *testing.T, workspace, root string, remove bool) {
@@ -102,5 +105,37 @@ func TestReapplyingAfterARuleWentMissingRecordsAndRemovesIt(t *testing.T) {
 	connectClaude(t, workspace, root, true)
 	if got := fileTree(t, root); len(got) != 0 {
 		t.Fatalf("files left after removal: %v", got)
+	}
+}
+
+func TestRecordUpdateWaitsForAnotherProcessHoldingTheLockFile(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("SKILLHUB_USER_CONFIG_DIR", dir)
+	other := flock.New(filepath.Join(dir, permissionRecordLockFile))
+	if locked, err := other.TryLock(); err != nil || !locked {
+		t.Fatalf("take the lock file: %v %v", locked, err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		done <- setPermissionRecord(ScopeProject, filepath.Join(dir, "settings.json"), map[string][]string{"allow": {"Bash(skillhub:*)"}})
+	}()
+	select {
+	case err := <-done:
+		t.Fatalf("update finished while another process held the lock: %v", err)
+	case <-time.After(150 * time.Millisecond):
+	}
+	if err := other.Unlock(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("update did not finish after the lock file was released")
+	}
+	if _, err := os.Stat(filepath.Join(dir, permissionRecordFile)); err != nil {
+		t.Fatalf("record was not written: %v", err)
 	}
 }

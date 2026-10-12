@@ -2,6 +2,7 @@ package hostintegration
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gofrs/flock"
 	"github.com/vantt/mcp-skill-hub/internal/userconfig"
 )
 
@@ -25,9 +27,45 @@ const permissionRecordFile = "permission-records.json"
 const maxPermissionRecordBytes = 1 << 20
 
 // permissionRecordMutex serializes the read-modify-write of the record file
-// within this process, so two connections made at once do not lose each
-// other's entries.
+// within this process; permissionRecordLockFile does the same between
+// processes, so two connections made at once do not lose each other's entries.
 var permissionRecordMutex sync.Mutex
+
+const (
+	permissionRecordLockFile    = "permission-records.lock"
+	permissionRecordLockTimeout = 10 * time.Second
+	permissionRecordLockRetry   = 20 * time.Millisecond
+)
+
+// lockPermissionRecords takes the process mutex and the lock file next to the
+// record and returns the function that releases both.
+func lockPermissionRecords() (func(), error) {
+	permissionRecordMutex.Lock()
+	dir, err := userconfig.Dir()
+	if err != nil {
+		permissionRecordMutex.Unlock()
+		return nil, err
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		permissionRecordMutex.Unlock()
+		return nil, fmt.Errorf("create %s: %w", dir, err)
+	}
+	lock := flock.New(filepath.Join(dir, permissionRecordLockFile))
+	ctx, cancel := context.WithTimeout(context.Background(), permissionRecordLockTimeout)
+	defer cancel()
+	locked, err := lock.TryLockContext(ctx, permissionRecordLockRetry)
+	if err != nil || !locked {
+		permissionRecordMutex.Unlock()
+		if err == nil {
+			err = context.DeadlineExceeded
+		}
+		return nil, fmt.Errorf("wait for another skillhub process to finish updating %s: %w", permissionRecordFile, err)
+	}
+	return func() {
+		_ = lock.Unlock()
+		permissionRecordMutex.Unlock()
+	}, nil
+}
 
 // permissionRecords maps "<scope>:<settings file>" to the rules connect added,
 // by permission key.
@@ -127,8 +165,11 @@ func savePermissionRecords(path string, records permissionRecords) error {
 // of the settings file at path: the ones connect recorded as its own, or every
 // managed rule when no record exists (a connection made before records).
 func managedRulesToRemove(scope Scope, path string) (map[string][]string, error) {
-	permissionRecordMutex.Lock()
-	defer permissionRecordMutex.Unlock()
+	unlock, err := lockPermissionRecords()
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
 	records, _, err := loadPermissionRecords()
 	if err != nil {
 		return nil, err
@@ -150,8 +191,11 @@ func managedRulesToRemove(scope Scope, path string) (map[string][]string, error)
 // connection and no record is made, so removal keeps taking out every managed
 // rule.
 func recordAddedPermissionRules(scope Scope, path string, before, after []byte) error {
-	permissionRecordMutex.Lock()
-	defer permissionRecordMutex.Unlock()
+	unlock, err := lockPermissionRecords()
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	records, recordPath, err := loadPermissionRecords()
 	if err != nil {
 		return err
@@ -182,8 +226,11 @@ func recordAddedPermissionRules(scope Scope, path string, before, after []byte) 
 
 // setPermissionRecord replaces the record of a settings file.
 func setPermissionRecord(scope Scope, path string, added map[string][]string) error {
-	permissionRecordMutex.Lock()
-	defer permissionRecordMutex.Unlock()
+	unlock, err := lockPermissionRecords()
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	records, recordPath, err := loadPermissionRecords()
 	if err != nil {
 		return err
@@ -195,8 +242,11 @@ func setPermissionRecord(scope Scope, path string, added map[string][]string) er
 // forgetPermissionRecord drops the record of a settings file after connect
 // removed its rules.
 func forgetPermissionRecord(scope Scope, path string) error {
-	permissionRecordMutex.Lock()
-	defer permissionRecordMutex.Unlock()
+	unlock, err := lockPermissionRecords()
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	records, recordPath, err := loadPermissionRecords()
 	if err != nil {
 		return err
