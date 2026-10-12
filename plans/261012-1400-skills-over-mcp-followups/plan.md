@@ -31,11 +31,9 @@ host check when a host release changes that; the matrix status stays `unverified
   listing every skill would cost context tokens; skills are found through `skill_resolve`. If user-attached skills are
   wanted later, use a `skill://{id}` template, not a full list.
 
-## Cleanup
+## Done
 
-- Dead code: `openPinnedGeneration`, `isCanonicalEntityPath`, `splitSkillFrontmatter`, `safeSourcePath`,
-  `OpenServable*` in catalog/app.
-- The curator branch repeated in `internal/app/distribution.go`.
+- Dead code and the repeated curator branch in `internal/app/distribution.go` were removed.
 
 ## Measured and skipped
 
@@ -46,4 +44,4 @@ host check when a host release changes that; the matrix status stays `unverified
 
 ## Not verified locally
 
-Web bundle and e2e run in CI only; F4 (`cd x && skillhub ... --yes` with Claude ask rules) is verified from docs only.
+Web bundle and e2e run in CI only; F4 (`cd x && skillhub ... --yes` with Claude ask rules): the rule set `connect` writes was read, and the compound-command behavior was confirmed with `echo` rules in `claude -p`. A run with the real `skillhub` rules is pending.
