@@ -272,6 +272,23 @@ func closeServeTelemetry(recorder *telemetry.Recorder, logger *slog.Logger) {
 	}
 }
 
+// toolSession returns the session of a tool call; a nil request has none.
+func toolSession(req *mcp.CallToolRequest) *mcp.ServerSession {
+	if req == nil {
+		return nil
+	}
+	return req.Session
+}
+
+// reviewBlock reports whether a skill's local state refuses its content until
+// it is reviewed, with the reason codes to record.
+func reviewBlock(local *app.LocalSkill) (blocked bool, reasons []string) {
+	if local == nil || local.Status != app.LocalStatusReviewRequired {
+		return false, nil
+	}
+	return true, local.ReasonCodes
+}
+
 func (adapter *Server) clientForReq(req mcp.Request) telemetry.Client {
 	var session *mcp.ServerSession
 	if req != nil {
@@ -422,11 +439,7 @@ func (adapter *Server) getSkill(ctx context.Context, session *mcp.ServerSession,
 	}
 	result := toSkillEntry(entry)
 	result.Local = adapter.localSkill(ctx, entry.SkillID, "active")
-	blocked := result.Local != nil && result.Local.Status == app.LocalStatusReviewRequired
-	var reasons []string
-	if blocked && result.Local != nil {
-		reasons = result.Local.ReasonCodes
-	}
+	blocked, reasons := reviewBlock(result.Local)
 	adapter.recordLoad(ctx, session, app.SkillLoad{
 		SkillID:      entry.SkillID,
 		ResourceKind: "entrypoint",
@@ -500,11 +513,7 @@ func (adapter *Server) readResource(ctx context.Context, request *mcp.ReadResour
 	meta, refused, reasons := adapter.localResourceMeta(ctx, content.SkillID, content.Path)
 	kind := mapResourceKind(content.Path)
 	if refused {
-		var session *mcp.ServerSession
-		if request != nil {
-			session = request.Session
-		}
-		adapter.recordLoad(ctx, session, app.SkillLoad{
+		adapter.recordLoad(ctx, request.Session, app.SkillLoad{
 			SkillID:      content.SkillID,
 			ResourceKind: kind,
 			Surface:      "resources_read",
@@ -513,11 +522,7 @@ func (adapter *Server) readResource(ctx context.Context, request *mcp.ReadResour
 		})
 		return nil, invalidParams("content_review_required", contentReviewRequiredMessage(content.SkillID))
 	}
-	var session *mcp.ServerSession
-	if request != nil {
-		session = request.Session
-	}
-	adapter.recordLoad(ctx, session, app.SkillLoad{
+	adapter.recordLoad(ctx, request.Session, app.SkillLoad{
 		SkillID:      content.SkillID,
 		ResourceKind: kind,
 		Surface:      "resources_read",
@@ -556,6 +561,8 @@ func (adapter *Server) recordLoad(ctx context.Context, session *mcp.ServerSessio
 	}
 	load.Attribution = "unsolicited"
 	load.EventID = telemetry.NewEventID()
+	var resolution app.LoadResolution
+	var resolutionKnown bool
 	if adapter.tracker != nil {
 		load.ResolutionID, load.Attribution, load.CatalogSnapshot, load.PolicyRevision, load.Client = adapter.tracker.attributeDetails(session, load.SkillID)
 		if adapter.remote {
@@ -569,34 +576,16 @@ func (adapter *Server) recordLoad(ctx context.Context, session *mcp.ServerSessio
 			load.FirstActivation = adapter.tracker.markActivation(session, load.ResolutionID, load.SkillID)
 		}
 		if load.Attribution == "override" || load.Attribution == "after_no_skill" {
-			if res, ok := adapter.tracker.resolutionData(session, load.ResolutionID); ok {
-				load.TopKSkillIDs = res.TopKSkillIDs
-				load.TopKMatched = res.TopKMatched
-				load.TopKChannels = res.TopKChannels
-				if load.FirstActivation {
-					_ = app.RecordCase(ctx, adapter.telemetry, telemetry.CaseRecord{
-						EventID:         load.EventID,
-						ResolutionID:    res.ResolutionID,
-						SessionHash:     load.SessionIDHash,
-						OccurredAt:      time.Now().UTC(),
-						Kind:            load.Attribution,
-						Client:          res.Client,
-						CatalogSnapshot: res.CatalogSnapshot,
-						PriorVerified:   res.PriorVerified,
-						Task:            map[string]any{"description": res.TaskDescription},
-						Operation:       res.Operation,
-						Request:         res.Request,
-						Resolver: map[string]any{
-							"status":         res.Status,
-							"topk_skill_ids": res.TopKSkillIDs,
-							"topk_matched":   res.TopKMatched,
-							"topk_channels":  res.TopKChannels,
-						},
-						Chosen: load.SkillID,
-					})
-				}
+			if noted, ok := adapter.tracker.resolutionData(session, load.ResolutionID); ok {
+				resolution, resolutionKnown = noted.loadResolution(), true
+				load.TopKSkillIDs = noted.TopKSkillIDs
+				load.TopKMatched = noted.TopKMatched
+				load.TopKChannels = noted.TopKChannels
 			}
 		}
+	}
+	if resolutionKnown && load.FirstActivation {
+		_ = app.RecordLoadCase(ctx, adapter.telemetry, load, resolution)
 	}
 	app.RecordSkillLoad(ctx, adapter.telemetry, adapter.workspace, load)
 }

@@ -19,10 +19,7 @@ func (adapter *Server) registerResolverTools(server *mcp.Server) {
 		if _, err := resolverpkg.NormalizeRequest(request); err != nil {
 			return failure[resolveResult](err)
 		}
-		var session *mcp.ServerSession
-		if req != nil {
-			session = req.Session
-		}
+		session := toolSession(req)
 		caller := adapter.callerContext(session)
 		ctx = app.WithCallerContext(ctx, caller)
 
@@ -52,10 +49,7 @@ func (adapter *Server) registerResolverTools(server *mcp.Server) {
 		if input.SchemaVersion != SchemaVersion || input.ResolutionID == "" || input.EventID == "" || input.Outcome == "" {
 			return failure[app.FeedbackResult](fmt.Errorf("schema_version, resolution_id, event_id, and outcome are required"))
 		}
-		var session *mcp.ServerSession
-		if req != nil {
-			session = req.Session
-		}
+		session := toolSession(req)
 		caller := adapter.callerContext(session)
 		ctx = app.WithCallerContext(ctx, caller)
 

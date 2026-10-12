@@ -37,6 +37,22 @@ type notedResolution struct {
 	Request         map[string]any
 }
 
+func (r notedResolution) loadResolution() app.LoadResolution {
+	return app.LoadResolution{
+		ResolutionID:    r.ResolutionID,
+		Status:          r.Status,
+		CatalogSnapshot: r.CatalogSnapshot,
+		Client:          r.Client,
+		PriorVerified:   r.PriorVerified,
+		TaskDescription: r.TaskDescription,
+		Operation:       r.Operation,
+		Request:         r.Request,
+		TopKSkillIDs:    r.TopKSkillIDs,
+		TopKMatched:     r.TopKMatched,
+		TopKChannels:    r.TopKChannels,
+	}
+}
+
 type sessionState struct {
 	hash        string
 	lastSeen    time.Time

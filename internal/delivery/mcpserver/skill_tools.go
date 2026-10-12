@@ -227,16 +227,8 @@ func (adapter *Server) registerSkillGetTool(server *mcp.Server) {
 			result.Content = ""
 		}
 		if detail.LifecycleState == "active" && detail.SkillID != systemskills.CuratorSkillID {
-			blocked := local != nil && local.Status == app.LocalStatusReviewRequired
-			var reasons []string
-			if blocked && local != nil {
-				reasons = local.ReasonCodes
-			}
-			var session *mcp.ServerSession
-			if req != nil {
-				session = req.Session
-			}
-			adapter.recordLoad(ctx, session, app.SkillLoad{
+			blocked, reasons := reviewBlock(local)
+			adapter.recordLoad(ctx, toolSession(req), app.SkillLoad{
 				SkillID:      detail.SkillID,
 				ResourceKind: "entrypoint",
 				Surface:      "skill_get",
