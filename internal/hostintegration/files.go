@@ -225,6 +225,11 @@ func apply(ctx context.Context, plan PlanResult, options ApplyOptions) (ApplyRes
 		} else if err := atomicWrite(root, writeRoot, write.change.Path, write.change.Desired, write.mode); err != nil {
 			return result, err
 		}
+		if write.change.Kind == ChangeHostPermissions && write.change.Host == HostClaude {
+			if err := updatePermissionRecord(plan, write.change, raw); err != nil {
+				return result, err
+			}
+		}
 		result.Changed = append(result.Changed, write.change)
 	}
 	return result, nil
@@ -543,4 +548,19 @@ func syncRootDirectory(root *os.Root, directory string) error {
 		return err
 	}
 	return nil
+}
+
+// updatePermissionRecord keeps the record of managed permission rules in step
+// with a settings change that was just written. A change that adds rules notes
+// them; a removal that leaves the file in place leaves an empty record, so a
+// second removal does not take out rules the user kept; a removal that deletes
+// the file forgets the record. before is the content the change replaced.
+func updatePermissionRecord(plan PlanResult, change Change, before []byte) error {
+	switch {
+	case isRemoval(change):
+		return forgetPermissionRecord(plan.Scope, change.Path)
+	case plan.mode().remove:
+		return setPermissionRecord(plan.Scope, change.Path, map[string][]string{})
+	}
+	return recordAddedPermissionRules(plan.Scope, change.Path, before, change.Desired)
 }

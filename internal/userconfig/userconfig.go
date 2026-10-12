@@ -47,17 +47,26 @@ type Store interface {
 	SetHub(path string) error
 }
 
-// Default returns the store in $SKILLHUB_USER_CONFIG_DIR when it is set, else
-// in <os.UserConfigDir()>/skillhub.
-func Default() Store {
+// Dir returns the configuration directory: $SKILLHUB_USER_CONFIG_DIR when it
+// is set, else <os.UserConfigDir()>/skillhub.
+func Dir() (string, error) {
 	if dir := strings.TrimSpace(os.Getenv(DirEnv)); dir != "" {
-		return NewStore(dir)
+		return dir, nil
 	}
 	base, err := os.UserConfigDir()
 	if err != nil {
-		return fileStore{err: fmt.Errorf("find the user configuration directory: %w; set %s to a writable directory", err, DirEnv)}
+		return "", fmt.Errorf("find the user configuration directory: %w; set %s to a writable directory", err, DirEnv)
 	}
-	return NewStore(filepath.Join(base, "skillhub"))
+	return filepath.Join(base, "skillhub"), nil
+}
+
+// Default returns the store in the directory Dir names.
+func Default() Store {
+	dir, err := Dir()
+	if err != nil {
+		return fileStore{err: err}
+	}
+	return NewStore(dir)
 }
 
 // NewStore returns a store whose file is <dir>/config.json.
