@@ -298,6 +298,10 @@ func TestProxyFetchesWholeSkillsOnceAndServesThemFromTheCache(t *testing.T) {
 	})
 
 	t.Run("a new session asks once and receives no content for a cached version", func(t *testing.T) {
+		// A cache hit under a new resolution sends its load confirmation in
+		// the background; let those requests end so they are not counted as
+		// requests of the new session.
+		proxied.proxy.backgroundTasks.Wait()
 		fresh := startTestProxy(t, hub.baseURL, hub.token, stateDir, counter)
 		before := counter.count()
 		got, _, encoded := proxySkillGet(t, fresh.session, "test-audit")

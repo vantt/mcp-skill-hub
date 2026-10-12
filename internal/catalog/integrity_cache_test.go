@@ -129,6 +129,11 @@ func TestIntegrityIsCheckedAgainWhenTheFileChanges(t *testing.T) {
 				if err := os.Chtimes(replacement, info.ModTime(), info.ModTime()); err != nil {
 					t.Fatal(err)
 				}
+				// A generation file is read-only, and Windows does not replace a
+				// read-only file by rename.
+				if err := os.Chmod(path, 0o600); err != nil {
+					t.Fatal(err)
+				}
 				if err := os.Rename(replacement, path); err != nil {
 					t.Fatal(err)
 				}

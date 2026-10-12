@@ -98,12 +98,20 @@ func TestRetryContendedReturnsOtherErrorsAtOnce(t *testing.T) {
 // longer than one operation timeout, and reports neither an error nor a drop.
 func TestRecorderKeepsEventsThroughTransientLockContention(t *testing.T) {
 	workspace := t.TempDir()
-	config := Config{WorkspaceRoot: workspace, Path: filepath.Join(workspace, "runtime", "telemetry.db"), OperationTimeout: 250 * time.Millisecond}
+	// The lock is released 150 ms before the retry budget ends. A slow Windows
+	// runner needs longer than that for the first write after the release, so
+	// the timeout and the release moment scale together there and keep their
+	// ratio while the margin grows.
+	scale := time.Duration(1)
+	if runtime.GOOS == "windows" {
+		scale = 6
+	}
+	config := Config{WorkspaceRoot: workspace, Path: filepath.Join(workspace, "runtime", "telemetry.db"), OperationTimeout: 250 * time.Millisecond * scale}
 	recorder := newTestRecorder(t, config)
 	mustFlush(t, recorder)
 
 	release := holdWriteLock(t, recorder.config.Path)
-	time.AfterFunc(600*time.Millisecond, release)
+	time.AfterFunc(600*time.Millisecond*scale, release)
 	event := validEvent(EventResolutionCompleted)
 	event.ID = "evt_contended"
 	recorder.Record(event)
