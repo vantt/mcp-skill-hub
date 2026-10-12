@@ -337,6 +337,9 @@ func selfConnectionFindings(root string, state hubState, hosts []hostintegration
 				Message: "The Claude Code permission rules are not the current set: " + strings.Join(permissions, "; ") + ".", Fix: repair, Detail: changePreviews(permissionChanges)})
 			addRepair("update the Claude Code permission rules (your own rules stay)")
 		}
+		if len(host.plan.Blocked) > 0 {
+			out = append(out, blockedSkillFinding(root, host.plan.Blocked))
+		}
 	}
 	return out
 }

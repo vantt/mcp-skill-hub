@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
@@ -124,20 +125,22 @@ func hostChangeLines(result app.Result, removal bool) []string {
 	files := map[string][]string{}
 	var order []string
 	for _, item := range result.Items {
-		parts := strings.Split(item.ID, "_")
-		if len(parts) < 3 || parts[0] != "host" {
+		host, kind, relPath, ok := parseHostItemID(item.ID)
+		if !ok || !hostItemWritten(item) {
 			continue
 		}
-		if _, seen := files[parts[1]]; !seen {
-			order = append(order, parts[1])
+		if _, seen := files[host]; !seen {
+			order = append(order, host)
 		}
-		description := formatChangeKind(parts[2], item.Summary)
+		description := formatChangeKind(kind, item.Summary, relPath)
 		if deleted := item.Impact == "Would be deleted." || item.Impact == "Deleted."; deleted && removal {
 			description += " deleted"
 		} else if deleted {
 			description = "remove " + description
 		}
-		files[parts[1]] = append(files[parts[1]], description)
+		if !slices.Contains(files[host], description) {
+			files[host] = append(files[host], description)
+		}
 	}
 	verbs := map[app.Status]string{app.StatusActionRequired: "will connect", app.StatusApplied: "connected", app.StatusReady: "already connected"}
 	if removal {

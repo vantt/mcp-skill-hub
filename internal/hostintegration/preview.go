@@ -16,7 +16,7 @@ func changePreview(host Host, kind ChangeKind, raw, desired []byte, exists bool)
 	switch kind {
 	case ChangeMCP:
 		preview = mcpChangePreview(host, raw, desired)
-	case ChangeNativeSkill:
+	case ChangeNativeSkill, ChangeSharedSkill:
 		preview = fmt.Sprintf("native skill exact file: %s -> %s", contentDescriptor(raw, exists), contentDescriptor(desired, true))
 	case ChangeBootstrap:
 		preview = bootstrapChangePreview(raw, desired)

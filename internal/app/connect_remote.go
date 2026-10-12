@@ -219,8 +219,11 @@ func (service ConnectService) planScope(ctx context.Context, hostRequest hostint
 	if err != nil {
 		return Result{}, err
 	}
+	root := hostRequest.Root
 	if len(plan.Changes) == 0 {
-		return NewResult(StatusReady, ""), nil
+		result := NewResult(StatusReady, "")
+		appendSkillPlanItems(&result, root, plan, levels)
+		return result, nil
 	}
 	if dryRun {
 		result := NewResult(StatusActionRequired, "")
@@ -229,12 +232,13 @@ func (service ConnectService) planScope(ctx context.Context, hostRequest hostint
 			if change.Remove {
 				impact = "Would be deleted."
 			}
-			item := hostChangeItem(change.Host, levels[change.Host], change.Kind, change.Path, impact)
+			item := hostChangeItem(root, change.Host, levels[change.Host], change.Kind, change.Path, impact)
 			if change.Preview != "" {
 				item.Summary += "\nManaged diff preview:\n" + change.Preview
 			}
 			result.Items = append(result.Items, item)
 		}
+		appendSkillPlanItems(&result, root, plan, levels)
 		return result, nil
 	}
 	applied, err := hostintegration.Apply(ctx, plan, hostintegration.ApplyOptions{Confirmed: true})
@@ -247,8 +251,9 @@ func (service ConnectService) planScope(ctx context.Context, hostRequest hostint
 		if change.Remove {
 			impact = "Deleted."
 		}
-		result.Items = append(result.Items, hostChangeItem(change.Host, levels[change.Host], change.Kind, change.Path, impact))
+		result.Items = append(result.Items, hostChangeItem(root, change.Host, levels[change.Host], change.Kind, change.Path, impact))
 	}
+	appendSkillPlanItems(&result, root, plan, levels)
 	return result, nil
 }
 

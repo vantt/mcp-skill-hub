@@ -1,0 +1,10 @@
+---
+name: system-curator
+description: Guide Skill Hub maintenance through the `skillhub` CLI (with --json) when a shell is available, or the bundled curation MCP tools when it is not.
+---
+<!-- Written by Skill Hub (wrapper v1). Edit the skill in .agents/skills/system-curator/, not here. -->
+
+This skill lives in the shared Agent Skills folder. Read
+`${CLAUDE_SKILL_DIR}/../../../.agents/skills/system-curator/SKILL.md` now and follow it as this skill.
+Wherever it mentions this skill's folder or its scripts, use
+`${CLAUDE_SKILL_DIR}/../../../.agents/skills/system-curator/`.

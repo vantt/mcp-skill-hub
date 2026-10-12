@@ -330,7 +330,7 @@ func TestConnectSwitchesAScopeAndRemoveRestoresIt(t *testing.T) {
 		t.Fatal(stderr)
 	}
 	code, stdout, stderr := runConnectCLI(t, project, "--hub", hub, "--token-file", tokenFile, "--dry-run")
-	if code != 0 || !strings.Contains(stdout, "This replaces:") || !strings.Contains(flatText(stdout), "Claude Code: the local hub at "+ws) || !strings.Contains(stdout, "remove curator skill") {
+	if code != 0 || !strings.Contains(stdout, "This replaces:") || !strings.Contains(flatText(stdout), "Claude Code: the local hub at "+ws) || !strings.Contains(stdout, "Claude Code: will connect (.mcp.json, .claude/settings.local.json, remove system-curator skill)") || !strings.Contains(stdout, "Agent Skills folder (.agents/skills): will connect (remove system-curator skill)") {
 		t.Fatalf("switch preview: exit %d\n%s%s", code, stdout, stderr)
 	}
 	if code, _, stderr := runConnectCLI(t, project, "--hub", hub, "--token-file", tokenFile); code != 0 {
@@ -623,7 +623,8 @@ func TestRemoteConnectAndRemoveOutputGolden(t *testing.T) {
 	preview.Items = []app.Item{
 		{ID: "host_claude-code_mcp-registration", Summary: "claude-code (x) mcp-registration: /home/a/app/.mcp.json", Impact: "Would be written."},
 		{ID: "host_claude-code_host-permissions", Summary: "claude-code (x) host-permissions: /home/a/app/.claude/settings.local.json", Impact: "Would be written."},
-		{ID: "host_claude-code_native-skill", Summary: "claude-code (x) native-skill: /home/a/app/.claude/skills/system-curator/SKILL.md", Impact: "Would be deleted."},
+		{ID: "host_claude-code_native-skill:.claude/skills/system-curator/SKILL.md", Summary: "claude-code (x) native-skill: /home/a/app/.claude/skills/system-curator/SKILL.md", Impact: "Would be deleted."},
+		{ID: "host_agents_shared-skill:.agents/skills/system-curator/SKILL.md", Summary: "agents (shared) shared-skill: /home/a/app/.agents/skills/system-curator/SKILL.md", Impact: "Would be deleted."},
 	}
 	preview.Warnings = []app.Warning{{Code: "hub_unreachable", Summary: "The hub does not answer at http://127.0.0.1:7420 right now (connection refused). The connection can be written anyway; start `skillhub serve` on machine B (and open the SSH tunnel if you use one) before you start the agent."}}
 	preview.SuggestedActions = []app.Action{{Command: "skillhub connect --hub http://127.0.0.1:7420 --token-file /home/a/.config/skillhub/hub-token"}}
@@ -632,7 +633,8 @@ func TestRemoteConnectAndRemoveOutputGolden(t *testing.T) {
 	want := "Dry run: agent connection for project /home/a/app to the hub at http://127.0.0.1:7420 was not\n" +
 		"written.\n" +
 		"Would change:\n" +
-		"  - Claude Code: will connect (.mcp.json, .claude/settings.local.json, remove curator skill)\n" +
+		"  - Claude Code: will connect (.mcp.json, .claude/settings.local.json, remove system-curator skill)\n" +
+		"  - Agent Skills folder (.agents/skills): will connect (remove system-curator skill)\n" +
 		"This replaces:\n" +
 		"  - Claude Code: the local hub at /home/a/skillhub\n" +
 		"\n" +

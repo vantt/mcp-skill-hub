@@ -83,17 +83,20 @@ func (service ConnectService) Connect(ctx context.Context, request ConnectReques
 		if isHub {
 			summary = "This is the hub; `skillhub init` already connected its agents, and the connection is current."
 		}
-		return NewResult(StatusReady, summary), nil
+		result := NewResult(StatusReady, summary)
+		appendSkillPlanItems(&result, root, plan, levels)
+		return result, nil
 	}
 	if request.DryRun {
 		result := NewResult(StatusActionRequired, "Dry run: agent connection for "+label+" was not written.")
 		for _, change := range plan.Changes {
-			item := hostChangeItem(change.Host, levels[change.Host], change.Kind, change.Path, "Would be written.")
+			item := hostChangeItem(root, change.Host, levels[change.Host], change.Kind, change.Path, "Would be written.")
 			if change.Preview != "" {
 				item.Summary += "\nManaged diff preview:\n" + change.Preview
 			}
 			result.Items = append(result.Items, item)
 		}
+		appendSkillPlanItems(&result, root, plan, levels)
 		result.SuggestedActions = []Action{{Label: "Write the agent connection", Command: connectCommand(request), RequiresConfirmation: true}}
 		return result, nil
 	}
@@ -107,8 +110,9 @@ func (service ConnectService) Connect(ctx context.Context, request ConnectReques
 	}
 	result := NewResult(StatusApplied, summary)
 	for _, change := range applied.Changed {
-		result.Items = append(result.Items, hostChangeItem(change.Host, levels[change.Host], change.Kind, change.Path, "Written."))
+		result.Items = append(result.Items, hostChangeItem(root, change.Host, levels[change.Host], change.Kind, change.Path, "Written."))
 	}
+	appendSkillPlanItems(&result, root, plan, levels)
 	if len(applied.Changed) > 0 {
 		result.Warnings = append(result.Warnings, hostBestEffortWarning())
 	}

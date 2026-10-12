@@ -155,7 +155,7 @@ func removalDirs(stale, existing []string) []string {
 
 // scopeRegistration reads the skillhub entry of a host's config file in a scope.
 func scopeRegistration(adapter Adapter, scope Scope, root string) (Registration, error) {
-	configRel, _, _ := adapter.relativePaths(scope)
+	configRel, _ := adapter.relativePaths(scope)
 	raw, _, _, err := readManagedFile(filepath.Join(root, filepath.FromSlash(configRel)), root)
 	if err != nil {
 		return Registration{}, err
@@ -490,23 +490,6 @@ func claudePermissionsChangePreview(raw, desired []byte) string {
 	return boundPreview(out.String())
 }
 
-// prepareCuratorRemoval removes the system-curator skill when it is the
-// unchanged bundled copy: it drives curation, which runs only on the hub
-// machine. A changed copy is the user's and stays.
-func prepareCuratorRemoval(host Host, path, root string) (preparedFile, error) {
-	raw, fileMode, exists, err := readManagedFile(path, root)
-	if err != nil {
-		return preparedFile{}, err
-	}
-	if !exists || !nativeCuratorOwned(raw) {
-		return newPreparedFile(host, ChangeNativeSkill, path, raw, raw, fileMode, exists, ""), nil
-	}
-	file := newPreparedFile(host, ChangeNativeSkill, path, raw, nil, fileMode, exists, "")
-	file.preview = "remove the bundled system-curator skill: curation runs only on the hub machine"
-	markRemoval(&file, exists)
-	return file, nil
-}
-
 // prepareInstructionsRemoval removes the Skill Hub instruction block, and the
 // file when nothing else is left in it.
 func prepareInstructionsRemoval(path, root string) (preparedFile, error) {
@@ -794,7 +777,7 @@ func readConfigRegistration(plan PlanResult, host Host) (Registration, error) {
 }
 
 // isRemoval reports whether a change deletes its file.
-func isRemoval(change Change) bool { return change.Remove || nativeRemoval(change) }
+func isRemoval(change Change) bool { return change.Remove }
 
 // removeEmptyParents deletes the directories above a removed file that are
 // left empty, up to the scope root, so a removal leaves no empty host

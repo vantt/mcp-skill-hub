@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
@@ -131,13 +132,14 @@ func renderConnectResult(stdout io.Writer, result app.Result) {
 	hostFiles := make(map[string][]string)
 	var hostOrder []string
 	for _, item := range result.Items {
-		parts := strings.Split(item.ID, "_")
-		if len(parts) >= 3 && parts[0] == "host" {
-			hostKey := parts[1]
-			if _, exists := hostFiles[hostKey]; !exists {
-				hostOrder = append(hostOrder, hostKey)
-			}
-			fileDesc := formatChangeKind(parts[2], item.Summary)
+		hostKey, kind, relPath, ok := parseHostItemID(item.ID)
+		if !ok || !hostItemWritten(item) {
+			continue
+		}
+		if _, exists := hostFiles[hostKey]; !exists {
+			hostOrder = append(hostOrder, hostKey)
+		}
+		if fileDesc := formatChangeKind(kind, item.Summary, relPath); !slices.Contains(hostFiles[hostKey], fileDesc) {
 			hostFiles[hostKey] = append(hostFiles[hostKey], fileDesc)
 		}
 	}
@@ -180,12 +182,16 @@ func hostDisplayName(hostKey string) string {
 		return "Codex"
 	case "gemini", "gemini-cli":
 		return "Gemini CLI"
+	case app.SharedSkillsItemKey:
+		return "Agent Skills folder (.agents/skills)"
 	default:
 		return hostKey
 	}
 }
 
-func formatChangeKind(kind, summary string) string {
+// formatChangeKind names the file of a host item. relPath is the path from
+// the item ID, set for skill files.
+func formatChangeKind(kind, summary, relPath string) string {
 	// The summary names the file with the platform's separators.
 	summary = filepath.ToSlash(summary)
 	switch kind {
@@ -205,8 +211,14 @@ func formatChangeKind(kind, summary string) string {
 			return ".claude/settings.local.json"
 		}
 		return ".claude/settings.json"
-	case "native-skill":
-		return "curator skill"
+	case "native-skill", "shared-skill":
+		// .claude/skills/<id>/SKILL.md or .agents/skills/<id>/<file>
+		if _, rest, found := strings.Cut(relPath, "skills/"); found {
+			if id, _, found := strings.Cut(rest, "/"); found {
+				return id + " skill"
+			}
+		}
+		return "skill file"
 	case "bootstrap-instructions", "bootstrap":
 		if strings.Contains(summary, "AGENTS.md") {
 			return "AGENTS.md"

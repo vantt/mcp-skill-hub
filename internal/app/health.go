@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -357,11 +356,23 @@ func ProblemCodes(sections []Section) []string {
 // describeChange names a host change in one line: host, kind and the file,
 // relative to root when it is inside it, with forward slashes.
 func describeChange(root string, change hostintegration.Change) string {
-	path := change.Path
-	if relative, err := filepath.Rel(root, path); err == nil && !filepath.IsAbs(relative) && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-		path = filepath.ToSlash(relative)
+	host := string(change.Host)
+	if host == "" {
+		host = SharedSkillsItemKey
 	}
-	return string(change.Host) + " " + string(change.Kind) + " " + path
+	return host + " " + string(change.Kind) + " " + displayPath(root, change.Path)
+}
+
+// blockedSkillFinding reports the system skill files a plan leaves unchanged
+// because Skill Hub did not write them. doctor --fix never changes them.
+func blockedSkillFinding(root string, blocked []hostintegration.FileState) Finding {
+	paths := make([]string, 0, len(blocked))
+	for _, file := range blocked {
+		paths = append(paths, displayPath(root, file.Path))
+	}
+	return Finding{Code: "system_skill_blocked", Label: "System skill files", Severity: SeverityProblem,
+		Message: "Skill Hub left " + strings.Join(paths, ", ") + " unchanged: " + blocked[0].Blocked,
+		Reason:  "doctor --fix never overwrites or deletes a file Skill Hub did not write; review it, delete it, then run doctor --fix again."}
 }
 
 // changePreviews joins the managed-block previews of host changes, one block

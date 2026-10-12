@@ -203,6 +203,9 @@ func localGroupFindings(ctx context.Context, report RoleReport, group localGroup
 		findings = append(findings, Finding{Code: "client_permissions_outdated", Label: "Claude permission rules", Severity: SeverityProblem,
 			Message: "The Claude Code permission rules are not the current set: " + strings.Join(permissions, "; ") + ".", Fix: fix, Manual: manualIfNoFix(fix, command), Reason: reason, Detail: changePreviews(permissionChanges)})
 	}
+	if len(plan.Blocked) > 0 {
+		findings = append(findings, blockedSkillFinding(group.root, plan.Blocked))
+	}
 	return findings
 }
 

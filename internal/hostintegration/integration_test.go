@@ -76,16 +76,7 @@ func TestPlanApplyAllHostsIsDependencyOrderedAndIdempotent(t *testing.T) {
 	assertContains(t, filepath.Join(workspace, ".codex/config.toml"), "cwd = "+tomlString(workspace))
 	assertContains(t, filepath.Join(workspace, ".codex/config.toml"), "command = "+tomlString(binary))
 
-	for _, path := range []string{
-		".claude/skills/system-curator/SKILL.md",
-		".agents/skills/system-curator/SKILL.md",
-		".gemini/skills/system-curator/SKILL.md",
-	} {
-		content := readTestFile(t, filepath.Join(workspace, path))
-		if string(content) != systemskills.CuratorBundle().Instructions {
-			t.Fatalf("%s does not contain exact bundled curator bytes", path)
-		}
-	}
+	assertSystemSkillLayout(t, workspace, systemskills.CuratorSkillID, systemskills.DistillSkillID)
 	for _, name := range []string{"CLAUDE.md", "AGENTS.md", "GEMINI.md"} {
 		content := string(readTestFile(t, filepath.Join(workspace, name)))
 		if strings.Count(content, bootstrapStart) != 1 || strings.Count(content, bootstrapEnd) != 1 {

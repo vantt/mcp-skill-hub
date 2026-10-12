@@ -53,7 +53,7 @@ func initTestWorkspace(t *testing.T) string {
 	return root
 }
 
-func TestDoctorTextReportsNativeCuratorFixCommand(t *testing.T) {
+func TestDoctorTextReportsAChangedCuratorWrapperAndLeavesIt(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	root := initTestWorkspace(t)
 	path := filepath.Join(root, ".claude", "skills", "system-curator", "SKILL.md")
@@ -65,14 +65,14 @@ func TestDoctorTextReportsNativeCuratorFixCommand(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("doctor exit = %d, want 1 for a problem: %s", code, stderr)
 	}
-	command := "skillhub doctor --fix --workspace " + root
 	text := strings.Join(strings.Fields(stdout), " ")
-	if !strings.Contains(text, path) || !strings.Contains(text, command) {
-		t.Fatalf("doctor drift report omitted path or fix command %q:\n%s", command, stdout)
+	if !strings.Contains(text, ".claude/skills/system-curator/SKILL.md") || !strings.Contains(text, "not written by Skill Hub") {
+		t.Fatalf("doctor omitted the changed wrapper:\n%s", stdout)
 	}
+	runCLI(t, "doctor", "--fix", "--workspace", root)
 	content, err := os.ReadFile(path)
 	if err != nil || !bytes.Equal(content, stale) {
-		t.Fatalf("doctor drift report changed native curator: %v", err)
+		t.Fatalf("doctor changed a wrapper Skill Hub did not write: %v", err)
 	}
 }
 
@@ -450,9 +450,14 @@ func TestConnectGlobalWritesUserScopeAndPreservesClaudeConfig(t *testing.T) {
 	if !strings.Contains(string(got), workspace) && !strings.Contains(string(got), escapedWorkspace) {
 		t.Fatalf("~/.claude.json is missing workspace %q:\n%s", workspace, got)
 	}
-	for _, path := range []string{".claude/CLAUDE.md", ".claude/skills/system-curator/SKILL.md", ".codex/config.toml", ".codex/AGENTS.md", ".agents/skills/system-curator/SKILL.md", ".gemini/settings.json", ".gemini/GEMINI.md", ".gemini/skills/system-curator/SKILL.md"} {
+	for _, path := range []string{".claude/CLAUDE.md", ".claude/skills/system-curator/SKILL.md", ".codex/config.toml", ".codex/AGENTS.md", ".agents/skills/system-curator/SKILL.md", ".gemini/settings.json", ".gemini/GEMINI.md"} {
 		if _, err := os.Stat(filepath.Join(home, filepath.FromSlash(path))); err != nil {
 			t.Fatalf("missing %s: %v", path, err)
+		}
+	}
+	for _, path := range []string{".gemini/skills", ".agents/skills/distill-lab", ".claude/skills/distill-lab"} {
+		if _, err := os.Stat(filepath.Join(home, filepath.FromSlash(path))); !os.IsNotExist(err) {
+			t.Fatalf("user scope holds %s: %v", path, err)
 		}
 	}
 

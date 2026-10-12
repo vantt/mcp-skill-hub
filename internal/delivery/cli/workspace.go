@@ -171,9 +171,9 @@ func shortCommit(commit string) string {
 func connectionSummaryLine(result app.Result) string {
 	var hosts []string
 	for _, item := range result.Items {
-		// Host item IDs are host_<host>_<change-kind>; neither part contains "_".
-		if parts := strings.Split(item.ID, "_"); len(parts) == 3 && parts[0] == "host" && !slices.Contains(hosts, parts[1]) {
-			hosts = append(hosts, parts[1])
+		// The shared Agent Skills folder belongs to no agent.
+		if host, _, _, ok := parseHostItemID(item.ID); ok && hostItemWritten(item) && host != app.SharedSkillsItemKey && !slices.Contains(hosts, host) {
+			hosts = append(hosts, host)
 		}
 	}
 	if len(hosts) == 0 {

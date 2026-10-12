@@ -11,6 +11,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/vantt/mcp-skill-hub/internal/systemskills"
 )
 
 const testHubURL = "http://127.0.0.1:7420"
@@ -193,8 +195,10 @@ func TestSwitchingAScopeBetweenLocalAndRemoteKeepsOneEntry(t *testing.T) {
 		if bytes.Contains(raw, []byte(workspace)) || bytes.Contains(raw, []byte(strings.ReplaceAll(workspace, `\`, `\\`))) {
 			t.Fatalf("%s config still names the local workspace:\n%s", adapter.Host, raw)
 		}
-		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(adapter.SkillRelativePath))); !os.IsNotExist(err) {
-			t.Fatalf("%s curator skill kept for a remote hub: %v", adapter.Host, err)
+	}
+	for _, path := range []string{".claude/skills/system-curator", ".agents/skills/system-curator"} {
+		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(path))); !os.IsNotExist(err) {
+			t.Fatalf("%s kept for a remote hub: %v", path, err)
 		}
 	}
 	permissions := readTestFile(t, filepath.Join(root, ".claude", "settings.local.json"))
@@ -211,10 +215,8 @@ func TestSwitchingAScopeBetweenLocalAndRemoteKeepsOneEntry(t *testing.T) {
 		if bytes.Contains(raw, []byte(access)) {
 			t.Fatalf("%s config still allows the remote cache:\n%s", adapter.Host, raw)
 		}
-		if !bytes.Equal(readTestFile(t, filepath.Join(root, filepath.FromSlash(adapter.SkillRelativePath))), []byte(systemCuratorInstructions())) {
-			t.Fatalf("%s curator skill not restored", adapter.Host)
-		}
 	}
+	assertSystemSkillLayout(t, root, systemskills.CuratorSkillID)
 	permissions = readTestFile(t, filepath.Join(root, ".claude", "settings.local.json"))
 	if dirs, _ := jsonStringArrayAt(permissions, claudeAllowedDirsPath); !slices.Equal(dirs, workspaceDirs) {
 		t.Fatalf("Claude directories after switching back = %v", dirs)

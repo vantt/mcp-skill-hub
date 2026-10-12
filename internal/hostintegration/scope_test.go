@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/vantt/mcp-skill-hub/internal/systemskills"
 )
 
 func TestProjectRootIsSeparateFromServedWorkspace(t *testing.T) {
@@ -72,7 +74,6 @@ func TestUserScopeWritesHomeFilesAndPreservesUnrelatedClaudeKeys(t *testing.T) {
 	for _, path := range []string{
 		".claude/skills/system-curator/SKILL.md",
 		".agents/skills/system-curator/SKILL.md",
-		".gemini/skills/system-curator/SKILL.md",
 		".codex/config.toml", ".codex/AGENTS.md",
 		".gemini/settings.json", ".gemini/GEMINI.md",
 	} {
@@ -81,6 +82,7 @@ func TestUserScopeWritesHomeFilesAndPreservesUnrelatedClaudeKeys(t *testing.T) {
 		}
 	}
 	assertJSONRegistration(t, filepath.Join(home, ".gemini/settings.json"), binary, workspace, true)
+	assertSystemSkillLayout(t, home, systemskills.CuratorSkillID)
 	// Project-scope names must not leak into the home directory.
 	for _, path := range []string{".mcp.json", "CLAUDE.md", "AGENTS.md", "GEMINI.md"} {
 		if _, err := os.Stat(filepath.Join(home, path)); !errors.Is(err, os.ErrNotExist) {

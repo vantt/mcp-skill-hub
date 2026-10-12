@@ -33,7 +33,16 @@ Skill Hub instructions are recommendations; your agent environment controls tool
 {"permissions":{"additionalDirectories":["<WORKSPACE>/runtime/cache/skills","<WORKSPACE>/runtime/envs","<WORKSPACE>/runtime/config"], "allow":["Bash(skillhub:*)"], "ask":["Bash(skillhub * --yes*)","Bash(skillhub * confirm *)","Bash(skillhub *init*)","Bash(skillhub *connect*)","Bash(skillhub *--fix*)","Bash(skillhub *token rotate*)","Bash(skillhub *cache clear*)","Bash(skillhub *serve*)"], "deny":["Bash(skillhub * --approve-content*)"]}}
 [no final newline]
 === .claude/skills/system-curator/SKILL.md
-<the bundled system-curator SKILL.md, unchanged>
+---
+name: system-curator
+description: Guide Skill Hub maintenance through the `skillhub` CLI (with --json) when a shell is available, or the bundled curation MCP tools when it is not.
+---
+<!-- Written by Skill Hub (wrapper v1). Edit the skill in .agents/skills/system-curator/, not here. -->
+
+This skill lives in the shared Agent Skills folder. Read
+`${CLAUDE_SKILL_DIR}/../../../.agents/skills/system-curator/SKILL.md` now and follow it as this skill.
+Wherever it mentions this skill's folder or its scripts, use
+`${CLAUDE_SKILL_DIR}/../../../.agents/skills/system-curator/`.
 === .codex/AGENTS.md
 <!-- skillhub:bootstrap:v1:start -->
 ## Skill Hub
@@ -98,5 +107,3 @@ Skill Hub instructions are recommendations; your agent environment controls tool
 === .gemini/settings.json
 {"mcpServers":{"skillhub":{"command":"<BINARY>","args":["mcp","serve","--workspace","<WORKSPACE>"],"cwd":"<WORKSPACE>","trust":false}}, "context":{"includeDirectories":["<WORKSPACE>/runtime/cache/skills","<WORKSPACE>/runtime/envs","<WORKSPACE>/runtime/config"]}}
 [no final newline]
-=== .gemini/skills/system-curator/SKILL.md
-<the bundled system-curator SKILL.md, unchanged>

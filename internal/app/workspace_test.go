@@ -48,14 +48,15 @@ func TestDoctorHostIntegrationPreviewIsReadOnlyAndDependencyOrdered(t *testing.T
 	if result.Status != StatusActionRequired {
 		t.Fatalf("host integration preview = %#v", result)
 	}
-	ranks := map[string]int{"mcp-registration": 1, "host-permissions": 2, "native-skill": 3, "bootstrap-instructions": 4}
+	ranks := map[string]int{"mcp-registration": 1, "host-permissions": 2, "shared-skill": 3, "native-skill": 4, "bootstrap-instructions": 5}
 	lastRank := -1
 	for _, item := range result.Items {
 		parts := strings.SplitN(item.ID, "_", 3)
 		if len(parts) != 3 {
 			t.Fatalf("unexpected non-host finding: %#v", item)
 		}
-		rank, known := ranks[parts[2]]
+		kind, _, _ := strings.Cut(parts[2], ":")
+		rank, known := ranks[kind]
 		if !known || rank < lastRank || !strings.Contains(item.Summary, root) || !strings.Contains(item.Summary, "Managed diff preview:") {
 			t.Fatalf("invalid or out-of-order preview item: %#v", item)
 		}
@@ -342,7 +343,9 @@ func hostArtifactPaths() []string {
 		".claude/settings.local.json",
 		".claude/skills/system-curator/SKILL.md",
 		".agents/skills/system-curator/SKILL.md",
-		".gemini/skills/system-curator/SKILL.md",
+		".claude/skills/distill-lab/SKILL.md",
+		".agents/skills/distill-lab/SKILL.md",
+		".agents/skills/distill-lab/scripts/distill.mjs",
 		"CLAUDE.md",
 		"AGENTS.md",
 		"GEMINI.md",

@@ -11,8 +11,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
-
-	"github.com/vantt/mcp-skill-hub/internal/systemskills"
 )
 
 const missingDigest = "missing"
@@ -31,9 +29,9 @@ type geminiMCPServer struct {
 }
 
 var adapters = []Adapter{
-	{Host: HostClaude, Level: LevelNativeSkillBestEffort, ConfigRelativePath: ".mcp.json", SkillRelativePath: ".claude/skills/system-curator/SKILL.md", InstructionFileName: "CLAUDE.md", UserConfigRelativePath: ".claude.json", UserSkillRelativePath: ".claude/skills/system-curator/SKILL.md", UserInstructionRelativePath: ".claude/CLAUDE.md", NativeSkill: true, PermissionsRelativePath: ".claude/settings.local.json", SharedPermissionsRelativePath: ".claude/settings.json", UserPermissionsRelativePath: ".claude/settings.json"},
-	{Host: HostCodex, Level: LevelNativeSkillBestEffort, ConfigRelativePath: ".codex/config.toml", SkillRelativePath: ".agents/skills/system-curator/SKILL.md", InstructionFileName: "AGENTS.md", UserConfigRelativePath: ".codex/config.toml", UserSkillRelativePath: ".agents/skills/system-curator/SKILL.md", UserInstructionRelativePath: ".codex/AGENTS.md", NativeSkill: true},
-	{Host: HostGemini, Level: LevelNativeSkillBestEffort, ConfigRelativePath: ".gemini/settings.json", SkillRelativePath: ".gemini/skills/system-curator/SKILL.md", InstructionFileName: "GEMINI.md", UserConfigRelativePath: ".gemini/settings.json", UserSkillRelativePath: ".gemini/skills/system-curator/SKILL.md", UserInstructionRelativePath: ".gemini/GEMINI.md", NativeSkill: true},
+	{Host: HostClaude, Level: LevelNativeSkillBestEffort, ConfigRelativePath: ".mcp.json", InstructionFileName: "CLAUDE.md", UserConfigRelativePath: ".claude.json", UserInstructionRelativePath: ".claude/CLAUDE.md", NativeSkill: true, SkillsDirRelativePath: ".claude/skills", Wrapper: true, PermissionsRelativePath: ".claude/settings.local.json", SharedPermissionsRelativePath: ".claude/settings.json", UserPermissionsRelativePath: ".claude/settings.json"},
+	{Host: HostCodex, Level: LevelNativeSkillBestEffort, ConfigRelativePath: ".codex/config.toml", InstructionFileName: "AGENTS.md", UserConfigRelativePath: ".codex/config.toml", UserInstructionRelativePath: ".codex/AGENTS.md", NativeSkill: true, SkillsDirRelativePath: SharedSkillsDirRelativePath},
+	{Host: HostGemini, Level: LevelNativeSkillBestEffort, ConfigRelativePath: ".gemini/settings.json", InstructionFileName: "GEMINI.md", UserConfigRelativePath: ".gemini/settings.json", UserInstructionRelativePath: ".gemini/GEMINI.md", NativeSkill: true, SkillsDirRelativePath: SharedSkillsDirRelativePath, LegacySkillsDirRelativePath: ".gemini/skills"},
 }
 
 // SupportedAdapters returns a defensive copy in deterministic order.
@@ -60,6 +58,9 @@ type preparedInspection struct {
 	hub       *RemoteHub
 	remove    bool
 	hosts     []preparedHost
+	// shared holds the files of the shared Agent Skills folder.
+	shared  []preparedFile
+	notices []Notice
 }
 
 func inspect(ctx context.Context, request Request) (Inspection, error) {
@@ -75,6 +76,9 @@ func inspect(ctx context.Context, request Request) (Inspection, error) {
 		}
 		result.Hosts = append(result.Hosts, report)
 	}
+	for _, file := range prepared.shared {
+		result.Shared = append(result.Shared, file.state)
+	}
 	return result, nil
 }
 
@@ -83,26 +87,45 @@ func buildPlan(ctx context.Context, request Request) (PlanResult, error) {
 	if err != nil {
 		return PlanResult{}, err
 	}
-	plan := PlanResult{Workspace: prepared.workspace, Root: prepared.root, Scope: prepared.scope, Binary: prepared.binary, Hub: prepared.hub, Remove: prepared.remove}
-	kinds := []ChangeKind{ChangeMCP, ChangeHostPermissions, ChangeNativeSkill, ChangeBootstrap}
-	for _, kind := range kinds {
-		for _, host := range prepared.hosts {
-			for _, file := range host.files {
-				if file.state.Conflict != "" {
-					return PlanResult{}, &ConflictError{Path: file.state.Path, Reason: file.state.Conflict}
-				}
-				if file.state.Kind != kind || file.state.Current {
-					continue
-				}
-				plan.Changes = append(plan.Changes, Change{
-					Host: host.adapter.Host, Kind: kind, Path: file.state.Path,
-					PreimageDigest: file.state.PreimageDigest,
-					Desired:        append([]byte(nil), file.desired...), Mode: uint32(file.mode.Perm()),
-					Preview: file.preview, Remove: file.remove,
-				})
-			}
+	plan := PlanResult{Workspace: prepared.workspace, Root: prepared.root, Scope: prepared.scope, Binary: prepared.binary, Hub: prepared.hub, Remove: prepared.remove, Notices: prepared.notices}
+	type hostFile struct {
+		host Host
+		file preparedFile
+	}
+	var files []hostFile
+	for _, file := range prepared.shared {
+		files = append(files, hostFile{file: file})
+	}
+	for _, host := range prepared.hosts {
+		for _, file := range host.files {
+			files = append(files, hostFile{host: host.adapter.Host, file: file})
 		}
 	}
+	for _, entry := range files {
+		if entry.file.state.Conflict != "" {
+			return PlanResult{}, &ConflictError{Path: entry.file.state.Path, Reason: entry.file.state.Conflict}
+		}
+	}
+	for _, entry := range files {
+		file := entry.file
+		if file.state.Blocked != "" {
+			state := file.state
+			state.Host = entry.host
+			plan.Blocked = append(plan.Blocked, state)
+			continue
+		}
+		if file.state.Current {
+			continue
+		}
+		plan.Changes = append(plan.Changes, Change{
+			Host: entry.host, Kind: file.state.Kind, Path: file.state.Path,
+			PreimageDigest: file.state.PreimageDigest,
+			Desired:        append([]byte(nil), file.desired...), Mode: uint32(file.mode.Perm()),
+			Preview: file.preview, Remove: file.remove,
+		})
+	}
+	// A stable sort keeps the host order inside each rank.
+	slices.SortStableFunc(plan.Changes, func(a, b Change) int { return changeRank(a) - changeRank(b) })
 	return plan, nil
 }
 
@@ -116,13 +139,17 @@ func prepare(ctx context.Context, request Request) (preparedInspection, error) {
 	}
 	prepared := preparedInspection{workspace: workspace, root: root, scope: scope, binary: binary, hub: request.Hub, remove: request.Remove}
 	mode := planMode{workspace: workspace, binary: binary, hub: request.Hub, remove: request.Remove}
-	bundle := systemskills.CuratorBundle()
+	skills, err := prepareSystemSkills(selected, scope, root, workspace, mode)
+	if err != nil {
+		return preparedInspection{}, err
+	}
+	prepared.shared, prepared.notices = skills.shared, skills.notices
 	for _, adapter := range selected {
 		if err := ctx.Err(); err != nil {
 			return preparedInspection{}, err
 		}
 		host := preparedHost{adapter: adapter}
-		configRel, skillRel, instructionRel := adapter.relativePaths(scope)
+		configRel, instructionRel := adapter.relativePaths(scope)
 		configPath := filepath.Join(root, filepath.FromSlash(configRel))
 		previous, err := scopeRegistration(adapter, scope, root)
 		if err != nil {
@@ -140,19 +167,7 @@ func prepare(ctx context.Context, request Request) (preparedInspection, error) {
 			}
 			host.files = append(host.files, permissions)
 		}
-		if adapter.NativeSkill {
-			skillPath := filepath.Join(root, filepath.FromSlash(skillRel))
-			var skill preparedFile
-			if mode.local() {
-				skill, err = prepareNativeCurator(adapter.Host, skillPath, root, []byte(bundle.Instructions))
-			} else {
-				skill, err = prepareCuratorRemoval(adapter.Host, skillPath, root)
-			}
-			if err != nil {
-				return preparedInspection{}, err
-			}
-			host.files = append(host.files, skill)
-		}
+		host.files = append(host.files, skills.hosts[adapter.Host]...)
 		instructionPath := filepath.Join(root, filepath.FromSlash(instructionRel))
 		if mode.remove {
 			instructions, err := prepareInstructionsRemoval(instructionPath, root)
@@ -385,14 +400,6 @@ func desiredGeminiConfig(raw []byte, binary, workspace string, supportsToggle bo
 		}
 	}
 	return desiredGeminiAllowedDirs(registered, workspace)
-}
-
-func prepareExactFile(kind ChangeKind, path, root string, desired []byte) (preparedFile, error) {
-	raw, mode, exists, err := readManagedFile(path, root)
-	if err != nil {
-		return preparedFile{}, err
-	}
-	return newPreparedFile("", kind, path, raw, desired, mode, exists, ""), nil
 }
 
 func prepareInstructions(path, root string, globalHasBootstrap bool) (preparedFile, error) {

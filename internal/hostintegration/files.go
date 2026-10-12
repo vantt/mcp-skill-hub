@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"syscall"
+
+	"github.com/vantt/mcp-skill-hub/internal/systemskills"
 )
 
 const maxManagedHostFileBytes = int64(4 << 20)
@@ -144,6 +146,7 @@ func apply(ctx context.Context, plan PlanResult, options ApplyOptions) (ApplyRes
 	}
 	defer func() { _ = root.Close() }()
 
+	covered := plannedSystemSkills(plan.mode(), planScope(plan), writeRoot, plan.Workspace)
 	lastOrder := -1
 	seen := make(map[string]struct{}, len(plan.Changes))
 	type pendingWrite struct {
@@ -155,7 +158,7 @@ func apply(ctx context.Context, plan PlanResult, options ApplyOptions) (ApplyRes
 		if err := ctx.Err(); err != nil {
 			return ApplyResult{}, err
 		}
-		order := changeOrder(change.Kind)
+		order := changeRank(change)
 		if order < 0 || order < lastOrder {
 			return ApplyResult{}, fmt.Errorf("plan changes are not dependency ordered")
 		}
@@ -164,7 +167,7 @@ func apply(ctx context.Context, plan PlanResult, options ApplyOptions) (ApplyRes
 			return ApplyResult{}, fmt.Errorf("plan contains duplicate path %s", change.Path)
 		}
 		seen[change.Path] = struct{}{}
-		if err := validateChangePath(writeRoot, plan.Scope, change); err != nil {
+		if err := validateChangePath(writeRoot, planScope(plan), covered, change); err != nil {
 			return ApplyResult{}, err
 		}
 		raw, mode, exists, err := readManagedFileAtRoot(root, writeRoot, change.Path)
@@ -177,7 +180,7 @@ func apply(ctx context.Context, plan PlanResult, options ApplyOptions) (ApplyRes
 		if digest(raw, exists) != change.PreimageDigest {
 			return ApplyResult{}, fmt.Errorf("%w: %s", ErrStalePlan, change.Path)
 		}
-		expected, remove, err := expectedChange(change, raw, plan)
+		expected, remove, err := expectedChange(writeRoot, covered, change, raw, plan)
 		if err != nil {
 			return ApplyResult{}, err
 		}
@@ -238,23 +241,11 @@ func apply(ctx context.Context, plan PlanResult, options ApplyOptions) (ApplyRes
 // expectedChange recomputes a change from the file's current content, so a
 // plan cannot carry content other than what planning would produce. The second
 // result reports that the change deletes the file.
-func expectedChange(change Change, raw []byte, plan PlanResult) ([]byte, bool, error) {
+func expectedChange(root string, covered []systemskills.SystemSkill, change Change, raw []byte, plan PlanResult) ([]byte, bool, error) {
 	mode := plan.mode()
 	switch change.Kind {
-	case ChangeNativeSkill:
-		if !mode.local() {
-			if !nativeCuratorOwned(raw) {
-				return nil, false, &ConflictError{Path: change.Path, Reason: "the system-curator skill changed after the preview; it is left in place"}
-			}
-			return nil, true, nil
-		}
-		if HostSupportsSkillsExtension(change.Host) {
-			if !nativeCuratorOwned(raw) {
-				return nil, false, &ConflictError{Path: change.Path, Reason: nativeCuratorConflict}
-			}
-			return nil, true, nil
-		}
-		return []byte(systemCuratorInstructions()), false, nil
+	case ChangeNativeSkill, ChangeSharedSkill:
+		return expectedSkillChange(root, covered, change, raw, mode)
 	case ChangeBootstrap:
 		update := updateBootstrap
 		if mode.remove {
@@ -291,22 +282,50 @@ func expectedChange(change Change, raw []byte, plan PlanResult) ([]byte, bool, e
 	return nil, false, fmt.Errorf("unsupported change %q for host %q", change.Kind, change.Host)
 }
 
-func changeOrder(kind ChangeKind) int {
-	switch kind {
+// changeRank orders the changes of a plan by dependency: MCP entries,
+// permissions, shared skill files, host skill files (wrappers and old
+// copies), removals of shared skill files, then instructions. Shared files are
+// written before the wrappers that point at them and removed only after them,
+// so a failure part way never leaves a wrapper pointing at a missing file.
+// Apply rejects a plan whose ranks decrease or that holds an unknown kind.
+func changeRank(change Change) int {
+	switch change.Kind {
 	case ChangeMCP:
 		return 1
 	case ChangeHostPermissions:
 		return 2
-	case ChangeNativeSkill:
+	case ChangeSharedSkill:
+		if change.Remove {
+			return 5
+		}
 		return 3
-	case ChangeBootstrap:
+	case ChangeNativeSkill:
 		return 4
+	case ChangeBootstrap:
+		return 6
 	default:
 		return -1
 	}
 }
 
-func validateChangePath(root string, scope Scope, change Change) error {
+// planScope is the scope of a plan; an empty scope is a project.
+func planScope(plan PlanResult) Scope {
+	if plan.Scope == "" {
+		return ScopeProject
+	}
+	return plan.Scope
+}
+
+func validateChangePath(root string, scope Scope, covered []systemskills.SystemSkill, change Change) error {
+	if change.Kind == ChangeSharedSkill || change.Kind == ChangeNativeSkill {
+		if change.Kind == ChangeSharedSkill && change.Host != "" {
+			return fmt.Errorf("a shared skill file belongs to no host: %s", change.Path)
+		}
+		if _, err := changeSkillTarget(root, covered, change); err != nil {
+			return err
+		}
+		return rejectSymlinkComponents(root, change.Path)
+	}
 	var adapter *Adapter
 	for index := range adapters {
 		if adapters[index].Host == change.Host {
@@ -318,7 +337,7 @@ func validateChangePath(root string, scope Scope, change Change) error {
 		return fmt.Errorf("unsupported host %q", change.Host)
 	}
 	var relative string
-	configRel, skillRel, instructionRel := adapter.relativePaths(scope)
+	configRel, instructionRel := adapter.relativePaths(scope)
 	switch change.Kind {
 	case ChangeMCP:
 		relative = configRel
@@ -327,11 +346,6 @@ func validateChangePath(root string, scope Scope, change Change) error {
 		if relative == "" {
 			return fmt.Errorf("host %q has no separate permissions file", change.Host)
 		}
-	case ChangeNativeSkill:
-		if !adapter.NativeSkill {
-			return fmt.Errorf("host %q has no native skill path", change.Host)
-		}
-		relative = skillRel
 	case ChangeBootstrap:
 		relative = instructionRel
 	default:

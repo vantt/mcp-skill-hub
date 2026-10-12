@@ -285,9 +285,12 @@ func TestConnectNamesHostFilesTheSameWayOnEveryPlatform(t *testing.T) {
 		{"mcp", ".claude.json", ".claude.json"},
 		{"host-permissions", ".claude/settings.local.json", ".claude/settings.local.json"},
 		{"bootstrap", ".codex/AGENTS.md", "AGENTS.md"},
+		{"native-skill", ".claude/skills/distill-lab/SKILL.md", "distill-lab skill"},
+		{"shared-skill", ".agents/skills/system-curator/SKILL.md", "system-curator skill"},
+		{"shared-skill", ".agents/skills/distill-lab/scripts/lib/js-yaml.mjs", "distill-lab skill"},
 	} {
 		summary := "codex-cli (native) " + test.kind + ": " + filepath.Join(root, filepath.FromSlash(test.relative))
-		if got := formatChangeKind(test.kind, summary); got != test.want {
+		if got := formatChangeKind(test.kind, summary, test.relative); got != test.want {
 			t.Errorf("formatChangeKind(%q, %q) = %q, want %q", test.kind, summary, got, test.want)
 		}
 	}

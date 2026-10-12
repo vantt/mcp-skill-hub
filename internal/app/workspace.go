@@ -358,17 +358,22 @@ func hostIntegrationResult(root string, result Result, host *hubHostState) Resul
 		result.Summary = "Host integration has conflicts; doctor made no changes."
 		return result
 	}
+	appendSkillPlanItems(&result, root, host.plan, levels)
 	missing := hostintegration.MissingFinding(host.plan)
 	impact := "Remediation is available after explicit confirmation."
 	if missing != nil {
 		impact = "Fixable: " + missing.Note + "."
 	}
 	for _, change := range host.plan.Changes {
-		item := hostChangeItem(change.Host, levels[change.Host], change.Kind, change.Path, impact)
+		item := hostChangeItem(root, change.Host, levels[change.Host], change.Kind, change.Path, impact)
 		if change.Preview != "" {
 			item.Summary += "\nManaged diff preview:\n" + change.Preview
 		}
 		result.Items = append(result.Items, item)
+	}
+	if len(host.plan.Blocked) > 0 && len(host.plan.Changes) == 0 {
+		result.Status = StatusActionRequired
+		result.Summary = "Workspace and catalog are healthy; a system skill file was not written by Skill Hub and was left in place."
 	}
 	if len(host.plan.Changes) > 0 {
 		result.Status = StatusActionRequired
@@ -417,8 +422,11 @@ func applyHostIntegration(ctx context.Context, root string, result Result, hosts
 		return Result{}, err
 	}
 	for _, change := range applied.Changed {
-		result.Items = append(result.Items, hostChangeItem(change.Host, levels[change.Host], change.Kind, change.Path, "Remediated."))
+		result.Items = append(result.Items, hostChangeItem(root, change.Host, levels[change.Host], change.Kind, change.Path, "Remediated."))
 	}
+	// A system skill file Skill Hub did not write is listed but does not
+	// change the status, so the rest of the repair counts as done.
+	appendSkillPlanItems(&result, root, plan, levels)
 	if len(applied.Changed) > 0 {
 		result.Warnings = append(result.Warnings, hostBestEffortWarning())
 		result.Status = StatusApplied
@@ -452,28 +460,83 @@ func currentBinary() (string, error) {
 }
 
 func appendHostInspectionItems(result *Result, inspection hostintegration.Inspection) {
-	for _, kind := range []hostintegration.ChangeKind{hostintegration.ChangeMCP, hostintegration.ChangeHostPermissions, hostintegration.ChangeNativeSkill, hostintegration.ChangeBootstrap} {
+	add := func(host hostintegration.Host, level hostintegration.IntegrationLevel, file hostintegration.FileState) {
+		impact := "Remediation is available after explicit confirmation."
+		switch {
+		case file.Conflict != "":
+			impact = "Automatic remediation is blocked: " + file.Conflict
+		case file.Blocked != "":
+			impact = BlockedImpactPrefix + file.Blocked
+		}
+		result.Items = append(result.Items, hostChangeItem(inspection.Root, host, level, file.Kind, file.Path, impact))
+	}
+	for _, kind := range []hostintegration.ChangeKind{hostintegration.ChangeMCP, hostintegration.ChangeHostPermissions, hostintegration.ChangeSharedSkill, hostintegration.ChangeNativeSkill, hostintegration.ChangeBootstrap} {
+		if kind == hostintegration.ChangeSharedSkill {
+			for _, file := range inspection.Shared {
+				if !file.Current {
+					add("", "", file)
+				}
+			}
+			continue
+		}
 		for _, host := range inspection.Hosts {
 			for _, file := range host.Files {
 				if file.Kind != kind || file.Current {
 					continue
 				}
-				impact := "Remediation is available after explicit confirmation."
-				if file.Conflict != "" {
-					impact = "Automatic remediation is blocked: " + file.Conflict
-				}
-				result.Items = append(result.Items, hostChangeItem(host.Host, host.Level, file.Kind, file.Path, impact))
+				add(host.Host, host.Level, file)
 			}
 		}
 	}
 }
 
-func hostChangeItem(host hostintegration.Host, level hostintegration.IntegrationLevel, kind hostintegration.ChangeKind, path, impact string) Item {
+// BlockedImpactPrefix starts the impact of an item for a system skill file
+// that Skill Hub did not write and left unchanged.
+const BlockedImpactPrefix = "Left unchanged: "
+
+// SharedSkillsItemKey is the host part of the item ID of a file in the shared
+// Agent Skills folder, which belongs to no single agent.
+const SharedSkillsItemKey = "agents"
+
+// appendSkillPlanItems lists the system skill files a plan leaves unchanged,
+// each as an item and a warning, and adds the plan's notices as warnings.
+func appendSkillPlanItems(result *Result, root string, plan hostintegration.PlanResult, levels map[hostintegration.Host]hostintegration.IntegrationLevel) {
+	for _, file := range plan.Blocked {
+		result.Items = append(result.Items, hostChangeItem(root, file.Host, levels[file.Host], file.Kind, file.Path, BlockedImpactPrefix+file.Blocked))
+		result.Warnings = append(result.Warnings, Warning{Code: "system_skill_blocked", Summary: file.Path + " was left unchanged: " + file.Blocked})
+	}
+	for _, notice := range plan.Notices {
+		result.Warnings = append(result.Warnings, Warning{Code: notice.Code, Summary: notice.Summary})
+	}
+}
+
+// hostChangeItem describes one host file. The ID is host_<host>_<kind>; a
+// skill file adds ":<path relative to root>" so that every skill file has its
+// own ID, and a file of the shared Agent Skills folder uses the host key
+// "agents" and the level "shared".
+func hostChangeItem(root string, host hostintegration.Host, level hostintegration.IntegrationLevel, kind hostintegration.ChangeKind, path, impact string) Item {
+	key, levelText := string(host), string(level)
+	if kind == hostintegration.ChangeSharedSkill {
+		key, levelText = SharedSkillsItemKey, "shared"
+	}
+	id := "host_" + key + "_" + string(kind)
+	if kind == hostintegration.ChangeSharedSkill || kind == hostintegration.ChangeNativeSkill {
+		id += ":" + displayPath(root, path)
+	}
 	return Item{
-		ID:      "host_" + string(host) + "_" + string(kind),
-		Summary: fmt.Sprintf("%s (%s) %s: %s", host, level, kind, path),
+		ID:      id,
+		Summary: fmt.Sprintf("%s (%s) %s: %s", key, levelText, kind, path),
 		Impact:  impact,
 	}
+}
+
+// displayPath is path relative to root with forward slashes when it is
+// inside root, else path itself.
+func displayPath(root, path string) string {
+	if relative, err := filepath.Rel(root, path); err == nil && !filepath.IsAbs(relative) && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return filepath.ToSlash(relative)
+	}
+	return path
 }
 
 func hostBestEffortWarning() Warning {

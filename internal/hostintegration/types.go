@@ -28,7 +28,9 @@ const (
 	LevelInstructionOnly IntegrationLevel = "instruction-only"
 )
 
-// ChangeKind is ordered by dependency: MCP, native skill, then bootstrap instructions.
+// ChangeKind names what a change writes. Plans order changes by changeRank:
+// MCP, permissions, shared skill files, native skill files, shared skill
+// removals, then bootstrap instructions.
 type ChangeKind string
 
 const (
@@ -37,9 +39,19 @@ const (
 	// runtime directories. Hosts whose MCP config file also carries the
 	// allowance (Codex, Gemini CLI) fold it into ChangeMCP instead.
 	ChangeHostPermissions ChangeKind = "host-permissions"
-	ChangeNativeSkill     ChangeKind = "native-skill"
-	ChangeBootstrap       ChangeKind = "bootstrap-instructions"
+	// ChangeNativeSkill is a skill file in a host's own skills folder: the
+	// Claude Code wrapper, or an old full copy that is removed.
+	ChangeNativeSkill ChangeKind = "native-skill"
+	// ChangeSharedSkill is a file of a system skill in the shared Agent Skills
+	// folder <root>/.agents/skills/<id>/. It belongs to no host: Codex and
+	// Gemini CLI read it directly, and the Claude Code wrapper points at it.
+	ChangeSharedSkill ChangeKind = "shared-skill"
+	ChangeBootstrap   ChangeKind = "bootstrap-instructions"
 )
+
+// SharedSkillsDirRelativePath is the shared Agent Skills folder, relative to
+// the scope root, that holds the real files of every system skill.
+const SharedSkillsDirRelativePath = ".agents/skills"
 
 // Scope selects where a host integration is written relative to Request.Root.
 type Scope string
@@ -60,18 +72,26 @@ const (
 //   - Codex: user config ~/.codex/config.toml, global instructions
 //     ~/.codex/AGENTS.md, user skills $HOME/.agents/skills
 //     (developers.openai.com/codex).
-//   - Gemini CLI: ~/.gemini/settings.json, ~/.gemini/GEMINI.md and
-//     ~/.gemini/skills (geminicli.com/docs/cli/skills).
+//   - Gemini CLI: ~/.gemini/settings.json and ~/.gemini/GEMINI.md; skills in
+//     .agents/skills from v0.28.0 (geminicli.com/docs/cli/creating-skills).
+//
+// Skill folders are the same relative path in both scopes.
 type Adapter struct {
 	Host                        Host
 	Level                       IntegrationLevel
 	ConfigRelativePath          string
-	SkillRelativePath           string
 	InstructionFileName         string
 	UserConfigRelativePath      string
-	UserSkillRelativePath       string
 	UserInstructionRelativePath string
 	NativeSkill                 bool
+	// SkillsDirRelativePath is the folder the host reads skills from.
+	SkillsDirRelativePath string
+	// Wrapper marks a host that does not read the shared Agent Skills folder
+	// and gets a generated wrapper SKILL.md pointing at it.
+	Wrapper bool
+	// LegacySkillsDirRelativePath is a skills folder that older releases
+	// wrote a full curator copy to; it is only ever cleaned up.
+	LegacySkillsDirRelativePath string
 	// PermissionsRelativePath and UserPermissionsRelativePath name a settings
 	// file separate from the MCP config; empty when the config file is shared.
 	PermissionsRelativePath string
@@ -89,12 +109,12 @@ func (a Adapter) permissionsPath(scope Scope) string {
 	return a.PermissionsRelativePath
 }
 
-// relativePaths returns the config, skill, and instruction paths for a scope.
-func (a Adapter) relativePaths(scope Scope) (config, skill, instructions string) {
+// relativePaths returns the config and instruction paths for a scope.
+func (a Adapter) relativePaths(scope Scope) (config, instructions string) {
 	if scope == ScopeUser {
-		return a.UserConfigRelativePath, a.UserSkillRelativePath, a.UserInstructionRelativePath
+		return a.UserConfigRelativePath, a.UserInstructionRelativePath
 	}
-	return a.ConfigRelativePath, a.SkillRelativePath, a.InstructionFileName
+	return a.ConfigRelativePath, a.InstructionFileName
 }
 
 // Request defines an integration target. Workspace, Root, and Binary must
@@ -129,13 +149,20 @@ type RemoteHub struct {
 }
 
 // FileState is a read-only view of one managed integration surface.
+//
+// Conflict stops the whole plan. Blocked is set only for system skill files:
+// Skill Hub leaves that one file unchanged and plans every other change.
 type FileState struct {
+	// Host is set on the entries of PlanResult.Blocked; it is empty for a
+	// shared skill file.
+	Host           Host
 	Kind           ChangeKind
 	Path           string
 	Exists         bool
 	Current        bool
 	PreimageDigest string
 	Conflict       string
+	Blocked        string
 }
 
 // HostInspection reports the capability and current state for one host.
@@ -146,11 +173,13 @@ type HostInspection struct {
 }
 
 // Inspection is safe to produce without user confirmation and performs no writes.
+// Shared holds the files of the shared Agent Skills folder, which belong to no host.
 type Inspection struct {
 	Workspace string
 	Root      string
 	Binary    string
 	Hosts     []HostInspection
+	Shared    []FileState
 }
 
 // Change is an immutable, preimage-pinned write proposal. Desired content is
@@ -170,6 +199,9 @@ type Change struct {
 }
 
 // PlanResult is dependency ordered and can be passed directly to Apply.
+// Changes of the shared kind carry an empty Host. Blocked lists the system
+// skill files the plan leaves unchanged, each with its reason in Blocked;
+// Notices are sentences a caller shows next to the result.
 type PlanResult struct {
 	Workspace string
 	Root      string
@@ -178,6 +210,15 @@ type PlanResult struct {
 	Changes   []Change
 	Hub       *RemoteHub
 	Remove    bool
+	Blocked   []FileState
+	Notices   []Notice
+}
+
+// Notice is a sentence about a plan that is not a change, for example what
+// an agent still sees after a change of another agent.
+type Notice struct {
+	Code    string
+	Summary string
 }
 
 // ApplyOptions makes mutation authorization explicit at the application boundary.
@@ -234,11 +275,14 @@ type Finding struct {
 
 const (
 	FindingHostIntegrationMissing = "host_integration_missing"
+	FindingHostIntegrationBlocked = "host_integration_blocked"
 	SummaryHostIntegrationMissing = "host integration missing"
 	NoteRunDoctorFix              = "run skillhub doctor --fix after a pull that untracked those files"
 )
 
-// MissingFinding returns a fixable Finding if the plan contains missing host files.
+// MissingFinding returns a fixable Finding if the plan contains missing host
+// files, else a Finding naming the first system skill file the plan leaves
+// unchanged, else nil.
 func MissingFinding(plan PlanResult) *Finding {
 	for _, change := range plan.Changes {
 		if change.PreimageDigest == missingDigest {
@@ -249,6 +293,13 @@ func MissingFinding(plan PlanResult) *Finding {
 				Fixable: true,
 			}
 		}
+	}
+	if len(plan.Blocked) > 0 {
+		summary := plan.Blocked[0].Path + " was not written by Skill Hub; review it or delete it, then run skillhub doctor --fix"
+		if more := len(plan.Blocked) - 1; more > 0 {
+			summary += fmt.Sprintf(" (and %d more)", more)
+		}
+		return &Finding{ID: FindingHostIntegrationBlocked, Summary: summary}
 	}
 	return nil
 }
