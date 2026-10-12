@@ -81,13 +81,13 @@ func TestRenderLaunchdPlistEscapesValues(t *testing.T) {
 
 func TestServiceUnitPath(t *testing.T) {
 	t.Parallel()
-	if got, _ := serviceUnitPath("linux", "/h", ""); got != "/h/.config/systemd/user/skillhub-server.service" {
+	if got, _ := serviceUnitPath("linux", "/h", ""); got != filepath.FromSlash("/h/.config/systemd/user/skillhub-server.service") {
 		t.Errorf("linux default = %q", got)
 	}
-	if got, _ := serviceUnitPath("linux", "/h", "/x"); got != "/x/systemd/user/skillhub-server.service" {
+	if got, _ := serviceUnitPath("linux", "/h", "/x"); got != filepath.FromSlash("/x/systemd/user/skillhub-server.service") {
 		t.Errorf("linux XDG = %q", got)
 	}
-	if got, _ := serviceUnitPath("darwin", "/Users/me", ""); got != "/Users/me/Library/LaunchAgents/dev.skillhub.server.plist" {
+	if got, _ := serviceUnitPath("darwin", "/Users/me", ""); got != filepath.FromSlash("/Users/me/Library/LaunchAgents/dev.skillhub.server.plist") {
 		t.Errorf("darwin = %q", got)
 	}
 	if _, ok := serviceUnitPath("windows", "C:\\", ""); ok {
