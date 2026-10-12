@@ -9,8 +9,8 @@ import (
 	resolverpkg "github.com/vantt/mcp-skill-hub/internal/resolver"
 )
 
-func (adapter *Server) registerResolverTools(server *mcp.Server) {
-	addTool(server, &mcp.Tool{
+func (adapter *Server) registerResolverTools(tools *toolRegistry) {
+	addTool(tools, &mcp.Tool{
 		Name: "skill_resolve", Title: "Resolve a skill",
 		Description: "Recommend at most one primary skill from task evidence (task.description in English). If setup is review_required, do not use the skill and ask the user to run `skillhub skill review <id>`. This does not load skill content: load the recommended skill with skill_get, or, only when your host supports the MCP skills extension, with skills/get and resources/read.",
 		Annotations: annotations(true, false, true, false),
@@ -19,10 +19,7 @@ func (adapter *Server) registerResolverTools(server *mcp.Server) {
 		if _, err := resolverpkg.NormalizeRequest(request); err != nil {
 			return failure[resolveResult](err)
 		}
-		var session *mcp.ServerSession
-		if req != nil {
-			session = req.Session
-		}
+		session := toolSession(req)
 		caller := adapter.callerContext(session)
 		ctx = app.WithCallerContext(ctx, caller)
 
@@ -42,9 +39,9 @@ func (adapter *Server) registerResolverTools(server *mcp.Server) {
 			Resolution: response, ActivationContext: &trueValue, Feedback: &trueValue,
 			SchemaMajor: SchemaVersion, ResourceVersionPinning: true,
 		})
-	})
+	}, withCommittedResolverSchemas())
 
-	addTool(server, &mcp.Tool{
+	addTool(tools, &mcp.Tool{
 		Name: "skill_feedback", Title: "Record skill feedback",
 		Description: "Record a bounded, deduplicated runtime outcome for a prior resolution. event_id is required. Feedback never mutates routing policy.",
 		Annotations: annotations(false, false, true, false),
@@ -52,10 +49,7 @@ func (adapter *Server) registerResolverTools(server *mcp.Server) {
 		if input.SchemaVersion != SchemaVersion || input.ResolutionID == "" || input.EventID == "" || input.Outcome == "" {
 			return failure[app.FeedbackResult](fmt.Errorf("schema_version, resolution_id, event_id, and outcome are required"))
 		}
-		var session *mcp.ServerSession
-		if req != nil {
-			session = req.Session
-		}
+		session := toolSession(req)
 		caller := adapter.callerContext(session)
 		ctx = app.WithCallerContext(ctx, caller)
 
@@ -64,5 +58,10 @@ func (adapter *Server) registerResolverTools(server *mcp.Server) {
 			Outcome: input.Outcome, ReasonCode: input.ReasonCode, SelectedSkill: input.SelectedSkill,
 			Utility: input.Utility, Basis: input.Basis,
 		}))
-	})
+	}, withPropertyEnums(map[string][]any{
+		"outcome":     {"activated", "loaded", "used", "abandoned", "rejected", "completed", "failed"},
+		"reason_code": {"user_rejected", "scope_mismatch", "capability_unavailable", "constraint_conflict", "workflow_completed", "workflow_failed", "abandoned", "host_report", "setup_failed"},
+		"utility":     {"helpful", "harmful", "neutral"},
+		"basis":       {"user", "evaluator", "controlled-benchmark"},
+	}))
 }

@@ -11,8 +11,8 @@ import (
 	"github.com/vantt/mcp-skill-hub/internal/skill"
 )
 
-func (adapter *Server) registerSkillReviewTools(server *mcp.Server) {
-	addTool(server, &mcp.Tool{
+func (adapter *Server) registerSkillReviewTools(tools *toolRegistry) {
+	addTool(tools, &mcp.Tool{
 		Name:        "skill_review",
 		Title:       "Review skill diagnostics",
 		Description: "Perform an offline diagnostic review for one skill, returning readiness, validation issues, resource divergence, and git status.",

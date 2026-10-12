@@ -1,11 +1,8 @@
 package mcpserver
 
 import (
-	"errors"
-	"strings"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/vantt/mcp-skill-hub/internal/app"
 	"github.com/vantt/mcp-skill-hub/internal/systemskills"
@@ -70,13 +67,8 @@ func TestCuratorSourcePerSessionClient(t *testing.T) {
 				t.Fatalf("curator listed=%v native=%v", found, tc.native)
 			}
 			got, err := mcp.CallCustomMethod[*getSkillParams, *getSkillResult](t.Context(), cs, "skills/get", &getSkillParams{URI: uri})
-			if tc.native {
-				var rpcErr *jsonrpc.Error
-				if !errors.As(err, &rpcErr) || !strings.Contains(string(rpcErr.Data), "skill_not_found") {
-					t.Fatalf("native client skills/get: %v", err)
-				}
-			} else if err != nil || got.Skill.URI != uri {
-				t.Fatalf("MCP client skills/get: %#v, %v", got, err)
+			if err != nil || got.Skill.URI != uri {
+				t.Fatalf("skills/get must answer for the curator (native=%v): %#v, %v", tc.native, got, err)
 			}
 		})
 	}

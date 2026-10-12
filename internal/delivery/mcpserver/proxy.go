@@ -217,7 +217,7 @@ func NewProxy(ctx context.Context, options ProxyOptions) (*Proxy, error) {
 	if err := cache.RecordHubURL(hubID, hubURL); err != nil {
 		return nil, fmt.Errorf("prepare the skill cache in %s: %w", cache.Root, err)
 	}
-	tools, err := runtimeToolDefinitions(ctx)
+	tools, err := runtimeToolDefinitions()
 	if err != nil {
 		return nil, err
 	}
@@ -353,24 +353,20 @@ func (transport bearerRoundTripper) CloseIdleConnections() {
 // runtimeToolDefinitions returns the runtime tools exactly as a hub lists
 // them, by registering them on a throwaway server and listing them in memory.
 // The proxy therefore offers the same names, descriptions and schemas.
-func runtimeToolDefinitions(ctx context.Context) ([]*mcp.Tool, error) {
+func runtimeToolDefinitions() ([]*mcp.Tool, error) {
 	adapter := &Server{profile: ProfileRuntime}
-	server := mcp.NewServer(&mcp.Implementation{Name: "skillhub", Version: "1"}, &mcp.ServerOptions{PageSize: paging.MaximumLimit})
-	adapter.registerRuntimeTools(server)
-	clientTransport, serverTransport := mcp.NewInMemoryTransports()
-	serverSession, err := server.Connect(ctx, serverTransport, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer serverSession.Close()
-	session, err := mcp.NewClient(&mcp.Implementation{Name: "skillhub-proxy", Version: "1"}, nil).Connect(ctx, clientTransport, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer session.Close()
+	collector := newToolCollector()
+	adapter.registerRuntimeTools(collector)
 	var tools []*mcp.Tool
-	for tool, err := range session.Tools(ctx, nil) {
+	for _, definition := range collector.definitions() {
+		// The definitions take the form a client decodes from tools/list, so
+		// the proxy offers byte-for-byte what a hub lists.
+		encoded, err := json.Marshal(definition)
 		if err != nil {
+			return nil, err
+		}
+		tool := &mcp.Tool{}
+		if err := json.Unmarshal(encoded, tool); err != nil {
 			return nil, err
 		}
 		tools = append(tools, tool)

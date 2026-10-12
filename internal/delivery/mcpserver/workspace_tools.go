@@ -10,8 +10,8 @@ import (
 	"github.com/vantt/mcp-skill-hub/internal/delivery/paging"
 )
 
-func (adapter *Server) registerWorkspaceTools(server *mcp.Server) {
-	addTool(server, &mcp.Tool{
+func (adapter *Server) registerWorkspaceTools(tools *toolRegistry) {
+	addTool(tools, &mcp.Tool{
 		Name: "curation_session_record", Title: "Record completed curation session",
 		Description: "Record explicitly observed, content-free UX measurements after a curation session has ended. This telemetry operation never mutates canonical files.",
 		Annotations: annotations(false, false, true, false),
@@ -26,20 +26,20 @@ func (adapter *Server) registerWorkspaceTools(server *mcp.Server) {
 			AutoFinalized: input.AutoFinalized, RecoveryCompleted: input.RecoveryCompleted,
 			RoutineGitNoise: input.RoutineGitNoise, DurationMS: input.DurationMS, ErrorCode: input.ErrorCode,
 		}))
-	})
-	addTool(server, &mcp.Tool{Name: "hub_status", Title: "Skill Hub status", Description: "Return local curation home, workspace health, action counts, and ranked next actions.", Annotations: annotations(true, false, false, false)},
+	}, withInputSchema(curationSessionInputSchema))
+	addTool(tools, &mcp.Tool{Name: "hub_status", Title: "Skill Hub status", Description: "Return local curation home, workspace health, action counts, and ranked next actions.", Annotations: annotations(true, false, false, false)},
 		func(ctx context.Context, _ *mcp.CallToolRequest, _ noArgs) (*mcp.CallToolResult, toolOutcome[app.CurationHome], error) {
 			return appResult((app.CurationService{}).GetCurationHome(ctx, adapter.workspace))
 		})
-	addTool(server, &mcp.Tool{Name: "workspace_validate", Title: "Validate workspace", Description: "Validate canonical workspace files without rebuilding or changing them.", Annotations: annotations(true, false, false, false)},
+	addTool(tools, &mcp.Tool{Name: "workspace_validate", Title: "Validate workspace", Description: "Validate canonical workspace files without rebuilding or changing them.", Annotations: annotations(true, false, false, false)},
 		func(ctx context.Context, _ *mcp.CallToolRequest, _ noArgs) (*mcp.CallToolResult, toolOutcome[app.Result], error) {
 			return appResult((app.WorkspaceService{}).ValidateWorkspace(ctx, adapter.workspace))
 		})
-	addTool(server, &mcp.Tool{Name: "workspace_rebuild", Title: "Rebuild catalog", Description: "Rebuild and atomically publish disposable derived catalog state from canonical files. Canonical files are never changed.", Annotations: annotations(false, false, false, false)},
+	addTool(tools, &mcp.Tool{Name: "workspace_rebuild", Title: "Rebuild catalog", Description: "Rebuild and atomically publish disposable derived catalog state from canonical files. Canonical files are never changed.", Annotations: annotations(false, false, false, false)},
 		func(ctx context.Context, _ *mcp.CallToolRequest, _ noArgs) (*mcp.CallToolResult, toolOutcome[app.Result], error) {
 			return appResult((app.CatalogService{}).BuildCatalogGeneration(ctx, adapter.workspace))
 		})
-	addTool(server, &mcp.Tool{Name: "workspace_diff", Title: "Read workspace diff", Description: "Return canonical Git diff paths or changes for an operation_id.", Annotations: annotations(true, false, false, false)},
+	addTool(tools, &mcp.Tool{Name: "workspace_diff", Title: "Read workspace diff", Description: "Return canonical Git diff paths or changes for an operation_id.", Annotations: annotations(true, false, false, false)},
 		func(ctx context.Context, _ *mcp.CallToolRequest, input workspaceDiffInput) (*mcp.CallToolResult, toolOutcome[workspaceDiffResult], error) {
 			limit, err := paging.NormalizeLimit(input.Limit)
 			if err != nil {

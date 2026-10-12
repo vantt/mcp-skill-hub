@@ -41,8 +41,8 @@ func validateSkillAddLocator(raw string) error {
 	return nil
 }
 
-func (adapter *Server) registerSkillAddTools(server *mcp.Server) {
-	addTool(server, &mcp.Tool{
+func (adapter *Server) registerSkillAddTools(tools *toolRegistry) {
+	addTool(tools, &mcp.Tool{
 		Name:        "skill_add_preview",
 		Title:       "Preview skill addition",
 		Description: "Preview adding a skill from a public GitHub repository. Returns an add proposal with confirmation pins.",
@@ -63,30 +63,21 @@ func (adapter *Server) registerSkillAddTools(server *mcp.Server) {
 		}))
 	})
 
-	addTool(server, &mcp.Tool{
+	addTool(tools, &mcp.Tool{
 		Name:        "skill_add_confirm",
 		Title:       "Confirm skill addition",
 		Description: "Apply an approved draft skill addition proposal with confirmation pins.",
 		Annotations: annotations(false, true, true, false),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input confirmationInput) (*mcp.CallToolResult, toolOutcome[app.SkillAddResult], error) {
-		proposalID := strings.TrimSpace(input.ProposalID)
-		proposalDigest := strings.TrimSpace(input.ProposalDigest)
-		baseVersion := strings.TrimSpace(input.BaseVersion)
-		if proposalID == "" || proposalDigest == "" || baseVersion == "" {
-			return failure[app.SkillAddResult](app.NewInvalidRequestError(
-				"proposal_id, proposal_digest, and base_version pins are required",
-				"Supply all confirmation pins.",
-			))
-		}
-		service := app.SkillAddService{}
-		preview, err := service.LoadSkillAddProposal(ctx, adapter.workspace, proposalID)
+		pins, err := input.requirePins()
 		if err != nil {
 			return failure[app.SkillAddResult](err)
 		}
-		return appResult(service.ConfirmSkillAdd(ctx, adapter.workspace, preview, app.ConfirmationPins{
-			ProposalID:     proposalID,
-			ProposalDigest: proposalDigest,
-			BaseVersion:    baseVersion,
-		}))
+		service := app.SkillAddService{}
+		preview, err := service.LoadSkillAddProposal(ctx, adapter.workspace, pins.ProposalID)
+		if err != nil {
+			return failure[app.SkillAddResult](err)
+		}
+		return appResult(service.ConfirmSkillAdd(ctx, adapter.workspace, preview, pins))
 	})
 }

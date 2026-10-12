@@ -9,8 +9,8 @@ import (
 	"github.com/vantt/mcp-skill-hub/internal/app"
 )
 
-func (adapter *Server) registerSourceWatchTools(server *mcp.Server) {
-	addTool(server, &mcp.Tool{
+func (adapter *Server) registerSourceWatchTools(tools *toolRegistry) {
+	addTool(tools, &mcp.Tool{
 		Name:        "source_watch_preview",
 		Title:       "Preview source watch",
 		Description: "Preview watching a GitHub repository and attaching it as a learning reference. Returns confirmation pins.",
@@ -33,23 +33,22 @@ func (adapter *Server) registerSourceWatchTools(server *mcp.Server) {
 			License:           strings.TrimSpace(input.License),
 			IdempotencyKey:    strings.TrimSpace(input.IdempotencyKey),
 		}))
-	})
+	}, withPropertyEnums(map[string][]any{
+		"cadence": {"manual", "daily", "weekly"},
+		"trust":   {"untrusted", "reviewed", "trusted"},
+	}))
 
-	addTool(server, &mcp.Tool{
+	addTool(tools, &mcp.Tool{
 		Name:        "source_watch_confirm",
 		Title:       "Confirm source watch",
 		Description: "Apply an approved source watch, attach, detach, or unwatch proposal with confirmation pins.",
 		Annotations: annotations(false, true, true, false),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input confirmationInput) (*mcp.CallToolResult, toolOutcome[app.SourceMutationResult], error) {
-		proposalID := strings.TrimSpace(input.ProposalID)
-		proposalDigest := strings.TrimSpace(input.ProposalDigest)
-		baseVersion := strings.TrimSpace(input.BaseVersion)
-		if proposalID == "" || proposalDigest == "" || baseVersion == "" {
-			return failure[app.SourceMutationResult](app.NewInvalidRequestError(
-				"proposal_id, proposal_digest, and base_version pins are required",
-				"Supply all confirmation pins.",
-			))
+		pins, err := input.requirePins()
+		if err != nil {
+			return failure[app.SourceMutationResult](err)
 		}
+		proposalID := pins.ProposalID
 		service := app.SourceService{}
 		preview, err := service.LoadSourceProposal(ctx, adapter.workspace, proposalID)
 		if err != nil {
@@ -64,10 +63,6 @@ func (adapter *Server) registerSourceWatchTools(server *mcp.Server) {
 				"Supply a valid source proposal ID.",
 			))
 		}
-		return appResult(service.ConfirmSourceProposal(ctx, adapter.workspace, preview, app.ConfirmationPins{
-			ProposalID:     proposalID,
-			ProposalDigest: proposalDigest,
-			BaseVersion:    baseVersion,
-		}))
+		return appResult(service.ConfirmSourceProposal(ctx, adapter.workspace, preview, pins))
 	})
 }

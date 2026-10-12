@@ -13,19 +13,14 @@ import (
 	"github.com/vantt/mcp-skill-hub/internal/systemskills"
 )
 
-func (adapter *Server) registerSkillTools(server *mcp.Server) {
-	adapter.registerSkillCurationTools(server)
-	adapter.registerSkillGetTool(server)
+func (adapter *Server) registerSkillCurationTools(tools *toolRegistry) {
+	adapter.registerSkillCreateTools(tools)
+	adapter.registerSkillTransitionTools(tools)
+	adapter.registerSkillListTool(tools)
 }
 
-func (adapter *Server) registerSkillCurationTools(server *mcp.Server) {
-	adapter.registerSkillCreateTools(server)
-	adapter.registerSkillTransitionTools(server)
-	adapter.registerSkillListTool(server)
-}
-
-func (adapter *Server) registerSkillCreateTools(server *mcp.Server) {
-	addTool(server, &mcp.Tool{
+func (adapter *Server) registerSkillCreateTools(tools *toolRegistry) {
+	addTool(tools, &mcp.Tool{
 		Name:        "skill_create_preview",
 		Title:       "Preview skill creation",
 		Description: "Preview creating a draft skill and return confirmation pins.",
@@ -57,34 +52,19 @@ func (adapter *Server) registerSkillCreateTools(server *mcp.Server) {
 		return appResult((app.SkillService{}).PreviewCreate(ctx, adapter.workspace, createInput, input.FullDiff))
 	})
 
-	addTool(server, &mcp.Tool{
+	addTool(tools, &mcp.Tool{
 		Name:        "skill_create_confirm",
 		Title:       "Confirm skill creation",
 		Description: "Apply a persisted draft skill creation proposal with required confirmation pins.",
 		Annotations: annotations(false, true, true, false),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input confirmationInput) (*mcp.CallToolResult, toolOutcome[app.SkillMutationResult], error) {
-		if strings.TrimSpace(input.ProposalID) == "" || strings.TrimSpace(input.ProposalDigest) == "" || strings.TrimSpace(input.BaseVersion) == "" {
-			return failure[app.SkillMutationResult](app.NewInvalidRequestError(
-				"proposal_id, proposal_digest, and base_version pins are required",
-				"Supply all confirmation pins.",
-			))
-		}
-		service := app.SkillService{}
-		preview, err := service.LoadSkillProposal(ctx, adapter.workspace, input.ProposalID)
-		if err != nil {
-			return failure[app.SkillMutationResult](err)
-		}
-		return appResult(service.ConfirmSkillMutation(ctx, adapter.workspace, preview, app.ConfirmationPins{
-			ProposalID:     input.ProposalID,
-			ProposalDigest: input.ProposalDigest,
-			BaseVersion:    input.BaseVersion,
-		}))
+		return adapter.confirmSkillMutation(ctx, input)
 	})
 }
 
-func (adapter *Server) registerSkillTransitionTools(server *mcp.Server) {
+func (adapter *Server) registerSkillTransitionTools(tools *toolRegistry) {
 
-	addTool(server, &mcp.Tool{
+	addTool(tools, &mcp.Tool{
 		Name:        "skill_transition_preview",
 		Title:       "Preview skill lifecycle transition",
 		Description: "Preview a skill lifecycle transition (target: active, deprecated, or archived) and return confirmation pins.",
@@ -114,34 +94,19 @@ func (adapter *Server) registerSkillTransitionTools(server *mcp.Server) {
 		return success(proposal)
 	})
 
-	addTool(server, &mcp.Tool{
+	addTool(tools, &mcp.Tool{
 		Name:        "skill_transition_confirm",
 		Title:       "Confirm skill lifecycle transition",
 		Description: "Apply a persisted skill lifecycle transition proposal with required confirmation pins.",
 		Annotations: annotations(false, true, true, false),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input confirmationInput) (*mcp.CallToolResult, toolOutcome[app.SkillMutationResult], error) {
-		if strings.TrimSpace(input.ProposalID) == "" || strings.TrimSpace(input.ProposalDigest) == "" || strings.TrimSpace(input.BaseVersion) == "" {
-			return failure[app.SkillMutationResult](app.NewInvalidRequestError(
-				"proposal_id, proposal_digest, and base_version pins are required",
-				"Supply all confirmation pins.",
-			))
-		}
-		service := app.SkillService{}
-		preview, err := service.LoadSkillProposal(ctx, adapter.workspace, input.ProposalID)
-		if err != nil {
-			return failure[app.SkillMutationResult](err)
-		}
-		return appResult(service.ConfirmSkillMutation(ctx, adapter.workspace, preview, app.ConfirmationPins{
-			ProposalID:     input.ProposalID,
-			ProposalDigest: input.ProposalDigest,
-			BaseVersion:    input.BaseVersion,
-		}))
+		return adapter.confirmSkillMutation(ctx, input)
 	})
 }
 
-func (adapter *Server) registerSkillListTool(server *mcp.Server) {
+func (adapter *Server) registerSkillListTool(tools *toolRegistry) {
 
-	addTool(server, &mcp.Tool{
+	addTool(tools, &mcp.Tool{
 		Name:        "skill_list",
 		Title:       "List skills",
 		Description: "for curation; to pick a skill for a task, call skill_resolve",
@@ -184,9 +149,9 @@ func (adapter *Server) registerSkillListTool(server *mcp.Server) {
 	})
 }
 
-func (adapter *Server) registerSkillGetTool(server *mcp.Server) {
+func (adapter *Server) registerSkillGetTool(tools *toolRegistry) {
 
-	addTool(server, &mcp.Tool{
+	addTool(tools, &mcp.Tool{
 		Name:        "skill_get",
 		Title:       "Get skill",
 		Description: "Get a skill by ID in any lifecycle state (routing, content, metadata). For active skills, local.path is a read-only copy of the skill folder and local.state_directory is writable. If local.status is review_required, content is omitted: ask the user to run `skillhub skill review <id>`. Run local.preflight check before scripts; ask before setup.",
@@ -227,16 +192,8 @@ func (adapter *Server) registerSkillGetTool(server *mcp.Server) {
 			result.Content = ""
 		}
 		if detail.LifecycleState == "active" && detail.SkillID != systemskills.CuratorSkillID {
-			blocked := local != nil && local.Status == app.LocalStatusReviewRequired
-			var reasons []string
-			if blocked && local != nil {
-				reasons = local.ReasonCodes
-			}
-			var session *mcp.ServerSession
-			if req != nil {
-				session = req.Session
-			}
-			adapter.recordLoad(ctx, session, app.SkillLoad{
+			blocked, reasons := reviewBlock(local)
+			adapter.recordLoad(ctx, toolSession(req), app.SkillLoad{
 				SkillID:      detail.SkillID,
 				ResourceKind: "entrypoint",
 				Surface:      "skill_get",

@@ -6,7 +6,6 @@ import (
 	"github.com/vantt/mcp-skill-hub/internal/delivery/paging"
 	"github.com/vantt/mcp-skill-hub/internal/resolver"
 	"github.com/vantt/mcp-skill-hub/internal/skill"
-	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
 )
 
 const (
@@ -18,38 +17,6 @@ type noArgs struct{}
 type pageInput struct {
 	Limit  int    `json:"limit,omitempty" jsonschema:"Maximum number of entries to return; defaults to 25 and cannot exceed 100."`
 	Cursor string `json:"cursor,omitempty" jsonschema:"Opaque cursor returned by the previous page."`
-}
-
-type sourceIntakeAddInput struct {
-	Locator        string `json:"locator"`
-	Reason         string `json:"reason"`
-	IdempotencyKey string `json:"idempotency_key"`
-}
-
-type sourceIntakeListInput struct {
-	Status string `json:"status,omitempty"`
-	pageInput
-}
-
-type sourceTriageInput struct {
-	CandidateID       string                `json:"candidate_id,omitempty"`
-	Decision          string                `json:"decision,omitempty"`
-	DecisionReason    string                `json:"decision_reason,omitempty"`
-	SourceID          string                `json:"source_id,omitempty"`
-	Adapter           string                `json:"adapter,omitempty"`
-	Ref               string                `json:"ref,omitempty"`
-	SourcePath        string                `json:"source_path,omitempty"`
-	License           string                `json:"license,omitempty"`
-	Trust             string                `json:"trust,omitempty"`
-	Cadence           string                `json:"cadence,omitempty"`
-	SkillID           string                `json:"skill_id,omitempty"`
-	NewSkillID        string                `json:"new_skill_id,omitempty"`
-	NewSkill          string                `json:"new_skill,omitempty"`
-	Selection         string                `json:"selection,omitempty"`
-	All               bool                  `json:"all,omitempty"`
-	MonitoringEnabled *bool                 `json:"monitoring_enabled,omitempty"`
-	IdempotencyKey    string                `json:"idempotency_key,omitempty"`
-	Confirmation      *app.ConfirmationPins `json:"confirmation,omitempty"`
 }
 
 type sourceCheckInput struct {
@@ -99,22 +66,6 @@ type sourceImportPreviewInput struct {
 
 type skillUpstreamStatusInput struct {
 	SkillID string `json:"skill_id,omitempty" jsonschema:"Optional skill identifier to inspect. If omitted, returns upstream status for all tracked skills."`
-}
-
-type sourceLinkPreviewInput struct {
-	Action         string `json:"action" jsonschema:"Action to perform: attach (link source) or detach (unlink source)."`
-	SkillID        string `json:"skill_id" jsonschema:"Skill identifier to link or unlink."`
-	SourceID       string `json:"source_id,omitempty" jsonschema:"Source identifier (required for detach; optional for attach if locator is provided)."`
-	Locator        string `json:"locator,omitempty" jsonschema:"Repository URL or locator to watch and attach."`
-	Ref            string `json:"ref,omitempty" jsonschema:"Branch, tag, or commit ref."`
-	Path           string `json:"path,omitempty" jsonschema:"Subdirectory path in the source."`
-	Cadence        string `json:"cadence,omitempty" jsonschema:"Monitoring cadence: manual, daily, or weekly."`
-	IdempotencyKey string `json:"idempotency_key,omitempty" jsonschema:"Optional idempotency key."`
-}
-
-type sourceUnwatchPreviewInput struct {
-	SourceID       string `json:"source_id" jsonschema:"Source identifier to stop watching."`
-	IdempotencyKey string `json:"idempotency_key,omitempty" jsonschema:"Optional idempotency key."`
 }
 
 type SkillUpstreamItem struct {
@@ -200,19 +151,6 @@ type skillGetResult struct {
 	Local   *app.LocalSkill `json:"local,omitempty"`
 }
 
-type errorEnvelope struct {
-	Error *app.Error `json:"error"`
-}
-
-type outcomeRecordInput struct {
-	IncorporationID string   `json:"incorporation_id"`
-	EventID         string   `json:"event_id"`
-	State           string   `json:"state"`
-	Evidence        []string `json:"evidence"`
-	Note            string   `json:"note"`
-	Supersedes      string   `json:"supersedes,omitempty"`
-}
-
 type curationSessionRecordInput struct {
 	SchemaVersion            string  `json:"schema_version"`
 	EventID                  string  `json:"event_id"`
@@ -271,18 +209,6 @@ type toolOutcome[T any] struct {
 type routingEvaluationResult struct {
 	Resolution resolver.Response `json:"resolution"`
 	Mutation   bool              `json:"mutation"`
-}
-
-type sourceTriageResult struct {
-	Preview  *app.SourceProposal       `json:"preview,omitempty"`
-	Mutation *app.SourceMutationResult `json:"mutation,omitempty"`
-	SkillAdd *app.SkillAddProposal     `json:"skill_add,omitempty"`
-}
-
-type sourceListItem struct {
-	Kind      string               `json:"kind"`
-	Candidate *sourcepkg.Candidate `json:"candidate,omitempty"`
-	Source    *sourcepkg.Record    `json:"source,omitempty"`
 }
 
 type resolveResult struct {

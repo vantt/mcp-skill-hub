@@ -16,8 +16,8 @@ type sourceListInput struct {
 	Limit  int    `json:"limit,omitempty"`
 }
 
-func (adapter *Server) registerSourceTools(server *mcp.Server) {
-	addTool(server, &mcp.Tool{
+func (adapter *Server) registerSourceTools(tools *toolRegistry) {
+	addTool(tools, &mcp.Tool{
 		Name:        "source_list",
 		Title:       "List sources",
 		Description: "List monitored sources in the catalog as a snapshot-bound page. Pass next_cursor unchanged to continue.",
@@ -47,7 +47,7 @@ func (adapter *Server) registerSourceTools(server *mcp.Server) {
 		return success(paged)
 	})
 
-	addTool(server, &mcp.Tool{
+	addTool(tools, &mcp.Tool{
 		Name:        "source_check",
 		Title:       "Check sources",
 		Description: "Check selected or due source revisions through configured adapters without editing curated skills.",
