@@ -194,7 +194,7 @@ flowchart LR
 | Delivery | Validate transport, map errors/status (CLI: `internal/delivery/cli`, MCP: `internal/delivery/mcpserver`, Web: `internal/delivery/web`) | Chứa business logic riêng |
 
 - **Phân loại lỗi:** Error classification do `internal/app` sở hữu (`app.ClassifyError`, `app.ErrorOf`). Các delivery adapter chỉ bổ sung transport policy (ví dụ MCP retryable flag, correlation ID) và không giữ matching rules riêng.
-- **Shared read models:** Các read model dùng chung giữa nhiều adapter nằm trong `internal/app`, ví dụ `SkillService.GetSkillDetail` phục vụ MCP `skill_get`, CLI và WebUI.
+- **Shared read models:** Các read model dùng chung giữa nhiều adapter nằm trong `internal/app`, ví dụ `SkillService.ReadSkillCore` (đọc nhanh từ một catalog generation, không đánh giá trạng thái canonical) phục vụ MCP `skill_get` và bundle của hub, còn `SkillService.GetSkillDetail` (core cộng với đánh giá `diverged`, `changed_resources`, `missing_resources`) phục vụ CLI và WebUI.
 - **CLI presentation:** CLI human output chỉ được render qua `internal/delivery/cli/termui`. JSON output là machine contract cố định; human text có thể điều chỉnh layout theo độ rộng terminal.
 ## 6. Agent ↔ Hub resolution và progressive loading
 
