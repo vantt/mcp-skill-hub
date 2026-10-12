@@ -58,9 +58,10 @@
   "unverified_checks": [
     {
       "tool": "@modelcontextprotocol/conformance",
-      "version": "0.1.16",
-      "status": "blocked_unverified",
-      "reason": "The released runner requires an HTTP URL and its listed scenarios stop at MCP 2025-11-25, while this server exposes stdio and targets 2026-07-28. No transport adapter was added merely to manufacture a conformance result."
+      "version": "0.1.16 and 0.2.0-alpha.12",
+      "status": "attempted_not_passing",
+      "date": "2026-10-12",
+      "reason": "Run against `skillhub serve` over HTTP (runtime profile, temporary hub, isolated HOME/XDG/config directories; a local forwarding proxy added the hub token because the runner cannot send headers). The skills scenarios of 0.2.0-alpha.12 (sep-2640-skills-enumeration, sep-2640-skills-manifest) could not exercise skills/list and skills/get: the runner speaks protocol 2026-07-28 for them and the stateful HTTP listener answers -32022 (only 2025-11-25 and older are supported there). sep-2640-skills-directory passed (directory read checks skipped, directoryRead is false). Stable 0.1.16 active suite: 8 of 30 scenarios passed (server-initialize, logging-set-level, ping, tools-list, server-sse-multiple-streams, resources-list, prompts-list, dns-rebinding-protection); the other 22 expect the runner's own fixture tools, prompts and resources, which this hub does not serve. Over the proxy the Host header was rewritten, so the dns-rebinding result is not evidence. No skills conformance is claimed."
     }
   ],
   "stock_clients": [
