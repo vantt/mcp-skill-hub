@@ -44,4 +44,4 @@ host check when a host release changes that; the matrix status stays `unverified
 
 ## Not verified locally
 
-Web bundle and e2e run in CI only; F4 (`cd x && skillhub ... --yes` with Claude ask rules): the rule set `connect` writes was read, and the compound-command behavior was confirmed with `echo` rules in `claude -p`. A run with the real `skillhub` rules is pending.
+Nothing open from this review. Permission rules for compound commands were run against the real `skillhub` rule set (see the observation backlog, F4). Web bundle and e2e run in CI.
