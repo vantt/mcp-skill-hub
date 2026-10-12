@@ -576,7 +576,10 @@ func TestSymlinkedSkillFolderIsBlockedPerItem(t *testing.T) {
 
 func TestVerifiedSkillsClientDropsOnlyTheCuratorWrapper(t *testing.T) {
 	original := bytes.Clone(matrixData)
-	t.Cleanup(func() { matrixData = original })
+	t.Cleanup(func() {
+		matrixData = original
+		parsedMatrix = newParsedMatrix()
+	})
 	hub, binary := t.TempDir(), absoluteBinary(t)
 	request := Request{Workspace: hub, Binary: binary, Hosts: []Host{HostClaude}}
 	planAndApply(t, request)
@@ -591,6 +594,7 @@ func TestVerifiedSkillsClientDropsOnlyTheCuratorWrapper(t *testing.T) {
 		}
 	}
 	matrixData, _ = json.Marshal(doc)
+	parsedMatrix = newParsedMatrix()
 	wrapper := filepath.Join(hub, ".claude", "skills", "system-curator", "SKILL.md")
 	edited := append(currentWrapper(t, systemskills.CuratorSkillID), []byte("\nmine\n")...)
 	writeTestFile(t, wrapper, edited, 0o644)

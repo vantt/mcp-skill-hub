@@ -221,16 +221,16 @@ func (DistributionService) ReadResource(ctx context.Context, path, uri string) (
 	}
 	defer closeDistributionHandle(handle, &resultErr)
 	var entry DistributedSkill
+	var verified map[string][]byte
 	if id == systemskills.CuratorSkillID {
 		entry, err = buildBundledCuratorSkill()
-		if err != nil {
-			return content, err
-		}
 	} else {
-		entry, err = buildDistributedSkill(ctx, root, handle, id)
-		if err != nil {
-			return content, err
-		}
+		// The build verifies every file against its pinned digest; the
+		// requested file's verified bytes are served as they were read.
+		entry, verified, err = buildDistributedSkillKeeping(ctx, root, handle, id, func(candidate string) bool { return candidate == relative })
+	}
+	if err != nil {
+		return content, err
 	}
 	if entry.Version != "sha256:"+manifestDigest {
 		return content, &SnapshotExpiredError{URI: uri, SkillID: id, CurrentURI: entry.URI}
@@ -253,13 +253,9 @@ func (DistributionService) ReadResource(ctx context.Context, path, uri string) (
 		}
 		contents = []byte(bundle.Instructions)
 	} else {
-		internal := entry.resourcePaths[uri]
-		if internal == "" {
+		var found bool
+		if contents, found = verified[relative]; !found {
 			return content, skill.ErrSnapshotExpired
-		}
-		contents, err = readPinnedResource(root, internal, selected.Digest)
-		if err != nil {
-			return content, err
 		}
 	}
 	if int64(len(contents)) != selected.Size {
@@ -292,90 +288,103 @@ func closeDistributionHandle(handle *catalog.Handle, resultErr *error) {
 }
 
 func buildDistributedSkill(ctx context.Context, root string, handle *catalog.Handle, id string) (DistributedSkill, error) {
+	entry, _, err := buildDistributedSkillKeeping(ctx, root, handle, id, nil)
+	return entry, err
+}
+
+// buildDistributedSkillKeeping builds the entry of an active skill and
+// verifies every distributed file against its pinned digest. The bytes of the
+// files for which keep returns true (by path relative to the skill folder) are
+// returned keyed by that path, so a caller that needs content does not read
+// the file a second time. A nil keep keeps nothing.
+func buildDistributedSkillKeeping(ctx context.Context, root string, handle *catalog.Handle, id string, keep func(relative string) bool) (DistributedSkill, map[string][]byte, error) {
 	if id == "" || strings.ContainsAny(id, `/\\`) {
-		return DistributedSkill{}, skill.ErrNotFound
+		return DistributedSkill{}, nil, skill.ErrNotFound
 	}
 	manifest := skill.Manifest{SkillID: id, CatalogSnapshot: handle.Pointer.CatalogSnapshot, Resources: []skill.Resource{}}
 	if err := handle.DB.QueryRowContext(ctx, `SELECT name,description,status FROM skills WHERE id=?`, id).Scan(&manifest.Name, &manifest.Description, &manifest.Status); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return DistributedSkill{}, skill.ErrNotFound
+			return DistributedSkill{}, nil, skill.ErrNotFound
 		}
-		return DistributedSkill{}, err
+		return DistributedSkill{}, nil, err
 	}
 	if manifest.Status != "active" {
-		return DistributedSkill{}, skill.ErrNotFound
+		return DistributedSkill{}, nil, skill.ErrNotFound
 	}
 	rows, err := handle.DB.QueryContext(ctx, `SELECT path,kind,digest,size_bytes FROM resources WHERE skill_id=? ORDER BY path`, id)
 	if err != nil {
-		return DistributedSkill{}, err
+		return DistributedSkill{}, nil, err
 	}
 	for rows.Next() {
 		var resource skill.Resource
 		if err := rows.Scan(&resource.Path, &resource.Kind, &resource.Digest, &resource.SizeBytes); err != nil {
 			_ = rows.Close()
-			return DistributedSkill{}, err
+			return DistributedSkill{}, nil, err
 		}
 		manifest.Resources = append(manifest.Resources, resource)
 	}
 	if err := rows.Err(); err != nil {
 		_ = rows.Close()
-		return DistributedSkill{}, err
+		return DistributedSkill{}, nil, err
 	}
 	if err := rows.Close(); err != nil {
-		return DistributedSkill{}, err
+		return DistributedSkill{}, nil, err
 	}
 	digestInput := make([]manifestDigestEntry, 0, len(manifest.Resources))
+	internalPaths := make(map[string]*skill.Resource, len(manifest.Resources))
 	var total int64
-	var entrypoint *skill.Resource
 	for index := range manifest.Resources {
 		resource := &manifest.Resources[index]
 		relative, ok := distributedRelativePath(resource.Path, id)
 		if !ok {
 			continue
 		}
-		if relative == "SKILL.md" {
-			entrypoint = resource
-		}
+		internalPaths[relative] = resource
 		total += resource.SizeBytes
 		digestInput = append(digestInput, manifestDigestEntry{Path: relative, Digest: resource.Digest, Size: resource.SizeBytes})
 	}
+	entrypoint := internalPaths["SKILL.md"]
 	if entrypoint == nil {
 		if len(digestInput) == 0 || len(digestInput) > MaxDistributedSkillResources {
-			return DistributedSkill{}, fmt.Errorf("%w: skill %s has %d distributed resources; supported range is 1..%d", catalog.ErrSkillNotServable, id, len(digestInput), MaxDistributedSkillResources)
+			return DistributedSkill{}, nil, fmt.Errorf("%w: skill %s has %d distributed resources; supported range is 1..%d", catalog.ErrSkillNotServable, id, len(digestInput), MaxDistributedSkillResources)
 		}
-		return DistributedSkill{}, fmt.Errorf("%w: %w: active skill has no top-level SKILL.md", catalog.ErrSkillNotServable, skill.ErrSnapshotExpired)
+		return DistributedSkill{}, nil, fmt.Errorf("%w: %w: active skill has no top-level SKILL.md", catalog.ErrSkillNotServable, skill.ErrSnapshotExpired)
 	}
-	contents, err := readPinnedResource(root, entrypoint.Path, entrypoint.Digest)
+	entrypointBytes, err := readPinnedResource(root, entrypoint.Path, entrypoint.Digest)
 	if err != nil {
-		return DistributedSkill{}, fmt.Errorf("%w: %w", catalog.ErrSkillNotServable, err)
+		return DistributedSkill{}, nil, fmt.Errorf("%w: %w", catalog.ErrSkillNotServable, err)
 	}
-	if err := catalog.ValidateServableSkill(id, contents, len(digestInput), total); err != nil {
-		return DistributedSkill{}, err
-	}
-	frontmatter, err := catalog.ParseSkillFrontmatter(contents)
+	frontmatter, err := catalog.ParseServableSkill(id, entrypointBytes, len(digestInput), total)
 	if err != nil {
-		return DistributedSkill{}, fmt.Errorf("%w: skill %s is not distributable: %v", catalog.ErrSkillNotServable, id, err)
+		return DistributedSkill{}, nil, err
+	}
+	var kept map[string][]byte
+	if keep != nil {
+		kept = make(map[string][]byte)
+		if keep("SKILL.md") {
+			kept["SKILL.md"] = entrypointBytes
+		}
 	}
 
-	// Verify all other distributed resources of this skill match their pinned digests
+	// Verify all other distributed resources of this skill match their pinned digests.
 	for _, res := range digestInput {
 		if res.Path == "SKILL.md" {
 			continue
 		}
-		for _, internal := range manifest.Resources {
-			if rel, ok := relativeSkillPath(internal.Path, id); ok && rel == res.Path {
-				if _, err := readPinnedResource(root, internal.Path, internal.Digest); err != nil {
-					return DistributedSkill{}, fmt.Errorf("%w: %w", catalog.ErrSkillNotServable, err)
-				}
-				break
-			}
+		internal := internalPaths[res.Path]
+		contents, err := readPinnedResource(root, internal.Path, internal.Digest)
+		if err != nil {
+			return DistributedSkill{}, nil, fmt.Errorf("%w: %w", catalog.ErrSkillNotServable, err)
+		}
+		if keep != nil && keep(res.Path) {
+			kept[res.Path] = contents
 		}
 	}
 
 	sort.Slice(digestInput, func(i, j int) bool { return digestInput[i].Path < digestInput[j].Path })
 	hexDigest, err := hashDistributedManifest(digestInput)
 	if err != nil {
-		return DistributedSkill{}, err
+		return DistributedSkill{}, nil, err
 	}
 	base := "skill://skillhub/" + hexDigest + "/" + id + "/"
 	resources := make([]DistributedResource, 0, len(digestInput))
@@ -385,14 +394,9 @@ func buildDistributedSkill(ctx context.Context, root string, handle *catalog.Han
 		digests = append(digests, skillruntime.ResourceDigest{Path: resource.Path, Digest: resource.Digest})
 		uri := base + escapeURIPath(resource.Path)
 		resources = append(resources, DistributedResource{URI: uri, Digest: resource.Digest, Size: resource.Size})
-		for _, internal := range manifest.Resources {
-			if relative, ok := relativeSkillPath(internal.Path, id); ok && relative == resource.Path {
-				resourcePaths[uri] = internal.Path
-				break
-			}
-		}
+		resourcePaths[uri] = internalPaths[resource.Path].Path
 	}
-	return DistributedSkill{URI: base + "SKILL.md", Frontmatter: frontmatter, Resources: resources, Version: "sha256:" + hexDigest, Snapshot: manifest.CatalogSnapshot, SkillID: id, resourcePaths: resourcePaths, digests: digests}, nil
+	return DistributedSkill{URI: base + "SKILL.md", Frontmatter: frontmatter, Resources: resources, Version: "sha256:" + hexDigest, Snapshot: manifest.CatalogSnapshot, SkillID: id, resourcePaths: resourcePaths, digests: digests}, kept, nil
 }
 
 // manifestDigestEntry is one file in the distributed manifest digest input.
@@ -442,19 +446,19 @@ type distributedSkillSource struct {
 	Files       []distributedSkillFile
 }
 
-// loadDistributedSkillSource builds an active, servable skill and reads every
-// distributed file, verifying each against its pinned digest and size. The
-// catalog handle is released before returning, so callers may write files
-// without holding the shared catalog lock. When admit returns false, the file
-// bytes are not read and Files stays empty; admit sees the skill entry and its
-// manifest document, which is enough to decide trust.
+// loadDistributedSkillSource builds an active, servable skill and returns every
+// distributed file, each verified against its pinned digest and size by the
+// same read that built the entry. The catalog handle is released before
+// returning, so callers may write files without holding the shared catalog
+// lock. When admit returns false, Files stays empty; admit sees the skill entry
+// and its manifest document, which is enough to decide trust.
 func loadDistributedSkillSource(ctx context.Context, path, id string, admit func(DistributedSkill, []byte) (bool, error)) (root string, source distributedSkillSource, resultErr error) {
 	root, handle, err := openDistributionGeneration(ctx, path)
 	if err != nil {
 		return "", source, err
 	}
 	defer closeDistributionHandle(handle, &resultErr)
-	entry, err := buildDistributedSkill(ctx, root, handle, id)
+	entry, verified, err := buildDistributedSkillKeeping(ctx, root, handle, id, func(string) bool { return true })
 	if err != nil {
 		return "", source, err
 	}
@@ -501,9 +505,9 @@ func loadDistributedSkillSource(ctx context.Context, path, id string, admit func
 		if internal == "" || !ok {
 			return "", source, fmt.Errorf("%w: resource %s has no verified workspace path", skill.ErrSnapshotExpired, resource.URI)
 		}
-		contents, err := readPinnedResource(root, internal, resource.Digest)
-		if err != nil {
-			return "", source, err
+		contents, found := verified[relative]
+		if !found {
+			return "", source, fmt.Errorf("%w: resource %s was not read", skill.ErrSnapshotExpired, resource.URI)
 		}
 		if int64(len(contents)) != resource.Size {
 			return "", source, fmt.Errorf("%w: resource %s size changed", ErrResourceContentUnavailable, relative)

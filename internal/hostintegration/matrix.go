@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"strings"
+	"sync"
 )
 
 //go:embed matrix.json
@@ -59,10 +60,22 @@ func hostSupportsServerToggleFromData(host Host, data []byte) bool {
 	return false
 }
 
+// parsedMatrix decodes the embedded matrix once; every skills/list and
+// skills/get asks it, and the matrix never changes while the process runs.
+var parsedMatrix = newParsedMatrix()
+
+func newParsedMatrix() func() (matrixDocument, error) {
+	return sync.OnceValues(func() (matrixDocument, error) {
+		var doc matrixDocument
+		err := json.Unmarshal(matrixData, &doc)
+		return doc, err
+	})
+}
+
 // HostSupportsSkillsExtension selects MCP-only curator delivery only for verified clients.
 func HostSupportsSkillsExtension(host Host) bool {
-	var doc matrixDocument
-	if err := json.Unmarshal(matrixData, &doc); err != nil {
+	doc, err := parsedMatrix()
+	if err != nil {
 		return false
 	}
 	names := map[Host]string{HostClaude: "Claude Code", HostCodex: "Codex CLI", HostGemini: "Gemini CLI"}

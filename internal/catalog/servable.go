@@ -64,22 +64,29 @@ func ParseSkillFrontmatter(contents []byte) (map[string]any, error) {
 // ValidateServableSkill applies the invariants skill distribution enforces so an
 // active skill that could never be served is rejected when the catalog is built.
 func ValidateServableSkill(id string, entrypoint []byte, resourceCount int, totalBytes int64) error {
+	_, err := ParseServableSkill(id, entrypoint, resourceCount, totalBytes)
+	return err
+}
+
+// ParseServableSkill validates a skill like ValidateServableSkill and returns
+// the parsed frontmatter, so a caller that needs both parses the entrypoint once.
+func ParseServableSkill(id string, entrypoint []byte, resourceCount int, totalBytes int64) (map[string]any, error) {
 	if resourceCount < 1 || resourceCount > MaxDistributedSkillResources {
-		return fmt.Errorf("%w: skill %s has %d distributed resources; supported range is 1..%d", ErrSkillNotServable, id, resourceCount, MaxDistributedSkillResources)
+		return nil, fmt.Errorf("%w: skill %s has %d distributed resources; supported range is 1..%d", ErrSkillNotServable, id, resourceCount, MaxDistributedSkillResources)
 	}
 	if totalBytes > MaxDistributedSkillBytes {
-		return fmt.Errorf("%w: skill %s exceeds the %d-byte distribution limit", ErrSkillNotServable, id, MaxDistributedSkillBytes)
+		return nil, fmt.Errorf("%w: skill %s exceeds the %d-byte distribution limit", ErrSkillNotServable, id, MaxDistributedSkillBytes)
 	}
 	frontmatter, err := ParseSkillFrontmatter(entrypoint)
 	if err != nil {
-		return fmt.Errorf("%w: skill %s is not distributable: %v", ErrSkillNotServable, id, err)
+		return nil, fmt.Errorf("%w: skill %s is not distributable: %v", ErrSkillNotServable, id, err)
 	}
 	name, _ := frontmatter["name"].(string)
 	description, _ := frontmatter["description"].(string)
 	if name != id || strings.TrimSpace(description) == "" {
-		return fmt.Errorf("%w: skill %s frontmatter must contain name %q and a non-empty description", ErrSkillNotServable, id, id)
+		return nil, fmt.Errorf("%w: skill %s frontmatter must contain name %q and a non-empty description", ErrSkillNotServable, id, id)
 	}
-	return nil
+	return frontmatter, nil
 }
 
 // servableSkillWarnings reports every active skill that distribution cannot
