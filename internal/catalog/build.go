@@ -154,8 +154,14 @@ func buildCatalogGeneration(ctx context.Context, root string, options BuildOptio
 		if current.ProjectionInputDigest != input.ProjectionInputDigest || current.CatalogSnapshot != input.CatalogSnapshot || !sameInputFiles(current.Files, input.Files) {
 			return fmt.Errorf("%w: canonical inputs changed before publish", ErrCanonicalChanged)
 		}
+		before, statErr := statGeneration(root, pointer.Database)
 		if err := verifyGeneration(ctx, databasePath, input, builderVersion, counts); err != nil {
 			return err
+		}
+		// The integrity check just ran on exactly this file version, so requests
+		// right after publication need not repeat it.
+		if after, err := statGeneration(root, pointer.Database); statErr == nil && err == nil && after == before {
+			integrityVerified.remember(databasePath, after)
 		}
 		// This is the final safe cancellation point: after pointer replacement the
 		// verified generation may already be visible and must be reported as published.
@@ -502,15 +508,7 @@ func writePointer(root string, pointer Pointer, options BuildOptions) (bool, err
 	}
 	name := temporary.Name()
 	defer os.Remove(name)
-	if err := temporary.Chmod(0o600); err == nil {
-		_, err = temporary.Write(contents)
-	}
-	if err == nil {
-		err = options.fail(FaultPointerTempSync)
-	}
-	if err == nil {
-		err = temporary.Sync()
-	}
+	err = fillPointerFile(temporary, contents, options)
 	if closeErr := temporary.Close(); err == nil {
 		err = closeErr
 	}
@@ -527,6 +525,21 @@ func writePointer(root string, pointer Pointer, options BuildOptions) (bool, err
 		return true, err
 	}
 	return true, syncDirectory(directory)
+}
+
+// fillPointerFile restricts, writes, and syncs the temporary pointer file. The
+// first failure is returned so an empty or partial pointer is never published.
+func fillPointerFile(file *os.File, contents []byte, options BuildOptions) error {
+	if err := file.Chmod(0o600); err != nil {
+		return err
+	}
+	if _, err := file.Write(contents); err != nil {
+		return err
+	}
+	if err := options.fail(FaultPointerTempSync); err != nil {
+		return err
+	}
+	return file.Sync()
 }
 
 func ensureRuntimeDirectory(root, relative string) error {

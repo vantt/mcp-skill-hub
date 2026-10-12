@@ -50,14 +50,32 @@ func TestIntegrityIsCheckedOncePerFileVersion(t *testing.T) {
 	}
 }
 
+func TestIntegrityIsSeededByTheBuildThatCheckedTheFile(t *testing.T) {
+	root := newFreshnessWorkspace(t)
+	pointer, err := readPointer(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for call := range 3 {
+		if checks, err := verifyAndCountChecks(t, root, pointer); err != nil || checks != 0 {
+			t.Fatalf("call %d right after the build: %d quick checks, %v; want 0 and no error", call, checks, err)
+		}
+	}
+}
+
 func TestIntegrityOfARecentlyWrittenFileIsCheckedEveryTime(t *testing.T) {
 	root := newFreshnessWorkspace(t)
 	pointer, err := readPointer(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The file was just published, inside the window in which a later write could
-	// keep its modification time, so its result is not reused yet.
+	// Touching the file after the build changes its identity, so the seeded
+	// result no longer applies. The file is inside the window in which a later
+	// write could keep its modification time, so no new result is reused yet.
+	now := time.Now()
+	if err := os.Chtimes(generationPath(root, pointer), now, now); err != nil {
+		t.Fatal(err)
+	}
 	for call := range 3 {
 		if checks, err := verifyAndCountChecks(t, root, pointer); err != nil || checks != 1 {
 			t.Fatalf("call %d: %d quick checks, %v; want 1 and no error", call, checks, err)

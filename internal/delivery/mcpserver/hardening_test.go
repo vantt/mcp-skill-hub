@@ -256,13 +256,14 @@ func BenchmarkMCPToolList(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	b.ReportMetric(float64(workspaceBytes), "workspace_bytes")
+	expected := len(expectedToolAnnotations())
 	for range b.N {
 		listed, err := session.ListTools(context.Background(), nil)
 		if err != nil {
 			b.Fatal(err)
 		}
-		if len(listed.Tools) != 33 {
-			b.Fatalf("tool list = %d", len(listed.Tools))
+		if len(listed.Tools) != expected {
+			b.Fatalf("tool list = %d, want %d", len(listed.Tools), expected)
 		}
 	}
 }

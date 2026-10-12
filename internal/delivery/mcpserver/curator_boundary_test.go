@@ -206,7 +206,7 @@ func TestCuratorServerBoundaryAndCompatibleTools(t *testing.T) {
 	if _, err := mcp.CallCustomMethod[*listSkillsParams, *listSkillsResult](t.Context(), runtimeSession, "skills/list", &listSkillsParams{}); err != nil {
 		t.Fatalf("runtime skills/list extension method failed: %v", err)
 	}
-	if _, err := mcp.CallCustomMethod[*listSkillsParams, *listSkillsResult](t.Context(), curationSession, "skills/list", &listSkillsParams{}); err != nil {
-		t.Fatalf("curation skills/list extension method failed: %v", err)
+	if _, err := mcp.CallCustomMethod[*listSkillsParams, *listSkillsResult](t.Context(), curationSession, "skills/list", &listSkillsParams{}); err == nil {
+		t.Fatal("curation profile must not serve the skills extension")
 	}
 }

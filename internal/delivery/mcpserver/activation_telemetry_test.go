@@ -167,11 +167,7 @@ func TestActivationTelemetryEndToEnd(t *testing.T) {
 		t.Fatalf("expected empty content for review_required, got %q", blockedGet.Content)
 	}
 
-	listedAfter, err := mcp.CallCustomMethod[*listSkillsParams, *listSkillsResult](t.Context(), session2, "skills/list", &listSkillsParams{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	entryAfter := findSkillEntryByName(t, listedAfter.Skills, "review-skill")
+	entryAfter := heldSkillEntry(t, root, "review-skill")
 	var newChecksURI string
 	for _, res := range entryAfter.Resources {
 		if filepath.Base(res.URI) == "checks.md" {

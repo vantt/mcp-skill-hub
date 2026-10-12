@@ -190,11 +190,7 @@ func TestResourceReadRefusesUnapprovedThirdPartyContent(t *testing.T) {
 		t.Fatal(err)
 	}
 	session := connectDistributionSession(t, root)
-	listed, err := mcp.CallCustomMethod[*listSkillsParams, *listSkillsResult](t.Context(), session, "skills/list", &listSkillsParams{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	entry := findSkillEntryByName(t, listed.Skills, "review-skill")
+	entry := heldSkillEntry(t, root, "review-skill")
 	var scriptURI, notesURI, entrypointURI string
 	for _, resource := range entry.Resources {
 		switch {
