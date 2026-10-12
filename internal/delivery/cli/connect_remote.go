@@ -135,6 +135,8 @@ func hostChangeLines(result app.Result, removal bool) []string {
 		description := formatChangeKind(kind, item.Summary, relPath)
 		if deleted := item.Impact == "Would be deleted." || item.Impact == "Deleted."; deleted && removal {
 			description += " deleted"
+		} else if deleted && result.Status == app.StatusApplied {
+			description = "removed " + description
 		} else if deleted {
 			description = "remove " + description
 		}

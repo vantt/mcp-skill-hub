@@ -333,8 +333,8 @@ func TestConnectSwitchesAScopeAndRemoveRestoresIt(t *testing.T) {
 	if code != 0 || !strings.Contains(stdout, "This replaces:") || !strings.Contains(flatText(stdout), "Claude Code: the local hub at "+ws) || !strings.Contains(stdout, "Claude Code: will connect (.mcp.json, .claude/settings.local.json, remove system-curator skill)") || !strings.Contains(stdout, "Agent Skills folder (.agents/skills): will connect (remove system-curator skill)") {
 		t.Fatalf("switch preview: exit %d\n%s%s", code, stdout, stderr)
 	}
-	if code, _, stderr := runConnectCLI(t, project, "--hub", hub, "--token-file", tokenFile); code != 0 {
-		t.Fatal(stderr)
+	if code, stdout, stderr := runConnectCLI(t, project, "--hub", hub, "--token-file", tokenFile); code != 0 || !strings.Contains(stdout, "Agent Skills folder (.agents/skills): connected (removed system-curator skill)") {
+		t.Fatalf("switch: exit %d\n%s%s", code, stdout, stderr)
 	}
 	raw, err := os.ReadFile(filepath.Join(project, ".mcp.json"))
 	if err != nil {
