@@ -366,10 +366,6 @@ func classifyEntity(path string) string {
 	}
 }
 
-func isCanonicalEntityPath(path string) bool {
-	return isCanonicalEntityPathForVersion(path, 3)
-}
-
 func isCanonicalEntityPathForVersion(path string, schemaVersion int) bool {
 	if strings.HasPrefix(path, "skills/") {
 		if schemaVersion < 3 {

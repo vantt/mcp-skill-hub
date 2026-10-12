@@ -114,11 +114,6 @@ func publicAddress(address netip.Addr) bool {
 	return true
 }
 
-func publicIP(ip net.IP) bool {
-	address, ok := netip.AddrFromSlice(ip)
-	return ok && publicAddress(address)
-}
-
 func safeResourcePath(value string) bool {
 	if value == "" || value == "." || strings.Contains(value, `\`) || strings.ContainsRune(value, '\x00') || strings.HasPrefix(value, "/") {
 		return false

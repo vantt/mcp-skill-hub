@@ -1185,9 +1185,6 @@ func normalizeCapturedLocator(raw string) (string, error) {
 	}
 	return filepath.ToSlash(clean), nil
 }
-func safeSourcePath(value string) bool {
-	return value != "" && value != "." && value != ".." && !strings.HasPrefix(value, "../") && !strings.Contains(value, `\`)
-}
 func safeOpaqueRecordID(value string) bool {
 	if value == "" || len(value) > 128 {
 		return false

@@ -127,15 +127,6 @@ func normalizeText(contents []byte) []byte {
 	return contents
 }
 
-// splitSkillFrontmatter separates frontmatter header and body.
-func splitSkillFrontmatter(contents []byte) (header, body []byte, ok bool) {
-	h, b, has, err := parseAndValidateSkillFrontmatter(contents)
-	if err != nil || !has {
-		return nil, contents, false
-	}
-	return h, b, true
-}
-
 // parseAndValidateSkillFrontmatter validates and extracts frontmatter header and body.
 // If frontmatter opens with `---` but is unclosed or invalid YAML, an error is returned.
 func parseAndValidateSkillFrontmatter(contents []byte) (header, body []byte, hasFrontmatter bool, err error) {
