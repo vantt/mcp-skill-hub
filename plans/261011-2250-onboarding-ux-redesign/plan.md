@@ -1,7 +1,7 @@
 ---
 title: "Onboarding UX redesign: init, connect, serve, status and README"
 description: "Make Skill Hub onboarding two steps (install the hub, install the client project) with the fewest commands, plain syntax, role-aware status and doctor, and a README that holds the whole onboarding."
-status: pending
+status: completed
 priority: P1
 effort: 12.5d
 branch: worktree-agent-a5c101367df3589e1
@@ -213,29 +213,29 @@ exclude", the generated skill folders drop out of the first commit automatically
 
 ## Acceptance criteria
 
-- [ ] From an empty folder, `skillhub init` creates a committed hub with `git status --porcelain --untracked-files=all`
+- [x] From an empty folder, `skillhub init` creates a committed hub with `git status --porcelain --untracked-files=all`
       empty, stores its path, and prints one next command; `cd <project> && skillhub connect` connects all agents with
       no other argument.
-- [ ] Every `init` case in the Phase 2 table behaves as specified (incl. unborn-HEAD resume, push retry, HEAD/branch
+- [x] Every `init` case in the Phase 2 table behaves as specified (incl. unborn-HEAD resume, push retry, HEAD/branch
       mismatch, untrusted clone, pre-existing `.git`); each has a test, incl. injected-failure tests for a failing
       pre-commit hook, `commit.gpgsign=true`, an interrupted run and a full disk.
-- [ ] `skillhub --version`, `skillhub help --dev`; no `integrate`, `web`, `check`, `--yes` (on onboarding commands),
+- [x] `skillhub --version`, `skillhub help --dev`; no `integrate`, `web`, `check`, `--yes` (on onboarding commands),
       `--trust-private-network`, `--loopback-only`, `init --force` anywhere in code, help, web UI, e2e or user docs
       (repo-wide grep gate). `mcp serve` is absent from help and docs examples but still launches stdio for existing
       registrations, which are not rewritten.
-- [ ] `skillhub serve` listens on `0.0.0.0:7420`, prints one `connect` line and one `scp` line per usable address and a
+- [x] `skillhub serve` listens on `0.0.0.0:7420`, prints one `connect` line and one `scp` line per usable address and a
       warning line; `serve web` prints the warning line too; a client using any of those IP addresses passes the Host
       check, while an `Origin` from a foreign IP gets 403; `--addr a,b` opens two listeners with one token; port 0 works.
-- [ ] status, doctor and `doctor --fix` never send the hub token to a hub named only in project files (test).
-- [ ] The `ask` permission rules match permuted flag orders; doctor reports an outdated rule set and `doctor --fix`
+- [x] status, doctor and `doctor --fix` never send the hub token to a hub named only in project files (test).
+- [x] The `ask` permission rules match permuted flag orders; doctor reports an outdated rule set and `doctor --fix`
       updates it.
-- [ ] `status` and `doctor` agree in every role fixture (hub, client-local, client-remote, both, mixed, none); status
+- [x] `status` and `doctor` agree in every role fixture (hub, client-local, client-remote, both, mixed, none); status
       always ends with a command whose `skillhub` segments pass the help check; doctor exits non-zero when it reports a
       problem; `status --json` still validates against `schemas/curation-home-v1.schema.json`.
-- [ ] README holds Install + Step 1 + Step 2 + Check under the existing `#quickstart` anchor; `docs/getting-started.md`
+- [x] README holds Install + Step 1 + Step 2 + Check under the existing `#quickstart` anchor; `docs/getting-started.md`
       is gone (or a "Moved to" stub) and no link points to it; one docs-vs-help test checks every `skillhub` command in
       README and the touched guides plus the few non-command bans.
-- [ ] `make check` green locally; CI green on Linux, macOS and Windows; web e2e green.
+- [x] `make check` green locally; CI green on Linux, macOS and Windows; web e2e green.
 
 ## Risks
 
