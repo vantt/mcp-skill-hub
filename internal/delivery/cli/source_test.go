@@ -213,7 +213,7 @@ func TestSourceImportCLI(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("confirm failed: %d, %s %s", code, stdout, stderr)
 	}
-	if !strings.Contains(stdout, "Watching calc-source.") || !strings.Contains(stdout, "distill-lab") {
+	if !strings.Contains(stdout, "Watching calc-source.") || !strings.Contains(stdout, "distill-lab") || !strings.Contains(stdout, "hub folder") {
 		t.Fatalf("confirm output missing distill-lab guidance: %s", stdout)
 	}
 	if !strings.Contains(stdout, "Watching does not auto-import skills") {

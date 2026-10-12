@@ -36,7 +36,7 @@ var (
 )
 
 // Document models one skill's hub-side distillation knowledge in .meta/distill.yaml.
-// The format adheres strictly to .claude/skills/distill-lab/scripts/distill.py.
+// The format adheres strictly to .agents/skills/distill-lab/scripts/distill.mjs.
 type Document struct {
 	Goal     Goal                      `yaml:"goal" json:"goal"`
 	Cursors  map[string]string         `yaml:"cursors" json:"cursors"`
@@ -116,7 +116,7 @@ func FinalScore(s Score) float64 {
 	return math.Round(val*100) / 100
 }
 
-// ValidateDocument validates the structure and fields of a Document against distill.py rules.
+// ValidateDocument validates the structure and fields of a Document against the rules of .agents/skills/distill-lab/scripts/distill.mjs.
 func ValidateDocument(doc *Document) error {
 	if doc == nil {
 		return errors.New("distill document is nil")
@@ -181,7 +181,7 @@ func ValidateDocument(doc *Document) error {
 	return nil
 }
 
-// ValidateLesson checks all fields of a lesson against distill.py rules.
+// ValidateLesson checks all fields of a lesson against the rules of .agents/skills/distill-lab/scripts/distill.mjs.
 func ValidateLesson(lesson *Lesson, cursors map[string]string) error {
 	if !KeyPattern.MatchString(lesson.Key) {
 		return fmt.Errorf("invalid lesson key %q: must be kebab-case", lesson.Key)

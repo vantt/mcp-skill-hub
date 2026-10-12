@@ -21,6 +21,9 @@ const (
 
 var skillIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
+// ValidID reports whether id has the form of a skill or collection id.
+func ValidID(id string) bool { return skillIDPattern.MatchString(id) }
+
 type skillMetadata struct {
 	Path          string
 	Directory     string

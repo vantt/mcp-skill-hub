@@ -735,7 +735,7 @@ func (service SourceService) ConfirmSourceProposal(ctx context.Context, path str
 			summary = fmt.Sprintf("Stopped watching %s.", preview.Source.ID)
 		}
 	default:
-		summary = fmt.Sprintf("Watching %s. Distill with distill-lab to write .meta/distill.yaml; porting lessons to skill content uses skill_update.\nWatching does not auto-import skills.", preview.Source.ID)
+		summary = fmt.Sprintf("Watching %s. To learn from it, start an agent in this hub folder and ask it to distill with the distill-lab skill; it writes .meta/distill.yaml. Porting lessons to skill content uses skill_update.\nWatching does not auto-import skills.", preview.Source.ID)
 	}
 	result := sourceMutationResult(summary, preview.Source.ID, receipt)
 	recordCurationTelemetry(ctx, service.Telemetry, root, curationTelemetryEvent(telemetry.EventSourceCandidateTriaged, map[string]any{

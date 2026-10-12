@@ -9,6 +9,7 @@ import (
 
 	"github.com/vantt/mcp-skill-hub/internal/app"
 	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
+	"github.com/vantt/mcp-skill-hub/internal/shellquote"
 )
 
 func runDiff(ctx context.Context, args []string, stdout, stderr io.Writer) int {
@@ -71,4 +72,29 @@ func diffStatusWord(status string) string {
 // and connect write hold paths of this machine, so the whole folder is never staged at once.
 func stageWorkspaceCommand(path string) string {
 	return fmt.Sprintf("git -C %s add .gitignore .skillhub skills sources history registry config distill evals", path)
+}
+
+// reviewLessonsCommand renders the review_lessons action as a command that
+// runs from any folder: node with the absolute script and file paths of the
+// hub, quoted for the shell of goos (double quotes on Windows, which cmd and
+// PowerShell both read). When a Windows hub path holds a character that one
+// of those shells expands inside double quotes, it returns the hub-relative
+// command instead, with in set to the folder to run it from.
+func reviewLessonsCommand(action app.ActionItem, hub, goos string) (command, in string) {
+	if !action.HubRelative || action.Script == "" || action.File == "" || hub == "" {
+		return action.Command, ""
+	}
+	if goos == "windows" {
+		if strings.ContainsAny(hub, "\"%$`") {
+			return action.Command, hub
+		}
+		join := func(relative string) string {
+			return `"` + strings.TrimRight(hub, `\/`) + `\` + strings.ReplaceAll(relative, "/", `\`) + `"`
+		}
+		return "node " + join(action.Script) + " list " + join(action.File), ""
+	}
+	join := func(relative string) string {
+		return shellquote.ArgFor(goos, strings.TrimRight(hub, "/")+"/"+relative)
+	}
+	return "node " + join(action.Script) + " list " + join(action.File), ""
 }

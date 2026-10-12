@@ -21,6 +21,10 @@ export interface HomeAction {
   command?: string;
   id?: string;
   label?: string;
+  /** review_lessons only: hub-relative script and file of its command. */
+  script?: string;
+  file?: string;
+  hub_relative?: boolean;
 }
 
 export interface HomeCategory {

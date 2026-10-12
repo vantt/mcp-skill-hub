@@ -29,25 +29,30 @@ func TestStatusJSONValidatesAgainstVersionedSchema(t *testing.T) {
 
 func validateJSONDocument(t *testing.T, schemaPath string, document []byte) {
 	t.Helper()
+	if err := validateSchemaFile(schemaPath, document); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// validateSchemaFile validates document against the JSON schema at schemaPath.
+func validateSchemaFile(schemaPath string, document []byte) error {
 	schemaBytes, err := os.ReadFile(schemaPath)
 	if err != nil {
-		t.Fatal(err)
+		return err
 	}
 	var schema map[string]any
 	if err := json.Unmarshal(schemaBytes, &schema); err != nil {
-		t.Fatalf("parse schema: %v", err)
+		return fmt.Errorf("parse schema: %w", err)
 	}
 	if id, _ := schema["$id"].(string); !strings.HasSuffix(id, "curation-home-v1.schema.json") {
-		t.Fatalf("status schema is not explicitly versioned: %q", id)
+		return fmt.Errorf("status schema is not explicitly versioned: %q", id)
 	}
 	var value any
 	decoder := json.NewDecoder(bytes.NewReader(document))
 	if err := decoder.Decode(&value); err != nil {
-		t.Fatalf("parse status JSON: %v", err)
+		return fmt.Errorf("parse status JSON: %w", err)
 	}
-	if err := validateSchemaValue(schema, schema, value, "$", true); err != nil {
-		t.Fatal(err)
-	}
+	return validateSchemaValue(schema, schema, value, "$", true)
 }
 
 func validateSchemaValue(root, schema map[string]any, value any, path string, enforceOneOf bool) error {

@@ -49,7 +49,16 @@ type ActionItem struct {
 	Count    int    `json:"count,omitempty"`
 	Priority int    `json:"priority"`
 	Summary  string `json:"summary"`
-	Command  string `json:"command"`
+	// Command is the command or tool to run. For review_lessons it is a
+	// command line to run from the hub folder, and it is empty when the
+	// hub's distill-lab differs from Skill Hub's copy.
+	Command string `json:"command"`
+	// Script and File name the script and the file a review_lessons command
+	// runs on, relative to the hub folder (HubRelative), so a reader in
+	// another folder can build the command from the hub path.
+	Script      string `json:"script,omitempty"`
+	File        string `json:"file,omitempty"`
+	HubRelative bool   `json:"hub_relative,omitempty"`
 }
 
 // CurationSummary contains compact counts that are safe to show at L0.
@@ -207,6 +216,9 @@ type homeState struct {
 	HostIntegrationFinding *hostintegration.Finding
 	TopCandidateSkillID    string
 	TopCandidateSkillPath  string
+	// DistillLabIntact is true when the hub's distill-lab files match the
+	// current bundle, so a command that runs its script may be printed.
+	DistillLabIntact bool
 }
 
 func defaultCategories() []ActionCategory {
@@ -319,6 +331,9 @@ func readHomeCounts(ctx context.Context, root string, state *homeState) (resultE
 	state.Summary.PendingHighValueInsights = candHighValue
 	state.TopCandidateSkillID = topSkillID
 	state.TopCandidateSkillPath = topSkillPath
+	if candLessons > 0 {
+		state.DistillLabIntact = distillLabIntact(root)
+	}
 	setCategoryCount(state.Categories, "source_unavailable", state.UnavailableSources)
 	setCategoryCount(state.Categories, "sources_ready_to_distill", state.ChangedSources)
 	setCategoryCount(state.Categories, "sources_due", state.DueSources)
@@ -362,12 +377,14 @@ func countCandidateLessons(root string) (int, int, string, string) {
 				}
 			}
 		}
-		if skillCandidates > maxCandidates {
+		// Only a file under folders named like canonical ids can appear in
+		// a command, so the path never needs quoting; others still count.
+		skillDir := filepath.Dir(filepath.Dir(match))
+		skillID, collectionID := filepath.Base(skillDir), filepath.Base(filepath.Dir(skillDir))
+		if skillCandidates > maxCandidates && canonical.ValidID(skillID) && canonical.ValidID(collectionID) {
 			maxCandidates = skillCandidates
-			skillDir := filepath.Dir(filepath.Dir(match))
-			topSkillID = filepath.Base(skillDir)
-			rel, _ := filepath.Rel(root, match)
-			topSkillPath = filepath.ToSlash(rel)
+			topSkillID = skillID
+			topSkillPath = "skills/" + collectionID + "/" + skillID + "/.meta/distill.yaml"
 		}
 	}
 	return totalCandidate, totalHighValue, topSkillID, topSkillPath
@@ -495,15 +512,7 @@ func deriveCurationHome(state homeState) CurationHome {
 	if state.Summary.PendingInsights > 0 {
 		home.HomeSummary.OptionalItems += state.Summary.PendingInsights
 		// Candidate lessons are optional work: do not let them alone turn home.Status into action_required
-		summary := fmt.Sprintf("%d candidate lesson(s) ready for review using the distill-lab skill's distill.py script", state.Summary.PendingInsights)
-		if state.Summary.PendingHighValueInsights > 0 {
-			summary = fmt.Sprintf("%d candidate lesson(s) ready for review using the distill-lab skill's distill.py script; %d are high-value", state.Summary.PendingInsights, state.Summary.PendingHighValueInsights)
-		}
-		cmd := "distill.py list"
-		if state.TopCandidateSkillPath != "" {
-			cmd += " " + state.TopCandidateSkillPath
-		}
-		home.Actions = append(home.Actions, ActionItem{Kind: "review_lessons", ID: state.TopCandidateSkillID, Count: state.Summary.PendingInsights, Priority: 40, Summary: summary, Command: cmd})
+		home.Actions = append(home.Actions, reviewLessonsAction(state))
 	}
 	if state.GitDirty {
 		home.HomeSummary.AttentionItems++
@@ -558,7 +567,7 @@ func deriveCurationHome(state homeState) CurationHome {
 		case "distill_changed_sources":
 			home.Summary = fmt.Sprintf("%s %s ready to distill.", termCount(recommended.Count, "source", "sources"), pluralWord(recommended.Count, "is", "are"))
 		case "review_lessons":
-			home.Summary = fmt.Sprintf("%d candidate lesson(s) are waiting for review.", recommended.Count)
+			home.Summary = fmt.Sprintf("%s %s waiting for review.", termCount(recommended.Count, "candidate lesson", "candidate lessons"), pluralWord(recommended.Count, "is", "are"))
 		case "review_git_changes":
 			home.Summary = "The hub has changes that are not committed to Git."
 		case "first_run_commit":
@@ -619,4 +628,24 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return "item"
+}
+
+// reviewLessonsAction points at the skill with the most candidate lessons.
+// Its command runs the hub's distill-lab script from the hub folder, and it
+// is given only when that script is the one Skill Hub installed.
+func reviewLessonsAction(state homeState) ActionItem {
+	action := ActionItem{Kind: "review_lessons", ID: state.TopCandidateSkillID, Count: state.Summary.PendingInsights, Priority: 40,
+		Summary: termCount(state.Summary.PendingInsights, "candidate lesson", "candidate lessons") + " ready for review with the distill-lab skill in the hub folder"}
+	if state.Summary.PendingHighValueInsights > 0 {
+		action.Summary += fmt.Sprintf("; %d %s high-value", state.Summary.PendingHighValueInsights, pluralWord(state.Summary.PendingHighValueInsights, "is", "are"))
+	}
+	if !state.DistillLabIntact {
+		action.Summary += "; distill-lab in this hub differs from Skill Hub's copy, run `skillhub doctor`"
+		return action
+	}
+	if state.TopCandidateSkillPath != "" {
+		action.Script, action.File, action.HubRelative = distillLabScript, state.TopCandidateSkillPath, true
+		action.Command = "node " + distillLabScript + " list " + state.TopCandidateSkillPath
+	}
+	return action
 }

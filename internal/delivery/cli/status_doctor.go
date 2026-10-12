@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"slices"
 	"strings"
 
@@ -144,7 +145,7 @@ func runStatusIn(ctx context.Context, dir string, args []string, stdout, stderr 
 			p.Blank()
 		}
 		if section.Kind == app.SectionHub {
-			renderHubStatus(p, section, home)
+			renderHubStatus(p, section, home, hub)
 		} else {
 			p.Raw(section.Title + "\n")
 		}
@@ -190,8 +191,9 @@ func markBusy(sections []app.Section) []app.Section {
 	return sections
 }
 
-// renderHubStatus prints the hub header and the curation summary of status.
-func renderHubStatus(p *termui.Printer, section app.Section, home app.CurationHome) {
+// renderHubStatus prints the hub header and the curation summary of status
+// for the hub folder hub.
+func renderHubStatus(p *termui.Printer, section app.Section, home app.CurationHome, hub string) {
 	p.Raw(section.Title + "\n")
 	fields := []termui.Field{{Label: "Status", Value: home.Summary}}
 	if home.Workspace.Health != "" {
@@ -216,21 +218,40 @@ func renderHubStatus(p *termui.Printer, section app.Section, home app.CurationHo
 	p.Fields(fields...)
 	// Curation work the health checks do not cover (sources to distill,
 	// upstream updates, lessons to review) stays visible with its command.
-	var waiting []string
+	type waitingItem struct{ line, command string }
+	var waiting []waitingItem
 	for _, action := range home.Actions {
 		switch action.Kind {
 		case "repair_workspace", "recover_workspace", "rebuild_index", "host_integration_missing", "review_git_changes", "first_run_commit":
+			continue
+		case "review_lessons":
+			// A script command is printed on its own line, unwrapped, so it
+			// can be copied and run from any folder.
+			item := waitingItem{line: action.Summary}
+			if command, in := reviewLessonsCommand(action, hub, runtime.GOOS); command != "" {
+				item.line += "; run:"
+				if in != "" {
+					item.line = action.Summary + "; in " + in + ", run:"
+				}
+				item.command = command
+			}
+			waiting = append(waiting, item)
 			continue
 		}
 		line := action.Summary
 		if command := strings.TrimSuffix(cliNextCommand(action.Command, action.ID, ""), " --json"); command != "" {
 			line += " (" + command + ")"
 		}
-		waiting = append(waiting, line)
+		waiting = append(waiting, waitingItem{line: line})
 	}
 	if len(waiting) > 0 {
 		p.Heading("Waiting")
-		p.Bullets(waiting...)
+		for _, item := range waiting {
+			p.Bullets(item.line)
+			if item.command != "" {
+				p.Command(item.command)
+			}
+		}
 	}
 }
 
