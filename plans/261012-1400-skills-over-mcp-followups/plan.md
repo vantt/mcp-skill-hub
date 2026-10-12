@@ -36,10 +36,10 @@ host check when a host release changes that; the matrix status stays `unverified
 - Dead code: `openPinnedGeneration`, `isCanonicalEntityPath`, `splitSkillFrontmatter`, `safeSourcePath`,
   `OpenServable*` in catalog/app.
 - The curator branch repeated in `internal/app/distribution.go`.
-- Remote-hub proxy decodes JSON into `map[string]any`, so integers above 2^53 lose precision.
 
 ## Measured and skipped
 
+- Integers above 2^53 in skill frontmatter through the remote-hub proxy: no loss. The proxy serves a skill's frontmatter only as the SKILL.md text from the cached bundle and never decodes it into a Go value; no runtime tool result carries frontmatter. A test pins this.
 - Merging the two observes in `skill_get` saves about 0.25 ms.
 - A long-lived `*sql.DB` per generation was measured and skipped: only resolve gains (0.36-0.56 ms); get, list and read already open no database. It breaks two pin and read-only contracts and adds Windows file-lock risk. See [measurement](../reports/measure-261012-longlived-db-handle.md). Cheaper options if resolve latency matters: skip the pin file for the read-only search, or memoize search results per generation and query.
 - Freshness scan costs 4-5 ms at 300 skills; removing it needs a file watcher.
