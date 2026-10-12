@@ -1,0 +1,9 @@
+# Backlog F1-F7 report
+
+- F1: committed resolver response schema without its own `$id` now has its `$defs` hoisted to the output schema root; a dangling reference returns an error (clear panic message at registration) instead of an opaque SDK panic. The shipped schema has `$id` and `$defs`, so the shipped binary was never hit. Tests in `internal/delivery/mcpserver/resolver_schema_embed_test.go`.
+- F2: all text `Next:` / confirm hints (skill_add, skill_editor, skill_upstream, and source.go which had the same bug) now print the full `skillhub skill confirm --proposal ... --proposal-digest ... --base-version ...` via `skillConfirmCommand`. Printed with `p.Command` so long lines are not wrapped. Tests updated.
+- F3: no event carries either counter (nothing emits those metrics), so they were removed from funnel and baseline output, JSON and design doc 04. Event types and EventVersion untouched. Web golden updated (dropped per-skill `unlisted_resource_reads`).
+- F4: Official docs (code.claude.com/docs/en/permissions, "Compound commands"): recognized separators `&&`, `||`, `;`, `|`, `|&`, `&`, newline; allow rules must match each subcommand; "Deny and ask rules apply when any subcommand matches them" with example `cd /tmp && git clean -f` still prompting. So `cd x && skillhub ... --yes` triggers an ask rule on `skillhub ...`. Not tested interactively. No docs claimed it unverified besides the backlog row. No settings edited.
+- F5: not doable from repo. Only a fixture `internal/migration/testdata/test-audit-distill.yaml` exists; the real skill is in the live hub.
+- F6: no test of that name existed. Added `TestMigrationKeepsTrustVerdictAndUpstreamStatusOfThirdPartySkill` (internal/app/migration_trust_test.go). Migration tests pass.
+- F7: `npm ci` worked (2s). `npm run typecheck`, `npm run lint`, `npm test` (178 tests) pass. Web bundle build not run (shell hook blocks the word build).
