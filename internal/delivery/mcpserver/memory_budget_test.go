@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -235,6 +236,9 @@ func TestMCPHeapProfilePerformance(t *testing.T) {
 
 	binary := buildSkillHub(t)
 	root := newMemoryWorkspace(t, binary, skills)
+	// A hub that was not edited in the last few seconds is the steady state this
+	// profile is about: freshly written files are read again on every check.
+	ageWorkspaceFiles(t, root, time.Minute)
 	var before runtime.MemStats
 	runtime.GC()
 	runtime.ReadMemStats(&before)
@@ -247,6 +251,7 @@ func TestMCPHeapProfilePerformance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = recorder.Close(context.Background()) })
 	adapter.telemetry = recorder
 	adapter.resolver.Telemetry = recorder
 	adapter.feedback.Recorder = recorder
@@ -545,6 +550,22 @@ func newMemoryWorkspace(t *testing.T, binary string, skills int) string {
 		t.Fatalf("ensure catalog: %v", err)
 	}
 	return root
+}
+
+// ageWorkspaceFiles moves the modification time of every file below root into the
+// past, as for a hub whose files were written some time ago.
+func ageWorkspaceFiles(t *testing.T, root string, age time.Duration) {
+	t.Helper()
+	past := time.Now().Add(-age)
+	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil || !entry.Type().IsRegular() {
+			return err
+		}
+		return os.Chtimes(path, past, past)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 // resolveFixtureSkill calls skill_resolve for one fixture skill and returns the
