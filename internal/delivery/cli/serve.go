@@ -28,13 +28,14 @@ const (
 )
 
 type serveConfig struct {
-	mode          string
-	workspacePath string
-	addrFlag      string
-	tokenFile     string
-	allowHosts    []string
-	noOpen        bool
-	dev           bool
+	mode           string
+	workspacePath  string
+	addrFlag       string
+	tokenFile      string
+	allowHosts     []string
+	noOpen         bool
+	dev            bool
+	installService bool
 }
 
 // parseServeArgs reads `skillhub serve [mcp|web] [flags]`. Without a mode
@@ -81,6 +82,11 @@ func parseServeArgs(args []string) (serveConfig, string, string) {
 				cfg.allowHosts = append(cfg.allowHosts, raw)
 			}
 			index++
+		case "--install-service":
+			if cfg.mode != serveModeMCP {
+				return cfg, "--install-service only applies to `skillhub serve` (mcp), not the web UI", fix
+			}
+			cfg.installService = true
 		case "--no-open", "--dev":
 			if cfg.mode != serveModeWeb {
 				return cfg, flag + " only applies to `skillhub serve web`", fix
@@ -140,6 +146,9 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 	resolved, resErr := resolveWorkspace(cfg.workspacePath)
 	if resErr != nil {
 		return writeWorkspaceResolutionError(stdout, stderr, false, resErr)
+	}
+	if cfg.installService {
+		return runInstallService(cfg, resolved, stdout, stderr)
 	}
 	if cfg.mode == serveModeWeb {
 		return runServeWeb(ctx, cfg, addresses, resolved, stdout, stderr)

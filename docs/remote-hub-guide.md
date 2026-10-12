@@ -83,7 +83,7 @@ Tailscale (100.101.102.103), on the other machine:
 The token itself is never printed. Stop the server with Ctrl-C.
 ```
 
-Virtual interfaces such as Docker bridges are left out of the list. Leave the server running. To start it at boot, see [Keep the server running](#keep-the-server-running-on-machine-b).
+Virtual interfaces such as Docker bridges are left out of the list. Leave the server running. To keep it running in the background, see [Keep the server running](#keep-the-server-running-on-machine-b).
 
 ### 2. On machine A: copy the token file
 
@@ -274,7 +274,24 @@ systemctl --user status skillhub-tunnel
 
 ## Keep the server running on machine B
 
-A systemd user unit on machine B starts the server at boot. Use the full path that `command -v skillhub` prints, and run the unit in the hub folder. Leave out `--addr 127.0.0.1:7420` when machine A reaches B on the LAN or over Tailscale. Save this as `~/.config/systemd/user/skillhub-server.service`:
+On Linux and macOS, let Skill Hub set up the service. Run it in the hub folder on machine B, with the same flags you would give `skillhub serve`:
+
+```bash
+skillhub serve --addr 127.0.0.1:7420 --install-service
+```
+
+Leave out `--addr 127.0.0.1:7420` when machine A reaches B on the LAN or over Tailscale. The command writes the service definition, starts it, and prints how to check it and stop it:
+
+| System | What it installs | Starts | Logs |
+|---|---|---|---|
+| Linux | The systemd user unit `~/.config/systemd/user/skillhub-server.service` | At login, or at boot after `enable-linger` | `journalctl --user -u skillhub-server.service` |
+| macOS | The launchd agent `~/Library/LaunchAgents/dev.skillhub.server.plist` | At login | `~/Library/Logs/skillhub-server.log` |
+
+The service runs this `skillhub` by its full path, in this hub, with the `--addr`, `--token-file` and `--allow-host` you passed, and restarts it ten seconds after a failure. Run the command again with other flags to change them, or after you move the `skillhub` binary. On Linux it also prints the `loginctl enable-linger` command when user services would stop at logout; run it to start the server at boot and keep it up when you are not logged in.
+
+To stop the service and keep it from starting again, run `systemctl --user disable --now skillhub-server.service` on Linux, or `launchctl bootout gui/$(id -u)/dev.skillhub.server` on macOS. The service definition stays on disk until you delete it.
+
+The server stops cleanly when the service stops: running requests finish and the usage records are written. To write the unit yourself instead, save this as `~/.config/systemd/user/skillhub-server.service`:
 
 ```text
 [Unit]
@@ -296,7 +313,7 @@ systemctl --user enable --now skillhub-server
 loginctl enable-linger "$USER"     # keep user services running when you are not logged in
 ```
 
-The server stops cleanly on Ctrl-C or `systemctl --user stop`: running requests finish and the usage records are written.
+Windows has no service installer yet: start `skillhub serve` yourself, or use the Task Scheduler.
 
 ## Two kinds of token
 

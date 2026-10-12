@@ -89,6 +89,7 @@ Skill Hub never commits or pushes your skill changes for you. Add the hub's own 
 |---|---|
 | Let agents on other machines use this hub | `skillhub serve [--addr <host:port>[,<host:port>...]] [--allow-host <name>]` |
 | Keep the server on this machine, for an SSH tunnel | `skillhub serve --addr 127.0.0.1:7420` |
+| Keep that server running as a systemd or launchd service | `skillhub serve [--addr <host:port>] --install-service` |
 | Show the token those agents need (terminal only) | `skillhub token show` |
 | Replace that token (terminal only) | `skillhub token rotate [--dry-run]` |
 | Remove the skills this machine fetched from another hub | `skillhub cache clear [--hub <url>] [--dry-run]` |

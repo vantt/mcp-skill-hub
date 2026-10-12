@@ -410,7 +410,7 @@ Update skillhub to the latest release or a specified version.
   --json          Machine-readable result
 `,
 	"serve": `Usage: skillhub serve [mcp] [--addr <host:port>[,<host:port>...]] [--token-file <path>]
-                      [--allow-host <name>]... [--workspace <path>]
+                      [--allow-host <name>]... [--workspace <path>] [--install-service]
        skillhub serve web [--addr <host:port>[,<host:port>...]] [--allow-host <host[:port]>]...
                           [--no-open] [--dev] [--workspace <path>]
 
@@ -438,6 +438,11 @@ tunnel (ssh -N -L); the banner prints the tunnel command.
   --allow-host <name>    Accept another Host name, for example a VPN DNS name
                          (repeatable; web also takes <host:port>)
   --workspace <path>     A local hub folder (default: the hub of the current folder)
+  --install-service      mcp: keep the server running as a service instead of starting it
+                         now: a systemd user unit on Linux, a launchd agent on macOS. It
+                         starts the server with the --addr, --token-file and --allow-host
+                         you pass, restarts it after a failure, and runs it again at boot
+                         (login on macOS). Run it again to change those flags
   --no-open              web: do not open the browser on start
   --dev                  web: development mode behind the Vite dev server (loopback only)
 
@@ -445,6 +450,7 @@ Examples:
   skillhub serve
   skillhub serve --addr 127.0.0.1:7420
   skillhub serve --addr 192.168.1.20,100.101.102.103
+  skillhub serve --addr 127.0.0.1:7420 --install-service
   skillhub serve web
 `,
 }
