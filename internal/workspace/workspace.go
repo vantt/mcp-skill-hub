@@ -686,80 +686,89 @@ func RequiredDirectories() []string { return append([]string(nil), requiredDirec
 // It enumerates directories in small batches and enforces the V1 count and byte ceilings before callers
 // allocate file contents.
 func RelativeFiles(root string) ([]string, error) {
+	paths, _, err := StatFiles(root)
+	return paths, err
+}
+
+// StatFiles is RelativeFiles that also returns the lstat result of each file,
+// taken while its directory was listed, so a caller that stamps the files does
+// not stat every path again. The slices are parallel and sorted by path.
+func StatFiles(root string) ([]string, []fs.FileInfo, error) {
 	rootInfo, err := os.Lstat(root)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if rootInfo.Mode()&fs.ModeSymlink != 0 {
-		return nil, fmt.Errorf("unsafe workspace root symlink: %s", root)
+		return nil, nil, fmt.Errorf("unsafe workspace root symlink: %s", root)
 	}
 	if !rootInfo.IsDir() {
-		return nil, fmt.Errorf("workspace root is not a directory: %s", root)
+		return nil, nil, fmt.Errorf("workspace root is not a directory: %s", root)
 	}
 	rootHandle, err := os.OpenRoot(root)
 	if err != nil {
-		return nil, fmt.Errorf("open workspace root: %w", err)
+		return nil, nil, fmt.Errorf("open workspace root: %w", err)
 	}
 	defer rootHandle.Close()
 
-	paths := make([]string, 0)
-	if err := collectCanonicalFiles(rootHandle, ".", &paths); err != nil {
-		return nil, err
+	var found []canonicalFile
+	if err := collectCanonicalFiles(rootHandle, ".", &found); err != nil {
+		return nil, nil, err
 	}
-	sort.Strings(paths)
+	sort.Slice(found, func(i, j int) bool { return found[i].path < found[j].path })
+	paths := make([]string, len(found))
+	infos := make([]fs.FileInfo, len(found))
 	var total int64
-	for _, relative := range paths {
-		info, err := rootHandle.Lstat(filepath.FromSlash(relative))
-		if err != nil {
-			return nil, fmt.Errorf("inspect canonical file %s: %w", relative, err)
+	for index, file := range found {
+		if file.info.Size() > MaxCanonicalFileBytesV1 {
+			return nil, nil, fmt.Errorf("canonical file %s exceeds V1 per-file limit of %d bytes", file.path, MaxCanonicalFileBytesV1)
 		}
-		if info.Mode()&fs.ModeSymlink != 0 {
-			return nil, fmt.Errorf("unsafe symlink: %s", relative)
+		if file.info.Size() > MaxCanonicalBytesV1-total {
+			return nil, nil, fmt.Errorf("canonical files exceed V1 aggregate limit of %d bytes at %s", MaxCanonicalBytesV1, file.path)
 		}
-		if !info.Mode().IsRegular() {
-			return nil, fmt.Errorf("unsupported non-regular canonical path: %s", relative)
-		}
-		if info.Size() > MaxCanonicalFileBytesV1 {
-			return nil, fmt.Errorf("canonical file %s exceeds V1 per-file limit of %d bytes", relative, MaxCanonicalFileBytesV1)
-		}
-		if info.Size() > MaxCanonicalBytesV1-total {
-			return nil, fmt.Errorf("canonical files exceed V1 aggregate limit of %d bytes at %s", MaxCanonicalBytesV1, relative)
-		}
-		total += info.Size()
+		total += file.info.Size()
+		paths[index], infos[index] = file.path, file.info
 	}
-	return paths, nil
+	return paths, infos, nil
 }
 
-func collectCanonicalFiles(root *os.Root, directory string, paths *[]string) error {
+// canonicalFile is a regular canonical file with its lstat result.
+type canonicalFile struct {
+	path string
+	info fs.FileInfo
+}
+
+func collectCanonicalFiles(root *os.Root, directory string, files *[]canonicalFile) error {
 	handle, err := root.Open(directory)
 	if err != nil {
 		return err
 	}
 	defer handle.Close()
 	for {
-		entries, readErr := handle.ReadDir(64)
-		for _, entry := range entries {
-			native := filepath.Join(directory, entry.Name())
+		// Readdir stats each entry relative to the open directory without
+		// following symbolic links.
+		entries, readErr := handle.Readdir(64)
+		for _, info := range entries {
+			native := filepath.Join(directory, info.Name())
 			relative := filepath.ToSlash(strings.TrimPrefix(native, "."+string(filepath.Separator)))
 			if isNonCanonicalPath(relative) {
 				continue
 			}
-			if entry.Type()&fs.ModeSymlink != 0 {
+			if info.Mode()&fs.ModeSymlink != 0 {
 				return fmt.Errorf("unsafe symlink: %s", relative)
 			}
-			if entry.IsDir() {
-				if err := collectCanonicalFiles(root, native, paths); err != nil {
+			if info.IsDir() {
+				if err := collectCanonicalFiles(root, native, files); err != nil {
 					return err
 				}
 				continue
 			}
-			if !entry.Type().IsRegular() {
+			if !info.Mode().IsRegular() {
 				return fmt.Errorf("unsupported non-regular canonical path: %s", relative)
 			}
-			if len(*paths) >= MaxCanonicalFilesV1 {
+			if len(*files) >= MaxCanonicalFilesV1 {
 				return fmt.Errorf("canonical file count exceeds V1 limit of %d files", MaxCanonicalFilesV1)
 			}
-			*paths = append(*paths, relative)
+			*files = append(*files, canonicalFile{path: relative, info: info})
 		}
 		if errors.Is(readErr, io.EOF) {
 			return nil

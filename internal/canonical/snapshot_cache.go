@@ -180,9 +180,10 @@ func (cache *snapshotCache) store(key string, tree *cachedTree) {
 }
 
 // stampTree lists canonical files with the same rules and limits as Scan and
-// stamps each one without reading its contents.
+// stamps each one without reading its contents. The stamps come from the
+// lstat taken while each directory was listed, one stat per file.
 func stampTree(root string) ([]string, []fileStamp, error) {
-	paths, err := workspace.RelativeFiles(root)
+	paths, infos, err := workspace.StatFiles(root)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -193,16 +194,7 @@ func stampTree(root string) ([]string, []fileStamp, error) {
 	defer rootHandle.Close()
 	stamps := make([]fileStamp, len(paths))
 	for index, relative := range paths {
-		info, err := rootHandle.Lstat(relative)
-		if err != nil {
-			return nil, nil, fmt.Errorf("inspect canonical input %s: %w", relative, err)
-		}
-		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-			return nil, nil, fmt.Errorf("canonical input %s is not a regular file", relative)
-		}
-		if info.Size() > workspace.MaxCanonicalFileBytesV1 {
-			return nil, nil, fmt.Errorf("canonical file %s exceeds V1 per-file limit of %d bytes", relative, workspace.MaxCanonicalFileBytesV1)
-		}
+		info := infos[index]
 		stamp := fileStamp{size: info.Size(), mode: info.Mode(), modTime: info.ModTime().UnixNano()}
 		if err := addPlatformStamp(&stamp, rootHandle, relative, info); err != nil {
 			return nil, nil, fmt.Errorf("inspect canonical input %s: %w", relative, err)
