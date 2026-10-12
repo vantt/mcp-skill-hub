@@ -143,6 +143,10 @@ Recommendation và distribution là hai bước tách biệt. Khi activate skill
 ```
 
 Hub kiểm tra platform live (`live_checks`), không chạy script bin/setup trong MCP process. Đối với `resources/read`, Hub gắn thêm metadata `_meta["io.skillhub/local_path"]` trỏ tới đường dẫn file trong snapshot cục bộ. Nếu skill là third-party chưa duyệt (`local.status == "review_required"`), content bị bỏ trống và `resources/read` trả lỗi `content_review_required`.
+
+`skills/list` có thể là danh sách một phần: skill đang chờ duyệt content (`local.status == "review_required"`) bị bỏ khỏi listing để host làm theo listing không cố tải một skill mà mọi lần đọc đều bị từ chối. `skills/get` và `resources/read` vẫn từ chối như trên với URI mà host đã có. Extension skills (và `skills/list`) chỉ được khai báo và phục vụ ở profile `runtime` và `all`, không ở profile `curation`, để host kết nối cả hai server không thấy mỗi skill hai lần.
+
+`skills/bundle` là vendor method nằm trong namespace của extension. Nếu chuẩn định nghĩa một cơ chế bundle khác, method này sẽ được đổi tên.
 ### 3.1 Curation system-skill tools
 
 Bundled System Curator Skill là primary interactive UX surface của binary. Nó không bắt user biết domain commands mà map natural-language intent vào structured tools dùng chung application services với CLI:
@@ -420,7 +424,7 @@ Không echo raw request. Reason codes là enum/mã ngắn, không phải chain-o
   "primary": {
     "id": "consumer-reliability-review",
     "version": "sha256:manifest...",
-    "uri": "skill://software/consumer-reliability-review",
+    "uri": "skill://skillhub/<digest>/consumer-reliability-review/SKILL.md",
     "applicability": "Review retry, acknowledgement and duplicate-processing behavior.",
     "confidence": "high",
     "setup": {
