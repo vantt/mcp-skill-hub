@@ -137,7 +137,7 @@ A skill added from GitHub remembers its **upstream**: the source it was copied f
 
 ### Manage one skill's sources
 
-A **source** is a Git repository linked to one or more skills. Your **curator agent** is your own agent with the distill-lab skill. It reads sources and records **lessons**, proposed improvements you decide on.
+A **source** is a Git repository linked to one or more skills. Your **curator agent** is your own agent, started in the hub folder, where Skill Hub installs the distill-lab skill. It reads sources and records **lessons**, proposed improvements you decide on.
 
 Open a skill and choose the **Sources** tab. It lists the skill's upstream and every **learning reference**: a source your curator agent reads for ideas, with nothing copied. A skill with neither shows **No sources yet**.
 
@@ -158,7 +158,7 @@ Open **Sources**. It lists every source, for learning or for updates. Each row s
 Your curator agent reads the sources you pick and records lessons for each skill.
 
 1. On **Sources**, tick the sources you want learned from and click **Distill with Curator Agent**.
-2. Click **Copy handoff** and paste the text to an agent that has the distill-lab skill.
+2. Click **Copy handoff** and paste it to an agent you start in your hub folder. The distill-lab skill there runs its script with Node 18 or newer ([Sources and learning](sources-and-learning.md#hand-changes-to-your-curator-agent)).
 3. The agent records its lessons in each skill's `.meta/distill.yaml`. Read them in the skill's **Distill** tab, where you decide what to keep.
 
 <img src="images/web/distill-handoff.png" alt="The distill hand-off screen with a brief ready to copy for the curator agent." width="800"><br><em>Distill: copy the brief and give it to your curator agent.</em>

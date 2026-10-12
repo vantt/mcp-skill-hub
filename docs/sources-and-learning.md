@@ -5,7 +5,7 @@ Your skills can keep improving after you add them. Skill Hub helps with two jobs
 A **source** is a Git repository linked to one or more skills. It plays one of two roles:
 
 - An **upstream** is the source a skill was copied from; you can pull its updates.
-- A **learning reference** is a source your **curator agent** reads for ideas; nothing is copied. Your curator agent is your own agent with the distill-lab skill.
+- A **learning reference** is a source your **curator agent** reads for ideas; nothing is copied. Your curator agent is your own agent, started in the hub folder, where Skill Hub installs the distill-lab skill.
 
 Nothing runs in the background. Skill Hub checks a source only when you run a check, from the terminal or the web UI.
 
@@ -175,12 +175,19 @@ https://github.com/anthropics/skills.git
 
 ### Hand changes to your curator agent
 
-Your curator agent reads sources and proposes lessons. Skill Hub does not distill by itself, and it does not ship the distill-lab skill.
+Your curator agent reads sources and proposes lessons. Skill Hub does not distill by itself: your agent does it with the distill-lab skill, which Skill Hub installs in the hub folder (`skillhub init` writes it, and `skillhub doctor --fix` adds it to a hub made by an older version). Projects and machines connected with `--hub` do not get it.
 
 1. Start the web UI with `skillhub serve web --addr 127.0.0.1:7421` ([Start the web UI](web-ui.md#start-the-web-ui)).
 2. Open **Sources** and choose **Distill with Curator Agent**.
 3. Pick the sources to hand over, then choose **Copy handoff**.
-4. Paste the handoff to an agent that has the distill-lab skill.
+4. Start your agent in the hub folder (`cd <hub>`, then your agent) and paste the handoff to it.
+
+distill-lab runs its script with [Node](https://nodejs.org) 18 or newer and needs Git 2.45.0 or newer; there is nothing to install with npm. The skill is self-contained: its folder `.agents/skills/distill-lab/` also works when copied on its own, because the script finds the hub from the `distill.yaml` path you give it. Outside a hub only the evidence check, which reads the source mirrors, is unavailable (`check` and `format` without `--no-where`).
+
+The script itself makes no network call. It never fetches a missing file into a mirror; it reports it as not fetched. The agent's steps that clone and fetch a source mirror do use the network.
+
+> [!WARNING]
+> A source is untrusted text, and distilling means your agent reads it. Mirrors are bare clones, so no agent file of the source lands in the hub, and the skill tells the agent never to read `runtime/config/` or `runtime/envs/` while distilling. An agent started in the hub folder can still read those secret files, because skills run there need them, so distill only sources you are willing to show to that agent.
 
 [Hand a source to your curator agent](web-ui.md#hand-a-source-to-your-curator-agent) shows this screen.
 
@@ -189,6 +196,14 @@ Your curator agent reads sources and proposes lessons. Skill Hub does not distil
 A **lesson** is a proposed improvement your curator agent records for a skill. It writes lessons to the skill's `.meta/distill.yaml` file.
 
 Read them on the skill's **Distill** tab in the web UI. The tab only shows lessons. To decide, tell your curator agent, for example "1 planned, 3 rejected: already covered".
+
+In the terminal, `skillhub status` in the hub counts the candidate lessons and prints the command that lists them, with the hub's full path so it runs from any folder:
+
+```bash
+node '<hub>/.agents/skills/distill-lab/scripts/distill.mjs' list '<hub>/skills/<collection>/<skill>/.meta/distill.yaml'
+```
+
+`status` prints that command only while the hub's distill-lab files are the ones Skill Hub installed; otherwise it asks you to run `skillhub doctor`.
 
 Nothing in your skill changes until you act on a lesson. Stage the new lesson file with your other changes. [Review and commit workspace changes](curating-skills.md#review-and-commit-workspace-changes) explains why you add only these paths.
 

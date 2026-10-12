@@ -2,6 +2,8 @@
 
 The installer puts `skillhub` in `~/.local/bin` (Windows: `%LOCALAPPDATA%\skillhub\bin`), checks its SHA-256 checksum and adds that folder to your `PATH`. It runs on Linux, macOS and Windows, on amd64 and arm64.
 
+Skill Hub needs Git. [Node](https://nodejs.org) 18 or newer and Git 2.45.0 or newer are needed only to run the distill-lab skill in the hub ([Sources and learning](sources-and-learning.md#hand-changes-to-your-curator-agent)); the `skillhub` program itself never runs Node.
+
 ## Install with one command
 
 The install command for Linux, macOS and Windows is in the [README Quickstart](../README.md#install). After it runs, open a new terminal so the new `PATH` applies, then check that the command works:

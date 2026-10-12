@@ -173,6 +173,30 @@ WHY: Host integration path <home>/.claude contains a
 
 Connect each project instead, or limit `-g` to agents with real folders (`--host codex,gemini`). Codex and Gemini CLI are not yet verified end to end. You can also replace the link with a regular folder.
 
+### System skill files were skipped because a folder is a symbolic link
+
+`connect` or `doctor` says a skill file "was left unchanged: Skill Hub does not write through the symbolic link". Skill Hub writes the agent registration but not the skill files when `.agents` or `.claude` is a link, for example into a dotfiles folder. Replace the link with a regular folder and run the command again, or copy the skill files there by hand.
+
+### A system skill file was not written by Skill Hub
+
+`connect`, `init` or `doctor` says that `.agents/skills/system-curator/SKILL.md` (or another system skill file) "was left unchanged: not written by Skill Hub". Skill Hub no longer overwrites a system skill file whose content it does not recognize. It skips only that file, applies every other repair, and stops pointing Claude Code at it. This covers an old copy you edited in `.gemini/skills/system-curator/` too. Review the file, delete it if you do not need your changes, and run the command again:
+
+```bash
+cd <your-project> && skillhub doctor --fix
+```
+
+### Gemini CLI no longer shows system-curator
+
+Skill Hub now writes `system-curator` only to `.agents/skills/`, and `doctor --fix` removes the old copy in `.gemini/skills/`. Gemini CLI reads `.agents/skills/` from v0.28.0. An older Gemini CLI reads only `.gemini/skills/`, and Skill Hub does not serve `system-curator` to Gemini CLI over MCP, so update Gemini CLI.
+
+### doctor notes that distill-lab cannot find Node 18 or newer
+
+In the hub, `doctor` shows a `notice` for distill-lab: it runs `scripts/distill.mjs` with [Node](https://nodejs.org) 18 or newer, and Node is missing or older. It is a notice, not a problem: the hub works, and only the distill-lab script cannot run. Install Node 18 or newer on the hub machine.
+
+### doctor says Git tracks a system skill file
+
+A hub created by an earlier version committed its `system-curator` copies. Skill Hub now regenerates those files from its version and keeps them out of Git through the hub's `.gitignore`. `doctor` prints a `git rm --cached` command for each tracked one; run it, then commit. Skill Hub never runs it for you, and the file stays on disk.
+
 ## Skills
 
 ### Activation refuses a draft

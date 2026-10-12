@@ -154,9 +154,10 @@ cd <your-project> && skillhub connect
 Connected project <home>/<your-project>
 to the hub at <home>/skill-hub.
 Agent connection written: claude-code, codex-cli, gemini-cli.
-  - Claude Code: connected (.mcp.json, .claude/settings.local.json, curator skill, CLAUDE.md)
-  - Codex: connected (.codex/config.toml, curator skill, AGENTS.md)
-  - Gemini CLI: connected (.gemini/settings.json, curator skill, GEMINI.md)
+  - Claude Code: connected (.mcp.json, .claude/settings.local.json, system-curator skill, CLAUDE.md)
+  - Codex: connected (.codex/config.toml, AGENTS.md)
+  - Gemini CLI: connected (.gemini/settings.json, GEMINI.md)
+  - Agent Skills folder (.agents/skills): connected (system-curator skill)
 
 Next: restart your agent and ask it: "curate my Skill Hub"
 ```

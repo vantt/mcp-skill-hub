@@ -13,7 +13,24 @@ over the generic Engineering Rules.
   `docs/design/01-system-architecture.md`. `archive/final.md` is the
   historical pre-V1 decision record, not authority.
   Public contracts: `docs/contracts/` and JSON schemas in `schemas/`.
-- Bundled curator skill: `system-skills/curator/SKILL.md`.
+- Bundled system skills, installed in `.agents/skills/<id>/` with a generated
+  Claude Code wrapper in `.claude/skills/<id>/SKILL.md`:
+  - curator: edit `system-skills/curator/SKILL.md`;
+  - distill-lab (hub folder only): edit `.agents/skills/distill-lab/` (SKILL.md
+    and the Node script `scripts/distill.mjs` with js-yaml 4.3.2 vendored in
+    `scripts/lib/`). `.claude/skills/distill-lab/SKILL.md` is the generated
+    wrapper, not a source.
+  Both are mirrored into `internal/systemskills/` and kept in sync by tests;
+  after editing distill-lab run
+  `rm -r internal/systemskills/distill-lab && cp -R .agents/skills/distill-lab internal/systemskills/distill-lab`.
+  To update js-yaml, follow the steps in the header comment of
+  `scripts/distill.mjs` (pinned tarball, registry sha512 check, digests in
+  `internal/systemskills/distill_script_test.go`, `npm run notices` in `web/`).
+  Release rule: once a release shipped a bundled file or a wrapper render, a
+  later change to it needs the shipped digest in
+  `internal/systemskills/known-digests.go` or
+  `internal/hostintegration/known-wrappers.go`; the tag-derived tests
+  (`SKILLHUB_REQUIRE_TAGS=1`) fail until it is there.
 - Active plans go in `plans/`; completed plans move to `archive/plans/`.
 
 ### Commands

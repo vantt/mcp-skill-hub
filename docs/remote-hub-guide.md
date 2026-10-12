@@ -150,7 +150,7 @@ What gets written, per agent:
 | Allowed directories | The skill cache of that hub, `<state>/skillhub/remote/<hub-id>` |
 | Claude Code permission rules | The same rules as for a hub on this machine |
 | Instruction block in `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` | The same as for a hub on this machine |
-| `system-curator` skill and `skillhub-curation` entry | Not installed: curation stays on machine B |
+| `system-curator` and `distill-lab` skills, `skillhub-curation` entry | Not installed: curation stays on machine B. A `system-curator` skill that a local connection wrote earlier is removed, unless another agent in the folder still uses a hub on this machine |
 
 ### Choose the addresses the server listens on
 

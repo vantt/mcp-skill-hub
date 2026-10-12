@@ -609,6 +609,7 @@ skillhub source triage <id>             # advanced intake: triage candidate
 skillhub source import <id>             # advanced intake: import discovered skills
 
 # Distillation is executed via distill-lab writing .meta/distill.yaml
+# (installed in the hub folder by init; it runs in the agent with Node, never in the binary)
 # Porting lessons into skill content uses skill_update preview/confirm
 
 skillhub validate [--staged]            # validate working tree or staged index
@@ -617,7 +618,7 @@ skillhub diff                           # show uncommitted changes
 skillhub doctor [--fix]                 # diagnose and repair
 ```
 
-Distillation semantic work is executed with the distill-lab skill writing directly to .meta/distill.yaml.
+Distillation semantic work is executed with the distill-lab skill writing directly to .meta/distill.yaml (installed in the hub folder by init; it runs in the agent with Node, never in the binary).
 
 ### 16.1 CLI output rules
 
