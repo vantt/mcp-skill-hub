@@ -122,7 +122,7 @@ Agents launch `mcp serve` (stdio, hidden, unchanged; P1). `serve` becomes the ne
 - [x] Release smoke drops `--loopback-only`; web e2e unchanged (`--addr 127.0.0.1:0`); remote guide mechanical edits for the guide test
 - [x] `go test ./...`, `go vet` (linux, windows, darwin) and `gofmt -l` clean; web e2e not run here (no `web/node_modules`)
 
-Report: [cook-261011-onboarding-phase3](../reports/cook-261011-onboarding-phase3.md)
+Report: [cook-261011-onboarding-phase3](../../../plans/reports/cook-261011-onboarding-phase3.md)
 
 ## Validation
 

@@ -226,7 +226,7 @@ call `runInitIn` through a helper (`initHub(t, dir)`), never `os.Chdir`/`t.Chdir
 - [x] Installer next step, CI and release smoke, web e2e call sites, mcpserver subprocess tests
 - [x] `go test ./...`, `go vet` (linux, windows, darwin) and `gofmt -l` clean; web e2e not run here (no `web/node_modules`)
 
-Report: [cook-261011-onboarding-phase2](../reports/cook-261011-onboarding-phase2.md)
+Report: [cook-261011-onboarding-phase2](../../../plans/reports/cook-261011-onboarding-phase2.md)
 
 ## Validation
 

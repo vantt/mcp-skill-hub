@@ -75,7 +75,7 @@ cannot fix, token rejected -> re-run the `scp` line, "pre-commit hook fails with
 
 **docs/installation.md**: no one-liner; its next-step link (`:25`) points to `../README.md#step-1-install-the-hub`.
 
-**`docs/getting-started.md`**: delete, or leave a stub whose whole content is "Moved to [README Quickstart](../README.md#quickstart)"
+**`docs/getting-started.md`**: delete, or leave a stub whose whole content is "Moved to [README Quickstart](../../../README.md#quickstart)"
 if any external link must keep resolving (decide when writing; the stub is the default because the other session asked
 for anchors or stubs). Its "Create your first skill" walkthrough moves to `docs/curating-skills.md` under the same
 heading so `#create-your-first-skill` keeps working there; update `docs/curating-skills.md:5,115`,

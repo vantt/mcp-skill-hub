@@ -130,7 +130,7 @@ Agents' stdio registrations are not touched: `mcp serve` keeps its name (P1, rev
 - [x] Step 8: compound-command matching verified from the Claude Code permissions documentation (ask rules apply when any subcommand matches); no fallback rule needed. Not run by hand in an interactive session.
 - [x] Grep gate clean; `go test ./...`, `go vet` (linux, windows, darwin) and `gofmt -l` clean
 
-Report: [cook-261011-onboarding-phase1](../reports/cook-261011-onboarding-phase1.md)
+Report: [cook-261011-onboarding-phase1](../../../plans/reports/cook-261011-onboarding-phase1.md)
 
 ## Validation
 

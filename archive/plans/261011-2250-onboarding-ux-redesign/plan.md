@@ -4,7 +4,7 @@ description: "Make Skill Hub onboarding two steps (install the hub, install the 
 status: completed
 priority: P1
 effort: 12.5d
-branch: worktree-agent-a5c101367df3589e1
+branch: main
 tags: [cli, onboarding, init, connect, serve, doctor, status, docs]
 blockedBy: []
 blocks: [261011-2153-package-distill-lab-in-the-hub]
@@ -22,7 +22,7 @@ Every command acts on the current directory, acts directly, prints what it chang
 command. Backward compatibility is not required: old names and flags are removed, not aliased. The one exception is
 the stdio launch command agents already have in their registrations, which keeps its name (P1).
 
-Reference: [CLI onboarding patterns research](../reports/researcher-261011-cli-onboarding-patterns.md) (in the main
+Reference: [CLI onboarding patterns research](../../../plans/reports/researcher-261011-cli-onboarding-patterns.md) (in the main
 checkout; patterns 1-9 adopted, pattern 10 "pairing codes" deferred per decision 10).
 
 ## Decisions (made by the user; not reopened)
@@ -192,7 +192,7 @@ doctor and status texts in Phase 4; docs in Phase 5.
 
 ## Coordination with the distill-lab packaging plan
 
-Session mcp-skill-hub-68 owns [plans/261011-2153-package-distill-lab-in-the-hub/](../../archive/plans/261011-2153-package-distill-lab-in-the-hub/plan.md),
+Session mcp-skill-hub-68 owns [plans/261011-2153-package-distill-lab-in-the-hub/](../261011-2153-package-distill-lab-in-the-hub/plan.md),
 which declares `blockedBy: [261011-2250-onboarding-ux-redesign]`. Agreed order: this plan lands and releases 5.0.0
 first; the other session implements afterwards from the new main.
 
@@ -326,7 +326,7 @@ together; Phase 5 ships in the same release.
 4. `connect <path>` does not change the stored hub (P6).
 5. `--yes` stays on curation commands and `maintain migrate` (P3).
 6. A project entry wins over a user-scope entry with the same server name in Claude Code, Codex and Gemini CLI
-   (see [scope precedence report](../reports/researcher-261011-mcp-config-scope-precedence.md)). Claude Code and
+   (see [scope precedence report](../../../plans/reports/researcher-261011-mcp-config-scope-precedence.md)). Claude Code and
    Gemini CLI replace the whole entry; Codex merges the two entries key by key (from source, not documented), so
    stale keys from a user-scope entry can leak into a project entry. Consequences for this plan: the project entry
    that `connect` writes must set every field it needs, and `status` explains a folder that is both a hub and a

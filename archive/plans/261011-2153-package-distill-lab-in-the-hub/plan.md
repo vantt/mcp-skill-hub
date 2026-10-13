@@ -327,7 +327,7 @@ compatibility matrix; reserving the `distill-lab` id for workspace skills; anyth
 
 ## Sequencing with the onboarding plan
 
-Another session implements [261011-2250-onboarding-ux-redesign](../../.claude/worktrees/agent-a5c101367df3589e1/plans/261011-2250-onboarding-ux-redesign/plan.md)
+Another session implements [261011-2250-onboarding-ux-redesign](../261011-2250-onboarding-ux-redesign/plan.md)
 (worktree branch `worktree-agent-a5c101367df3589e1`, read-only for this plan) and merges and releases the
 release that carries the onboarding redesign, 0.5.0, first. <!-- Validation: release is 0.5.0, not 5.0.0 -->
 Every "0.5.0" in this plan names that release (the repo's tags are `v0.x`; the latest stable is `v0.4.1`). Implementation of this plan starts in a fresh worktree from the new main only after that session announces

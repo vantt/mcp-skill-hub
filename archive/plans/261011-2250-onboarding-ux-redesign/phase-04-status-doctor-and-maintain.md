@@ -195,7 +195,7 @@ tool names (`workspace_validate`, `workspace_rebuild`, `workspace_diff`) do not 
 - [x] `go test ./...`, `go vet` (linux, windows, darwin) and `gofmt -l` clean; web unit tests and e2e not run here (no
       `web/node_modules`)
 
-Report: [cook-261011-onboarding-phase4](../reports/cook-261011-onboarding-phase4.md)
+Report: [cook-261011-onboarding-phase4](../../../plans/reports/cook-261011-onboarding-phase4.md)
 
 ## Validation
 
