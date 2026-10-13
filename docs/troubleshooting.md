@@ -197,6 +197,10 @@ In the hub, `doctor` shows a `notice` for distill-lab: it runs `scripts/distill.
 
 A hub created by an earlier version committed its `system-curator` copies. Skill Hub now regenerates those files from its version and keeps them out of Git through the hub's `.gitignore`. `doctor` prints one `git rm --cached -- <files>` command that covers every tracked connection file and every tracked system skill file; run it, then commit. Skill Hub never runs it for you, and the file stays on disk.
 
+### doctor --fix on a hub that needs a migration
+
+A hub from an older schema may also lack newer `.gitignore` entries. `skillhub doctor --fix` adds those entries to the hub's `.gitignore` (your own lines stay, and doctor makes no commit), then lists the schema migration as the next step. The migration itself stays a command you preview and confirm: `skillhub maintain migrate`, then `skillhub maintain migrate --yes`.
+
 ## Skills
 
 ### Activation refuses a draft

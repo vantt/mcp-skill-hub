@@ -116,6 +116,45 @@ func TestStatusChecksNeverWaitForABusyHub(t *testing.T) {
 	}
 }
 
+func TestDoctorFixAddsIgnoreEntriesBeforeTheSchemaMigration(t *testing.T) {
+	t.Parallel()
+	root := healthHub(t)
+	ignore := filepath.Join(root, ".gitignore")
+	content, err := os.ReadFile(ignore)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(ignore, []byte("mine/\n"+strings.Replace(string(content), "/.codex/\n", "", 1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(root, ".skillhub", "schema-version")
+	if err := os.Remove(marker); err != nil {
+		t.Fatal(err)
+	}
+	report := RoleReport{Cwd: root, Hub: &HubRef{Root: root}}
+	before := Run(t.Context(), report, DepthFull)
+	if got := codesOf(before, SeverityProblem); !slices.Equal(got, []string{"hub_schema", "gitignore_entry_missing"}) {
+		t.Fatalf("problems = %v", got)
+	}
+	fixes := ApplyFixes(t.Context(), before)
+	if len(fixes.Fixed) != 1 || !slices.Equal(fixes.Fixed[0].Codes, []string{"gitignore_entry_missing"}) || !slices.Equal(fixes.Fixed[0].Changed, Changed{ignore}) {
+		t.Fatalf("fixed = %+v", fixes.Fixed)
+	}
+	if len(fixes.NotFixed) != 1 || fixes.NotFixed[0].Code != "hub_schema" {
+		t.Fatalf("not fixed = %+v", fixes.NotFixed)
+	}
+	after, err := os.ReadFile(ignore)
+	if err != nil || !strings.HasPrefix(string(after), "mine/\n") || !strings.Contains(string(after), "/.codex/\n") {
+		t.Fatalf(".gitignore = %q, %v", after, err)
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("the schema marker was written: %v", err)
+	}
+	if got := codesOf(Run(t.Context(), report, DepthFull), SeverityProblem); !slices.Equal(got, []string{"hub_schema"}) {
+		t.Fatalf("problems after the fix = %v", got)
+	}
+}
+
 func TestDoctorFixRepairsTheHubAndLeavesATrackedConnectionFileToThePerson(t *testing.T) {
 	t.Parallel()
 	root := healthHub(t)

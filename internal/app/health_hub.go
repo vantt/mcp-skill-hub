@@ -199,7 +199,7 @@ func hubStateFindings(root string, report RoleReport, state hubState, depth Dept
 	}
 	blocked := ""
 	var missingIgnore, trackedMachine []string
-	layoutFixable := false
+	layoutFixable, otherBlock := false, false
 	for _, finding := range state.plan.Findings {
 		switch {
 		case finding.ID == "machine_file_tracked":
@@ -210,6 +210,7 @@ func hubStateFindings(root string, report RoleReport, state hubState, depth Dept
 				Message: finding.Summary, Manual: report.hubCommand("skillhub maintain migrate"),
 				Reason: "A schema change needs a migration that you preview and confirm."})
 		case !finding.Fixable:
+			otherBlock = true
 			if blocked == "" {
 				blocked = "the problem with " + finding.Path
 			}
@@ -232,9 +233,17 @@ func hubStateFindings(root string, report RoleReport, state hubState, depth Dept
 		findings = append(findings, Finding{Code: "hub_schema", Label: "Schema version", Severity: SeverityOK, Message: "version " + workspace.SchemaVersion})
 	}
 	if len(missingIgnore) > 0 {
+		fix := repair
+		if blocked == "the schema migration" && !otherBlock && len(state.recoveries) == 0 {
+			// Only the managed entries are appended, so the hub is safe to
+			// repair before its migration; the migration stays a command the
+			// person previews and confirms.
+			fix = ignoreEntriesFix(root)
+		} else {
+			addRepair("add the missing .gitignore entries")
+		}
 		findings = append(findings, Finding{Code: "gitignore_entry_missing", Label: "Git ignore entries", Severity: SeverityProblem,
-			Message: ".gitignore lacks " + strings.Join(missingIgnore, " ") + ", so Git could pick up files that hold paths of this machine.", Fix: repair})
-		addRepair("add the missing .gitignore entries")
+			Message: ".gitignore lacks " + strings.Join(missingIgnore, " ") + ", so Git could pick up files that hold paths of this machine.", Fix: fix})
 	} else {
 		findings = append(findings, Finding{Code: "gitignore_entry_missing", Label: "Git ignore entries", Severity: SeverityOK, Message: "present"})
 	}
@@ -355,6 +364,28 @@ func shareUntrackCommand(root string, findings []Finding) {
 	findings[owner].untrack, findings[owner].Manual = all, untrackCommand(root, all)
 	findings[other].Manual = ""
 	findings[other].Message = strings.Replace(findings[other].Message, "stop tracking them with the command below, then commit.", "the command of the tracked machine files above stops tracking them too.", 1)
+}
+
+// ignoreEntriesFix appends the missing ignore entries to the hub's ignore file
+// and changes nothing else.
+func ignoreEntriesFix(root string) *FixAction {
+	return &FixAction{
+		Summary: "add the missing .gitignore entries (the schema migration stays a separate step)",
+		Apply: func(ctx context.Context) (Changed, error) {
+			lock, err := mutation.AcquireExclusiveLock(ctx, root, mutation.DefaultLockTimeout)
+			if err != nil {
+				return nil, err
+			}
+			changed, err := workspace.AddMissingIgnoreEntries(root)
+			if unlockErr := lock.Unlock(); err == nil {
+				err = unlockErr
+			}
+			if err != nil || !changed {
+				return Changed{}, err
+			}
+			return Changed{filepath.Join(root, ".gitignore")}, nil
+		},
+	}
 }
 
 // selfConnectionFindings checks the hub's own agent connection files and the
