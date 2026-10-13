@@ -1,0 +1,197 @@
+{
+  "_dataset": {
+    "decided": 3,
+    "decision_states": {
+      "candidate": 39,
+      "planned": 3
+    },
+    "lessons": 42,
+    "weaknesses": [
+      "few lessons have a decision, so any association rests on a handful of cases",
+      "candidate means undecided, not rejected: there are no negatives unless a lesson is rejected",
+      "decisions were made with the scores visible, so a high rank is partly circular",
+      "this method can never support a decision alone"
+    ]
+  },
+  "association.contrast_by_state": {
+    "status": "preliminary",
+    "table": {
+      "already-covered": {
+        "candidate": 8
+      },
+      "contradicts": {
+        "candidate": 3
+      },
+      "extends": {
+        "candidate": 11,
+        "planned": 1
+      },
+      "new": {
+        "candidate": 17,
+        "planned": 2
+      }
+    }
+  },
+  "association.effort": {
+    "chance_k_random_lessons_rank_that_high": 0.8606,
+    "decided": 3,
+    "decided_midranks": [
+      15.5,
+      15.5,
+      35.5
+    ],
+    "higher_is_better": true,
+    "lessons_ranking_at_least_as_high_as_the_lowest_decided": 40,
+    "status": "preliminary"
+  },
+  "association.evidence": {
+    "chance_k_random_lessons_rank_that_high": 1,
+    "decided": 3,
+    "decided_midranks": [
+      2.5,
+      27.5,
+      27.5
+    ],
+    "higher_is_better": true,
+    "lessons_ranking_at_least_as_high_as_the_lowest_decided": 42,
+    "status": "preliminary"
+  },
+  "association.final_score": {
+    "chance_k_random_lessons_rank_that_high": 0.0249,
+    "decided": 3,
+    "decided_midranks": [
+      4,
+      6.5,
+      11
+    ],
+    "higher_is_better": true,
+    "lessons_ranking_at_least_as_high_as_the_lowest_decided": 13,
+    "status": "preliminary"
+  },
+  "association.impact": {
+    "chance_k_random_lessons_rank_that_high": 0.0249,
+    "decided": 3,
+    "decided_midranks": [
+      3.5,
+      3.5,
+      11.5
+    ],
+    "higher_is_better": true,
+    "lessons_ranking_at_least_as_high_as_the_lowest_decided": 13,
+    "status": "preliminary"
+  },
+  "association.relevance": {
+    "chance_k_random_lessons_rank_that_high": 0.2854,
+    "decided": 3,
+    "decided_midranks": [
+      7,
+      7,
+      21
+    ],
+    "higher_is_better": true,
+    "lessons_ranking_at_least_as_high_as_the_lowest_decided": 28,
+    "status": "preliminary"
+  },
+  "contrast": {
+    "counts": {
+      "already-covered": 8,
+      "contradicts": 3,
+      "extends": 12,
+      "new": 19
+    },
+    "cross_table_with_fact_b": {
+      "already-covered": {
+        "no-b": 8
+      },
+      "contradicts": {
+        "b": 2,
+        "no-b": 1
+      },
+      "extends": {
+        "b": 11,
+        "no-b": 1
+      },
+      "new": {
+        "b": 5,
+        "no-b": 14
+      }
+    },
+    "cross_table_with_impact0": {
+      "already-covered": {
+        "impact0": 8
+      },
+      "contradicts": {
+        "impact0": 1,
+        "impact\u003e0": 2
+      },
+      "extends": {
+        "impact0": 1,
+        "impact\u003e0": 11
+      },
+      "new": {
+        "impact0": 14,
+        "impact\u003e0": 5
+      }
+    },
+    "entropy_bits": 1.7617,
+    "entropy_bits_given_all_facts": 1.0831,
+    "entropy_bits_given_fact_b": 1.3365,
+    "entropy_bits_given_impact0": 1.3365,
+    "weakness": "entropy says how much contrast varies and how much the facts imply, not whether it helps an agent"
+  },
+  "notable": {
+    "gzip_bytes_what": 3565,
+    "gzip_bytes_what_and_notable": 6873,
+    "gzip_marginal_bytes_of_notable": 3308,
+    "jaccard_with_what_max": 0.1556,
+    "jaccard_with_what_median": 0.087,
+    "share_of_content_words_not_in_what_median": 0.9024,
+    "trigrams_shared_by_3_or_more": 4,
+    "weakness": "word overlap misses paraphrase, and gzip is a crude entropy proxy on short texts",
+    "words_median": 27
+  },
+  "score.components": {
+    "effort_distribution": {
+      "1": 30,
+      "2": 10,
+      "3": 2
+    },
+    "evidence_distribution": {
+      "1": 30,
+      "2": 8,
+      "3": 4
+    },
+    "final_score_zero": 24,
+    "impact_distribution": {
+      "0": 24,
+      "2": 5,
+      "3": 4,
+      "4": 3,
+      "5": 6
+    },
+    "relevance_distribution": {
+      "0": 8,
+      "1": 6,
+      "2": 15,
+      "3": 13
+    },
+    "spearman_effort_final": -0.1181,
+    "spearman_evidence_final": 0.2767,
+    "spearman_impact_final": 0.9828,
+    "spearman_relevance_final": 0.4857,
+    "spearman_relevance_impact": 0.4682,
+    "weakness": "correlations describe this one file; ties at zero make the order among zero-score lessons arbitrary"
+  },
+  "score.ordering_sensitivity": {
+    "tau_b_effort_held_constant": 0.9561,
+    "tau_b_evidence_held_constant": 0.9508,
+    "tau_b_impact_alone": 0.9297,
+    "tau_b_impact_held_constant": 0.4997,
+    "tau_b_relevance_held_constant": 0.9842,
+    "weakness": "this shows how far a component moves the ranking, not whether the ranking is right"
+  },
+  "score.why": {
+    "trigrams_shared_by_3_or_more": 34,
+    "words_median": 17
+  }
+}
