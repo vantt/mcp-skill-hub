@@ -2,7 +2,7 @@
 
 <h1><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/brand/skill-hub-logo-dark.svg"><img src="docs/images/brand/skill-hub-logo-light.svg" alt="Skill Hub" width="280"></picture></h1>
 
-Một thư viện skill. Mọi agent. Mọi dự án.<br>
+Skill của bạn ở một nơi. Mọi agent kéo về khi cần.<br>
 
 [![Latest release](https://img.shields.io/github/v/release/vantt/mcp-skill-hub)](https://github.com/vantt/mcp-skill-hub/releases/latest) [![CI](https://github.com/vantt/mcp-skill-hub/actions/workflows/ci.yml/badge.svg)](https://github.com/vantt/mcp-skill-hub/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -10,8 +10,8 @@ Một thư viện skill. Mọi agent. Mọi dự án.<br>
 
 </div>
 
-Giữ các skill của agent trong một kho Git của riêng bạn, và thôi sao chép thư mục skill qua lại giữa các dự án.
-Khi agent bắt đầu một việc, nó được dặn hỏi hub xem skill nào phù hợp, và hub gợi ý một skill. Skill của bạn không thay đổi nếu bạn chưa đồng ý.
+Skill Hub phục vụ các skill của agent qua MCP từ một kho Git của riêng bạn, nên không có gì phải cài hay sao chép vào từng dự án: agent hỏi hub skill phù hợp khi bắt đầu một việc.
+Vì thư viện nằm một chỗ, bạn có thể thu thập skill từ bất kỳ kho nào, chỉnh sửa và tinh chỉnh theo tiêu chí của riêng bạn, kèm phản hồi từ việc dùng thật và một bước duyệt trước khi bất cứ thứ gì đến tay agent.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/web/dark-skills-list.png">
@@ -23,7 +23,7 @@ Khi agent bắt đầu một việc, nó được dặn hỏi hub xem skill nào
 ## Cách hoạt động
 
 1. Bạn giữ các skill trong một hub: một thư mục riêng, nằm trong một kho Git.
-2. Bạn kết nối một dự án, hoặc mọi dự án, để agent tìm thấy hub.
+2. Bạn kết nối tài khoản người dùng một lần, hoặc một dự án riêng, để agent tìm thấy hub.
 3. Agent được dặn hỏi hub skill nào phù hợp với một việc, và hub trả lời.
 
 ```mermaid
@@ -54,6 +54,8 @@ flowchart LR
 
 ## Vì sao dùng Skill Hub
 
+- **Không cài theo từng dự án.** Kết nối tài khoản người dùng một lần bằng `skillhub connect -g` và các thư mục dự án giữ nguyên. Agent hỏi hub skill khi bắt đầu một việc, nên không có gì được sao chép vào từng dự án.
+- **Biến skill thành của bạn.** Thu thập skill từ bất kỳ kho nào, chỉnh sửa và tinh chỉnh theo tiêu chí của bạn. Phản hồi từ việc dùng thật cho biết skill nào có ích, và skill mới bắt đầu ở trạng thái nháp để bạn duyệt.
 - **Mỗi việc một gợi ý.** Agent được dặn hỏi hub bằng một mô tả ngắn của việc. Nó nhận một gợi ý, hoặc "không skill nào phù hợp", và nội dung đầy đủ của skill chỉ được tải sau khi nó chọn.
 - **Bạn duyệt mọi thay đổi của skill.** Skill mới bắt đầu ở trạng thái nháp và agent không được đề xuất chúng. Skill từ kho của người khác chỉ đến được agent sau khi bạn duyệt trong terminal.
 - **Một chương trình, không có gì chạy nền.** Skill Hub là một file thực thi duy nhất. Agent khởi động nó khi cần; không có gì chạy ngầm.

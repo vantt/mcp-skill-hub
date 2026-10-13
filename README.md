@@ -2,7 +2,7 @@
 
 <h1><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/brand/skill-hub-logo-dark.svg"><img src="docs/images/brand/skill-hub-logo-light.svg" alt="Skill Hub" width="280"></picture></h1>
 
-One skill library. Every agent. Every project.<br>
+Your skills in one place. Pulled by any agent, on demand.<br>
 
 [![Latest release](https://img.shields.io/github/v/release/vantt/mcp-skill-hub)](https://github.com/vantt/mcp-skill-hub/releases/latest) [![CI](https://github.com/vantt/mcp-skill-hub/actions/workflows/ci.yml/badge.svg)](https://github.com/vantt/mcp-skill-hub/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -10,8 +10,8 @@ One skill library. Every agent. Every project.<br>
 
 </div>
 
-Keep your agent skills in one Git repository you own, and stop copying skill folders between projects.
-When your agent starts a task, it is told to ask the hub which skill fits, and the hub suggests one. Nothing changes in your skills without your say-so.
+Skill Hub serves your agent skills over MCP from one Git repository you own, so there is nothing to install or copy into each project: your agent asks the hub for the right skill when a task starts.
+Because the library is central, you can collect skills from any repository, edit them, and tune them to your own criteria, with feedback from real use and an approval step before anything reaches an agent.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/web/dark-skills-list.png">
@@ -23,7 +23,7 @@ When your agent starts a task, it is told to ask the hub which skill fits, and t
 ## How it works
 
 1. You keep your skills in a hub: a folder of its own, kept in a Git repository.
-2. You connect a project, or every project, so your agent finds the hub.
+2. You connect your user account once, or a single project, so your agent finds the hub.
 3. Your agent is told to ask the hub which skill fits a task, and the hub answers.
 
 ```mermaid
@@ -54,6 +54,8 @@ flowchart LR
 
 ## Why Skill Hub
 
+- **No per-project install.** Connect your user account once with `skillhub connect -g` and your project folders stay untouched. Your agent asks the hub for a skill when a task starts, so nothing is copied into each project.
+- **Make skills yours.** Collect skills from any repository, edit them, and tune them to your own criteria. Feedback from real use shows which ones help, and new skills start as drafts you approve.
 - **One recommendation per task.** Your agent is told to ask the hub with a short task description. It gets one recommendation, or "no skill fits", and the full skill text loads only after it picks one.
 - **You approve every skill change.** New skills start as drafts that agents are not offered. Skills from someone else's repository reach your agent only after you approve them in the terminal.
 - **One program, nothing to keep running.** Skill Hub is a single binary. Your agent starts it when needed; nothing runs in the background.
