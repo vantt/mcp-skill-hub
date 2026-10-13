@@ -13,13 +13,13 @@ Pre-commit hook     ok      no pre-commit hook
 Network server      ok      nothing listens on 127.0.0.1:7420; run `skillhub serve` when agents on
                             another machine need this hub
 
-This project uses the hub at <WORKSPACE>
+This project uses this hub
 
 Check             Status  Detail
 Claude Code       ok      project entry in .mcp.json; it wins over the entry of your user account
 Connection files  ok      current
 
-Your user account uses the hub at <WORKSPACE>
+Your user account uses this hub
 
 Check             Status  Detail
 Claude Code       ok      user entry in ~/.claude.json; not used here, because this project's own
@@ -45,13 +45,13 @@ Pre-commit hook     ok      no pre-commit hook
 Network server      ok      nothing listens on 127.0.0.1:7420; run `skillhub serve` when agents on
                             another machine need this hub
 
-This project uses the hub at <WORKSPACE>
+This project uses this hub
 
 Check             Status  Detail
 Claude Code       ok      project entry in .mcp.json; it wins over the entry of your user account
 Connection files  ok      current
 
-Your user account uses the hub at <WORKSPACE>
+Your user account uses this hub
 
 Check             Status  Detail
 Claude Code       ok      user entry in ~/.claude.json; not used here, because this project's own

@@ -195,7 +195,7 @@ In the hub, `doctor` shows a `notice` for distill-lab: it runs `scripts/distill.
 
 ### doctor says Git tracks a system skill file
 
-A hub created by an earlier version committed its `system-curator` copies. Skill Hub now regenerates those files from its version and keeps them out of Git through the hub's `.gitignore`. `doctor` prints a `git rm --cached` command for each tracked one; run it, then commit. Skill Hub never runs it for you, and the file stays on disk.
+A hub created by an earlier version committed its `system-curator` copies. Skill Hub now regenerates those files from its version and keeps them out of Git through the hub's `.gitignore`. `doctor` prints one `git rm --cached -- <files>` command that covers every tracked connection file and every tracked system skill file; run it, then commit. Skill Hub never runs it for you, and the file stays on disk.
 
 ## Skills
 

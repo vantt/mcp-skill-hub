@@ -106,6 +106,9 @@ type Finding struct {
 	// fix would rewrite; doctor prints it below the table, status leaves it
 	// out.
 	Detail string
+	// untrack lists the hub files, relative to the hub, that a tracked-file
+	// finding asks the person to stop tracking.
+	untrack []string
 }
 
 // findingJSON is the JSON form of a Finding: the fix is its summary.
@@ -224,6 +227,7 @@ func Run(ctx context.Context, report RoleReport, depth Depth) []Section {
 				section.Findings = append(section.Findings, checkSafely(ctx, provider, report, depth)...)
 			}
 		}
+		shareUntrackCommand(hub, section.Findings)
 		sections = append(sections, section)
 	}
 	for _, provider := range []sectionProvider{clientLocalCheck{}, clientRemoteCheck{}} {

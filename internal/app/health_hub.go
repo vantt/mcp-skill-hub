@@ -198,15 +198,12 @@ func hubStateFindings(root string, report RoleReport, state hubState, depth Dept
 		}
 	}
 	blocked := ""
-	var missingIgnore []string
+	var missingIgnore, trackedMachine []string
 	layoutFixable := false
 	for _, finding := range state.plan.Findings {
 		switch {
 		case finding.ID == "machine_file_tracked":
-			findings = append(findings, Finding{Code: finding.ID, Label: "Tracked machine file", Severity: SeverityProblem,
-				Message: "Git tracks " + finding.Path + ", which holds paths of this machine.",
-				Manual:  "git -C " + shellquote.Arg(root) + " rm --cached -- " + shellquote.Arg(finding.Path),
-				Reason:  "doctor --fix never changes what Git tracks; stop tracking the file with the command below (it stays on disk)."})
+			trackedMachine = append(trackedMachine, finding.Path)
 		case finding.ID == "canonical_schema_incompatible":
 			blocked = "the schema migration"
 			findings = append(findings, Finding{Code: "hub_schema", Label: "Schema version", Severity: SeverityProblem,
@@ -224,6 +221,9 @@ func hubStateFindings(root string, report RoleReport, state hubState, depth Dept
 			layoutFixable = true
 			findings = append(findings, Finding{Code: finding.ID, Label: "Hub layout", Severity: SeverityProblem, Message: finding.Path + ": " + finding.Summary, Fix: repair})
 		}
+	}
+	if len(trackedMachine) > 0 {
+		findings = append(findings, trackedMachineFinding(root, trackedMachine))
 	}
 	if layoutFixable {
 		addRepair("create the missing hub folders and files")
@@ -301,6 +301,60 @@ func hubStateFindings(root string, report RoleReport, state hubState, depth Dept
 		}
 	}
 	return findings
+}
+
+// trackedMachineFinding is the one finding for every connection file Git
+// tracks. It holds the single command that stops tracking them; doctor --fix
+// never runs it.
+func trackedMachineFinding(root string, paths []string) Finding {
+	paths = sortedUnique(paths)
+	return Finding{Code: "machine_file_tracked", Label: "Tracked machine files", Severity: SeverityProblem,
+		Message: "Git tracks " + strings.Join(paths, ", ") + ", which hold paths of this machine.",
+		Manual:  untrackCommand(root, paths), untrack: paths,
+		Reason: "doctor --fix never changes what Git tracks; stop tracking the files with the command below (they stay on disk), then commit."}
+}
+
+// untrackCommand is the one Git line that stops tracking paths, which are
+// relative to root and sorted by the caller.
+func untrackCommand(root string, paths []string) string {
+	quoted := make([]string, 0, len(paths))
+	for _, path := range paths {
+		quoted = append(quoted, shellquote.Arg(path))
+	}
+	return "git -C " + shellquote.Arg(root) + " rm --cached -- " + strings.Join(quoted, " ")
+}
+
+func sortedUnique(paths []string) []string {
+	out := slices.Clone(paths)
+	slices.Sort(out)
+	return slices.Compact(out)
+}
+
+// shareUntrackCommand makes the hub section print one `git rm --cached`
+// command for every tracked machine file and tracked system skill file: the
+// command lives on the machine file finding and covers both; the system skill
+// finding keeps its message and drops its own command.
+func shareUntrackCommand(root string, findings []Finding) {
+	var all []string
+	owner, other := -1, -1
+	for index, finding := range findings {
+		switch finding.Code {
+		case "machine_file_tracked":
+			owner = index
+		case "system_skill_tracked":
+			other = index
+		default:
+			continue
+		}
+		all = append(all, finding.untrack...)
+	}
+	if owner < 0 || other < 0 {
+		return
+	}
+	all = sortedUnique(all)
+	findings[owner].untrack, findings[owner].Manual = all, untrackCommand(root, all)
+	findings[other].Manual = ""
+	findings[other].Message = strings.Replace(findings[other].Message, "stop tracking them with the command below, then commit.", "the command of the tracked machine files above stops tracking them too.", 1)
 }
 
 // selfConnectionFindings checks the hub's own agent connection files and the

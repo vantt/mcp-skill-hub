@@ -112,7 +112,7 @@ Claude Code asks you before any `skillhub` command with `--yes` or `confirm`, an
 </details>
 
 > [!CAUTION]
-> Do not commit connection files. `.mcp.json`, `.claude/settings.local.json`, `.codex/` and `.gemini/` hold absolute paths for this machine. `init` lists them in the hub's `.gitignore`; add them to a project's `.gitignore` yourself. If your hub is older, run `skillhub doctor --fix` to add the entries, and `git rm --cached <file>` for any of them Git already tracks. `doctor` names each one it finds.
+> Do not commit connection files. `.mcp.json`, `.claude/settings.local.json`, `.codex/` and `.gemini/` hold absolute paths for this machine. `init` lists them in the hub's `.gitignore`; add them to a project's `.gitignore` yourself. If your hub is older, run `skillhub doctor --fix` to add the entries, and the one `git rm --cached -- <files>` command that `doctor` prints for the files Git already tracks.
 
 ### Undo a connection
 
