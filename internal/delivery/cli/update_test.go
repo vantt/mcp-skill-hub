@@ -88,6 +88,10 @@ func setupCLIFixtureServer(t *testing.T, targetVersion string, archiveBytes []by
 		case path == "/download/"+releaseTag+"/checksums.txt":
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte(checksumsContent))
+		case path == "/download/"+releaseTag+"/checksums.txt.sigstore.json":
+			// Any bundle will do: the tests put a stub cosign on PATH when the host has a real one.
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("{}"))
 		case path == "/download/"+releaseTag+"/"+archiveName:
 			w.WriteHeader(http.StatusOK)
 			w.Write(archiveBytes)
