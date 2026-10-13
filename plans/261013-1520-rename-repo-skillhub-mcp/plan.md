@@ -1,9 +1,9 @@
 ---
 title: "Rename the repository and Go module from mcp-skill-hub to skillhub-mcp"
-description: "Drop the transport-first name: the repo, module path and release URLs become skillhub-mcp, while the product name Skill Hub, the skillhub command, SKILLHUB_* variables and user config stay unchanged. Includes a bridge release so installed binaries can still verify and self-update across the rename."
+description: "Drop the transport-first name: the repo, module path and release URLs become skillhub-mcp, while the product name Skill Hub, the skillhub command, SKILLHUB_* variables and user config stay unchanged. Decision: no bridge release; binaries older than the first release under the new name reinstall once."
 status: pending
 priority: P2
-effort: 6h
+effort: 4h
 branch: main
 tags: [rename, release, selfupdate, supply-chain]
 blockedBy: []
@@ -16,9 +16,10 @@ created: 2026-10-13
 ## Outcome, constraints, non-goals
 
 - **Outcome.** The GitHub repository is `vantt/skillhub-mcp`, the Go module is
-  `github.com/vantt/skillhub-mcp`, and every URL, installer, workflow and document uses the new name. A person
-  with an installed v0.6.x binary can still run `skillhub self-update` and reach the first release built under
-  the new name, without a manual reinstall.
+  `github.com/vantt/skillhub-mcp`, and every URL, installer, workflow and document uses the new name. People on
+  v0.6.4 or earlier reinstall once with the install one-liner (decision below).
+- **Decision (user, 2026-10-13).** No bridge release: older binaries cannot verify a release signed under the
+  new name, and that is accepted. Whoever is on v0.6.4 or earlier reinstalls once.
 - **Decision (user, 2026-10-13).** The name is `skillhub-mcp`. It was chosen over `mcp-skillhub` because the
   distinctive part comes first and `mcp` reads as a qualifier that can be dropped later. The reasoning, and the
   naming panel it came from, are in the PRD reference survey.
@@ -34,31 +35,26 @@ created: 2026-10-13
 - **Non-goals.** Renaming the product, the binary or the hub folder; a new logo; trademark or npm/PyPI/domain
   checks (open item for the user, not part of this plan).
 
-## Why a bridge release is required
+## What breaks without a bridge, and why it is accepted
 
-Release verification pins the signing identity to the repository path. In
-`internal/selfupdate/selfupdate.go` the identity is
-`<DefaultSigstoreWorkflow>@refs/tags/<tag>` with the workflow URL
-`https://github.com/vantt/mcp-skill-hub/.github/workflows/release.yml`, and the installers
-(`scripts/install.sh`, `scripts/install.ps1`) pin the same prefix. Sigstore stamps a release with the repository
-name at signing time. After the rename, a release is signed as
-`https://github.com/vantt/skillhub-mcp/.github/workflows/release.yml@refs/tags/vX`, so every binary that only
-knows the old identity (v0.6.4 and earlier) rejects it and aborts its self-update.
-
-GitHub keeps redirects for a renamed repository, so the download URLs in old binaries still resolve. The
-identity check is the only break. The fix is a release before the rename whose binary accepts **both**
-identities, then the rename, then a release signed under the new name.
+Release verification pins the signing identity to the repository path: `internal/selfupdate/selfupdate.go`
+builds `<DefaultSigstoreWorkflow>@refs/tags/<tag>` from
+`https://github.com/vantt/mcp-skill-hub/.github/workflows/release.yml`, and `scripts/install.sh` and
+`scripts/install.ps1` pin the same prefix. A release signed after the rename carries
+`https://github.com/vantt/skillhub-mcp/...`, so a v0.6.4 binary rejects it and `skillhub self-update` aborts
+before replacing anything (fails safe). GitHub redirects keep the old download URLs working, so the only break is
+that one signature check, and the cure is one reinstall with the install one-liner, which is fetched from the
+redirected URL and already carries the new identity. Nothing on disk is lost.
 
 ## Working in separate worktrees
 
 The main checkout stays untouched while the rename is prepared: it may hold other sessions' uncommitted work, and
-the module-path change would make every open build in it stale. Each preparing phase runs in its own git worktree
+the module-path change would make every open build in it stale. The preparing phase runs in its own git worktree
 created from `origin/main`, never from the main checkout's working tree.
 
 | Phase | Worktree | Branch | Starts from |
 |-------|----------|--------|-------------|
-| 1 | `.claude/worktrees/rename-bridge` | `rename-bridge` | `origin/main` |
-| 2 | `.claude/worktrees/rename-module` | `rename-module` | `main` after phase 1 is merged and v0.6.5 is released |
+| 1 | `.claude/worktrees/rename-module` | `rename-module` | `origin/main` |
 
 Rules for the worktrees:
 
@@ -70,39 +66,21 @@ Rules for the worktrees:
 - Run `make check` and the three-platform `go vet` inside the worktree. Start no long-running process there; if a
   test starts one, stop it before the worktree is removed.
 - Merge into local `main` with a normal merge commit once the checks pass (no rebase, no history rewrite), then
-  remove the worktree and its branch. Only **68** pushes, and only after the repository rename in phase 3.
-- Settings such as `git remote set-url origin` are shared by all worktrees of the repository, so phase 3 changes
+  remove the worktree and its branch. Only **68** pushes, and only after the repository rename in phase 2.
+- Settings such as `git remote set-url origin` are shared by all worktrees of the repository, so phase 2 changes
   the URL once.
-- Before phase 2, re-run the `git grep -n "mcp-skill-hub"` inventory in the new worktree; do not trust a list made
+- Before starting, re-run the `git grep -n "mcp-skill-hub"` inventory in the new worktree; do not trust a list made
   earlier.
 
 ## Phases
 
 | # | Phase | Owner | Depends on |
 |---|-------|-------|-----------|
-| 1 | Accept both signing identities (bridge release) | me, then **68** releases | none |
-| 2 | Rename the module and every reference | me | phase 1 released |
-| 3 | Rename the GitHub repository and ship the first release under the new name | **68** | phase 2 merged locally |
-| 4 | Verify installers, self-update and links on the new name | me and **68** | phase 3 |
+| 1 | Rename the module and every reference | me | none |
+| 2 | Rename the GitHub repository and ship the first release under the new name | **68** | phase 1 merged locally |
+| 3 | Verify installers, redirects and links on the new name | me and **68** | phase 2 |
 
-### Phase 1: bridge release (accept both identities)
-
-- **Where.** Worktree `rename-bridge` (see "Working in separate worktrees").
-
-- **Change.** In `internal/selfupdate/selfupdate.go` keep `DefaultSigstoreWorkflow` as is and add the new
-  workflow URL as a second accepted identity. Verification passes when either identity verifies; a failure of
-  both reports both identities in the error. Do the same in `scripts/install.sh` and `scripts/install.ps1`,
-  which already check the identity before installing.
-- **Files.** `internal/selfupdate/selfupdate.go` and its tests, `scripts/install.sh`, `scripts/install.ps1`,
-  `scripts/test-installer-lifecycle.sh`, `scripts/test-installer-windows.ps1`, `docs/release-runbook.md`.
-- **Tests.** Table test: identity A passes, identity B passes, a third identity fails, and the error text lists
-  both accepted identities. Installer lifecycle tests keep a wrong-identity failure case.
-- **Release.** **68** tags this as the next patch (v0.6.5). It is built and signed under the old name. After it
-  ships, anyone who runs `skillhub self-update` once gets a binary that survives the rename.
-- **Gate.** Do not start phase 3 until v0.6.5 is released, so that the number of people stuck on an older binary
-  stays as small as possible.
-
-### Phase 2: rename in the repository (one mechanical commit, then fixes)
+### Phase 1: rename in the repository (one mechanical commit, then fixes)
 
 1. In the `rename-module` worktree, replace `github.com/vantt/mcp-skill-hub` with `github.com/vantt/skillhub-mcp` across Go files,
    `go.mod`, `web/go.mod`, `.github/workflows/*.yml`, `scripts/*`, `Makefile` and the ldflags in
@@ -112,7 +90,8 @@ Rules for the worktrees:
    `internal/telemetry/redactor_test.go` and `internal/transcripts/claude_code_test.go`, whose strings are the
    local checkout path `/home/vantt/projects/mcp-skill-hub` and the matching Claude Code project-directory
    slug, not the product name. If the checkout directory is later renamed, update those two fixtures with it.
-3. Keep the old workflow URL as the second accepted identity from phase 1; do not remove it in this commit.
+3. `DefaultSigstoreWorkflow`, `DefaultReleaseBaseURL`, the installers and the installer test scripts move to
+   the new name together with everything else; there is no second accepted identity.
 4. Update the user-facing text that names the repo: README badge and install URLs (both languages),
    `docs/installation.md` (clone and `cd` lines), `docs/release-runbook.md` (`REPO=`), `docs/troubleshooting.md`,
    `docs/remote-hub-guide.md` and the design docs. Add one line to the README explaining the names: the repo is
@@ -120,30 +99,32 @@ Rules for the worktrees:
 5. Check that `web/go.mod` (its own module, `github.com/vantt/mcp-skill-hub/web`) and any `replace` directive
    still point at the root module, then run `go mod tidy` in the root and in `web/` and confirm both compile.
 6. Verification: `gofmt -l .`, `go vet ./...` for linux, `GOOS=windows` and `GOOS=darwin`, `make check`,
-   and `git grep -n "mcp-skill-hub"` showing only the intended leftovers (the two fixtures, the second accepted
-   identity, `archive/`, `plans/`, and the release-note history).
+   and `git grep -n "mcp-skill-hub"` showing only the intended leftovers (the two fixtures, `archive/`, `plans/`
+   and the release-note history).
 7. Commit trailer as usual. No plan ids or phase numbers in code or commit messages.
 
-### Phase 3: rename and release (**68**)
+### Phase 2: rename and release (**68**)
 
 1. **68** renames the repository in GitHub settings to `skillhub-mcp`. GitHub redirects the old web, clone, API
    and release-download URLs. Update the local `origin` URL (`git remote set-url origin
    git@github.com:vantt/skillhub-mcp.git` or the HTTPS equivalent) in every checkout and worktree.
-2. **68** pushes the phase 2 commits, waits for CI, tags the next version (v0.7.0 suggested, because the module
+2. **68** pushes the phase 1 commits, waits for CI, tags the next version (v0.7.0 suggested, because the module
    path changes) and lets the release workflow sign and publish it.
 3. **68** updates the repository description and topics: "Skill Hub: your skills in one place, pulled by any
    agent, on demand", topics `agent-skills`, `mcp`, `git-native`, `skills`.
 4. Do not create a new repository at the old name: that would break the redirect.
 
-### Phase 4: verify
+### Phase 3: verify
 
 - A fresh install from `https://github.com/vantt/skillhub-mcp/releases/latest/download/install.sh` verifies the
   signature with `cosign` and with `SKILLHUB_REQUIRE_SIGNATURE=1`.
 - The old URL `https://github.com/vantt/mcp-skill-hub/releases/latest/download/install.sh` still resolves through
   the redirect and installs the same release.
-- An installed v0.6.5 binary runs `skillhub self-update` to the new release and the signature check passes.
-- An installed v0.6.4 binary (old identity only) fails safe: it aborts with the identity message and prints the
-  reinstall one-liner. Record that behaviour in the release notes so people on 0.6.4 or earlier know to reinstall.
+- An installed v0.6.4 binary fails safe: `skillhub self-update` aborts with the identity message and changes
+  nothing, and the reinstall one-liner replaces it. Run this once on a throwaway HOME and record the exact
+  behaviour in the release notes so people on 0.6.4 or earlier know to reinstall.
+- The three calls a binary makes through the redirect work (release listing used to find the latest version,
+  asset download, signature bundle download), checked from the new binary on a machine that never saw the new name.
 - `go install github.com/vantt/skillhub-mcp/cmd/skillhub@latest` works. The old module path
   `github.com/vantt/mcp-skill-hub` stops being fetchable as a Go module even though the repo redirects, because
   the module's own `go.mod` declares the new path. Say so in the release notes.
@@ -151,49 +132,35 @@ Rules for the worktrees:
 
 ## Release-process review notes (by the releasing session, 2026-10-13)
 
-- The plan's order is right: bridge release under the old name, then rename, then tag under the new name. The
-  identity pins found in `internal/selfupdate/selfupdate.go` (lines 30, 36, 389, 390, 418, 419),
-  `scripts/install.sh` (lines 7, 28), `scripts/install.ps1` (lines 26, 30) and the installer test scripts are the
-  only repository-name pins; `.github/` has none, so the release workflow needs no other change besides ldflags
-  and module paths.
-- Phase 1 must keep `DefaultReleaseBaseURL` and the install URLs on the old name: v0.6.5 is published under the
-  old name and relies on GitHub's redirect after the rename. Phase 4 therefore has to prove the redirect for the
-  three calls that matter, not only for `install.sh`: the release listing used to find the latest version, the
-  asset download, and the signature bundle download. Run it from a v0.6.5 binary on a machine that never saw the
-  new name.
-- Ship v0.6.5 and give it a few days before renaming, and say in the v0.6.5 release notes "run `skillhub
-  self-update` once before 0.7.0". The gate in phase 1 says this; the wait should be a stated minimum (suggest
-  seven days), not left open.
-- Take the rename step only while no release workflow runs, and tag the new version only after the new repository
-  name shows in `gh repo view`. After the rename, check Actions and the release workflow are still enabled and
-  the repository secrets and OIDC permissions survived (they should, but they are the first thing a signed
-  release needs).
-- Update `docs/release-runbook.md` (`REPO=mcp-skill-hub`, line 105) and any release-note template that links the
-  old compare URL.
+- The identity pins are only in `internal/selfupdate/selfupdate.go` (lines 30, 36, 389, 390, 418, 419),
+  `scripts/install.sh` (7, 28), `scripts/install.ps1` (26, 30) and the installer test scripts; `.github/` has
+  none, so the release workflow needs only the ldflags and module paths.
+- Rename only while no release workflow runs, and tag only after `gh repo view` shows the new name. After the
+  rename check that Actions and the release workflow are enabled and that secrets and OIDC permissions survived.
+- Fix `REPO=` in `docs/release-runbook.md` and any release-note template that links the old compare URL.
 
 ## Risks and rollback
 
 | Risk | Effect | Mitigation |
 |------|--------|-----------|
-| Binary older than the bridge cannot verify the new release | That user must reinstall once | Ship the bridge first; document the reinstall one-liner |
+| Binary v0.6.4 or older cannot verify the new release | That user reinstalls once; self-update fails safe | Accepted; document the one-liner in the release notes |
 | Sigstore identity mismatch because the rename happens mid-release | Release fails verification | Rename only when no release workflow is running; tag after the rename |
 | A tag for the next version is created before the rename | Signed under the old name | **68** renames first, then tags |
 | `sed` touches `skill-hub` hub folder paths | Wrong default hub folder | Replace only the exact `mcp-skill-hub` string; review `git grep` output |
 | Local checkout directory name | Two test fixtures keep the old directory string | They describe the local path, not the product; update them only if the directory is renamed |
 | Someone clones the old URL | Works through the redirect | Do not reuse the old name for another repository |
 
-Rollback before phase 3: drop the branch. After the repository is renamed: GitHub allows renaming back, which
-restores the old name, and the bridge release already accepts both identities, so a rollback does not strand
-anyone who installed v0.6.5.
+Rollback before phase 2: drop the branch. After the repository is renamed: GitHub allows renaming back, which
+restores the old name; releases signed under the new name would then fail the old identity, so roll back only
+before the first new release.
 
 ## Acceptance criteria
 
-- [ ] Bridge release v0.6.5 ships with both identities accepted in `selfupdate` and both installers, with tests.
 - [ ] The module, workflows, installers and docs use `skillhub-mcp`; `git grep mcp-skill-hub` shows only the
-      intended leftovers listed in phase 2.
+      intended leftovers listed in phase 1.
 - [ ] `gofmt`, `go vet` (three platforms) and `make check` pass; CI is green on Linux, Windows and macOS.
 - [ ] The GitHub repository is renamed and the first release under the new name is signed and published.
-- [ ] A fresh install, a v0.6.5 self-update and the old URL redirect are verified as described in phase 4.
+- [ ] A fresh install, the old URL redirect and the v0.6.4 fail-safe are verified as described in phase 3.
 - [ ] Release notes explain the rename, the reinstall step for v0.6.4 and earlier, and the Go module path change.
 - [ ] The README names the three names in one line (repo, product, command).
 
