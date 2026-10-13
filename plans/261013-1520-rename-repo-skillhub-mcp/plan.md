@@ -1,7 +1,7 @@
 ---
 title: "Rename the repository and Go module from mcp-skill-hub to skillhub-mcp"
 description: "Drop the transport-first name: the repo, module path and release URLs become skillhub-mcp, while the product name Skill Hub, the skillhub command, SKILLHUB_* variables and user config stay unchanged. Decision: no bridge release; binaries older than the first release under the new name reinstall once."
-status: in-progress
+status: completed
 priority: P2
 effort: 4h
 branch: main
@@ -177,5 +177,8 @@ before the first new release.
 - 2026-10-13: the GitHub repository was renamed to `vantt/skillhub-mcp`; local `origin` follows it.
 - 2026-10-13: phase 1 merged into local `main` (module path, workflows, installers, selfupdate constants, docs,
   README names line). `gofmt`, `go vet` on three platforms, `bash -n` and `make check` pass. Not pushed.
-- Next: **68** pushes and tags v0.6.6, then phase 3 verification (new-name install, old-URL redirect, v0.6.4
-  fail-safe, `go install` with the new path).
+- 2026-10-13: v0.6.6 tagged and released by 68 (Release workflow green, signed, smoke installs passed on three
+  OSes). Checked from this side: the new and the old `install.sh` URLs resolve to the same asset, and
+  `go list -m github.com/vantt/skillhub-mcp@v0.6.6` resolves through the Go proxy.
+- Not run: the v0.6.4 `self-update` fail-safe on a throwaway HOME. The design says it aborts without changing
+  anything; confirm it the first time someone on v0.6.4 or earlier reports a failed update.
