@@ -1,0 +1,7 @@
+{
+  "judge_scale_gate": 0.3,
+  "rate_gate": 0.1,
+  "min_same_sign_pairs": 4,
+  "kappa_min": 0.6,
+  "tau_min": 0.9
+}

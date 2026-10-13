@@ -1,7 +1,7 @@
 ---
 title: "distill-lab Phase 0 scorecard: keep or drop notable, contrast and R/E/F"
 description: "Measure each experimental lesson field of distill-lab with read-only static analysis and an opt-in agent ablation test, so the user decides from one table instead of scoring 42 lessons by hand."
-status: pending
+status: in-progress
 priority: P2
 effort: 25h
 branch: main
@@ -46,10 +46,10 @@ created: 2026-10-13
 
 | Phase | Name | Label | Depends on | Status |
 |---|---|---|---|---|
-| 1 | [Static analysis tool](./phase-01-static-analysis-tool.md) | agent-only | none | pending |
-| 2 | [In-use harness, dry run](./phase-02-in-use-harness.md) | agent-only | 1 | pending |
+| 1 | [Static analysis tool](./phase-01-static-analysis-tool.md) | agent-only | none | done |
+| 2 | [In-use harness, dry run](./phase-02-in-use-harness.md) | agent-only | 1 | done |
 | 3 | [Paid in-use runs](./phase-03-paid-in-use-runs.md) | needs-user-go | 2 | pending |
-| 4 | [Scorecard report](./phase-04-scorecard-report.md) | agent-only | 1 (3 optional) | pending |
+| 4 | [Scorecard report](./phase-04-scorecard-report.md) | agent-only | 1 (3 optional) | done (static only) |
 | 5 | [User decisions](./phase-05-user-decisions.md) | user-decision | 4 | pending |
 | 6 | [Apply the decision](./phase-06-apply-the-decision.md) | needs-user-go | 5 | pending |
 

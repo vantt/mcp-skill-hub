@@ -2,7 +2,7 @@
 phase: 2
 title: "In-use harness, dry run"
 label: agent-only
-status: pending
+status: done
 priority: P2
 effort: "7h"
 dependencies: [1]

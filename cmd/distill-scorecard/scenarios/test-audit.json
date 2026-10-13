@@ -1,0 +1,118 @@
+{
+  "families": [
+    {
+      "id": "F1",
+      "name": "triage",
+      "variants": ["full", "no-notable", "no-contrast", "no-score", "full-sorted"],
+      "repetitions": 5,
+      "prompt": "Task family: F1\n\nYou maintain the agent skill below. A distillation pass produced a list of lessons learned from other projects. Decide which lessons are worth porting into the skill.\n\n## The skill's goal\n{{GOAL}}\n\n## The skill (SKILL.md)\n{{SKILL}}\n\n## The skill (CAMPAIGN.md)\n{{CAMPAIGN}}\n\n## Lessons\n{{LESSONS}}\n\n## Task\nPick the 5 lessons to port first (their keys, most valuable first). Then label every lesson with exactly one of: port (worth adding to the skill), already-covered (the skill already says it), outside-goal (does not serve the skill's goal). Reply with JSON only, matching the schema.",
+      "schema": {
+        "type": "object",
+        "required": ["top5", "labels"],
+        "properties": {
+          "top5": {"type": "array", "items": {"type": "string"}, "minItems": 5, "maxItems": 5},
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["key", "label"],
+              "properties": {
+                "key": {"type": "string"},
+                "label": {"type": "string", "enum": ["port", "already-covered", "outside-goal"]}
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "F2",
+      "name": "reconstruct",
+      "variants": ["no-contrast", "no-score"],
+      "repetitions": 3,
+      "missing": {
+        "no-contrast": "`contrast` (one of new, extends, contradicts, already-covered)",
+        "no-score": "`relevance` (0-3), `facts` (the list of letters a-e that hold), `evidence` (1-3) and `effort` (1-3)"
+      },
+      "prompt": "Task family: F2\n\nA distillation pass for the agent skill below recorded lessons, and some fields were lost. Rebuild them using the rubric.\n\n## The skill's goal\n{{GOAL}}\n\n## The skill (SKILL.md)\n{{SKILL}}\n\n## Rubric\n{{RUBRIC}}\n\n## Lessons (missing: {{MISSING}})\n{{LESSONS}}\n\n## Task\nFor every lesson fill in the missing fields, following the rubric exactly. Return one entry per lesson with its key and only the missing fields. Reply with JSON only, matching the schema.",
+      "schema": {
+        "type": "object",
+        "required": ["lessons"],
+        "properties": {
+          "lessons": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["key"],
+              "properties": {
+                "key": {"type": "string"},
+                "contrast": {"type": "string", "enum": ["new", "extends", "contradicts", "already-covered"]},
+                "relevance": {"type": "integer", "minimum": 0, "maximum": 3},
+                "facts": {"type": "array", "items": {"type": "string", "enum": ["a", "b", "c", "d", "e"]}},
+                "evidence": {"type": "integer", "minimum": 1, "maximum": 3},
+                "effort": {"type": "integer", "minimum": 1, "maximum": 3}
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "F3",
+      "name": "apply",
+      "variants": ["full", "no-notable", "no-contrast", "no-score"],
+      "repetitions": 5,
+      "only_keys": [
+        "ratchet-over-doctrine",
+        "mock-isolation-must-be-declared",
+        "ban-ships-with-replacement",
+        "description-trap",
+        "no-source-text-assertions",
+        "prefer-real-boundary-over-broad-mocks"
+      ],
+      "prompt": "Task family: F3\n\nYou maintain the agent skill below. Lessons from other projects are listed. For each lesson, draft the change to the skill's SKILL.md that adopts it, in at most 150 words, naming where in SKILL.md it goes. If the skill already says what the lesson says, or the lesson does not belong in it, say that no change is needed instead.\n\n## The skill's goal\n{{GOAL}}\n\n## The skill (SKILL.md)\n{{SKILL}}\n\n## Lessons\n{{LESSONS}}\n\nReply with JSON only, matching the schema, with one answer per lesson.",
+      "schema": {
+        "type": "object",
+        "required": ["answers"],
+        "properties": {
+          "answers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["key", "no_change_needed", "change"],
+              "properties": {
+                "key": {"type": "string"},
+                "no_change_needed": {"type": "boolean"},
+                "change": {"type": "string"}
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "judge": {
+    "noise_runs": 4,
+    "prompt": "Task family: JUDGE\n\nYou grade draft changes to an agent skill. Each answer below responds to one lesson. Grade each answer on four criteria, each from 0 (bad) to 3 (excellent):\n- mechanism: the draft captures the lesson's real mechanism\n- in_goal: the change serves the skill's goal and stays inside its scope\n- not_in_skill: the change adds something SKILL.md does not already say\n- placement: the draft names a concrete place in SKILL.md and a concrete edit\nIf the skill already says what the lesson says, the best answer is that no change is needed: give a correct 'no change needed' 3 on all four criteria, and give an invented change 0 on not_in_skill.\n\n## The skill's goal\n{{GOAL}}\n\n## The skill (SKILL.md)\n{{SKILL}}\n\n## Lessons\n{{ITEMS}}\n\n## Answers\n{{ANSWERS}}\n\nReply with JSON only, matching the schema, with one entry per answer.",
+    "schema": {
+      "type": "object",
+      "required": ["scores"],
+      "properties": {
+        "scores": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["key", "mechanism", "in_goal", "not_in_skill", "placement"],
+            "properties": {
+              "key": {"type": "string"},
+              "mechanism": {"type": "integer", "minimum": 0, "maximum": 3},
+              "in_goal": {"type": "integer", "minimum": 0, "maximum": 3},
+              "not_in_skill": {"type": "integer", "minimum": 0, "maximum": 3},
+              "placement": {"type": "integer", "minimum": 0, "maximum": 3}
+            }
+          }
+        }
+      }
+    }
+  }
+}

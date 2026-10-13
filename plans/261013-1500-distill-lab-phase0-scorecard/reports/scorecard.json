@@ -1,0 +1,109 @@
+{
+  "limits": "Limits: one skill (test-audit), 42 lessons, one model, `claude -p` mode, 5 paired repetitions (a sign test cannot reach p \u003c 0.05 with 5 pairs, so the gate is an effect size), a biased gold (3 planned lessons chosen with the scores visible), a judge that is itself a model, and lexical information measures. Static evidence alone never gives more than low confidence.",
+  "manifest": {},
+  "rows": [
+    {
+      "field": "notable",
+      "a_decision_association": "n/a (text field)",
+      "b_information_or_ordering": "90% of its content words are not in `what`; adds 3308 gzip bytes",
+      "c1_triage_vs_full": "not run",
+      "c2_reconstruct_agreement": "not testable",
+      "c3_apply_vs_full": "not run",
+      "consumers": "distill.mjs:765-767; distill_model.go:195-197; distill.schema.json:94; DistillTab.tsx:212",
+      "recommendation": "keep optional (lean keep, static evidence only)",
+      "confidence": "low",
+      "if_dropped": "strip on `format`; remove from writer, Go struct, schema, tab and SKILL.md step 5; loses the only why-it-matters prose"
+    },
+    {
+      "field": "contrast",
+      "a_decision_association": "n/a (text field)",
+      "b_information_or_ordering": "1.08 bits left after the facts (of 1.76)",
+      "c1_triage_vs_full": "not run",
+      "c2_reconstruct_agreement": "not run",
+      "c3_apply_vs_full": "not run",
+      "consumers": "distill.mjs:37,775-777,2020; distill_model.go:31,224-226; v4.go:343; list goldens",
+      "recommendation": "keep optional (lean keep, static evidence only)",
+      "confidence": "low",
+      "if_dropped": "strip on `format`; `list` loses a column and its goldens; fact b needs a new definition; separates 8 already-covered lessons from 14 new-but-outside-goal ones"
+    },
+    {
+      "field": "score.relevance",
+      "a_decision_association": "preliminary: chance 0.285 by luck, 3 decided",
+      "b_information_or_ordering": "tau-b 0.98 when held constant",
+      "c1_triage_vs_full": "not run",
+      "c2_reconstruct_agreement": "not run",
+      "c3_apply_vs_full": "not run",
+      "consumers": "distill.mjs:665-700,778-795; distill_model.go:228-253; curation_home.go:375; distill.schema.json:125; DistillTab.tsx:212-235",
+      "recommendation": "keep optional (lean drop, static evidence only)",
+      "confidence": "low",
+      "if_dropped": "formula and `final_score` change for every lesson; Home high-value count needs a new rule (public JSON)"
+    },
+    {
+      "field": "score.facts / impact",
+      "a_decision_association": "preliminary: chance 0.025 by luck, 3 decided",
+      "b_information_or_ordering": "tau-b 0.50 when held constant",
+      "c1_triage_vs_full": "not run",
+      "c2_reconstruct_agreement": "not run",
+      "c3_apply_vs_full": "not run",
+      "consumers": "distill.mjs:665-700,778-795; distill_model.go:228-253; curation_home.go:375; distill.schema.json:125; DistillTab.tsx:212-235",
+      "recommendation": "keep optional (lean keep, static evidence only)",
+      "confidence": "low",
+      "if_dropped": "impact decides the ranking (alone it reproduces most of the order); dropping it removes the ordering"
+    },
+    {
+      "field": "score.evidence",
+      "a_decision_association": "preliminary: chance 1.000 by luck, 3 decided",
+      "b_information_or_ordering": "tau-b 0.95 when held constant",
+      "c1_triage_vs_full": "not run",
+      "c2_reconstruct_agreement": "not run",
+      "c3_apply_vs_full": "not run",
+      "consumers": "distill.mjs:665-700,778-795; distill_model.go:228-253; curation_home.go:375; distill.schema.json:125; DistillTab.tsx:212-235",
+      "recommendation": "keep optional (lean drop, static evidence only)",
+      "confidence": "low",
+      "if_dropped": "formula and `final_score` change for every lesson; one reorder on `format`"
+    },
+    {
+      "field": "score.effort",
+      "a_decision_association": "preliminary: chance 0.861 by luck, 3 decided",
+      "b_information_or_ordering": "tau-b 0.96 when held constant",
+      "c1_triage_vs_full": "not run",
+      "c2_reconstruct_agreement": "not run",
+      "c3_apply_vs_full": "not run",
+      "consumers": "distill.mjs:665-700,778-795; distill_model.go:228-253; curation_home.go:375; distill.schema.json:125; DistillTab.tsx:212-235",
+      "recommendation": "keep optional (lean drop, static evidence only)",
+      "confidence": "low",
+      "if_dropped": "formula and `final_score` change for every lesson; one reorder on `format`"
+    },
+    {
+      "field": "final_score (ordering)",
+      "a_decision_association": "preliminary: chance 0.025 by luck, 3 decided",
+      "b_information_or_ordering": "tau-b 0.93 when held constant",
+      "c1_triage_vs_full": "not run",
+      "c2_reconstruct_agreement": "ordering tau-b 0.93",
+      "c3_apply_vs_full": "not run",
+      "consumers": "distill.mjs:665-700,778-795; distill_model.go:228-253; curation_home.go:375; distill.schema.json:125; DistillTab.tsx:212-235",
+      "recommendation": "keep optional (lean drop, static evidence only)",
+      "confidence": "low",
+      "if_dropped": "strip `score` and `final_score` on `format`; `list` order becomes layer then key; `pending_high_value_insights` needs a new rule"
+    },
+    {
+      "field": "R/E/F as a block",
+      "a_decision_association": "preliminary: chance 0.025 by luck, 3 decided",
+      "b_information_or_ordering": "final_score tracks impact (Spearman 0.98); 24 of 42 lessons score 0",
+      "c1_triage_vs_full": "not run",
+      "c2_reconstruct_agreement": "not testable",
+      "c3_apply_vs_full": "not run",
+      "consumers": "distill.mjs:665-700,778-795; distill_model.go:228-253; curation_home.go:375; distill.schema.json:125; DistillTab.tsx:212-235",
+      "recommendation": "keep optional (lean keep, static evidence only)",
+      "confidence": "low",
+      "if_dropped": "remove impactOf, finalScore, sort, Go Score type, schema block, tab row and about 60 lines of SKILL.md"
+    }
+  ],
+  "thresholds": {
+    "judge_scale_gate": 0.3,
+    "rate_gate": 0.1,
+    "min_same_sign_pairs": 4,
+    "kappa_min": 0.6,
+    "tau_min": 0.9
+  }
+}

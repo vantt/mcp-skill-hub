@@ -171,3 +171,13 @@ func TestStatsWritesOnlyWhereTheGuardAllows(t *testing.T) {
 		t.Errorf("output not written: %v", err)
 	}
 }
+
+// jsonRoundTrip turns computed stats into what `report` reads back from a file.
+func jsonRoundTrip(r Result) (Result, error) {
+	b, err := json.Marshal(r)
+	if err != nil {
+		return nil, err
+	}
+	var out Result
+	return out, json.Unmarshal(b, &out)
+}

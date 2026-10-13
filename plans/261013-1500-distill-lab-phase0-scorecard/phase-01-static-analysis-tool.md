@@ -2,7 +2,7 @@
 phase: 1
 title: "Static analysis tool"
 label: agent-only
-status: pending
+status: done
 priority: P2
 effort: "5h"
 dependencies: []

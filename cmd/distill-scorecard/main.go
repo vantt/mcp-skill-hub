@@ -26,11 +26,17 @@ func main() {
 
 func run(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: distill-scorecard stats --in <distill.yaml> [--json] [--out <file>]")
+		return fmt.Errorf("usage: distill-scorecard stats|variants|run|report (see each command's flags)")
 	}
 	switch args[0] {
 	case "stats":
 		return runStats(args[1:], stdout, stderr)
+	case "variants":
+		return runVariants(args[1:], stdout, stderr)
+	case "run":
+		return runCommand(args[1:], stdout, stderr)
+	case "report":
+		return runReport(args[1:], stdout, stderr)
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}

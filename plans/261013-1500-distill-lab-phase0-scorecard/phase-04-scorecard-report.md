@@ -2,7 +2,7 @@
 phase: 4
 title: "Scorecard report"
 label: agent-only
-status: pending
+status: done-static-only
 priority: P2
 effort: "3h"
 dependencies: [1]
