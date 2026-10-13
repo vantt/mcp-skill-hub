@@ -49,6 +49,33 @@ GitHub keeps redirects for a renamed repository, so the download URLs in old bin
 identity check is the only break. The fix is a release before the rename whose binary accepts **both**
 identities, then the rename, then a release signed under the new name.
 
+## Working in separate worktrees
+
+The main checkout stays untouched while the rename is prepared: it may hold other sessions' uncommitted work, and
+the module-path change would make every open build in it stale. Each preparing phase runs in its own git worktree
+created from `origin/main`, never from the main checkout's working tree.
+
+| Phase | Worktree | Branch | Starts from |
+|-------|----------|--------|-------------|
+| 1 | `.claude/worktrees/rename-bridge` | `rename-bridge` | `origin/main` |
+| 2 | `.claude/worktrees/rename-module` | `rename-module` | `main` after phase 1 is merged and v0.6.5 is released |
+
+Rules for the worktrees:
+
+- Create them with `git worktree add -b <branch> .claude/worktrees/<name> origin/main` and remove only the ones
+  this work created. The worktrees `agent-a238343e8dbb379fc` and `agent-a3357cc17b83133d8` belong to other
+  sessions and stay.
+- Work and run every command inside the worktree (`cd` into it, or `git -C` and `go` with the worktree as the
+  working directory). Do not run `go mod tidy` or the mechanical replace in the main checkout.
+- Run `make check` and the three-platform `go vet` inside the worktree. Start no long-running process there; if a
+  test starts one, stop it before the worktree is removed.
+- Merge into local `main` with a normal merge commit once the checks pass (no rebase, no history rewrite), then
+  remove the worktree and its branch. Only **68** pushes, and only after the repository rename in phase 3.
+- Settings such as `git remote set-url origin` are shared by all worktrees of the repository, so phase 3 changes
+  the URL once.
+- Before phase 2, re-run the `git grep -n "mcp-skill-hub"` inventory in the new worktree; do not trust a list made
+  earlier.
+
 ## Phases
 
 | # | Phase | Owner | Depends on |
@@ -59,6 +86,8 @@ identities, then the rename, then a release signed under the new name.
 | 4 | Verify installers, self-update and links on the new name | me and **68** | phase 3 |
 
 ### Phase 1: bridge release (accept both identities)
+
+- **Where.** Worktree `rename-bridge` (see "Working in separate worktrees").
 
 - **Change.** In `internal/selfupdate/selfupdate.go` keep `DefaultSigstoreWorkflow` as is and add the new
   workflow URL as a second accepted identity. Verification passes when either identity verifies; a failure of
@@ -75,7 +104,7 @@ identities, then the rename, then a release signed under the new name.
 
 ### Phase 2: rename in the repository (one mechanical commit, then fixes)
 
-1. In a branch, replace `github.com/vantt/mcp-skill-hub` with `github.com/vantt/skillhub-mcp` across Go files,
+1. In the `rename-module` worktree, replace `github.com/vantt/mcp-skill-hub` with `github.com/vantt/skillhub-mcp` across Go files,
    `go.mod`, `web/go.mod`, `.github/workflows/*.yml`, `scripts/*`, `Makefile` and the ldflags in
    `release.yml`. Then replace the remaining bare `mcp-skill-hub` strings in tracked files **outside**
    `archive/`, `plans/` and the two path-based test fixtures below.
@@ -119,6 +148,28 @@ identities, then the rename, then a release signed under the new name.
   `github.com/vantt/mcp-skill-hub` stops being fetchable as a Go module even though the repo redirects, because
   the module's own `go.mod` declares the new path. Say so in the release notes.
 - Badge, `go.mod`, CI and release workflow all show the new name; `git grep` finds no stray old URL.
+
+## Release-process review notes (by the releasing session, 2026-10-13)
+
+- The plan's order is right: bridge release under the old name, then rename, then tag under the new name. The
+  identity pins found in `internal/selfupdate/selfupdate.go` (lines 30, 36, 389, 390, 418, 419),
+  `scripts/install.sh` (lines 7, 28), `scripts/install.ps1` (lines 26, 30) and the installer test scripts are the
+  only repository-name pins; `.github/` has none, so the release workflow needs no other change besides ldflags
+  and module paths.
+- Phase 1 must keep `DefaultReleaseBaseURL` and the install URLs on the old name: v0.6.5 is published under the
+  old name and relies on GitHub's redirect after the rename. Phase 4 therefore has to prove the redirect for the
+  three calls that matter, not only for `install.sh`: the release listing used to find the latest version, the
+  asset download, and the signature bundle download. Run it from a v0.6.5 binary on a machine that never saw the
+  new name.
+- Ship v0.6.5 and give it a few days before renaming, and say in the v0.6.5 release notes "run `skillhub
+  self-update` once before 0.7.0". The gate in phase 1 says this; the wait should be a stated minimum (suggest
+  seven days), not left open.
+- Take the rename step only while no release workflow runs, and tag the new version only after the new repository
+  name shows in `gh repo view`. After the rename, check Actions and the release workflow are still enabled and
+  the repository secrets and OIDC permissions survived (they should, but they are the first thing a signed
+  release needs).
+- Update `docs/release-runbook.md` (`REPO=mcp-skill-hub`, line 105) and any release-note template that links the
+  old compare URL.
 
 ## Risks and rollback
 
