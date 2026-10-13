@@ -40,6 +40,57 @@ lessons:
     final_score: 12
     decision: {state: candidate}
 
+  - key: run-rules-moved-into-prose
+    domains:
+      - host-integration
+      - skill-over-mcp
+    layer: history
+    what: >-
+      Until v0.1.2 run_shell_command executed `cd {skill_dir}/{skill_name} && {command}`
+      itself; v0.1.2 runs the agent's string as is and instead puts "EVERY command MUST
+      start with: cd {skill_dir}/<skill_name> &&" and "Do NOT use absolute paths" into the
+      tool description, while the demo system prompt says "always use absolute paths".
+      skill_name is still required but no longer used to choose the directory.
+    notable: >-
+      An invariant the code used to guarantee became advice the model may skip, and two
+      prompt layers now give opposite rules. The host is in the same position by design for
+      scripts: skill_get's preflight tells the agent in prose to export SKILLHUB_SKILL_DIR,
+      _STATE_DIR and _CONFIG_DIR, load the env file and run `check` in working_directory
+      before scripts, and nothing verifies it was done. The hub must not run the commands,
+      but it can hand a ready-to-run line (env assignments and cd included) so the agent
+      copies one string instead of composing it.
+    where:
+      - zouyingcao-agentskills@b8da4303caaa
+      - >-
+        zouyingcao-agentskills@32589389aacf:mcp_agentskills/core/tools/run_shell_command_prompt.yaml#L1-L16
+      - >-
+        zouyingcao-agentskills@32589389aacf:mcp_agentskills/core/tools/run_shell_command_op.py#L143-L177
+      - zouyingcao-agentskills@32589389aacf:tests/skill_agent_prompt.py#L23-L26
+    contrast: extends
+    host: internal/app/skill_snapshot.go
+    score:
+      relevance: 2
+      facts:
+        - a
+        - c
+        - d
+      impact: 3
+      evidence: 1
+      effort: 1
+      why: >-
+        In scope (agents using served skills). a: skill_snapshot.go preflight relies on the
+        agent following a prose export/cd instruction, so a skipped step runs scripts
+        against the wrong state directory unnoticed; c: every script run of every runtime
+        skill; d: lands as a generated command field. One source, the removal without a
+        stated reason.
+    final_score: 6
+    keywords:
+      - cd skill_dir
+      - tool_desc
+      - absolute paths
+      - export env
+    decision: {state: candidate}
+
   - key: native-and-mcp-same-name
     domains:
       - host-integration
@@ -53,9 +104,12 @@ lessons:
     notable: >-
       The hub installs system-curator as a native skill in each host's skills folder and
       also serves system-curator over MCP, so every connected host sees the same name from
-      two origins, possibly at different versions.
+      two origins, possibly at different versions. Another source hits the same collision
+      locally. The install directory is the bare slug, so @team-a/x and @global/x collide in
+      one agent folder, and the design only says the CLI "should detect and prompt".
     where:
       - ext-skills@167da6c0d42c:specification/stable/skills.mdx#L852-L858
+      - iflytek-skillhub@a463efb5352e:docs/07-skill-protocol.md#L187-L198
     contrast: contradicts
     host: internal/hostintegration/integration.go
     score:
@@ -76,15 +130,331 @@ lessons:
       reason: >-
         Ported 2026-10-10: each supported client selects one curator source using the
         synchronized skills_extension matrix. Verified clients use MCP; other integrated
-        clients retain native installation and skills/list plus skills/get omit the
-        bundled curator for their normalized sessions. Installation receipts permit
-        cleanup of unchanged older copies; user edits and unrecognizable legacy versions
-        are reported and preserved. Unknown sessions retain MCP because native installation
-        cannot be assumed. No stock client is currently verified, so native delivery stays
-        unchanged for all supported hosts. Doctor skew reporting already existed; added
-        its missing regression coverage.
+        clients retain native installation and skills/list plus skills/get omit the bundled
+        curator for their normalized sessions. Installation receipts permit cleanup of
+        unchanged older copies; user edits and unrecognizable legacy versions are reported
+        and preserved. Unknown sessions retain MCP because native installation cannot be
+        assumed. No stock client is currently verified, so native delivery stays unchanged
+        for all supported hosts. Doctor skew reporting already existed; added its missing
+        regression coverage.
       at: 167da6c0d42c
-      local: c09742a matrix; e03ed41 native cutover; 5dee318 MCP filtering; 1b8c2f7 doctor skew test
+      local: >-
+        c09742a matrix; e03ed41 native cutover; 5dee318 MCP filtering; 1b8c2f7 doctor skew
+        test
+
+  - key: agent-guide-contract-test
+    domains:
+      - host-integration
+      - trust-safety
+    layer: enforcement
+    what: >-
+      The CLI agent guide (skillhub-cli SKILL.md) is tested as an executable contract. CI
+      checks it byte-for-byte against the copy the web server serves (`cmp`) and greps for
+      required safety sentences. A Python block asserts that the sections appear in order
+      (missing, install, existing, verified, foreign, confirm). It also asserts that
+      forbidden actions ("npm install --global", "unlink an executable") do not appear
+      inside the inspection section, and that the authorization paragraph keeps its limits.
+    notable: >-
+      Ordering and section scoping catch a reword that keeps every phrase but moves a write
+      before the check that should guard it. A containment test misses that. The trade-off
+      is brittle tests that must change with the wording. The host's embed tests check that
+      the curator SKILL.md contains certain strings and that the distill-lab mirror equals
+      its source. Nothing asserts the order of its approval and safety steps, or that a
+      mutating command does not appear before the read-only inspection step.
+    where:
+      - iflytek-skillhub@a463efb5352e:scripts/tests/build-builtin-skills-test.sh#L21-L77
+    contrast: extends
+    host: internal/systemskills/embed_test.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: >-
+        In scope (agent instructions). b: host tests check containment and mirror equality
+        only. d: it is a test. No host failure is recorded yet, so impact stays 0 by rule.
+        One source. Facts b/d would hold once the host has a concrete failure (fact a).
+    final_score: 0
+    keywords:
+      - executable contract
+      - section order
+      - forbidden phrase
+      - guide template
+    decision: {state: candidate}
+
+  - key: mcp-prompts-as-workflow-entry
+    domains:
+      - host-integration
+      - curation
+    layer: content
+    what: >-
+      The server registers two MCP prompts: create_skill (argument topic) returns a user
+      message with the ordered steps and the tools to use, and resume_skill returns steps to
+      check status and continue. Clients surface MCP prompts as user-invoked commands.
+    notable: >-
+      A prompt is a user-triggered entry point that costs nothing in the agent's base
+      context (unlike a tool description) and gives every host the same start of a workflow.
+      Trade-off: prompt support and presentation vary by client, and the text is advisory.
+      The host starts curation through the explicit-only system-curator skill and the phrase
+      "curate my Skill Hub"; a `curate` prompt would be a second, discoverable door to the
+      same skill, not a replacement.
+    where:
+      - skill-forge-mcp@3211174026e6:src/index.ts#L308-L374
+    contrast: new
+    host: system-skills/curator/SKILL.md
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: >-
+        Adjacent (host integration). No concrete failure today: curation is reachable
+        through the curator skill and CLI.
+    final_score: 0
+    keywords:
+      - registerPrompt
+      - create_skill
+      - resume_skill
+      - slash command
+    decision: {state: candidate}
+
+  - key: agent-operations-guide-url
+    domains:
+      - host-integration
+      - ux
+    layer: content
+    what: >-
+      The server publishes /skills.md, a Markdown guide generated per request with the
+      instance's base URL, written for an agent ("Read https://<host>/skills.md and follow
+      the instructions"): health check, discovery, search, download with ETag, device-flow
+      auth, publish, error codes; /.well-known/clawhub.json lists every endpoint including
+      the guide.
+    notable: >-
+      An agent can onboard to a remote registry from one URL with no install step, and the
+      guide cannot drift in base URL because the server renders it. The trade-off is a long
+      hand-built string that drifts in content (its visibility values are already wrong).
+      For the host's remote hub, a served onboarding page could replace pasting connect
+      instructions, but the host prefers a CLI that writes host config.
+    where:
+      - saker-skillhub@6a0a5538257b:pkg/handler/wellknown_handler.go#L19-L72
+      - saker-skillhub@6a0a5538257b:skillhub_test.go#L219-L292
+    contrast: new
+    host: internal/hostintegration/remote.go
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 2
+      why: Adjacent (host onboarding); no host failure it fixes today.
+    final_score: 0
+    keywords:
+      - skills.md
+      - well-known
+      - clawhub.json
+      - installGuide
+      - agent guide
+    decision: {state: candidate}
+
+  - key: non-claude-agent-demo-loop
+    domains:
+      - host-integration
+      - evaluation
+    layer: validation
+    what: >-
+      A demo ReAct agent lists the server's tools over SSE, hands the four to a Qwen model
+      via function calling with a system prompt that orders the workflow (metadata first,
+      load, read references only when required, run scripts), and loops until the model says
+      "task_complete". It prints results with no assertion, and the prompt's `{time}` slot
+      is never filled because the template is rendered with Jinja (`{{ }}`).
+    notable: >-
+      An end-to-end run with a non-Anthropic model is the right kind of proof for "any MCP
+      agent can use skills", but without an expected outcome it proves only that the loop
+      ran. The host's routing evals score resolution, not whether a given client model
+      follows the bootstrap and loads the skill; models-ignore-available-skills covers that
+      gap.
+    where:
+      - zouyingcao-agentskills@32589389aacf:tests/skill_agent.py#L79-L161
+      - zouyingcao-agentskills@32589389aacf:tests/run_skill_agent.py#L9-L21
+      - zouyingcao-agentskills@32589389aacf:tests/skill_agent_prompt.py#L3-L5
+    contrast: new
+    host: internal/hostintegration/bootstrap.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 2
+      why: >-
+        In scope (any MCP agent). No fact a beyond models-ignore-available-skills, which
+        already records the failure; this adds no assertion to copy.
+    final_score: 0
+    keywords:
+      - ReAct
+      - qwen
+      - task_complete
+      - function calling
+    decision: {state: candidate}
+
+  - key: agent-guide-no-substitution-wording
+    domains:
+      - host-integration
+      - skill-recommendation
+    layer: wording
+    what: >-
+      The agent guide states several limits. "Install an exact Skill ... do not search for
+      or substitute a similarly named package." "Discover ... search this registry first. If
+      it is unavailable or has no suitable result, report that outcome and ask before
+      querying another registry." "Never add --force unless ... the user approves."
+      "Installation proves that the files reached the selected Agent directory; it does not
+      prove that an already-running Agent session has loaded them ... report it as installed
+      but not yet loaded."
+    notable: >-
+      Each sentence names the exact shortcut an agent would take: a look-alike package,
+      another registry, --force, or claiming success. The host's resolve can return
+      `no_skill` or `needs_context`, but the bootstrap block and curator should equally say
+      what the agent must not do then. It should not pick a similarly named native skill,
+      fetch one from the web, or claim a skill is active after `connect` without a restart.
+      That keeps recommendation outcomes honest.
+    where:
+      - iflytek-skillhub@a463efb5352e:builtin-skills/skills/skillhub-cli/SKILL.md#L53-L60
+      - iflytek-skillhub@a463efb5352e:builtin-skills/skills/skillhub-cli/SKILL.md#L87
+      - iflytek-skillhub@a463efb5352e:builtin-skills/skills/skillhub-cli/SKILL.md#L112-L114
+    contrast: extends
+    host: internal/systemskills/curator/SKILL.md
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: >-
+        In scope (agent instructions around resolve outcomes). b: the host wording on what
+        to do after no_skill has not been checked against these substitutes. No observed
+        host failure, so impact 0 by rule. One source. Facts b would hold once the host has
+        a concrete failure (fact a).
+    final_score: 0
+    keywords:
+      - similarly named
+      - another registry
+      - installed but not yet loaded
+      - force
+    decision: {state: candidate}
+
+  - key: generic-mcp-command-name-collision
+    domains:
+      - host-integration
+      - ux
+    layer: ecosystem
+    what: >-
+      Both servers first published as the PyPI package `agentskills-mcp` and both renamed it
+      (pinkpixel to `pinkpixel-agentskills-mcp`, zouyingcao to `mcp-agentskills`) without a
+      stated reason, yet both still install a console command named `agentskills-mcp`.
+      zouyingcao's README still configures `uvx agentskills-mcp`, which resolves the PyPI
+      project of that name, not the package it now publishes.
+    notable: >-
+      A generic name in this space collides at three levels: package registry, executable on
+      PATH, and the command users paste into MCP configs; the last one can silently run
+      someone else's package. The host's naming survey (PRD §56) already found "skillhub"
+      used by other CLIs; the binary name and any `npx`/`uvx`-style install line deserve the
+      same check.
+    where:
+      - pinkpixel-agentskills@3001da10da06
+      - pinkpixel-agentskills@47049d9635c5:pyproject.toml#L26-L28
+      - zouyingcao-agentskills@e5c3058a7323
+      - zouyingcao-agentskills@32589389aacf:pyproject.toml#L69-L70
+      - zouyingcao-agentskills@32589389aacf:README.md#L94-L103
+    contrast: new
+    host: docs/PRD.md
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 2
+      effort: 1
+      why: >-
+        Adjacent (naming and install). No fact a: the host's install command has not been
+        shown to resolve to a foreign package. Two sources show the rename.
+    final_score: 0
+    keywords:
+      - pypi rename
+      - console script
+      - uvx
+    decision: {state: candidate}
+
+  - key: client-install-deeplinks
+    domains:
+      - host-integration
+      - ux
+    layer: ecosystem
+    what: >-
+      The README offers one-click install links for Cursor (cursor:// deeplink with a base64
+      server config), VS Code / Copilot and Kiro, plus `codex mcp add` and `claude mcp add`
+      one-liners, all pointing at `uvx skillport-mcp` with SKILLPORT_SKILLS_DIR.
+    notable: >-
+      For clients the host's `connect` does not cover, a deeplink installs the MCP server
+      entry with no file editing. Trade-off: the link carries no instructions block and no
+      permission rules, and it hard-codes a path. The host's connect writes richer, verified
+      config for three hosts; deeplinks could cover the long tail cheaply.
+    where:
+      - skillport@51334ae94919:README.md#L146-L193
+    contrast: new
+    host: internal/hostintegration/integration.go
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Adjacent distribution convenience; no host failure.
+    final_score: 0
+    keywords:
+      - deeplink
+      - cursor
+      - kiro
+      - uvx
+    decision: {state: candidate}
+
+  - key: catalog-table-in-agents-md
+    domains:
+      - host-integration
+      - skill-over-mcp
+    layer: content
+    what: >-
+      For agents without MCP, `skillport doc` (and `init`) writes a block between <!--
+      SKILLPORT_START/END --> markers into AGENTS.md / GEMINI.md: usage instructions plus an
+      <available_skills> list with every skill's name, description and SKILL.md location;
+      the agent then runs `skillport show <id>`. init prints "Tip: Edit instruction files to
+      remove skills not relevant to this project" above five skills, and a later release
+      added --no-instructions.
+    notable: >-
+      The CLI mode puts the whole catalog into every session's base context and copies it
+      into each project, the two failures the host's goal lists; skillport's own tip to
+      prune the file by hand is the symptom. The host's marker-replaced block carries only
+      the protocol, never the catalog, and KeepInstructions covers the opt-out.
+    where:
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/interfaces/cli/commands/doc.py#L82-L175
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/interfaces/cli/commands/init.py#L202-L223
+      - skillport@ed8054ede3c2
+    contrast: already-covered
+    host: internal/hostintegration/bootstrap.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered; the host never writes the catalog into instruction files.
+    keywords:
+      - skillport doc
+      - available_skills
+      - AGENTS.md
+      - markers
+    decision: {state: candidate}
 
   - key: install-by-copying
     domains:
@@ -94,15 +464,119 @@ lessons:
     what: >-
       skills-mcp's install_skill downloads a skill folder from GitHub into the IDE's skills
       directory (~/.cursor/skills, ~/.claude/skills, ~/.codex/skills, ...).
-    notable: The copy-per-project model the host exists to replace; recorded as outside the goal.
+      pinkpixel-agentskills' install_skill writes the folder to destination_dir,
+      GITHUB_SKILLS_INSTALL_ROOT or ./downloaded-skills, slugging names, nesting by repo
+      alias, and refusing a non-empty target unless overwrite=true.
+    notable: >-
+      The copy-per-project model the host exists to replace; recorded as outside the goal.
+      Two independent aggregators converge on it as their "use" step. An enterprise registry
+      also distributes by copying packages into per-agent skill folders: 19 profiles
+      (.claude/skills, .codex/skills, ...) with a .agents/skills fallback, plus an inventory
+      to track the copies.
     where:
       - skills-mcp@dc3dda4f8660:src/fetcher.ts#L74-L116
+      - pinkpixel-agentskills@47049d9635c5:src/github_skills_mcp/server.py#L553-L605
+      - iflytek-skillhub@a463efb5352e:cli/src/agents/profiles/make-profile.ts#L4-L25
+      - iflytek-skillhub@a463efb5352e:docs/07-skill-protocol.md#L123-L134
     contrast: contradicts
+    score:
+      relevance: 0
+      facts: []
+      impact: 0
+      evidence: 2
+      effort: 1
+      why: Out of scope (installing skills by copying).
+    decision: {state: candidate}
+
+  - key: llm-framework-config-for-a-file-server
+    domains:
+      - host-integration
+    layer: craft
+    what: >-
+      The server is a FlowLLM application: its default config declares Qwen chat and
+      embedding models and the README marks FLOW_LLM_API_KEY and FLOW_LLM_BASE_URL as
+      required, although none of the four tools calls a model; configuration is passed as
+      dotted CLI arguments (`mcp.transport=stdio`, `metadata.skill_dir=...`).
+    notable: >-
+      Building on an agent framework drags its secrets and cloud endpoints into a server
+      that only reads files, so setup asks for a key it does not use. The host is one Go
+      binary that needs no model key or cloud service, which the goal requires.
+    where:
+      - zouyingcao-agentskills@32589389aacf:mcp_agentskills/config/default.yaml#L26-L50
+      - zouyingcao-agentskills@32589389aacf:README.md#L235-L240
+      - zouyingcao-agentskills@32589389aacf:mcp_agentskills/main.py#L24-L75
+    contrast: already-covered
+    host: cmd/skillhub
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered (no LLM key or cloud service required).
+    keywords:
+      - flowllm
+      - FLOW_LLM_API_KEY
+      - qwen
+    decision: {state: candidate}
+
+  - key: pkg-everything-then-facade
+    domains:
+      - host-integration
+    layer: history
+    what: >-
+      saker moved all packages from internal/ to pkg/ "for external importability", later
+      added a root package as a "stable facade" whose public types are aliases of
+      pkg/service and pkg/model types, and a registry.go placeholder holding an unused mutex
+      for a later phase.
+    notable: >-
+      Once everything is under pkg/, every internal change is a breaking change for
+      embedders, and type aliases make the facade no boundary at all. The host keeps
+      internal/; if embedding is ever wanted, a thin root package with its own types over
+      internal/ keeps that freedom.
+    where:
+      - saker-skillhub@4d80eab16530
+      - saker-skillhub@6a0a5538257b:skillhub.go#L1-L25
+      - saker-skillhub@6a0a5538257b:types.go#L1-L26
+      - saker-skillhub@6a0a5538257b:registry.go#L1-L12
+    contrast: already-covered
+    host: internal
     score:
       relevance: 0
       facts: []
       impact: 0
       evidence: 1
       effort: 1
-      why: Out of scope (installing skills by copying).
+      why: Outside the goal (no embedding use case); host already uses internal/.
+    keywords:
+      - internal
+      - pkg
+      - facade
+      - type alias
+      - importability
+    decision: {state: candidate}
+
+  - key: same-tools-over-stdio-sse-http
+    domains:
+      - host-integration
+    layer: ecosystem
+    what: >-
+      One config switch (mcp.transport=stdio|sse|http) serves the same tools locally over
+      stdio or remotely over SSE or HTTP; README gives client configs for each and a FastMCP
+      client example.
+    notable: >-
+      Local and remote delivery from one server. The host already serves stdio and
+      streamable HTTP from the same tool registry.
+    where:
+      - zouyingcao-agentskills@32589389aacf:README.md#L85-L159
+      - zouyingcao-agentskills@32589389aacf:mcp_agentskills/config/default.yaml#L1-L11
+    contrast: already-covered
+    host: internal/delivery/mcpserver/http.go
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered.
     decision: {state: candidate}

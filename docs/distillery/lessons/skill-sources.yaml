@@ -3,6 +3,54 @@
 # facts); ranked lessons come first by final_score, then unranked ones by key.
 lessons:
 
+  - key: refuse-upstream-rewind
+    domains:
+      - skill-sources
+      - curation
+      - trust-safety
+    layer: content
+    what: >-
+      Before an upgrade, the SkillHub CLI orders the installed and remote versions. It
+      blocks the item when the remote is older ("remote version is older than the installed
+      version; local files were kept"). It also blocks when the order is unknown
+      (non-semver), and when the version is the same but the fingerprint changed ("remote
+      content changed without a newer version").
+    notable: >-
+      An "update" that is actually a rollback, or a silent re-publish under the same
+      version, is refused instead of applied. The trade-off: the user must reinstall
+      explicitly in those cases. The host classifies any upstream change as
+      `update_available` or `diverged` without checking that the new commit descends from
+      the recorded base commit. A force-pushed or rewound upstream branch is therefore shown
+      to the human as an ordinary update. For the goal ("an upstream change silently alters
+      curated knowledge"), the hub could add a `git merge-base --is-ancestor` check and
+      label such a target as a rewind, not an update.
+    where:
+      - iflytek-skillhub@a463efb5352e:cli/src/services/upgrade-service.ts#L169-L206
+      - iflytek-skillhub@6ab8faa6b926
+    contrast: extends
+    host: internal/app/upstream.go
+    score:
+      relevance: 2
+      facts:
+        - a
+        - b
+        - d
+      impact: 3
+      evidence: 1
+      effort: 1
+      why: >-
+        In scope (upstream change detection). a: upstream.go maps any upstream "changed"
+        state to update_available or diverged with no ancestry check, so a rewind is shown
+        as an update. b: no host rule covers it. d: it becomes one git check. One source.
+    final_score: 6
+    keywords:
+      - remote-older
+      - downgrade
+      - version order
+      - force push
+      - rewind
+    decision: {state: candidate}
+
   - key: scheduled-refresh-commits-diff
     domains:
       - skill-sources
@@ -38,6 +86,47 @@ lessons:
     final_score: 4
     decision: {state: candidate}
 
+  - key: builtin-default-sources-merged-by-alias
+    domains:
+      - skill-sources
+      - trust-safety
+    layer: content
+    what: >-
+      The server ships two built-in GitHub collections and merges them with a user list read
+      from GITHUB_SKILLS_REPOS (JSON) or repos.json, keyed by alias so a user entry with the
+      same name silently replaces the built-in one; GITHUB_SKILLS_REPLACE_DEFAULTS and
+      GITHUB_SKILLS_INCLUDE_DEFAULTS drop the defaults. The config is re-read on every tool
+      call.
+    notable: >-
+      Zero-config usefulness (1,600 skills out of the box) is bought by serving third-party
+      content nobody reviewed, and an alias collision rewires every `alias:skill` slug to
+      another repository without a warning. The host deliberately has no built-in sources:
+      each source is a Git record with a trust/reviewed field and imported skills need
+      approval, which is the safer side of this trade-off for the goal's "third-party skill
+      content is served without the human's approval".
+    where:
+      - pinkpixel-agentskills@47049d9635c5:src/github_skills_mcp/server.py#L25-L40
+      - pinkpixel-agentskills@47049d9635c5:src/github_skills_mcp/server.py#L188-L224
+      - pinkpixel-agentskills@47049d9635c5:README.md#L100-L105
+    contrast: contradicts
+    host: internal/source/records.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: >-
+        In scope (multi-source registry). No fact a: the host already requires explicit,
+        reviewed source records, so the failure this design invites does not occur there.
+    final_score: 0
+    keywords:
+      - repos.json
+      - GITHUB_SKILLS_REPOS
+      - default repos
+      - replace defaults
+    decision: {state: candidate}
+
   - key: declarative-sources-with-globs
     domains:
       - skill-sources
@@ -62,6 +151,95 @@ lessons:
       effort: 1
       why: In scope, but no concrete host failure from the missing tier today.
     final_score: 0
+    decision: {state: candidate}
+
+  - key: per-source-token-env-reference
+    domains:
+      - skill-sources
+      - trust-safety
+    layer: content
+    what: >-
+      Each source entry may name the environment variable that holds its GitHub token
+      (github_token_env, default GITHUB_TOKEN); requests send it as a Bearer header and fall
+      back to GITHUB_TOKEN. Config files never contain a secret, and README tells users
+      never to ship a personal token with the server. A 403 is turned into "set
+      GITHUB_TOKEN".
+    notable: >-
+      skillport resolves a GitHub token through a chain GH_TOKEN -> GITHUB_TOKEN -> `gh auth
+      token` (5 s timeout), so a user already logged into gh can add private repos with no
+      configuration, and a 404 or 403 is explained by whether a token was found ("token
+      lacks access (from gh_cli)... needs 'repo' scope" vs "authenticate with gh auth
+      login"). The host's locators remain credential-free.
+    where:
+      - pinkpixel-agentskills@47049d9635c5:src/github_skills_mcp/server.py#L56-L74
+      - pinkpixel-agentskills@47049d9635c5:src/github_skills_mcp/server.py#L238-L261
+      - pinkpixel-agentskills@47049d9635c5:README.md#L96-L98
+      - pinkpixel-agentskills@47049d9635c5:repos.example.json#L9-L16
+      - skillport@51334ae94919:packages/skillport-core/src/skillport/shared/auth.py#L47-L109
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/modules/skills/internal/github.py#L39-L80
+      - skillport@758ac1f6ae44
+    contrast: new
+    host: internal/source/git_repository.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 2
+      why: >-
+        In scope (upstream tracking). No fact a yet: no recorded need for a private Git
+        upstream, and a local-path source is a workaround; reopen if a team library needs a
+        private repo tracked.
+    final_score: 0
+    keywords:
+      - github_token_env
+      - GITHUB_TOKEN
+      - private repos
+      - bearer
+    decision: {state: candidate}
+
+  - key: source-namespaced-skill-slug
+    domains:
+      - skill-sources
+      - curation
+    layer: content
+    what: >-
+      Every skill is addressed as `<repo alias>:<skill folder name>`; lookup splits the slug
+      on the first colon, resolves the alias, then rescans that repo's tree. install_skill
+      nests the files under the alias by default (preserve_repo_prefix) "to avoid
+      collisions".
+    notable: >-
+      skillport namespaces by default when one source yields several skills (namespace =
+      source directory or repo name, ids like `team/skill`, at most two levels), and the
+      interactive prompt marks the namespace option "(Claude Code incompatible)" because
+      Claude Code discovers only flat .claude/skills/*/SKILL.md; the warning was added after
+      users chose it.
+    where:
+      - pinkpixel-agentskills@47049d9635c5:src/github_skills_mcp/server.py#L318-L325
+      - pinkpixel-agentskills@47049d9635c5:src/github_skills_mcp/server.py#L365-L378
+      - pinkpixel-agentskills@47049d9635c5:src/github_skills_mcp/server.py#L153-L156
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/modules/skills/public/add.py#L176-L201
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/interfaces/cli/commands/add.py#L126-L141
+      - skillport@4951bdb72e46
+    contrast: contradicts
+    host: internal/app/source_import.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 2
+      why: >-
+        In scope (duplicates across sources). No fact a: the host's explicit conflict skip
+        is a working answer; no observed case needing two same-named curated skills.
+    final_score: 0
+    keywords:
+      - skill_slug
+      - repo prefix
+      - collision
     decision: {state: candidate}
 
   - key: clone-free-trees-api-ingestion
@@ -116,6 +294,47 @@ lessons:
     final_score: 0
     decision: {state: candidate}
 
+  - key: git-blob-compatible-content-hash
+    domains:
+      - skill-sources
+      - curation
+    layer: content
+    what: >-
+      A skill's content hash is SHA-256 over (relative path, NUL, Git blob SHA-1, NUL) for
+      every file sorted by POSIX path, skipping dotfiles and __pycache__, capped at 5,000
+      files / 100 MB. The same formula over the GitHub trees API (one recursive call per
+      repo, cached in-process, refusing truncated trees) gives the remote hash, so `update`
+      tells up-to-date, changed upstream and locally modified apart without downloading; zip
+      sources use mtime as a fast path.
+    notable: >-
+      Hashing in Git's own blob format makes a plain directory comparable with a remote tree
+      for the price of one API call. The host reaches the same result natively: its revision
+      digest is the Git tree/blob hash of the scoped path in a go-git mirror, and curated
+      skills live in Git, so local modification is a Git diff. Independent agreement that
+      per-path content identity, not repo HEAD, is the right change signal.
+    where:
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/modules/skills/internal/origin.py#L156-L213
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/modules/skills/internal/github.py#L355-L373
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/modules/skills/internal/github.py#L400-L464
+    contrast: already-covered
+    host: internal/source/git_repository.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 2
+      effort: 1
+      why: Already covered by scopedObjectHash on the mirror.
+    keywords:
+      - content_hash
+      - trees api
+      - blob sha
+      - get_remote_tree_hash
+    decision: {state: candidate}
+
   - key: head-sha-repo-cache
     domains:
       - skill-sources
@@ -141,6 +360,42 @@ lessons:
       why: Already covered, more precisely, by scoped tree hashes.
     decision: {state: candidate}
 
+  - key: live-github-tree-no-local-index
+    domains:
+      - skill-sources
+      - skill-over-mcp
+    layer: craft
+    what: >-
+      There is no catalog: the first search in a process calls the branches API and the
+      recursive trees API for every configured repo, keeps only blob paths in memory, and
+      derives skills from paths ending in SKILL.md; every get_skill then makes one raw
+      request per file. Anonymous use is subject to GitHub's API rate limit, which README
+      answers with an optional token.
+    notable: >-
+      Simplest possible aggregator (one file, no state), paid for with network on every cold
+      start, rate limits, no descriptions to search, and nothing to diff when upstream
+      changes. The host's local mirrors plus a derived SQLite catalog are the opposite
+      choice and already give offline search and change detection.
+    where:
+      - pinkpixel-agentskills@47049d9635c5:src/github_skills_mcp/server.py#L303-L333
+      - pinkpixel-agentskills@47049d9635c5:src/github_skills_mcp/server.py#L360-L362
+      - pinkpixel-agentskills@47049d9635c5:README.md#L67-L71
+    contrast: already-covered
+    host: internal/catalog/open.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered by local mirrors and the derived catalog.
+    keywords:
+      - trees api
+      - recursive
+      - branches api
+      - no cache
+    decision: {state: candidate}
+
   - key: orphan-origin-tracking
     domains:
       - skill-sources
@@ -164,4 +419,72 @@ lessons:
       evidence: 1
       effort: 1
       why: Already covered by the host's upstream state model.
+    decision: {state: candidate}
+
+  - key: pinned-full-sha-provenance
+    domains:
+      - skill-sources
+      - curation
+    layer: enforcement
+    what: >-
+      The starter catalog.json records repository, path and commit for each curated skill.
+      The builder rejects a commit that is not a full 40-hex SHA, rejects unsorted or
+      duplicate slugs, and requires the SKILL.md name, version and license to equal the
+      catalog values.
+    notable: >-
+      Provenance is a validated record, not prose. The host stores origin repository, path
+      and full commit in skill.meta.yaml and treats a 40-hex ref as pinned. Recorded as
+      convergence.
+    where:
+      - iflytek-skillhub@a463efb5352e:scripts/build-builtin-skills.py#L68-L115
+      - iflytek-skillhub@a463efb5352e:scripts/build-builtin-skills.py#L196-L219
+    contrast: already-covered
+    host: internal/app/upstream_origin.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered by origin provenance in skill.meta.yaml.
+    keywords:
+      - catalog.json
+      - full Git SHA
+      - provenance
+    decision: {state: candidate}
+
+  - key: webhook-tag-auto-import
+    domains:
+      - skill-sources
+    layer: content
+    what: >-
+      GitHub/GitLab/Gitea push webhooks for tags refs/tags/v* from allowed origin prefixes
+      are HMAC-verified, then the repo is bare-cloned or fetched into an "imported" owner
+      and the version is meant to be registered and published automatically. GitLab's
+      X-Gitlab-Token (a plain shared secret) is checked as an HMAC, so GitLab hooks cannot
+      verify.
+    notable: >-
+      Push-driven ingestion with no human step is the design the host's goal excludes (no
+      auto-merge of upstream changes); the host polls and diffs upstreams and asks the
+      human. Recorded for completeness.
+    where:
+      - saker-skillhub@6a0a5538257b:pkg/gitstore/importer.go#L36-L161
+      - saker-skillhub@6a0a5538257b:pkg/handler/webhook_handler.go#L19-L65
+    contrast: contradicts
+    host: internal/app/upstream.go
+    score:
+      relevance: 0
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 2
+      why: Outside the goal (auto-merging upstream changes is out of scope).
+    keywords:
+      - webhook
+      - tag push
+      - import
+      - HMAC
+      - allowed origins
+    also_fits:
+      - upstream
     decision: {state: candidate}

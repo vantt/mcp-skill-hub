@@ -1,0 +1,37 @@
+# Lessons whose primary domain is "source-learning". Written by distill.mjs: edit freely, then run
+# `distill.mjs format`. final_score = relevance × impact × evidence / effort (impact = number of
+# facts); ranked lessons come first by final_score, then unranked ones by key.
+lessons:
+
+  - key: commit-decision-trailers
+    domains:
+      - source-learning
+    layer: wording
+    what: >-
+      Recent commits end with structured trailers: Constraint:, Rejected: <option> |
+      <reason>, Directive: (what must not be reintroduced), Confidence:, Scope-risk:,
+      Tested: (the exact commands run).
+    notable: >-
+      The rejected alternative and the rule it implies are recorded where a later reader of
+      the history (a distill pass, or the next agent) finds them with git log --grep. For
+      the host, the same trailers in its own commits would make its negative space as easy
+      to mine as this source's; the cost is discipline per commit.
+    where:
+      - saker-skillhub@372ce95c88f3
+      - saker-skillhub@99ea21bc6aac
+    contrast: new
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Adjacent (recording decisions); no host failure cited.
+    final_score: 0
+    keywords:
+      - commit trailer
+      - Rejected
+      - Directive
+      - Constraint
+      - Tested
+    decision: {state: candidate}

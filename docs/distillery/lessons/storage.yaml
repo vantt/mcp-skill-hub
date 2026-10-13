@@ -3,6 +3,294 @@
 # facts); ranked lessons come first by final_score, then unranked ones by key.
 lessons:
 
+  - key: cli-filesystem-truth-server-owns-index
+    domains:
+      - storage
+      - ux
+    layer: history
+    what: >-
+      The 1.0 split made the CLI read SKILL.md files directly (list, show, doc, validate
+      need no index) and left the MCP server as the only index builder. CLI `show` and MCP
+      load_skill now read different copies: disk now versus the index built at the last
+      server start. The guide still prints "Rebuilding index..." after add/update although
+      the CLI no longer touches the index.
+    notable: >-
+      Two readers of truth diverge silently. The host gives the CLI, web UI and MCP server
+      one derived catalog that every path checks for freshness before use, so all surfaces
+      see the same state.
+    where:
+      - skillport@bb03e3a374b1
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/interfaces/cli/catalog.py#L1-L146
+      - skillport@51334ae94919:guide/cli.md#L421-L437
+    contrast: already-covered
+    host: internal/catalog/open.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered by one freshness-checked catalog for every surface.
+    keywords:
+      - filesystem SSOT
+      - catalog.py
+      - sole index builder
+    decision: {state: candidate}
+
+  - key: doctor-rebuilds-inventory-from-disk
+    domains:
+      - storage
+      - host-integration
+    layer: content
+    what: >-
+      `skillhub doctor` rebuilds the CLI's inventory.json from the `.skillhub/metadata.json`
+      files found under each agent skill folder. It groups them by registry, namespace and
+      slug. A group with more than one version is reported as a conflict and not written.
+      The old inventory is backed up to `.bak` before an atomic write.
+    notable: >-
+      Derived state is rebuilt from the files that travel with the content. That is the
+      host's own principle (runtime state rebuilt from Git), applied by a source at a
+      smaller scale. Note that the source calls this "doctor" though it writes. The host
+      keeps doctor read-only and rebuilds on a separate command. Recorded as convergence.
+    where:
+      - iflytek-skillhub@a463efb5352e:cli/src/services/doctor-service.ts#L43-L50
+      - iflytek-skillhub@a463efb5352e:cli/src/services/doctor-service.ts#L96-L111
+    contrast: already-covered
+    host: internal/catalog/catalog.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered by the rebuild-from-Git catalog.
+    keywords:
+      - doctor
+      - inventory rebuild
+      - metadata.json
+    decision: {state: candidate}
+
+  - key: git-holds-content-database-holds-truth
+    domains:
+      - storage
+    layer: content
+    what: >-
+      saker keeps one bare Git repository per skill, a commit plus a vX.Y.Z tag per version
+      and a moving "latest" tag, but every version fact (yank, deprecation, moderation,
+      signature status, dependencies, latest pointer) lives only in SQLite/PostgreSQL.
+      Nothing rebuilds the database from Git; only the Bleve index is rebuilt, from the
+      database, on every startup.
+    notable: >-
+      The README sells "Git-native versioning ... rollbacks built in", yet losing the
+      database loses the registry: Git alone cannot say which versions are yanked, approved
+      or latest. The host's rule is the reverse (Git is the durable database, SQLite is
+      derived and rebuilt), which is exactly what this design gives up.
+    where:
+      - saker-skillhub@6a0a5538257b:pkg/gitstore/gitstore.go#L76-L227
+      - saker-skillhub@6a0a5538257b:pkg/model/version.go#L9-L50
+      - saker-skillhub@6a0a5538257b:README.md#L15-L15
+    contrast: already-covered
+    host: internal/catalog/build.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: >-
+        In scope (Git as the database, rebuild); host already rebuilds runtime state from
+        Git.
+    keywords:
+      - bare repo
+      - version tag
+      - latest tag
+      - gitstore
+    decision: {state: candidate}
+
+  - key: governance-mutation-audit-atomic
+    domains:
+      - storage
+      - curation
+    layer: history
+    what: >-
+      Governance actions write an audit_log row (actor, action, target, request id, client
+      IP, user agent, detail JSON) through a @Transactional AuditLogService. A fix titled
+      "make mutations and audit atomic" put the state change and its audit record in one
+      transaction. Audit detail JSON was later built with Jackson instead of string
+      concatenation.
+    notable: >-
+      An audit row that can commit without its mutation, or the reverse, is not an audit.
+      The host's audit is the Git commit plus mutation receipt written by the same
+      transaction, so the two cannot diverge. It is recorded as convergence.
+    where:
+      - iflytek-skillhub@b22b92fcbcc9
+      - iflytek-skillhub@215ab11b09b9
+      - >-
+        iflytek-skillhub@a463efb5352e:server/skillhub-domain/src/main/java/com/iflytek/skillhub/domain/audit/AuditLogService.java#L23-L44
+      - iflytek-skillhub@a463efb5352e:docs/02-domain-model.md#L314-L327
+    contrast: already-covered
+    host: internal/mutation/receipt.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered by Git commits and mutation receipts.
+    keywords:
+      - audit_log
+      - atomic audit
+      - governance
+    decision: {state: candidate}
+
+  - key: idempotency-key-replay
+    domains:
+      - storage
+      - ux
+    layer: content
+    what: >-
+      POST, PUT and DELETE requests carry X-Request-Id. A record (PROCESSING, COMPLETED,
+      FAILED; 24 h TTL; Redis SETNX plus PostgreSQL) makes a repeated request return 409
+      `error.request.duplicate` with the stored status. The suite install plan sends its own
+      Idempotency-Key and retries once with the same key on network errors and 502/503/504.
+    notable: >-
+      Agents and CLIs retry, and a retried mutation must not apply twice. The host's
+      mutation layer already requires an idempotency key plus a request digest, which is
+      stronger: it also rejects the same key with a different request. Recorded as
+      convergence.
+    where:
+      - >-
+        iflytek-skillhub@a463efb5352e:server/skillhub-app/src/main/java/com/iflytek/skillhub/filter/IdempotencyInterceptor.java#L28-L33
+      - >-
+        iflytek-skillhub@a463efb5352e:server/skillhub-app/src/main/java/com/iflytek/skillhub/filter/IdempotencyInterceptor.java#L84-L91
+      - iflytek-skillhub@a463efb5352e:docs/02-domain-model.md#L404-L420
+      - iflytek-skillhub@a463efb5352e:docs/25-skill-suites.md#L99-L102
+    contrast: already-covered
+    host: internal/mutation/mutation.go
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered by idempotency key plus request digest.
+    keywords:
+      - X-Request-Id
+      - Idempotency-Key
+      - duplicate request
+    decision: {state: candidate}
+
+  - key: index-mapping-drift-reindex-on-boot
+    domains:
+      - storage
+      - skill-recommendation
+    layer: content
+    what: >-
+      When a field is added to the Bleve mapping, an existing index keeps the old mapping
+      and namespace-filtered searches silently return nothing; the code only prints a NOTE
+      on every open telling the operator to delete the index. A background ReindexAll on
+      every startup backfills documents, capped at 10,000 skills with no warning past the
+      cap.
+    notable: >-
+      A derived index without a stored schema version cannot tell it is stale, so the
+      failure is an empty result, not an error. The host stamps derived_schema_version in
+      the catalog and rebuilds on mismatch, which is the fix this source lacks.
+    where:
+      - saker-skillhub@6a0a5538257b:pkg/search/bleve.go#L32-L44
+      - saker-skillhub@6a0a5538257b:pkg/server/server.go#L364-L375
+      - saker-skillhub@6a0a5538257b:pkg/service/skill_service.go#L1584-L1600
+    contrast: already-covered
+    host: internal/catalog/schema.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: In scope (derived state rebuilt); host versions its derived schema.
+    keywords:
+      - bleve mapping
+      - reindex
+      - namespaceSlug
+      - ReindexAll
+    decision: {state: candidate}
+
+  - key: optional-home-state-file
+    domains:
+      - storage
+    layer: craft
+    what: >-
+      Progress persists only when SKILL_FORGE_PERSIST=true, to ~/.skill-forge-mcp/
+      state.json, written with a plain writeFileSync on every mark_progress and on
+      SIGTERM/SIGINT/stdin close; a parse error silently resets to a fresh state; the access
+      log is capped at 1000 entries.
+    notable: >-
+      The cheapest durable state, with two silent failure modes: a crash mid-write leaves a
+      truncated file, and the next start discards all progress without saying so. The host
+      writes through atomic replace and keeps durable state in Git, with runtime state
+      rebuilt from it, so nothing to port; recorded as a contrast.
+    where:
+      - skill-forge-mcp@3211174026e6:src/state.ts#L52-L99
+      - skill-forge-mcp@3211174026e6:src/index.ts#L378-L395
+    contrast: already-covered
+    host: internal/mutation/filesystem.go
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered by atomic replace and Git as the durable store.
+    keywords:
+      - SKILL_FORGE_PERSIST
+      - state.json
+      - access log cap
+    decision: {state: candidate}
+
+  - key: provenance-beside-derived-index
+    domains:
+      - storage
+      - skill-sources
+    layer: craft
+    what: >-
+      origins.json (source, kind, path, commit_sha, content_hash, local_modified, last 10
+      update events) lives in meta_dir, derived next to the LanceDB index under
+      ~/.skillport/indexes/<first 10 hex of sha1(skills_dir path)>/meta, not inside the
+      skills directory. Recording an origin after `add` is wrapped in `except Exception:
+      pass`; skills without an entry show as "Untracked" and can no longer be updated, and
+      orphan entries are pruned before each index build.
+    notable: >-
+      Provenance stored with disposable derived state is lost when the folder moves, the
+      index is wiped, or the library is cloned on a second machine, and a swallowed write
+      failure leaves a skill silently unupdatable. The host keeps provenance in the Git
+      repository with the skill and rebuilds runtime state from it, the design this failure
+      argues for.
+    where:
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/modules/skills/internal/origin.py#L18-L51
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/shared/config.py#L185-L217
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/modules/skills/public/add.py#L273-L322
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/modules/skills/internal/tracking.py#L82-L104
+    contrast: already-covered
+    host: internal/source/records.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered by Git-owned provenance and rebuildable runtime state.
+    keywords:
+      - origins.json
+      - meta_dir
+      - untracked
+      - prune_orphan_origins
+    decision: {state: candidate}
+
   - key: stubs-removed-not-shipped
     domains:
       - storage
@@ -36,12 +324,15 @@ lessons:
       Every meta_skill write runs four phases: a tx record, SQLite pending, a Git commit,
       SQLite committed; incomplete tx_log rows are replayed on startup under a global lock.
     notable: >-
-      Prevents split-brain between the two stores at the cost of a transaction log. The host
-      has its own write-ahead log and receipts, and its simplification plan asks whether one
-      operation should simply be one Git commit.
+      saker writes files to the store first and the version rows in one DB transaction
+      after; if the transaction fails for any reason except a conflict or validation error,
+      it deletes the just-written version as a compensating step (logging, not failing, if
+      that cleanup fails). A lighter pattern than a transaction log, which leaves orphans
+      when the process dies between the two writes.
     where:
       - meta-skill@e999668e8d8c:src/storage/tx.rs#L1-L5
       - meta-skill@e999668e8d8c:src/storage/tx.rs#L499-L522
+      - saker-skillhub@6a0a5538257b:pkg/service/skill_service.go#L575-L622
     contrast: already-covered
     host: internal/mutation/transaction.go
     score:

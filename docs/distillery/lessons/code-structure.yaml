@@ -1,0 +1,391 @@
+# Lessons whose primary domain is "code-structure". Written by distill.mjs: edit freely, then run
+# `distill.mjs format`. final_score = relevance × impact × evidence / effort (impact = number of
+# facts); ranked lessons come first by final_score, then unranked ones by key.
+lessons:
+
+  - key: sentinel-errors-not-message-matching
+    domains:
+      - code-structure
+      - ux
+      - skill-over-mcp
+    layer: history
+    what: >-
+      saker maps service errors to HTTP status with sentinel errors (ErrForbidden,
+      ErrNotFound, ErrConflict, ErrValidation) and errors.Is/As; a typed AmbiguousSlugError
+      carries its candidate list and implements Is(ErrConflict) so one value both
+      categorises and carries payload. The switch came after string-prefix matching
+      ("forbidden:") let a 403 silently become 400 when a message was reworded, and after a
+      test passed falsely on string matching. The newest handler (runtime API) nevertheless
+      classifies by substrings again ("not found", "version", "file", "invalid").
+    notable: >-
+      An error's category (the code and retryable flag an agent acts on) must not depend on
+      its wording; otherwise editing a message silently changes the contract, and nothing
+      fails. The trade-off is one exported sentinel or typed error per category and wrapping
+      with %w at every return. The host's ClassifyError still ends in classifySubstringRules
+      and knownRequestMessage, which map any message containing " must ", "not found",
+      "invalid" or "conflict" to invalid_request with retryable false: an internal "file not
+      found" becomes a non-retryable validation error with the wrong FIX. saker's own
+      regression shows the rule erodes unless a check forbids strings.Contains(err.Error())
+      in classifiers.
+    where:
+      - saker-skillhub@6a0a5538257b:pkg/service/errors.go#L5-L54
+      - saker-skillhub@6a0a5538257b:pkg/handler/errors.go#L12-L50
+      - saker-skillhub@6a0a5538257b:pkg/handler/runtime_skill_handler.go#L676-L700
+      - saker-skillhub@6a0a5538257b:pkg/handler/agent_skill_handler.go#L381-L400
+      - saker-skillhub@b129b5306fae
+      - saker-skillhub@d9c4aeb7d1df
+    contrast: extends
+    host: internal/app/error_classify.go
+    score:
+      relevance: 2
+      facts:
+        - a
+        - b
+        - c
+        - d
+        - e
+      impact: 5
+      evidence: 2
+      effort: 2
+      why: >-
+        In scope (agent-facing errors and FIX text). a: host
+        classifySubstringRules/knownRequestMessage (error_classify.go L239-L315) give
+        category by wording, so a reworded or foreign "not found" message is misclassified;
+        b: host has sentinels for some paths but a substring fallback; c: saker hit it three
+        times (403->400, false-passing test, runtime handler regression) and the host has 7
+        substring rules; d: lands as a test that bans substring checks in classifiers; e:
+        silent, and saker's commits fix a real incident. One source.
+    final_score: 10
+    keywords:
+      - sentinel error
+      - errors.Is
+      - errors.As
+      - writeServiceError
+      - AmbiguousSlugError
+      - string prefix
+      - P3-12
+    decision: {state: candidate}
+
+  - key: cli-and-server-dependency-boundary-tests
+    domains:
+      - code-structure
+      - ux
+      - host-integration
+    layer: enforcement
+    what: >-
+      After splitting into skillport (CLI), skillport-mcp (server) and skillport-core, tests
+      enforce the boundary: importing the CLI in a fresh subprocess must not load lancedb,
+      fastmcp, tantivy, openai or the indexing module; CLI sources must not mention those
+      imports; CLI and core pyproject dependencies must exclude server packages; all three
+      versions and the core pin must match; and nested lockfiles are refused.
+    notable: >-
+      An architecture rule becomes a failing test instead of a reviewer's memory, and the
+      subprocess import check catches transitive imports a grep misses. The host is one Go
+      binary, so the packaging half does not transfer; the import-graph half could keep the
+      runtime MCP profile from pulling curation code paths if startup cost ever matters.
+    where:
+      - skillport@51334ae94919:tests/unit/test_dependency_boundaries.py#L19-L110
+      - skillport@bb03e3a374b1
+    contrast: new
+    host: internal/delivery/mcpserver/startup_bench_test.go
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Adjacent craft; no host boundary is failing today.
+    final_score: 0
+    keywords:
+      - dependency boundary
+      - lazy import
+      - split distributions
+    decision: {state: candidate}
+
+  - key: property-tests-on-search-invariants
+    domains:
+      - code-structure
+      - skill-recommendation
+      - evaluation
+    layer: validation
+    what: >-
+      Hypothesis property tests pin invariants rather than examples: for any list of
+      positive scores the search keeps exactly the rows with score/top >= threshold, in
+      order, cut to the limit (against a fake table); query and tag normalization are
+      idempotent trims; generated valid names always pass and names with one invalid
+      character always fail.
+    notable: >-
+      A property test states the ranking contract (floor, order, limit) once and checks it
+      on hundreds of generated inputs, catching edge cases example tests miss. The host
+      fuzzes parsers and path confinement and runs routing evals, but has no property test
+      that the resolver's floors, margin and candidate limit hold for arbitrary scores.
+    where:
+      - skillport@51334ae94919:tests/unit/test_normalization_and_threshold.py#L69-L89
+      - skillport@51334ae94919:tests/pbt/test_name_properties.py#L40-L60
+    contrast: extends
+    host: internal/resolver/resolver_test.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: >-
+        peripheral: a test technique for the resolver, not routing behaviour; no current
+        host failure (fact a does not hold). b: no property test on policy invariants; d:
+        lands as a Go fuzz/property test. Facts b/d would hold once the host has a concrete
+        failure (fact a).
+    final_score: 0
+    keywords:
+      - hypothesis
+      - property-based
+      - threshold
+    decision: {state: candidate}
+
+  - key: nil-safe-optional-component
+    domains:
+      - code-structure
+      - storage
+    layer: craft
+    what: >-
+      SkillCache is an expirable LRU whose every method is a no-op on a nil receiver; a size
+      <= 0 returns nil, so "cache off" needs no if-guards. Get and Set copy the struct so
+      callers cannot mutate the cached entry; "not found" is never cached so a new skill is
+      visible at once; the service invalidates on metadata writes and accepts TTL staleness
+      for counters. Tests lock the nil-safe contract.
+    notable: >-
+      Making the disabled state a nil value removes a class of guard bugs and keeps the
+      option testable. Small for the host, which has no in-memory hot-path cache; it fits
+      any optional collaborator (recorder, tracker) that is sometimes absent.
+    where:
+      - saker-skillhub@6a0a5538257b:pkg/repository/skill_cache.go#L25-L95
+      - saker-skillhub@6a0a5538257b:pkg/repository/skill_cache_test.go#L20-L49
+      - saker-skillhub@ef8c84cf65df
+    contrast: new
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Adjacent Go craft; no host failure.
+    final_score: 0
+    keywords:
+      - nil receiver
+      - LRU
+      - expirable
+      - InvalidateCache
+      - negative cache
+    decision: {state: candidate}
+
+  - key: idempotent-close-sync-once
+    domains:
+      - code-structure
+      - ux
+    layer: craft
+    what: >-
+      Hub.Close is wrapped in sync.Once and caches its error, after both the Run ctx.Done
+      branch and the embedder's deferred Close ran shutdown and panicked with "close of
+      closed channel".
+    notable: >-
+      Shutdown paths reached from two directions need to be idempotent. Small for the host,
+      whose long-running mode is serve; not verified whether its shutdown can run twice.
+    where:
+      - saker-skillhub@6a0a5538257b:skillhub.go#L105-L114
+      - saker-skillhub@318e954318c3
+    contrast: new
+    host: internal/delivery/cli/serve.go
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Adjacent Go craft; no host failure verified.
+    final_score: 0
+    keywords:
+      - sync.Once
+      - Close
+      - shutdown
+      - close of closed channel
+    decision: {state: candidate}
+
+  - key: import-boundary-grep-check
+    domains:
+      - code-structure
+    layer: craft
+    what: >-
+      The documented module rule is "domain is the innermost layer, infra implements domain
+      repository ports, no domain->infra". CI enforces part of it with a script that greps
+      protected domain packages for forbidden imports (auth, controller, infra ...) and for
+      protocol words (oidc, oauth, saml, scim ...). Each violation is reported with a label.
+    notable: >-
+      An architecture rule enforced by a cheap check instead of review. The host states
+      boundaries in package comments ("independently of delivery adapters") but has no
+      depguard or import test, so a delivery import into internal/skill would pass CI. Off
+      the goal's main subject (code craft), hence unclassified and low relevance.
+    where:
+      - >-
+        iflytek-skillhub@a463efb5352e:scripts/check-enterprise-identity-architecture.sh#L34-L60
+      - iflytek-skillhub@a463efb5352e:docs/01-system-architecture.md#L30-L44
+    contrast: new
+    host: .golangci.yml
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: >-
+        Adjacent (code structure). b: no host import-boundary check. d: one CI rule. No goal
+        failure. Facts b/d would hold once the host has a concrete failure (fact a).
+    final_score: 0
+    keywords:
+      - module boundary
+      - forbidden import
+      - depguard
+      - architecture check
+    decision: {state: candidate}
+
+  - key: driver-registry-blank-import
+    domains:
+      - code-structure
+      - storage
+    layer: craft
+    what: >-
+      Storage backends register through store.Register(name, factory) in their init(), like
+      database/sql: a duplicate name panics, Open("") defaults to git, an unknown name
+      errors with the list of registered drivers, and the binary blank-imports all three
+      backends so embedders can drop some.
+    notable: >-
+      A clean Go extension point with a helpful failure for the common mistake (forgotten
+      blank import). The host keeps Git as its only store by design, so there is nothing to
+      plug in.
+    where:
+      - saker-skillhub@6a0a5538257b:pkg/store/driver.go#L41-L89
+      - saker-skillhub@6a0a5538257b:cmd/skillhub/main.go#L21-L28
+    contrast: new
+    score:
+      relevance: 0
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 2
+      why: Outside the goal (replacing Git as the store is out of scope).
+    keywords:
+      - driver registry
+      - Register
+      - blank import
+      - Factory
+    decision: {state: candidate}
+
+  - key: hardening-lands-on-one-path
+    domains:
+      - code-structure
+      - trust-safety
+      - skill-sources
+    layer: craft
+    what: >-
+      saker has parallel code paths for skills and plugins. The plugin path was hardened
+      after review: install stages into a temp dir, validates, swaps atomically with
+      rollback, rejects traversal and symlink entries, and checks the version-exists rule
+      inside the DB transaction. The skill path still clears the target first, silently
+      skips unsafe entries, follows no symlink check, and checks version existence outside
+      the transaction. The directory readers of both are copy-pasted.
+    notable: >-
+      A fix applied to one of two near-duplicate paths leaves the other with the bug, and
+      nothing flags the gap. The host has one bundle extraction path (staging, symlink
+      refusal, atomic rename); keeping one shared helper per safety rule is what prevents
+      this drift.
+    where:
+      - saker-skillhub@6a0a5538257b:pkg/cli/plugins.go#L524-L617
+      - saker-skillhub@6a0a5538257b:pkg/cli/commands.go#L282-L330
+      - saker-skillhub@6a0a5538257b:pkg/service/plugin_service.go#L270-L274
+      - saker-skillhub@6a0a5538257b:pkg/service/skill_service.go#L446-L461
+      - saker-skillhub@3304f5228693
+    contrast: already-covered
+    host: internal/skillruntime/remote_cache.go
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Adjacent; host has one extraction path.
+    keywords:
+      - atomic install
+      - staging
+      - symlink
+      - TOCTOU
+      - duplicate path
+    decision: {state: candidate}
+
+  - key: options-swallow-errors
+    domains:
+      - code-structure
+      - ux
+    layer: craft
+    what: >-
+      The embedding SDK uses functional options; WithConfigFile ignores a load error and
+      keeps the defaults, and WithConfig, WithDB, WithLogger and others silently ignore nil.
+    notable: >-
+      A misspelled config path starts a hub on defaults with no error. Functional options
+      that can fail need an error path (validate in New, or an option type that returns
+      error). The host has no SDK; recorded as a pattern to avoid if one appears.
+    where:
+      - saker-skillhub@6a0a5538257b:options.go#L60-L82
+    contrast: new
+    score:
+      relevance: 0
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Outside the goal (host is not an embeddable library).
+    keywords:
+      - functional options
+      - WithConfigFile
+      - silent fallback
+    decision: {state: candidate}
+
+  - key: tests-copy-server-wiring-drift
+    domains:
+      - code-structure
+      - evaluation
+      - skill-over-mcp
+    layer: validation
+    what: >-
+      Integration tests connect a real MCP Client over InMemoryTransport, but because
+      src/index.ts registers everything at module top level and connects stdio on import,
+      each test file re-registers its own copy of the resources, tools and prompts. The
+      copies have drifted: Japanese titles after the English-only change, mark_progress
+      without saveState, shorter prompt text, no outputSchema on one tool. Test names carry
+      requirement ids (R-1, T-5, S-2).
+    notable: >-
+      skillport shows the cure: create_mcp_server() builds the configured FastMCP instance
+      without starting it ("enables testing with fastmcp.Client(transport=mcp)"), run_server
+      reuses it, and the integration tests connect an in-memory client to that same factory
+      and assert the exact tool list per mode, so tests cannot drift from production wiring.
+      The host's tests likewise build the server through its own constructor.
+    where:
+      - skill-forge-mcp@3211174026e6:tests/resources.test.ts#L14-L20
+      - skill-forge-mcp@3211174026e6:tests/resources.test.ts#L80-L84
+      - skill-forge-mcp@3211174026e6:tests/tools.test.ts#L109-L125
+      - skill-forge-mcp@3211174026e6:src/index.ts#L14-L24
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/interfaces/mcp/server.py#L49-L69
+      - skillport@51334ae94919:tests/integration/test_mcp_server.py#L59-L83
+    contrast: already-covered
+    host: internal/delivery/mcpserver/server.go
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered by New() plus in-memory transport tests.
+    keywords:
+      - InMemoryTransport
+      - createTestServer
+      - test drift
+    decision: {state: candidate}

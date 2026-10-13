@@ -20,13 +20,22 @@ lessons:
       The human reviewer gets machine-flagged risks instead of reading every line. The
       regexes are simple keyword matches, so this is a net for obvious cases, not a defence.
       The host gates third-party content on a human-approved digest but runs no scan to help
-      that review.
+      that review. A third independent source runs a scanner (static, behavioral and
+      optional LLM analyzers) after upload and before the human review queue. Verdicts are
+      SAFE, SUSPICIOUS, DANGEROUS and BLOCKED. Approval is blocked while scanning, and regex
+      secret rules produce warnings the publisher must confirm. Same placement as
+      meta_skill: the machine flags, the human decides.
     where:
       - meta-skill@e999668e8d8c:src/security/acip.rs#L13-L45
       - meta-skill@e999668e8d8c:src/lint/rules/security.rs#L400-L440
       - tech-leads-club@120b67676388:packages/skills-catalog/src/scan-skills.ts#L361-L385
       - >-
         tech-leads-club@120b67676388:packages/skills-catalog/security-scan-allowlist.yaml#L1-L19
+      - >-
+        iflytek-skillhub@a463efb5352e:server/skillhub-domain/src/main/java/com/iflytek/skillhub/domain/security/SecurityScanService.java#L173-L209
+      - >-
+        iflytek-skillhub@a463efb5352e:server/skillhub-domain/src/main/java/com/iflytek/skillhub/domain/skill/validation/BasicPrePublishValidator.java#L20-L34
+      - iflytek-skillhub@a463efb5352e:docs/security-scanning.md#L9-L22
     contrast: extends
     host: internal/skillruntime/trust.go
     score:
@@ -45,6 +54,53 @@ lessons:
         exists; d: lands as a lint/check; e: the failure is silent. Two independent sources
         converge.
     final_score: 12
+    decision: {state: candidate}
+
+  - key: scan-gate-fails-closed
+    domains:
+      - trust-safety
+      - curation
+    layer: enforcement
+    what: >-
+      Publishing a PUBLIC or NAMESPACE_ONLY version is refused with
+      `error.security.scanner.required` when the scanner is disabled. Approval is refused
+      with `review.approve.scan_in_progress` while the version is SCANNING. After retries
+      run out a scan ends in SCAN_FAILED, but a review task is still created "so the package
+      does not get stuck forever". The policy states "Scanner failure must not be treated as
+      proof that a package is safe."
+    notable: >-
+      The gate fails closed for anything shared, yet a broken scanner cannot deadlock the
+      human queue: the reviewer sees the failure and decides. The trade-off: a scanner
+      outage blocks publishing. For the host this matters only once a content scan exists
+      (see content-scan-before-review). It then defines the rule that a missing or failed
+      scan blocks activation of third-party content unless the human approves with the
+      failure shown, never silently.
+    where:
+      - >-
+        iflytek-skillhub@a463efb5352e:server/skillhub-domain/src/main/java/com/iflytek/skillhub/domain/skill/service/SkillPublishService.java#L465-L467
+      - >-
+        iflytek-skillhub@a463efb5352e:server/skillhub-domain/src/main/java/com/iflytek/skillhub/domain/review/ReviewService.java#L194-L198
+      - iflytek-skillhub@a463efb5352e:docs/security-scanning.md#L165-L175
+      - iflytek-skillhub@a463efb5352e:docs/CONTENT_SAFETY.md#L97-L100
+    contrast: new
+    host: internal/skillruntime/trust.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: >-
+        In scope (approval of third-party content). b: the host has no scan, so it has no
+        rule for scan absence or failure. d: it is a gate. Impact is 0 by rule until the
+        host has a scan. One source. Facts b/d would hold once the host has a concrete
+        failure (fact a).
+    final_score: 0
+    keywords:
+      - SCANNING
+      - SCAN_FAILED
+      - scanner required
+      - fail closed
     decision: {state: candidate}
 
   - key: deny-unknown-dependency-sources
@@ -71,6 +127,47 @@ lessons:
       - upstream
     decision: {state: candidate}
 
+  - key: closed-allowlist-exec-surface-validation
+    domains:
+      - trust-safety
+    layer: enforcement
+    what: >-
+      Before accepting an Agent Plugins package, saker validates mcp.json with closed field
+      sets per transport: stdio command must be one bare or ./-relative token, cwd only
+      under ./, ${PLUGIN_ROOT} or ${PLUGIN_DATA}, reserved env names refused; http(s)
+      servers must use HTTPS unless loopback, no userinfo or fragment, headers checked with
+      httpguts and deduplicated; package paths must be canonical and local.
+    notable: >-
+      The registry rejects an executable surface it cannot reason about instead of trusting
+      the author, using allow-lists rather than deny-lists. For the host this applies to
+      skills that declare runtime commands or env (preflight/setup): an allow-list check at
+      import would refuse absolute-path commands or credential-bearing URLs before a human
+      even reviews them. This pass did not verify which fields the host's runtime spec
+      already closes.
+    where:
+      - saker-skillhub@6a0a5538257b:pkg/agentplugin/validate.go#L60-L70
+      - saker-skillhub@6a0a5538257b:pkg/agentplugin/validate.go#L170-L261
+    contrast: new
+    host: internal/skillruntime
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 2
+      why: >-
+        Adjacent (what may run); host does not distribute MCP server configs, and no host
+        failure was verified.
+    final_score: 0
+    keywords:
+      - mcp.json
+      - stdio
+      - streamable-http
+      - PLUGIN_ROOT
+      - agent plugins
+      - validateServer
+    decision: {state: candidate}
+
   - key: signed-bundles-refuse-unsigned
     domains:
       - trust-safety
@@ -95,6 +192,337 @@ lessons:
       effort: 3
       why: Adjacent; the host has no bundle distribution.
     final_score: 0
+    decision: {state: candidate}
+
+  - key: scoped-expiring-tokens
+    domains:
+      - trust-safety
+      - host-integration
+    layer: content
+    what: >-
+      API tokens carry a scope: read (GET/HEAD only), publish (POST only on the publish and
+      star routes), full. Namespace team tokens must have an expiry (at most 365 days) and a
+      namespace may hold at most 50 active ones.
+    notable: >-
+      Least privilege per credential, and no team credential lives forever. The host's
+      network MCP uses one shared, non-expiring bearer token, and keeps privilege low by
+      exposing only the runtime tools there (no curation tools). Expiry or rotation of that
+      token is the part the host does not have.
+    where:
+      - saker-skillhub@6a0a5538257b:pkg/middleware/auth.go#L96-L136
+      - saker-skillhub@6a0a5538257b:pkg/handler/token_handler.go#L27-L45
+      - saker-skillhub@6a0a5538257b:pkg/handler/token_handler.go#L241-L258
+    contrast: extends
+    host: internal/hubtoken/hubtoken.go
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 2
+      why: >-
+        Adjacent (remote access); host already limits the network surface to read-only
+        tools.
+    final_score: 0
+    keywords:
+      - token scope
+      - read
+      - publish
+      - team token
+      - expiresIn
+    decision: {state: candidate}
+
+  - key: verifier-interface-records-unverified
+    domains:
+      - trust-safety
+    layer: content
+    what: >-
+      Publish accepts an optional Sigstore bundle; a pluggable SignatureVerifier decides,
+      and the default NopVerifier only checks it is JSON and returns "unverified". Only
+      "invalid" is rejected; the status (unsigned, unverified, verified, invalid) plus
+      subject and issuer are stored per version and returned to clients.
+    notable: >-
+      Shipping the upload path and the status field before the verification infrastructure
+      lets clients start showing trust state, at the cost that "has a signature" can be
+      mistaken for "verified". The host plans signing "when infrastructure allows";
+      recording a verification status per version is the cheap first step, but the host's
+      trust gate is human approval of a digest, not signatures.
+    where:
+      - saker-skillhub@6a0a5538257b:pkg/security/sigstore.go#L1-L61
+      - saker-skillhub@6a0a5538257b:pkg/service/skill_service.go#L525-L552
+      - saker-skillhub@9932f7933aab
+    contrast: contradicts
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 2
+      why: >-
+        Adjacent; the host does not distribute signed packages, and accepting unverified
+        bundles contradicts refuse-unsigned designs.
+    final_score: 0
+    keywords:
+      - sigstore
+      - SignatureVerifier
+      - NopVerifier
+      - unverified
+      - cosign
+    decision: {state: candidate}
+
+  - key: async-scan-latest-attempt-wins
+    domains:
+      - trust-safety
+      - storage
+    layer: craft
+    what: >-
+      Each scan attempt gets its own security_audit row. A late result is stored on its own
+      round but "cannot complete a newer attempt": only the latest active attempt moves the
+      version out of SCANNING. Scan tasks are written to an outbox, because publishing them
+      before the transaction committed lost tasks (issue #612). Unavailable tasks expire to
+      SCAN_FAILED after max-unavailable-age.
+    notable: >-
+      Asynchronous checks need attempt identity and after-commit delivery, or a stale or
+      lost result decides the state. The host runs everything synchronously in one process,
+      so this applies only if a scan or remote check ever runs out of band. Recorded at low
+      relevance.
+    where:
+      - >-
+        iflytek-skillhub@a463efb5352e:server/skillhub-domain/src/main/java/com/iflytek/skillhub/domain/security/SecurityScanService.java#L125-L137
+      - >-
+        iflytek-skillhub@a463efb5352e:server/skillhub-domain/src/main/java/com/iflytek/skillhub/domain/security/SecurityScanService.java#L195-L209
+      - iflytek-skillhub@95e630c09674
+      - iflytek-skillhub@51457bfa2c1a
+    contrast: new
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 2
+      effort: 2
+      why: Adjacent; the host has no asynchronous checks. Fixed in practice per two commits.
+    final_score: 0
+    keywords:
+      - outbox
+      - scan attempt
+      - late result
+      - after commit
+    decision: {state: candidate}
+
+  - key: scan-verdict-not-safety-claim
+    domains:
+      - trust-safety
+      - ux
+    layer: wording
+    what: >-
+      The `isSafe: true` verdict is rendered as "No high-risk findings", not as safe. Lower
+      severity findings may still be present and findingsCount may be non-zero. The policy
+      adds that controls "reduce risk but do not certify a package as safe or compliant".
+    notable: >-
+      A scan label that reads as a guarantee invites the human to skip review. The commit
+      shows the wording was changed deliberately. If the host adds scan hints to `skill
+      review` or the web UI, the label should name what was checked ("no high-risk patterns
+      found"), not a verdict ("safe"). The same applies to the host's current advisory
+      runtime hints.
+    where:
+      - iflytek-skillhub@a463efb5352e:docs/security-scanning.md#L161-L163
+      - iflytek-skillhub@9bbadca31b2b
+      - iflytek-skillhub@a463efb5352e:docs/CONTENT_SAFETY.md#L80-L95
+    contrast: new
+    host: internal/app/skill_review.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: >-
+        In scope (human approval). b: no host wording rule for scan or hint labels. No
+        current host failure. One source. Facts b would hold once the host has a concrete
+        failure (fact a).
+    final_score: 0
+    keywords:
+      - isSafe
+      - No high-risk findings
+      - verdict
+      - certify
+    decision: {state: candidate}
+
+  - key: add-serves-without-review
+    domains:
+      - trust-safety
+      - curation
+    layer: content
+    what: >-
+      `skillport add <github-url>` validates frontmatter (fatal issues only) and copies the
+      skills into the served directory; the next MCP start indexes them and search can
+      return them to any agent. There is no draft state, review or approval step, and
+      `update --all` replaces content from upstream on the same terms.
+    notable: >-
+      Fast onboarding for a single user, at the cost of serving third-party instructions and
+      scripts nobody has read. The host's goal names exactly this failure, and its
+      third-party skills reach agents only after `skillhub skill review` approves a digest;
+      recorded as the contrast that justifies that gate.
+    where:
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/modules/skills/public/add.py#L401-L495
+      - skillport@51334ae94919:README.md#L46-L65
+    contrast: already-covered
+    host: internal/skillruntime/trust.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered by the review gate on third-party content.
+    keywords:
+      - add
+      - no review
+      - third-party
+    decision: {state: candidate}
+
+  - key: approval-bound-to-skill-not-version
+    domains:
+      - trust-safety
+      - curation
+    layer: content
+    what: >-
+      A non-admin publishing a new public skill gets visibility private and moderation
+      pending_review until a moderator approves. The check runs only in the "skill does not
+      exist yet" branch; every later version of an approved public skill is published and
+      served with no review.
+    notable: >-
+      Approval is attached to the name, not to the bytes, so the first benign version buys
+      unreviewed publication of every later one. The host binds approval to a content digest
+      per version (review_required until the digest is approved). This independent registry
+      made the opposite choice, which confirms the host's design and names the failure it
+      avoids.
+    where:
+      - saker-skillhub@6a0a5538257b:pkg/service/skill_service.go#L405-L411
+      - saker-skillhub@6a0a5538257b:pkg/service/skill_service.go#L436-L444
+    contrast: already-covered
+    host: internal/app/skill_bundle.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: >-
+        In scope (human approval of third-party content); the host already approves per
+        content digest.
+    keywords:
+      - moderation
+      - pending_review
+      - ModerationStatus
+      - approved
+    decision: {state: candidate}
+
+  - key: archive-extraction-hardening
+    domains:
+      - trust-safety
+      - skill-sources
+    layer: enforcement
+    what: >-
+      Tarball and zip extraction normalise every member name to a POSIX relative path and
+      reject absolute paths, `..`, and any part containing ":" (Windows drives, UNC), reject
+      symlinks and hard links, re-confine each target with resolve_inside, skip .git, .env,
+      node_modules and dotfiles, and cap 25 MB per file, 200 MB download, 100 MB extracted
+      (zip: 1,000 files). The fix commit added tests for UNC paths, drive prefixes and
+      traversal.
+    notable: >-
+      Every upstream archive is untrusted input; dropping .env on import also keeps an
+      upstream's secrets out of the library. The host reads upstreams through go-git mirrors
+      with a byte budget, mirror-size check and no-follow file access, so the archive form
+      of this attack does not reach it; recorded as agreement.
+    where:
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/modules/skills/internal/github.py#L174-L192
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/modules/skills/internal/github.py#L262-L297
+      - skillport@192d4483400d
+    contrast: already-covered
+    host: internal/source/git_repository.go
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered by the mirror byte budget and no-follow reads.
+    keywords:
+      - tarball
+      - zip slip
+      - symlink
+      - resolve_inside
+    decision: {state: candidate}
+
+  - key: bundled-skills-pinned-by-sha
+    domains:
+      - trust-safety
+      - host-integration
+    layer: enforcement
+    what: >-
+      The official starter skills are built deterministically. The build runs twice and
+      `cmp` checks the zips and artifacts.json, which must have sorted entries and contain
+      SKILL.md, LICENSE.txt and NOTICE.md. The runtime manifest pins each package to an
+      https URL on one CDN host with a SHA-256 that must equal the built artifact. The
+      backend rejects changed bytes before extraction. A negative test plants a symlink to
+      /etc/passwd and expects "symbolic links are not allowed".
+    notable: >-
+      What a fresh deployment installs by default is reproducible and integrity-checked
+      against the reviewed source. The host embeds its system skills and checks them against
+      known digests. Recorded as convergence.
+    where:
+      - iflytek-skillhub@a463efb5352e:scripts/tests/build-builtin-skills-test.sh#L101-L156
+      - iflytek-skillhub@a463efb5352e:scripts/tests/build-builtin-skills-test.sh#L173-L195
+      - iflytek-skillhub@a463efb5352e:builtin-skills/README.md#L21-L31
+    contrast: already-covered
+    host: internal/systemskills/known-digests.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered by embedded system skills with known digests.
+    keywords:
+      - deterministic zip
+      - runtime manifest
+      - sha256
+      - immutable CDN
+    decision: {state: candidate}
+
+  - key: git-token-in-argv
+    domains:
+      - trust-safety
+      - skill-sources
+    layer: craft
+    what: >-
+      Mirror push passes the token inside `git -c credential.helper=!f(){ ...
+      password=<token>; }; f`, with a comment saying this avoids leaking the token in
+      /proc/*/cmdline; the -c argument is itself on the command line.
+    notable: >-
+      A security comment that claims the opposite of what the code does. The host never
+      handles Git credentials: it refuses remote URLs with a user name or password and lets
+      Git ask or use the user's own credential helper.
+    where:
+      - saker-skillhub@6a0a5538257b:pkg/gitstore/mirror.go#L51-L79
+    contrast: already-covered
+    host: internal/app/git_remote.go
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Adjacent; host already leaves credentials to Git.
+    keywords:
+      - credential.helper
+      - mirror
+      - token
+      - cmdline
     decision: {state: candidate}
 
   - key: license-retained-note
@@ -144,4 +572,163 @@ lessons:
       evidence: 2
       effort: 1
       why: Already covered.
+    decision: {state: candidate}
+
+  - key: privileged-path-skipped-scan
+    domains:
+      - trust-safety
+      - curation
+    layer: history
+    what: >-
+      The super-admin auto-publish flow skipped security scanning entirely (issue #415). The
+      fix calls triggerScan regardless of autoPublish, "while preserving the PUBLISHED
+      status (scan runs as post-publish audit rather than blocking)". Today
+      SecurityScanService leaves an already-PUBLISHED version in place and only records the
+      audit.
+    notable: >-
+      A privileged shortcut is where a gate silently disappears, and the fix kept the
+      shortcut and demoted the gate to an after-the-fact audit. The host avoids this
+      structurally. Its trust check runs where the catalog decides what is servable, not on
+      each write path, and `--approve-content` must name the exact content digest. It is
+      recorded as independent confirmation that the gate belongs at the serving boundary.
+    where:
+      - iflytek-skillhub@ec4598efec82
+      - >-
+        iflytek-skillhub@a463efb5352e:server/skillhub-domain/src/main/java/com/iflytek/skillhub/domain/security/SecurityScanService.java#L133-L137
+      - >-
+        iflytek-skillhub@a463efb5352e:server/skillhub-domain/src/main/java/com/iflytek/skillhub/domain/skill/service/SkillPublishService.java#L531-L536
+    contrast: already-covered
+    host: internal/skillruntime/trust.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: >-
+        Already covered; approval is checked at the serving boundary against an exact
+        digest.
+    keywords:
+      - auto-publish
+      - SUPER_ADMIN
+      - bypass
+      - post-publish audit
+    decision: {state: candidate}
+
+  - key: reference-read-path-containment
+    domains:
+      - trust-safety
+      - skill-over-mcp
+    layer: content
+    what: >-
+      read_reference_file builds `<skill_dir>/<skill_name>/<file_name>` from two
+      agent-supplied strings and reads it if it exists, with no check that the result stays
+      in the skill folder; load_skill does the same with skill_name. A file_name of
+      `../../...` reads any file the server process can.
+    notable: >-
+      A per-file read tool is a file-system read primitive unless the path is confined. The
+      host rejects empty, `.`, `..` and separator-bearing components in resource URIs and
+      snapshot paths and refuses symlinked components.
+    where:
+      - >-
+        zouyingcao-agentskills@32589389aacf:mcp_agentskills/core/tools/read_reference_file_op.py#L113-L131
+      - >-
+        zouyingcao-agentskills@32589389aacf:mcp_agentskills/core/tools/load_skill_op.py#L107-L127
+    contrast: already-covered
+    host: internal/app/distribution.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered by path validation in distribution and snapshots.
+    keywords:
+      - file_name
+      - path traversal
+      - reference file
+    decision: {state: candidate}
+
+  - key: release-event-oidc-provenance-traps
+    domains:
+      - trust-safety
+    layer: ecosystem
+    what: >-
+      Publishing moved to npm trusted publishing (OIDC, id-token: write). It took three
+      follow-up fixes: drop then restore registry-url, `unset NODE_AUTH_TOKEN` because
+      setup-node sets a placeholder that blocks OIDC detection, Node 24 for npm 11.5.1, and
+      pin checkout@v4 because v6 checks out a detached commit on release events and sigstore
+      provenance fails with "Missing SourceRepositoryRef".
+    notable: >-
+      Keyless provenance removes a long-lived publish token but is brittle to action
+      versions and the triggering event. The host publishes Go binaries with signatures from
+      its own release workflow and pins actions by SHA; relevant only if it adopts sigstore
+      attestation on release events.
+    where:
+      - skill-forge-mcp@3211174026e6:.github/workflows/publish.yml#L7-L42
+      - skill-forge-mcp@6c2e13d08b05
+      - skill-forge-mcp@c5fdfc0a3ff2
+    contrast: new
+    host: .github/workflows/release.yml
+    score:
+      relevance: 0
+      facts: []
+      impact: 0
+      evidence: 2
+      effort: 1
+      why: >-
+        Outside the goal (release plumbing); evidence 2 because the fixes were exercised in
+        practice.
+    keywords:
+      - trusted publishing
+      - OIDC
+      - sigstore
+      - SourceRepositoryRef
+      - NODE_AUTH_TOKEN
+    also_fits:
+      - upstream
+    decision: {state: candidate}
+
+  - key: server-side-shell-tool
+    domains:
+      - trust-safety
+      - skill-over-mcp
+    layer: content
+    what: >-
+      run_shell_command passes any agent-supplied string to create_subprocess_shell with a
+      copy of the server's whole environment (including the LLM API key the README requires)
+      and no working-directory or allowlist; with auto_install_deps it also runs `pipreqs .
+      --force && pip install -r requirements.txt` in the skill folder. The default config
+      binds SSE/HTTP to 0.0.0.0 and the README offers remote use.
+    notable: >-
+      skillport shows the history behind refusing such a tool: it shipped run_skill_command
+      (allowlisted commands, shell=False, cwd confined to the skill dir, timeout and output
+      cap) and dropped it in its restructure, settling on "knowledge provider, not execution
+      environment" with scripts run by the agent from the returned path. The
+      allowed_commands / exec_timeout settings remain in Config "for backwards
+      compatibility" and do nothing. Agrees with the host, which never executes skill code.
+    where:
+      - >-
+        zouyingcao-agentskills@32589389aacf:mcp_agentskills/core/tools/run_shell_command_op.py#L150-L183
+      - zouyingcao-agentskills@32589389aacf:mcp_agentskills/config/default.yaml#L4-L11
+      - zouyingcao-agentskills@32589389aacf:README.md#L235-L240
+      - skillport@526952c022ef:src/skillpod_mcp/tools/execution.py#L131-L200
+      - skillport@a811d4d03461
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/shared/config.py#L139-L155
+      - skillport@51334ae94919:guide/philosophy.md#L100-L127
+    contrast: already-covered
+    host: internal/app/skill_snapshot.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered; the host never executes skill code server-side.
+    keywords:
+      - run_shell_command
+      - create_subprocess_shell
+      - pipreqs
+      - auto_install_deps
     decision: {state: candidate}

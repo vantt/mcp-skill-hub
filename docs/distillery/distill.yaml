@@ -1,11 +1,12 @@
 # distill learning area: goal, domains, sources (cursor + coverage) and intake.
 # Written by distill.mjs; comments are not kept, so put reasons in fields. Lessons live in lessons/<domain>.yaml.
 goal:
-  status: draft
+  status: confirmed
   purpose: >-
     Any MCP-capable agent, in any project, gets the right curated skill from one
-    Git-owned library and loads only what its task needs, while the human keeps curated
-    skills under their own control as upstream sources change.
+    Git-owned library and loads only what its task needs, while the human collects,
+    edits and tunes curated skills to their own criteria and keeps them under their own
+    control as upstream sources change.
   core_domains:
     - skill-over-mcp
     - skill-recommendation
@@ -83,6 +84,10 @@ domains:
     definition: >-
       how people and agents operate it: CLI, web UI, output formats, errors and
       documentation
+  - name: code-structure
+    definition: >-
+      how the host's own code is organised and kept honest: module and package
+      boundaries, error types, test architecture and the checks that enforce them
 
 sources:
   - name: skills-mcp
@@ -258,5 +263,482 @@ sources:
           reason: not reached in this pass
         - path: skills/(creation)/skill-architect and the style guides
           reason: general skill-writing and style manuals; not this host subject
+  - name: skillport
+    type: git-repo
+    url: https://github.com/gotalab/skillport
+    cursor: 51334ae94919
+    analyzed: '2026-10-13'
+    domains_covered:
+      - skill-over-mcp
+      - skill-recommendation
+      - skill-sources
+      - curation
+      - source-learning
+      - storage
+      - evaluation
+      - trust-safety
+      - host-integration
+      - ux
+      - code-structure
+    coverage:
+      at: 51334ae94919
+      read:
+        - README.md
+        - CHANGELOG.md
+        - AGENTS.md (CLAUDE.md is empty)
+        - guide/philosophy.md
+        - guide/configuration.md
+        - guide/cli.md (overview, add, update, list, show sections)
+        - >-
+          packages/skillport-core/src/skillport/interfaces/mcp/ (server, tools,
+          instructions, cli)
+        - >-
+          packages/skillport-core/src/skillport/interfaces/cli/ (app, catalog, context,
+          commands/doc, init, add, meta (frontmatter writer), validate by reference)
+        - >-
+          packages/skillport-core/src/skillport/modules/indexing/ (lancedb, search_service,
+          state, embeddings, public query/index)
+        - >-
+          packages/skillport-core/src/skillport/modules/skills/public/ (search, load, read,
+          add, update)
+        - >-
+          packages/skillport-core/src/skillport/modules/skills/internal/ (origin, tracking,
+          github, validation, manager (signatures), zip_handler (limits))
+        - >-
+          packages/skillport-core/src/skillport/shared/ (config, filters, exceptions, utils,
+          auth)
+        - packages/skillport-core/src/skillport/modules/__init__.py
+        - tests/unit/test_dependency_boundaries.py
+        - tests/unit/test_transport_mode.py (structure)
+        - tests/unit/test_normalization_and_threshold.py
+        - tests/pbt/test_name_properties.py (head)
+        - tests/integration/test_mcp_server.py
+        - tests/conftest.py, tests/integration/conftest.py
+        - verify_server.py
+        - .github/workflows/ci.yml, .github/workflows/release.yml (step names)
+        - >-
+          .skills/experimental/skill-evaluator/SKILL.md (head) and
+          evaluations/basic-skill-evaluation.json
+        - >-
+          full commit history (183 commits; bodies of ~30 incl. 65fd58c, ea8b74f, bb03e3a,
+          0274cae, 5e41fb2, 74b4065, 9e04d26, e6bff6d, 12873a1, 192d448, 4951bdb, c052a45,
+          ea16ed4); removals via --diff-filter=D; old trees at 526952c, a811d4d, ece8f14,
+          cf4b4f5 for the removed execution tool and the renames
+      not_read:
+        - path: >-
+            tests/unit/ (test_update, test_add_logic, test_validation_rules,
+            test_github_source, test_origin*, test_zip_handler, test_doc,
+            test_xml_instructions, test_config, test_project_config, others)
+          reason: read by name and spot-checked only; behaviour taken from the code they test
+        - path: >-
+            tests/integration/test_cli_commands.py, test_cli_meta_commands.py,
+            test_search_and_tools_integration.py
+          reason: CLI behaviour read from the commands themselves
+        - path: guide/creating-skills.md
+          reason: general skill-writing manual; not this host's subject
+        - path: >-
+            .skills/experimental/git-branch-cleanup/,
+            .skills/experimental/opus-4-5-migration/
+          reason: example skill content, not a mechanism of the tool
+        - path: .skills/experimental/skill-evaluator/references/, scripts/validate_skill.py
+          reason: general skill-quality rubric; the tool's own validator was read instead
+        - path: >-
+            packages/skillport-core/src/skillport/interfaces/cli/commands/ (list, show,
+            remove, update CLI wrappers, validate), theme.py, config.py (.skillportrc
+            loader)
+          reason: thin presentation layers over modules already read
+        - path: >-
+            packages/skillport-core/src/skillport/modules/skills/internal/manager.py,
+            zip_handler.py
+          reason: read for signatures, limits and symlink checks only
+        - path: uv.lock, pyproject.toml files, release-please config
+          reason: packaging metadata; only the version-sync test that guards them was read
+  - name: iflytek-skillhub
+    type: git-repo
+    url: https://github.com/iflytek/skillhub
+    cursor: a463efb5352e
+    analyzed: '2026-10-13'
+    domains_covered:
+      - skill-over-mcp
+      - skill-recommendation
+      - skill-sources
+      - curation
+      - source-learning
+      - storage
+      - evaluation
+      - trust-safety
+      - host-integration
+      - ux
+      - code-structure
+    coverage:
+      at: a463efb5352e
+      read:
+        - README.md
+        - >-
+          AGENTS.md (listing only) and .agents/skills/skill-lifecycle/SKILL.md,
+          .agents/skills/testing-and-ci/SKILL.md
+        - docs/00-product-direction.md
+        - docs/01-system-architecture.md
+        - docs/02-domain-model.md (versions, tags, audit_log, idempotency_record)
+        - docs/04-search-architecture.md
+        - docs/07-skill-protocol.md
+        - docs/14-skill-lifecycle.md
+        - docs/25-skill-suites.md
+        - docs/oss-02-core-semantic-rules.md (state machine, permission matrix)
+        - docs/security-scanning.md
+        - docs/CONTENT_SAFETY.md
+        - docs/skillhub/en/guide/review.md, docs/skillhub/en/guide/runtime-integration.md
+        - openspec/changes/support-promotion-updates-and-revocation/proposal.md
+        - >-
+          builtin-skills/README.md, catalog.json, evals.json (head),
+          skills/triage-nda/NOTICE.md, skills/skillhub-cli/SKILL.md
+        - >-
+          scripts/build-builtin-skills.py (validation functions),
+          scripts/tests/build-builtin-skills-test.sh,
+          scripts/check-enterprise-identity-architecture.sh (head)
+        - .github/workflows/security.yml, .github/workflows/pr-tests.yml (steps), .mcp.json
+        - >-
+          server/skillhub-domain skill, review, security, audit and idempotency services
+          (via inventory, key lines re-read): SkillPublishService, SkillGovernanceService,
+          SkillLifecycleProjectionService, SkillTagService, ReviewService,
+          ReviewPermissionChecker, PromotionService (inventory only), SecurityScanService,
+          SkillPackagePolicy, SkillPackageValidator, SkillMetadataParser,
+          BasicPrePublishValidator, AuditLogService
+        - >-
+          server/skillhub-app IdempotencyInterceptor, CliSkillController and
+          ClawHubCompatController (route list)
+        - >-
+          cli/src (install, upgrade, sync, remove, doctor, fingerprint, target lock,
+          inventory store, output, errors, agent profiles, auth); cli/test layout and
+          helpers
+        - >-
+          git log --oneline (1537 commits) grepped for
+          revert/remove/drop/deprecate/security/migrate/yank/audit/review/scan/self/idempotency;
+          bodies of about 30 commits
+      not_read:
+        - path: web/
+          reason: frontend UI (React)
+          outside the goal: null
+        - path: web/src/i18n/
+          reason: i18n strings
+        - path: docs/skillhub/public/
+          reason: images and screenshots
+        - path: docs/skillhub/ (zh guides)
+          reason: Chinese duplicates of the en guides that were read
+        - path: server/skillhub-auth/ (OAuth
+          OIDC: null
+          DingTalk: null
+          Feishu: null
+          SCIM: null
+          device flow: null
+          account merge): null
+          reason: >-
+            enterprise identity; the host has no multi-user identity; only the RBAC route
+            policy was sampled
+        - path: server/skillhub-notification/
+          reason: notifications and subscriptions
+          outside the goal: null
+        - path: server/skillhub-search/ code
+          reason: the design doc was read; the PostgreSQL FTS implementation was not
+        - path: server/skillhub-app/src/main/resources/db/migration/
+          reason: Flyway SQL; only the version uniqueness constraint was sampled
+        - path: server/**/src/test/
+          reason: test bodies not read; only counts
+          names and Testcontainers usage were inventoried: null
+        - path: server/skillhub-app bootstrap/ (BuiltinSkillInitializer)
+          SkillHardDeleteService: null
+          PromotionRevocationService: null
+          reason: grep hits only; the revocation design was read from the openspec proposal
+        - path: charts/
+          deploy/: null
+          compose*.yml: null
+          docker-compose*.yml: null
+          Makefile (except test-builtin-skills): null
+          reason: deployment and infrastructure
+        - path: .github/scripts/ and issue/reward/release-notes workflows
+          reason: project-management automation (issue triage
+          rewards): null
+          not this host's subject: null
+        - path: weekly/
+          reason: generated weekly report site
+        - path: builtin-skills/skills/* (other than triage-nda NOTICE and skillhub-cli)
+          reason: starter skill content
+          not mechanisms: null
+        - path: openspec/changes/ (other than promotion update)
+          docs/superpowers/: null
+          docs/prds/: null
+          reason: feature specs for UI
+          identity and suite bundles; outside the goal or covered by the docs read: null
+        - '5': null
+          '6': null
+          '923': null
+          path: docs/03
+          08-13: null
+          15-24: null
+          observability: null
+          SMTP: null
+          RISCV64: null
+          integration guides (dsh: null
+          hermes: null
+          openclaw): null
+          reason: auth
+          API listing: null
+          frontend: null
+          deployment: null
+          observability and per-runtime setup: null
+          outside the goal: null
+        - path: CONTRIBUTING.md
+          CODE_OF_CONDUCT.md: null
+          .agents/skills/code-conventions: null
+          frontend-conventions: null
+          pr-submission: null
+          dev-workflow: null
+          reason: general contribution guidance
+          not this host's subject: null
+        - path: cli/README.md narrative
+          cli/RELEASE.md: null
+          cli/src/platform/updater.ts: null
+          cli/src/clients/npm-registry-client.ts: null
+          reason: CLI self-update and release mechanics
+          adjacent: null
+        - path: examples/python
+          scanner/: null
+          reason: REST client examples and the third-party scanner image config
+  - name: saker-skillhub
+    type: git-repo
+    url: https://github.com/saker-ai/skillhub
+    cursor: 6a0a5538257b
+    analyzed: '2026-10-13'
+    domains_covered:
+      - skill-over-mcp
+      - skill-recommendation
+      - skill-sources
+      - curation
+      - source-learning
+      - storage
+      - evaluation
+      - trust-safety
+      - host-integration
+      - ux
+      - code-structure
+    coverage:
+      at: 6a0a5538257b
+      read:
+        - README.md
+        - cmd/skillhub/main.go
+        - skillhub.go, options.go, registry.go, types.go (SDK facade)
+        - skillhub_test.go (harness, contract tests)
+        - >-
+          pkg/service/ (errors, common, skill_service publish/resolve/reindex, skill_yank,
+          plugin_service identity diff, test fixtures)
+        - >-
+          pkg/handler/ (errors, agent_skill_handler, runtime_skill_handler,
+          download_handler, wellknown_handler, webhook_handler)
+        - pkg/gitstore/ (gitstore, importer, mirror)
+        - pkg/store/driver.go, pkg/store/store.go, pkg/store/driver_test.go
+        - pkg/repository/skill_cache.go, skill_cache_test.go, db.go (auto-migrate gate)
+        - pkg/search/bleve.go
+        - pkg/security/sigstore.go
+        - pkg/agentplugin/validate.go
+        - pkg/model/ (skill, version, skill_ref)
+        - pkg/middleware/ (auth RequireScope, deprecation, ratelimit head)
+        - pkg/handler/token_handler.go (team-token limits)
+        - pkg/server/ (server wiring, routes, huma, huma_docs head, discovery)
+        - >-
+          pkg/cli/ (commands, output, config, client ReadDirFiles, plugins install/extract,
+          tests)
+        - pkg/config/config.go (env overrides)
+        - skills/SKILL.md, skills/saker-knowledge/SKILL.md (heads)
+        - >-
+          .golangci.yml, .github/workflows/ci.yml, .github/workflows/release.yml (steps),
+          Makefile (test, lint)
+        - web/embed.go (OpenAPI embed comment)
+        - full commit history (82 commits; bodies of all commits with bodies)
+      not_read:
+        - path: web/src/
+          reason: React SPA UI; outside the goal
+        - path: web-client/
+          reason: TypeScript API client for the SPA; UI
+        - path: web-pages/
+          reason: shared React pages; UI
+        - path: web/templates/
+          reason: server-rendered HTML fallback; UI
+        - path: web/openapi.yaml
+          reason: >-
+            hand-maintained spec; only checked which paths it lists and that it is no longer
+            served
+        - path: README_CN.md
+          reason: Chinese translation of README.md
+        - path: pkg/store/s3/
+          reason: object-store backend; host keeps Git as the only store by design
+        - path: pkg/store/oss/
+          reason: object-store backend; host keeps Git as the only store by design
+        - path: pkg/auth/ (oauth
+          device: null
+          synapse_jwt: null
+          service): null
+          reason: multi-user identity and OAuth/JWT; outside a single-owner hub
+        - path: >-
+            pkg/service/{namespace,rating,comment,notification,audit}_service.go and their
+            handlers/repos
+          reason: >-
+            multi-tenant and social marketplace features; outside the goal (no public
+            marketplace)
+        - path: pkg/metrics/
+          reason: Prometheus collector boilerplate; mechanism noted from commit c4bfda1
+        - path: deployments/docker/
+          reason: container packaging
+        - path: CONTRIBUTING.md
+          reason: general contribution guide; not this host's subject
+        - path: SECURITY.md
+          reason: vulnerability reporting policy
+  - name: pinkpixel-agentskills
+    type: git-repo
+    url: https://github.com/pinkpixel-dev/agentskills-mcp
+    cursor: 47049d9635c5
+    analyzed: '2026-10-13'
+    domains_covered:
+      - skill-over-mcp
+      - skill-recommendation
+      - skill-sources
+      - curation
+      - source-learning
+      - storage
+      - evaluation
+      - trust-safety
+      - host-integration
+      - ux
+      - code-structure
+    coverage:
+      at: 47049d9635c5
+      read:
+        - src/github_skills_mcp/server.py (all 703 lines)
+        - src/github_skills_mcp/__init__.py
+        - README.md
+        - repos.example.json
+        - pyproject.toml
+        - .github/workflows/publish.yml
+        - glama.json
+        - .gitignore
+        - .codex/AGENTS.md (first 40 lines, to classify it)
+        - full commit history (4 commits, diffs of 808be83bf434 and 3001da10da06)
+      not_read:
+        - path: .codex/agents/, .codex/skills/, .codex/tailwind-v4-vite.instructions.md
+          reason: >-
+            the author's own development agents and general-purpose skills (mcp-builder,
+            skill-creator, web-design-review...) checked in for working on the repo, not
+            served by the server; general skill-writing material, not this host's subject
+        - path: uv.lock
+          reason: generated lockfile
+        - path: LICENSE
+          reason: standard MIT text
+  - name: zouyingcao-agentskills
+    type: git-repo
+    url: https://github.com/zouyingcao/agentskills-mcp
+    cursor: 32589389aacf
+    analyzed: '2026-10-13'
+    domains_covered:
+      - skill-over-mcp
+      - skill-recommendation
+      - skill-sources
+      - curation
+      - source-learning
+      - storage
+      - evaluation
+      - trust-safety
+      - host-integration
+      - ux
+      - code-structure
+    coverage:
+      at: 32589389aacf
+      read:
+        - >-
+          mcp_agentskills/ (all files: main.py, __init__.py, config/, core/tools/ ops and
+          prompt yaml, core/utils/service_runner.py)
+        - README.md
+        - docs/tools.md
+        - pyproject.toml
+        - example.env
+        - .github/workflows/pre-commit.yml
+        - .github/workflows/python-publish.yml
+        - .pre-commit-config.yaml (to classify it)
+        - >-
+          tests/skill_agent.py, tests/skill_agent_prompt.py, tests/run_skill_agent.py,
+          tests/run_project_sse.py
+        - tests/test_load_skill_op.py, tests/test_run_shell_command_op.py
+        - >-
+          full commit history (13 commits; diffs of b8da4303caaa, 32589389aacf,
+          e5c3058a7323, f0950408fb7c, 579729038f9d)
+      not_read:
+        - path: README_ZH.md
+          reason: Chinese translation of README.md
+        - path: >-
+            tests/run_project_http.py, tests/test_load_skill_metadata_op.py,
+            tests/test_reference_file_op.py
+          reason: same pattern as the read siblings (HTTP variant and single-op scripts)
+        - path: docs/figure/agentskills-logo.png
+          reason: image
+        - path: LICENSE, .gitignore
+          reason: boilerplate
+        - path: flowllm (dependency)
+          reason: >-
+            external framework, not in the repository; its MCP wiring was inferred from the
+            ops' ToolCall definitions
+  - name: skill-forge-mcp
+    type: git-repo
+    url: https://github.com/popyson1648/skill-forge-mcp
+    cursor: '3211174026e6'
+    analyzed: '2026-10-13'
+    domains_covered:
+      - skill-over-mcp
+      - skill-recommendation
+      - skill-sources
+      - curation
+      - source-learning
+      - storage
+      - evaluation
+      - trust-safety
+      - host-integration
+      - ux
+      - code-structure
+    coverage:
+      at: '3211174026e6'
+      read:
+        - README.md
+        - CHANGELOG.md
+        - package.json
+        - src/index.ts
+        - src/content.ts
+        - src/search.ts
+        - src/state.ts
+        - src/status.ts
+        - src/content/manifest.json
+        - src/content/phase_0.md .. phase_8.md (all nine)
+        - tests/ (all 5 files)
+        - .github/workflows/ci.yml
+        - .github/workflows/publish.yml
+        - biome.json
+        - SECURITY.md (header)
+        - .github/pull_request_template.md
+        - >-
+          full commit history (35 commits; bodies of ed1da04, 182cb1c, f1a649c, f07ad1e,
+          6c2e13d, c5fdfc0; diff of ed1da04)
+      not_read:
+        - path: src/content-ja/
+          reason: >-
+            Japanese translation of src/content/, not served since 1.1.0 (developer
+            reference only)
+        - path: README.ja.md
+          reason: Japanese copy of README.md
+        - path: package-lock.json
+          reason: generated dependency lock
+        - path: docs/images/logo.png
+          reason: image
+        - path: >-
+            .github/ISSUE_TEMPLATE/, .github/dependabot.yml, .editorconfig, .nvmrc,
+            tsconfig.json
+          reason: generic repository hygiene, not this host's subject
+        - path: LICENSE
+          reason: MIT licence text
 
 intake: []

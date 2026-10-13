@@ -23,15 +23,19 @@ lessons:
       real server. A fourth, tech-leads-club, still documents its MCP server as having no
       local filesystem access after a tool that writes a cache directory was added.
       meta_skill also ships an MCP suggest tool described as context-aware that returns the
-      most recently modified skills.
+      most recently modified skills. A fifth, zouyingcao-agentskills, documents tools named
+      `*_op` that are registered without the suffix, documents the metadata tool as
+      returning a dict with each skill's directory after v0.1.2 changed it to a text list,
+      and keeps `uvx agentskills-mcp` in its stdio config after renaming its package to
+      mcp-agentskills.
     notable: >-
-      The mechanism is to turn every operational promise (rebuild from Git, install command,
-      advertised counts) into something executed: a test or CI job that clones, rebuilds and
-      checks, or a value generated from the system instead of typed. The trade-off is CI
-      time and a fixture hub. For the goal this is the guard on "a fresh clone on a new
-      machine cannot rebuild a working hub": the host already simulates a clone with absent
-      empty directories in tests, but not an end-to-end clone + rebuild of a hub with skills
-      and lessons, which is exactly the claim that failed on 2026-10-08.
+      skillport adds two cases. Its CLI guide shows "Rebuilding index..." after add and
+      update, but since the 1.0 split the CLI never touches the index, so a running server
+      keeps serving the old content. And its CI "verify" job runs verify_server.py, which
+      prints "❌ Missing core tools" or "❌ load_skill failed" and returns normally, so the
+      job exits 0 whatever happens; the job's SKILLS_DIR / EMBEDDING_PROVIDER variables lack
+      the SKILLPORT_ prefix and are ignored. A check that cannot fail is a claim, not a
+      test.
     where:
       - meta-skill@e999668e8d8c:README.md#L94-L99
       - meta-skill@e999668e8d8c:src/cli/commands/doctor.rs#L365-L414
@@ -40,6 +44,26 @@ lessons:
       - ext-skills@167da6c0d42c:docs/archive/experimental-findings.md#L19-L36
       - tech-leads-club@120b67676388:SECURITY.md#L172-L172
       - meta-skill@e999668e8d8c:src/cli/commands/mcp.rs#L1309-L1310
+      - zouyingcao-agentskills@32589389aacf:README.md#L214-L218
+      - zouyingcao-agentskills@32589389aacf:docs/tools.md#L29-L38
+      - zouyingcao-agentskills@32589389aacf:README.md#L94-L103
+      - iflytek-skillhub@a463efb5352e:docs/14-skill-lifecycle.md#L1-L6
+      - iflytek-skillhub@a463efb5352e:docs/14-skill-lifecycle.md#L97-L102
+      - >-
+        iflytek-skillhub@a463efb5352e:server/skillhub-domain/src/main/java/com/iflytek/skillhub/domain/skill/service/SkillGovernanceService.java#L249-L257
+      - iflytek-skillhub@a463efb5352e:docs/07-skill-protocol.md#L116-L121
+      - >-
+        iflytek-skillhub@a463efb5352e:server/skillhub-domain/src/main/java/com/iflytek/skillhub/domain/skill/validation/SkillPackagePolicy.java#L18-L20
+      - saker-skillhub@6a0a5538257b:README.md#L18-L18
+      - saker-skillhub@6a0a5538257b:pkg/gitstore/importer.go#L18-L25
+      - saker-skillhub@6a0a5538257b:pkg/gitstore/importer.go#L157-L160
+      - saker-skillhub@6a0a5538257b:pkg/handler/webhook_handler.go#L59-L64
+      - saker-skillhub@6a0a5538257b:pkg/handler/wellknown_handler.go#L182-L182
+      - saker-skillhub@6a0a5538257b:skillhub_test.go#L1512-L1538
+      - saker-skillhub@6a0a5538257b:web/embed.go#L8-L17
+      - skillport@51334ae94919:guide/cli.md#L421-L437
+      - skillport@51334ae94919:verify_server.py#L63-L93
+      - skillport@51334ae94919:.github/workflows/ci.yml#L31-L44
     contrast: extends
     host: internal/workspace/workspace_test.go
     score:
@@ -54,9 +78,105 @@ lessons:
       why: >-
         Core of the goal (git clone rebuilds the hub). a: the clone+rebuild promise broke on
         2026-10-08 and current tests cover only absent directories; d: lands as a CI job; e:
-        both sources show the claim failing silently. Two independent sources converge. Four
-        independent sources agree.
+        the sources show the claim failing silently. Five independent sources agree.
     final_score: 13.5
+    decision: {state: candidate}
+
+  - key: behavior-eval-per-curated-skill
+    domains:
+      - evaluation
+      - curation
+    layer: validation
+    what: >-
+      The reviewed starter collection requires one evals.json case per skill. Each case has
+      a realistic prompt, `acceptance` criteria and `forbidden` behaviours. The builder
+      fails on "eval inventory mismatch" when a skill has no case or a case has no skill.
+    notable: >-
+      Every curated skill carries a statement of what correct and unsafe behaviour look
+      like, and CI enforces that it exists. Running the cases still needs a model or a
+      human. The host evaluates routing (examples, counter_examples, no-skill cases), not
+      what the skill makes the agent do. An edit to a skill's body has no recorded
+      acceptance or forbidden behaviour to check against. A required behaviour case per
+      active skill, checked for presence by `skill lint`, would give "did this change help"
+      a baseline. The `forbidden` list is also a natural place for third-party safety
+      concerns found in review.
+    where:
+      - iflytek-skillhub@a463efb5352e:scripts/build-builtin-skills.py#L119-L148
+      - iflytek-skillhub@a463efb5352e:builtin-skills/evals.json#L1-L40
+      - iflytek-skillhub@a463efb5352e:builtin-skills/README.md#L48-L52
+    contrast: extends
+    host: internal/evaluation
+    score:
+      relevance: 3
+      facts:
+        - a
+        - b
+        - d
+      impact: 3
+      evidence: 1
+      effort: 2
+      why: >-
+        In scope (feedback that proves changes help). a: a content edit to an active skill
+        has no behavioural check, only routing evals. b: the host eval suite covers
+        resolution, not behaviour. d: presence is lintable. One source. Rescored 2026-10-13:
+        the confirmed purpose now names collecting, editing and tuning curated skills to the
+        human's own criteria.
+    final_score: 4.5
+    keywords:
+      - evals.json
+      - acceptance
+      - forbidden
+      - regression case
+      - starter collection
+    decision: {state: candidate}
+
+  - key: per-file-navigation-signals
+    domains:
+      - evaluation
+      - curation
+    layer: validation
+    what: >-
+      Every resource read is appended to an access log (uri, phase, section) and get_status
+      reports reads per phase. Phase 8 turns navigation into curation actions: files read in
+      an unexpected order → fix links; important references never followed → make links
+      explicit; a section read repeatedly → move it into the SKILL.md body; a bundled file
+      never read → consider removing it.
+    notable: >-
+      Which files of a skill the agent actually opens is a content-free, cheap signal that
+      maps directly to an edit (promote, link, or delete a file). Trade-off: reads without
+      outcomes say nothing about quality, and the source only counts phases, not the four
+      patterns. The host records skill loads with a resource kind
+      (entrypoint/reference/script/asset) but not which file, so it cannot tell a curator
+      that references/x.md was never read in N loads.
+    where:
+      - skill-forge-mcp@3211174026e6:src/index.ts#L60-L65
+      - skill-forge-mcp@3211174026e6:src/index.ts#L272-L304
+      - skill-forge-mcp@3211174026e6:src/content/phase_8.md#L48-L57
+    contrast: extends
+    host: internal/delivery/mcpserver/load_attribution.go
+    score:
+      relevance: 3
+      facts:
+        - a
+        - b
+        - d
+      impact: 3
+      evidence: 1
+      effort: 2
+      why: >-
+        In scope (telemetry that makes skills measurably better). a: unused bundled files
+        and over-read references stay invisible, so curation cannot act on them; b:
+        mapResourceKind drops the path; d: lands as a telemetry field and a funnel/review
+        line. One source, only partly implemented there. Rescored 2026-10-13: the confirmed
+        purpose now names collecting, editing and tuning curated skills to the human's own
+        criteria.
+    final_score: 4.5
+    keywords:
+      - access log
+      - reads
+      - unused content
+      - over-reliance
+      - missed references
     decision: {state: candidate}
 
   - key: graded-implicit-rewards
@@ -128,6 +248,142 @@ lessons:
     final_score: 2
     decision: {state: candidate}
 
+  - key: ownership-sentinel-tests
+    domains:
+      - evaluation
+      - curation
+    layer: validation
+    what: >-
+      The CLI upgrade work was landed with tests named for invariants: "prove upgrade safety
+      invariants", "prove manual ownership remains untouched", "bind ownership sentinels to
+      each fixture", "use a dead pid for stale lock recovery". The tests run against a fake
+      registry (Bun.serve) with injectable failure modes (auth, forbidden, not_found,
+      rate_limited, server_error, network) in a temp HOME and CWD.
+    notable: >-
+      Safety claims ("never touches files you own") are proven by planting sentinel files in
+      each fixture and asserting they survive. The host's connect and upstream update make
+      the same claims. Whether every fixture carries such a sentinel was not checked, so
+      this is recorded as extends at low weight.
+    where:
+      - iflytek-skillhub@6ab8faa6b926
+      - iflytek-skillhub@a463efb5352e:cli/test/helpers/fake-registry.ts#L1-L12
+      - iflytek-skillhub@a463efb5352e:cli/test/helpers/fake-registry.ts#L226-L230
+    contrast: extends
+    host: internal/hostintegration/integration_test.go
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Adjacent test practice; host coverage of the same claim not verified.
+    final_score: 0
+    keywords:
+      - sentinel
+      - ownership
+      - fake registry
+      - failure modes
+    decision: {state: candidate}
+
+  - key: metrics-route-template-labels
+    domains:
+      - evaluation
+    layer: craft
+    what: >-
+      Prometheus metrics label HTTP series with the matched route template (gin FullPath)
+      and put unmatched paths under "unmatched", bounding cardinality; cache hits and
+      misses, publishes, downloads and searches are counters; /metrics is unauthenticated by
+      design and left to the network layer.
+    notable: >-
+      Operational metrics for a long-running server. peripheral for the host, whose
+      telemetry is local, event-based and tied to resolutions rather than to HTTP routes.
+    where:
+      - saker-skillhub@c4bfda175700
+      - saker-skillhub@ef8c84cf65df
+    contrast: new
+    host: internal/telemetry
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 2
+      why: Adjacent (operations, not resolution quality).
+    final_score: 0
+    keywords:
+      - prometheus
+      - FullPath
+      - cardinality
+      - metrics
+    decision: {state: candidate}
+
+  - key: contract-test-forbids-removed-keys
+    domains:
+      - evaluation
+      - ux
+    layer: validation
+    what: >-
+      After simplifying the agent API, tests assert that deprecated response keys
+      (PascalCase fields, redirect status, format query) stay absent, with a helper
+      rejectJSONKeys, matching the commit's Directive "Do not reintroduce PascalCase Agent
+      Skill fields".
+    notable: >-
+      A removal becomes a check so it cannot quietly come back. The host already has tests
+      that removed commands and names stay gone.
+    where:
+      - saker-skillhub@6a0a5538257b:skillhub_test.go#L1503-L1510
+      - saker-skillhub@99ea21bc6aac
+    contrast: already-covered
+    host: internal/delivery/cli/onboarding_test.go
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Adjacent; host pins removals with tests.
+    keywords:
+      - rejectJSONKeys
+      - deprecated key
+      - contract test
+      - Directive
+    decision: {state: candidate}
+
+  - key: errors-as-success-text
+    domains:
+      - evaluation
+      - skill-over-mcp
+    layer: validation
+    what: >-
+      Missing skills and files return normal text ("Skill 'x' not found", "File ... not
+      found") instead of a tool error, so the one-command integration script's `assert
+      success` on `not result.is_error` passes even when every lookup fails. The other tests
+      are manual scripts that need a skills directory argument; CI runs only pre-commit
+      linters.
+    notable: >-
+      When failures are success-shaped, neither the client nor the test can tell; the check
+      exists but cannot fail. The host returns IsError with a structured error and runs go
+      test in CI.
+    where:
+      - >-
+        zouyingcao-agentskills@32589389aacf:mcp_agentskills/core/tools/load_skill_op.py#L118-L123
+      - zouyingcao-agentskills@32589389aacf:tests/run_project_sse.py#L42-L52
+      - zouyingcao-agentskills@32589389aacf:.github/workflows/pre-commit.yml#L30-L38
+    contrast: already-covered
+    host: internal/delivery/mcpserver/tool_errors.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered by IsError results and CI tests.
+    keywords:
+      - is_error
+      - set_output
+      - not found
+    decision: {state: candidate}
+
   - key: eval-before-ranking-changes
     domains:
       - evaluation
@@ -181,4 +437,162 @@ lessons:
       evidence: 1
       effort: 1
       why: Already covered by resolution-linked feedback.
+    decision: {state: candidate}
+
+  - key: lint-zero-without-ci-gate
+    domains:
+      - evaluation
+    layer: enforcement
+    what: >-
+      A commit "drive lint to zero" added .golangci.yml with each exclusion justified in a
+      comment block, but CI runs only go vet and go test (on Go 1.25 while go.mod says
+      1.26.4); lint is a local make target.
+    notable: >-
+      Documented exemptions are good practice; a zero baseline that CI does not enforce
+      erodes. The host already gates lint on changes, race, fuzz and gofmt in CI.
+    where:
+      - saker-skillhub@6a0a5538257b:.golangci.yml#L1-L20
+      - saker-skillhub@6a0a5538257b:.github/workflows/ci.yml#L13-L33
+      - saker-skillhub@00faa6ad0382
+    contrast: already-covered
+    host: .github/workflows/ci.yml
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Adjacent; host CI already enforces lint.
+    keywords:
+      - golangci-lint
+      - exclusions
+      - CI
+      - go vet
+    decision: {state: candidate}
+
+  - key: popularity-sort-as-ranking
+    domains:
+      - evaluation
+      - skill-recommendation
+    layer: content
+    what: >-
+      Discovery ranks and sorts by downloads, stars, ratings and recency; downloads are
+      deduplicated by a hash of the client IP; stars, ratings and comments are social
+      features with no link to whether a skill helped a task.
+    notable: >-
+      Popularity measures attention, not fit for a task, and gives the agent no signal about
+      why a skill was chosen. The host's resolver deliberately ranks by task fit and learns
+      from feedback tied to a resolution; recorded as the marketplace model the goal rules
+      out.
+    where:
+      - saker-skillhub@6a0a5538257b:pkg/search/bleve.go#L80-L84
+      - saker-skillhub@6a0a5538257b:pkg/handler/download_handler.go#L65-L69
+    contrast: contradicts
+    host: internal/resolver
+    score:
+      relevance: 0
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Outside the goal (public marketplace signals).
+    keywords:
+      - downloads
+      - stars
+      - ratings
+      - sort
+      - popularity
+    decision: {state: candidate}
+
+  - key: real-sqlite-git-fixtures
+    domains:
+      - evaluation
+    layer: validation
+    what: >-
+      Service and SDK tests build the whole stack on a t.TempDir(): SQLite with
+      auto-migrate, a Bleve index and a real bare-Git store, then drive gin handlers through
+      httptest without listening; fixtures are never shared across parallel subtests.
+    notable: >-
+      End-to-end behaviour (publish writes a commit, download streams git archive) is tested
+      without mocks. The host already tests against real Git workspaces and SQLite catalogs.
+    where:
+      - saker-skillhub@6a0a5538257b:skillhub_test.go#L36-L58
+      - saker-skillhub@6a0a5538257b:pkg/service/skill_service_methods_test.go#L27-L60
+    contrast: already-covered
+    host: internal/app/main_test.go
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Adjacent; host already uses real fixtures.
+    keywords:
+      - t.TempDir
+      - httptest
+      - sqlite fixture
+      - no mocks
+    decision: {state: candidate}
+
+  - key: test-isolates-user-home-state
+    domains:
+      - evaluation
+      - ux
+    layer: validation
+    what: >-
+      Integration tests that set only SKILLPORT_SKILLS_DIR used to write derived indexes
+      under ~/.skillport/indexes/<slug>; an autouse fixture now redirects DB and meta paths
+      into tmp_path for every integration test, and a shared test_config fixture does the
+      same for unit tests.
+    notable: >-
+      Derived paths computed from the home directory leak test runs into the developer's
+      real state unless isolation is automatic. The host's TestMain isolates HOME and Go
+      caches for every CLI test and subprocess; agreement.
+    where:
+      - skillport@51334ae94919:tests/integration/conftest.py#L8-L17
+      - skillport@88dbb9c9190d
+    contrast: already-covered
+    host: internal/delivery/cli/main_test.go
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered by TestMain home isolation.
+    keywords:
+      - autouse fixture
+      - tmp_path
+      - isolation
+    decision: {state: candidate}
+
+  - key: trace-records-version-id-and-digest
+    domains:
+      - evaluation
+      - trust-safety
+    layer: content
+    what: >-
+      The runtime-integration contract says an agent runtime should record skillVersionId
+      and complianceSnapshot.digest (plus a package digest) in its execution trace.
+      Recording only the slug is called an anti-pattern: "the slug identifies the skill
+      container, not an immutable version".
+    notable: >-
+      Outcomes can be tied to the exact content that produced them. The host stamps every
+      telemetry event with catalog_snapshot and policy_revision. Recorded as convergence.
+    where:
+      - iflytek-skillhub@a463efb5352e:docs/skillhub/en/guide/runtime-integration.md#L14-L28
+      - iflytek-skillhub@a463efb5352e:docs/skillhub/en/guide/runtime-integration.md#L86-L91
+    contrast: already-covered
+    host: internal/telemetry/events.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered by catalog_snapshot on every event.
+    keywords:
+      - skillVersionId
+      - complianceSnapshot digest
+      - execution trace
     decision: {state: candidate}

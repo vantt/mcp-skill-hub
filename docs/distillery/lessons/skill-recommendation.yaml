@@ -51,14 +51,23 @@ lessons:
       tech-leads-club's list_skills requires the literal argument explicit_request: true and
       says "Only when the user explicitly asks to see every skill", returning one short
       sentence per skill, so an agent does not pull the whole catalog into context instead
-      of searching.
+      of searching. zouyingcao-agentskills shows the unguarded alternative as its design: a
+      no-argument load_skill_metadata returns one "- name: description" line for every
+      SKILL.md, and both README and the demo system prompt tell the agent to call it first
+      in every task.
     notable: >-
-      A schema-level guard turns a wording rule into one the model cannot skip by accident.
-      The host's model-callable skill_list takes only an optional state filter, has no limit
-      or guard, and its description does not steer the agent to skill_resolve; on a hub with
-      hundreds of skills one call floods the context the goal protects.
+      A schema-level guard turns a wording rule into one the model cannot skip by accident;
+      the second source shows what happens without one: the full catalog becomes a per-task
+      fixed cost that grows with every skill added. The host's model-callable skill_list
+      takes only an optional state filter, has no limit or guard, and its description does
+      not steer the agent to skill_resolve; on a hub with hundreds of skills one call floods
+      the context the goal protects.
     where:
       - tech-leads-club@120b67676388:packages/mcp/src/tools/list-tool.ts#L7-L37
+      - >-
+        zouyingcao-agentskills@32589389aacf:mcp_agentskills/core/tools/load_skill_metadata_op.py#L162-L189
+      - zouyingcao-agentskills@32589389aacf:tests/skill_agent_prompt.py#L8-L10
+      - zouyingcao-agentskills@32589389aacf:README.md#L214-L215
     contrast: new
     host: internal/delivery/mcpserver/skill_tools.go
     score:
@@ -68,13 +77,14 @@ lessons:
         - b
         - d
       impact: 3
-      evidence: 1
+      evidence: 2
       effort: 1
       why: >-
         Core of the goal (load only what the task needs). a: skill_list returns the catalog
         with no limit or guard; b: nothing steers listing to explicit requests; d: a literal
-        guard in the input schema enforces it. One source; small change.
-    final_score: 9
+        guard in the input schema enforces it. Two independent sources (one guard, one
+        showing the unguarded dump as the default path); small change.
+    final_score: 18
     decision: {state: candidate}
 
   - key: project-signal-detector
@@ -186,6 +196,48 @@ lessons:
     final_score: 3
     decision: {state: candidate}
 
+  - key: embedder-identity-in-index-state
+    domains:
+      - skill-recommendation
+      - storage
+    layer: content
+    what: >-
+      The index state stores the embedding provider and model next to the content hash; a
+      change of either forces a reindex (provider_changed, model_changed). Config fails fast
+      at load when provider=openai has no key, and embeddings default to none (BM25 only,
+      "no API keys, privacy, speed").
+    notable: >-
+      Vectors from different models are not comparable, so an index must know which embedder
+      produced it or a model switch silently mixes spaces. The host's vector channel is off;
+      when it is enabled, the derived catalog's freshness key needs the embedder identity,
+      and the off-by-default plus fail-fast pattern matches the host's Validate() on
+      disabled channels.
+    where:
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/modules/indexing/internal/lancedb.py#L69-L76
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/modules/indexing/internal/state.py#L114-L127
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/shared/config.py#L193-L197
+    contrast: new
+    host: internal/catalog/schema.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: >-
+        peripheral: only matters once the vector channel exists. b: no embedder identity in
+        the catalog freshness key; d: a field in the freshness check. Facts b/d would hold
+        once the host has a concrete failure (fact a).
+    final_score: 0
+    keywords:
+      - embedding_signature
+      - provider_changed
+      - model_changed
+    decision: {state: candidate}
+
   - key: regex-domain-classifier
     domains:
       - skill-recommendation
@@ -241,6 +293,53 @@ lessons:
     final_score: 0
     decision: {state: candidate}
 
+  - key: search-then-agent-picks
+    domains:
+      - skill-recommendation
+      - skill-over-mcp
+    layer: content
+    what: >-
+      search_skills(query) returns the top `search_limit` (default 10) rows as {id,
+      description, score} plus `total`, sorted by raw BM25 (or vector) score; the
+      description tells the agent "If too many results, refine your query with more specific
+      terms instead of loading more", and "" or "*" lists everything. The agent reads the
+      list and chooses which id to load_skill. Routing signal is only id, name, description,
+      tags and category.
+    notable: >-
+      The Tool Search Tool pattern applied to skills: the server retrieves, the model ranks.
+      It is cheap and transparent (the agent sees alternatives and scores) but costs up to
+      ten descriptions (up to ~10 KB) per lookup, has no no-skill or ambiguity outcome, and
+      leaves the final choice to a model reading descriptions. The host chose the opposite
+      (PRD §29 "Agent should not re-rank", at most one primary or needs_context/no_skill
+      with reasons) and PRD §58 keeps that choice open for review; skillport is the cleanest
+      working example of the alternative, with no evals to show it picks well. Useful as the
+      baseline arm if the host ever measures single-recommendation against
+      agent-picks-from-list.
+    where:
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/interfaces/mcp/tools.py#L23-L49
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/modules/skills/public/search.py#L11-L49
+      - skillport@51334ae94919:guide/philosophy.md#L238-L258
+    contrast: contradicts
+    host: internal/resolver/resolver.go
+    score:
+      relevance: 3
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 3
+      why: >-
+        Core design fork, recorded for the PRD §58 discussion. No host failure is shown
+        (fact a does not hold), so impact 0; adopting it would restructure resolution.
+    final_score: 0
+    keywords:
+      - search_skills
+      - tool search tool
+      - search-first
+      - refine query
+    decision: {state: candidate}
+
   - key: bandit-adaptive-ranking
     domains:
       - skill-recommendation
@@ -270,6 +369,49 @@ lessons:
     final_score: 0
     decision: {state: candidate}
 
+  - key: registry-search-not-recommendation
+    domains:
+      - skill-recommendation
+      - skill-over-mcp
+    layer: ecosystem
+    what: >-
+      The registry has no MCP server and no task recommendation. Discovery is PostgreSQL
+      full-text search (weighted title, summary, keywords and frontmatter text) with an
+      optional semantic rerank. Its roadmap states that vector search is search enhancement
+      only and that no recommendation system will be built. Agents reach skills only when
+      the CLI copies them into one of 19 agent-specific skill folders.
+    notable: >-
+      A large, actively developed enterprise registry with the same name as the host's CLI
+      chose search plus install-by-copy. That is exactly the model the host's goal rejects
+      (copies drift; the agent must rank results). It strengthens the host's positioning:
+      the registry competes on governance, while serving over MCP and one recommendation per
+      task remain the host's distinct value. Peripheral as a mechanism, because it adds
+      nothing the host should build.
+    where:
+      - iflytek-skillhub@a463efb5352e:docs/00-product-direction.md#L137-L145
+      - iflytek-skillhub@a463efb5352e:docs/04-search-architecture.md#L139-L156
+      - iflytek-skillhub@a463efb5352e:.mcp.json#L1-L11
+    contrast: contradicts
+    host: docs/PRD.md
+    score:
+      relevance: 3
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: >-
+        peripheral: positioning evidence, not a mechanism to adopt; core domain, so
+        relevance stays 3, but no host failure follows from it.
+    final_score: 0
+    keywords:
+      - no MCP
+      - full-text search
+      - no recommendation
+      - install by copy
+    also_fits:
+      - project:positioning
+    decision: {state: candidate}
+
   - key: fuzzy-search-as-recommendation
     domains:
       - skill-recommendation
@@ -280,10 +422,16 @@ lessons:
       no no-skill decision beyond an empty result.
     notable: >-
       Shows the floor the host is designed above: the host resolver has explicit no_skill,
-      needs_context and ambiguity outcomes with reason codes.
+      needs_context and ambiguity outcomes with reason codes and absolute floors. skillport
+      makes "always something" a stated principle: its threshold is relative to the top hit
+      (keep rows with score/top >= 0.2), so the best match always survives however weak, and
+      an empty FTS result falls back to a substring scan with a fixed score 0.1.
     where:
       - skills-mcp@dc3dda4f8660:src/search.ts#L6-L22
       - skills-mcp@dc3dda4f8660:src/index.ts#L246-L280
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/modules/indexing/internal/search_service.py#L96-L106
+      - skillport@51334ae94919:guide/philosophy.md#L226-L236
     contrast: already-covered
     host: internal/resolver/types.go
     score:
@@ -330,12 +478,23 @@ lessons:
       lexical search fell back to a substring scan; a later commit restored Tantivy BM25
       because the "lexical" half "carried no real BM25 signal".
     notable: >-
-      A ranking channel can degrade to near-noise with every command still succeeding. The
-      host guards this with routing evals and a CI gate on precision, which is the mechanism
-      that would catch it.
+      A ranking channel can degrade to near-noise with every command still succeeding.
+      skillport shows two more forms: scores were clamped to [0,1], so every BM25 score
+      above 1 became 1.0 and ranking among strong matches was lost until a fix restored raw
+      scores; and its chain vector -> FTS -> substring catches every failure and only prints
+      to stderr, so an FTS index that failed to build silently turns search into a substring
+      scan. The host guards this with routing evals and a CI gate on precision.
     where:
       - meta-skill@7650d0b9dd9e
       - meta-skill@73020b1efa2b
+      - iflytek-skillhub@a463efb5352e:docs/04-search-architecture.md#L116-L120
+      - skillport@9e04d26366e3
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/modules/indexing/internal/search_service.py#L69-L94
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/modules/indexing/internal/search_service.py#L145-L150
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/modules/indexing/internal/lancedb.py#L258-L265
     contrast: already-covered
     host: .github/workflows/evaluation.yml
     score:
@@ -345,4 +504,98 @@ lessons:
       evidence: 2
       effort: 1
       why: Already covered by the host routing eval gate.
+    decision: {state: candidate}
+
+  - key: name-path-substring-search
+    domains:
+      - skill-recommendation
+    layer: content
+    what: >-
+      search_skills scores each skill by substring matches of query tokens in its folder
+      name and path (10 each), +25 when the whole query is inside the name and +15 for a
+      name prefix; descriptions are never read, and the scaffold tool reuses the same score.
+      README presents the server as the cure for noise like `rust` matching inside `trust`,
+      yet the `token in haystack` substring test matches exactly that.
+    notable: >-
+      A name-only, substring scorer cannot tell what a skill does and leaks across word
+      boundaries, which is exactly the "wrong skill" failure. The host searches frontmatter
+      descriptions with FTS terms and returns explicit resolved, needs_context and no_skill
+      outcomes.
+    where:
+      - pinkpixel-agentskills@47049d9635c5:src/github_skills_mcp/server.py#L336-L357
+      - pinkpixel-agentskills@47049d9635c5:README.md#L45-L45
+      - pinkpixel-agentskills@47049d9635c5:README.md#L184-L184
+    contrast: already-covered
+    host: internal/resolver/sqlite_catalog.go
+    score:
+      relevance: 3
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered by description FTS and resolver outcomes.
+    keywords:
+      - score
+      - matched_terms
+      - substring
+    decision: {state: candidate}
+
+  - key: reject-underspecified-request
+    domains:
+      - skill-recommendation
+      - ux
+    layer: wording
+    what: >-
+      Every tool input is a pydantic model with extra="forbid", whitespace stripping and
+      bounded lengths and limits; the scaffold request must have at least two words,
+      otherwise "Provide a slightly more descriptive request so the server can ground the
+      scaffold."
+    notable: >-
+      Schema-level bounds and a refusal that says what to add. The host's resolver answers a
+      vague task with needs_context and typed inputs, a richer form of the same idea.
+    where:
+      - pinkpixel-agentskills@47049d9635c5:src/github_skills_mcp/server.py#L113-L127
+      - pinkpixel-agentskills@47049d9635c5:src/github_skills_mcp/server.py#L171-L176
+    contrast: already-covered
+    host: internal/resolver/types.go
+    score:
+      relevance: 3
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered by the needs_context outcome.
+    decision: {state: candidate}
+
+  - key: search-and-install-disagree
+    domains:
+      - skill-recommendation
+      - skill-over-mcp
+    layer: content
+    what: >-
+      The design records a product limit. Search indexes one document per skill from the
+      latest published version, so a user who installs by tag (`@beta`) may get content that
+      differs from what search showed. Channel-aware search would need a version-level
+      index.
+    notable: >-
+      When the discovery index and the delivery path read different versions, the
+      recommendation describes content the agent never loads. The host avoids this: resolve
+      and skills/get read the same catalog snapshot, and snapshot_expired signals a change.
+      Recorded as confirmation of that design.
+    where:
+      - iflytek-skillhub@a463efb5352e:docs/04-search-architecture.md#L91-L104
+    contrast: already-covered
+    host: internal/catalog/servable.go
+    score:
+      relevance: 3
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered by one snapshot for resolve and serving.
+    keywords:
+      - search document
+      - tag install
+      - channel-aware search
+      - version-level index
     decision: {state: candidate}

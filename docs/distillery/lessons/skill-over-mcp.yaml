@@ -16,13 +16,17 @@ lessons:
       unanswerable ones leaking).
     notable: >-
       The cost of an MCP server to every agent is its tools/list, not only the skills it
-      serves. Measured on this host (skillhub mcp serve, 2026-10-08): 43 tools, 243 KB of
-      JSON, about 60k tokens, of which 194 KB are outputSchemas and 2k tokens descriptions;
-      source_triage alone is 15 KB. A client without tool deferral pays that in every
-      session, and most of it is curation tooling an ordinary task never calls.
+      serves. Re-measured on this host 2026-10-13 (TestToolsListSize): all tools 118 KB (76%
+      outputSchema); the runtime profile that `connect` installs is 3 tools and 16.6 KB
+      (~4.2k tokens), 61% of it outputSchema, and the test asserts only the tool count, not
+      a byte budget. skillport, independently, serves skills with 2 tools whose descriptions
+      total ~830 characters and whose results are untyped dicts, a few KB in all; the
+      remaining host gap is output schemas and the resolve input schema, not tool count.
     where:
       - tech-leads-club@85dd32647899
       - tech-leads-club@120b67676388:packages/mcp/src/tools/search-tool.ts#L7-L10
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/interfaces/mcp/tools.py#L23-L75
     contrast: new
     host: internal/delivery/mcpserver/server.go
     score:
@@ -34,15 +38,67 @@ lessons:
         - d
         - e
       impact: 5
-      evidence: 2
+      evidence: 3
       effort: 2
       why: >-
-        Core of the goal (adding capability must not grow the agent's base context). a:
-        measured 60k-token tools/list today; b: no budget or test on it; c: every session of
-        every agent; d: lands as a size-budget test and a separate curation profile; e:
-        silent, and the source measured its own fix. One source with measurements; a medium
-        change.
-    final_score: 15
+        Core. a: runtime tools/list still 16.6 KB per session; b: no byte budget asserted;
+        c: every session; d: a size-budget assertion in tools_size_test.go; e: silent, and
+        tech-leads-club measured its own cut. Evidence 3: tech-leads-club and skillport
+        reached a minimal-description runtime surface independently.
+    final_score: 22.5
+    decision: {state: candidate}
+
+  - key: entrypoint-length-budget-lint
+    domains:
+      - skill-over-mcp
+      - curation
+    layer: content
+    what: >-
+      The guide sets a hard budget for the loaded body: SKILL.md under 500 lines / ~5000
+      tokens (L2), name+description ~100 tokens (L1), resources loaded only when referenced
+      and only one reference level deep from SKILL.md; Phase 7 repeats these as the
+      deploy-time validation checklist and Phase 6 gives an order for what to cut when over
+      budget.
+    notable: >-
+      The context cost of a skill is set at authoring time by how long its entrypoint is,
+      because a client loads SKILL.md whole. The source keeps the rule as prose for the
+      agent; the transferable mechanism is to make it a lint/readiness warning (entrypoint
+      lines or estimated tokens over a threshold; a reference file that links to another
+      reference). Trade-off: a threshold is a heuristic and some reference skills
+      legitimately run long, so it should warn, not refuse. For this host,
+      ValidateServableSkill only checks name, description and the 16 MiB / 512-resource
+      ceilings, so a 3,000-line SKILL.md activates and is loaded whole on every pick.
+    where:
+      - skill-forge-mcp@3211174026e6:src/content/phase_0.md#L51-L59
+      - skill-forge-mcp@3211174026e6:src/content/phase_6.md#L41-L59
+      - skill-forge-mcp@3211174026e6:src/content/phase_7.md#L39-L51
+    contrast: new
+    host: internal/catalog/servable.go
+    score:
+      relevance: 3
+      facts:
+        - a
+        - b
+        - c
+        - d
+      impact: 4
+      evidence: 1
+      effort: 1
+      why: >-
+        Core (load only what the task needs). a: the host activates and serves an entrypoint
+        of any length and the agent loads it whole (failure "loads too much content"); b: no
+        length or reference-depth rule in servable.go, lint.go or checkActivationReadiness;
+        c: applies to every skill load; d: lands as a lint finding / readiness warning. One
+        source (a guide, not measured).
+    final_score: 12
+    keywords:
+      - 500 lines
+      - 5000 tokens
+      - progressive disclosure
+      - one level deep
+      - L1 L2 L3
+    also_fits:
+      - skill:system-curator
     decision: {state: candidate}
 
   - key: listing-frontmatter-verbatim
@@ -103,12 +159,20 @@ lessons:
       slices that are never dropped.
     notable: >-
       Context cost becomes a parameter the server enforces instead of a property of how long
-      the author wrote SKILL.md. The trade-off is a slice structure every skill must carry.
-      The host discloses by file (manifest, then SKILL.md, then one resource at a time) but
-      always serves a whole SKILL.md.
+      the author wrote SKILL.md. Two designs now: meta_skill packs typed slices under a
+      token budget (needs a slice schema in every skill); skill-forge-mcp serves a single
+      section through a resource template whose name→heading index lives in a manifest, with
+      "overview" = text before the first ### and a batch template for several at once. The
+      section form costs no new skill format (headings already exist) but drifts silently: a
+      renamed heading is only found when a request fails with an internal error, so a host
+      adopting it should derive the section index from the file at build time instead of a
+      hand-kept manifest. The host discloses by file and always serves a whole SKILL.md.
     where:
       - meta-skill@e999668e8d8c:src/core/disclosure.rs#L20-L50
       - meta-skill@e999668e8d8c:src/core/packing.rs#L10-L50
+      - skill-forge-mcp@3211174026e6:src/index.ts#L81-L162
+      - skill-forge-mcp@3211174026e6:src/content.ts#L31-L83
+      - skill-forge-mcp@3211174026e6:src/content/manifest.json#L12-L30
     contrast: extends
     host: internal/delivery/mcpserver/server.go
     score:
@@ -119,13 +183,69 @@ lessons:
         - c
         - d
       impact: 4
-      evidence: 1
+      evidence: 2
       effort: 3
       why: >-
-        Core of the goal (load only what the task needs). a: a long SKILL.md is loaded whole
-        even when a section suffices; b: no token budget exists; c: every skill load; d: the
-        server can enforce the budget. One source; restructures the skill format.
-    final_score: 4
+        Core of the goal. a: a long SKILL.md is loaded whole even when a section suffices;
+        b: no sub-file disclosure; c: every skill load; d: the server can serve and enforce
+        it. Evidence 2: a second independent source reached sub-file disclosure. Effort 2
+        for the heading-section form (no new skill format), 3 for slice packing.
+    final_score: 8
+    decision: {state: candidate}
+
+  - key: server-instructions-carry-the-protocol
+    domains:
+      - skill-over-mcp
+      - host-integration
+    layer: content
+    what: >-
+      skillport sends its usage protocol in the MCP server `instructions` field
+      (<skills_system>: workflow search -> load -> read, tool list, tips such as "execute
+      scripts via path, don't read them into context"), built at startup from the list of
+      tools actually registered for the transport, and appends always-on core skills. Tests
+      assert the instructions mention read_skill_file only when that tool exists.
+    notable: >-
+      The protocol travels with the server, so connecting the MCP server is the whole
+      install: no per-project instruction file, and the text can never disagree with the
+      running binary's tools. The host does the opposite: mcp.ServerOptions carries no
+      Instructions, and `connect` writes a versioned bootstrap block (~3 KB) into CLAUDE.md
+      / AGENTS.md / GEMINI.md, which `doctor --fix` must refresh when it goes stale; in this
+      very session the same block is loaded twice, from ~/.claude/CLAUDE.md and from the
+      project CLAUDE.md. Trade-offs: some clients ignore or truncate server instructions
+      (the host's file block works without client support), and a user cannot tune server
+      instructions per project. For the selling point "nothing to install per project",
+      server instructions are the zero-file channel; a sensible shape is both, with the file
+      block reduced to a pointer.
+    where:
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/interfaces/mcp/instructions.py#L17-L91
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/interfaces/mcp/server.py#L34-L69
+      - skillport@51334ae94919:tests/unit/test_transport_mode.py#L29-L90
+    contrast: new
+    host: internal/delivery/mcpserver/server.go
+    score:
+      relevance: 3
+      facts:
+        - a
+        - b
+        - c
+        - d
+      impact: 4
+      evidence: 1
+      effort: 2
+      why: >-
+        Core (skills over MCP with nothing installed per project). a: the host's protocol
+        lives only in per-project/global instruction files that drift and need doctor --fix,
+        and here loads twice; b: server.go sets no Instructions; c: every connected project
+        and session; d: generated from the tool registry and asserted by a test. One source;
+        a new channel plus trimming the bootstrap block.
+    final_score: 6
+    keywords:
+      - instructions
+      - skills_system
+      - server instructions
+      - bootstrap
     decision: {state: candidate}
 
   - key: stable-skill-uri-for-recovery
@@ -138,14 +258,15 @@ lessons:
       change costs one entry instead of re-enumerating a catalog of thousands. A skill's
       identity across hosts is server plus uri.
     notable: >-
-      That recovery assumes the skill keeps its URI across versions. The host puts the
-      manifest digest in the URI (skill://skillhub/<manifest>/<name>/SKILL.md) and answers
-      skills/get for an old URI with snapshot_expired, so a client must re-list everything,
-      and every version is a new identity in its registry and approvals. The trade-off is
-      the host's snapshot pinning, which the human may prefer to keep.
+      saker separates identity from version the same way: a skill is addressed by a stable
+      registry id or slug, and the digest is an optional pin parameter; a pin that no longer
+      matches is refused, but the identity still resolves to the current version (and
+      plugins gained resolution by stable id in the latest commit).
     where:
       - ext-skills@167da6c0d42c:specification/stable/skills.mdx#L447-L452
       - ext-skills@167da6c0d42c:docs/rationale.md#L35-L43
+      - saker-skillhub@6a0a5538257b:pkg/handler/runtime_skill_handler.go#L290-L318
+      - saker-skillhub@6a0a5538257b
     contrast: contradicts
     host: internal/app/distribution.go
     score:
@@ -162,6 +283,127 @@ lessons:
         the spec's recovery path fails after any update; b: no stable alias; c: every skill
         update. Contradicts a deliberate pinning design; a URI scheme change.
     final_score: 3
+    decision: {state: candidate}
+
+  - key: always-apply-core-skills
+    domains:
+      - skill-over-mcp
+      - skill-recommendation
+    layer: content
+    what: >-
+      A skill marked `metadata.skillport.alwaysApply: true` becomes a Core Skill: its id,
+      description and SKILL.md location are listed in the server instructions of every
+      session, outside search. SKILLPORT_CORE_SKILLS_MODE per client chooses auto (honour
+      alwaysApply), explicit (only SKILLPORT_CORE_SKILLS ids) or none ("lighter context").
+    notable: >-
+      The skill analogue of non-deferred tools: a few procedures that must always be in view
+      skip retrieval. The cost is that base context grows with every core skill, and in auto
+      mode the flag comes from the skill's own frontmatter, so a skill added from any GitHub
+      repo can promote itself into every client's instructions. The host has no always-on
+      tier (its goal names "adding skills grows the agent's base context" as a failure); if
+      it ever adds one, the switch belongs to the curator per connection, never to
+      third-party frontmatter.
+    where:
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/interfaces/mcp/instructions.py#L70-L86
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/modules/indexing/public/query.py#L23-L47
+      - skillport@51334ae94919:guide/configuration.md#L130-L156
+    contrast: new
+    host: internal/resolver/resolver.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 2
+      why: >-
+        peripheral: conflicts with the base-context goal; recorded mainly for the trust
+        point (third-party frontmatter must not choose always-on). No host failure.
+    final_score: 0
+    keywords:
+      - alwaysApply
+      - core skills
+      - core_skills_mode
+    decision: {state: candidate}
+
+  - key: per-client-skill-filter
+    domains:
+      - skill-over-mcp
+      - skill-recommendation
+    layer: content
+    what: >-
+      One skills directory, several MCP server entries: each client's entry sets
+      SKILLPORT_ENABLED_SKILLS, _NAMESPACES or _CATEGORIES (first non-empty wins), applied
+      as a WHERE prefilter on search and as a check on load and read, so a filtered-out
+      skill is "not found" to that client.
+    notable: >-
+      "Same skill repository, different views per client" narrows retrieval before ranking
+      and keeps writing skills away from a coding agent. The host has collection ids and PRD
+      §23 defines collections as "filter / authorization / search scope", but no
+      per-connection scope exists; connect could write one into each project's server entry.
+      Trade-off: filtering by env per server entry multiplies config entries.
+    where:
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/shared/filters.py#L16-L48
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/modules/indexing/internal/lancedb.py#L46-L67
+      - skillport@51334ae94919:guide/philosophy.md#L180-L213
+    contrast: extends
+    host: internal/resolver/types.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 2
+      why: >-
+        peripheral: a scope narrowing for large libraries; the host has no measured
+        wrong-domain recommendation yet, so fact a does not hold. b: PRD §23 scope
+        unimplemented; d: lands as a connection-level filter. Facts b/d would hold once the
+        host has a concrete failure (fact a).
+    final_score: 0
+    keywords:
+      - enabled_categories
+      - enabled_namespaces
+      - enabled_skills
+      - collections
+    decision: {state: candidate}
+
+  - key: batch-resolve-per-item-errors
+    domains:
+      - skill-over-mcp
+    layer: content
+    what: >-
+      POST /api/runtime/skills/resolve takes up to 100 refs (id or slug, optional version
+      and digest) and returns one result per input index, each with either the skill or its
+      own error object, so one bad ref does not fail the batch. GET
+      /api/runtime/capabilities announces a dated API version ("2026-06-17") and which
+      features exist.
+    notable: >-
+      Useful when a client restores many pinned skills at session start (one round trip,
+      partial success). peripheral: the host's agents resolve and load one skill per task,
+      and MCP initialize already negotiates capabilities, so the batch form has no current
+      consumer.
+    where:
+      - saker-skillhub@6a0a5538257b:pkg/handler/runtime_skill_handler.go#L41-L89
+      - saker-skillhub@6a0a5538257b:pkg/handler/runtime_skill_handler.go#L353-L370
+    contrast: new
+    host: internal/delivery/mcpserver/skill_tools.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 2
+      why: 'peripheral: no host flow loads many pinned skills at once today; no failure to cite.'
+    final_score: 0
+    keywords:
+      - resolve
+      - refs
+      - include
+      - capabilities
+      - runtimeSkills
     decision: {state: candidate}
 
   - key: directory-read-for-deferred-files
@@ -215,26 +457,33 @@ lessons:
       tech-leads-club bounded fetch_skill_files to 5 paths and a 50,000-character response
       that names what it truncated, because one unbounded call "could exceed the ~25k-token
       cap agents apply to tool responses and cost the turn"; it also strips frontmatter from
-      read_skill because search already delivered it.
+      read_skill because search already delivered it. pinkpixel-agentskills independently
+      bounds get_skill by max_files (default 12, at most 50), max_chars_per_file (default
+      5000) and a 25,000-character response limit, and reports total_files_in_skill and
+      truncated_file_count.
     notable: >-
-      Stripping frontmatter is not open to the host: the skills extension requires verbatim
-      bytes so clients can verify digests. The bound matters only if a host serves large
-      references; one file per resources/read and a 16 MiB skill cap make it unmeasured
-      here.
+      Two independent servers that return a whole skill in one tool call arrived at the same
+      ~25k response bound. Stripping frontmatter is not open to the host: the skills
+      extension requires verbatim bytes so clients can verify digests. The bound matters
+      only if a host serves large references in one call; one file per resources/read and a
+      16 MiB skill cap make it unmeasured here.
     where:
       - tech-leads-club@568582cae974
       - tech-leads-club@120b67676388:packages/mcp/src/tools/core/fetcher.ts#L9-L12
+      - pinkpixel-agentskills@47049d9635c5:src/github_skills_mcp/server.py#L130-L141
+      - pinkpixel-agentskills@47049d9635c5:src/github_skills_mcp/server.py#L512-L550
     contrast: contradicts
     host: internal/app/distribution.go
     score:
       relevance: 2
       facts: []
       impact: 0
-      evidence: 2
+      evidence: 3
       effort: 1
       why: >-
         In scope. peripheral: the host serves one verified file per read as the spec
-        requires; no measured oversized read. Measured in the source.
+        requires; no measured oversized read. Two independent sources converge, one
+        measured.
     final_score: 0
     decision: {state: candidate}
 
@@ -246,25 +495,75 @@ lessons:
       tech-leads-club's MCP served only files under scripts/, references/ and assets/, while
       the registry declared more: 76 files in 5 skills (59 in one) were unreachable over MCP
       although the CLI installed them. The fix: a bundled file is anything the registry
-      declares, "a folder-name convention is not the contract".
+      declares, "a folder-name convention is not the contract". pinkpixel-agentskills shows
+      the opposite error from the same convention: it derives a skill's files by directory
+      prefix, and when SKILL.md sits at the repository root both branches of its filter
+      append every path, so get_skill and install_skill of a root-level skill take the whole
+      repository.
     notable: >-
-      Two consumers of one catalog must agree on what a skill contains. The host builds its
-      resources set from the files it indexes; this pass did not verify which files it
-      excludes.
+      A file set inferred from folder layout fails in both directions (files missing, or the
+      whole repo included). Two consumers of one catalog must agree on what a skill
+      contains. The host builds its resources set from the files it indexes; this pass did
+      not verify which files it excludes or how it scopes a root-level skill.
     where:
       - tech-leads-club@4805b5e60654
       - tech-leads-club@120b67676388:packages/mcp/src/utils.ts#L5-L16
+      - pinkpixel-agentskills@47049d9635c5:src/github_skills_mcp/server.py#L392-L403
     contrast: new
     score:
       relevance: 3
       facts: []
       impact: 0
-      evidence: 2
+      evidence: 3
       effort: 1
       why: >-
         Core domain, but the host's inclusion rule was not verified in this pass (no fact
-        a).
+        a). Two independent sources show the convention failing.
     final_score: 0
+    decision: {state: candidate}
+
+  - key: setup-automation-tried-and-dropped
+    domains:
+      - skill-over-mcp
+      - trust-safety
+    layer: history
+    what: >-
+      skillport added skill readiness checks and automated setup (detect uv.lock,
+      pyproject.toml, requirements.txt, package-lock.json... and run uv sync / npm ci / pip
+      install into the skill folder, with --setup-list and --setup-auto flags) and removed
+      it three hours later, replacing it with running Python through `uv run` so PEP 723
+      inline dependencies install at execution; the indexer still strips runtime /
+      requires_setup / env_version keys.
+    notable: >-
+      The source judged per-skill dependency setup not worth its weight and moved the burden
+      to self-contained scripts; no reason beyond "simplified" is recorded. The host chose
+      the opposite: skill runtime blocks with a preflight check the agent runs and a setup
+      the user approves, installed into a per-skill state directory. Worth knowing when
+      weighing that subsystem's cost; inline-dependency scripts are a lighter path the host
+      could recommend for authors.
+    where:
+      - skillport@ea8b74fe69a0
+      - skillport@65fd58c78cd5
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/modules/indexing/internal/lancedb.py#L96-L108
+    contrast: contradicts
+    host: internal/skillruntime/checks.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: >-
+        peripheral: a design counterpoint with no stated reason or data; no host failure
+        shown.
+    final_score: 0
+    keywords:
+      - setup
+      - readiness
+      - uv run
+      - PEP 723
+      - requires_setup
     decision: {state: candidate}
 
   - key: handshake-reads-sidecar
@@ -325,6 +624,44 @@ lessons:
       why: Already covered by the host's v1 implementation.
     decision: {state: candidate}
 
+  - key: digest-pinned-immutable-reads
+    domains:
+      - skill-over-mcp
+      - trust-safety
+    layer: content
+    what: >-
+      The runtime API builds a manifest per version (entrypoint, files sorted by path with
+      size and sha256, dependencies) and a manifest digest over its canonical JSON. A caller
+      may pass digest=; a mismatch is refused, a pinned read is served Cache-Control
+      immutable for a year, an unpinned one private for 5 minutes, and each file carries
+      ETag sha256:<hex> with 304 on If-None-Match. A yanked version answers 410 Gone.
+    notable: >-
+      Content addressing makes caching and integrity the same mechanism: the pin is the
+      cache key. The host does the same over MCP (manifest digest as ETag, 304 for held
+      digests, deterministic bundles), so this is independent confirmation, not a gap.
+    where:
+      - saker-skillhub@6a0a5538257b:pkg/handler/runtime_skill_handler.go#L156-L205
+      - saker-skillhub@6a0a5538257b:pkg/handler/runtime_skill_handler.go#L445-L502
+      - saker-skillhub@6a0a5538257b:pkg/handler/runtime_skill_handler.go#L642-L647
+    contrast: already-covered
+    host: internal/delivery/mcpserver/distribution.go
+    score:
+      relevance: 3
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: >-
+        Core (serving skills with integrity); host already does digest-pinned bundles with
+        ETag/304.
+    keywords:
+      - manifestDigest
+      - ETag
+      - If-None-Match
+      - immutable
+      - X-Saker-Skill-Digest
+    decision: {state: candidate}
+
   - key: fetch-by-branch-unpinned
     domains:
       - skill-over-mcp
@@ -334,12 +671,208 @@ lessons:
       skills-mcp records each source's commit in the catalog, but get_skill and
       install_skill fetch from the branch name (falling back to master and main), so the
       content served can differ from what was indexed, with no digest check.
+      pinkpixel-agentskills caches each repo's recursive tree per process keyed by (owner,
+      repo, branch name) and never refreshes it, while file bodies come live from
+      raw.githubusercontent.com at the branch, so a long-running server lists files from one
+      revision and serves bodies from another.
     notable: >-
-      Shows why the host pins: it serves manifest-versioned, per-file digested content and
-      refuses a digest mismatch.
+      skillport makes it a stated trade-off ("No version lock | Manual updates |
+      Simplicity"): a URL without a ref resolves the default branch (falling back to "main"
+      on any API error), and update always fetches that branch's latest tarball; the commit
+      SHA is recorded only after the fact, parsed from the tarball root name.
     where:
       - skills-mcp@dc3dda4f8660:src/catalog.ts#L96-L104
       - skills-mcp@dc3dda4f8660:src/fetcher.ts#L18-L33
+      - pinkpixel-agentskills@47049d9635c5:src/github_skills_mcp/server.py#L287-L300
+      - pinkpixel-agentskills@47049d9635c5:src/github_skills_mcp/server.py#L387-L389
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/modules/skills/internal/github.py#L107-L163
+      - skillport@51334ae94919:guide/philosophy.md#L297-L302
+    contrast: already-covered
+    host: internal/app/distribution.go
+    score:
+      relevance: 3
+      facts: []
+      impact: 0
+      evidence: 3
+      effort: 1
+      why: >-
+        Already covered by digest-pinned distribution; two independent sources show the
+        failure.
+    decision: {state: candidate}
+
+  - key: four-tool-progressive-loading
+    domains:
+      - skill-over-mcp
+    layer: content
+    what: >-
+      Skills are exposed only as four MCP tools: load_skill_metadata (catalog), load_skill
+      (whole SKILL.md), read_reference_file (one named file, "only when explicitly
+      required"), run_shell_command (run a script so only its output enters context). No
+      resources, prompts or skills extension, so any function-calling model can use them;
+      the demo drives Qwen.
+    notable: >-
+      Tools-only delivery reaches clients that ignore resources, at the cost of no digests,
+      no listing/approval contract and plain-text results. The host already layers the same
+      three read steps (resolve or list, SKILL.md, one resource at a time) over both the
+      skills extension and its skill_get tool, with verified content.
+    where:
+      - zouyingcao-agentskills@32589389aacf:docs/tools.md#L1-L4
+      - zouyingcao-agentskills@32589389aacf:README.md#L212-L218
+      - zouyingcao-agentskills@32589389aacf:tests/skill_agent_prompt.py#L11-L18
+    contrast: already-covered
+    host: internal/delivery/mcpserver/skill_tools.go
+    score:
+      relevance: 3
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered by skills/get, resources/read and skill_get.
+    keywords:
+      - load_skill_metadata
+      - load_skill
+      - read_reference_file
+      - progressive disclosure
+    decision: {state: candidate}
+
+  - key: heavy-fields-behind-include-flag
+    domains:
+      - skill-over-mcp
+    layer: history
+    what: >-
+      The agent skill detail endpoint always embeds the full SKILL.md; adding the version's
+      file list to it was reverted the same day. The later runtime API returns name, version
+      and digest by default and adds the manifest or SKILL.md only when the caller asks with
+      include=manifest,skillMd.
+    notable: >-
+      Progressive disclosure expressed as an explicit opt-in per call rather than a fixed
+      rich payload; the revert is the source backing away from growing the default response.
+      The host already splits listing, skill_get and resource reads, so this confirms its
+      design.
+    where:
+      - saker-skillhub@6a0a5538257b:pkg/handler/agent_skill_handler.go#L91-L118
+      - saker-skillhub@6a0a5538257b:pkg/handler/runtime_skill_handler.go#L320-L351
+      - saker-skillhub@693c36ca6399
+      - saker-skillhub@fd02d0a96af7
+    contrast: already-covered
+    host: internal/delivery/mcpserver/skill_tools.go
+    score:
+      relevance: 3
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Core (context budget of what an agent loads); host already discloses progressively.
+    keywords:
+      - include
+      - skillMd
+      - manifest
+      - detail
+      - revert
+    decision: {state: candidate}
+
+  - key: index-snapshot-served-until-restart
+    domains:
+      - skill-over-mcp
+      - storage
+    layer: craft
+    what: >-
+      The MCP server decides at startup whether to reindex by comparing a stored state
+      (schema version, embedding provider and model, and a SHA-256 over every SKILL.md's
+      path, mtime, size and SHA-1) and prints the reason (no_state, schema_changed,
+      provider_changed, model_changed, hash_changed, unchanged). load_skill then serves the
+      SKILL.md body stored in the LanceDB row, so an edit or `skillport add` while the
+      server runs is invisible until restart; supporting files are not in the hash. "Hot
+      reload" is listed as avoided.
+    notable: >-
+      Named reindex reasons make staleness explainable, but a startup-only check serves a
+      stale snapshot for the whole session. The host checks catalog freshness on every open,
+      covering every canonical file, and rebuilds under a lock, so this is recorded as
+      independent agreement on the state signature and contrast on the timing.
+    where:
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/modules/indexing/internal/state.py#L20-L43
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/modules/indexing/internal/state.py#L74-L141
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/interfaces/mcp/server.py#L91-L101
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/modules/skills/public/load.py#L13-L42
+    contrast: already-covered
+    host: internal/catalog/open.go
+    score:
+      relevance: 3
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered by EnsureFreshOrRebuild on every catalog open.
+    keywords:
+      - should_reindex
+      - index_state.json
+      - hash_changed
+      - hot reload
+    decision: {state: candidate}
+
+  - key: latest-is-published-pointer
+    domains:
+      - skill-over-mcp
+      - curation
+    layer: content
+    what: >-
+      `latest` is a reserved, read-only tag (`error.skill.tag.latest.reserved`) that always
+      equals Skill.latestVersionId. That pointer may only reference a PUBLISHED version.
+      Search, install, compat and default download must bind to the projection's
+      publishedVersion and must not derive a "current version" themselves. The pointer moves
+      to the most recently approved version, not the highest version string.
+    notable: >-
+      Every read path agrees on one definition of "what is served". The host has the same
+      rule. Only active skills enter the served catalog, and resolve, skills/list and
+      skills/get all read one snapshot. It is recorded as convergence on a single
+      served-version definition.
+    where:
+      - iflytek-skillhub@a463efb5352e:docs/14-skill-lifecycle.md#L53-L73
+      - iflytek-skillhub@a463efb5352e:docs/14-skill-lifecycle.md#L130-L136
+      - >-
+        iflytek-skillhub@a463efb5352e:server/skillhub-domain/src/main/java/com/iflytek/skillhub/domain/skill/service/SkillTagService.java#L78-L81
+      - >-
+        iflytek-skillhub@a463efb5352e:server/skillhub-domain/src/main/java/com/iflytek/skillhub/domain/skill/service/SkillLifecycleProjectionService.java#L111-L121
+    contrast: already-covered
+    host: internal/catalog/servable.go
+    score:
+      relevance: 3
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered by the active-only served catalog snapshot.
+    keywords:
+      - latest
+      - latestVersionId
+      - publishedVersion
+      - lifecycle projection
+    decision: {state: candidate}
+
+  - key: listed-name-is-not-the-load-key
+    domains:
+      - skill-over-mcp
+    layer: content
+    what: >-
+      The listing finds SKILL.md files recursively and shows each skill's frontmatter name,
+      but load_skill and read_reference_file look for `<skill_dir>/<name>/` directly. A
+      nested skill, or one whose name differs from its folder, is listed but answers "Skill
+      'x' not found". v0.1.2 removed the name-to-directory map that bridged the two.
+    notable: >-
+      The identifier an agent sees in the listing must be the exact key every later call
+      accepts, otherwise discovery succeeds and loading fails. The host lists and fetches by
+      the same skill ID and URI.
+    where:
+      - >-
+        zouyingcao-agentskills@32589389aacf:mcp_agentskills/core/tools/load_skill_metadata_op.py#L165-L184
+      - >-
+        zouyingcao-agentskills@32589389aacf:mcp_agentskills/core/tools/load_skill_op.py#L107-L123
+      - zouyingcao-agentskills@b8da4303caaa
     contrast: already-covered
     host: internal/app/distribution.go
     score:
@@ -348,7 +881,11 @@ lessons:
       impact: 0
       evidence: 1
       effort: 1
-      why: Already covered by digest-pinned distribution.
+      why: Already covered by one ID for listing and fetching.
+    keywords:
+      - skill_name
+      - rglob
+      - skill_metadata_dict
     decision: {state: candidate}
 
   - key: local-index-no-network-search
@@ -375,6 +912,119 @@ lessons:
       why: Already covered; two sources agree.
     decision: {state: candidate}
 
+  - key: naive-frontmatter-split
+    domains:
+      - skill-over-mcp
+    layer: craft
+    what: >-
+      Frontmatter is parsed by splitting the whole file on "---" and reading lines starting
+      with `name:` or `description:`, stripping quotes by hand; a folded or block
+      description (`description: >-`) becomes ">-", and a skill without both fields is
+      dropped with a log warning. load_skill's docstring says frontmatter is stripped, the
+      code returns the whole file.
+    notable: >-
+      skillport is a milder form: it does use a YAML parser, but splits the file on the
+      first two "---" anywhere in the text (a "---" inside a value cuts the block), and a
+      YAML error silently yields {} so the indexer falls back to the folder name and an
+      empty description, which makes the skill unfindable without any error.
+    where:
+      - >-
+        zouyingcao-agentskills@32589389aacf:mcp_agentskills/core/tools/load_skill_metadata_op.py#L100-L131
+      - >-
+        zouyingcao-agentskills@32589389aacf:mcp_agentskills/core/tools/load_skill_op.py#L1-L8
+      - skillport@51334ae94919:packages/skillport-core/src/skillport/shared/utils.py#L15-L35
+    contrast: already-covered
+    host: internal/catalog/servable.go
+    score:
+      relevance: 3
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered by the YAML frontmatter parser.
+    keywords:
+      - frontmatter
+      - split
+      - description
+    decision: {state: candidate}
+
+  - key: name-blind-content-fingerprint
+    domains:
+      - skill-over-mcp
+      - trust-safety
+    layer: history
+    what: >-
+      saker has two fingerprints: plugins hash path and content together, skills hash only
+      the sorted contents and ignore file names, kept "to preserve backward-compatible
+      fingerprints for existing versions". The skill fingerprint is the download ETag and
+      the key of the reverse lookup /api/v1/resolve?fingerprint=.
+    notable: >-
+      A digest that omits paths treats a rename or a swap of two files' roles (say SKILL.md
+      and a reference) as unchanged, so a 304 can confirm a different package. Once clients
+      cache a digest its definition is frozen, which is why the weak one survives next to
+      the fixed one. The host's bundle files carry path and digest and the manifest covers
+      both.
+    where:
+      - saker-skillhub@6a0a5538257b:pkg/service/common.go#L46-L76
+      - saker-skillhub@6a0a5538257b:pkg/handler/download_handler.go#L54-L63
+      - saker-skillhub@6a0a5538257b:pkg/handler/download_handler.go#L147-L169
+    contrast: already-covered
+    host: internal/skillruntime/remote_cache.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: >-
+        peripheral: already covered, host digests include paths. Recorded as the failure the
+        host avoids.
+    keywords:
+      - computeContentFingerprint
+      - computeFingerprint
+      - fingerprint
+      - ETag
+    decision: {state: candidate}
+
+  - key: path-not-content-for-scripts
+    domains:
+      - skill-over-mcp
+    layer: content
+    what: >-
+      load_skill returns the SKILL.md body plus the skill's absolute directory path; the
+      instructions and philosophy say to run scripts as `python {path}/scripts/x.py`
+      ("executing code doesn't require reading code", ~20 tokens instead of ~2,000) and to
+      use the client's own Read tool for templates. Only over HTTP, where the agent has no
+      shared filesystem, is read_skill_file registered (text as UTF-8, binary as base64,
+      65,536-byte cap, path confined by resolve_inside).
+    notable: >-
+      Independent agreement with the host: skill_get returns local.path (a read-only
+      snapshot) and a writable state directory, and the bootstrap tells agents to resolve
+      relative script paths against it. The host goes further for remote hubs by
+      materialising the snapshot locally through the client-side proxy instead of falling
+      back to a file-read tool.
+    where:
+      - skillport@51334ae94919:guide/philosophy.md#L129-L178
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/interfaces/mcp/tools.py#L53-L110
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/modules/skills/public/read.py#L36-L99
+    contrast: already-covered
+    host: internal/delivery/mcpserver/skill_tools.go
+    score:
+      relevance: 3
+      facts: []
+      impact: 0
+      evidence: 2
+      effort: 1
+      why: Already covered by skill_get local.path and the remote snapshot cache.
+    keywords:
+      - load_skill
+      - path
+      - read_skill_file
+      - execute by path
+    decision: {state: candidate}
+
   - key: per-file-digests-cover-supporting-files
     domains:
       - skill-over-mcp
@@ -386,11 +1036,15 @@ lessons:
       complete, per-file resources set, and approval binds to it and is revoked when it
       changes.
     notable: >-
-      Agrees with the host: per-file digests, a manifest over all files, approval bound to a
-      content digest over every file.
+      saker's runtime manifest also lists every file with its own sha256 and digests the
+      whole list, a third independent design that binds identity to all files rather than to
+      SKILL.md.
     where:
       - ext-skills@167da6c0d42c:docs/rationale.md#L67-L71
       - ext-skills@167da6c0d42c:specification/stable/skills.mdx#L869-L876
+      - iflytek-skillhub@a463efb5352e:cli/src/services/skill-fingerprint.ts#L10-L23
+      - iflytek-skillhub@a463efb5352e:cli/src/services/install-service.ts#L119-L127
+      - saker-skillhub@6a0a5538257b:pkg/handler/runtime_skill_handler.go#L445-L502
     contrast: already-covered
     host: internal/skillruntime/trust.go
     score:
@@ -402,6 +1056,40 @@ lessons:
       why: Already covered by digest-bound approval.
     decision: {state: candidate}
 
+  - key: per-session-skill-uri-loading
+    domains:
+      - skill-over-mcp
+      - host-integration
+    layer: ecosystem
+    what: >-
+      The consumer (Saker) loads skills and plugins either globally at runtime start or per
+      session from a request field plugin_uri=plugin://host?slugs=..., decomposing a plugin
+      into session skills, MCP server connections and hooks, cached per thread for 10
+      minutes.
+    notable: >-
+      Per-session loading by URI keeps the base context free of unused skills, the same goal
+      as the host's on-demand skill_get. peripheral: described only in the README; the
+      client code is in another repository and was not read.
+    where:
+      - saker-skillhub@6a0a5538257b:README.md#L177-L203
+    contrast: already-covered
+    host: internal/delivery/mcpserver
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 2
+      why: >-
+        peripheral: README description of a client in another repository; host already loads
+        on demand.
+    keywords:
+      - plugin_uri
+      - skillhub_uri
+      - per-session
+      - thread cache
+    decision: {state: candidate}
+
   - key: per-skill-size-limits
     domains:
       - skill-over-mcp
@@ -409,9 +1097,16 @@ lessons:
     what: >-
       The spec fixes per-skill limits every host must accept: 512 resources and 16 MiB
       total; servers should not serve skills above them.
-    notable: The host already caps a distributed skill at 16 MiB.
+    notable: >-
+      The host already caps a distributed skill at 16 MiB. Another source limits file count,
+      file size and package size (500, 10 MB and 100 MB), plus YAML aliases (20), nesting
+      depth (20) and frontmatter size (200k code points).
     where:
       - ext-skills@167da6c0d42c:specification/stable/skills.mdx#L227-L241
+      - >-
+        iflytek-skillhub@a463efb5352e:server/skillhub-domain/src/main/java/com/iflytek/skillhub/domain/skill/validation/SkillPackagePolicy.java#L18-L20
+      - >-
+        iflytek-skillhub@a463efb5352e:server/skillhub-domain/src/main/java/com/iflytek/skillhub/domain/skill/metadata/SkillMetadataParser.java#L17-L20
     contrast: already-covered
     host: internal/catalog/servable.go
     score:
@@ -447,4 +1142,72 @@ lessons:
       evidence: 2
       effort: 1
       why: Already covered; two sources agree on staging verified copies.
+    decision: {state: candidate}
+
+  - key: structured-output-and-tool-annotations
+    domains:
+      - skill-over-mcp
+    layer: craft
+    what: >-
+      Every tool returns both a text block and structuredContent matching a zod
+      outputSchema, and declares readOnlyHint, idempotentHint, destructiveHint and
+      openWorldHint.
+    notable: >-
+      Same pattern as the host, which declares annotations in tool_registration.go and
+      output schemas in schema_shaping.go. Note the cost side recorded in
+      tools-list-is-a-fixed-cost: output schemas dominate the host's tools/list size.
+    where:
+      - skill-forge-mcp@3211174026e6:src/index.ts#L166-L212
+    contrast: already-covered
+    host: internal/delivery/mcpserver/tool_registration.go
+    score:
+      relevance: 3
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered.
+    keywords:
+      - outputSchema
+      - structuredContent
+      - readOnlyHint
+    decision: {state: candidate}
+
+  - key: transport-shaped-tool-set
+    domains:
+      - skill-over-mcp
+      - host-integration
+    layer: craft
+    what: >-
+      The registered tools depend on transport: stdio registers search_skills and
+      load_skill; HTTP adds read_skill_file because a remote agent cannot read the path. One
+      helper (_get_registered_tools_list) feeds both registration and the generated
+      instructions, and the startup log prints the mode and tool list.
+    notable: >-
+      Offering a tool only where it is needed keeps the local surface minimal. The host
+      reaches the same end differently: one tool set per profile, and remote hubs are
+      reached through a local proxy that gives the agent a real local.path, so no file-read
+      tool is needed. Recorded as agreement on the goal, not the mechanism.
+    where:
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/interfaces/mcp/server.py#L34-L46
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/interfaces/mcp/tools.py#L77-L112
+      - skillport@51334ae94919:tests/integration/test_mcp_server.py#L75-L116
+    contrast: already-covered
+    host: internal/delivery/mcpserver/tool_registration.go
+    score:
+      relevance: 2
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: >-
+        peripheral: the host already has runtime/curation profiles and a proxy for remote
+        hubs; this is an alternative mechanism for the same budget.
+    keywords:
+      - is_remote
+      - read_skill_file
+      - stdio
+      - http
     decision: {state: candidate}

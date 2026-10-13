@@ -30,6 +30,76 @@ lessons:
     final_score: 0
     decision: {state: candidate}
 
+  - key: markdown-or-json-tool-output
+    domains:
+      - ux
+      - skill-over-mcp
+    layer: craft
+    what: >-
+      Each read tool takes response_format markdown (default; tables and fenced file bodies)
+      or json, and returns a plain string; no tool declares an outputSchema.
+    notable: >-
+      A string result keeps tools/list tiny (no output schemas) and lets the default be the
+      cheaper human-readable form; the trade-off is no structured content for clients that
+      validate results. Relevant only as a data point next to tools-list-is-a-fixed-cost,
+      where most of the host's 243 KB tools/list is outputSchemas.
+    where:
+      - pinkpixel-agentskills@47049d9635c5:src/github_skills_mcp/server.py#L104-L110
+      - pinkpixel-agentskills@47049d9635c5:src/github_skills_mcp/server.py#L538-L550
+    contrast: contradicts
+    host: internal/delivery/mcpserver/schema_shaping.go
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 2
+      why: >-
+        peripheral: output format; the tools/list cost it touches is already a ranked
+        lesson.
+    final_score: 0
+    keywords:
+      - response_format
+      - markdown table
+    decision: {state: candidate}
+
+  - key: not-found-lists-valid-names
+    domains:
+      - ux
+      - skill-over-mcp
+    layer: wording
+    what: >-
+      An unknown section name throws JSON-RPC -32002 with data.availableSections and, when
+      an edit distance of 3 or less matches, data.suggestion "Did you mean 'frontmatter'?";
+      out-of-range phase ids say the valid range.
+    notable: >-
+      skillport's load_skill accepts an id or a frontmatter name; a name shared by several
+      skills raises "Ambiguous skill name 'x'. Specify full id. Candidates: a/x, b/x"
+      instead of picking one.
+    where:
+      - skill-forge-mcp@3211174026e6:src/content.ts#L46-L66
+      - skill-forge-mcp@3211174026e6:src/content.ts#L85-L122
+      - >-
+        skillport@51334ae94919:packages/skillport-core/src/skillport/modules/indexing/internal/lancedb.py#L308-L326
+    contrast: extends
+    host: internal/delivery/mcpserver/rpc_errors.go
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: >-
+        Adjacent (agent ergonomics). No concrete goal failure: the host already names the
+        recovery call, so fact a does not hold.
+    final_score: 0
+    keywords:
+      - availableSections
+      - Did you mean
+      - levenshtein
+      - '-32002'
+    decision: {state: candidate}
+
   - key: derive-published-values
     domains:
       - ux
@@ -56,6 +126,198 @@ lessons:
     final_score: 0
     decision: {state: candidate}
 
+  - key: skillhub-name-was-abandoned
+    domains:
+      - ux
+    layer: ecosystem
+    what: >-
+      skillport started as `skillhub_mcp` with a `skillhub add` command and ~/.skillhub/
+      home, then was renamed skillpod, skillsouko and finally skillport within its first
+      week; the metadata namespace moved from metadata.skillhub to metadata.skillport.
+    notable: >-
+      Adds a data point to the PRD §56 naming survey: the "skillhub" name was already used
+      and then dropped by this closest competitor, and frontmatter written under its old
+      namespace (metadata.skillhub) may still exist in skills in the wild, a collision for
+      any tool that reads a `skillhub` key.
+    where:
+      - skillport@ea16ed463ec3
+      - skillport@5a63f7daa8b0
+      - skillport@ece8f14d9874
+    contrast: extends
+    host: docs/PRD.md
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Positioning context only.
+    final_score: 0
+    keywords:
+      - naming
+      - skillhub
+      - skillpod
+      - skillsouko
+    decision: {state: candidate}
+
+  - key: ambiguous-name-409-with-candidates
+    domains:
+      - ux
+      - skill-recommendation
+    layer: wording
+    what: >-
+      A bare slug that exists in several namespaces is answered 409 with a candidates list
+      (namespace, slug, owner, id) and the guide tells the agent to re-issue with
+      @namespace/slug.
+    notable: >-
+      The refusal carries the data needed to retry. The host's
+      ambiguous_ref/ambiguous_locator errors already carry candidates and a FIX.
+    where:
+      - saker-skillhub@6a0a5538257b:pkg/service/common.go#L142-L175
+      - saker-skillhub@6a0a5538257b:pkg/handler/wellknown_handler.go#L247-L250
+    contrast: already-covered
+    host: internal/source/types.go
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Adjacent; host already returns candidates with a FIX.
+    keywords:
+      - ambiguous slug
+      - candidates
+      - '409'
+      - namespace-qualified
+    decision: {state: candidate}
+
+  - key: docs-registered-apart-from-handlers
+    domains:
+      - ux
+      - evaluation
+    layer: validation
+    what: >-
+      The served OpenAPI comes from a Huma "doc-only" API: 77 operations re-declared by hand
+      with a no-op adapter, apart from the 142 gin route registrations. The runtime skill
+      API that the main client consumes is missing from it, and its server URL says port
+      17020 while the default is 10070.
+    notable: >-
+      Documentation built from a second, hand-kept route list drifts from the router with no
+      failing test. The host derives MCP tool input schemas from Go types and checks its
+      JSON schemas in tests, so the documented and the served contract come from one place.
+    where:
+      - saker-skillhub@6a0a5538257b:pkg/server/huma.go#L17-L49
+      - saker-skillhub@6a0a5538257b:pkg/server/huma_docs.go#L252-L277
+    contrast: already-covered
+    host: internal/delivery/mcpserver
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Adjacent; the host's schemas come from code.
+    keywords:
+      - Huma
+      - OpenAPI
+      - doc-only API
+      - drift
+    decision: {state: candidate}
+
+  - key: error-names-next-tool
+    domains:
+      - ux
+    layer: wording
+    what: >-
+      Errors name the next call: "Unknown repo ... Use github_skills_list_repositories
+      first", "Skill ... was not found. Re-run github_skills_search_skills first", a 403
+      becomes "set GITHUB_TOKEN", an occupied install target says "Re-run with
+      overwrite=true or choose another destination_dir", and an empty search suggests
+      broader terms or listing repos.
+    notable: >-
+      The agent recovers without guessing. The host's ERROR/WHY/FIX errors and next-command
+      hints already do this.
+    where:
+      - pinkpixel-agentskills@47049d9635c5:src/github_skills_mcp/server.py#L227-L235
+      - pinkpixel-agentskills@47049d9635c5:src/github_skills_mcp/server.py#L252-L261
+      - pinkpixel-agentskills@47049d9635c5:src/github_skills_mcp/server.py#L578-L581
+      - pinkpixel-agentskills@47049d9635c5:src/github_skills_mcp/server.py#L492-L496
+    contrast: already-covered
+    host: internal/delivery/mcpserver/tool_errors.go
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered.
+    decision: {state: candidate}
+
+  - key: mask-internal-error-details
+    domains:
+      - ux
+      - trust-safety
+    layer: wording
+    what: >-
+      All 5xx answers return the constant {"error":"internal error"}; the detail goes to
+      slog with op, route, method and client IP. The commit cites 14 handlers that had
+      leaked database, path and library errors to clients.
+    notable: >-
+      Separates the client message from diagnostics. The host already returns a fixed
+      internal_error render with a correlation ID and keeps detail on stderr.
+    where:
+      - saker-skillhub@6a0a5538257b:pkg/handler/errors.go#L52-L79
+      - saker-skillhub@cf843ece6ab2
+    contrast: already-covered
+    host: internal/app/error_classify.go
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Adjacent; host already masks internals.
+    keywords:
+      - writeInternalError
+      - internal error
+      - information leak
+    decision: {state: candidate}
+
+  - key: serve-one-language
+    domains:
+      - ux
+    layer: history
+    what: >-
+      1.0.0 served English or Japanese guide content selected by SKILL_FORGE_LANG, with two
+      manifests and a per-file English fallback; 1.1.0 removed locale support from the
+      server, kept content-ja/ as an unserved developer reference and dropped it from the
+      build.
+    notable: >-
+      Two served copies of the same instructions double the content that must stay in sync
+      (section headings are keyed by a per-locale manifest), and the agent reads either
+      language fine. The commit states no reason beyond the issue link, so the lesson is
+      weak. For the host, served skills are the curator's own text; it has no plan for
+      localized served content, only a translated README.
+    where:
+      - skill-forge-mcp@ed1da044483e8d27f57a8dcb1c63878598dcc4b5
+      - skill-forge-mcp@3211174026e6:CHANGELOG.md#L12-L16
+    contrast: new
+    host: README.vi.md
+    score:
+      relevance: 0
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Outside the goal; recorded because it is the source's only feature removal.
+    keywords:
+      - SKILL_FORGE_LANG
+      - i18n
+      - content-ja
+    also_fits:
+      - upstream
+    decision: {state: candidate}
+
   - key: structured-error-envelope
     domains:
       - ux
@@ -64,10 +326,16 @@ lessons:
       meta_skill's machine errors carry code, numeric_code, message, suggestion,
       recoverable, category and help_url; but a JSON error is printed only under the
       deprecated --robot flag, not under -m or -O json.
-    notable: 'The host already has one output path: JSON or ERROR/WHY/FIX with stable codes.'
+    notable: >-
+      The host already has one output path: JSON or ERROR/WHY/FIX with stable codes. The
+      SkillHub CLI emits {ok:false, message, exitCode, details} under --json and
+      Error/Context/Request ID/Next lines for humans. Exit codes are typed by class: auth 2,
+      network 3, filesystem 4, usage 5, validation 6.
     where:
       - meta-skill@e999668e8d8c:src/cli/output.rs#L88-L123
       - meta-skill@e999668e8d8c:src/main.rs#L12-L38
+      - iflytek-skillhub@a463efb5352e:cli/src/shared/output.ts#L12-L40
+      - iflytek-skillhub@a463efb5352e:cli/src/shared/constants.ts#L6-L13
     contrast: already-covered
     host: internal/delivery/cli/output.go
     score:
@@ -77,4 +345,61 @@ lessons:
       evidence: 1
       effort: 1
       why: Already covered.
+    decision: {state: candidate}
+
+  - key: tool-hint-annotations
+    domains:
+      - ux
+      - host-integration
+    layer: craft
+    what: >-
+      Every tool declares title, readOnlyHint, destructiveHint, idempotentHint and
+      openWorldHint; only install is non-read-only and non-idempotent, and the listing tool
+      is the only closed-world one. Tool names carry a server prefix (github_skills_*).
+    notable: >-
+      Lets a client auto-approve the read tools and confirm the one that writes. The host
+      already sets the same four hints on every tool.
+    where:
+      - pinkpixel-agentskills@47049d9635c5:src/github_skills_mcp/server.py#L425-L434
+      - pinkpixel-agentskills@47049d9635c5:src/github_skills_mcp/server.py#L553-L562
+    contrast: already-covered
+    host: internal/delivery/mcpserver/tool_registration.go
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Already covered.
+    decision: {state: candidate}
+
+  - key: unknown-command-starts-server
+    domains:
+      - ux
+    layer: craft
+    what: >-
+      The CLI is a hand-written switch over os.Args; an unknown subcommand starts the HTTP
+      server ("Backward compatible"). Commands call os.Exit inside library functions, print
+      untyped map[string]interface{} fields from JSON, and offer no --json output.
+    notable: >-
+      A typo silently becomes a long-running server, and commands cannot be tested or
+      composed. The host's Run returns an exit code with injected writers, refuses unknown
+      commands with invalid_request and a FIX, and has --json everywhere.
+    where:
+      - saker-skillhub@6a0a5538257b:cmd/skillhub/main.go#L66-L107
+      - saker-skillhub@6a0a5538257b:pkg/cli/output.go#L82-L103
+    contrast: already-covered
+    host: internal/delivery/cli/root.go
+    score:
+      relevance: 1
+      facts: []
+      impact: 0
+      evidence: 1
+      effort: 1
+      why: Adjacent; the host's CLI already avoids each of these.
+    keywords:
+      - os.Args switch
+      - os.Exit
+      - runServer
+      - CLI
     decision: {state: candidate}
