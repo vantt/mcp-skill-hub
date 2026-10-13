@@ -12,8 +12,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
-	"github.com/vantt/mcp-skill-hub/internal/shellquote"
+	"github.com/vantt/skillhub-mcp/internal/delivery/cli/termui"
+	"github.com/vantt/skillhub-mcp/internal/shellquote"
 )
 
 const (

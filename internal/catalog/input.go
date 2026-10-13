@@ -15,9 +15,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vantt/mcp-skill-hub/internal/canonical"
-	"github.com/vantt/mcp-skill-hub/internal/mutation"
-	"github.com/vantt/mcp-skill-hub/internal/workspace"
+	"github.com/vantt/skillhub-mcp/internal/canonical"
+	"github.com/vantt/skillhub-mcp/internal/mutation"
+	"github.com/vantt/skillhub-mcp/internal/workspace"
 	"gopkg.in/yaml.v3"
 )
 

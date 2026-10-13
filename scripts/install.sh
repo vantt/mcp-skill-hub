@@ -4,7 +4,7 @@ set -eu
 
 SKILLHUB_SCRIPT_NAME=${0##*/}
 SKILLHUB_PREFIX=${SKILLHUB_PREFIX:-"$HOME/.local"}
-SKILLHUB_RELEASE_BASE=${SKILLHUB_RELEASE_BASE:-https://github.com/vantt/mcp-skill-hub/releases/download}
+SKILLHUB_RELEASE_BASE=${SKILLHUB_RELEASE_BASE:-https://github.com/vantt/skillhub-mcp/releases/download}
 DEFAULT_VERSION='@SKILLHUB_VERSION@'
 SKILLHUB_VERSION=${SKILLHUB_VERSION:-$DEFAULT_VERSION}
 SKILLHUB_OS=${SKILLHUB_OS:-}
@@ -25,7 +25,7 @@ SKILLHUB_CHECKSUM_MAX_BYTES=1048576
 SKILLHUB_BUNDLE_MAX_BYTES=4194304
 SKILLHUB_ARCHIVE_MAX_BYTES=134217728
 SKILLHUB_SIGSTORE_ISSUER=https://token.actions.githubusercontent.com
-SKILLHUB_SIGSTORE_WORKFLOW=https://github.com/vantt/mcp-skill-hub/.github/workflows/release.yml
+SKILLHUB_SIGSTORE_WORKFLOW=https://github.com/vantt/skillhub-mcp/.github/workflows/release.yml
 SKILLHUB_FIXTURE_VERIFIER=${SKILLHUB_FIXTURE_VERIFIER:-}
 
 skillhub_error() {

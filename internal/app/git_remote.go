@@ -11,7 +11,7 @@ import (
 
 	"golang.org/x/term"
 
-	"github.com/vantt/mcp-skill-hub/internal/shellquote"
+	"github.com/vantt/skillhub-mcp/internal/shellquote"
 )
 
 // InitSource is the Git repository `skillhub init <git-url>` starts from.

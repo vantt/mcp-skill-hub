@@ -12,7 +12,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/vantt/mcp-skill-hub/internal/mutation"
+	"github.com/vantt/skillhub-mcp/internal/mutation"
 )
 
 func bumpSchemaVersionMarkerV5(root string) ([]mutation.Change, []FileDiff, error) {

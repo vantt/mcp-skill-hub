@@ -6,9 +6,9 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/vantt/mcp-skill-hub/internal/app"
-	"github.com/vantt/mcp-skill-hub/internal/systemskills"
-	"github.com/vantt/mcp-skill-hub/internal/telemetry"
+	"github.com/vantt/skillhub-mcp/internal/app"
+	"github.com/vantt/skillhub-mcp/internal/systemskills"
+	"github.com/vantt/skillhub-mcp/internal/telemetry"
 )
 
 // reviewBlock reports whether a skill's local state refuses its content until

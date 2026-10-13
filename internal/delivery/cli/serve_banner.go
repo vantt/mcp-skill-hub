@@ -10,9 +10,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
-	"github.com/vantt/mcp-skill-hub/internal/delivery/hostpolicy"
-	"github.com/vantt/mcp-skill-hub/internal/hubtoken"
+	"github.com/vantt/skillhub-mcp/internal/delivery/cli/termui"
+	"github.com/vantt/skillhub-mcp/internal/delivery/hostpolicy"
+	"github.com/vantt/skillhub-mcp/internal/hubtoken"
 )
 
 // mcpBanner is what the network MCP listener prints once it accepts

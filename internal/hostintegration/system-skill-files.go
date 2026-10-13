@@ -9,7 +9,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/vantt/mcp-skill-hub/internal/systemskills"
+	"github.com/vantt/skillhub-mcp/internal/systemskills"
 )
 
 // System skills are written once, into the shared Agent Skills folder

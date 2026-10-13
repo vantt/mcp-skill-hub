@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vantt/mcp-skill-hub/internal/catalog"
-	resolverpkg "github.com/vantt/mcp-skill-hub/internal/resolver"
-	"github.com/vantt/mcp-skill-hub/internal/workspace"
+	"github.com/vantt/skillhub-mcp/internal/catalog"
+	resolverpkg "github.com/vantt/skillhub-mcp/internal/resolver"
+	"github.com/vantt/skillhub-mcp/internal/workspace"
 )
 
 func writeDistributionFixtureSkill(t *testing.T, root, id, trigger, entrypoint string, extra map[string][]byte) {

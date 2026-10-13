@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/vantt/mcp-skill-hub/internal/catalog"
+	"github.com/vantt/skillhub-mcp/internal/catalog"
 )
 
 func TestEnsureCatalogKeepsHealthyGenerationAndRebuildsMissingPointer(t *testing.T) {

@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vantt/mcp-skill-hub/internal/systemskills"
+	"github.com/vantt/skillhub-mcp/internal/systemskills"
 )
 
 func TestPlanApplyAllHostsIsDependencyOrderedAndIdempotent(t *testing.T) {

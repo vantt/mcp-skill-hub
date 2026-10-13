@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vantt/mcp-skill-hub/internal/telemetry"
+	"github.com/vantt/skillhub-mcp/internal/telemetry"
 )
 
 func TestBaselineSufficiencyTransition(t *testing.T) {

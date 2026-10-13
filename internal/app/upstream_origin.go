@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/vantt/mcp-skill-hub/internal/skillruntime"
-	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
-	"github.com/vantt/mcp-skill-hub/internal/workspace"
+	"github.com/vantt/skillhub-mcp/internal/skillruntime"
+	sourcepkg "github.com/vantt/skillhub-mcp/internal/source"
+	"github.com/vantt/skillhub-mcp/internal/workspace"
 )
 
 type revisionAtAdapter interface {

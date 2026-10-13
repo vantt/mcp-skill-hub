@@ -17,7 +17,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/skillhub-mcp/internal/app"
 )
 
 func createCLITestTarGz(t *testing.T, binaryName string, content []byte) []byte {

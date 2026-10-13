@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vantt/mcp-skill-hub/internal/migration"
-	"github.com/vantt/mcp-skill-hub/internal/mutation"
-	"github.com/vantt/mcp-skill-hub/internal/workspace"
+	"github.com/vantt/skillhub-mcp/internal/migration"
+	"github.com/vantt/skillhub-mcp/internal/mutation"
+	"github.com/vantt/skillhub-mcp/internal/workspace"
 	"gopkg.in/yaml.v3"
 )
 

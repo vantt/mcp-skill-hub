@@ -5,8 +5,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/vantt/mcp-skill-hub/internal/telemetry"
-	"github.com/vantt/mcp-skill-hub/internal/workspace"
+	"github.com/vantt/skillhub-mcp/internal/telemetry"
+	"github.com/vantt/skillhub-mcp/internal/workspace"
 )
 
 // BaselineQuery defines parameters for querying the baseline report.

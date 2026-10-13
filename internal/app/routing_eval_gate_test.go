@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vantt/mcp-skill-hub/internal/catalog"
-	resolverpkg "github.com/vantt/mcp-skill-hub/internal/resolver"
-	"github.com/vantt/mcp-skill-hub/internal/workspace"
+	"github.com/vantt/skillhub-mcp/internal/catalog"
+	resolverpkg "github.com/vantt/skillhub-mcp/internal/resolver"
+	"github.com/vantt/skillhub-mcp/internal/workspace"
 	"gopkg.in/yaml.v3"
 )
 

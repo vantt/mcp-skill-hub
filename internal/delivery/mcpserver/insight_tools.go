@@ -7,9 +7,9 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/vantt/mcp-skill-hub/internal/app"
-	resolverpkg "github.com/vantt/mcp-skill-hub/internal/resolver"
-	"github.com/vantt/mcp-skill-hub/internal/skill"
+	"github.com/vantt/skillhub-mcp/internal/app"
+	resolverpkg "github.com/vantt/skillhub-mcp/internal/resolver"
+	"github.com/vantt/skillhub-mcp/internal/skill"
 )
 
 func (adapter *Server) registerInsightTools(tools *toolRegistry) {

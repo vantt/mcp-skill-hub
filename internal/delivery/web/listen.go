@@ -6,7 +6,7 @@ import (
 	"net"
 	"strconv"
 
-	"github.com/vantt/mcp-skill-hub/internal/delivery/hostpolicy"
+	"github.com/vantt/skillhub-mcp/internal/delivery/hostpolicy"
 )
 
 // DefaultPort is the port `skillhub serve web` listens on when --addr names

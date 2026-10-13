@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vantt/mcp-skill-hub/internal/catalog"
-	"github.com/vantt/mcp-skill-hub/internal/workspace"
+	"github.com/vantt/skillhub-mcp/internal/catalog"
+	"github.com/vantt/skillhub-mcp/internal/workspace"
 )
 
 // newDistributionBenchmarkWorkspace builds a hub of count active skills, each

@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/vantt/mcp-skill-hub/internal/telemetry"
+	"github.com/vantt/skillhub-mcp/internal/telemetry"
 )
 
 // bundleLoads returns the skill loads recorded for bundle requests.

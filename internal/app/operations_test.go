@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vantt/mcp-skill-hub/internal/canonical"
-	"github.com/vantt/mcp-skill-hub/internal/mutation"
+	"github.com/vantt/skillhub-mcp/internal/canonical"
+	"github.com/vantt/skillhub-mcp/internal/mutation"
 )
 
 func TestValidateWorkspaceApplicationContract(t *testing.T) {

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vantt/mcp-skill-hub/internal/systemskills"
+	"github.com/vantt/skillhub-mcp/internal/systemskills"
 )
 
 func TestProjectRootIsSeparateFromServedWorkspace(t *testing.T) {

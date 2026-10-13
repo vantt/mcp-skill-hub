@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/vantt/mcp-skill-hub/internal/telemetry"
-	"github.com/vantt/mcp-skill-hub/internal/workspace"
+	"github.com/vantt/skillhub-mcp/internal/telemetry"
+	"github.com/vantt/skillhub-mcp/internal/workspace"
 )
 
 // TelemetryService owns the application boundary for disposable workspace

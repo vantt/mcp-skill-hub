@@ -3,7 +3,7 @@ package app
 import (
 	"testing"
 
-	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
+	sourcepkg "github.com/vantt/skillhub-mcp/internal/source"
 )
 
 func TestUpstreamSourceMatching(t *testing.T) {

@@ -15,11 +15,11 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/vantt/mcp-skill-hub/internal/catalog"
-	resolverpkg "github.com/vantt/mcp-skill-hub/internal/resolver"
-	"github.com/vantt/mcp-skill-hub/internal/telemetry"
-	"github.com/vantt/mcp-skill-hub/internal/transcripts"
-	"github.com/vantt/mcp-skill-hub/internal/workspace"
+	"github.com/vantt/skillhub-mcp/internal/catalog"
+	resolverpkg "github.com/vantt/skillhub-mcp/internal/resolver"
+	"github.com/vantt/skillhub-mcp/internal/telemetry"
+	"github.com/vantt/skillhub-mcp/internal/transcripts"
+	"github.com/vantt/skillhub-mcp/internal/workspace"
 )
 
 var telemetryTokenPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:@+\-]{0,255}$`)

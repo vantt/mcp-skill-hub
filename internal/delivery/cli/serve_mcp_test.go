@@ -17,9 +17,9 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/vantt/mcp-skill-hub/internal/delivery/hostpolicy"
-	"github.com/vantt/mcp-skill-hub/internal/hubtoken"
-	"github.com/vantt/mcp-skill-hub/internal/shellquote"
+	"github.com/vantt/skillhub-mcp/internal/delivery/hostpolicy"
+	"github.com/vantt/skillhub-mcp/internal/hubtoken"
+	"github.com/vantt/skillhub-mcp/internal/shellquote"
 )
 
 // stdioToolNames starts the given skillhub command as a stdio MCP server in a

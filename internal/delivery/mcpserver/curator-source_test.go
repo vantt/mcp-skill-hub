@@ -4,9 +4,9 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/vantt/mcp-skill-hub/internal/app"
-	"github.com/vantt/mcp-skill-hub/internal/systemskills"
-	"github.com/vantt/mcp-skill-hub/internal/workspace"
+	"github.com/vantt/skillhub-mcp/internal/app"
+	"github.com/vantt/skillhub-mcp/internal/systemskills"
+	"github.com/vantt/skillhub-mcp/internal/workspace"
 )
 
 func TestCuratorSourcePerSessionClient(t *testing.T) {

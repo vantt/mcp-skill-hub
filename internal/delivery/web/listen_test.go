@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vantt/mcp-skill-hub/internal/delivery/hostpolicy"
+	"github.com/vantt/skillhub-mcp/internal/delivery/hostpolicy"
 )
 
 func TestStartupOutput(t *testing.T) {

@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/vantt/mcp-skill-hub/internal/app"
-	"github.com/vantt/mcp-skill-hub/internal/telemetry"
+	"github.com/vantt/skillhub-mcp/internal/app"
+	"github.com/vantt/skillhub-mcp/internal/telemetry"
 )
 
 type lifecycleRecorder struct {

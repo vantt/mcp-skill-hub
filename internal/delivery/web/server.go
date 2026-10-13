@@ -10,9 +10,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/vantt/mcp-skill-hub/internal/app"
-	"github.com/vantt/mcp-skill-hub/internal/delivery/hostpolicy"
-	"github.com/vantt/mcp-skill-hub/internal/workspace"
+	"github.com/vantt/skillhub-mcp/internal/app"
+	"github.com/vantt/skillhub-mcp/internal/delivery/hostpolicy"
+	"github.com/vantt/skillhub-mcp/internal/workspace"
 )
 
 // Options configure the web server.

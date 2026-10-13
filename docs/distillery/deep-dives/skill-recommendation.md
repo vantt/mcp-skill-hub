@@ -85,7 +85,7 @@ Không có hàng đợi review skill: `inbox` là hộp thư giữa các agent.
 
 ## So sánh & trade-offs
 
-| Chiều | meta_skill | host (mcp-skill-hub) | Bên tốt hơn và vì sao |
+| Chiều | meta_skill | host (skillhub-mcp) | Bên tốt hơn và vì sao |
 |---|---|---|---|
 | Agent gửi gì | query, hoặc chỉ cwd | `task.description` (bắt buộc), constraints, operation, active_artifact, facts có provenance, execution signal, activation_context, prior (doc 02 §4) | **host**: mô tả task hiện tại là tín hiệu mạnh nhất, meta_skill không có |
 | Server tự suy ra | marker file, file gần đây, tool, git | FactProvider đã thiết kế, chưa xây (doc 03 §12); có trần cho ambient fact 0.15 (§7.2) | **meta_skill có code**, host có thiết kế tốt hơn (trần, provenance, quyền) |

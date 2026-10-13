@@ -11,8 +11,8 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/vantt/mcp-skill-hub/internal/app"
-	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
+	"github.com/vantt/skillhub-mcp/internal/app"
+	"github.com/vantt/skillhub-mcp/internal/delivery/cli/termui"
 )
 
 type UpstreamListResult struct {

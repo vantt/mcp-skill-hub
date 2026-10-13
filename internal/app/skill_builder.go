@@ -3,7 +3,7 @@ package app
 import (
 	"strings"
 
-	"github.com/vantt/mcp-skill-hub/internal/catalog"
+	"github.com/vantt/skillhub-mcp/internal/catalog"
 	"gopkg.in/yaml.v3"
 )
 

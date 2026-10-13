@@ -13,7 +13,7 @@ import (
 	"runtime"
 	"syscall"
 
-	"github.com/vantt/mcp-skill-hub/internal/systemskills"
+	"github.com/vantt/skillhub-mcp/internal/systemskills"
 )
 
 const maxManagedHostFileBytes = int64(4 << 20)

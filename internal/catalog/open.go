@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vantt/mcp-skill-hub/internal/canonical"
-	"github.com/vantt/mcp-skill-hub/internal/mutation"
+	"github.com/vantt/skillhub-mcp/internal/canonical"
+	"github.com/vantt/skillhub-mcp/internal/mutation"
 )
 
 // Inspect reports catalog freshness without changing runtime or canonical state.

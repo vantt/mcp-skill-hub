@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vantt/mcp-skill-hub/internal/migration"
-	"github.com/vantt/mcp-skill-hub/internal/mutation"
-	"github.com/vantt/mcp-skill-hub/internal/skillruntime"
+	"github.com/vantt/skillhub-mcp/internal/migration"
+	"github.com/vantt/skillhub-mcp/internal/mutation"
+	"github.com/vantt/skillhub-mcp/internal/skillruntime"
 )
 
 // approvedThirdPartyRepo returns a Git-tracked workspace holding a third-party

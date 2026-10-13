@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/vantt/mcp-skill-hub/internal/app"
-	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
+	"github.com/vantt/skillhub-mcp/internal/app"
+	sourcepkg "github.com/vantt/skillhub-mcp/internal/source"
 )
 
 func TestSourceImportMCPPreviewAndConfirm(t *testing.T) {

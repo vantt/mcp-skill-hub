@@ -12,11 +12,11 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/vantt/mcp-skill-hub/internal/app"
-	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
-	resolverpkg "github.com/vantt/mcp-skill-hub/internal/resolver"
-	"github.com/vantt/mcp-skill-hub/internal/skill"
-	"github.com/vantt/mcp-skill-hub/internal/telemetry"
+	"github.com/vantt/skillhub-mcp/internal/app"
+	"github.com/vantt/skillhub-mcp/internal/delivery/cli/termui"
+	resolverpkg "github.com/vantt/skillhub-mcp/internal/resolver"
+	"github.com/vantt/skillhub-mcp/internal/skill"
+	"github.com/vantt/skillhub-mcp/internal/telemetry"
 )
 
 const maxResolveRequestBytes = 64 << 10

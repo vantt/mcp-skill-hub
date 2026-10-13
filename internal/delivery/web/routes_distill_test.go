@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/vantt/mcp-skill-hub/internal/distill"
-	"github.com/vantt/mcp-skill-hub/internal/workspace"
+	"github.com/vantt/skillhub-mcp/internal/distill"
+	"github.com/vantt/skillhub-mcp/internal/workspace"
 )
 
 func TestSkillDistillGetRoute(t *testing.T) {

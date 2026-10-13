@@ -7,9 +7,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/vantt/mcp-skill-hub/internal/hostintegration"
-	"github.com/vantt/mcp-skill-hub/internal/shellquote"
-	"github.com/vantt/mcp-skill-hub/internal/userconfig"
+	"github.com/vantt/skillhub-mcp/internal/hostintegration"
+	"github.com/vantt/skillhub-mcp/internal/shellquote"
+	"github.com/vantt/skillhub-mcp/internal/userconfig"
 )
 
 // The roles a folder can have for Skill Hub.

@@ -11,11 +11,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vantt/mcp-skill-hub/internal/app"
-	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
-	"github.com/vantt/mcp-skill-hub/internal/skill"
-	"github.com/vantt/mcp-skill-hub/internal/skillruntime"
-	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
+	"github.com/vantt/skillhub-mcp/internal/app"
+	"github.com/vantt/skillhub-mcp/internal/delivery/cli/termui"
+	"github.com/vantt/skillhub-mcp/internal/skill"
+	"github.com/vantt/skillhub-mcp/internal/skillruntime"
+	sourcepkg "github.com/vantt/skillhub-mcp/internal/source"
 	"gopkg.in/yaml.v3"
 )
 

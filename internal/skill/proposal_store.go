@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vantt/mcp-skill-hub/internal/mutation"
+	"github.com/vantt/skillhub-mcp/internal/mutation"
 )
 
 const proposalLifetime = 24 * time.Hour

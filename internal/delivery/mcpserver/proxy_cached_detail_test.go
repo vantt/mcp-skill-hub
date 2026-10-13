@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/vantt/mcp-skill-hub/internal/skillruntime"
+	"github.com/vantt/skillhub-mcp/internal/skillruntime"
 )
 
 // A cache entry written by a hub that still sent the curation fields of the

@@ -8,9 +8,9 @@ import (
 	"sort"
 	"time"
 
-	resolverpkg "github.com/vantt/mcp-skill-hub/internal/resolver"
-	"github.com/vantt/mcp-skill-hub/internal/skillruntime"
-	"github.com/vantt/mcp-skill-hub/internal/telemetry"
+	resolverpkg "github.com/vantt/skillhub-mcp/internal/resolver"
+	"github.com/vantt/skillhub-mcp/internal/skillruntime"
+	"github.com/vantt/skillhub-mcp/internal/telemetry"
 )
 
 // ErrDoctorSkillUnavailable means the skill is unknown, not active, or its

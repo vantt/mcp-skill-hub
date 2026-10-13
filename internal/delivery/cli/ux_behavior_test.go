@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/skillhub-mcp/internal/app"
 )
 
 func createDraftSkill(t *testing.T, root, id string, extra ...string) {

@@ -8,7 +8,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/vantt/mcp-skill-hub/internal/telemetry"
+	"github.com/vantt/skillhub-mcp/internal/telemetry"
 )
 
 func TestFeedbackUsesInjectedRecorderAndPreservesSemanticIdempotency(t *testing.T) {

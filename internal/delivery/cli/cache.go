@@ -5,10 +5,10 @@ import (
 	"io"
 	"strings"
 
-	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
-	"github.com/vantt/mcp-skill-hub/internal/delivery/mcpserver"
-	"github.com/vantt/mcp-skill-hub/internal/shellquote"
-	"github.com/vantt/mcp-skill-hub/internal/skillruntime"
+	"github.com/vantt/skillhub-mcp/internal/delivery/cli/termui"
+	"github.com/vantt/skillhub-mcp/internal/delivery/mcpserver"
+	"github.com/vantt/skillhub-mcp/internal/shellquote"
+	"github.com/vantt/skillhub-mcp/internal/skillruntime"
 )
 
 type cacheClearConfig struct {

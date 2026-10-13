@@ -11,12 +11,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vantt/mcp-skill-hub/internal/catalog"
-	resolverpkg "github.com/vantt/mcp-skill-hub/internal/resolver"
-	"github.com/vantt/mcp-skill-hub/internal/skillruntime"
-	"github.com/vantt/mcp-skill-hub/internal/telemetry"
-	"github.com/vantt/mcp-skill-hub/internal/workspace"
-	"github.com/vantt/mcp-skill-hub/schemas"
+	"github.com/vantt/skillhub-mcp/internal/catalog"
+	resolverpkg "github.com/vantt/skillhub-mcp/internal/resolver"
+	"github.com/vantt/skillhub-mcp/internal/skillruntime"
+	"github.com/vantt/skillhub-mcp/internal/telemetry"
+	"github.com/vantt/skillhub-mcp/internal/workspace"
+	"github.com/vantt/skillhub-mcp/schemas"
 )
 
 type panickingTelemetrySink struct{}

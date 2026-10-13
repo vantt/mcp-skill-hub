@@ -16,11 +16,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/vantt/mcp-skill-hub/internal/hostintegration"
-	"github.com/vantt/mcp-skill-hub/internal/hubtoken"
-	"github.com/vantt/mcp-skill-hub/internal/shellquote"
-	"github.com/vantt/mcp-skill-hub/internal/skillruntime"
-	"github.com/vantt/mcp-skill-hub/internal/version"
+	"github.com/vantt/skillhub-mcp/internal/hostintegration"
+	"github.com/vantt/skillhub-mcp/internal/hubtoken"
+	"github.com/vantt/skillhub-mcp/internal/shellquote"
+	"github.com/vantt/skillhub-mcp/internal/skillruntime"
+	"github.com/vantt/skillhub-mcp/internal/version"
 )
 
 // HubTokenEnv names the environment variable that may carry the hub token on

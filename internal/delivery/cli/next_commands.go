@@ -7,8 +7,8 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/vantt/mcp-skill-hub/internal/app"
-	"github.com/vantt/mcp-skill-hub/internal/shellquote"
+	"github.com/vantt/skillhub-mcp/internal/app"
+	"github.com/vantt/skillhub-mcp/internal/shellquote"
 )
 
 // commandOutput carries invocation context without process-global state. JSON

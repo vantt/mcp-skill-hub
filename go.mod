@@ -1,4 +1,4 @@
-module github.com/vantt/mcp-skill-hub
+module github.com/vantt/skillhub-mcp
 
 go 1.26.9
 

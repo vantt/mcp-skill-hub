@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vantt/mcp-skill-hub/internal/workspace"
+	"github.com/vantt/skillhub-mcp/internal/workspace"
 )
 
 func TestReadEditableSkillReturnsContentAndDigest(t *testing.T) {

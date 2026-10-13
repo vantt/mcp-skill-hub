@@ -12,10 +12,10 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
-	"github.com/vantt/mcp-skill-hub/internal/delivery/hostpolicy"
-	"github.com/vantt/mcp-skill-hub/internal/delivery/mcpserver"
-	"github.com/vantt/mcp-skill-hub/internal/delivery/web"
+	"github.com/vantt/skillhub-mcp/internal/delivery/cli/termui"
+	"github.com/vantt/skillhub-mcp/internal/delivery/hostpolicy"
+	"github.com/vantt/skillhub-mcp/internal/delivery/mcpserver"
+	"github.com/vantt/skillhub-mcp/internal/delivery/web"
 )
 
 // mcpDefaultPort is the port `skillhub serve` listens on when --addr names

@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/skillhub-mcp/internal/app"
 )
 
 func validateSkillAddLocator(raw string) error {

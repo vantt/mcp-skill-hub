@@ -5,11 +5,11 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/vantt/mcp-skill-hub/internal/app"
-	"github.com/vantt/mcp-skill-hub/internal/catalog"
-	"github.com/vantt/mcp-skill-hub/internal/delivery/paging"
-	"github.com/vantt/mcp-skill-hub/internal/hostintegration"
-	"github.com/vantt/mcp-skill-hub/internal/systemskills"
+	"github.com/vantt/skillhub-mcp/internal/app"
+	"github.com/vantt/skillhub-mcp/internal/catalog"
+	"github.com/vantt/skillhub-mcp/internal/delivery/paging"
+	"github.com/vantt/skillhub-mcp/internal/hostintegration"
+	"github.com/vantt/skillhub-mcp/internal/systemskills"
 )
 
 func (adapter *Server) registerSkills(server *mcp.Server) error {

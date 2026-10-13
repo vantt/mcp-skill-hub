@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vantt/mcp-skill-hub/internal/app"
-	resolverpkg "github.com/vantt/mcp-skill-hub/internal/resolver"
+	"github.com/vantt/skillhub-mcp/internal/app"
+	resolverpkg "github.com/vantt/skillhub-mcp/internal/resolver"
 )
 
 func TestResolveCLIExposesStructuredApplicationContractWithoutActivating(t *testing.T) {

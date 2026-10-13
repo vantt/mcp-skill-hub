@@ -8,11 +8,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/vantt/mcp-skill-hub/internal/canonical"
-	catalogpkg "github.com/vantt/mcp-skill-hub/internal/catalog"
-	"github.com/vantt/mcp-skill-hub/internal/hostintegration"
-	"github.com/vantt/mcp-skill-hub/internal/mutation"
-	"github.com/vantt/mcp-skill-hub/internal/workspace"
+	"github.com/vantt/skillhub-mcp/internal/canonical"
+	catalogpkg "github.com/vantt/skillhub-mcp/internal/catalog"
+	"github.com/vantt/skillhub-mcp/internal/hostintegration"
+	"github.com/vantt/skillhub-mcp/internal/mutation"
+	"github.com/vantt/skillhub-mcp/internal/workspace"
 )
 
 // WorkspaceService is the shared application service used by init and doctor --fix.

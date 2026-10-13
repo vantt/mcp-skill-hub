@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/gofrs/flock"
-	"github.com/vantt/mcp-skill-hub/internal/userconfig"
+	"github.com/vantt/skillhub-mcp/internal/userconfig"
 )
 
 // permissionRecordFile holds, per user, which managed Claude permission rules

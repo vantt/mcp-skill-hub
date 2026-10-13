@@ -7,9 +7,9 @@ import (
 	"io"
 	"strings"
 
-	"github.com/vantt/mcp-skill-hub/internal/app"
-	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
-	"github.com/vantt/mcp-skill-hub/internal/skillruntime"
+	"github.com/vantt/skillhub-mcp/internal/app"
+	"github.com/vantt/skillhub-mcp/internal/delivery/cli/termui"
+	"github.com/vantt/skillhub-mcp/internal/skillruntime"
 )
 
 // runSkillDoctor checks a skill's declared runtime requirements on this

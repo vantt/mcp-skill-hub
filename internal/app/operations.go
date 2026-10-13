@@ -13,10 +13,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/vantt/mcp-skill-hub/internal/canonical"
-	"github.com/vantt/mcp-skill-hub/internal/shellquote"
-	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
-	"github.com/vantt/mcp-skill-hub/internal/workspace"
+	"github.com/vantt/skillhub-mcp/internal/canonical"
+	"github.com/vantt/skillhub-mcp/internal/shellquote"
+	sourcepkg "github.com/vantt/skillhub-mcp/internal/source"
+	"github.com/vantt/skillhub-mcp/internal/workspace"
 	"gopkg.in/yaml.v3"
 )
 

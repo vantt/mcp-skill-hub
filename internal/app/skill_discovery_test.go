@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
+	sourcepkg "github.com/vantt/skillhub-mcp/internal/source"
 )
 
 func TestSanitizeSkillID(t *testing.T) {

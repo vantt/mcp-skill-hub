@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/vantt/mcp-skill-hub/internal/catalog"
-	"github.com/vantt/mcp-skill-hub/internal/skill"
+	"github.com/vantt/skillhub-mcp/internal/catalog"
+	"github.com/vantt/skillhub-mcp/internal/skill"
 )
 
 // SkillListEntry is one skill row from the current catalog generation.

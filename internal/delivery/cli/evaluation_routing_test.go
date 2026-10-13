@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/skillhub-mcp/internal/app"
 )
 
 func TestEvaluationRoutingCLIExitCodesAndReporting(t *testing.T) {

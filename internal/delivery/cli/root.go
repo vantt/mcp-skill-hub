@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/vantt/mcp-skill-hub/internal/app"
-	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
+	"github.com/vantt/skillhub-mcp/internal/app"
+	"github.com/vantt/skillhub-mcp/internal/delivery/cli/termui"
 )
 
 // Run executes a Skill Hub command and returns a process exit code.

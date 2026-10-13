@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/skillhub-mcp/internal/app"
 )
 
 func TestSourceWatchPreviewRejectsLocalFolders(t *testing.T) {

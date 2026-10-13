@@ -307,7 +307,7 @@ $verifierCode = @'
 param($manifest, $bundle, $identity, $issuer)
 if ($args.Count + 4 -ne 4 -and $null -eq $manifest) { exit 20 }
 if ($issuer -ne "https://token.actions.githubusercontent.com") { exit 21 }
-if ($identity -notlike "https://github.com/vantt/mcp-skill-hub/.github/workflows/release.yml@refs/tags/v*") { exit 22 }
+if ($identity -notlike "https://github.com/vantt/skillhub-mcp/.github/workflows/release.yml@refs/tags/v*") { exit 22 }
 $actual = (Get-FileHash -LiteralPath $manifest -Algorithm SHA256).Hash.ToLowerInvariant()
 $expected = (Get-Content -LiteralPath $bundle -TotalCount 1).Trim().ToLowerInvariant()
 if ($actual -ne $expected) { exit 23 }
@@ -725,7 +725,7 @@ try {
         FIXTURE_HTTP_ROOT        = $HttpRoot
         FIXTURE_HTTP_LOG         = $HttpLog
         FIXTURE_COSIGN_LOG       = $CosignLog
-        EXPECTED_COSIGN_IDENTITY = 'https://github.com/vantt/mcp-skill-hub/.github/workflows/release.yml@refs/tags/vWRONG'
+        EXPECTED_COSIGN_IDENTITY = 'https://github.com/vantt/skillhub-mcp/.github/workflows/release.yml@refs/tags/vWRONG'
         SKILLHUB_VERSION         = 'v1.0.0'
         SKILLHUB_ARCH            = 'amd64'
         SKILLHUB_RELEASE_BASE    = 'https://fixtures.invalid/releases'
@@ -787,7 +787,7 @@ try {
         FIXTURE_HTTP_ROOT        = $HttpRoot
         FIXTURE_HTTP_LOG         = $HttpLog
         FIXTURE_COSIGN_LOG       = $CosignLog
-        EXPECTED_COSIGN_IDENTITY = 'https://github.com/vantt/mcp-skill-hub/.github/workflows/release.yml@refs/tags/v1.0.0'
+        EXPECTED_COSIGN_IDENTITY = 'https://github.com/vantt/skillhub-mcp/.github/workflows/release.yml@refs/tags/v1.0.0'
         SKILLHUB_VERSION         = 'v1.0.0'
         SKILLHUB_ARCH            = 'amd64'
         SKILLHUB_RELEASE_BASE    = 'https://fixtures.invalid/releases'

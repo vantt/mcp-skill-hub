@@ -3,7 +3,7 @@ package app
 import (
 	"context"
 
-	"github.com/vantt/mcp-skill-hub/internal/telemetry"
+	"github.com/vantt/skillhub-mcp/internal/telemetry"
 )
 
 // CallerContext carries transport-derived session and client identity into

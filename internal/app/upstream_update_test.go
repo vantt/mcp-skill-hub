@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
+	sourcepkg "github.com/vantt/skillhub-mcp/internal/source"
 	"gopkg.in/yaml.v3"
 )
 

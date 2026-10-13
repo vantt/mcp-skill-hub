@@ -11,11 +11,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/vantt/mcp-skill-hub/internal/canonical"
-	"github.com/vantt/mcp-skill-hub/internal/hostintegration"
-	"github.com/vantt/mcp-skill-hub/internal/shellquote"
-	"github.com/vantt/mcp-skill-hub/internal/userconfig"
-	"github.com/vantt/mcp-skill-hub/internal/workspace"
+	"github.com/vantt/skillhub-mcp/internal/canonical"
+	"github.com/vantt/skillhub-mcp/internal/hostintegration"
+	"github.com/vantt/skillhub-mcp/internal/shellquote"
+	"github.com/vantt/skillhub-mcp/internal/userconfig"
+	"github.com/vantt/skillhub-mcp/internal/workspace"
 )
 
 // ErrorGitFailed reports a Git command that failed; the rendering carries

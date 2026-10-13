@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vantt/mcp-skill-hub/internal/skill"
-	"github.com/vantt/mcp-skill-hub/internal/skillruntime"
+	"github.com/vantt/skillhub-mcp/internal/skill"
+	"github.com/vantt/skillhub-mcp/internal/skillruntime"
 )
 
 func confirmSkillUpdate(t *testing.T, root, id string, input skill.UpdateInput) {

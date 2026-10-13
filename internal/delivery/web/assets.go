@@ -8,7 +8,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/skillhub-mcp/internal/app"
 )
 
 //go:embed all:dist

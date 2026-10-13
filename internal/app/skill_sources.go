@@ -10,11 +10,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vantt/mcp-skill-hub/internal/distill"
+	"github.com/vantt/skillhub-mcp/internal/distill"
 
-	"github.com/vantt/mcp-skill-hub/internal/skill"
-	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
-	"github.com/vantt/mcp-skill-hub/internal/workspace"
+	"github.com/vantt/skillhub-mcp/internal/skill"
+	sourcepkg "github.com/vantt/skillhub-mcp/internal/source"
+	"github.com/vantt/skillhub-mcp/internal/workspace"
 )
 
 type LearningReference struct {

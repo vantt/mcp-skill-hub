@@ -1,3 +1,3 @@
-module github.com/vantt/mcp-skill-hub/web
+module github.com/vantt/skillhub-mcp/web
 
 go 1.26.9

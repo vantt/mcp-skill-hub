@@ -6,7 +6,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/vantt/mcp-skill-hub/internal/delivery/cli"
+	"github.com/vantt/skillhub-mcp/internal/delivery/cli"
 )
 
 func main() {

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vantt/mcp-skill-hub/internal/workspace"
+	"github.com/vantt/skillhub-mcp/internal/workspace"
 )
 
 func newCachedScanWorkspace(t *testing.T) string {

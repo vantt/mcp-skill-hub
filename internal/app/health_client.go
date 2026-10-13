@@ -8,10 +8,10 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/vantt/mcp-skill-hub/internal/hostintegration"
-	"github.com/vantt/mcp-skill-hub/internal/hubtoken"
-	"github.com/vantt/mcp-skill-hub/internal/shellquote"
-	"github.com/vantt/mcp-skill-hub/internal/workspace"
+	"github.com/vantt/skillhub-mcp/internal/hostintegration"
+	"github.com/vantt/skillhub-mcp/internal/hubtoken"
+	"github.com/vantt/skillhub-mcp/internal/shellquote"
+	"github.com/vantt/skillhub-mcp/internal/workspace"
 )
 
 // localGroup is the hosts of one scope whose entries point at one hub folder

@@ -14,8 +14,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/vantt/mcp-skill-hub/internal/canonical"
-	"github.com/vantt/mcp-skill-hub/internal/workspace"
+	"github.com/vantt/skillhub-mcp/internal/canonical"
+	"github.com/vantt/skillhub-mcp/internal/workspace"
 )
 
 // IndexEntry represents one stage-0 entry parsed from Git ls-files --stage -z.

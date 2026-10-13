@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vantt/mcp-skill-hub/internal/hostintegration"
-	"github.com/vantt/mcp-skill-hub/internal/systemskills"
-	"github.com/vantt/mcp-skill-hub/internal/userconfig"
+	"github.com/vantt/skillhub-mcp/internal/hostintegration"
+	"github.com/vantt/skillhub-mcp/internal/systemskills"
+	"github.com/vantt/skillhub-mcp/internal/userconfig"
 )
 
 func writeFileForTest(t *testing.T, path, content string) {

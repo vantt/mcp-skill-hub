@@ -9,7 +9,7 @@ import (
 	"math/rand"
 	"sort"
 
-	"github.com/vantt/mcp-skill-hub/internal/resolver"
+	"github.com/vantt/skillhub-mcp/internal/resolver"
 )
 
 type Runner struct {

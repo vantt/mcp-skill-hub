@@ -22,18 +22,18 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vantt/mcp-skill-hub/internal/version"
+	"github.com/vantt/skillhub-mcp/internal/version"
 )
 
 const (
 	// DefaultReleaseBaseURL is the standard GitHub releases base URL.
-	DefaultReleaseBaseURL = "https://github.com/vantt/mcp-skill-hub/releases"
+	DefaultReleaseBaseURL = "https://github.com/vantt/skillhub-mcp/releases"
 
 	// DefaultSigstoreIssuer is the GitHub Actions OIDC token issuer.
 	DefaultSigstoreIssuer = "https://token.actions.githubusercontent.com"
 
 	// DefaultSigstoreWorkflow is the release workflow identity prefix.
-	DefaultSigstoreWorkflow = "https://github.com/vantt/mcp-skill-hub/.github/workflows/release.yml"
+	DefaultSigstoreWorkflow = "https://github.com/vantt/skillhub-mcp/.github/workflows/release.yml"
 
 	// ManagedMarkerHeader is the expected first line of .skillhub-managed.
 	ManagedMarkerHeader = "skillhub-managed-v1"
@@ -386,8 +386,8 @@ func verifyManagedMarker(markerPath, exePath string) (string, error) {
 			Summary: "Refusing to update an unmanaged binary.",
 			Why:     fmt.Sprintf("The binary at %s was not installed by the Skill Hub installer (missing .skillhub-managed marker).", exePath),
 			Fix: "To reinstall or manage Skill Hub with the official installer:\n" +
-				"  Linux/macOS: curl -fsSL https://github.com/vantt/mcp-skill-hub/releases/latest/download/install.sh | sh\n" +
-				"  Windows:     powershell -ExecutionPolicy ByPass -c \"irm https://github.com/vantt/mcp-skill-hub/releases/latest/download/install.ps1 | iex\"",
+				"  Linux/macOS: curl -fsSL https://github.com/vantt/skillhub-mcp/releases/latest/download/install.sh | sh\n" +
+				"  Windows:     powershell -ExecutionPolicy ByPass -c \"irm https://github.com/vantt/skillhub-mcp/releases/latest/download/install.ps1 | iex\"",
 		}
 	}
 
@@ -415,8 +415,8 @@ func verifyManagedMarker(markerPath, exePath string) (string, error) {
 			Summary: "Refusing to update an unmanaged binary.",
 			Why:     fmt.Sprintf("The marker at %s does not contain a valid %q header.", markerPath, ManagedMarkerHeader),
 			Fix: "To reinstall or manage Skill Hub with the official installer:\n" +
-				"  Linux/macOS: curl -fsSL https://github.com/vantt/mcp-skill-hub/releases/latest/download/install.sh | sh\n" +
-				"  Windows:     powershell -ExecutionPolicy ByPass -c \"irm https://github.com/vantt/mcp-skill-hub/releases/latest/download/install.ps1 | iex\"",
+				"  Linux/macOS: curl -fsSL https://github.com/vantt/skillhub-mcp/releases/latest/download/install.sh | sh\n" +
+				"  Windows:     powershell -ExecutionPolicy ByPass -c \"irm https://github.com/vantt/skillhub-mcp/releases/latest/download/install.ps1 | iex\"",
 		}
 	}
 

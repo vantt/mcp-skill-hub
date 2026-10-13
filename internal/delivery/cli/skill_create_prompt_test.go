@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/skillhub-mcp/internal/app"
 )
 
 func guidedCreate(t *testing.T, root, answers string) (int, string, string) {

@@ -23,11 +23,11 @@ $DEFAULT_VERSION = '@SKILLHUB_VERSION@'
 $ReleaseBase = if (-not [string]::IsNullOrWhiteSpace($env:SKILLHUB_RELEASE_BASE)) {
     $env:SKILLHUB_RELEASE_BASE
 } else {
-    'https://github.com/vantt/mcp-skill-hub/releases/download'
+    'https://github.com/vantt/skillhub-mcp/releases/download'
 }
 
 $SigstoreIssuer = 'https://token.actions.githubusercontent.com'
-$SigstoreWorkflow = 'https://github.com/vantt/mcp-skill-hub/.github/workflows/release.yml'
+$SigstoreWorkflow = 'https://github.com/vantt/skillhub-mcp/.github/workflows/release.yml'
 $ChecksumMaxBytes   = 1048576       # 1 MiB
 $BundleMaxBytes     = 4194304       # 4 MiB
 $ArchiveMaxBytes    = 134217728     # 128 MiB

@@ -18,7 +18,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/vantt/mcp-skill-hub/internal/resolver"
+	"github.com/vantt/skillhub-mcp/internal/resolver"
 	"gopkg.in/yaml.v3"
 )
 

@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vantt/mcp-skill-hub/internal/catalog"
-	"github.com/vantt/mcp-skill-hub/internal/skill"
-	"github.com/vantt/mcp-skill-hub/internal/systemskills"
+	"github.com/vantt/skillhub-mcp/internal/catalog"
+	"github.com/vantt/skillhub-mcp/internal/skill"
+	"github.com/vantt/skillhub-mcp/internal/systemskills"
 	"gopkg.in/yaml.v3"
 )
 

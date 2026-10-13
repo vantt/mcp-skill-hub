@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
+	sourcepkg "github.com/vantt/skillhub-mcp/internal/source"
 )
 
 // fullDiffSection returns the removed and added lines a full diff shows for

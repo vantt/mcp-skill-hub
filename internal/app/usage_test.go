@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vantt/mcp-skill-hub/internal/skill"
-	"github.com/vantt/mcp-skill-hub/internal/telemetry"
+	"github.com/vantt/skillhub-mcp/internal/skill"
+	"github.com/vantt/skillhub-mcp/internal/telemetry"
 )
 
 func createTestSkill(t *testing.T, root, id, name string, active bool) {

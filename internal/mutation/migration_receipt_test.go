@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/vantt/mcp-skill-hub/internal/workspace"
+	"github.com/vantt/skillhub-mcp/internal/workspace"
 )
 
 func TestMigrationReceiptRoundTripPreservesStructuredVersions(t *testing.T) {

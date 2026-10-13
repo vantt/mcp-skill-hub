@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vantt/mcp-skill-hub/internal/skillruntime"
+	"github.com/vantt/skillhub-mcp/internal/skillruntime"
 )
 
 func TestRuntimeHintFindings(t *testing.T) {

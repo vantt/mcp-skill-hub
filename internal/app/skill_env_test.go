@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vantt/mcp-skill-hub/internal/skillruntime"
+	"github.com/vantt/skillhub-mcp/internal/skillruntime"
 )
 
 const envSentinel = "sentinel-secret-7f3a91"

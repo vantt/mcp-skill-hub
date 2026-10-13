@@ -80,7 +80,7 @@ identity=$3
 issuer=$4
 [ "$issuer" = https://token.actions.githubusercontent.com ] || exit 21
 case "$identity" in
-	https://github.com/vantt/mcp-skill-hub/.github/workflows/release.yml@refs/tags/v*) ;;
+	https://github.com/vantt/skillhub-mcp/.github/workflows/release.yml@refs/tags/v*) ;;
 	*) exit 22 ;;
 esac
 if command -v sha256sum >/dev/null 2>&1; then
@@ -334,7 +334,7 @@ fi
 FIXTURE_HTTP_ROOT=$HTTP_ROOT FIXTURE_HTTP_LOG=$HTTP_LOG INSTALL_SCRIPT_SOURCE=$SCRIPT_DIR/install.sh PATH=$FAKE_BIN:$PATH \
 	curl -fsSL https://fixtures.invalid/install.sh |
 	PATH=$FAKE_BIN:$PATH FIXTURE_HTTP_ROOT=$HTTP_ROOT FIXTURE_HTTP_LOG=$HTTP_LOG FIXTURE_COSIGN_LOG=$COSIGN_LOG \
-	EXPECTED_COSIGN_IDENTITY=https://github.com/vantt/mcp-skill-hub/.github/workflows/release.yml@refs/tags/v1.0.0 \
+	EXPECTED_COSIGN_IDENTITY=https://github.com/vantt/skillhub-mcp/.github/workflows/release.yml@refs/tags/v1.0.0 \
 	sh -s -- --version 1.0.0 --release-base https://fixtures.invalid/releases --prefix "$PIPE_PREFIX" --os linux --arch amd64 --no-modify-path >/dev/null || fail 'curl|sh install failed'
 cat > "$TEST_ROOT/expected-install-urls" <<'EOF'
 https://fixtures.invalid/install.sh
@@ -351,7 +351,7 @@ assert_output 1.0.0 "$PIPE_PREFIX/bin/skillhub" version
 : > "$HTTP_LOG"
 : > "$COSIGN_LOG"
 PATH=$FAKE_BIN:$PATH FIXTURE_HTTP_ROOT=$HTTP_ROOT FIXTURE_HTTP_LOG=$HTTP_LOG FIXTURE_COSIGN_LOG=$COSIGN_LOG \
-EXPECTED_COSIGN_IDENTITY=https://github.com/vantt/mcp-skill-hub/.github/workflows/release.yml@refs/tags/v2.1.0-rc.1+build.5 \
+EXPECTED_COSIGN_IDENTITY=https://github.com/vantt/skillhub-mcp/.github/workflows/release.yml@refs/tags/v2.1.0-rc.1+build.5 \
 	"$SCRIPT_DIR/install.sh" --version v2.1.0-rc.1+build.5 --release-base https://fixtures.invalid/releases --prefix "$PRERELEASE_PREFIX" --os linux --arch amd64 --no-modify-path >/dev/null
 cat > "$TEST_ROOT/expected-prerelease-urls" <<'EOF'
 https://fixtures.invalid/releases/v2.1.0-rc.1+build.5/checksums.txt
@@ -380,7 +380,7 @@ assert_output 1.0.0 "$PREFIX/bin/skillhub" version
 # Production-path upgrade via re-running install.sh authenticates the manifest and preserves user data.
 : > "$HTTP_LOG"
 PATH=$FAKE_BIN:$PATH FIXTURE_HTTP_ROOT=$HTTP_ROOT FIXTURE_HTTP_LOG=$HTTP_LOG FIXTURE_COSIGN_LOG=$COSIGN_LOG \
-EXPECTED_COSIGN_IDENTITY=https://github.com/vantt/mcp-skill-hub/.github/workflows/release.yml@refs/tags/v2.0.0 \
+EXPECTED_COSIGN_IDENTITY=https://github.com/vantt/skillhub-mcp/.github/workflows/release.yml@refs/tags/v2.0.0 \
 	"$SCRIPT_DIR/install.sh" --version v2.0.0 --release-base https://fixtures.invalid/releases --prefix "$PREFIX" --os linux --arch amd64 --no-modify-path >/dev/null
 cat > "$TEST_ROOT/expected-upgrade-urls" <<'EOF'
 https://fixtures.invalid/releases/v2.0.0/checksums.txt
@@ -436,7 +436,7 @@ assert_absent "$TEST_ROOT/req-sig"
 
 # 3. Bad signature when cosign is present: aborts.
 if PATH=$FAKE_BIN:$PATH FIXTURE_HTTP_ROOT=$HTTP_ROOT FIXTURE_HTTP_LOG=$HTTP_LOG FIXTURE_COSIGN_LOG=$COSIGN_LOG \
-	EXPECTED_COSIGN_IDENTITY=https://github.com/vantt/mcp-skill-hub/.github/workflows/release.yml@refs/tags/vWRONG \
+	EXPECTED_COSIGN_IDENTITY=https://github.com/vantt/skillhub-mcp/.github/workflows/release.yml@refs/tags/vWRONG \
 	"$SCRIPT_DIR/install.sh" --version v1.0.0 --release-base https://fixtures.invalid/releases --prefix "$CORRUPT_PREFIX" --os linux --arch amd64 --no-modify-path >/dev/null 2>&1; then
 	fail 'installer accepted a mismatched cosign signature'
 fi

@@ -14,9 +14,9 @@ import (
 	"strconv"
 	"strings"
 
-	distillpkg "github.com/vantt/mcp-skill-hub/internal/distill"
-	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
-	"github.com/vantt/mcp-skill-hub/internal/workspace"
+	distillpkg "github.com/vantt/skillhub-mcp/internal/distill"
+	sourcepkg "github.com/vantt/skillhub-mcp/internal/source"
+	"github.com/vantt/skillhub-mcp/internal/workspace"
 	"gopkg.in/yaml.v3"
 )
 

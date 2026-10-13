@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/vantt/mcp-skill-hub/internal/delivery/cli/termui"
-	"github.com/vantt/mcp-skill-hub/internal/delivery/mcpserver"
-	"github.com/vantt/mcp-skill-hub/internal/hubtoken"
+	"github.com/vantt/skillhub-mcp/internal/delivery/cli/termui"
+	"github.com/vantt/skillhub-mcp/internal/delivery/mcpserver"
+	"github.com/vantt/skillhub-mcp/internal/hubtoken"
 )
 
 // runMCP handles the hidden `skillhub mcp` commands. `skillhub mcp serve` is

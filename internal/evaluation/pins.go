@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/vantt/mcp-skill-hub/internal/catalog"
+	"github.com/vantt/skillhub-mcp/internal/catalog"
 )
 
 var ErrPinnedArtifactUnavailable = errors.New("pinned replay artifact unavailable")

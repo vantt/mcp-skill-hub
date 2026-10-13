@@ -5,7 +5,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/vantt/mcp-skill-hub/internal/canonical"
+	"github.com/vantt/skillhub-mcp/internal/canonical"
 )
 
 // maxVerifiedGenerations bounds the process-wide cache; a server normally

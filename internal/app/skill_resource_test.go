@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vantt/mcp-skill-hub/internal/skill"
+	"github.com/vantt/skillhub-mcp/internal/skill"
 )
 
 const resourceSkillDir = "skills/software/consumer-review"

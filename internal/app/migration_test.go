@@ -3,14 +3,14 @@ package app
 import (
 	"encoding/json"
 	"errors"
-	"github.com/vantt/mcp-skill-hub/internal/mutation"
+	"github.com/vantt/skillhub-mcp/internal/mutation"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
-	"github.com/vantt/mcp-skill-hub/internal/catalog"
+	"github.com/vantt/skillhub-mcp/internal/catalog"
 )
 
 func TestMigrationServicePreviewThenApply(t *testing.T) {

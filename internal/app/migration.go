@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	catalogpkg "github.com/vantt/mcp-skill-hub/internal/catalog"
-	migrationpkg "github.com/vantt/mcp-skill-hub/internal/migration"
-	"github.com/vantt/mcp-skill-hub/internal/mutation"
-	"github.com/vantt/mcp-skill-hub/internal/workspace"
+	catalogpkg "github.com/vantt/skillhub-mcp/internal/catalog"
+	migrationpkg "github.com/vantt/skillhub-mcp/internal/migration"
+	"github.com/vantt/skillhub-mcp/internal/mutation"
+	"github.com/vantt/skillhub-mcp/internal/workspace"
 )
 
 // MigrationReceipt is the public, structured result of an applied migration.

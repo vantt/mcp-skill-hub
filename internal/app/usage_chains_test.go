@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vantt/mcp-skill-hub/internal/telemetry"
+	"github.com/vantt/skillhub-mcp/internal/telemetry"
 )
 
 func TestTwoSessionsSameTaskFormTwoChains(t *testing.T) {

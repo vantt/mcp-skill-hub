@@ -7,9 +7,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/vantt/mcp-skill-hub/internal/catalog"
-	resolverpkg "github.com/vantt/mcp-skill-hub/internal/resolver"
-	"github.com/vantt/mcp-skill-hub/internal/telemetry"
+	"github.com/vantt/skillhub-mcp/internal/catalog"
+	resolverpkg "github.com/vantt/skillhub-mcp/internal/resolver"
+	"github.com/vantt/skillhub-mcp/internal/telemetry"
 )
 
 // recordCurationTelemetry pins events to the catalog and recommendation policy

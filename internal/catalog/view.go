@@ -6,8 +6,8 @@ import (
 	"sort"
 	"sync/atomic"
 
-	"github.com/vantt/mcp-skill-hub/internal/canonical"
-	"github.com/vantt/mcp-skill-hub/internal/mutation"
+	"github.com/vantt/skillhub-mcp/internal/canonical"
+	"github.com/vantt/skillhub-mcp/internal/mutation"
 )
 
 // View is the current generation observed under the shared workspace lock,

@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vantt/mcp-skill-hub/internal/skillruntime"
-	"github.com/vantt/mcp-skill-hub/internal/telemetry"
+	"github.com/vantt/skillhub-mcp/internal/skillruntime"
+	"github.com/vantt/skillhub-mcp/internal/telemetry"
 )
 
 // fakeDoctorRunner answers version probes from a fixed table and records

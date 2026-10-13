@@ -12,7 +12,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/vantt/mcp-skill-hub/internal/resolver"
+	"github.com/vantt/skillhub-mcp/internal/resolver"
 )
 
 const testDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"

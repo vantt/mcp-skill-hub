@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vantt/mcp-skill-hub/internal/mutation"
-	"github.com/vantt/mcp-skill-hub/internal/workspace"
+	"github.com/vantt/skillhub-mcp/internal/mutation"
+	"github.com/vantt/skillhub-mcp/internal/workspace"
 )
 
 func TestDeleteRuntimeRebuildsOfflineAndRecreatesDisposableDatabases(t *testing.T) {

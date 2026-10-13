@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vantt/mcp-skill-hub/internal/skill"
+	"github.com/vantt/skillhub-mcp/internal/skill"
 )
 
 // SkillResourceItem is one companion file of a skill as it is on disk now.

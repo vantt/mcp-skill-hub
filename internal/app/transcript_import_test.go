@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vantt/mcp-skill-hub/internal/transcripts"
+	"github.com/vantt/skillhub-mcp/internal/transcripts"
 )
 
 func TestTranscriptImportService(t *testing.T) {

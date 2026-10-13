@@ -53,7 +53,7 @@ If the web UI changed since the last release, rerun `make web-shots` before tagg
 - **Tell macOS users of the older releases to update.** The crash above comes from the Go 1.26.0 toolchain that built v0.2.0 through v0.4.0, and the product runs `git` as a child process (`init` and the history commands). Users of those releases on macOS who see `git init: signal: segmentation fault` should update to v0.4.1 or later, which is built with Go 1.26.9. A crash in a released binary has not been reproduced; the link rests on the CI evidence above.
 - **Find a failure that only one runner shows.** Add a temporary workflow on a throwaway branch that runs a matrix over the suspected variable (here the Go version) and, when it fails, prints the crash reports (`~/Library/Logs/DiagnosticReports` on macOS). Delete the branch afterwards.
 - **A flaky test blocks the release.** The release workflow runs the whole test suite on Linux, macOS and Windows before it builds anything, so a flaky test stops the tag with nothing published. If the failure is a known flake, rerun only the failed job with `gh run rerun <run-id> --failed`. If the code or a test must change, no release exists yet: fix it, wait for green CI, and use the next prerelease number (for example `v0.5.0-alpha.2`) or delete the unpublished tag and tag again.
-- **Prereleases.** A tag such as `v0.5.0-alpha.1` is published as a GitHub prerelease and is never "latest", so the installers behind `releases/latest/download/` do not offer it. Install it with the installer attached to that tag and an explicit version, for example `curl -fsSL https://github.com/vantt/mcp-skill-hub/releases/download/v0.5.0-alpha.1/install.sh | sh -s -- --version 0.5.0-alpha.1`. On Windows set `$env:SKILLHUB_VERSION = '0.5.0-alpha.1'` first and run the `install.ps1` from the same tag.
+- **Prereleases.** A tag such as `v0.5.0-alpha.1` is published as a GitHub prerelease and is never "latest", so the installers behind `releases/latest/download/` do not offer it. Install it with the installer attached to that tag and an explicit version, for example `curl -fsSL https://github.com/vantt/skillhub-mcp/releases/download/v0.5.0-alpha.1/install.sh | sh -s -- --version 0.5.0-alpha.1`. On Windows set `$env:SKILLHUB_VERSION = '0.5.0-alpha.1'` first and run the `install.ps1` from the same tag.
 
 ### Network MCP listener and remote clients
 
@@ -102,7 +102,7 @@ Download release assets into an empty folder and verify:
 
 ```bash
 export OWNER=vantt
-export REPO=mcp-skill-hub
+export REPO=skillhub-mcp
 export VERSION=0.1.0
 
 # 1. Verify checksums file with Cosign

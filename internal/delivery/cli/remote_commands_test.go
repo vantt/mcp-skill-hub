@@ -12,8 +12,8 @@ import (
 
 	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
-	"github.com/vantt/mcp-skill-hub/internal/app"
-	sourcepkg "github.com/vantt/mcp-skill-hub/internal/source"
+	"github.com/vantt/skillhub-mcp/internal/app"
+	sourcepkg "github.com/vantt/skillhub-mcp/internal/source"
 )
 
 func TestRemoteAddAndWatchCLIConfirmStoredPreviews(t *testing.T) {

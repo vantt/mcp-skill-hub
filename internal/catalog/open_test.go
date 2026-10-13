@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vantt/mcp-skill-hub/internal/mutation"
+	"github.com/vantt/skillhub-mcp/internal/mutation"
 )
 
 func TestOpenSnapshotOpensExactCurrentGenerationReadOnly(t *testing.T) {

@@ -334,7 +334,7 @@ jobs:
           set -euo pipefail
           mkdir -p dist artifacts
           go build -trimpath -buildvcs=false \
-            -ldflags "-s -w -X github.com/vantt/mcp-skill-hub/internal/version.Version=$VERSION -X github.com/vantt/mcp-skill-hub/internal/version.Commit=$COMMIT -X github.com/vantt/mcp-skill-hub/internal/version.Date=$BUILD_DATE -X github.com/vantt/mcp-skill-hub/internal/version.Dirty=$DIRTY" \
+            -ldflags "-s -w -X github.com/vantt/skillhub-mcp/internal/version.Version=$VERSION -X github.com/vantt/skillhub-mcp/internal/version.Commit=$COMMIT -X github.com/vantt/skillhub-mcp/internal/version.Date=$BUILD_DATE -X github.com/vantt/skillhub-mcp/internal/version.Dirty=$DIRTY" \
             -o "dist/$BINARY" \
             ./cmd/skillhub
 

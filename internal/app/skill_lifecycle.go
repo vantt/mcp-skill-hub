@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/vantt/mcp-skill-hub/internal/mutation"
-	"github.com/vantt/mcp-skill-hub/internal/skill"
+	"github.com/vantt/skillhub-mcp/internal/mutation"
+	"github.com/vantt/skillhub-mcp/internal/skill"
 )
 
 // SkillService is the shared application boundary for CLI and future MCP tools.

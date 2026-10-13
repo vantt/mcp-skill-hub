@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/skillhub-mcp/internal/app"
 )
 
 // hubWithCandidateLessons creates a hub at root with one skill whose

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vantt/mcp-skill-hub/internal/systemskills"
+	"github.com/vantt/skillhub-mcp/internal/systemskills"
 )
 
 func systemSkill(t *testing.T, id string) systemskills.SystemSkill {

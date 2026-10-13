@@ -6,7 +6,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/skillhub-mcp/internal/app"
 )
 
 func validateSourceImportRequest(flags sourceFlags, positionals []string) error {

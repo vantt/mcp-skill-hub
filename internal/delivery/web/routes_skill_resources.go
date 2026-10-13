@@ -4,8 +4,8 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/vantt/mcp-skill-hub/internal/app"
-	"github.com/vantt/mcp-skill-hub/internal/skill"
+	"github.com/vantt/skillhub-mcp/internal/app"
+	"github.com/vantt/skillhub-mcp/internal/skill"
 )
 
 func init() {

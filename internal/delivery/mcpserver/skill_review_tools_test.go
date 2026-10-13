@@ -2,7 +2,7 @@ package mcpserver
 
 import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/vantt/mcp-skill-hub/internal/app"
+	"github.com/vantt/skillhub-mcp/internal/app"
 	"os"
 	"path/filepath"
 	"testing"

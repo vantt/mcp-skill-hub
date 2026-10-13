@@ -6,9 +6,9 @@ import (
 	"sync"
 
 	"github.com/google/jsonschema-go/jsonschema"
-	"github.com/vantt/mcp-skill-hub/internal/delivery/paging"
-	"github.com/vantt/mcp-skill-hub/internal/telemetry"
-	contractschemas "github.com/vantt/mcp-skill-hub/schemas"
+	"github.com/vantt/skillhub-mcp/internal/delivery/paging"
+	"github.com/vantt/skillhub-mcp/internal/telemetry"
+	contractschemas "github.com/vantt/skillhub-mcp/schemas"
 )
 
 // walkSchema calls visit on schema and then on every subschema reachable

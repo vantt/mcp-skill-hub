@@ -11,7 +11,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/vantt/mcp-skill-hub/internal/skillruntime"
+	"github.com/vantt/skillhub-mcp/internal/skillruntime"
 )
 
 // planMode carries what a plan connects a scope to, so planning and the

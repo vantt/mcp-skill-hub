@@ -55,13 +55,13 @@ Add `--check` to only see whether a newer release exists, or `--version <version
 On Linux or macOS, run the installer with `--uninstall`:
 
 ```bash
-curl -fsSL https://github.com/vantt/mcp-skill-hub/releases/latest/download/install.sh | sh -s -- --uninstall
+curl -fsSL https://github.com/vantt/skillhub-mcp/releases/latest/download/install.sh | sh -s -- --uninstall
 ```
 
 On Windows, run this in PowerShell, then close that window so the variable cannot affect a later install:
 
 ```powershell
-$env:SKILLHUB_UNINSTALL = '1'; irm https://github.com/vantt/mcp-skill-hub/releases/latest/download/install.ps1 | iex
+$env:SKILLHUB_UNINSTALL = '1'; irm https://github.com/vantt/skillhub-mcp/releases/latest/download/install.ps1 | iex
 ```
 
 Uninstall removes the binary, its install marker and the `PATH` lines the installer added. It never deletes your hubs, your skills or the connection files your agents use.
@@ -71,8 +71,8 @@ Uninstall removes the binary, its install marker and the `PATH` lines the instal
 You need Git, Go 1.26.9 or newer, and Node.js 24. Node.js builds the web UI that is embedded in the binary.
 
 ```bash
-git clone https://github.com/vantt/mcp-skill-hub.git
-cd mcp-skill-hub
+git clone https://github.com/vantt/skillhub-mcp.git
+cd skillhub-mcp
 make web-build
 go build -o skillhub ./cmd/skillhub
 ```
