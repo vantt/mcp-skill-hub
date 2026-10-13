@@ -6,7 +6,7 @@ One skill library. Every agent. Every project.<br>
 
 [![Latest release](https://img.shields.io/github/v/release/vantt/mcp-skill-hub)](https://github.com/vantt/mcp-skill-hub/releases/latest) [![CI](https://github.com/vantt/mcp-skill-hub/actions/workflows/ci.yml/badge.svg)](https://github.com/vantt/mcp-skill-hub/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-[Quickstart](#quickstart) · [Using Skill Hub](docs/user-guide.md) · [Curating skills](docs/curating-skills.md)
+[Tiếng Việt](README.vi.md) · [Quickstart](#quickstart) · [Using Skill Hub](docs/user-guide.md) · [Curating skills](docs/curating-skills.md)
 
 </div>
 
