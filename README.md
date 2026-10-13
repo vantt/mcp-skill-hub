@@ -4,7 +4,7 @@
 
 Your skills in one place. Pulled by any agent, on demand.<br>
 
-[![Latest release](https://img.shields.io/github/v/release/vantt/mcp-skill-hub)](https://github.com/vantt/mcp-skill-hub/releases/latest) [![CI](https://github.com/vantt/mcp-skill-hub/actions/workflows/ci.yml/badge.svg)](https://github.com/vantt/mcp-skill-hub/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Latest release](https://img.shields.io/github/v/release/vantt/skillhub-mcp)](https://github.com/vantt/skillhub-mcp/releases/latest) [![CI](https://github.com/vantt/skillhub-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/vantt/skillhub-mcp/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 [Tiếng Việt](README.vi.md) · [Quickstart](#quickstart) · [Using Skill Hub](docs/user-guide.md) · [Curating skills](docs/curating-skills.md)
 
@@ -12,6 +12,8 @@ Your skills in one place. Pulled by any agent, on demand.<br>
 
 Skill Hub serves your agent skills over MCP from one Git repository you own, so there is nothing to install or copy into each project: your agent asks the hub for the right skill when a task starts.
 Because the library is central, you can collect skills from any repository, edit them, and tune them to your own criteria, with feedback from real use and an approval step before anything reaches an agent.
+
+A note on names: the repository is `skillhub-mcp`, the product is Skill Hub, and the command is `skillhub`.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/web/dark-skills-list.png">
@@ -71,14 +73,14 @@ You set up Skill Hub in two steps. First you install the **hub**, the folder tha
 Install Skill Hub on Linux or macOS with one command.
 
 ```bash
-curl -fsSL https://github.com/vantt/mcp-skill-hub/releases/latest/download/install.sh | sh
+curl -fsSL https://github.com/vantt/skillhub-mcp/releases/latest/download/install.sh | sh
 ```
 
 <details>
 <summary>Windows (PowerShell)</summary>
 
 ```powershell
-powershell -ExecutionPolicy ByPass -c "irm https://github.com/vantt/mcp-skill-hub/releases/latest/download/install.ps1 | iex"
+powershell -ExecutionPolicy ByPass -c "irm https://github.com/vantt/skillhub-mcp/releases/latest/download/install.ps1 | iex"
 ```
 
 </details>

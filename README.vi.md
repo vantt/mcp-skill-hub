@@ -4,7 +4,7 @@
 
 Skill của bạn ở một nơi. Mọi agent kéo về khi cần.<br>
 
-[![Latest release](https://img.shields.io/github/v/release/vantt/mcp-skill-hub)](https://github.com/vantt/mcp-skill-hub/releases/latest) [![CI](https://github.com/vantt/mcp-skill-hub/actions/workflows/ci.yml/badge.svg)](https://github.com/vantt/mcp-skill-hub/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Latest release](https://img.shields.io/github/v/release/vantt/skillhub-mcp)](https://github.com/vantt/skillhub-mcp/releases/latest) [![CI](https://github.com/vantt/skillhub-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/vantt/skillhub-mcp/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 [English](README.md) · [Bắt đầu nhanh](#quickstart) · [Dùng Skill Hub](docs/user-guide.md) · [Quản lý skill](docs/curating-skills.md)
 
@@ -12,6 +12,8 @@ Skill của bạn ở một nơi. Mọi agent kéo về khi cần.<br>
 
 Skill Hub phục vụ các skill của agent qua MCP từ một kho Git của riêng bạn, nên không có gì phải cài hay sao chép vào từng dự án: agent hỏi hub skill phù hợp khi bắt đầu một việc.
 Vì thư viện nằm một chỗ, bạn có thể thu thập skill từ bất kỳ kho nào, chỉnh sửa và tinh chỉnh theo tiêu chí của riêng bạn, kèm phản hồi từ việc dùng thật và một bước duyệt trước khi bất cứ thứ gì đến tay agent.
+
+Về tên gọi: kho mã là `skillhub-mcp`, sản phẩm là Skill Hub, và lệnh là `skillhub`.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/web/dark-skills-list.png">
@@ -73,14 +75,14 @@ Bạn cài Skill Hub qua hai bước. Trước hết cài **hub**, là thư mụ
 Cài Skill Hub trên Linux hoặc macOS chỉ với một lệnh.
 
 ```bash
-curl -fsSL https://github.com/vantt/mcp-skill-hub/releases/latest/download/install.sh | sh
+curl -fsSL https://github.com/vantt/skillhub-mcp/releases/latest/download/install.sh | sh
 ```
 
 <details>
 <summary>Windows (PowerShell)</summary>
 
 ```powershell
-powershell -ExecutionPolicy ByPass -c "irm https://github.com/vantt/mcp-skill-hub/releases/latest/download/install.ps1 | iex"
+powershell -ExecutionPolicy ByPass -c "irm https://github.com/vantt/skillhub-mcp/releases/latest/download/install.ps1 | iex"
 ```
 
 </details>
