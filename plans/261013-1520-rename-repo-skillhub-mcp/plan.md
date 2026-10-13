@@ -169,7 +169,8 @@ before the first new release.
 1. **Version (user, 2026-10-13):** the first release under the new name is v0.6.6.
 2. Local checkout directory `/home/vantt/projects/mcp-skill-hub`: kept as is (renaming it detaches this project's
    Claude Code session history). The two path fixtures keep the old directory string.
-3. Trademark, npm, PyPI and domain checks for `skillhub`: still open, before any broad launch.
+3. Trademark, npm, PyPI and domain checks for `skillhub`: not needed now (user, 2026-10-13); revisit before any
+   broad launch.
 
 ## Progress
 
