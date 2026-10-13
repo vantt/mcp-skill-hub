@@ -1,7 +1,7 @@
 ---
 title: "Rename the repository and Go module from mcp-skill-hub to skillhub-mcp"
 description: "Drop the transport-first name: the repo, module path and release URLs become skillhub-mcp, while the product name Skill Hub, the skillhub command, SKILLHUB_* variables and user config stay unchanged. Decision: no bridge release; binaries older than the first release under the new name reinstall once."
-status: pending
+status: in-progress
 priority: P2
 effort: 4h
 branch: main
@@ -164,12 +164,17 @@ before the first new release.
 - [ ] Release notes explain the rename, the reinstall step for v0.6.4 and earlier, and the Go module path change.
 - [ ] The README names the three names in one line (repo, product, command).
 
-## Open questions for the user
+## Decisions and open questions
 
-1. Is the next version after the rename v0.7.0 (a module-path change is breaking for Go importers, though there
-   are few) or v0.6.6?
-2. Should the local checkout directory `/home/vantt/projects/mcp-skill-hub` also be renamed to
-   `skillhub-mcp`? Doing so changes the Claude Code project-directory slug and so detaches this project's
-   session history; the plan assumes it stays.
-3. Do you want the trademark, npm, PyPI and domain checks for `skillhub` done before the rename, or only before
-   a broad launch?
+1. **Version (user, 2026-10-13):** the first release under the new name is v0.6.6.
+2. Local checkout directory `/home/vantt/projects/mcp-skill-hub`: kept as is (renaming it detaches this project's
+   Claude Code session history). The two path fixtures keep the old directory string.
+3. Trademark, npm, PyPI and domain checks for `skillhub`: still open, before any broad launch.
+
+## Progress
+
+- 2026-10-13: the GitHub repository was renamed to `vantt/skillhub-mcp`; local `origin` follows it.
+- 2026-10-13: phase 1 merged into local `main` (module path, workflows, installers, selfupdate constants, docs,
+  README names line). `gofmt`, `go vet` on three platforms, `bash -n` and `make check` pass. Not pushed.
+- Next: **68** pushes and tags v0.6.6, then phase 3 verification (new-name install, old-URL redirect, v0.6.4
+  fail-safe, `go install` with the new path).
