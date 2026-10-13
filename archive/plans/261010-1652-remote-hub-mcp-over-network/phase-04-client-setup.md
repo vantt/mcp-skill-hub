@@ -32,4 +32,4 @@ One command on machine A makes the agent host use the hub on machine B (through 
 - [x] `make check` green.
 
 ## Implementation status (2026-10-11)
-Completed. Report: [cook-261011-remote-phase4.md](../reports/cook-261011-remote-phase4.md). The token hand-off is explained in the `connect --hub` preview and in `skillhub help connect`; the user guide is Phase 6.
+Completed. Report: [cook-261011-remote-phase4.md](../../../plans/reports/cook-261011-remote-phase4.md). The token hand-off is explained in the `connect --hub` preview and in `skillhub help connect`; the user guide is Phase 6.

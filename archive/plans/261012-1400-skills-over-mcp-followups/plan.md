@@ -1,17 +1,17 @@
 ---
 title: "Skills over MCP follow-ups"
 description: "Work deliberately left open after the skills-over-MCP conformance review: items that wait for a host to use the skills extension, and small cleanups."
-status: pending
+status: completed
 priority: P3
 created: 2026-10-12
 ---
 
 # Skills over MCP follow-ups
 
-Source: [conformance review](../reports/review-261012-skills-over-mcp-conformance.md) and
-[host check](../reports/review-261012-host-skills-extension-check.md). Shipped in v0.6.2.
+Source: [conformance review](../../../plans/reports/review-261012-skills-over-mcp-conformance.md) and
+[host check](../../../plans/reports/review-261012-host-skills-extension-check.md). Shipped in v0.6.2.
 
-## Waiting for a host that calls `skills/list`
+## Waiting for a host that calls `skills/list` (moved to the observation backlog, item H5)
 
 No tested host (Claude Code 2.1.296, Codex 0.161.0) calls `skills/list` yet; Gemini CLI was not installed. Re-run the
 host check when a host release changes that; the matrix status stays `unverified` until then.
@@ -23,7 +23,7 @@ host check when a host release changes that; the matrix status stays `unverified
 
 ## Waiting for the user
 
-- Curator-compliance script.
+- Curator-compliance script: done 2026-10-12 (observation backlog, M8).
 
 ## Decided not to do
 
@@ -39,7 +39,7 @@ host check when a host release changes that; the matrix status stays `unverified
 
 - Integers above 2^53 in skill frontmatter through the remote-hub proxy: no loss. The proxy serves a skill's frontmatter only as the SKILL.md text from the cached bundle and never decodes it into a Go value; no runtime tool result carries frontmatter. A test pins this.
 - Merging the two observes in `skill_get` saves about 0.25 ms.
-- A long-lived `*sql.DB` per generation was measured and skipped: only resolve gains (0.36-0.56 ms); get, list and read already open no database. It breaks two pin and read-only contracts and adds Windows file-lock risk. See [measurement](../reports/measure-261012-longlived-db-handle.md). Cheaper options if resolve latency matters: skip the pin file for the read-only search, or memoize search results per generation and query.
+- A long-lived `*sql.DB` per generation was measured and skipped: only resolve gains (0.36-0.56 ms); get, list and read already open no database. It breaks two pin and read-only contracts and adds Windows file-lock risk. See [measurement](../../../plans/reports/measure-261012-longlived-db-handle.md). Cheaper options if resolve latency matters: skip the pin file for the read-only search, or memoize search results per generation and query.
 - Freshness scan costs 4-5 ms at 300 skills; removing it needs a file watcher.
 
 ## Not verified locally

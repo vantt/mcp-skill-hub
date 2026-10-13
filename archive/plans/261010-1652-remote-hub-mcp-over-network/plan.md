@@ -1,7 +1,7 @@
 ---
 title: "Remote hub: agents on machine A use the hub on machine B over MCP"
 description: "Let an agent on one machine call skill_resolve, skill_get and skill_feedback against a hub running on another machine, over authenticated, encrypted MCP, with runtime tools only."
-status: in-progress
+status: completed
 priority: P3
 effort: 4d
 branch: main
@@ -101,7 +101,7 @@ skillhub connect --remove --yes                      # remove the entry for this
 | 3 | [Skill bundle delivery and client cache (skill runs, fetch is fast)](./phase-03-bundle-delivery-and-cache.md) | Completed | P1 |
 | 4 | [Client setup: connect --hub and doctor](./phase-04-client-setup.md) | Completed | P2 |
 | 5 | [Telemetry, sessions and privacy](./phase-05-telemetry-and-privacy.md) | Completed | P2 |
-| 6 | [Benchmarks, two-machine tests and docs](./phase-06-benchmarks-tests-docs.md) | In progress | P1 |
+| 6 | [Benchmarks, two-machine tests and docs](./phase-06-benchmarks-tests-docs.md) | Completed (real-machine run moved to backlog R1) | P1 |
 
 Phases run in order. Phase 3 is the heart of the two headline criteria and is the largest phase.
 
@@ -135,7 +135,7 @@ Budgets, checked by Phase 1 against the stdio baseline on 2026-10-11 (`make remo
 - [ ] A to B: the same skills resolve and run through an SSH tunnel and through a Tailscale address (the second checked by hand on the user's machines; the first also in an automated loopback test). Open: the loopback tunnel case is automated (`TestRemoteHubEndToEndThroughATunnel`, a relay on a second port as `ssh -N -L` gives); the Tailscale address and the real SSH tunnel wait for the user's run on the real machines (`docs/remote-hub-guide.md`, `scripts/remote-timing.sh`).
 - [x] Machine B serves its own agents over stdio and machine A over the network at the same time, with no lost telemetry events. Proof: `TestHubServesLocalStdioAndRemoteProxiesAtOnce` (three stdio servers and two proxies at once; every resolution event written).
 
-Still open (2026-10-11): the Tailscale check and the timed run on the user's real machines, and CI on macOS and Windows (checked locally with `GOOS=darwin` and `GOOS=windows go vet` only).
+Closed (2026-10-13): CI on macOS and Windows is green (Verify jobs on the v0.6.4 release commit). The Tailscale check, the real SSH tunnel and the timed run on the user's real machines moved to the observation backlog, item R1.
 
 ## Risks
 

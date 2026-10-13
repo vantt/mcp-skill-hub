@@ -1,7 +1,7 @@
 ---
 phase: 6
 title: "Benchmarks, two-machine tests and docs"
-status: in-progress
+status: completed
 priority: P1
 effort: "0.5d"
 dependencies: [3, 4, 5]
@@ -32,8 +32,8 @@ As built: the bench is `internal/delivery/mcpserver/remote_budget_bench_test.go`
 ## Verification
 - [x] All success criteria in `plan.md` are checked with a test or a benchmark line, or marked as needing the real machines or CI on macOS and Windows.
 - [x] `make check` and `make remote-bench` green on Linux.
-- [ ] CI on macOS and Windows green (checked locally with `GOOS=darwin` and `GOOS=windows go vet` only).
-- [ ] The user ran one skill from machine A against machine B and timed it.
+- [x] CI on macOS and Windows green (Verify jobs, 2026-10-13).
+- [ ] The user ran one skill from machine A against machine B and timed it. Moved to the observation backlog, item R1.
 
 ## Implementation status (2026-10-11)
-Tasks 1 to 5 completed. Report: [cook-261011-remote-phase6.md](../reports/cook-261011-remote-phase6.md). Task 6 and the last two verification lines wait for the user's real machines and for CI.
+Tasks 1 to 5 completed. Report: [cook-261011-remote-phase6.md](../../../plans/reports/cook-261011-remote-phase6.md). Task 6 and the last two verification lines wait for the user's real machines and for CI.

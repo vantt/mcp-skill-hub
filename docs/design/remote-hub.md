@@ -5,7 +5,7 @@
 Status: implemented. Decisions settled and the stdio baseline measured on 2026-10-11 before any
 network code existed; the final command syntax and the measured numbers of the finished feature are
 below. The user-facing guide is [docs/remote-hub-guide.md](../remote-hub-guide.md).
-Plan: [plans/261010-1652-remote-hub-mcp-over-network/plan.md](../../plans/261010-1652-remote-hub-mcp-over-network/plan.md).
+Plan: [archive/plans/261010-1652-remote-hub-mcp-over-network/plan.md](../../archive/plans/261010-1652-remote-hub-mcp-over-network/plan.md).
 
 One user has several machines. Machine B curates the hub and serves it; machine A only uses the
 skills. An agent on A calls the three runtime tools (`skill_resolve`, `skill_get`, `skill_feedback`)
