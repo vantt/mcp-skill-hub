@@ -77,12 +77,17 @@ func systemSkillGitFindings(ctx context.Context, root string) []Finding {
 	if err != nil {
 		return nil
 	}
+	var owned []string
 	for _, path := range tracked {
 		if raw, ok := readGeneratedFile(root, path); ok && hostintegration.SystemSkillFileOwned(path, raw) {
-			findings = append(findings, Finding{Code: "system_skill_tracked", Label: "Tracked system skill", Severity: SeverityNotice,
-				Message: "Git tracks " + path + ", which Skill Hub regenerates from its version; stop tracking it with the command below, then commit.",
-				Manual:  "git -C " + shellquote.Arg(root) + " rm --cached -- " + shellquote.Arg(path)})
+			owned = append(owned, path)
 		}
+	}
+	if len(owned) > 0 {
+		owned = sortedUnique(owned)
+		findings = append(findings, Finding{Code: "system_skill_tracked", Label: "Tracked system skills", Severity: SeverityNotice,
+			Message: "Git tracks " + strings.Join(owned, ", ") + ", which Skill Hub regenerates from its version; stop tracking them with the command below, then commit.",
+			Manual:  untrackCommand(root, owned), untrack: owned})
 	}
 	ignored, err := gitPaths(ctx, root, append([]string{"ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--"}, folders...)...)
 	if err != nil {

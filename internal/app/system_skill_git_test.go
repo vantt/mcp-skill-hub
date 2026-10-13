@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/vantt/mcp-skill-hub/internal/shellquote"
 	"github.com/vantt/mcp-skill-hub/internal/userconfig"
 )
 
@@ -164,6 +165,32 @@ func TestUntrackedUserFileInAnIgnoredSkillFolderIsNamed(t *testing.T) {
 	}
 	if !strings.Contains(gitForTest(t, hub, "status", "--porcelain", "--untracked-files=all"), ".claude/skills/my-skill/SKILL.md") {
 		t.Fatal("a user skill outside the system skill folders is ignored")
+	}
+}
+
+func TestTrackedMachineAndSystemSkillFilesShareOneSortedCommand(t *testing.T) {
+	t.Parallel()
+	hub := healthHub(t)
+	tracked := []string{".mcp.json", ".claude/settings.local.json", ".claude/skills/system-curator/SKILL.md", ".agents/skills/system-curator/SKILL.md"}
+	gitForTest(t, hub, append([]string{"add", "-f", "--"}, tracked...)...)
+	gitForTest(t, hub, "commit", "-q", "-m", "track generated files")
+	sections := Run(t.Context(), RoleReport{Cwd: hub, Hub: &HubRef{Root: hub}}, DepthFull)
+	var commands []string
+	for _, section := range sections {
+		for _, finding := range section.Findings {
+			if strings.Contains(finding.Manual, "rm --cached") {
+				commands = append(commands, finding.Manual)
+			}
+		}
+	}
+	want := "git -C " + shellquote.Arg(hub) + " rm --cached -- .agents/skills/system-curator/SKILL.md .claude/settings.local.json .claude/skills/system-curator/SKILL.md .mcp.json"
+	if len(commands) != 1 || commands[0] != want {
+		t.Fatalf("untrack commands = %q, want one: %q", commands, want)
+	}
+	machine := findingByCode(t, sections, "machine_file_tracked")
+	system := findingByCode(t, sections, "system_skill_tracked")
+	if machine.Severity != SeverityProblem || machine.Manual != want || system.Severity != SeverityNotice || system.Manual != "" {
+		t.Fatalf("machine = %+v\nsystem = %+v", machine, system)
 	}
 }
 

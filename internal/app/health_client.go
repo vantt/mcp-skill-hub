@@ -72,7 +72,12 @@ func (clientLocalCheck) sections(ctx context.Context, report RoleReport, _ Depth
 		if hubName == "" {
 			hubName = "the folder named in " + group.path
 		}
-		section := Section{Kind: SectionClient, Root: group.root, Title: scopeTitle(report, group.global, group.root, "uses") + " the hub at " + hubName}
+		title := scopeTitle(report, group.global, group.root, "uses") + " the hub at " + hubName
+		if group.hub != "" && sameDirectory(group.hub, report.HealthHub()) {
+			// The hub section above already names this hub.
+			title = scopeTitle(report, group.global, group.root, "uses") + " this hub"
+		}
+		section := Section{Kind: SectionClient, Root: group.root, Title: title}
 		section.Findings = append(section.Findings, hostScopeFindings(report, group.global, group.hosts)...)
 		section.Findings = append(section.Findings, localGroupFindings(ctx, report, group)...)
 		sections = append(sections, section)

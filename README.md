@@ -226,7 +226,7 @@ Status:     Skill Hub is up to date.
 Health:     Workspace valid; search index current; Git clean.
 Inventory:  No skills yet.
 
-This project uses the hub at <home>/skill-hub
+This project uses this hub
 
 Check        Status  Detail
 Claude Code  ok      project entry in .mcp.json

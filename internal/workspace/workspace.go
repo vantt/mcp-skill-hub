@@ -403,6 +403,42 @@ func MissingIgnoreEntries(root string) ([]string, error) {
 	return missing, nil
 }
 
+// AddMissingIgnoreEntries appends the required entries the hub's .gitignore
+// lacks and keeps every other line. It changes nothing else, so it is safe on a
+// hub whose schema still needs a migration. Callers hold the exclusive
+// mutation lock. It reports whether the file changed.
+func AddMissingIgnoreEntries(root string) (bool, error) {
+	missing, err := MissingIgnoreEntries(root)
+	if err != nil || len(missing) == 0 {
+		return false, err
+	}
+	contents, err := desiredGitignore(root)
+	if err != nil {
+		return false, err
+	}
+	path := filepath.Join(root, ".gitignore")
+	mode := fs.FileMode(0o644)
+	if info, statErr := os.Lstat(path); statErr == nil {
+		mode = info.Mode().Perm()
+	}
+	temporary, err := os.CreateTemp(root, ".gitignore-*")
+	if err != nil {
+		return false, err
+	}
+	name := temporary.Name()
+	_, writeErr := temporary.Write(contents)
+	closeErr := temporary.Close()
+	if err := errors.Join(writeErr, closeErr, os.Chmod(name, mode)); err != nil {
+		_ = os.Remove(name)
+		return false, err
+	}
+	if err := os.Rename(name, path); err != nil {
+		_ = os.Remove(name)
+		return false, err
+	}
+	return true, nil
+}
+
 // MachineFiles lists the agent connection files that hold paths of this
 // machine and therefore never belong in Git.
 func MachineFiles() []string { return append([]string(nil), machineFiles...) }

@@ -68,6 +68,64 @@ func TestDoctorFixPreservesBlockedWorkspaceAndUnregisteredHosts(t *testing.T) {
 	}
 }
 
+func TestDoctorFixAddsIgnoreEntriesOfAHubThatStillNeedsItsMigration(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	hub := initHub(t, filepath.Join(t.TempDir(), "hub"))
+	ignore := filepath.Join(hub, ".gitignore")
+	replaceInFile(t, ignore, "/.codex/\n", "")
+	if err := os.WriteFile(ignore, append([]byte("# mine\nnotes/\n"), mustRead(t, ignore)...), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(hub, ".skillhub", "schema-version")
+	if err := os.Remove(marker); err != nil {
+		t.Fatal(err)
+	}
+	head := strings.TrimSpace(gitOutput(t, hub, "rev-parse", "HEAD"))
+	t.Chdir(hub)
+
+	code, stdout, stderr := runCLI(t, "doctor", "--workspace", hub, "--fix", "--json")
+	if code != 1 {
+		t.Fatalf("doctor --fix exit = %d, want 1 while the migration is pending: %s%s", code, stdout, stderr)
+	}
+	var result doctorJSON
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.ContainsFunc(result.Fixed, func(item app.FixedItem) bool { return slices.Contains(item.Codes, "gitignore_entry_missing") }) {
+		t.Fatalf("the ignore entries were not added: %s", stdout)
+	}
+	if !slices.ContainsFunc(result.NotFixed, func(item app.NotFixedItem) bool {
+		return item.Code == "hub_schema" && strings.Contains(item.Manual, "maintain migrate")
+	}) {
+		t.Fatalf("the migration is not named as the next step: %s", stdout)
+	}
+	after := string(mustRead(t, ignore))
+	if !strings.HasPrefix(after, "# mine\nnotes/\n") || !strings.Contains(after, "/.codex/\n") || strings.Count(after, "/runtime/\n") != 1 {
+		t.Fatalf(".gitignore after doctor --fix:\n%s", after)
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("doctor --fix wrote the schema marker: %v", err)
+	}
+	if got := strings.TrimSpace(gitOutput(t, hub, "rev-parse", "HEAD")); got != head {
+		t.Fatalf("doctor --fix made a commit: %s -> %s", head, got)
+	}
+	if code, _, stderr := runCLI(t, "maintain", "migrate", "--workspace", hub, "--yes"); code != 0 {
+		t.Fatalf("migrate after doctor --fix exit = %d: %s", code, stderr)
+	}
+	if code, stdout, stderr := runCLI(t, "doctor", "--workspace", hub, "--fix"); code != 0 {
+		t.Fatalf("doctor --fix after the migration exit = %d: %s%s", code, stdout, stderr)
+	}
+}
+
+func mustRead(t *testing.T, path string) []byte {
+	t.Helper()
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return content
+}
+
 func TestDoctorFixDoesNotRedirectOtherWorkspaceConnections(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
