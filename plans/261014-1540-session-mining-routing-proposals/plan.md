@@ -1,7 +1,7 @@
 ---
 title: "Routing suggestions mined from telemetry"
 description: "The hub reads its own case journal and usage events for routing misses and suggests examples, counter_examples and not_for entries for existing skills; every suggestion becomes an ordinary skill edit preview that a human confirms or dismisses."
-status: pending
+status: on-hold # deferred 2026-10-14: wait for the curation UX review; this plan may change after it
 priority: P2
 effort: 13h
 branch: TBD (own worktree, see Execution)

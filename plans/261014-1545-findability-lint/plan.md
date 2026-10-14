@@ -1,7 +1,7 @@
 ---
 title: "Self-resolution lint for skill examples"
 description: "Warn when a skill's own examples do not resolve to it, its counter-examples do, or a change to it takes other skills' examples. Review and validate check only the examples a change can affect; a bounded full scan stays as the safety net."
-status: pending
+status: on-hold # deferred 2026-10-14: wait for the curation UX review; this plan may change after it
 priority: P2
 effort: 3d
 branch: worktree-agent-adf317bed349da81c
