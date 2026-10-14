@@ -252,6 +252,8 @@ UI rendering of readiness warnings. No persisted cache of earlier results.
    new problem caused by X.
 3. `leaveOneOutCatalog` removes the example from scoring but not from FTS. Closing that would change
    `eval routing` metrics and testdata/routing/gate-v1.json. Should a later change close it?
+   Decided 2026-10-14: yes, as a separate change after this plan; tracked as F16 in
+   docs/plans/2026-10-10-observation-backlog.md.
 4. Should MCP workspace validate accept a `full` option, or stay with the changed-skills default?
 5. Should the review JSON gain a structured `routing_findings` array (code, other_skill_id, value,
    fix) in addition to the strings? The plan keeps strings only.
