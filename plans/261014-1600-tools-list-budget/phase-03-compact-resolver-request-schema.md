@@ -2,6 +2,8 @@
 
 ## Gate
 
+Open: the user chose option (a) on 2026-10-14.
+
 User decision on plan open question 1. Today the advertised `skill_resolve` input schema is the committed contract
 byte for byte and `server_test.go:195-203` enforces that. This phase changes that rule, so it does not start without an
 explicit "yes" (option a) or "only `$id`/`$schema`" (option c, steps 2 and 4 only, no projection of bounds).

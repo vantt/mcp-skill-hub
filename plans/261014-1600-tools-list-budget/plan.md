@@ -126,7 +126,13 @@ restores the previous descriptions or schema and its pinned digests and budget t
 
 ## Open questions
 
-1. **Advertised request schema vs committed contract (decides phase 3).** Today the advertised `skill_resolve`
+1. **Decided 2026-10-14: option (a), phase 3 in full.** The "advertised schema equals the contract" rule is
+   dropped: its only real job was to make the SDK enforce every bound, which phase 3 keeps through explicit
+   validation against the committed schema and a per-bound test. The bounds are generous (task description 4096
+   characters, list items 512, at most 32 facts), so a model rarely hits one, and the saving recurs every session.
+   Original question kept below for the record.
+
+   **Advertised request schema vs committed contract (decides phase 3).** Today the advertised `skill_resolve`
    input schema equals `schemas/skill-resolve-request-v1.schema.json` byte for byte, and a test enforces it. Phase 3
    would advertise a projection (no `$id`, `$schema`, length/count/uniqueness keywords) while the server validates the
    full committed schema. Trade-off: ~780 bytes (~195 tokens) per session in Claude Code, zero in Codex (which already
