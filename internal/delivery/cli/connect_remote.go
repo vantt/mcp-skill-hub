@@ -73,7 +73,7 @@ var pairingLookup = func(ctx context.Context, host string) ([]netip.Addr, error)
 	return net.DefaultResolver.LookupNetIP(ctx, "ip", host)
 }
 
-const pairingRefused = "an invite is only sent over Tailscale or to this machine (SSH tunnel); use the scp line instead"
+const pairingRefused = "with --strict-pairing an invite is only sent over Tailscale or to this machine (SSH tunnel); use the scp line instead"
 
 // checkPairingHost refuses a hub address an invite must not be sent to: the
 // host must be an address that is loopback or Tailscale, or a name that
@@ -121,8 +121,10 @@ func acceptInvite(ctx context.Context, flags *connectFlags, stdout, stderr io.Wr
 	if problem != nil {
 		return "", writeWorkspaceResult(app.ErrorResult(problem), nil, stdout, stderr, flags.json), true
 	}
-	if err := checkPairingHost(ctx, hubURL); err != nil {
-		return fail("The invite was not sent.", err.Error()+".", "Use the hub's Tailscale address or an SSH tunnel to it, or copy the token file with the scp line `skillhub serve` prints.")
+	if flags.strictPairing {
+		if err := checkPairingHost(ctx, hubURL); err != nil {
+			return fail("The invite was not sent.", err.Error()+".", "Use the hub's Tailscale address or an SSH tunnel to it, or copy the token file with the scp line `skillhub serve` prints.")
+		}
 	}
 	destination := flags.tokenFile
 	if destination == "" {

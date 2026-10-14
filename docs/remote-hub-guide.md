@@ -53,11 +53,11 @@ Skills whose content waits for your approval stay blocked for machine A exactly 
 > [!WARNING]
 > `skillhub serve` listens on every network interface (`0.0.0.0`) by default, over plain HTTP. Anyone who can watch that network can read the hub token and the task text your agents send. The web UI (`skillhub serve web`) works the same way, and it can change skills: anyone who gets its address can add or edit the skills every connected agent uses. Tailscale and SSH encrypt the traffic; on any other network you do not trust, use the [SSH tunnel](#on-an-untrusted-network-use-an-ssh-tunnel).
 
-## Connect with an invite (Tailscale or an SSH tunnel)
+## Connect with an invite
 
-An invite hands machine A the hub token in one step, without `scp` and without an SSH login to machine B. It works only where the traffic is encrypted: over Tailscale, or through an SSH tunnel to machine B's loopback address.
+An invite hands machine A the hub token in one step, without `scp` and without an SSH login to machine B. By default it works over any network the server listens on, in plain HTTP, so the code and the token can be read by anyone who can watch that network: fine at home or in an office, risky elsewhere. To limit it to Tailscale and to an SSH tunnel, where the traffic is encrypted, start the server with `--strict-pairing` and pass the same flag to `token invite` and `connect`.
 
-1. Start the server on machine B and leave it running. For Tailscale, `skillhub serve`; for a tunnel, `skillhub serve --addr 127.0.0.1:7420` and open the tunnel from machine A as in [On an untrusted network](#on-an-untrusted-network-use-an-ssh-tunnel).
+1. Start the server on machine B and leave it running: `skillhub serve`. On a network you do not trust, use `skillhub serve --addr 127.0.0.1:7420 --strict-pairing` and open the tunnel from machine A as in [On an untrusted network](#on-an-untrusted-network-use-an-ssh-tunnel).
 2. On machine B, in another terminal, run the same folder and `--addr` the server uses:
 
    ```bash
@@ -72,7 +72,7 @@ An invite hands machine A the hub token in one step, without `scp` and without a
      $ skillhub connect --hub http://100.121.46.35:7420 --invite K7QF-9M2X-4TBD
    ```
 
-   The command needs a terminal (the code must not land in a file, a log or an agent transcript). It lists only the addresses where an invite is accepted, and one line says so when a plain LAN address was left out.
+   The command needs a terminal (the code must not land in a file, a log or an agent transcript). It lists every address of machine B; with `--strict-pairing` it lists only Tailscale and loopback, and one line says so when a plain LAN address was left out.
 3. On machine A, paste the line inside your project:
 
    ```bash
@@ -98,13 +98,13 @@ An invite hands machine A the hub token in one step, without `scp` and without a
 | Message | What to do |
 |---|---|
 | This invite is not valid: it expired, was already used, or is wrong | Run `skillhub token invite` on machine B for a new one |
-| Pairing is only offered over Tailscale or an SSH tunnel | Use the Tailscale address or the tunnel, or copy the token file with the `scp` lines |
+| Pairing is only offered over Tailscale or an SSH tunnel | The server runs with `--strict-pairing`: use the Tailscale address or the tunnel, or copy the token file with the `scp` lines |
 | The hub refused the request (403 before the invite was looked at) | Reaching the hub by a name it does not know: add `--allow-host <name>` to `skillhub serve`, or use an address `serve` prints |
 | The hub is refusing attempts for a minute | Wait a minute, then run the command again |
 | This hub does not offer invites | The server is older than this feature; update Skill Hub on machine B, or use the `scp` lines |
 | `<path>` already exists | With `--token-file`, pick a path that does not exist yet, or leave `--token-file` out |
 
-**Limits to know.** The invite appears in the command line on machine A for the moment the command runs, so another user of that machine could read it from the process list; it works once and expires in 10 minutes. Tailscale's address range (100.64.0.0/10) is the generic carrier-grade NAT range, so the server cannot tell Tailscale from another network that uses the same range; the server also refuses requests that carry proxy headers (`Forwarded`, `X-Forwarded-*`, `Via`), including those from `tailscale serve` and Funnel. A user who can already log in to machine B can use the route like any client, and two hubs reached through the same `127.0.0.1:<port>` tunnel on machine A would share one saved file.
+**Limits to know.** Without `--strict-pairing` nothing protects the code or the token on the wire. The invite appears in the command line on machine A for the moment the command runs, so another user of that machine could read it from the process list; it works once and expires in 10 minutes. Tailscale's address range (100.64.0.0/10) is the generic carrier-grade NAT range, so the server cannot tell Tailscale from another network that uses the same range; the server also refuses requests that carry proxy headers (`Forwarded`, `X-Forwarded-*`, `Via`), including those from `tailscale serve` and Funnel. A user who can already log in to machine B can use the route like any client, and two hubs reached through the same `127.0.0.1:<port>` tunnel on machine A would share one saved file.
 
 ## Set up on your LAN or Tailscale with `scp`
 

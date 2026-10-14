@@ -73,9 +73,11 @@ do not type it. On the wire the listener answers `/mcp` (MCP Streamable HTTP), `
 whole approved skill as one digest-addressed archive, with `ETag` and `304`) and `GET /mcp/status`
 (version and remote protocol level), all behind the same bearer token, and `POST /mcp/pair`, which takes
 a one-time invite instead of the bearer token and answers with the hub token. The pair route is off unless
-the server was given an invite store. It answers only when both the local and the remote address of the
+the server was given an invite store. By default it answers any connection the listener accepts, so a hub
+at home or in an office pairs with no extra setup, at the price that the code and the token travel in plain
+HTTP. With `--strict-pairing` it answers only when both the local and the remote address of the
 connection are loopback or in `100.64.0.0/10` and the request has no forwarding header; otherwise it
-answers 403 without looking at the invite. An invite is a 12 character code kept on the hub as an empty
+answers 403 without looking at the invite, and the client refuses to send an invite to any other address. An invite is a 12 character code kept on the hub as an empty
 file named by its SHA-256, whose modification time is its expiry; it is claimed by creating a `.used` marker
 with exclusive creation, which exactly one request can do on every system, and it expires after 10 minutes. Failures are counted per remote address apart from
 bearer failures, every failure answers the same 403, and the hub token is read before the invite is claimed

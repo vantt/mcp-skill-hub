@@ -66,6 +66,10 @@ type HTTPOptions struct {
 	// Invites redeems the one-time codes presented to POST /mcp/pair; nil
 	// turns that route off (404).
 	Invites Redeemer
+	// StrictPairing makes the pair route answer only connections that stay
+	// on loopback or Tailscale and carry no proxy header. Without it the route
+	// answers any connection the listener accepts.
+	StrictPairing bool
 }
 
 // ServeHTTP serves the runtime tools (skill_resolve, skill_get,
@@ -105,6 +109,7 @@ func ServeHTTP(ctx context.Context, listeners []net.Listener, options HTTPOption
 	gate := newHTTPGate(server, tokens, hosts, originHosts(addresses, options.AllowHosts), adapter.logger)
 	gate.bundle = adapter.bundleHTTPHandler(server)
 	gate.invites = options.Invites
+	gate.strictPairing = options.StrictPairing
 	httpServer := &http.Server{
 		Handler:           gate,
 		ReadHeaderTimeout: httpReadHeaderTimeout,
@@ -172,12 +177,13 @@ func ServeHTTP(ctx context.Context, listeners []net.Listener, options HTTPOption
 // limit, and the session cap. The token is compared in constant time and is
 // never logged or echoed.
 type httpGate struct {
-	server  *mcp.Server
-	handler http.Handler
-	bundle  http.Handler
-	invites Redeemer
-	tokens  *hubtoken.Source
-	hosts   *hostpolicy.Policy
+	server        *mcp.Server
+	handler       http.Handler
+	bundle        http.Handler
+	invites       Redeemer
+	strictPairing bool
+	tokens        *hubtoken.Source
+	hosts         *hostpolicy.Policy
 	// origins is the strict Origin set; it does not follow the Host policy's
 	// acceptance of any IP literal (see originHosts).
 	origins  map[string]bool

@@ -35,6 +35,7 @@ type tokenConfig struct {
 	tokenFile     string
 	addrFlag      string
 	dryRun        bool
+	strictPairing bool
 }
 
 func runToken(args []string, stdout, stderr io.Writer) int {
@@ -93,6 +94,11 @@ func parseTokenFlags(args []string, subcommand string) (tokenConfig, string) {
 				cfg.tokenFile = args[index+1]
 			}
 			index++
+		case "--strict-pairing":
+			if subcommand != "invite" {
+				return cfg, "unknown argument \"--strict-pairing\""
+			}
+			cfg.strictPairing = true
 		case "--dry-run":
 			if subcommand != "rotate" {
 				return cfg, "unknown argument \"--dry-run\""
@@ -269,7 +275,7 @@ func runTokenInvite(cfg tokenConfig, stdout, stderr io.Writer) int {
 	p.Fields(termui.Field{Label: "Hub folder", Value: workspace})
 	skipped := false
 	for _, option := range connectTargets(bound, interfaces) {
-		if option.kind == targetLAN {
+		if cfg.strictPairing && option.kind == targetLAN {
 			skipped = true
 			continue
 		}
@@ -285,7 +291,7 @@ func runTokenInvite(cfg tokenConfig, stdout, stderr io.Writer) int {
 	}
 	p.Blank()
 	if skipped {
-		p.Line("Other addresses are not listed: an invite works only over Tailscale or an SSH tunnel. The `scp` way that `skillhub serve` prints still works there.")
+		p.Line("Other addresses are not listed because of --strict-pairing: an invite then works only over Tailscale or an SSH tunnel. The `scp` way that `skillhub serve` prints still works there.")
 	}
 	p.Line("The code is not the hub token. Running this command again gives a new code.")
 	p.Line("Run it with the same --workspace and --addr the server uses: the invite counts only for the `skillhub serve` that uses this hub folder. If the server is not running, start `skillhub serve`.")
@@ -299,6 +305,9 @@ func tokenInviteCommand(cfg tokenConfig) string {
 	}
 	if cfg.addrFlag != "" {
 		command += " --addr " + shellquote.Arg(cfg.addrFlag)
+	}
+	if cfg.strictPairing {
+		command += " --strict-pairing"
 	}
 	return command
 }

@@ -24,6 +24,7 @@ type connectFlags struct {
 	hub, tokenFile string
 	// invite is the canonical code given with --invite.
 	invite               string
+	strictPairing        bool
 	hosts                []hostintegration.Host
 	global, dryRun, json bool
 	remove, cache        bool
@@ -265,6 +266,8 @@ func parseConnectFlags(args []string) (connectFlags, error) {
 				return flags, err
 			}
 			flags.tokenFile, flags.tokenFileSet = item, true
+		case "--strict-pairing":
+			flags.strictPairing = true
 		case "--invite":
 			item, err := value(&index)
 			if err != nil {
@@ -329,6 +332,12 @@ func parseConnectFlags(args []string) (connectFlags, error) {
 			what: "--invite needs --hub.",
 			why:  "An invite is traded for the token of a hub on another machine, so the command needs that hub's URL.",
 			fix:  "Add --hub <url>, the address `skillhub token invite` printed on the hub machine.",
+		}
+	case flags.strictPairing && !flags.inviteSet:
+		return flags, &connectUsageError{
+			what: "--strict-pairing needs --invite.",
+			why:  "--strict-pairing limits where an invite may be sent.",
+			fix:  "Add --invite <code>, or leave out --strict-pairing.",
 		}
 	case flags.inviteSet && flags.dryRun:
 		return flags, &connectUsageError{

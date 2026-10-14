@@ -77,8 +77,8 @@ A folder with other files is refused; init takes no folder argument.
 	"connect": `Usage: skillhub connect [<path>] [-g|--global] [--host claude|codex|gemini]... [--dry-run] [--json]
        skillhub connect --hub <url> --token-file <file> [-g|--global]
                         [--host claude|codex|gemini]... [--dry-run] [--json]
-       skillhub connect --hub <url> --invite <code> [--token-file <file>] [-g|--global]
-                        [--host claude|codex|gemini]... [--json]
+       skillhub connect --hub <url> --invite <code> [--token-file <file>] [--strict-pairing]
+                        [-g|--global] [--host claude|codex|gemini]... [--json]
        skillhub connect --remove [--cache] [-g|--global]
                         [--host claude|codex|gemini]... [--dry-run] [--json]
 
@@ -106,11 +106,13 @@ A hub on another machine (through an SSH tunnel or Tailscale):
                     with SKILLHUB_HUB_TOKEN set.
   --invite <code>   Take the token from a one-time invite instead of copying the file:
                     run ` + "`skillhub token invite`" + ` on the hub machine and pass the code
-                    it prints, with the Tailscale or SSH-tunnel URL it prints. The
-                    token is saved in this machine's Skill Hub config folder (or at
-                    --token-file) and then connected as usual. The invite works once
-                    and expires; it is sent only over Tailscale or to this machine,
-                    so it cannot be combined with --dry-run or --remove.
+                    it prints, with the URL it prints. The token is saved in this
+                    machine's Skill Hub config folder (or at --token-file; the file
+                    must not exist yet) and then connected as usual. The invite works
+                    once and expires, so it cannot be combined with --dry-run or
+                    --remove. On a plain network the code and the token travel
+                    unencrypted: --strict-pairing refuses to send the invite anywhere
+                    but to this machine or over Tailscale
 
 Undo a connection:
   --remove          Remove the Skill Hub entry of the scope (local or remote hub), its
@@ -391,6 +393,7 @@ Examples:
 	"token": `Usage: skillhub token show [--workspace <path>] [--token-file <path>]
        skillhub token rotate [--workspace <path>] [--token-file <path>] [--dry-run]
        skillhub token invite [--workspace <path>] [--addr <host:port>[,<host:port>...]]
+                             [--strict-pairing]
 
 Manage the shared bearer token of the network MCP listener (skillhub serve).
 The token is created on first use in <workspace>/runtime/config/.hub-token
@@ -406,13 +409,15 @@ Other machines get a copy of the file: skillhub serve prints the scp line.
                     next request
   invite            Create a one-time code, valid for 10 minutes and usable
                     once, and print the skillhub connect --invite line for each
-                    address it works over (Tailscale or an SSH tunnel). The
-                    other machine then fetches the token itself; the code is
-                    not the token. Only in a terminal. Run it again for a new
-                    code
+                    address of this machine. The other machine then fetches the
+                    token itself; the code is not the token. Only in a terminal.
+                    Run it again for a new code
   --workspace <p>   Workspace whose token to use
   --addr <list>     invite: the --addr the server uses, to list the right
                     addresses (default 0.0.0.0:7420). Pass the same --workspace
+  --strict-pairing  invite: list only Tailscale and loopback addresses, the ones
+                    where the code and the token are not readable on the network
+                    (pass it to serve too)
                     and --addr as skillhub serve
   --token-file <p>  Use this token file instead of the workspace one
 
@@ -430,7 +435,8 @@ Update skillhub to the latest release or a specified version.
   --json          Machine-readable result
 `,
 	"serve": `Usage: skillhub serve [mcp] [--addr <host:port>[,<host:port>...]] [--token-file <path>]
-                      [--allow-host <name>]... [--workspace <path>] [--install-service]
+                      [--allow-host <name>]... [--workspace <path>] [--strict-pairing]
+                      [--install-service]
        skillhub serve web [--addr <host:port>[,<host:port>...]] [--allow-host <host[:port]>]...
                           [--no-open] [--dev] [--workspace <path>]
 
@@ -463,6 +469,11 @@ tunnel (ssh -N -L); the banner prints the tunnel command.
                          starts the server with the --addr, --token-file and --allow-host
                          you pass, restarts it after a failure, and runs it again at boot
                          (login on macOS). Run it again to change those flags
+  --strict-pairing       mcp: answer invites (skillhub token invite) only on loopback
+                         and Tailscale connections without proxy headers. Without it
+                         the invite works over any network the server listens on, in
+                         plain HTTP, which is fine at home and risky on a network you
+                         do not trust
   --no-open              web: do not open the browser on start
   --dev                  web: development mode behind the Vite dev server (loopback only)
 

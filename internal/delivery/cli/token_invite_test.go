@@ -40,11 +40,36 @@ func inviteFiles(t *testing.T, workspace string) []string {
 	return names
 }
 
-func TestTokenInviteListsOnlyAddressesPairingAccepts(t *testing.T) {
+func TestTokenInviteListsEveryAddressByDefault(t *testing.T) {
 	withInviteEnvironment(t)
 	ws := initTestWorkspace(t)
 
 	code, stdout, stderr := runCLI(t, "token", "invite", "--workspace", ws)
+	if code != 0 || stderr != "" {
+		t.Fatalf("exit %d, stderr %q", code, stderr)
+	}
+	match := inviteCodePattern.FindStringSubmatch(stdout)
+	if match == nil {
+		t.Fatalf("no connect line with a grouped code:\n%s", stdout)
+	}
+	for _, want := range []string{
+		"  $ skillhub connect --hub http://192.168.1.20:7420 --invite " + match[1] + "\n",
+		"  $ skillhub connect --hub http://100.101.102.103:7420 --invite " + match[1] + "\n",
+	} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("output lacks %q:\n%s", want, stdout)
+		}
+	}
+	if strings.Contains(stdout, "--strict-pairing") {
+		t.Errorf("the default output talks about strict pairing:\n%s", stdout)
+	}
+}
+
+func TestTokenInviteWithStrictPairingListsOnlyTailscaleAndLoopback(t *testing.T) {
+	withInviteEnvironment(t)
+	ws := initTestWorkspace(t)
+
+	code, stdout, stderr := runCLI(t, "token", "invite", "--workspace", ws, "--strict-pairing")
 	if code != 0 || stderr != "" {
 		t.Fatalf("exit %d, stderr %q", code, stderr)
 	}
@@ -59,7 +84,7 @@ func TestTokenInviteListsOnlyAddressesPairingAccepts(t *testing.T) {
 		"not the hub token",
 		"Running this command again gives a new code",
 		"same --workspace and --addr",
-		"Tailscale or an SSH tunnel",
+		"because of --strict-pairing",
 		"scp",
 	} {
 		if !strings.Contains(stdout, want) {
@@ -69,7 +94,7 @@ func TestTokenInviteListsOnlyAddressesPairingAccepts(t *testing.T) {
 	if strings.Contains(stdout, "192.168.1.20") || strings.Contains(stdout, "eth0") {
 		t.Errorf("a LAN address is listed:\n%s", stdout)
 	}
-	if strings.Count(stdout, "Tailscale or an SSH tunnel") != 1 {
+	if strings.Count(stdout, "because of --strict-pairing") != 1 {
 		t.Errorf("the explanation is not printed exactly once:\n%s", stdout)
 	}
 	if !regexp.MustCompile(`expires at \d\d:\d\d`).MatchString(stdout) {

@@ -38,6 +38,7 @@ type serveConfig struct {
 	noOpen         bool
 	dev            bool
 	installService bool
+	strictPairing  bool
 }
 
 // parseServeArgs reads `skillhub serve [mcp|web] [flags]`. Without a mode
@@ -84,6 +85,11 @@ func parseServeArgs(args []string) (serveConfig, string, string) {
 				cfg.allowHosts = append(cfg.allowHosts, raw)
 			}
 			index++
+		case "--strict-pairing":
+			if cfg.mode != serveModeMCP {
+				return cfg, "--strict-pairing only applies to `skillhub serve` (mcp), not the web UI", fix
+			}
+			cfg.strictPairing = true
 		case "--install-service":
 			if cfg.mode != serveModeMCP {
 				return cfg, "--install-service only applies to `skillhub serve` (mcp), not the web UI", fix
@@ -196,11 +202,12 @@ func runServeMCP(ctx context.Context, cfg serveConfig, addresses []listenAddress
 	}
 
 	err = mcpserver.ServeHTTP(ctx, listeners, mcpserver.HTTPOptions{
-		Workspace:   workspaceRoot,
-		TokenFile:   tokenFile,
-		AllowHosts:  cfg.allowHosts,
-		Diagnostics: stderr,
-		Invites:     invite.NewService(inviteStore, nil, nil),
+		Workspace:     workspaceRoot,
+		TokenFile:     tokenFile,
+		AllowHosts:    cfg.allowHosts,
+		Diagnostics:   stderr,
+		Invites:       invite.NewService(inviteStore, nil, nil),
+		StrictPairing: cfg.strictPairing,
 		Ready: func(bound []net.Addr) {
 			interfaces, _ := hostpolicy.SystemInterfaces()
 			home, _ := os.UserHomeDir()

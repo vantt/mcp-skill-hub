@@ -74,6 +74,9 @@ func serviceArgs(cfg serveConfig, workspace string) ([]string, error) {
 	for _, host := range cfg.allowHosts {
 		args = append(args, "--allow-host", host)
 	}
+	if cfg.strictPairing {
+		args = append(args, "--strict-pairing")
+	}
 	return args, nil
 }
 

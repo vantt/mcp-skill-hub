@@ -30,7 +30,7 @@ type Redeemer interface {
 }
 
 // servePair answers POST /mcp/pair. The checks run in a fixed order: method,
-// transport, failure budget, body, hub token, invite. The hub token is read
+// transport (only with strict pairing), failure budget, body, hub token, invite. The hub token is read
 // before the invite is redeemed so a token that cannot be read never burns an
 // invite. Neither the invite, the token nor the request body is logged or
 // echoed; only a redeem failure is counted, against the remote address.
@@ -40,12 +40,7 @@ func (gate *httpGate) servePair(writer http.ResponseWriter, request *http.Reques
 		http.Error(writer, "use POST", http.StatusMethodNotAllowed)
 		return
 	}
-	local, _ := request.Context().Value(http.LocalAddrContextKey).(net.Addr)
-	var remoteAddr net.Addr
-	if parsed, err := netip.ParseAddrPort(request.RemoteAddr); err == nil {
-		remoteAddr = net.TCPAddrFromAddrPort(parsed)
-	}
-	if !hostpolicy.PairingAllowed(local, remoteAddr, request.Header) {
+	if gate.strictPairing && !gate.pairingTransportAllowed(request) {
 		http.Error(writer, httpPairTransport, http.StatusForbidden)
 		return
 	}
@@ -86,6 +81,18 @@ func (gate *httpGate) servePair(writer http.ResponseWriter, request *http.Reques
 		return
 	}
 	writePairJSON(writer, http.StatusOK, map[string]string{"token": token})
+}
+
+// pairingTransportAllowed reports whether the connection stays on loopback or
+// Tailscale, where the traffic is not readable on the wire, and carries no
+// proxy header.
+func (gate *httpGate) pairingTransportAllowed(request *http.Request) bool {
+	local, _ := request.Context().Value(http.LocalAddrContextKey).(net.Addr)
+	var remoteAddr net.Addr
+	if parsed, err := netip.ParseAddrPort(request.RemoteAddr); err == nil {
+		remoteAddr = net.TCPAddrFromAddrPort(parsed)
+	}
+	return hostpolicy.PairingAllowed(local, remoteAddr, request.Header)
 }
 
 func writePairJSON(writer http.ResponseWriter, status int, value map[string]string) {

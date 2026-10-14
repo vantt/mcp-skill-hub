@@ -210,8 +210,9 @@ func TestConnectInviteRefusals(t *testing.T) {
 		{"malformed code", []string{"--hub", hub.URL, "--invite", "nope"}, "The invite code is not valid"},
 		{"code of the wrong length", []string{"--hub", hub.URL, "--invite", code + "A"}, "The invite code is not valid"},
 		{"missing value", []string{"--hub", hub.URL, "--invite"}, "--invite requires a value"},
-		{"LAN address", []string{"--hub", "http://192.168.1.20:7420", "--invite", code}, "an invite is only sent over Tailscale or to this machine (SSH tunnel); use the scp line instead"},
-		{"public address", []string{"--hub", "https://8.8.8.8", "--invite", code}, "an invite is only sent over Tailscale or to this machine"},
+		{"LAN address with strict pairing", []string{"--hub", "http://192.168.1.20:7420", "--invite", code, "--strict-pairing"}, "an invite is only sent over Tailscale or to this machine (SSH tunnel); use the scp line instead"},
+		{"public address with strict pairing", []string{"--hub", "https://8.8.8.8", "--invite", code, "--strict-pairing"}, "an invite is only sent over Tailscale or to this machine"},
+		{"strict pairing without an invite", []string{"--hub", hub.URL, "--strict-pairing"}, "--strict-pairing needs --invite"},
 		{"destination not writable", []string{"--hub", hub.URL, "--invite", code, "--token-file", filepath.Join(blocker, "sub", "token")}, "The invite is still unused"},
 		{"destination is a folder", []string{"--hub", hub.URL, "--invite", code, "--token-file", t.TempDir()}, "The invite is still unused"},
 	}
@@ -245,7 +246,7 @@ func TestConnectInviteRefusesANameThatResolvesToALANAddress(t *testing.T) {
 	previous := pairingLookup
 	pairingLookup = func(context.Context, string) ([]netip.Addr, error) { return resolved, nil }
 	t.Cleanup(func() { pairingLookup = previous })
-	exit, stdout, stderr := runConnectCLI(t, t.TempDir(), "--hub", "http://hub.example.test:7420", "--invite", hub.Code.Format())
+	exit, stdout, stderr := runConnectCLI(t, t.TempDir(), "--hub", "http://hub.example.test:7420", "--invite", hub.Code.Format(), "--strict-pairing")
 	if exit == 0 || !strings.Contains(flatText(stdout+stderr), "an invite is only sent over Tailscale or to this machine") {
 		t.Fatalf("exit %d: %s%s", exit, stdout, stderr)
 	}

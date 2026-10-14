@@ -203,6 +203,7 @@ func TestPairTransportMatrix(t *testing.T) {
 	}
 	for _, tc := range cases {
 		gate, redeemer, _ := newPairGate(t, pairTestInvite)
+		gate.strictPairing = true
 		response := pairRequest(gate, tc.remote, tc.local, http.MethodPost, pairBody(pairTestInvite), tc.mutate)
 		if response.Code != tc.want {
 			t.Errorf("%s: status = %d, want %d", tc.name, response.Code, tc.want)
@@ -219,6 +220,23 @@ func TestPairTransportMatrix(t *testing.T) {
 		}
 		if after := pairRequest(gate, "127.0.0.1:50000", "127.0.0.1", http.MethodPost, pairBody(pairTestInvite), nil); after.Code != http.StatusOK {
 			t.Errorf("%s: the invite was not redeemable afterwards: %d", tc.name, after.Code)
+		}
+	}
+}
+
+func TestPairWithoutStrictPairingAnswersAnyConnection(t *testing.T) {
+	for name, tc := range map[string]struct {
+		remote, local string
+		mutate        func(*http.Request)
+	}{
+		"plain LAN":         {"192.168.1.20:50000", "192.168.1.5", nil},
+		"public address":    {"8.8.8.8:50000", "192.168.1.5", nil},
+		"behind a proxy":    {"127.0.0.1:50000", "127.0.0.1", func(r *http.Request) { r.Header.Set("X-Forwarded-For", "1.2.3.4") }},
+		"unparsable remote": {"nonsense", "127.0.0.1", nil},
+	} {
+		gate, _, _ := newPairGate(t, pairTestInvite)
+		if response := pairRequest(gate, tc.remote, tc.local, http.MethodPost, pairBody(pairTestInvite), tc.mutate); response.Code != http.StatusOK {
+			t.Errorf("%s: status = %d, want 200", name, response.Code)
 		}
 	}
 }
@@ -279,6 +297,7 @@ func TestPairFailuresDoNotBlockBearerRequests(t *testing.T) {
 
 func TestPairRefusedTransportIsNotCounted(t *testing.T) {
 	gate, _, _ := newPairGate(t, pairTestInvite)
+	gate.strictPairing = true
 	for attempt := 0; attempt < httpAuthFailureLimit+5; attempt++ {
 		pairRequest(gate, "192.168.1.20:50000", "127.0.0.1", http.MethodPost, pairBody("wrong"), nil)
 		pairRequest(gate, "127.0.0.1:50000", "127.0.0.1", http.MethodPost, pairBody("wrong"), func(r *http.Request) { r.Header.Set("Via", "x") })
