@@ -93,8 +93,12 @@ func New(workspacePath string, diagnostics io.Writer, profiles ...Profile) (*Ser
 	if servesSkills {
 		capabilities.AddExtension("io.modelcontextprotocol/skills", map[string]any{"directoryRead": false})
 	}
+	registry := newToolCollector()
+	adapter.registerTools(registry)
+	instructions := serverInstructions(registry.names(), instructionOptions{skillsExtension: servesSkills, curatorSkill: true})
 	server := mcp.NewServer(&mcp.Implementation{Name: "skillhub", Version: version.Current().Version}, &mcp.ServerOptions{
 		Capabilities: capabilities,
+		Instructions: instructions,
 		PageSize:     paging.MaximumLimit,
 		Logger:       logger,
 		SetCacheable: func(_ context.Context, _ mcp.Request, cache *mcp.Cacheable) {
@@ -108,8 +112,8 @@ func New(workspacePath string, diagnostics io.Writer, profiles ...Profile) (*Ser
 			return nil, nil, err
 		}
 	}
-	adapter.tools = newToolRegistry(server)
-	adapter.registerTools(adapter.tools)
+	registry.install(server)
+	adapter.tools = registry
 	return adapter, server, nil
 }
 

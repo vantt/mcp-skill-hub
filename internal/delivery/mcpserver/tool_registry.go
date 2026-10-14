@@ -11,20 +11,27 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// toolRegistry registers tools on one server, or only collects their
-// definitions.
+// toolRegistry collects tool definitions, then either lists them as they are
+// or installs them on one server.
 //
 // The SDK resolves both schemas of a typed tool when the tool is added, which
 // costs most of the server's startup and allocates megabytes for tools a
-// session may never call. The registry therefore lists every tool at once from
+// session may never call. Installing therefore lists every tool at once from
 // its derived schema, with a placeholder handler, and adds the typed tool, which
 // resolves its schemas, only when the first call for that tool arrives. What a
 // client sees in tools/list, and how a call is validated and answered, does not
 // change.
 type toolRegistry struct {
-	server    *mcp.Server // nil when only definitions are collected
+	server    *mcp.Server // nil until installed
 	pending   map[string]*pendingTool
-	collected []*mcp.Tool
+	collected []collectedTool
+}
+
+// collectedTool is a tool whose schemas are derived and whose typed
+// registration has not run.
+type collectedTool struct {
+	tool     *mcp.Tool
+	register func(*mcp.Server)
 }
 
 // pendingTool is a listed tool whose typed registration has not run yet.
@@ -33,35 +40,49 @@ type pendingTool struct {
 	register func(*mcp.Server)
 }
 
-func newToolRegistry(server *mcp.Server) *toolRegistry {
-	registry := &toolRegistry{server: server, pending: map[string]*pendingTool{}}
-	server.AddReceivingMiddleware(registry.registerOnFirstCall)
-	return registry
-}
-
 // newToolCollector returns a registry that derives tool definitions and
-// registers nothing.
+// registers nothing until it is installed.
 func newToolCollector() *toolRegistry {
 	return &toolRegistry{}
 }
 
+// names returns the collected tool names in the order a server lists them.
+func (registry *toolRegistry) names() []string {
+	definitions := registry.definitions()
+	names := make([]string, len(definitions))
+	for i, tool := range definitions {
+		names[i] = tool.Name
+	}
+	return names
+}
+
 // definitions returns the collected tools in the order a server lists them.
 func (registry *toolRegistry) definitions() []*mcp.Tool {
-	tools := slices.Clone(registry.collected)
+	tools := make([]*mcp.Tool, len(registry.collected))
+	for i, collected := range registry.collected {
+		tools[i] = collected.tool
+	}
 	slices.SortFunc(tools, func(a, b *mcp.Tool) int { return strings.Compare(a.Name, b.Name) })
 	return tools
 }
 
-// add lists a tool whose schemas are already derived.
+// add records a tool whose schemas are already derived.
 func (registry *toolRegistry) add(tool *mcp.Tool, register func(*mcp.Server)) {
-	if registry.server == nil {
-		registry.collected = append(registry.collected, tool)
-		return
+	registry.collected = append(registry.collected, collectedTool{tool: tool, register: register})
+}
+
+// install lists every collected tool on server with a placeholder handler and
+// registers each typed tool when its first call arrives.
+func (registry *toolRegistry) install(server *mcp.Server) {
+	registry.server = server
+	registry.pending = map[string]*pendingTool{}
+	server.AddReceivingMiddleware(registry.registerOnFirstCall)
+	for _, collected := range registry.collected {
+		registry.pending[collected.tool.Name] = &pendingTool{register: collected.register}
+		server.AddTool(collected.tool, func(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			return nil, &jsonrpc.Error{Code: jsonrpc.CodeInternalError, Message: "The tool is not ready."}
+		})
 	}
-	registry.pending[tool.Name] = &pendingTool{register: register}
-	registry.server.AddTool(tool, func(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return nil, &jsonrpc.Error{Code: jsonrpc.CodeInternalError, Message: "The tool is not ready."}
-	})
 }
 
 // materialize adds the typed tool for name if it is still only listed.

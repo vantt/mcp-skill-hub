@@ -221,8 +221,13 @@ func NewProxy(ctx context.Context, options ProxyOptions) (*Proxy, error) {
 	if err != nil {
 		return nil, err
 	}
+	names := make([]string, len(tools))
+	for i, tool := range tools {
+		names[i] = tool.Name
+	}
 	server := mcp.NewServer(&mcp.Implementation{Name: "skillhub", Version: version.Current().Version}, &mcp.ServerOptions{
 		Capabilities: &mcp.ServerCapabilities{Tools: &mcp.ToolCapabilities{}},
+		Instructions: serverInstructions(names, instructionOptions{}),
 		PageSize:     paging.MaximumLimit,
 	})
 	for _, tool := range tools {
