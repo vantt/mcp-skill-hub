@@ -83,15 +83,21 @@ func (adapter *Server) callerContext(session *mcp.ServerSession) app.CallerConte
 	sessionHash := ""
 	client := adapter.sessionClient(session)
 	var verifier func(string) bool
+	var lookup func(string) (app.PriorResolution, bool)
 	if adapter.tracker != nil && session != nil {
 		sessionHash = adapter.tracker.sessionHash(session)
 		verifier = func(resID string) bool {
 			return adapter.tracker.hasResolution(session, resID)
+		}
+		lookup = func(resID string) (app.PriorResolution, bool) {
+			noted, ok := adapter.tracker.resolutionData(session, resID)
+			return app.PriorResolution{PrimaryID: noted.PrimaryID, TaskDescription: noted.TaskDescription}, ok
 		}
 	}
 	return app.CallerContext{
 		SessionHash:   sessionHash,
 		Client:        client,
 		PriorVerifier: verifier,
+		PriorLookup:   lookup,
 	}
 }

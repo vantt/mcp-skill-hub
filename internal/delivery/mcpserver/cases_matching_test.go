@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/vantt/skillhub-mcp/internal/app"
+	"github.com/vantt/skillhub-mcp/internal/resolver"
 	"github.com/vantt/skillhub-mcp/internal/skill"
 	"github.com/vantt/skillhub-mcp/internal/telemetry"
 )
@@ -40,19 +41,25 @@ func TestCasesMatchTelemetryEvents(t *testing.T) {
 		t.Fatalf("confirm activate = %#v, %v", result, err)
 	}
 
-	_, _, recorder, session := connectTelemetrySession(t, root)
+	adapter, server, recorder, session := connectTelemetrySession(t, root)
 	defer recorder.Close(context.Background())
 
-	// 1. First resolution
+	// 1. First resolution; the first phrasing carries a secret that must not survive redaction.
+	const firstPhrasing = "initial review task"
+	const secret = "sk-1234567890abcdef1234567890abcdef"
 	res1 := callSkillResolve(t, session, map[string]any{
 		"schema_version": "1",
 		"request_id":     "REQ-match-1",
-		"task":           map[string]any{"description": "initial review task", "scope": "multi_step"},
+		"task":           map[string]any{"description": firstPhrasing + " " + secret, "scope": "multi_step"},
 		"operation":      "review",
 	})
 	if res1.Resolution.ResolutionID == "" {
 		t.Fatal("res1 has empty ResolutionID")
 	}
+	if res1.Resolution.Primary == nil {
+		t.Fatal("res1 recommended nothing")
+	}
+	firstPrimary := res1.Resolution.Primary.ID
 
 	// 2. Second resolution: verified reformulation with prior.kind: rejected
 	res2 := callSkillResolve(t, session, map[string]any{
@@ -162,5 +169,67 @@ func TestCasesMatchTelemetryEvents(t *testing.T) {
 	}
 	if overrideCase.EventID != overrideLoadEvent.ID {
 		t.Fatalf("overrideCase EventID %q != event ID %q", overrideCase.EventID, overrideLoadEvent.ID)
+	}
+
+	// 9. Links the suggestions rely on: the case names the skill it turned down.
+	if got := overrideCase.Resolver["primary"]; got != res2.Resolution.Primary.ID {
+		t.Fatalf("override resolver.primary = %v, want %q", got, res2.Resolution.Primary.ID)
+	}
+	if got := reformCase.Resolver["prior_primary"]; got != firstPrimary {
+		t.Fatalf("reformulation resolver.prior_primary = %v, want %q", got, firstPrimary)
+	}
+	wantPrior := firstPhrasing + " [TOKEN]"
+	if got := reformCase.Task["prior_description"]; got != wantPrior {
+		t.Fatalf("reformulation task.prior_description = %v, want %q", got, wantPrior)
+	}
+
+	// 10. A rejection whose prior belongs to another session copies nothing from it.
+	other := newClientSession(t, server)
+	res3 := callSkillResolve(t, other, map[string]any{
+		"schema_version": "1",
+		"request_id":     "REQ-match-3",
+		"task":           map[string]any{"description": "foreign review task", "scope": "multi_step"},
+		"operation":      "review",
+		"prior":          map[string]any{"resolution_id": res1.Resolution.ResolutionID, "kind": "rejected", "context_revision": 1},
+	})
+
+	// 11. A load after "needs context" is journalled with the empty primary.
+	needsContext := resolver.Request{Operation: "review", Task: resolver.Task{Description: "ambiguous task", Scope: "multi_step"}}
+	adapter.tracker.noteResolution(nil, needsContext, resolver.Response{ResolutionID: "res-needs-context", Status: resolver.StatusNeedsContext}, false)
+	adapter.recordLoad(t.Context(), nil, app.SkillLoad{SkillID: "other-skill", ResourceKind: "entrypoint"})
+
+	if err := recorder.Flush(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	cases, err = recorder.Cases(t.Context(), time.Time{}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rejectedCase, needsContextCase *telemetry.CaseRecord
+	for i := range cases {
+		switch c := &cases[i]; {
+		case c.Kind == "rejected" && c.ResolutionID == res3.Resolution.ResolutionID:
+			rejectedCase = c
+		case c.Kind == "after_needs_context":
+			needsContextCase = c
+		}
+	}
+	if rejectedCase == nil {
+		t.Fatal("expected a rejected case for the foreign prior")
+	}
+	if _, ok := rejectedCase.Resolver["prior_primary"]; ok {
+		t.Fatalf("rejected case carries prior_primary: %#v", rejectedCase.Resolver)
+	}
+	if _, ok := rejectedCase.Task["prior_description"]; ok {
+		t.Fatalf("rejected case carries prior_description: %#v", rejectedCase.Task)
+	}
+	if needsContextCase == nil {
+		t.Fatal("expected an after_needs_context case")
+	}
+	if got, ok := needsContextCase.Resolver["primary"]; !ok || got != "" {
+		t.Fatalf("after_needs_context resolver.primary = %v (present %v), want empty", got, ok)
+	}
+	if needsContextCase.Chosen != "other-skill" {
+		t.Fatalf("after_needs_context chosen = %q, want other-skill", needsContextCase.Chosen)
 	}
 }

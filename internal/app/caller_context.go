@@ -17,6 +17,25 @@ type CallerContext struct {
 	SessionHash   string
 	Client        telemetry.Client
 	PriorVerifier func(resolutionID string) bool
+	PriorLookup   func(resolutionID string) (PriorResolution, bool)
+}
+
+// PriorResolution is what the session remembers about a prior resolution
+// issued to the caller: its primary skill (empty when none was recommended)
+// and its task description, already redacted.
+type PriorResolution struct {
+	PrimaryID       string
+	TaskDescription string
+}
+
+// LookupPrior returns what the caller session remembers about a prior
+// resolution. It reports false when no session tracker is attached (CLI) or
+// the resolution is unknown or expired.
+func (c CallerContext) LookupPrior(resolutionID string) (PriorResolution, bool) {
+	if c.PriorLookup != nil {
+		return c.PriorLookup(resolutionID)
+	}
+	return PriorResolution{}, false
 }
 
 // VerifyPrior reports whether a prior resolution was issued to this caller session.

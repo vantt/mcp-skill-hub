@@ -13,6 +13,7 @@ import (
 type LoadResolution struct {
 	ResolutionID    string
 	Status          string
+	PrimaryID       string
 	CatalogSnapshot string
 	Client          telemetry.Client
 	PriorVerified   bool
@@ -40,12 +41,24 @@ func RecordLoadCase(ctx context.Context, sink TelemetrySink, load SkillLoad, res
 		Task:            map[string]any{"description": resolution.TaskDescription},
 		Operation:       resolution.Operation,
 		Request:         resolution.Request,
-		Resolver: map[string]any{
-			"status":         resolution.Status,
-			"topk_skill_ids": resolution.TopKSkillIDs,
-			"topk_matched":   resolution.TopKMatched,
-			"topk_channels":  resolution.TopKChannels,
-		},
-		Chosen: load.SkillID,
+		Resolver:        loadCaseResolver(resolution),
+		Chosen:          load.SkillID,
 	})
+}
+
+// loadCaseResolver describes the resolution a load follows. The recommended
+// primary is recorded only when it is a safe skill ID; it is empty for
+// resolutions that recommended nothing.
+func loadCaseResolver(resolution LoadResolution) map[string]any {
+	primary := ""
+	if safeTelemetryToken(resolution.PrimaryID) {
+		primary = resolution.PrimaryID
+	}
+	return map[string]any{
+		"status":         resolution.Status,
+		"primary":        primary,
+		"topk_skill_ids": resolution.TopKSkillIDs,
+		"topk_matched":   resolution.TopKMatched,
+		"topk_channels":  resolution.TopKChannels,
+	}
 }

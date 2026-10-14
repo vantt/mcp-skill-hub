@@ -92,6 +92,7 @@ func (service ResolverService) Resolve(ctx context.Context, path string, request
 				sessionHash = caller.SessionHash
 			}
 
+			task, resolverInfo := disagreementCaseMaps(ctx, redactor, request, response, kind)
 			_ = RecordCase(ctx, service.Telemetry, telemetry.CaseRecord{
 				EventID:         resEvt.ID,
 				ResolutionID:    response.ResolutionID,
@@ -101,16 +102,11 @@ func (service ResolverService) Resolve(ctx context.Context, path string, request
 				Client:          CallerFromContext(ctx).Client,
 				CatalogSnapshot: catalogSnapshot,
 				PriorVerified:   request.Prior != nil && CallerFromContext(ctx).VerifyPrior(request.Prior.ResolutionID),
-				Task:            map[string]any{"description": redactor.Redact(request.Task.Description)},
+				Task:            task,
 				Operation:       request.Operation,
 				Request:         redactedRequest,
-				Resolver: map[string]any{
-					"status":         string(response.Status),
-					"topk_skill_ids": response.TopKSkillIDs,
-					"topk_matched":   response.TopKMatched,
-					"topk_channels":  response.TopKChannels,
-				},
-				Chosen: chosen,
+				Resolver:        resolverInfo,
+				Chosen:          chosen,
 			})
 		}
 
@@ -485,4 +481,32 @@ func RedactRequest(redactor *telemetry.Redactor, req resolverpkg.Request) map[st
 	}
 	out["context"] = map[string]any{"facts": facts}
 	return out
+}
+
+// disagreementCaseMaps builds the task and resolver sections of a
+// disagreement case. A verified reformulation also names the skill the caller
+// turned down and the phrasing that led to it, taken from the caller's own
+// session; they are left out when the session no longer remembers the prior.
+func disagreementCaseMaps(ctx context.Context, redactor *telemetry.Redactor, request resolverpkg.Request, response resolverpkg.Response, kind string) (task, resolver map[string]any) {
+	task = map[string]any{"description": redactor.Redact(request.Task.Description)}
+	resolver = map[string]any{
+		"status":         string(response.Status),
+		"topk_skill_ids": response.TopKSkillIDs,
+		"topk_matched":   response.TopKMatched,
+		"topk_channels":  response.TopKChannels,
+	}
+	if kind != "verified_reformulation" {
+		return task, resolver
+	}
+	prior, ok := CallerFromContext(ctx).LookupPrior(request.Prior.ResolutionID)
+	if !ok {
+		return task, resolver
+	}
+	if safeTelemetryToken(prior.PrimaryID) {
+		resolver["prior_primary"] = prior.PrimaryID
+	}
+	if prior.TaskDescription != "" {
+		task["prior_description"] = prior.TaskDescription
+	}
+	return task, resolver
 }

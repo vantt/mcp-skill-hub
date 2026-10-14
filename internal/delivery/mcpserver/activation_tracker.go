@@ -41,6 +41,7 @@ func (r notedResolution) loadResolution() app.LoadResolution {
 	return app.LoadResolution{
 		ResolutionID:    r.ResolutionID,
 		Status:          r.Status,
+		PrimaryID:       r.PrimaryID,
 		CatalogSnapshot: r.CatalogSnapshot,
 		Client:          r.Client,
 		PriorVerified:   r.PriorVerified,

@@ -55,7 +55,7 @@ func (adapter *Server) recordLoad(ctx context.Context, session *mcp.ServerSessio
 		if !load.Blocked && load.ResourceKind == "entrypoint" {
 			load.FirstActivation = adapter.tracker.markActivation(session, load.ResolutionID, load.SkillID)
 		}
-		if load.Attribution == "override" || load.Attribution == "after_no_skill" {
+		if load.Attribution == "override" || load.Attribution == "after_no_skill" || load.Attribution == "after_needs_context" {
 			if noted, ok := adapter.tracker.resolutionData(session, load.ResolutionID); ok {
 				resolution, resolutionKnown = noted.loadResolution(), true
 				load.TopKSkillIDs = noted.TopKSkillIDs

@@ -219,6 +219,17 @@ Case journal là cờ opt-in độc lập, lưu tại runtime state (`runtime/ca
 `skillhub telemetry cases enable|disable|status` hoặc biến môi trường `SKILLHUB_CASE_JOURNAL=1`.
 Mọi telemetry event vẫn giữ `content_mode: none` để `telemetry export` luôn thành công.
 
+Mỗi case là một dòng trong `telemetry_cases` (`payload_json`), cùng opt-in, cùng `telemetry.Redactor`, cùng retention và giới hạn số case mỗi ngày. Các loại case và liên kết chúng mang:
+
+| Kind | Khi nào ghi | Liên kết thêm trong payload |
+|---|---|---|
+| `verified_reformulation` | `prior.kind: rejected` và prior thuộc chính session này | `resolver.prior_primary` (skill bị từ chối; rỗng nếu prior là `no_skill`), `task.prior_description` (cách diễn đạt đầu, đã redact). Chỉ có khi tracker còn giữ prior (TTL 2 giờ); nếu không thì bỏ qua, không đoán |
+| `rejected` | `prior.kind: rejected` nhưng prior không xác minh được | Không có hai trường trên: prior có thể thuộc session khác nên không sao chép dữ liệu của nó |
+| `override` | Lần activation đầu của một skill khác skill được recommend | `resolver.primary`: primary của resolution mà lượt load nối tiếp |
+| `after_no_skill`, `after_needs_context` | Lần activation đầu (entrypoint, không bị chặn, resolution đã biết) sau `no_skill` hoặc `needs_context` | `resolver.primary` (rỗng) |
+
+Các khóa mới nằm trong map `task` và `resolver` hiện có; schema SQLite và telemetry event không đổi, reader cũ bỏ qua chúng.
+
 ### 4.2 Retention
 
 - **Raw events:** 14 ngày (time + size based rotation).
