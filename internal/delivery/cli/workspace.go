@@ -188,15 +188,15 @@ func runValidate(ctx context.Context, args []string, stdout, stderr io.Writer) i
 	if errors.Is(ctx.Err(), context.Canceled) {
 		return writeWorkspaceResult(app.Result{}, context.Canceled, stdout, stderr, hasJSONFlag(args))
 	}
-	path, jsonOutput, staged, err := validateFlags(args)
+	path, jsonOutput, staged, full, err := validateFlags(args)
 	if err != nil {
 		var resErr *WorkspaceResolutionError
 		if errors.As(err, &resErr) {
 			return writeWorkspaceResolutionError(stdout, stderr, jsonOutput, resErr)
 		}
-		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub maintain validate [--staged] [--workspace <path>]`.")
+		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub maintain validate [--staged | --full] [--workspace <path>]`.")
 	}
-	result, err := executeValidate(ctx, path, staged)
+	result, err := executeValidate(ctx, path, staged, full)
 	if err != nil {
 		return writeInvalidWorkspace(stdout, stderr, jsonOutput, err)
 	}

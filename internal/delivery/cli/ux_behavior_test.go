@@ -207,7 +207,7 @@ func TestPerCommandHelpHasRealUsage(t *testing.T) {
 	t.Parallel()
 	want := map[string][]string{
 		"resolve": {"--request", "Example"}, "resolution": {"replay", "--manifest"},
-		"maintain":  {"validate [--staged]", "rebuild [--verbose]", "migrate [--to <version>] [--yes]", "diff [--workspace <path>]", "Examples"},
+		"maintain":  {"validate [--staged | --full]", "rebuild [--verbose]", "migrate [--to <version>] [--yes]", "diff [--workspace <path>]", "Examples"},
 		"telemetry": {"purge --yes", "export"}, "eval": {"manifest", "promote"}, "version": {"--json"},
 	}
 	for command, fragments := range want {

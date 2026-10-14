@@ -67,8 +67,88 @@ func canonicalRuntimeHints(root, id string) (skillruntime.Hints, error) {
 	return reviewRuntimeHints(root, skillRelDir, resources, hasRuntimeBlock), nil
 }
 
-func workspaceLintWarnings(ctx context.Context, root string) []Warning {
-	return append(secretLikeFileWarnings(ctx, root), catalogLintWarnings(ctx, root)...)
+// lintScope says which skills the example check covers and where their new
+// versions are read from.
+type lintScope struct {
+	// Full checks the own examples of every active skill instead of the
+	// skills that changed.
+	Full bool
+	// Snapshot is the directory of a staged index snapshot. When set, the
+	// changed skills are the staged ones and a hub without a catalog
+	// generation is skipped without a warning.
+	Snapshot string
+}
+
+func workspaceLintWarnings(ctx context.Context, root string, scope lintScope) []Warning {
+	return append(secretLikeFileWarnings(ctx, root), catalogLintWarnings(ctx, root, scope)...)
+}
+
+// selfResolutionWarnings reports the routing examples that no longer resolve as
+// their author meant. The changed skills are the ones that differ from HEAD,
+// or every active skill when asked for or when Git cannot tell.
+func selfResolutionWarnings(ctx context.Context, root string, scope lintScope) []Warning {
+	changed, mode, ok := changedForLint(ctx, root, scope)
+	if !ok {
+		return nil
+	}
+	var findings []resolverpkg.LintFinding
+	if mode == selfCheckChanges && changed.policyChanged {
+		findings = []resolverpkg.LintFinding{resolverpkg.SelfResolutionSkipped("", "the recommendation policy changed and the served catalog may still have the old one", "Rebuild, then run skillhub maintain validate --full")}
+	} else if findings = checkedChanges(ctx, root, scope, changed, mode); len(findings) == 0 {
+		return nil
+	}
+	warnings := make([]Warning, 0, len(findings))
+	for _, f := range findings {
+		summary := fmt.Sprintf("%s Fix: %s", f.Message, f.Fix)
+		if f.SkillID != "" {
+			summary = f.SkillID + ": " + summary
+		}
+		warnings = append(warnings, Warning{Code: f.Code, Summary: summary})
+	}
+	return warnings
+}
+
+// checkedChanges replays the examples against the current generation. A
+// catalog that is not current is skipped: the pair lint has already said so.
+func checkedChanges(ctx context.Context, root string, scope lintScope, changed changedSkills, mode selfCheckMode) []resolverpkg.LintFinding {
+	view, err := catalog.ObserveCurrentLocked(ctx, root)
+	if err != nil {
+		return nil
+	}
+	defer view.Close()
+	policy, err := generationPolicy(ctx, view)
+	if err != nil {
+		return nil
+	}
+	if mode == selfCheckFull {
+		return checkSkillChanges(ctx, view, policy, nil, selfCheckFull)
+	}
+	newRead := directoryReader(root)
+	if scope.Snapshot != "" {
+		newRead = directoryReader(scope.Snapshot)
+	}
+	changes := changed.changes(newRead, headReader(ctx, root))
+	if len(changes) == 0 {
+		return nil
+	}
+	return checkSkillChanges(ctx, view, policy, changes, selfCheckChanges)
+}
+
+// changedForLint finds the skills to check and how. It reports false when
+// nothing can be checked.
+func changedForLint(ctx context.Context, root string, scope lintScope) (changedSkills, selfCheckMode, bool) {
+	if scope.Full {
+		return changedSkills{}, selfCheckFull, true
+	}
+	if scope.Snapshot != "" {
+		paths, ok := stagedChangedPaths(ctx, root)
+		return parseChangedPaths(paths), selfCheckChanges, ok
+	}
+	paths, ok := workingTreeChangedPaths(ctx, root)
+	if !ok {
+		return changedSkills{}, selfCheckFull, true
+	}
+	return parseChangedPaths(paths), selfCheckChanges, true
 }
 
 const secretLikeFileListLimit = 20
@@ -113,9 +193,12 @@ func secretLikeFileWarnings(ctx context.Context, root string) []Warning {
 	}}
 }
 
-func catalogLintWarnings(ctx context.Context, root string) []Warning {
+func catalogLintWarnings(ctx context.Context, root string, scope lintScope) []Warning {
 	handle, err := catalog.OpenCurrentLocked(ctx, root)
 	if err != nil {
+		if scope.Snapshot != "" {
+			return nil
+		}
 		return []Warning{{
 			Code:    "lint_skipped",
 			Summary: "Metadata lint skipped: catalog generation unavailable. Run `skillhub maintain rebuild` first.",
@@ -164,6 +247,9 @@ func catalogLintWarnings(ctx context.Context, root string) []Warning {
 			warnings = append(warnings, runtimeHintFindings(s.ID, hints)...)
 		}
 	}
+
+	// 3. Routing examples of the changed skills
+	warnings = append(warnings, selfResolutionWarnings(ctx, root, scope)...)
 
 	return warnings
 }

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 
@@ -48,8 +49,15 @@ func checkSkillChanges(ctx context.Context, view *catalog.View, policy resolverp
 	if len(changes) == 1 {
 		id = changes[0].ID
 	}
-	return []resolverpkg.LintFinding{resolverpkg.SelfResolutionSkipped(id, err.Error(), "Change fewer skills at once, or fix the skill so it resolves, then check again")}
+	fix := "Fill in the required routing fields first"
+	if errors.Is(err, errOverBound) {
+		fix = "Change fewer skills at once, or run skillhub eval routing for the whole library"
+	}
+	return []resolverpkg.LintFinding{resolverpkg.SelfResolutionSkipped(id, err.Error(), fix)}
 }
+
+// errOverBound marks a run that would resolve more than the work bound allows.
+var errOverBound = errors.New("too many examples to resolve at once")
 
 func servedSkillCatalog(ctx context.Context, view *catalog.View) (resolverpkg.Catalog, error) {
 	database, err := view.DB(ctx)
@@ -103,7 +111,7 @@ func runSelfCheck(ctx context.Context, served resolverpkg.Catalog, policy resolv
 		}
 	}
 	if work := len(cases) * active; work > maxSelfResolutionWork {
-		return nil, fmt.Errorf("%d examples against %d active skills exceed the bound of %d resolves x skills", len(cases), active, maxSelfResolutionWork)
+		return nil, fmt.Errorf("%w: %d examples against %d active skills exceed the bound of %d resolves x skills", errOverBound, len(cases), active, maxSelfResolutionWork)
 	}
 
 	before := beforeState{newOverlayCatalog(served, versions(changes, func(c skillChange) *resolverpkg.Skill { return c.Old }), gone(changes, func(c skillChange) *resolverpkg.Skill { return c.Old })), policy}

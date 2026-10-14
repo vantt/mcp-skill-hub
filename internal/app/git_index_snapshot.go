@@ -255,7 +255,11 @@ func (WorkspaceService) ValidateWorkspaceStaged(ctx context.Context, path string
 		return Result{}, err
 	}
 	allIssues := append(preIssues, canonicalIssues...)
-	return formatValidationResult(allIssues), nil
+	result := formatValidationResult(allIssues)
+	if len(allIssues) == 0 {
+		result.Warnings = append(result.Warnings, catalogLintWarnings(ctx, root, lintScope{Snapshot: tempDir})...)
+	}
+	return result, nil
 }
 
 // ValidateStaged is an alias for ValidateWorkspaceStaged.

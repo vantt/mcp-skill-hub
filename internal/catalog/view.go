@@ -49,6 +49,29 @@ func ObserveCurrentLocked(ctx context.Context, root string) (*View, error) {
 	return newView(root, status, snapshot, lock.Unlock), nil
 }
 
+// ObservePublishedLocked observes the published generation as it is, without
+// asking whether the canonical files have moved on since it was built. It never
+// rebuilds. A reader that wants to know what agents are served now uses it: an
+// index that is only behind file edits is still the one in use. It fails when
+// the pointer is missing, the generation is corrupt or its schema is
+// incompatible. The view carries no canonical digests.
+func ObservePublishedLocked(ctx context.Context, root string) (*View, error) {
+	lock, err := mutation.AcquireSharedLock(ctx, root, mutation.DefaultLockTimeout)
+	if err != nil {
+		return nil, err
+	}
+	status, err := inspectPublishedWhileLocked(ctx, root)
+	if err != nil {
+		_ = lock.Unlock()
+		return nil, err
+	}
+	if status.State != StateUnknown || status.Pointer == nil {
+		_ = lock.Unlock()
+		return nil, catalogUnavailableError{state: status.State, detail: status.Detail}
+	}
+	return newView(root, status, canonical.Snapshot{}, lock.Unlock), nil
+}
+
 func newView(root string, status Status, snapshot canonical.Snapshot, release func() error) *View {
 	return &View{Pointer: *status.Pointer, Status: status, root: root, memo: memoFor(root, *status.Pointer), files: snapshot.Files, release: release}
 }

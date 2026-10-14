@@ -20,8 +20,21 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// ValidateOptions selects how far the routing example check reaches.
+type ValidateOptions struct {
+	// Full checks the own examples of every active skill. By default only the
+	// skills changed against HEAD are checked.
+	Full bool
+}
+
 // ValidateWorkspace is the application contract behind CLI and future tool adapters.
-func (WorkspaceService) ValidateWorkspace(ctx context.Context, path string) (Result, error) {
+// It checks the routing examples of the skills changed against HEAD.
+func (service WorkspaceService) ValidateWorkspace(ctx context.Context, path string) (Result, error) {
+	return service.ValidateWorkspaceWith(ctx, path, ValidateOptions{})
+}
+
+// ValidateWorkspaceWith is ValidateWorkspace with the example check configured.
+func (WorkspaceService) ValidateWorkspaceWith(ctx context.Context, path string, options ValidateOptions) (Result, error) {
 	if err := ctx.Err(); err != nil {
 		return Result{}, err
 	}
@@ -35,7 +48,7 @@ func (WorkspaceService) ValidateWorkspace(ctx context.Context, path string) (Res
 	}
 	result := formatValidationResult(issues)
 	if len(issues) == 0 {
-		result.Warnings = append(result.Warnings, workspaceLintWarnings(ctx, root)...)
+		result.Warnings = append(result.Warnings, workspaceLintWarnings(ctx, root, lintScope{Full: options.Full})...)
 	}
 	return result, nil
 }

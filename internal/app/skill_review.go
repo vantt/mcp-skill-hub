@@ -32,6 +32,11 @@ type ActivationReadiness struct {
 	Warnings          []string `json:"warnings,omitempty"`
 }
 
+// ActiveUnmetWarning is the readiness warning for an active skill that lacks
+// activation requirements. Every other readiness warning is a routing lint
+// finding.
+const ActiveUnmetWarning = "skill is marked active but has unmet activation requirements"
+
 // ResourceItem describes one skill file found in canonical storage.
 type ResourceItem struct {
 	Path      string `json:"path"`
@@ -138,8 +143,7 @@ func (SkillService) ReviewSkill(ctx context.Context, path, id string) (SkillRevi
 	metaDoc.Name, metaDoc.Description = catalog.DeriveSkillNameAndDesc(entrypointBytes, metaDoc.Name, metaDoc.Description, id)
 	canonicalIssues, valid := checkCanonicalIssues(root, skillRelDir)
 	readiness, isScaffold, missingFields := checkActivationReadiness(entrypointBytes, metaDoc, valid)
-	if active, ok := activeSkillsForLint(ctx, root); ok {
-		findings, lintErr := lintReviewedSkill(id, skillMetaBytes, entrypointBytes, active)
+	if findings, ok, lintErr := lintProposedSkill(ctx, root, id, skillMetaBytes, entrypointBytes); ok {
 		if lintErr != nil {
 			readiness.Warnings = append(readiness.Warnings, "lint_skipped: Routing lint skipped: "+lintErr.Error())
 		}
@@ -204,40 +208,81 @@ func (SkillService) ReviewSkill(ctx context.Context, path, id string) (SkillRevi
 	return result, nil
 }
 
-// activeSkillsForLint lists the active skills of the published catalog that a
-// skill under review is linted against. It reports false when the catalog
-// cannot be read, so the lint is skipped rather than failed.
-func activeSkillsForLint(ctx context.Context, root string) ([]resolverpkg.Skill, bool) {
-	handle, err := catalog.OpenCurrentLocked(ctx, root)
-	if err != nil {
-		return nil, false
+// lintProposedSkill lints a skill under review or proposed for a commit against
+// the generation agents are served now, even when the canonical files have
+// moved on since it was built: the routing metadata rules, then the examples
+// the change can affect. A catalog that cannot be read gives one lint_skipped
+// finding, never a failure, and an error is returned when the skill cannot be
+// decoded. It records nothing and rebuilds nothing.
+func lintProposedSkill(ctx context.Context, root, id string, metaBytes, skillMD []byte) ([]resolverpkg.LintFinding, bool, error) {
+	skipped := func(reason string) ([]resolverpkg.LintFinding, bool, error) {
+		return []resolverpkg.LintFinding{{Code: "lint_skipped", SkillID: id, Message: "Routing lint skipped: " + reason, Fix: "Run skillhub maintain rebuild first"}}, true, nil
 	}
-	defer handle.Close()
-	sqliteCat, err := resolverpkg.NewSQLiteCatalog(handle.DB, handle.Pointer.CatalogSnapshot)
+	view, err := catalog.ObservePublishedLocked(ctx, root)
 	if err != nil {
-		return nil, false
+		return skipped("catalog generation unavailable")
 	}
-	allSkills, err := sqliteCat.Skills(ctx)
+	defer view.Close()
+	served, err := servedSkillCatalog(ctx, view)
 	if err != nil {
-		return nil, false
+		return skipped(err.Error())
 	}
+	all, err := served.Skills(ctx)
+	if err != nil {
+		return skipped(err.Error())
+	}
+	target, err := decodeProposedSkill(id, metaBytes, skillMD)
+	if err != nil {
+		return nil, true, err
+	}
+	findings := resolverpkg.LintTargetSkill(target, activeLintSkills(all))
+	if target.Status != "" && target.Status != "draft" && target.Status != "active" {
+		return findings, true, nil
+	}
+	policy, err := generationPolicy(ctx, view)
+	if err != nil {
+		return append(findings, resolverpkg.SelfResolutionSkipped(id, err.Error(), "Rebuild the catalog, then check again")), true, nil
+	}
+	change := skillChange{ID: id, Old: servedActiveSkill(all, id), New: &target}
+	return append(findings, checkSkillChanges(ctx, view, policy, []skillChange{change}, selfCheckChanges)...), true, nil
+}
+
+// activeLintSkills keeps the skills a lint compares against: the active ones
+// except the bundled curator.
+func activeLintSkills(all []resolverpkg.Skill) []resolverpkg.Skill {
 	var active []resolverpkg.Skill
-	for _, s := range allSkills {
-		if s.Status == "active" && s.ID != "system-curator" {
+	for _, s := range all {
+		if s.Status == "active" && s.ID != bundledOwnerID {
 			active = append(active, s)
 		}
 	}
-	return active, true
+	return active
 }
 
-// lintReviewedSkill decodes the skill the way activation would see it and lints it against
-// the active skills.
-func lintReviewedSkill(id string, metaBytes, skillMD []byte, active []resolverpkg.Skill) ([]resolverpkg.LintFinding, error) {
+// servedActiveSkill returns the served version of id, or nil when id is not an
+// active skill of the served generation.
+func servedActiveSkill(all []resolverpkg.Skill, id string) *resolverpkg.Skill {
+	for i := range all {
+		if all[i].ID == id && all[i].Status == "active" {
+			return &all[i]
+		}
+	}
+	return nil
+}
+
+// decodeProposedSkill decodes the skill the way activation would see it.
+func decodeProposedSkill(id string, metaBytes, skillMD []byte) (resolverpkg.Skill, error) {
 	normalized, err := catalog.NormalizeSkillDocument(metaBytes, skillMD, id)
 	if err != nil {
-		return nil, err
+		return resolverpkg.Skill{}, err
 	}
-	target, err := resolverpkg.DecodeSkillDocument(id, normalized)
+	return resolverpkg.DecodeSkillDocument(id, normalized)
+}
+
+// lintReviewedSkill lints the decoded skill against the active skills with the
+// metadata rules alone.
+func lintReviewedSkill(id string, metaBytes, skillMD []byte, active []resolverpkg.Skill) ([]resolverpkg.LintFinding, error) {
+	target, err := decodeProposedSkill(id, metaBytes, skillMD)
 	if err != nil {
 		return nil, err
 	}
@@ -380,7 +425,7 @@ func checkActivationReadiness(entrypointBytes []byte, metaDoc skillReviewMeta, v
 		MissingFields:     missingFields,
 	}
 	if metaDoc.Status == "active" && !readiness.Ready {
-		readiness.Warnings = append(readiness.Warnings, "skill is marked active but has unmet activation requirements")
+		readiness.Warnings = append(readiness.Warnings, ActiveUnmetWarning)
 	}
 	return readiness, isScaffold, missingFields
 }

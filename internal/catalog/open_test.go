@@ -378,3 +378,40 @@ func TestOpenWithFallbackLockedRetainsLockUntilClose(t *testing.T) {
 	}
 	_ = lock.Unlock()
 }
+
+func TestObservePublishedLockedServesAGenerationThatFilesHaveMovedPast(t *testing.T) {
+	t.Parallel()
+	root := newWorkspace(t)
+	built := build(t, root, BuildOptions{})
+	writeCanonical(t, root, "skills/core/late/skill.meta.yaml", "schema_version: 1\nid: late\n")
+	if _, err := OpenCurrentLocked(context.Background(), root); !errors.Is(err, ErrCatalogUnavailable) {
+		t.Fatalf("the healthy-only opener must refuse a stale catalog, got %v", err)
+	}
+	before, err := os.ReadFile(filepath.Join(root, "runtime", "catalog", "CURRENT"))
+	if err != nil {
+		before = nil
+	}
+
+	view, err := ObservePublishedLocked(context.Background(), root)
+	if err != nil {
+		t.Fatalf("ObservePublishedLocked() = %v", err)
+	}
+	defer view.Close()
+	if view.Pointer.Generation != built.Pointer.Generation {
+		t.Fatalf("observed %q, want the published %q", view.Pointer.Generation, built.Pointer.Generation)
+	}
+	if _, err := view.DB(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if after, _ := os.ReadFile(filepath.Join(root, "runtime", "catalog", "CURRENT")); before != nil && string(after) != string(before) {
+		t.Fatal("observing rebuilt or moved the pointer")
+	}
+}
+
+func TestObservePublishedLockedReportsAMissingGeneration(t *testing.T) {
+	t.Parallel()
+	root := newWorkspace(t)
+	if _, err := ObservePublishedLocked(context.Background(), root); !errors.Is(err, ErrCatalogUnavailable) {
+		t.Fatalf("ObservePublishedLocked() error = %v, want ErrCatalogUnavailable", err)
+	}
+}

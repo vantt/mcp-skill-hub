@@ -311,7 +311,7 @@ experiment manifest (see ` + "`skillhub eval manifest`" + `). Developer tool.
 
 Example: skillhub resolution replay --case case.json --manifest manifest.json
 `,
-	"maintain": `Usage: skillhub maintain validate [--staged] [--workspace <path>] [--json]
+	"maintain": `Usage: skillhub maintain validate [--staged | --full] [--workspace <path>] [--json]
        skillhub maintain rebuild [--verbose] [--workspace <path>] [--json]
        skillhub maintain migrate [--to <version>] [--yes] [--workspace <path>] [--json]
        skillhub maintain diff [--workspace <path>] [--json]
@@ -322,6 +322,9 @@ the repairs most people need; these are the single steps.
   validate   Validate the hub files (skills, sources, schema) and print each
              problem with its file. --staged validates the files staged in the
              Git index without touching the working tree, for a pre-commit hook.
+             It also checks that the routing examples of the changed skills
+             still resolve to their skill, against HEAD; --full checks every
+             active skill's own examples instead, up to a work limit.
   rebuild    Rebuild the search index from the hub files; only files that pass
              validation are published. Safe at any time. --verbose adds progress
              events and table row counts.
@@ -332,6 +335,7 @@ the repairs most people need; these are the single steps.
 Examples:
   skillhub maintain validate
   skillhub maintain validate --staged
+  skillhub maintain validate --full
   skillhub maintain rebuild
   skillhub maintain migrate --to 1 --yes
   skillhub maintain diff

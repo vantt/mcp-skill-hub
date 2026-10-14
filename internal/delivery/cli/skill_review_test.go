@@ -261,3 +261,27 @@ func TestSkillReviewSummarizesChangesSinceApproval(t *testing.T) {
 		t.Fatalf("the change summary must precede the approve command:\n%s", stdout)
 	}
 }
+
+func TestSkillReviewTextShowsRoutingLintForAReadyDraft(t *testing.T) {
+	t.Parallel()
+	root := initTestWorkspace(t)
+	contentFile := filepath.Join(t.TempDir(), "content.md")
+	_ = os.WriteFile(contentFile, []byte("---\nname: lint-test\ndescription: Lint test skill.\n---\n\n# Lint Test\n\nInstructions.\n"), 0o600)
+	code, _, stderr := seedSkillCLI(t, "lint-test", "--workspace", root,
+		"--collection", "core", "--name", "Lint Test", "--description", "Lint test skill.",
+		"--trigger", "run", "--example", "tidy the changelog", "--not-for", "unrelated", "--min-scope", "single_step",
+		"--content-file", contentFile, "--yes")
+	if code != 0 {
+		t.Fatalf("create failed (exit %d): %s", code, stderr)
+	}
+	code, stdout, stderr := runCLI(t, "skill", "review", "lint-test", "--workspace", root)
+	if code != 0 {
+		t.Fatalf("review failed (exit %d): %s", code, stderr)
+	}
+	if !strings.Contains(stdout, "Routing lint") {
+		t.Errorf("review of a draft with lint findings lacks the heading:\n%s", stdout)
+	}
+	if strings.Contains(stdout, "Activation readiness") {
+		t.Errorf("a ready draft must not show the readiness heading:\n%s", stdout)
+	}
+}

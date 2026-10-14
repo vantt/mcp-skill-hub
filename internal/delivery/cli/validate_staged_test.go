@@ -188,3 +188,25 @@ Normal skill body.
 		t.Fatalf("expected WARN absolute_install_path in human output, got:\n%s", humanOutput)
 	}
 }
+
+func TestValidateFullIsRejectedWithStaged(t *testing.T) {
+	t.Parallel()
+	root := initTestWorkspace(t)
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{"maintain", "validate", "--full", "--staged", "--workspace", root}, &stdout, &stderr)
+	if code != 2 || !strings.Contains(stderr.String(), "--full and --staged cannot be used together") {
+		t.Fatalf("exit %d, stderr: %s", code, stderr.String())
+	}
+}
+
+func TestValidateFullRunsOnAFreshHub(t *testing.T) {
+	t.Parallel()
+	root := initTestWorkspace(t)
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"maintain", "validate", "--full", "--workspace", root}, &stdout, &stderr); code != 0 {
+		t.Fatalf("exit %d: %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "Workspace validation passed.") {
+		t.Fatalf("stdout: %s", stdout.String())
+	}
+}

@@ -74,6 +74,15 @@ func writeSkillReview(stdout, stderr io.Writer, jsonOutput, verbose bool, result
 			p.Bullets(result.CanonicalIssues...)
 		}
 
+		var lint []string
+		var readinessWarnings []string
+		for _, warn := range result.ActivationReadiness.Warnings {
+			if warn == app.ActiveUnmetWarning {
+				readinessWarnings = append(readinessWarnings, warn)
+			} else {
+				lint = append(lint, warn)
+			}
+		}
 		if !result.ActivationReadiness.Ready {
 			p.Heading("Activation readiness")
 			var bullets []string
@@ -83,10 +92,14 @@ func writeSkillReview(stdout, stderr io.Writer, jsonOutput, verbose bool, result
 			for _, missing := range result.ActivationReadiness.MissingFields {
 				bullets = append(bullets, fmt.Sprintf("Missing required field: %s", missing))
 			}
-			for _, warn := range result.ActivationReadiness.Warnings {
+			for _, warn := range readinessWarnings {
 				bullets = append(bullets, fmt.Sprintf("Warning: %s", warn))
 			}
 			p.Bullets(bullets...)
+		}
+		if len(lint) > 0 {
+			p.Heading("Routing lint")
+			p.Bullets(lint...)
 		}
 
 		writeContentTrust(p, result.ContentTrust)

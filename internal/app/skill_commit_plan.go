@@ -420,11 +420,10 @@ func commitLint(ctx context.Context, plan *commitPlan) []SkillCommitLint {
 	if meta == nil {
 		meta = plan.metaBefore
 	}
-	active, ok := activeSkillsForLint(ctx, plan.root)
+	lint, ok, err := lintProposedSkill(ctx, plan.root, plan.id, meta, plan.final["SKILL.md"].Data)
 	if !ok {
 		return findings
 	}
-	lint, err := lintReviewedSkill(plan.id, meta, plan.final["SKILL.md"].Data, active)
 	if err != nil {
 		return append(findings, SkillCommitLint{Code: "lint_skipped", Message: "Routing lint skipped: " + err.Error()})
 	}

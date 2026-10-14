@@ -450,11 +450,10 @@ func fileDiff(rel, change string, before, after []byte) string {
 // changesLint lints the proposed skill the way review does.
 func changesLint(ctx context.Context, root, id string, meta []byte, final map[string]treeFile) []SkillCommitLint {
 	findings := []SkillCommitLint{}
-	active, ok := activeSkillsForLint(ctx, root)
+	lint, ok, err := lintProposedSkill(ctx, root, id, meta, final["SKILL.md"].Data)
 	if !ok {
 		return findings
 	}
-	lint, err := lintReviewedSkill(id, meta, final["SKILL.md"].Data, active)
 	if err != nil {
 		return append(findings, SkillCommitLint{Code: "lint_skipped", Message: "Routing lint skipped: " + err.Error()})
 	}
