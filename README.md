@@ -197,24 +197,7 @@ cd <your-project>; skillhub connect
 
 </details>
 
-<details>
-<summary>Use a hub on another machine</summary>
-
-On the machine that holds the hub, start the server:
-
-```bash
-cd ~/skill-hub && skillhub serve
-```
-
-For each address the other machine can use, it prints two lines to run there: an `scp` line that copies the hub's token file, and the `connect` line. Run both on the other machine, the `connect` line inside your project:
-
-```bash
-cd <your-project> && skillhub connect --hub <url> --token-file <file>
-```
-
-`serve` listens on every network interface over plain HTTP. On a network you do not trust, use the SSH tunnel setup instead. The token file lets that machine's agents use the hub; it is one of [two kinds of token](docs/remote-hub-guide.md#two-kinds-of-token). [Use one hub from several machines](docs/remote-hub-guide.md) explains every step.
-
-</details>
+Want your agents on another machine to use this hub? See [Use one hub from several machines](#use-one-hub-from-several-machines).
 
 ### Check
 
@@ -252,6 +235,51 @@ When something is wrong, `status` names it. These are the common cases and their
 [Troubleshooting](docs/troubleshooting.md) covers every message, step by step.
 
 Next: [create your first skill](docs/curating-skills.md#create-your-first-skill).
+
+## Use one hub from several machines
+
+Run the hub on one machine and let agents on your other machines use it over the network. Nothing is copied: the agent machine keeps no skills and no hub folder.
+
+| Machine | Role | What you do there |
+|---|---|---|
+| **Hub machine** | Holds the hub folder with your skills | Install Skill Hub, [create the hub](#step-1-install-the-hub), run `skillhub serve` |
+| **Agent machine** | Runs your agent, such as Claude Code | Install Skill Hub, copy a token file, run `skillhub connect` in your project |
+
+Install Skill Hub on both machines first, as in [Install](#install). Then:
+
+1. **On the hub machine**, start the server:
+
+   ```bash
+   cd ~/skill-hub && skillhub serve
+   ```
+
+   For each address the other machine can use, it prints two lines to run on the agent machine: an `scp` line that copies the hub's token file, and the `connect` line. Leave it running.
+
+2. **On the agent machine**, run those two lines. Run the `connect` line inside your project:
+
+   ```bash
+   scp -p you@<hub-machine>:skill-hub/runtime/config/.hub-token ~/.skillhub-token-<hub-machine>-7420
+   cd <your-project> && skillhub connect --hub http://<hub-machine>:7420 --token-file ~/.skillhub-token-<hub-machine>-7420
+   ```
+
+   Copy the exact lines from the server's output; they hold the right address and file names. Add `-g` to `connect` to connect every project of your user account at once.
+
+3. **Restart your agent** and check the connection:
+
+   ```bash
+   cd <your-project> && skillhub doctor
+   ```
+
+   It checks that the hub answers and accepts your token, and prints one fix for anything that fails. If it says "Nothing answers", start `skillhub serve` on the hub machine.
+
+`serve` listens on every network interface over plain HTTP, so use it only on your own network or over [Tailscale](https://tailscale.com). On a network you do not trust, keep the server on the hub machine's own address and open an SSH tunnel from the agent machine:
+
+```bash
+cd ~/skill-hub && skillhub serve --addr 127.0.0.1:7420     # on the hub machine
+ssh -N -L 7420:127.0.0.1:7420 you@<hub-machine>             # on the agent machine, keep it running
+```
+
+Then run the `scp` and `connect` lines against `127.0.0.1:7420` that the server printed. On the hub machine, `skillhub serve --install-service` keeps the server running after you close the terminal (Linux and macOS). Curation stays on the hub machine. [Use one hub from several machines](docs/remote-hub-guide.md) covers tokens, Windows, the service, rotating the token and going back to one machine.
 
 ## See it
 

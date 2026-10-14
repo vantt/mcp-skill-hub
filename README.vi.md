@@ -199,24 +199,7 @@ cd <your-project>; skillhub connect
 
 </details>
 
-<details>
-<summary>Dùng hub ở máy khác</summary>
-
-Trên máy giữ hub, khởi động máy chủ:
-
-```bash
-cd ~/skill-hub && skillhub serve
-```
-
-Với mỗi địa chỉ mà máy kia dùng được, nó in hai dòng để chạy ở đó: một dòng `scp` sao chép file token của hub, và dòng `connect`. Chạy cả hai trên máy kia, dòng `connect` chạy bên trong dự án của bạn:
-
-```bash
-cd <your-project> && skillhub connect --hub <url> --token-file <file>
-```
-
-`serve` lắng nghe trên mọi giao diện mạng qua HTTP thường. Trên mạng bạn không tin cậy, hãy dùng cách thiết lập đường hầm SSH. File token cho phép agent của máy đó dùng hub; nó là một trong [hai loại token](docs/remote-hub-guide.md#two-kinds-of-token). [Dùng một hub từ nhiều máy](docs/remote-hub-guide.md) giải thích từng bước.
-
-</details>
+Muốn agent ở máy khác dùng hub này? Xem [Dùng một hub từ nhiều máy](#dùng-một-hub-từ-nhiều-máy).
 
 ### Kiểm tra
 
@@ -254,6 +237,51 @@ Khi có gì sai, `status` gọi tên nó. Đây là các trường hợp thườ
 [Xử lý sự cố](docs/troubleshooting.md) giải thích từng thông báo, theo từng bước.
 
 Tiếp theo: [tạo skill đầu tiên](docs/curating-skills.md#create-your-first-skill).
+
+## Dùng một hub từ nhiều máy
+
+Chạy hub trên một máy và cho agent ở các máy khác dùng nó qua mạng. Không có gì bị sao chép: máy chạy agent không giữ skill hay thư mục hub nào.
+
+| Máy | Vai trò | Việc làm ở máy đó |
+|---|---|---|
+| **Máy hub** | Giữ thư mục hub chứa skill của bạn | Cài Skill Hub, [tạo hub](#bước-1-cài-hub), chạy `skillhub serve` |
+| **Máy agent** | Chạy agent của bạn, như Claude Code | Cài Skill Hub, sao chép file token, chạy `skillhub connect` trong dự án |
+
+Hãy cài Skill Hub trên cả hai máy trước, như ở phần [Cài đặt](#cài-đặt). Sau đó:
+
+1. **Trên máy hub**, khởi động server:
+
+   ```bash
+   cd ~/skill-hub && skillhub serve
+   ```
+
+   Với mỗi địa chỉ mà máy kia dùng được, nó in ra hai dòng để chạy trên máy agent: một dòng `scp` sao chép file token của hub, và dòng `connect`. Cứ để nó chạy.
+
+2. **Trên máy agent**, chạy hai dòng đó. Chạy dòng `connect` trong dự án của bạn:
+
+   ```bash
+   scp -p you@<máy-hub>:skill-hub/runtime/config/.hub-token ~/.skillhub-token-<máy-hub>-7420
+   cd <dự-án-của-bạn> && skillhub connect --hub http://<máy-hub>:7420 --token-file ~/.skillhub-token-<máy-hub>-7420
+   ```
+
+   Hãy chép đúng các dòng server in ra; chúng chứa đúng địa chỉ và tên file. Thêm `-g` vào `connect` để kết nối mọi dự án của tài khoản người dùng cùng lúc.
+
+3. **Khởi động lại agent** và kiểm tra kết nối:
+
+   ```bash
+   cd <dự-án-của-bạn> && skillhub doctor
+   ```
+
+   Nó kiểm tra hub có trả lời và có nhận token của bạn không, và in một cách sửa cho mỗi mục lỗi. Nếu nó báo "Nothing answers", hãy chạy `skillhub serve` trên máy hub.
+
+`serve` lắng nghe trên mọi giao diện mạng qua HTTP thường, nên chỉ dùng trên mạng của riêng bạn hoặc qua [Tailscale](https://tailscale.com). Trên mạng bạn không tin cậy, hãy để server chỉ nghe trên địa chỉ của chính máy hub và mở một đường hầm SSH từ máy agent:
+
+```bash
+cd ~/skill-hub && skillhub serve --addr 127.0.0.1:7420     # trên máy hub
+ssh -N -L 7420:127.0.0.1:7420 you@<máy-hub>                 # trên máy agent, để nó chạy
+```
+
+Sau đó chạy các dòng `scp` và `connect` cho `127.0.0.1:7420` mà server đã in. Trên máy hub, `skillhub serve --install-service` giữ server chạy sau khi bạn đóng terminal (Linux và macOS). Việc quản lý skill vẫn ở máy hub. [Dùng một hub từ nhiều máy](docs/remote-hub-guide.md) nói về token, Windows, dịch vụ nền, xoay token và quay về một máy.
 
 ## Xem thử
 
