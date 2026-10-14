@@ -1,7 +1,7 @@
 ---
 title: "Small curation fixes from the UX reviews"
 description: "Fix the P0 curation defects the two 2026-10-14 UX reviews found that stay valid under the accepted redesign (D1-D9): secrets copied into the hub, lost executable bits, wrong or misleading CLI messages, and four small web defects."
-status: pending
+status: completed
 priority: P1
 effort: 2.5d
 branch: (implementation gets its own worktree)
