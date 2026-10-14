@@ -112,6 +112,17 @@ func applyCommonConstraints(schema *jsonschema.Schema) {
 	})
 }
 
+// dropEnumLengthBounds clears maxLength on enum properties: an enum already
+// bounds the length.
+func dropEnumLengthBounds(schema *jsonschema.Schema) {
+	walkSchema(schema, func(node *jsonschema.Schema) bool {
+		if len(node.Enum) > 0 {
+			node.MaxLength = nil
+		}
+		return true
+	})
+}
+
 func schemaHasType(schema *jsonschema.Schema, target string) bool {
 	if schema.Type == target {
 		return true
@@ -175,6 +186,7 @@ func deriveToolSchemas[In, Out any](name string, options toolSchemaOptions) (inp
 	if options.shapeInput != nil {
 		options.shapeInput(input)
 	}
+	dropEnumLengthBounds(input)
 	normalizeMultiTypeSchemas(input)
 	output, err = jsonschema.For[toolOutcome[Out]](&jsonschema.ForOptions{})
 	if err != nil {

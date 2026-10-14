@@ -17,7 +17,7 @@ import (
 const (
 	// runtimeModelVisibleBudget bounds name, description and input schema of
 	// the runtime tools, which is what a client puts in the model's context.
-	runtimeModelVisibleBudget = 4800
+	runtimeModelVisibleBudget = 4700
 	// runtimeInstructionsAllowance bounds the initialize instructions, which
 	// are model-visible too. The 2048-byte client cap stays owned by
 	// instructions_test.go; this is the measured size, kept apart so
