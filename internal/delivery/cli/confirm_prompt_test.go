@@ -87,22 +87,6 @@ func confirmCases() []confirmCase {
 			subject: "Archive tbl-skill",
 		},
 		{
-			name: "add",
-			setup: func(t *testing.T, hub nextStepHub) {
-				dir := filepath.Join(t.TempDir(), "tbl-added")
-				if err := os.MkdirAll(dir, 0o755); err != nil {
-					t.Fatal(err)
-				}
-				content := "---\nname: tbl-added\ndescription: Added from a folder.\n---\n\n# Added\n\nInstructions.\n"
-				if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte(content), 0o644); err != nil {
-					t.Fatal(err)
-				}
-				t.Setenv("TBL_ADD_DIR", dir)
-			},
-			args:    func(nextStepHub) []string { return []string{"skill", "add", os.Getenv("TBL_ADD_DIR")} },
-			subject: "Add tbl-added",
-		},
-		{
 			name: "migrate",
 			setup: func(t *testing.T, hub nextStepHub) {
 				if err := os.Remove(filepath.Join(hub.root, ".skillhub", "schema-version")); err != nil {

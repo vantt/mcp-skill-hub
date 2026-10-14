@@ -5,119 +5,416 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/object"
 
 	"github.com/vantt/skillhub-mcp/internal/app"
 	"github.com/vantt/skillhub-mcp/internal/delivery/cli/termui"
+	sourcepkg "github.com/vantt/skillhub-mcp/internal/source"
 )
 
-func TestSkillAddLocalPreviewAndConfirm(t *testing.T) {
-	t.Parallel()
-	root := initTestWorkspace(t)
-	temp := t.TempDir()
-	sourceDir := filepath.Join(temp, "pdf-tools")
-	if err := os.MkdirAll(sourceDir, 0o700); err != nil {
+// These tests add from a file:// repository through source adapters that accept
+// one, and replace package-level terminal stand-ins, so none of them runs in
+// parallel.
+
+const pdfSkillMD = "---\nname: pdf\ndescription: Fill and extract PDF forms. Use when the user asks to fill a pdf form. Do not use when the user wants to edit a word document.\n%s---\n\n# PDF\n\nFill the form fields with the values the user gives.\n"
+
+// addFixtureFile is one file of a fixture repository.
+type addFixtureFile struct {
+	path, body string
+	executable bool
+}
+
+// addFixtureRepo commits the files to a new repository and returns its file:// URL.
+func addFixtureRepo(t *testing.T, files ...addFixtureFile) string {
+	t.Helper()
+	dir := t.TempDir()
+	repo, err := git.PlainInit(dir, false)
+	if err != nil {
 		t.Fatal(err)
 	}
-	skillContent := "---\nname: pdf-tools\ndescription: Extract and convert PDF files.\n---\n\n# PDF Tools\n\nInstructions.\n"
-	if err := os.WriteFile(filepath.Join(sourceDir, "SKILL.md"), []byte(skillContent), 0o600); err != nil {
+	for _, file := range files {
+		mode := os.FileMode(0o644)
+		if file.executable {
+			mode = 0o755
+		}
+		writeCLIAddFixture(t, dir, file.path, file.body, mode)
+	}
+	tree, err := repo.Worktree()
+	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := tree.Add("."); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tree.Commit("initial", &git.CommitOptions{Author: &object.Signature{Name: "Tester", Email: "tester@example.com", When: time.Now()}}); err != nil {
+		t.Fatal(err)
+	}
+	slash := filepath.ToSlash(dir)
+	if !strings.HasPrefix(slash, "/") {
+		slash = "/" + slash
+	}
+	return "file://" + slash
+}
 
-	// 1. Preview
-	code, stdout, stderr := runCLI(t, "skill", "add", sourceDir, "--workspace", root)
-	if code != 0 {
-		t.Fatalf("skill add preview failed (exit %d): %s", code, stderr)
+// commitFixtureFile adds a commit to a fixture repository.
+func commitFixtureFile(t *testing.T, url, rel, body string) {
+	t.Helper()
+	dir := strings.TrimPrefix(url, "file://")
+	repo, err := git.PlainOpen(dir)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !strings.Contains(stdout, "Add pdf-tools as a draft") {
-		t.Errorf("preview missing summary: %s", stdout)
+	writeCLIAddFixture(t, dir, rel, body, 0o644)
+	tree, err := repo.Worktree()
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !strings.Contains(stdout, "Apply: skillhub skill add ") || !strings.Contains(stdout, " --yes\n") {
-		t.Errorf("preview must end with the command that applies it: %s", stdout)
+	if _, err := tree.Add("."); err != nil {
+		t.Fatal(err)
 	}
-	if !strings.Contains(stdout, "Show the diff: skillhub skill add ") || !strings.Contains(stdout, " --diff\n") {
-		t.Errorf("preview must say how to see the diff: %s", stdout)
-	}
-	if !strings.Contains(stdout, "Nothing written yet.") {
-		t.Errorf("preview should note that nothing was written: %s", stdout)
-	}
-
-	// Verify no canonical files changed yet
-	targetMeta := filepath.Join(root, "skills", "default", "pdf-tools", ".meta", "skill.yaml")
-	if _, err := os.Stat(targetMeta); !os.IsNotExist(err) {
-		t.Fatalf("preview wrote canonical files before confirmation")
-	}
-
-	// 2. Add with --yes
-	code, stdout, stderr = runCLI(t, "skill", "add", sourceDir, "--workspace", root, "--yes")
-	if code != 0 {
-		t.Fatalf("skill add --yes failed (exit %d): %s", code, stderr)
-	}
-	if !strings.Contains(stdout, "Draft pdf-tools added.") {
-		t.Errorf("applied output missing confirmation line: %s", stdout)
-	}
-	if !strings.Contains(stdout, "skillhub skill review pdf-tools") {
-		t.Errorf("applied output missing review next step: %s", stdout)
-	}
-
-	// Verify canonical files were created
-	if _, err := os.Stat(targetMeta); err != nil {
-		t.Fatalf("canonical files not found after confirm: %v", err)
+	if _, err := tree.Commit("change", &git.CommitOptions{Author: &object.Signature{Name: "Tester", Email: "tester@example.com", When: time.Now()}}); err != nil {
+		t.Fatal(err)
 	}
 }
 
-func TestSkillAddMultiSelectionAndAll(t *testing.T) {
-	t.Parallel()
-	root := initTestWorkspace(t)
-	temp := t.TempDir()
-	sourceDir := filepath.Join(temp, "bundle")
-	dirA := filepath.Join(sourceDir, "tool-a")
-	dirB := filepath.Join(sourceDir, "tool-b")
-	_ = os.MkdirAll(dirA, 0o700)
-	_ = os.MkdirAll(dirB, 0o700)
-	_ = os.WriteFile(filepath.Join(dirA, "SKILL.md"), []byte("---\nname: tool-a\ndescription: Tool A\n---\n\n# Tool A\n"), 0o600)
-	_ = os.WriteFile(filepath.Join(dirB, "SKILL.md"), []byte("---\nname: tool-b\ndescription: Tool B\n---\n\n# Tool B\n"), 0o600)
-
-	// 1. Adding without selection must fail with selection required
-	code, _, stderr := runCLI(t, "skill", "add", sourceDir, "--workspace", root)
-	if code != 2 {
-		t.Fatalf("expected exit 2 on multi-skill without selection, got %d: %s", code, stderr)
+// useFileSourceAdapters lets skill add read file:// repositories for one test.
+func useFileSourceAdapters(t *testing.T) {
+	t.Helper()
+	saved := skillAddAdapters
+	t.Cleanup(func() { skillAddAdapters = saved })
+	skillAddAdapters = func(root string) map[string]sourcepkg.Adapter {
+		return map[string]sourcepkg.Adapter{"git": sourcepkg.GitRepositoryAdapter{CacheRoot: filepath.Join(root, "runtime", "sources", "git"), AllowFileProtocol: true}}
 	}
-	if !strings.Contains(stderr, "explicit selection is required") {
-		t.Errorf("expected explicit selection error, got: %s", stderr)
-	}
+}
 
-	// 2. Add all preview with --all
-	code, stdout, stderr := runCLI(t, "skill", "add", sourceDir, "--all", "--workspace", root)
+// pdfFixtureRepo is a repository with one skill whose folder holds a script, a
+// license file and a secret that must stay out.
+func pdfFixtureRepo(t *testing.T, frontmatterExtra string) string {
+	return addFixtureRepo(t,
+		addFixtureFile{path: "skills/pdf/SKILL.md", body: strings.Replace(pdfSkillMD, "%s", frontmatterExtra, 1)},
+		addFixtureFile{path: "skills/pdf/forms.md", body: "How to fill a form.\n"},
+		addFixtureFile{path: "skills/pdf/scripts/fill.py", body: "print('fill')\n", executable: true},
+		addFixtureFile{path: "skills/pdf/LICENSE.txt", body: "All rights reserved.\n"},
+		addFixtureFile{path: "skills/pdf/.env", body: "TOKEN=abc\n"},
+	)
+}
+
+func TestSkillAddRefusesAFolderAndPointsToCommit(t *testing.T) {
+	hub := newNextStepHub(t)
+	dir := filepath.Join(t.TempDir(), "team-release")
+	writeCLIAddFixture(t, dir, "SKILL.md", "---\nname: team-release\ndescription: Release the team.\n---\n\n# Release\n", 0o644)
+	before := hubHead(t, hub.root)
+
+	code, stdout, stderr := hub.run("skill", "add", dir)
+	if code != 2 || stdout != "" {
+		t.Fatalf("exit = %d, stdout = %q", code, stdout)
+	}
+	if !strings.Contains(flatText(stderr), "skill add takes a GitHub URL.") || !strings.Contains(flatText(stderr), "skillhub skill commit "+dir) {
+		t.Fatalf("refusal must name the replacement:\n%s", stderr)
+	}
+	code, stdout, _ = hub.run("skill", "add", dir, "--json")
+	var refused app.Result
+	if code != 2 || json.Unmarshal([]byte(stdout), &refused) != nil || refused.Error == nil || refused.Error.Code != app.ErrorInvalidRequest || !strings.Contains(refused.Error.Render.Fix, "skillhub skill commit") {
+		t.Fatalf("json refusal: exit = %d\n%s", code, stdout)
+	}
+	if code, _, stderr = hub.run("skill", "add", "file:///tmp/some/repo.git"); code != 2 || !strings.Contains(stderr, "skillhub skill commit") {
+		t.Fatalf("a file:// URL is a folder: exit = %d\n%s", code, stderr)
+	}
+	if hubHead(t, hub.root) != before || !hubIsClean(t, hub.root) {
+		t.Fatalf("a refused add must not change the hub")
+	}
+}
+
+func TestSkillAddPreviewShowsEverythingAPersonNeedsToDecide(t *testing.T) {
+	useFileSourceAdapters(t)
+	hub := newNextStepHub(t)
+	repo := pdfFixtureRepo(t, "license: Proprietary terms apply\n")
+	before := hubHead(t, hub.root)
+
+	code, stdout, stderr := hub.run("skill", "add", repo, "--skill", "pdf")
 	if code != 0 {
-		t.Fatalf("skill add --all preview failed (exit %d): %s", code, stderr)
+		t.Fatalf("exit = %d\nstdout=%s\nstderr=%s", code, stdout, stderr)
 	}
-	if !strings.Contains(stdout, "Add tool-a, tool-b as a draft") && !strings.Contains(stdout, "tool-a") {
-		t.Errorf("preview missing multi-skill line: %s", stdout)
+	out := flatText(stdout)
+	for _, want := range []string{
+		"Add pdf from ", "tracked for upstream updates.",
+		"Files (4,", "SKILL.md", "forms.md", "scripts/fill.py", "LICENSE.txt",
+		"Left out: skills/pdf/.env (looks like a secret)",
+		"License: Proprietary terms apply (LICENSE.txt)", "may have proprietary terms",
+		"Routing, suggested from the description (edit with --edit-routing):", "trigger", "min scope",
+		"Routing lint:",
+		"Third-party: agents get pdf only after you approve its content.",
+		"Nothing written yet.", "Show every file: skillhub skill add ", " --diff", "Apply: skillhub skill add ", " --yes",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("preview lacks %q:\n%s", want, stdout)
+		}
+	}
+	if strings.Contains(out, "TOKEN=abc") || strings.Contains(out, "Fill the form fields") {
+		t.Errorf("the preview lists files; --diff shows content:\n%s", stdout)
+	}
+	if hubHead(t, hub.root) != before || !hubIsClean(t, hub.root) {
+		t.Fatalf("a preview must not change the hub")
 	}
 
-	// 3. Add specific with --skill and --yes
-	code, stdout, stderr = runCLI(t, "skill", "add", sourceDir, "--skill", "tool-b", "--workspace", root, "--yes")
-	if code != 0 {
-		t.Fatalf("skill add --skill failed (exit %d): %s", code, stderr)
+	code, stdout, stderr = hub.run("skill", "add", repo, "--skill", "pdf", "--diff")
+	if code != 0 || !strings.Contains(stdout, "Fill the form fields with the values the user gives.") || !strings.Contains(stdout, "How to fill a form.") || strings.Contains(stdout, "[added") || strings.Contains(stdout, "Show every file:") {
+		t.Fatalf("--diff must print every file's content as an added file: exit = %d\n%s\n%s", code, stdout, stderr)
 	}
-	if !strings.Contains(stdout, "Draft tool-b added.") {
-		t.Errorf("applied output missing tool-b: %s", stdout)
+	if strings.Contains(stdout, "TOKEN=abc") {
+		t.Fatalf("a left-out file must stay out of the diff:\n%s", stdout)
+	}
+}
+
+func TestSkillAddPreviewSaysWhenNoLicenseIsDeclared(t *testing.T) {
+	useFileSourceAdapters(t)
+	hub := newNextStepHub(t)
+	repo := addFixtureRepo(t, addFixtureFile{path: "SKILL.md", body: strings.Replace(pdfSkillMD, "%s", "", 1)})
+	code, stdout, stderr := hub.run("skill", "add", repo)
+	if code != 0 || !strings.Contains(flatText(stdout), "License: not declared") || !strings.Contains(flatText(stdout), "License is unknown") {
+		t.Fatalf("exit = %d\nstdout=%s\nstderr=%s", code, stdout, stderr)
+	}
+}
+
+func TestSkillAddAtATerminalChainsAddApproveAndActivateIntoOneCommit(t *testing.T) {
+	useFileSourceAdapters(t)
+	hub := newNextStepHub(t)
+	repo := pdfFixtureRepo(t, "license: MIT\n")
+	before := hubHead(t, hub.root)
+
+	atTerminal(t, "y\ny\ny\n")
+	code, stdout, stderr := hub.run("skill", "add", repo, "--skill", "pdf")
+	if code != 0 {
+		t.Fatalf("exit = %d\nstdout=%s\nstderr=%s", code, stdout, stderr)
+	}
+	for _, want := range []string{"Add pdf as a draft? [y/N] ", "Approve this content for agents? [y/N] ", "Activate pdf now? [y/N] ", "Added pdf, approved its content and activated it.", "Committed ", ", approve content, activate"} {
+		if !strings.Contains(flatText(stdout), want) {
+			t.Fatalf("output lacks %q:\n%s", want, stdout)
+		}
+	}
+	if strings.Contains(stdout, "Apply this change?") || strings.Contains(stdout, "Nothing written yet.") {
+		t.Fatalf("a preview with questions must not print the two-step hints:\n%s", stdout)
+	}
+	if gitOutput(t, hub.root, "rev-list", "--count", before+"..HEAD") != "1" || !hubIsClean(t, hub.root) {
+		t.Fatalf("add, approve and activate must be one commit and leave the hub clean:\n%s", stdout)
+	}
+	meta := readFileText(t, filepath.Join(hub.root, "skills", "default", "pdf", ".meta", "skill.yaml"))
+	if !strings.Contains(meta, "status: active") || !strings.Contains(meta, "content_reviewed_digest: sha256:") || !strings.Contains(meta, "kind: github") || !strings.Contains(meta, "triggers:") {
+		t.Fatalf("the skill must be active, approved, tracked and routed:\n%s", meta)
+	}
+	if info, err := os.Stat(filepath.Join(hub.root, "skills", "default", "pdf", "scripts", "fill.py")); err != nil || info.Mode()&0o111 == 0 {
+		t.Fatalf("the executable bit must survive the add: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(hub.root, "skills", "default", "pdf", ".env")); err == nil {
+		t.Fatalf("a secret must stay out of the hub")
+	}
+	code, stdout, stderr = hub.run("skill", "review", "pdf", "--json")
+	var review struct {
+		ContentTrust struct {
+			ThirdParty bool `json:"third_party"`
+			Approved   bool `json:"approved"`
+		} `json:"content_trust"`
+	}
+	if code != 0 || json.Unmarshal([]byte(stdout), &review) != nil || !review.ContentTrust.ThirdParty || !review.ContentTrust.Approved {
+		t.Fatalf("the approval must match the content on the hub: exit = %d\n%s\n%s", code, stdout, stderr)
+	}
+}
+
+func TestSkillAddEachNoStopsTheChainAndCommitsWhatWasAccepted(t *testing.T) {
+	useFileSourceAdapters(t)
+	for _, tc := range []struct {
+		name, answers string
+		asked         []string
+		subject       string
+		status        string
+		approved      bool
+	}{
+		{name: "no approval", answers: "y\nn\n", asked: []string{"Add pdf as a draft?", "Approve this content for agents?"}, subject: `"Add pdf from `, status: "status: draft"},
+		{name: "no activation", answers: "y\ny\nn\n", asked: []string{"Approve this content for agents?", "Activate pdf now?"}, subject: ", approve content\"", status: "status: draft", approved: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			hub := newNextStepHub(t)
+			repo := pdfFixtureRepo(t, "license: MIT\n")
+			before := hubHead(t, hub.root)
+			atTerminal(t, tc.answers)
+			code, stdout, stderr := hub.run("skill", "add", repo, "--skill", "pdf")
+			if code != 0 {
+				t.Fatalf("exit = %d\nstdout=%s\nstderr=%s", code, stdout, stderr)
+			}
+			for _, want := range tc.asked {
+				if !strings.Contains(flatText(stdout), want) {
+					t.Fatalf("output lacks %q:\n%s", want, stdout)
+				}
+			}
+			if !strings.Contains(flatText(stdout), tc.subject) {
+				t.Fatalf("commit subject lacks %q:\n%s", tc.subject, stdout)
+			}
+			if tc.approved != strings.Contains(flatText(stdout), "Activate pdf now?") {
+				t.Fatalf("activation is asked only after approval:\n%s", stdout)
+			}
+			if gitOutput(t, hub.root, "rev-list", "--count", before+"..HEAD") != "1" || !hubIsClean(t, hub.root) {
+				t.Fatalf("what was accepted must be one commit:\n%s", stdout)
+			}
+			meta := readFileText(t, filepath.Join(hub.root, "skills", "default", "pdf", ".meta", "skill.yaml"))
+			if !strings.Contains(meta, tc.status) || strings.Contains(meta, "content_reviewed_digest") != tc.approved {
+				t.Fatalf("wrong state (approved=%v):\n%s", tc.approved, meta)
+			}
+		})
+	}
+}
+
+func TestSkillAddDecliningTheFirstQuestionWritesNothing(t *testing.T) {
+	useFileSourceAdapters(t)
+	hub := newNextStepHub(t)
+	repo := pdfFixtureRepo(t, "license: MIT\n")
+	before := hubHead(t, hub.root)
+	atTerminal(t, "\n")
+	code, stdout, _ := hub.run("skill", "add", repo, "--skill", "pdf")
+	if code != 0 || !strings.Contains(stdout, "Nothing written.") || hubHead(t, hub.root) != before || !hubIsClean(t, hub.root) {
+		t.Fatalf("exit = %d\n%s", code, stdout)
+	}
+}
+
+func TestSkillAddWithoutATerminalAddsTheDraftAndNeverApproves(t *testing.T) {
+	useFileSourceAdapters(t)
+	hub := newNextStepHub(t)
+	repo := pdfFixtureRepo(t, "license: MIT\n")
+	before := hubHead(t, hub.root)
+
+	code, stdout, stderr := hub.run("skill", "add", repo, "--skill", "pdf", "--yes", "--trigger", "fill a pdf form", "--not-for", "edit a word document", "--min-scope", "single_step")
+	if code != 0 {
+		t.Fatalf("exit = %d\nstdout=%s\nstderr=%s", code, stdout, stderr)
+	}
+	out := flatText(stdout)
+	for _, want := range []string{"Draft pdf added. Agent use: off.", "Committed ", "Next: skillhub skill review pdf", "A person approves its content"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output lacks %q:\n%s", want, stdout)
+		}
+	}
+	if strings.Contains(out, "[y/N]") || strings.Contains(out, "approve content") {
+		t.Errorf("no prompt and no approval without a terminal:\n%s", stdout)
+	}
+	if gitOutput(t, hub.root, "rev-list", "--count", before+"..HEAD") != "1" || !hubIsClean(t, hub.root) {
+		t.Fatalf("the draft must be one commit")
+	}
+	meta := readFileText(t, filepath.Join(hub.root, "skills", "default", "pdf", ".meta", "skill.yaml"))
+	for _, want := range []string{"status: draft", "fill a pdf form", "edit a word document", "min_scope: single_step"} {
+		if !strings.Contains(meta, want) {
+			t.Errorf("meta lacks %q:\n%s", want, meta)
+		}
+	}
+	if strings.Contains(meta, "content_reviewed_digest") {
+		t.Errorf("an unattended add must not approve content:\n%s", meta)
+	}
+
+	hub2 := newNextStepHub(t)
+	code, _, stderr = hub2.run("skill", "add", repo, "--skill", "pdf", "--yes", "--approve-content", "sha256:"+strings.Repeat("a", 64))
+	if code != 2 || !strings.Contains(stderr, "only a person approves") || !hubIsClean(t, hub2.root) {
+		t.Fatalf("--approve-content must be refused: exit = %d\n%s", code, stderr)
+	}
+}
+
+func TestSkillAddEditRoutingOpensTheSuggestionsInTheEditor(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell fixture is Unix-only")
+	}
+	useFileSourceAdapters(t)
+	hub := newNextStepHub(t)
+	repo := pdfFixtureRepo(t, "license: MIT\n")
+	editor := filepath.Join(t.TempDir(), "editor.sh")
+	script := "#!/bin/sh\ncat > \"$1\" <<'EOF'\ntriggers:\n  - fill a pdf form\nnot_for:\n  - editing a word document\nmin_scope: multi_step\nEOF\n"
+	if err := os.WriteFile(editor, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("VISUAL", editor)
+	atTerminal(t, "y\nn\n")
+	code, stdout, stderr := hub.run("skill", "add", repo, "--skill", "pdf", "--edit-routing")
+	if code != 0 || !strings.Contains(stdout, `"fill a pdf form"`) {
+		t.Fatalf("exit = %d\nstdout=%s\nstderr=%s", code, stdout, stderr)
+	}
+	meta := readFileText(t, filepath.Join(hub.root, "skills", "default", "pdf", ".meta", "skill.yaml"))
+	if !strings.Contains(meta, "fill a pdf form") || !strings.Contains(meta, "multi_step") {
+		t.Fatalf("edited routing was not saved:\n%s", meta)
+	}
+	if code, _, stderr := hub.run("skill", "add", repo, "--skill", "pdf", "--edit-routing", "--yes"); code != 2 || !strings.Contains(stderr, "--edit-routing") {
+		t.Fatalf("--edit-routing needs a terminal: exit = %d stderr=%s", code, stderr)
+	}
+}
+
+func TestSkillAddSeveralSkillsAreDraftsOnly(t *testing.T) {
+	useFileSourceAdapters(t)
+	hub := newNextStepHub(t)
+	repo := addFixtureRepo(t,
+		addFixtureFile{path: "tool-a/SKILL.md", body: "---\nname: tool-a\ndescription: Tool A\n---\n\n# Tool A\n"},
+		addFixtureFile{path: "tool-b/SKILL.md", body: "---\nname: tool-b\ndescription: Tool B\n---\n\n# Tool B\n"},
+	)
+	code, _, stderr := hub.run("skill", "add", repo)
+	if code != 2 || !strings.Contains(stderr, "explicit selection is required") {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+	before := hubHead(t, hub.root)
+	atTerminal(t, "y\n")
+	code, stdout, stderr := hub.run("skill", "add", repo, "--all")
+	if code != 0 || !strings.Contains(stdout, "Add tool-a, tool-b as drafts? [y/N] ") || strings.Contains(stdout, "Approve this content") {
+		t.Fatalf("exit = %d\nstdout=%s\nstderr=%s", code, stdout, stderr)
+	}
+	for _, id := range []string{"tool-a", "tool-b"} {
+		if !strings.Contains(readFileText(t, filepath.Join(hub.root, "skills", "default", id, ".meta", "skill.yaml")), "status: draft") {
+			t.Fatalf("%s must be a draft", id)
+		}
+	}
+	if gitOutput(t, hub.root, "rev-list", "--count", before+"..HEAD") != "1" {
+		t.Fatalf("both drafts must be one commit")
+	}
+}
+
+func TestSkillAddAgainExplainsNothingChanged(t *testing.T) {
+	useFileSourceAdapters(t)
+	hub := newNextStepHub(t)
+	repo := pdfFixtureRepo(t, "license: MIT\n")
+	if code, _, stderr := hub.run("skill", "add", repo, "--skill", "pdf", "--yes"); code != 0 {
+		t.Fatalf("first add exit %d: %s", code, stderr)
+	}
+	for _, args := range [][]string{{"skill", "add", repo, "--skill", "pdf"}, {"skill", "add", repo, "--skill", "pdf", "--yes"}} {
+		code, stdout, stderr := hub.run(args...)
+		if code != 0 {
+			t.Fatalf("%v exit %d: %s", args, code, stderr)
+		}
+		out := flatText(stdout)
+		if !strings.Contains(out, "already added") || !strings.Contains(out, "skillhub skill review pdf") || strings.Contains(out, "Draft pdf added") || strings.Contains(out, "skill confirm") {
+			t.Errorf("%v: want an already-added message with a review step:\n%s", args, stdout)
+		}
+	}
+}
+
+func TestSkillAddErrorPreviewKeepsItsOwnCauseUnderYes(t *testing.T) {
+	hub := newNextStepHub(t)
+	for _, args := range [][]string{{"skill", "add", "https://gitlab.com/owner/repo"}, {"skill", "add", "https://gitlab.com/owner/repo", "--yes"}} {
+		code, _, stderr := hub.run(args...)
+		if code != 2 {
+			t.Errorf("%v exit = %d, want 2", args, code)
+		}
+		text := flatText(stderr)
+		if !strings.Contains(text, `unsupported host "gitlab.com"; only public github.com is supported`) || !strings.Contains(text, "supported hosts: github.com") || strings.Contains(strings.ToLower(stderr), "stale") {
+			t.Errorf("%v stderr should carry the real cause:\n%s", args, stderr)
+		}
 	}
 }
 
 func TestSkillAddShortConfirmDispatched(t *testing.T) {
-	t.Parallel()
-	root := initTestWorkspace(t)
-	temp := t.TempDir()
-	sourceDir := filepath.Join(temp, "short-confirm-skill")
-	_ = os.MkdirAll(sourceDir, 0o700)
-	_ = os.WriteFile(filepath.Join(sourceDir, "SKILL.md"), []byte("---\nname: short-confirm\ndescription: Short confirm test.\n---\n\n# Short Confirm\n"), 0o600)
+	useFileSourceAdapters(t)
+	hub := newNextStepHub(t)
+	repo := addFixtureRepo(t, addFixtureFile{path: "SKILL.md", body: "---\nname: short-confirm\ndescription: Short confirm test.\n---\n\n# Short Confirm\n"})
 
-	// Preview with JSON to get proposal ID
+	// Preview with JSON to get the proposal ID
 	var stdout, stderr bytes.Buffer
-	code := Run([]string{"skill", "add", sourceDir, "--workspace", root, "--json"}, &stdout, &stderr)
+	code := Run([]string{"skill", "add", repo, "--workspace", hub.root, "--json"}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("preview exit %d: %s", code, stderr.String())
 	}
@@ -130,10 +427,10 @@ func TestSkillAddShortConfirmDispatched(t *testing.T) {
 		t.Fatal("missing proposal ID in preview JSON")
 	}
 
-	// Confirm with short form: skillhub skill confirm <proposal_id>
+	// Confirm with the short form: skillhub skill confirm <proposal_id>
 	stdout.Reset()
 	stderr.Reset()
-	code = Run([]string{"skill", "confirm", proposalID, "--workspace", root}, &stdout, &stderr)
+	code = Run([]string{"skill", "confirm", proposalID, "--workspace", hub.root}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("short confirm exit %d: %s", code, stderr.String())
 	}
@@ -167,7 +464,7 @@ func TestSkillAddPreviewAndResultRenderUpstream(t *testing.T) {
 			Created:  true,
 		},
 	}
-	writeSkillAddPreview(p, preview, "skillhub skill add x", false, false)
+	writeSkillAddPreview(p, preview, previewHints{rerun: "skillhub skill add x"})
 	out := buf.String()
 	wantPreviewLine := "Upstream: tracked by new source anthropics-skills (checked weekly by `skillhub source check`; nothing runs in the background)."
 	if !strings.Contains(flatText(out), wantPreviewLine) {
@@ -180,7 +477,7 @@ func TestSkillAddPreviewAndResultRenderUpstream(t *testing.T) {
 	// 2. Preview with existing upstream source
 	buf.Reset()
 	preview.UpstreamSource.Created = false
-	writeSkillAddPreview(p, preview, "skillhub skill add x", false, false)
+	writeSkillAddPreview(p, preview, previewHints{rerun: "skillhub skill add x"})
 	outExisting := buf.String()
 	wantExistingLine := "Upstream: tracked by source anthropics-skills."
 	if !strings.Contains(outExisting, wantExistingLine) {
@@ -232,111 +529,5 @@ func writeCLIAddFixture(t *testing.T, dir, rel, body string, mode os.FileMode) {
 	}
 	if err := os.Chmod(path, mode); err != nil {
 		t.Fatal(err)
-	}
-}
-
-func TestSkillAddPreviewListsEveryFileAndWhatWasLeftOut(t *testing.T) {
-	t.Parallel()
-	root := initTestWorkspace(t)
-	dir := filepath.Join(t.TempDir(), "team-release")
-	writeCLIAddFixture(t, dir, "SKILL.md", "---\nname: team-release\ndescription: Release the team.\n---\n\n# Release\n", 0o644)
-	writeCLIAddFixture(t, dir, "scripts/bump.sh", "#!/bin/sh\n", 0o755)
-	writeCLIAddFixture(t, dir, ".env", "TOKEN=abc\n", 0o644)
-
-	code, stdout, stderr := runCLI(t, "skill", "add", dir, "--workspace", root)
-	if code != 0 {
-		t.Fatalf("preview exit %d: %s", code, stderr)
-	}
-	out := flatText(stdout)
-	for _, want := range []string{"Files (2,", "SKILL.md", "scripts/bump.sh", "(executable)", "Left out", ".env"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("preview missing %q:\n%s", want, stdout)
-		}
-	}
-	if strings.Contains(out, "TOKEN=abc") {
-		t.Errorf("preview leaked file contents:\n%s", stdout)
-	}
-}
-
-func TestSkillAddAgainExplainsNothingChanged(t *testing.T) {
-	t.Parallel()
-	root := initTestWorkspace(t)
-	dir := filepath.Join(t.TempDir(), "team-release")
-	writeCLIAddFixture(t, dir, "SKILL.md", "---\nname: team-release\ndescription: Release the team.\n---\n\n# Release\n", 0o644)
-
-	if code, _, stderr := runCLI(t, "skill", "add", dir, "--workspace", root, "--yes"); code != 0 {
-		t.Fatalf("first add exit %d: %s", code, stderr)
-	}
-	if code, _, stderr := runCLI(t, "skill", "edit", "team-release", "--trigger", "release day", "--not-for", "hotfixes", "--min-scope", "single_step", "--workspace", root, "--yes"); code != 0 {
-		t.Fatalf("edit exit %d: %s", code, stderr)
-	}
-	if code, _, stderr := runCLI(t, "skill", "activate", "team-release", "--workspace", root, "--yes"); code != 0 {
-		t.Fatalf("activate exit %d: %s", code, stderr)
-	}
-	for _, args := range [][]string{
-		{"skill", "add", dir, "--workspace", root},
-		{"skill", "add", dir, "--workspace", root, "--yes"},
-	} {
-		code, stdout, stderr := runCLI(t, args...)
-		if code != 0 {
-			t.Fatalf("%v exit %d: %s", args, code, stderr)
-		}
-		out := flatText(stdout)
-		if !strings.Contains(out, "already added") || !strings.Contains(out, "active") {
-			t.Errorf("%v: want an already-added message with the state:\n%s", args, stdout)
-		}
-		if strings.Contains(out, "--proposal ''") || strings.Contains(out, "skill confirm") {
-			t.Errorf("%v: must not offer a confirm command:\n%s", args, stdout)
-		}
-		if strings.Contains(out, "Draft team-release added") {
-			t.Errorf("%v: must not claim a new draft:\n%s", args, stdout)
-		}
-		if !strings.Contains(out, "skillhub skill review team-release") {
-			t.Errorf("%v: missing review next step:\n%s", args, stdout)
-		}
-	}
-}
-
-func TestSkillAddErrorPreviewKeepsItsOwnCauseUnderYes(t *testing.T) {
-	t.Parallel()
-	root := initTestWorkspace(t)
-	missing := filepath.Join(t.TempDir(), "nope")
-	for _, args := range [][]string{
-		{"skill", "add", missing, "--workspace", root},
-		{"skill", "add", missing, "--workspace", root, "--yes"},
-	} {
-		code, _, stderr := runCLI(t, args...)
-		if code != 2 {
-			t.Errorf("%v exit = %d, want 2", args, code)
-		}
-		if !strings.Contains(flatText(stderr), "cannot access local directory") || strings.Contains(strings.ToLower(stderr), "stale") {
-			t.Errorf("%v stderr should carry the real cause:\n%s", args, stderr)
-		}
-	}
-}
-
-func TestSkillAddPreviewShowsLicenseWarningOnlyWhenItMatters(t *testing.T) {
-	t.Parallel()
-	root := initTestWorkspace(t)
-	temp := t.TempDir()
-	proprietary := filepath.Join(temp, "prop-skill")
-	writeCLIAddFixture(t, proprietary, "SKILL.md", "---\nname: prop-skill\ndescription: Proprietary tool\nlicense: Proprietary terms apply\n---\n\n# Prop\n", 0o644)
-	own := filepath.Join(temp, "own-skill")
-	writeCLIAddFixture(t, own, "SKILL.md", "---\nname: own-skill\ndescription: My own tool\n---\n\n# Own\n", 0o644)
-
-	code, stdout, stderr := runCLI(t, "skill", "add", proprietary, "--workspace", root)
-	if code != 0 {
-		t.Fatalf("exit %d: %s", code, stderr)
-	}
-	if !strings.Contains(strings.ToLower(flatText(stdout)), "proprietary") {
-		t.Errorf("preview must warn about the proprietary license:\n%s", stdout)
-	}
-	code, stdout, stderr = runCLI(t, "skill", "add", own, "--workspace", root)
-	if code != 0 {
-		t.Fatalf("exit %d: %s", code, stderr)
-	}
-	preview, _, _ := strings.Cut(stdout, "Nothing written yet.")
-	if strings.Contains(strings.ToLower(preview), "license") {
-		t.Errorf("a folder of your own needs no license line:\n%s", stdout)
 	}
 }

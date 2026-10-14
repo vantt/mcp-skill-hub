@@ -484,12 +484,12 @@ func (service SourceService) previewOnboarding(ctx context.Context, root string,
 	}
 	locator := sourceLocator(candidate.Locator, adapterName, input.Ref, input.SourcePath)
 	if adapterName == "git" && strings.Contains(candidate.Locator, "github.com/") && (strings.Contains(candidate.Locator, "/tree/") || strings.Contains(candidate.Locator, "/blob/")) {
-		route, routeErr := sourcepkg.ParseGitHubLocator(candidate.Locator, input.Ref, input.SourcePath)
+		route, routeErr := sourcepkg.ParseLocatorWithOptions(candidate.Locator, input.Ref, input.SourcePath, sourcepkg.LocatorOptions{})
 		if routeErr != nil {
 			return SourceProposal{}, routeErr
 		}
 		if gitAdapter, ok := adapter.(sourcepkg.GitRepositoryAdapter); ok {
-			resolved, resolveErr := sourcepkg.ResolveGitHubRoute(ctx, gitAdapter, route)
+			resolved, resolveErr := sourcepkg.ResolveRoute(ctx, gitAdapter, route)
 			if resolveErr != nil {
 				return SourceProposal{}, resolveErr
 			}
@@ -1222,7 +1222,7 @@ func sourceLocator(value, adapter, ref, path string) sourcepkg.Locator {
 	switch adapter {
 	case "git":
 		if strings.Contains(value, "github.com/") && (strings.Contains(value, "/tree/") || strings.Contains(value, "/blob/")) {
-			route, err := sourcepkg.ParseGitHubLocator(value, ref, path)
+			route, err := sourcepkg.ParseLocatorWithOptions(value, ref, path, sourcepkg.LocatorOptions{})
 			if err == nil {
 				resolvedRef := route.Ref
 				resolvedPath := route.Path

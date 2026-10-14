@@ -63,18 +63,11 @@ func TestSkillPreviewCLICommandsApplyReviewedProposal(t *testing.T) {
 	}
 }
 
-func TestLocalAddCLIConfirmsSnapshotNotChangedInput(t *testing.T) {
-	t.Parallel()
-	root := initTestWorkspace(t)
-	input := filepath.Join(t.TempDir(), "local-skill")
-	if err := os.MkdirAll(input, 0700); err != nil {
-		t.Fatal(err)
-	}
-	content := "---\nname: local-skill\ndescription: Original reviewed content\n---\n\n# Original\n"
-	if err := os.WriteFile(filepath.Join(input, "SKILL.md"), []byte(content), 0600); err != nil {
-		t.Fatal(err)
-	}
-	code, output, stderr := runCLI(t, "skill", "add", input, "--workspace", root, "--json")
+func TestAddCLIConfirmsReviewedContentNotALaterCommit(t *testing.T) {
+	useFileSourceAdapters(t)
+	hub := newNextStepHub(t)
+	repo := addFixtureRepo(t, addFixtureFile{path: "SKILL.md", body: "---\nname: remote-skill\ndescription: Original reviewed content\n---\n\n# Original\n"})
+	code, output, stderr := hub.run("skill", "add", repo, "--json")
 	if code != 0 {
 		t.Fatalf("preview: %d %s %s", code, output, stderr)
 	}
@@ -87,14 +80,12 @@ func TestLocalAddCLIConfirmsSnapshotNotChangedInput(t *testing.T) {
 	if preview.CLI == "" {
 		t.Fatalf("missing cli: %s", output)
 	}
-	if err := os.WriteFile(filepath.Join(input, "SKILL.md"), []byte("changed after review"), 0600); err != nil {
-		t.Fatal(err)
-	}
+	commitFixtureFile(t, repo, "SKILL.md", "changed after review")
 	code, output, stderr = runCLI(t, splitCLI(preview.CLI)[1:]...)
 	if code != 0 {
 		t.Fatalf("confirm: %d %s %s", code, output, stderr)
 	}
-	actual, err := os.ReadFile(filepath.Join(root, "skills", "default", "local-skill", "SKILL.md"))
+	actual, err := os.ReadFile(filepath.Join(hub.root, "skills", "default", "remote-skill", "SKILL.md"))
 	if err != nil || !strings.Contains(string(actual), "# Original") || strings.Contains(string(actual), "changed after review") {
 		t.Fatalf("applied unreviewed input: %q %v", actual, err)
 	}

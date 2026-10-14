@@ -86,13 +86,13 @@ func validateSourceWatchLocator(rawLocator string) *SourceProposal {
 	return nil
 }
 
-func resolveSourceWatchRoute(inspectionContext context.Context, adapter sourcepkg.Adapter, rawLocator, refInput, pathInput string) (*sourcepkg.ResolvedGitHubRoute, *SourceProposal) {
+func resolveSourceWatchRoute(inspectionContext context.Context, adapter sourcepkg.Adapter, rawLocator, refInput, pathInput string) (*sourcepkg.ResolvedRoute, *SourceProposal) {
 	allowFile := false
 	if ga, isGit := adapter.(sourcepkg.GitRepositoryAdapter); isGit {
 		allowFile = ga.AllowFileProtocol
 	}
 
-	route, err := sourcepkg.ParseGitHubLocatorWithOptions(rawLocator, refInput, pathInput, sourcepkg.GitHubLocatorOptions{AllowFile: allowFile})
+	route, err := sourcepkg.ParseLocatorWithOptions(rawLocator, refInput, pathInput, sourcepkg.LocatorOptions{AllowFile: allowFile})
 	if err != nil {
 		prop := SourceProposal{
 			Result: ErrorResult(NewInvalidRequestError(err.Error(), "Provide a valid public GitHub URL (e.g. https://github.com/owner/repo).")),
@@ -101,7 +101,7 @@ func resolveSourceWatchRoute(inspectionContext context.Context, adapter sourcepk
 	}
 
 	if ga, isGit := adapter.(sourcepkg.GitRepositoryAdapter); isGit {
-		resolved, resolveErr := sourcepkg.ResolveGitHubRoute(inspectionContext, ga, route)
+		resolved, resolveErr := sourcepkg.ResolveRoute(inspectionContext, ga, route)
 		if resolveErr != nil {
 			var ambErr *sourcepkg.AmbiguousRefError
 			if errors.As(resolveErr, &ambErr) {
@@ -132,7 +132,7 @@ func resolveSourceWatchRoute(inspectionContext context.Context, adapter sourcepk
 	if path == "" && route.Rest != "" {
 		path = route.Rest
 	}
-	return &sourcepkg.ResolvedGitHubRoute{
+	return &sourcepkg.ResolvedRoute{
 		Repository: route.Repository,
 		Ref:        ref,
 		Path:       path,
@@ -148,7 +148,7 @@ type sourceWatchConfig struct {
 	trust             string
 }
 
-func deriveSourceWatchConfig(input SourceWatchInput, resolved *sourcepkg.ResolvedGitHubRoute) (sourceWatchConfig, *SourceProposal) {
+func deriveSourceWatchConfig(input SourceWatchInput, resolved *sourcepkg.ResolvedRoute) (sourceWatchConfig, *SourceProposal) {
 	monitoringEnabled := true
 	if input.MonitoringEnabled != nil {
 		monitoringEnabled = *input.MonitoringEnabled

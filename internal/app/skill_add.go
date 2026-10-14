@@ -1,7 +1,6 @@
 package app
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -41,6 +40,9 @@ type SkillAddInput struct {
 	IdempotencyKey string `json:"idempotency_key,omitempty"` // Optional idempotency key
 	FullDiff       bool   `json:"full_diff,omitempty"`       // Whether to include full diff
 	CandidateID    string `json:"-"`                         // Optional candidate ID when invoked from triage import
+	// Routing holds explicit routing fields; each one set replaces the field
+	// suggested from the description.
+	Routing *skill.RoutingInput `json:"-"`
 }
 
 // SkillOrigin contains privacy-safe origin metadata matching the schema.
@@ -78,9 +80,22 @@ type SkillAddProposal struct {
 	Confirmation    ConfirmationPolicy           `json:"confirmation"`
 	Assessment      catalog.SkillStateAssessment `json:"assessment"`
 	Replayed        bool                         `json:"replayed"`
-	planned         mutation.Proposal
-	alreadyApplied  *mutation.Receipt
-	expiresAt       time.Time
+	// The fields below feed the terminal preview. They stay out of JSON so the
+	// output schema of the skill_add tool, and the tools/list digest, do not move.
+	// Files lists every file the add writes into the first skill, with its size.
+	Files []SkillCommitFile `json:"-"`
+	// RoutingSuggestions is the routing written into the draft: suggested from
+	// the description, with the person's own fields on top.
+	RoutingSuggestions *skill.RoutingInput `json:"-"`
+	RoutingLint        []SkillCommitLint   `json:"-"`
+	// Trust names the digest of the new content, which an approval binds to.
+	Trust             *SkillCommitTrust `json:"-"`
+	ActivationReady   bool              `json:"-"`
+	ActivationMissing []string          `json:"-"`
+	planned           mutation.Proposal
+	plannedApproved   *mutation.Proposal
+	alreadyApplied    *mutation.Receipt
+	expiresAt         time.Time
 }
 
 // Planned returns the underlying planned mutation proposal.
@@ -123,6 +138,8 @@ type SkillAddResult struct {
 	Resources       []DiscoveredCompanion        `json:"resources,omitempty"`
 	Excluded        []ExcludedFile               `json:"excluded,omitempty"`
 	UpstreamSource  *UpstreamSourceRef           `json:"upstream_source,omitempty"`
+	Approved        bool                         `json:"-"`
+	Activated       bool                         `json:"-"`
 }
 
 // SkillAddService coordinates preview and confirmation for direct skill additions.
@@ -212,6 +229,10 @@ func (service SkillAddService) PreviewSkillAdd(ctx context.Context, path string,
 	if changeProp != nil {
 		return *changeProp, nil
 	}
+	routing, routingErr := applySkillAddRouting(changes, collection, selected, input.Routing)
+	if routingErr != nil {
+		return SkillAddProposal{Result: ErrorResult(NewInvalidRequestError(routingErr.Error(), "Check the routing flags."))}, nil
+	}
 
 	primaryTargetID := selected[0].TargetID
 	primaryContentDigest := "sha256:" + hex.EncodeToString(func() []byte { s := sha256.Sum256(selected[0].SkillMDBytes); return s[:] }())
@@ -236,6 +257,7 @@ func (service SkillAddService) PreviewSkillAdd(ctx context.Context, path string,
 		requestDigest:  requestDigest,
 		now:            now,
 		fullDiff:       input.FullDiff,
+		routing:        routing,
 	}
 
 	replayProp, found, err := lookupReplayedSkillAdd(ctx, planCtx)
@@ -385,10 +407,10 @@ func captureRemoteSkillAddSource(ctx context.Context, service SkillAddService, r
 		allowFile = ga.AllowFileProtocol
 	}
 
-	route, parseErr := sourcepkg.ParseGitHubLocatorWithOptions(rawLocator, "", "", sourcepkg.GitHubLocatorOptions{AllowFile: allowFile})
+	route, parseErr := sourcepkg.ParseLocatorWithOptions(rawLocator, "", "", sourcepkg.LocatorOptions{AllowFile: allowFile})
 	if parseErr != nil {
 		prop := SkillAddProposal{
-			Result: ErrorResult(NewInvalidRequestError(parseErr.Error(), "Provide a valid GitHub repository URL.")),
+			Result: ErrorResult(NewInvalidRequestError(parseErr.Error(), "Provide a valid repository URL (supported hosts: "+strings.Join(sourcepkg.SupportedHosts(), ", ")+").")),
 		}
 		return skillAddCapture{}, &prop, nil
 	}
@@ -396,10 +418,10 @@ func captureRemoteSkillAddSource(ctx context.Context, service SkillAddService, r
 	inspectCtx, cancelInspect := context.WithTimeout(ctx, sourcepkg.DefaultTimeout)
 	defer cancelInspect()
 
-	var resolved *sourcepkg.ResolvedGitHubRoute
+	var resolved *sourcepkg.ResolvedRoute
 	if ga, isGit := gitAdapter.(sourcepkg.GitRepositoryAdapter); isGit {
 		var resErr error
-		resolved, resErr = sourcepkg.ResolveGitHubRoute(inspectCtx, ga, route)
+		resolved, resErr = sourcepkg.ResolveRoute(inspectCtx, ga, route)
 		if resErr != nil {
 			var ambErr *sourcepkg.AmbiguousRefError
 			if errors.As(resErr, &ambErr) {
@@ -418,7 +440,7 @@ func captureRemoteSkillAddSource(ctx context.Context, service SkillAddService, r
 		if ref == "" {
 			ref = "main"
 		}
-		resolved = &sourcepkg.ResolvedGitHubRoute{
+		resolved = &sourcepkg.ResolvedRoute{
 			Repository: route.Repository,
 			Ref:        ref,
 			Path:       route.Path,
@@ -476,7 +498,7 @@ func captureRemoteSkillAddSource(ctx context.Context, service SkillAddService, r
 
 	return skillAddCapture{
 		origin: SkillOrigin{
-			Kind:         "github",
+			Kind:         route.HostKind,
 			Repository:   resolved.Repository,
 			Ref:          resolved.Ref,
 			Commit:       rev.Value,
@@ -717,6 +739,7 @@ type skillAddPlanContext struct {
 	requestDigest  string
 	now            time.Time
 	fullDiff       bool
+	routing        *skill.RoutingInput
 }
 
 func lookupReplayedSkillAdd(ctx context.Context, planCtx skillAddPlanContext) (*SkillAddProposal, bool, error) {
@@ -805,13 +828,17 @@ func planSkillAddProposal(ctx context.Context, planCtx skillAddPlanContext) (Ski
 
 	expiresAt := planCtx.now.Add(24 * time.Hour)
 	diffSummary := skill.DiffSummary{Added: planCtx.diffAdded}
+	extras, err := buildSkillAddExtras(ctx, planCtx.root, planCtx, planCtx.routing)
+	if err != nil {
+		return SkillAddProposal{}, err
+	}
+	approvedPlan, err := planApprovedSkillAdd(planCtx.root, planCtx, extras)
+	if err != nil {
+		return SkillAddProposal{}, err
+	}
 	fullDiffText := ""
 	if planCtx.fullDiff {
-		var diffBuf bytes.Buffer
-		for _, c := range planCtx.changes {
-			fmt.Fprintf(&diffBuf, "--- /dev/null\n+++ %s\n@@ -0,0 +1 @@\n+[added %d bytes]\n", c.Path, len(c.Contents))
-		}
-		fullDiffText = diffBuf.String()
+		fullDiffText = addFullDiff(ctx, planCtx.root, extras.fullDiffByAddedKey)
 	}
 
 	primaryItem := planCtx.selected[0]
@@ -870,9 +897,16 @@ func planSkillAddProposal(ctx context.Context, planCtx skillAddPlanContext) (Ski
 				Pins:     pins,
 			},
 		},
-		Assessment: assessment,
-		planned:    planned,
-		expiresAt:  expiresAt,
+		Assessment:         assessment,
+		Files:              extras.files,
+		RoutingSuggestions: extras.routing,
+		RoutingLint:        extras.lint,
+		Trust:              extras.trust,
+		ActivationReady:    extras.activationReady,
+		ActivationMissing:  extras.activationMissing,
+		planned:            planned,
+		plannedApproved:    approvedPlan,
+		expiresAt:          expiresAt,
 	}
 
 	// A folder of your own needs no license, so only a declared proprietary

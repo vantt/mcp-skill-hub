@@ -136,9 +136,10 @@ func (n NormalizedLocator) ToLocator() Locator {
 	}
 }
 
-// ParsedGitHubRoute holds the structurally parsed components of a GitHub URL.
-type ParsedGitHubRoute struct {
+// ParsedRoute holds the structurally parsed components of a hosting-service URL.
+type ParsedRoute struct {
 	OriginalURL string
+	HostKind    string // provider Kind() that parsed the URL; stored as the origin kind
 	Repository  string // canonical repository URL: "https://github.com/owner/repo.git"
 	Owner       string
 	RepoName    string
@@ -148,8 +149,8 @@ type ParsedGitHubRoute struct {
 	Path        string // explicit path from flag
 }
 
-// ResolvedGitHubRoute holds the fully resolved and pinned GitHub reference and path.
-type ResolvedGitHubRoute struct {
+// ResolvedRoute holds the fully resolved and pinned reference and path of a route.
+type ResolvedRoute struct {
 	Repository    string
 	Ref           string
 	Commit        string
@@ -157,18 +158,80 @@ type ResolvedGitHubRoute struct {
 	ContentDigest string
 }
 
-// GitHubLocatorOptions configures parsing options for GitHub locators.
-type GitHubLocatorOptions struct {
+// ParsedGitHubRoute and ResolvedGitHubRoute keep the original names of the route types.
+type (
+	ParsedGitHubRoute   = ParsedRoute
+	ResolvedGitHubRoute = ResolvedRoute
+)
+
+// LocatorOptions configures parsing options for host locators.
+type LocatorOptions struct {
 	AllowFile bool
 }
 
-// ParseGitHubLocator parses a GitHub URL structurally into its repository, route kind, and path components.
-func ParseGitHubLocator(rawURL, explicitRef, explicitPath string) (*ParsedGitHubRoute, error) {
-	return ParseGitHubLocatorWithOptions(rawURL, explicitRef, explicitPath, GitHubLocatorOptions{})
+// GitHubLocatorOptions is the original name of LocatorOptions.
+type GitHubLocatorOptions = LocatorOptions
+
+// HostProvider turns a web URL of a hosting service into a Git repository route.
+//
+// A self-hosted provider needs more than this port: its addresses also have to pass the
+// address policy (policy.go, deniedAddressRanges, which today admits public hosts only) and
+// its private repositories need credentials. This port solves neither.
+type HostProvider interface {
+	// Kind is stored as the origin kind of skills added from the host ("github").
+	Kind() string
+	// Host is the host name shown in user-facing text ("github.com").
+	Host() string
+	// Matches reports whether the provider owns the URL.
+	Matches(u *url.URL) bool
+	// ParseRoute parses a URL that Matches into a route. The caller fills OriginalURL.
+	ParseRoute(u *url.URL, ref, path string) (*ParsedRoute, error)
 }
 
-// ParseGitHubLocatorWithOptions parses a GitHub URL structurally into its repository, route kind, and path components.
-func ParseGitHubLocatorWithOptions(rawURL, explicitRef, explicitPath string, opts GitHubLocatorOptions) (*ParsedGitHubRoute, error) {
+// hostProviders is the registry; GitHub is the only provider.
+var hostProviders = []HostProvider{GitHubProvider{}}
+
+// SupportedHosts lists the host names of every registered provider.
+func SupportedHosts() []string {
+	hosts := make([]string, 0, len(hostProviders))
+	for _, provider := range hostProviders {
+		hosts = append(hosts, provider.Host())
+	}
+	return hosts
+}
+
+// KindForRepository returns the origin kind of a repository URL: the provider kind when a
+// provider owns the host, otherwise "git".
+func KindForRepository(repository string) string {
+	lower := strings.ToLower(repository)
+	if u, err := url.Parse(repository); err == nil && u.Host != "" {
+		for _, provider := range hostProviders {
+			if provider.Matches(u) {
+				return provider.Kind()
+			}
+		}
+		return "git"
+	}
+	for _, provider := range hostProviders {
+		if strings.Contains(lower, provider.Host()) {
+			return provider.Kind()
+		}
+	}
+	return "git"
+}
+
+// ParseGitHubLocator parses a hosting-service URL structurally into its repository, route kind, and path components.
+func ParseGitHubLocator(rawURL, explicitRef, explicitPath string) (*ParsedRoute, error) {
+	return ParseLocatorWithOptions(rawURL, explicitRef, explicitPath, LocatorOptions{})
+}
+
+// ParseGitHubLocatorWithOptions is ParseLocatorWithOptions under its original name.
+func ParseGitHubLocatorWithOptions(rawURL, explicitRef, explicitPath string, opts LocatorOptions) (*ParsedRoute, error) {
+	return ParseLocatorWithOptions(rawURL, explicitRef, explicitPath, opts)
+}
+
+// ParseLocatorWithOptions parses a hosting-service URL with the provider that owns its host.
+func ParseLocatorWithOptions(rawURL, explicitRef, explicitPath string, opts LocatorOptions) (*ParsedRoute, error) {
 	value := strings.TrimSpace(rawURL)
 	if value == "" || len(value) > 4096 || strings.ContainsAny(value, "\r\n\x00") {
 		return nil, ErrInvalidLocator
@@ -194,8 +257,10 @@ func ParseGitHubLocatorWithOptions(rawURL, explicitRef, explicitPath string, opt
 		if repoName == "" {
 			repoName = "repo"
 		}
-		return &ParsedGitHubRoute{
+		// A file:// repository stands in for a hosted one in fixtures, so it takes the first provider's kind.
+		return &ParsedRoute{
 			OriginalURL: rawURL,
+			HostKind:    hostProviders[0].Kind(),
 			Repository:  value,
 			Owner:       "local",
 			RepoName:    repoName,
@@ -209,166 +274,143 @@ func ParseGitHubLocatorWithOptions(rawURL, explicitRef, explicitPath string, opt
 	if u.Scheme != "https" {
 		return nil, fmt.Errorf("%w: allowed protocol is https", ErrInvalidLocator)
 	}
-	host := strings.ToLower(strings.TrimSuffix(u.Hostname(), "."))
-	if host != "github.com" {
-		return nil, fmt.Errorf("%w: unsupported host %q; only public github.com is supported", ErrInvalidLocator, host)
-	}
-
-	// Address policy check
-	if _, err := ValidateRemoteURL(value, false); err != nil {
-		return nil, err
-	}
-
-	cleanPath := strings.Trim(u.Path, "/")
-	if cleanPath == "" {
-		return nil, fmt.Errorf("%w: GitHub URL requires owner and repository name", ErrInvalidLocator)
-	}
-
-	segments := strings.Split(cleanPath, "/")
-	if len(segments) < 2 {
-		return nil, fmt.Errorf("%w: GitHub URL requires owner and repository name", ErrInvalidLocator)
-	}
-
-	owner := segments[0]
-	repoName := strings.TrimSuffix(segments[1], ".git")
-	if !validGitHubName(owner) || !validGitHubName(repoName) {
-		return nil, fmt.Errorf("%w: invalid GitHub repository name", ErrInvalidLocator)
-	}
-
-	canonicalRepo := fmt.Sprintf("https://github.com/%s/%s.git", owner, repoName)
-	routeKind := "root"
-	rest := ""
-
-	if len(segments) == 2 {
-		routeKind = "root"
-	} else {
-		kind := segments[2]
-		switch kind {
-		case "tree":
-			if len(segments) < 4 {
-				return nil, fmt.Errorf("%w: tree route requires ref or branch", ErrInvalidLocator)
-			}
-			routeKind = "tree"
-			rest = strings.Join(segments[3:], "/")
-		case "blob":
-			if len(segments) < 4 {
-				return nil, fmt.Errorf("%w: blob route requires ref and file path", ErrInvalidLocator)
-			}
-			last := segments[len(segments)-1]
-			if last == "SKILL.md" {
-				routeKind = "blob"
-				// The folder is the parent of SKILL.md
-				rest = strings.Join(segments[3:len(segments)-1], "/")
-			} else if filepath.Ext(last) != "" {
-				return nil, fmt.Errorf("%w: link the skill folder or its SKILL.md", ErrInvalidLocator)
-			} else {
-				// The user linked a directory using /blob/ instead of /tree/
-				routeKind = "tree"
-				rest = strings.Join(segments[3:], "/")
-			}
-		default:
-			return nil, fmt.Errorf("%w: unsupported GitHub route %q", ErrInvalidLocator, kind)
+	for _, provider := range hostProviders {
+		if !provider.Matches(u) {
+			continue
 		}
+		route, parseErr := provider.ParseRoute(u, explicitRef, explicitPath)
+		if parseErr != nil {
+			return nil, parseErr
+		}
+		route.OriginalURL = rawURL
+		route.HostKind = provider.Kind()
+		return route, nil
 	}
-
-	return &ParsedGitHubRoute{
-		OriginalURL: rawURL,
-		Repository:  canonicalRepo,
-		Owner:       owner,
-		RepoName:    repoName,
-		RouteKind:   routeKind,
-		Rest:        rest,
-		Ref:         explicitRef,
-		Path:        explicitPath,
-	}, nil
+	host := strings.ToLower(strings.TrimSuffix(u.Hostname(), "."))
+	return nil, fmt.Errorf("%w: unsupported host %q; only public %s is supported", ErrInvalidLocator, host, strings.Join(SupportedHosts(), ", "))
 }
 
-// ResolveGitHubRoute resolves the commit hash and folder path for a parsed GitHub route.
-func ResolveGitHubRoute(ctx context.Context, adapter GitRepositoryAdapter, route *ParsedGitHubRoute) (*ResolvedGitHubRoute, error) {
+// ResolveGitHubRoute is ResolveRoute under its original name.
+func ResolveGitHubRoute(ctx context.Context, adapter GitRepositoryAdapter, route *ParsedRoute) (*ResolvedRoute, error) {
+	return ResolveRoute(ctx, adapter, route)
+}
+
+// ResolveRoute resolves the commit hash and folder path for a parsed route.
+func ResolveRoute(ctx context.Context, adapter GitRepositoryAdapter, route *ParsedRoute) (*ResolvedRoute, error) {
 	if route == nil {
 		return nil, ErrInvalidLocator
 	}
+	if route.Ref != "" {
+		return resolveExplicitRef(ctx, adapter, route)
+	}
+	if route.RouteKind == "root" {
+		return resolveDefaultBranch(ctx, adapter, route)
+	}
+	return resolveTreeOrBlob(ctx, adapter, route)
+}
 
+// resolveExplicitRef resolves a route whose ref was given by the caller.
+func resolveExplicitRef(ctx context.Context, adapter GitRepositoryAdapter, route *ParsedRoute) (*ResolvedRoute, error) {
 	repoURL := route.Repository
 	resolvedRef := route.Ref
 	resolvedPath := route.Path
 
-	if resolvedRef != "" {
-		// Explicit ref provided
-		if resolvedPath == "" && route.Rest != "" {
-			if route.Rest == resolvedRef {
+	if resolvedPath == "" && route.Rest != "" {
+		if route.Rest == resolvedRef {
+			resolvedPath = ""
+		} else if strings.HasPrefix(route.Rest, resolvedRef+"/") {
+			resolvedPath = route.Rest[len(resolvedRef)+1:]
+		} else {
+			shortRef := strings.TrimPrefix(strings.TrimPrefix(resolvedRef, "refs/heads/"), "refs/tags/")
+			if route.Rest == shortRef {
 				resolvedPath = ""
-			} else if strings.HasPrefix(route.Rest, resolvedRef+"/") {
-				resolvedPath = route.Rest[len(resolvedRef)+1:]
+			} else if strings.HasPrefix(route.Rest, shortRef+"/") {
+				resolvedPath = route.Rest[len(shortRef)+1:]
 			} else {
-				shortRef := strings.TrimPrefix(strings.TrimPrefix(resolvedRef, "refs/heads/"), "refs/tags/")
-				if route.Rest == shortRef {
-					resolvedPath = ""
-				} else if strings.HasPrefix(route.Rest, shortRef+"/") {
-					resolvedPath = route.Rest[len(shortRef)+1:]
-				} else {
-					resolvedPath = route.Rest
-				}
+				resolvedPath = route.Rest
 			}
 		}
-
-		commitSHA, err := adapter.ResolveRefCommit(ctx, repoURL, resolvedRef)
-		if err != nil {
-			return nil, err
-		}
-		return &ResolvedGitHubRoute{
-			Repository: repoURL,
-			Ref:        resolvedRef,
-			Commit:     commitSHA,
-			Path:       filepath.ToSlash(filepath.Clean(resolvedPath)),
-		}, nil
 	}
 
-	// No explicit ref provided
-	if route.RouteKind == "root" {
-		// Resolve default branch
-		advertised, err := adapter.ListAdvertisedRefs(ctx, repoURL)
-		if err != nil {
-			return nil, err
+	commitSHA, err := adapter.ResolveRefCommit(ctx, repoURL, resolvedRef)
+	if err != nil {
+		return nil, err
+	}
+	return &ResolvedRoute{
+		Repository: repoURL,
+		Ref:        resolvedRef,
+		Commit:     commitSHA,
+		Path:       filepath.ToSlash(filepath.Clean(resolvedPath)),
+	}, nil
+}
+
+// resolveDefaultBranch resolves a repository link without a ref to its default branch.
+func resolveDefaultBranch(ctx context.Context, adapter GitRepositoryAdapter, route *ParsedRoute) (*ResolvedRoute, error) {
+	repoURL := route.Repository
+	advertised, err := adapter.ListAdvertisedRefs(ctx, repoURL)
+	if err != nil {
+		return nil, err
+	}
+	defaultBranch := "main"
+	commitSHA := ""
+	for _, ref := range advertised {
+		if ref.Name == "refs/heads/main" {
+			defaultBranch = "main"
+			commitSHA = ref.Hash
+			break
 		}
-		defaultBranch := "main"
-		commitSHA := ""
+		if ref.Name == "refs/heads/master" && commitSHA == "" {
+			defaultBranch = "master"
+			commitSHA = ref.Hash
+		}
+	}
+	if commitSHA == "" && len(advertised) > 0 {
 		for _, ref := range advertised {
-			if ref.Name == "refs/heads/main" {
-				defaultBranch = "main"
+			if strings.HasPrefix(ref.Name, "refs/heads/") {
+				defaultBranch = strings.TrimPrefix(ref.Name, "refs/heads/")
 				commitSHA = ref.Hash
 				break
 			}
-			if ref.Name == "refs/heads/master" && commitSHA == "" {
-				defaultBranch = "master"
-				commitSHA = ref.Hash
-			}
 		}
-		if commitSHA == "" && len(advertised) > 0 {
-			for _, ref := range advertised {
-				if strings.HasPrefix(ref.Name, "refs/heads/") {
-					defaultBranch = strings.TrimPrefix(ref.Name, "refs/heads/")
-					commitSHA = ref.Hash
-					break
-				}
-			}
-		}
-		if commitSHA == "" {
-			var resolveErr error
-			commitSHA, resolveErr = adapter.ResolveRefCommit(ctx, repoURL, "HEAD")
-			if resolveErr != nil {
-				return nil, resolveErr
-			}
-		}
-		return &ResolvedGitHubRoute{
-			Repository: repoURL,
-			Ref:        defaultBranch,
-			Commit:     commitSHA,
-			Path:       "",
-		}, nil
 	}
+	if commitSHA == "" {
+		var resolveErr error
+		commitSHA, resolveErr = adapter.ResolveRefCommit(ctx, repoURL, "HEAD")
+		if resolveErr != nil {
+			return nil, resolveErr
+		}
+	}
+	return &ResolvedRoute{
+		Repository: repoURL,
+		Ref:        defaultBranch,
+		Commit:     commitSHA,
+		Path:       "",
+	}, nil
+}
 
-	// route.Rest is non-empty for tree or blob
+// resolveCommitLink resolves a link whose first segment is a commit hash.
+func resolveCommitLink(ctx context.Context, adapter GitRepositoryAdapter, route *ParsedRoute) (*ResolvedRoute, error) {
+	firstSeg := strings.Split(route.Rest, "/")[0]
+	if validGitObject(firstSeg) {
+		path := strings.TrimPrefix(route.Rest, firstSeg)
+		path = strings.TrimPrefix(path, "/")
+		commitSHA, resolveErr := adapter.ResolveRefCommit(ctx, route.Repository, firstSeg)
+		if resolveErr == nil {
+			return &ResolvedRoute{
+				Repository: route.Repository,
+				Ref:        firstSeg,
+				Commit:     commitSHA,
+				Path:       filepath.ToSlash(filepath.Clean(path)),
+			}, nil
+		}
+	}
+	return nil, fmt.Errorf("%w: reference not found for %q", ErrInvalidLocator, route.Rest)
+}
+
+// resolveTreeOrBlob splits the part of a /tree/ or /blob/ link after the route
+// kind into a ref and a path, using the refs the repository advertises.
+func resolveTreeOrBlob(ctx context.Context, adapter GitRepositoryAdapter, route *ParsedRoute) (*ResolvedRoute, error) {
+	repoURL := route.Repository
 	advertised, err := adapter.ListAdvertisedRefs(ctx, repoURL)
 	if err != nil {
 		return nil, err
@@ -429,21 +471,7 @@ func ResolveGitHubRoute(ctx context.Context, adapter GitRepositoryAdapter, route
 
 	// If no advertised ref matched, check for commit SHA
 	if len(candidates) == 0 {
-		firstSeg := strings.Split(route.Rest, "/")[0]
-		if validGitObject(firstSeg) {
-			path := strings.TrimPrefix(route.Rest, firstSeg)
-			path = strings.TrimPrefix(path, "/")
-			commitSHA, resolveErr := adapter.ResolveRefCommit(ctx, repoURL, firstSeg)
-			if resolveErr == nil {
-				return &ResolvedGitHubRoute{
-					Repository: repoURL,
-					Ref:        firstSeg,
-					Commit:     commitSHA,
-					Path:       filepath.ToSlash(filepath.Clean(path)),
-				}, nil
-			}
-		}
-		return nil, fmt.Errorf("%w: reference not found for %q", ErrInvalidLocator, route.Rest)
+		return resolveCommitLink(ctx, adapter, route)
 	}
 
 	// If exactly one match
@@ -451,7 +479,7 @@ func ResolveGitHubRoute(ctx context.Context, adapter GitRepositoryAdapter, route
 		c := candidates[0]
 		path := strings.TrimPrefix(route.Rest, c.name)
 		path = strings.TrimPrefix(path, "/")
-		return &ResolvedGitHubRoute{
+		return &ResolvedRoute{
 			Repository: repoURL,
 			Ref:        c.name,
 			Commit:     c.hash,
@@ -484,7 +512,7 @@ func ResolveGitHubRoute(ctx context.Context, adapter GitRepositoryAdapter, route
 
 	if len(withSkill) == 1 {
 		selected := withSkill[0]
-		return &ResolvedGitHubRoute{
+		return &ResolvedRoute{
 			Repository: repoURL,
 			Ref:        selected.cand.name,
 			Commit:     selected.cand.hash,
@@ -498,23 +526,11 @@ func ResolveGitHubRoute(ctx context.Context, adapter GitRepositoryAdapter, route
 	}
 }
 
-// ResolveGitHubLocator combines parsing and resolving a GitHub URL into a single step.
-func ResolveGitHubLocator(ctx context.Context, adapter GitRepositoryAdapter, rawURL, explicitRef, explicitPath string) (*ResolvedGitHubRoute, error) {
-	route, err := ParseGitHubLocator(rawURL, explicitRef, explicitPath)
+// ResolveGitHubLocator combines parsing and resolving a URL into a single step.
+func ResolveGitHubLocator(ctx context.Context, adapter GitRepositoryAdapter, rawURL, explicitRef, explicitPath string) (*ResolvedRoute, error) {
+	route, err := ParseLocatorWithOptions(rawURL, explicitRef, explicitPath, LocatorOptions{})
 	if err != nil {
 		return nil, err
 	}
-	return ResolveGitHubRoute(ctx, adapter, route)
-}
-
-func validGitHubName(name string) bool {
-	if name == "" || len(name) > 100 {
-		return false
-	}
-	for _, r := range name {
-		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.') {
-			return false
-		}
-	}
-	return true
+	return ResolveRoute(ctx, adapter, route)
 }

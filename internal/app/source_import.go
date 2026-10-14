@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -630,10 +629,7 @@ func buildImportItemChanges(
 	if schemaVersion >= 3 {
 		var src map[string]any
 		if record.Adapter == "git" {
-			originKind := "git"
-			if u, err := url.Parse(record.Locator.Repository); err == nil && strings.ToLower(u.Host) == "github.com" {
-				originKind = "github"
-			}
+			originKind := sourcepkg.KindForRepository(record.Locator.Repository)
 			capturedOrigin := SkillOrigin{
 				Kind:       originKind,
 				Repository: record.Locator.Repository,
@@ -700,10 +696,7 @@ func buildImportItemChanges(
 	} else {
 		var provDoc map[string]any
 		if record.Adapter == "git" {
-			originKind := "git"
-			if u, err := url.Parse(record.Locator.Repository); err == nil && strings.ToLower(u.Host) == "github.com" {
-				originKind = "github"
-			}
+			originKind := sourcepkg.KindForRepository(record.Locator.Repository)
 			capturedOrigin := SkillOrigin{
 				Kind:       originKind,
 				Repository: record.Locator.Repository,

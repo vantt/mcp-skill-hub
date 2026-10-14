@@ -401,10 +401,7 @@ func (bc *backfillContext) processCandidateB(id, relDir, sourceID string, metaBy
 		return nil, nil, nil, nil
 	}
 
-	originKind := "git"
-	if strings.Contains(strings.ToLower(srcRec.Locator.Repository), "github.com") {
-		originKind = "github"
-	}
+	originKind := sourcepkg.KindForRepository(srcRec.Locator.Repository)
 	ref := srcRec.Locator.Ref
 	if ref == "" {
 		ref = "main"
