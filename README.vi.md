@@ -13,8 +13,6 @@ Skill của bạn ở một nơi. Mọi agent kéo về khi cần.<br>
 Skill Hub phục vụ các skill của agent qua MCP từ một kho Git của riêng bạn, nên không có gì phải cài hay sao chép vào từng dự án: agent hỏi hub skill phù hợp khi bắt đầu một việc.
 Vì thư viện nằm một chỗ, bạn có thể thu thập skill từ bất kỳ kho nào, chỉnh sửa và tinh chỉnh theo tiêu chí của riêng bạn, kèm phản hồi từ việc dùng thật và một bước duyệt trước khi bất cứ thứ gì đến tay agent.
 
-Về tên gọi: kho mã là `skillhub-mcp`, sản phẩm là Skill Hub, và lệnh là `skillhub`.
-
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/web/dark-skills-list.png">
   <img src="docs/images/web/skills-list.png" alt="Danh sách skill với bộ lọc trạng thái và các skill ở trạng thái nháp, đang dùng hoặc không còn dùng." width="800">
