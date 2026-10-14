@@ -1,7 +1,7 @@
 ---
 title: "Server instructions carry the Skill Hub protocol"
 description: "The skillhub MCP server sends the usage protocol in its initialize instructions, generated from the tools it registers; connect stops writing the CLAUDE.md/AGENTS.md/GEMINI.md block and doctor --fix removes the old one."
-status: pending
+status: completed
 priority: P2
 effort: 7h
 branch: worktree-agent-a169e2483df1cb908
