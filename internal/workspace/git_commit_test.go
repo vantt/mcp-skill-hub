@@ -108,6 +108,9 @@ func TestCommitPathsFailingHookLeavesFilesAndGivesManualCommand(t *testing.T) {
 	if outcome.Status != CommitFailed || !strings.Contains(outcome.Reason, "hook says no") {
 		t.Fatalf("outcome = %+v", outcome)
 	}
+	if !strings.Contains(outcome.Reason, "staged") {
+		t.Fatalf("the reason must say the files are left staged: %q", outcome.Reason)
+	}
 	if data, _ := os.ReadFile(filepath.Join(root, "skills/default/a/SKILL.md")); string(data) != "a changed\n" {
 		t.Fatal("the file must stay written")
 	}
@@ -185,5 +188,30 @@ func TestDirtyPathsReportsModifiedStagedAndUntrackedUnderTheGivenPaths(t *testin
 
 	if got, err := DirtyPaths(context.Background(), t.TempDir(), []string{"skills"}); err != nil || got != nil {
 		t.Fatalf("non-Git root = %v, %v", got, err)
+	}
+}
+
+func TestCommitPathsTreatsGlobCharactersLiterally(t *testing.T) {
+	root := newCommitRepo(t)
+	writeRepoFile(t, root, "res/x1.md", "one\n")
+	writeRepoFile(t, root, "res/x[12].md", "bracket\n")
+	git(t, root, "add", "-A")
+	git(t, root, "commit", "-q", "-m", "resources")
+	writeRepoFile(t, root, "res/x1.md", "one edited by hand\n")
+	writeRepoFile(t, root, "res/x[12].md", "bracket changed\n")
+
+	dirty, err := DirtyPaths(context.Background(), root, []string{"res/x[12].md"})
+	if err != nil || len(dirty) != 1 || dirty[0] != "res/x[12].md" {
+		t.Fatalf("dirty = %v, err = %v", dirty, err)
+	}
+	outcome := CommitPaths(context.Background(), root, []string{"res/x[12].md"}, "Edit bracket", false)
+	if outcome.Status != CommitCommitted {
+		t.Fatalf("outcome = %+v", outcome)
+	}
+	if files := git(t, root, "show", "--name-only", "--format=", "HEAD"); files != "res/x[12].md" {
+		t.Fatalf("commit holds %q, want only the bracket path", files)
+	}
+	if status := git(t, root, "status", "--porcelain=v1"); status != "M res/x1.md" && status != " M res/x1.md" {
+		t.Fatalf("the unrelated edit was not left alone: %q", status)
 	}
 }

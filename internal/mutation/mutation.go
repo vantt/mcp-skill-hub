@@ -235,18 +235,25 @@ func CommitWithOptions(root string, set WriteSet, options Options) (Receipt, err
 	if err := ctx.Err(); err != nil {
 		return Receipt{}, err
 	}
+	policy, asked := workspace.CommitPolicyFrom(ctx)
+	if asked && !policy.Disabled && !policy.Defer {
+		commitLock, err := AcquireCommitLock(ctx, root)
+		if err != nil {
+			return Receipt{}, err
+		}
+		defer func() { _ = commitLock.Unlock() }()
+	}
 	lock, err := AcquireExclusiveLock(ctx, root, DefaultLockTimeout)
 	if err != nil {
 		return Receipt{}, err
 	}
 	receipt, replayed, err := commitWhileLocked(root, set, options)
-	// The commit runs after the lock is released because the hub's pre-commit
-	// hook may run skillhub itself.
+	// The Git commit runs after the workspace lock is released because the
+	// hub's pre-commit hook may run skillhub itself.
 	_ = lock.Unlock()
 	if err != nil || replayed {
 		return receipt, err
 	}
-	policy, asked := workspace.CommitPolicyFrom(ctx)
 	switch {
 	case !asked || policy.Disabled:
 	case policy.Defer:

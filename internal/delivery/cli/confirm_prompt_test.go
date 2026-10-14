@@ -373,3 +373,43 @@ func TestSourceCaptureCommitsAndHonoursNoCommit(t *testing.T) {
 		t.Fatal("--no-commit must leave the capture uncommitted")
 	}
 }
+
+// readerFunc lets a test act at the moment the person answers.
+type readerFunc func(p []byte) (int, error)
+
+func (f readerFunc) Read(p []byte) (int, error) { return f(p) }
+
+func TestMigrateYesRefusesAProposalThatChangedSincePreview(t *testing.T) {
+	hub := newNextStepHub(t)
+	marker := filepath.Join(hub.root, ".skillhub", "schema-version")
+	if err := os.Remove(marker); err != nil {
+		t.Fatal(err)
+	}
+	gitOutput(t, hub.root, "add", "-A")
+	gitOutput(t, hub.root, "commit", "-q", "-m", "hub without a schema marker")
+	atTerminal(t, "")
+	answered := false
+	confirmInput = readerFunc(func(p []byte) (int, error) {
+		if answered {
+			return 0, io.EOF
+		}
+		answered = true
+		// The hub changes while the preview is on screen.
+		if err := os.WriteFile(marker, []byte("4\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		gitOutput(t, hub.root, "add", "-A")
+		gitOutput(t, hub.root, "commit", "-q", "-m", "someone else changed the marker")
+		return copy(p, "y\n"), nil
+	})
+	code, stdout, _ := hub.run("maintain", "migrate", "--to", "5")
+	if code == 0 {
+		t.Fatalf("a changed proposal was applied:\n%s", stdout)
+	}
+	if subject := gitOutput(t, hub.root, "log", "-1", "--format=%s"); subject != "someone else changed the marker" {
+		t.Fatalf("a commit was made for a proposal the person never saw (%q):\n%s", subject, stdout)
+	}
+	if got, _ := os.ReadFile(marker); string(got) != "4\n" {
+		t.Fatalf("marker = %q, want it untouched", got)
+	}
+}

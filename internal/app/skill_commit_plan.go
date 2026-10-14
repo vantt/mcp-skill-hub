@@ -208,6 +208,18 @@ func (service SkillCommitService) planNewSkill(preview *SkillCommitPreview, inpu
 		if err != nil {
 			return nil, err
 		}
+		if input.Runtime != nil {
+			document, err := decodeMeta(meta)
+			if err != nil {
+				return nil, err
+			}
+			if err := skill.ApplyRuntimeBlock(document, input.Runtime); err != nil {
+				return NewInvalidRequestError(err.Error(), "Fix the runtime file: requires.bins, requires.env, requires.platforms and setup.check/command are the known keys."), nil
+			}
+			if meta, err = encodeMeta(document); err != nil {
+				return nil, err
+			}
+		}
 		changes[index].Contents, plan.metaAfter = meta, meta
 	}
 	plan.changes = changes

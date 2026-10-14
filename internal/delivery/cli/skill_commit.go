@@ -94,6 +94,13 @@ func applyCommit(ctx context.Context, flags skillFlags, preview app.SkillCommitP
 // commitInputFromFlags turns the command line into the service input.
 func commitInputFromFlags(flags skillFlags) (app.SkillCommitInput, error) {
 	input := app.SkillCommitInput{Target: flags.positionals[0], ProjectDir: currentDirectory(), Collection: flags.collection, FullDiff: flags.diff}
+	if flags.runtimeFile != "" {
+		block, err := readRuntimeFile(flags.runtimeFile)
+		if err != nil {
+			return input, err
+		}
+		input.Runtime = block
+	}
 	if flags.hasRoutingFlags() {
 		input.Routing = &skill.RoutingInput{Operations: flags.operations, Triggers: flags.triggers, NotFor: flags.notFor, MinScope: flags.minScope, Examples: flags.examples, CounterExamples: flags.counterExamples}
 	}

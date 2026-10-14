@@ -70,7 +70,9 @@ func parseSkillCommitFlags(flags *skillFlags, positionals []string) error {
 	if len(positionals) != 1 || flags.id != "" {
 		return errors.New("commit requires exactly one skill id or folder")
 	}
-	if flags.hasEditFlags() {
+	withoutRuntime := *flags
+	withoutRuntime.runtimeFile = ""
+	if withoutRuntime.hasEditFlags() {
 		return errors.New("commit takes the skill from its folder; edit the folder, then commit it")
 	}
 	for _, item := range flags.accepts {

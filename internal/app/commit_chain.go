@@ -79,6 +79,11 @@ func (chain *commitChain) Finish() *workspace.CommitOutcome {
 	if len(chain.ops) > 0 {
 		message += "\n\nSkillhub-Operation: " + chain.ops[0]
 	}
+	lock, err := mutation.AcquireCommitLock(chain.ctx, chain.root)
+	if err != nil {
+		return &workspace.CommitOutcome{Status: workspace.CommitFailed, Message: message, Reason: "Another change was still being committed: " + err.Error()}
+	}
+	defer func() { _ = lock.Unlock() }()
 	outcome := workspace.CommitPaths(chain.ctx, chain.root, paths, message, chain.policy.Interactive)
 	return &outcome
 }

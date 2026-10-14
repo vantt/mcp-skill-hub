@@ -55,18 +55,39 @@ func TryAcquireSharedLock(root string) (*WorkspaceLock, error) {
 }
 
 func openLock(root string) (*flock.Flock, string, error) {
+	return openNamedLock(root, "workspace.lock")
+}
+
+func openNamedLock(root, name string) (*flock.Flock, string, error) {
 	if err := ensureSafeParents(root, "runtime/locks", 0o755); err != nil {
 		return nil, "", err
 	}
-	path := filepath.Join(root, "runtime", "locks", "workspace.lock")
+	path := filepath.Join(root, "runtime", "locks", name)
 	return flock.New(path), path, nil
 }
 
+// CommitLockTimeout bounds the wait for another confirmed change to finish its
+// Git commit, which may run a slow hook.
+var CommitLockTimeout = 2 * time.Minute
+
+// AcquireCommitLock serializes "write the change, then commit it" across
+// processes. It is taken before the exclusive workspace lock and released after
+// the Git commit, so a second change never sees the first one's files as
+// uncommitted and two commits never race on Git's index lock. The hub's
+// pre-commit hook never takes it.
+func AcquireCommitLock(ctx context.Context, root string) (*WorkspaceLock, error) {
+	return acquireNamedLock(ctx, root, "commit.lock", CommitLockTimeout, false)
+}
+
 func acquireLock(ctx context.Context, root string, timeout time.Duration, shared bool) (*WorkspaceLock, error) {
+	return acquireNamedLock(ctx, root, "workspace.lock", timeout, shared)
+}
+
+func acquireNamedLock(ctx context.Context, root, name string, timeout time.Duration, shared bool) (*WorkspaceLock, error) {
 	if timeout <= 0 {
 		timeout = DefaultLockTimeout
 	}
-	lock, path, err := openLock(root)
+	lock, path, err := openNamedLock(root, name)
 	if err != nil {
 		return nil, err
 	}

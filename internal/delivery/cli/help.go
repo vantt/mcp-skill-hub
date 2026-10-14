@@ -169,7 +169,7 @@ Subcommands:
                                                     when not to and for an example; without one the flags fill the same file
   checkout <id>                                     Copy a skill with every file into .claude/skills/<id>/ of this project to edit and
                                                     try it; the hub keeps serving the current version and the folder goes into .gitignore
-  commit <id|folder> [--collection <c>] [--accept <p>=hub|project]... [--manual <p>=<f>]... [--write-conflicts <dir>]
+  commit <id|folder> [--collection <c>] [--runtime-file <yaml>] [--accept <p>=hub|project]... [--manual <p>=<f>]... [--write-conflicts <dir>]
          [--trigger <t>]... [--not-for <n>]... [--example <e>]... [--min-scope <s>] [--edit-routing]
          [--approve-content <digest>] [--diff] [--yes] [--no-commit] [--json]
                                                     Bring a project folder back to the hub as one reviewed change and one hub commit.
@@ -215,7 +215,7 @@ Allowed --min-scope values: single_step, multi_step, project.
 On edit, routing flags you pass replace that field; the others keep their values.
 --example and --counter-example record requests that should (or should not) route to the
 skill: at most 10 each, up to 300 characters.
---runtime-file replaces the skill's runtime block with the YAML mapping in the file (requires.bins/env/platforms,
+--runtime-file replaces the skill's runtime block with the YAML mapping in the file (on commit: for a new skill only) (requires.bins/env/platforms,
 setup.check/command); a file containing {} removes the block. Changing it makes an earlier --approve-content stale.
 --approve-content records your review of a skill's whole content (files and runtime block); pass the
 exact content digest. Only this command can approve content; agents cannot.

@@ -153,7 +153,7 @@ func CommitPaths(ctx context.Context, root string, paths []string, message strin
 		return outcome
 	}
 	if _, stderr, err := runGit(ctx, root, interactive, append([]string{"commit", "-q", "-m", message, "--"}, paths...)...); err != nil {
-		return fail(gitReason(ctx, stderr, err))
+		return fail(gitReason(ctx, stderr, err) + " The files are staged: run the manual command to finish, or `git reset` to unstage them.")
 	}
 	head, _, err := runGit(ctx, root, false, "rev-parse", "HEAD")
 	if err != nil {
@@ -247,7 +247,7 @@ func existingOrTracked(ctx context.Context, root string, paths []string) []strin
 
 func gitCommand(ctx context.Context, root string, stdin io.Reader, args ...string) *exec.Cmd {
 	command := exec.CommandContext(ctx, "git", append([]string{"-C", root}, args...)...)
-	command.Env = append(os.Environ(), "GIT_OPTIONAL_LOCKS=0", "GIT_PAGER=cat")
+	command.Env = append(os.Environ(), "GIT_OPTIONAL_LOCKS=0", "GIT_PAGER=cat", "GIT_LITERAL_PATHSPECS=1")
 	command.Stdin = stdin
 	command.WaitDelay = 2 * time.Second
 	return command
@@ -266,6 +266,10 @@ func runGit(ctx context.Context, root string, interactive bool, args ...string) 
 		command.Env = append(command.Env, "GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=never", "GIT_ASKPASS=", "SSH_ASKPASS=")
 	}
 	command.Stdout, command.Stderr = &stdout, &stderr
+	if interactive {
+		// A hook or a signing tool that asks a question must be heard.
+		command.Stdout, command.Stderr = io.MultiWriter(&stdout, os.Stderr), io.MultiWriter(&stderr, os.Stderr)
+	}
 	err := command.Run()
 	return stdout.String(), stderr.String(), err
 }

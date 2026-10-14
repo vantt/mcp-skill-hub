@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	catalogpkg "github.com/vantt/skillhub-mcp/internal/catalog"
@@ -35,7 +36,16 @@ type MigrationResult struct {
 }
 
 // MigrationService owns explicit canonical migration preview and confirmation.
-type MigrationService struct{ Registry migrationpkg.Registry }
+type MigrationService struct {
+	Registry migrationpkg.Registry
+	// ExpectedDigest, when set, is the digest of the proposal the person was
+	// shown. A confirmation that would apply any other proposal is refused.
+	ExpectedDigest string
+}
+
+// ErrProposalChanged means the hub no longer yields the proposal that was
+// previewed, so applying it would write something the person never saw.
+var ErrProposalChanged = errors.New("the hub changed since the preview, so nothing was applied; review a fresh preview")
 
 // Migrate previews by default. When confirmed, it applies the exact proposal
 // produced by the same fresh inspection through the canonical mutation WAL.
@@ -59,6 +69,9 @@ func (service MigrationService) Migrate(ctx context.Context, path string, target
 		return MigrationResult{}, err
 	}
 	if source == target {
+		if yes && service.ExpectedDigest != "" {
+			return MigrationResult{}, ErrProposalChanged
+		}
 		if yes {
 			prior, found, lookupErr := lookupAppliedMigration(ctx, root, target)
 			if lookupErr != nil {
@@ -76,6 +89,9 @@ func (service MigrationService) Migrate(ctx context.Context, path string, target
 	proposal, err := registry.Preview(root, target)
 	if err != nil {
 		return MigrationResult{}, err
+	}
+	if yes && service.ExpectedDigest != "" && proposal.Digest != service.ExpectedDigest {
+		return MigrationResult{}, ErrProposalChanged
 	}
 	result := MigrationResult{
 		Result:              NewResult(StatusActionRequired, fmt.Sprintf("Preview only: canonical schema migration %d to %d was not applied without --yes.", proposal.SourceVersion, proposal.TargetVersion)),

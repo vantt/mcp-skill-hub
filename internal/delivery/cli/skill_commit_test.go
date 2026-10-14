@@ -401,3 +401,48 @@ func TestStatusInsideAProjectListsOpenCheckouts(t *testing.T) {
 	_, thisFile, _, _ := runtime.Caller(0)
 	validateJSONDocument(t, filepath.Join(filepath.Dir(thisFile), "..", "..", "..", "schemas", "curation-home-v1.schema.json"), []byte(jsonOut))
 }
+
+func TestSkillCommitNewFolderTakesARuntimeFile(t *testing.T) {
+	hub := newNextStepHub(t)
+	project := projectInDir(t)
+	if code, _, stderr := runCLI(t, "skill", "create", "team-release", "--description", "Cut a release", "--trigger", "cut a release", "--not-for", "npm"); code != 0 {
+		t.Fatalf("create: %s", stderr)
+	}
+	folder := filepath.Join(project, ".claude", "skills", "team-release")
+	runtimeFile := filepath.Join(t.TempDir(), "runtime.yaml")
+	if err := os.WriteFile(runtimeFile, []byte("requires:\n  bins: [git]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	badFile := filepath.Join(t.TempDir(), "bad.yaml")
+	if err := os.WriteFile(badFile, []byte("- not a mapping\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	before := hubHead(t, hub.root)
+	if code, out, errOut := runCLI(t, "skill", "commit", folder, "--workspace", hub.root, "--yes", "--runtime-file", badFile); code == 0 || hubHead(t, hub.root) != before {
+		t.Fatalf("a runtime file that is not a mapping must be refused (exit %d)\n%s%s", code, out, errOut)
+	}
+
+	code, stdout, stderr := runCLI(t, "skill", "commit", folder, "--workspace", hub.root, "--yes", "--runtime-file", runtimeFile)
+	if code != 0 || !strings.Contains(stdout, "Committed ") {
+		t.Fatalf("exit = %d\nstdout=%s\nstderr=%s", code, stdout, stderr)
+	}
+	meta := readFileText(t, filepath.Join(hub.root, "skills", "default", "team-release", ".meta", "skill.yaml"))
+	if !strings.Contains(meta, "runtime:") || !strings.Contains(meta, "git") {
+		t.Fatalf("the runtime block did not reach the hub:\n%s", meta)
+	}
+}
+
+func TestSkillCommitRuntimeFileIsOnlyForANewSkill(t *testing.T) {
+	hub, _, folder := checkedOutProject(t, "review-checklist")
+	appendToFile(t, filepath.Join(folder, "SKILL.md"), "\nOne more line.\n")
+	runtimeFile := filepath.Join(t.TempDir(), "runtime.yaml")
+	if err := os.WriteFile(runtimeFile, []byte("requires:\n  bins: [git]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	before := hubHead(t, hub.root)
+	code, stdout, stderr := runCLI(t, "skill", "commit", "review-checklist", "--workspace", hub.root, "--yes", "--runtime-file", runtimeFile)
+	if code == 0 || hubHead(t, hub.root) != before || !strings.Contains(stdout+stderr, "--runtime-file") {
+		t.Fatalf("exit = %d\nstdout=%s\nstderr=%s", code, stdout, stderr)
+	}
+}

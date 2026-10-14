@@ -22,10 +22,10 @@ func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Run `skillhub maintain migrate --workspace <path> [--to <version>]` to preview, then add --yes after review.")
 	}
 	retry := "Run `skillhub doctor` in the hub and review a fresh `skillhub maintain migrate` preview before retrying."
-	migrate := func(apply bool) (app.MigrationResult, error) {
-		return (app.MigrationService{}).Migrate(commitContext(ctx, noCommit, stdout), workspacePath, target, apply)
+	migrate := func(apply bool, expected string) (app.MigrationResult, error) {
+		return (app.MigrationService{ExpectedDigest: expected}).Migrate(commitContext(ctx, noCommit, stdout), workspacePath, target, apply)
 	}
-	result, err := migrate(yes)
+	result, err := migrate(yes, "")
 	if err != nil {
 		return writeMigrationError(stdout, stderr, jsonOutput, err, retry)
 	}
@@ -36,7 +36,7 @@ func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		if !apply {
 			return code
 		}
-		if result, err = migrate(true); err != nil {
+		if result, err = migrate(true, result.ProposalDigest); err != nil {
 			return writeMigrationError(stdout, stderr, jsonOutput, err, retry)
 		}
 	}

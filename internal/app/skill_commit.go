@@ -44,7 +44,10 @@ type SkillCommitInput struct {
 	Collection string `json:"collection,omitempty"`
 	// Routing holds explicit routing fields; each one set replaces the
 	// suggestion or the hub's value.
-	Routing     *skill.RoutingInput     `json:"routing,omitempty"`
+	Routing *skill.RoutingInput `json:"routing,omitempty"`
+	// Runtime is the runtime block of a new skill; an empty mapping leaves it
+	// without one. A skill the hub already has keeps its block, so it is refused.
+	Runtime     map[string]any          `json:"runtime,omitempty"`
 	Resolutions []SkillCommitResolution `json:"resolutions,omitempty"`
 	FullDiff    bool                    `json:"full_diff,omitempty"`
 }
@@ -287,6 +290,9 @@ func normalizeProjectSkillMD(tree map[string]treeFile, id string, hub *hubSkill)
 func (service SkillCommitService) planExistingSkill(ctx context.Context, preview *SkillCommitPreview, input SkillCommitInput, projectTree map[string]treeFile) (*Error, error) {
 	plan := preview.plan
 	hub := plan.hub
+	if input.Runtime != nil {
+		return NewInvalidRequestError("--runtime-file applies to a new skill only", "Change the runtime block of a skill on the hub with `skillhub skill edit "+plan.id+" --runtime-file <yaml>`."), nil
+	}
 	plan.relDir, plan.metaPath, plan.collection = hub.relDir, hub.metaPath, hub.collection
 	plan.metaBefore, plan.hubVersion = hub.meta, hub.version
 	preview.Collection, preview.State = hub.collection, parseSkillReviewMeta(hub.meta).Status

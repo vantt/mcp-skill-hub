@@ -449,8 +449,8 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 	if flags.state != "" && subcommand != "list" {
 		return flags, errors.New("--state is available only for skill list")
 	}
-	if flags.runtimeFile != "" && subcommand != "edit" {
-		return flags, errors.New("--runtime-file is available only for skill edit")
+	if flags.runtimeFile != "" && subcommand != "edit" && subcommand != "commit" {
+		return flags, errors.New("--runtime-file is available only for skill edit and skill commit")
 	}
 	switch subcommand {
 	case "outdated":

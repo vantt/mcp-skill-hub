@@ -283,7 +283,7 @@ func (manager Manager) PreviewUpdate(ctx context.Context, root, id string, input
 		document["quality"] = quality
 	}
 	if input.Runtime != nil {
-		if err := applyRuntimeBlock(document, input.Runtime); err != nil {
+		if err := ApplyRuntimeBlock(document, input.Runtime); err != nil {
 			return Proposal{}, err
 		}
 	}
@@ -625,9 +625,9 @@ func updateRequestDigest(id string, input UpdateInput) string {
 	}{id, normalizeOptional(input.Name), normalizeOptional(input.Description), content, input.SetContent, strings.TrimSpace(input.ExpectedContentDigest), routing, normalizeOptional(input.Rationale), normalizeOptional(input.ContentReviewedDigest), runtimeBlock})
 }
 
-// applyRuntimeBlock validates block with the same rules the catalog applies and
+// ApplyRuntimeBlock validates block with the same rules the catalog applies and
 // sets it on the manifest document; an empty block removes the runtime key.
-func applyRuntimeBlock(document map[string]any, block map[string]any) error {
+func ApplyRuntimeBlock(document map[string]any, block map[string]any) error {
 	if len(block) == 0 {
 		delete(document, "runtime")
 		return nil
