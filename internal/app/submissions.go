@@ -33,6 +33,9 @@ const (
 	// holding the hub token can park on the hub's disk.
 	MaxWaitingSubmissions   = 50
 	MaxSubmissionQueueBytes = 256 << 20
+	// MaxConcurrentSubmissionUploads bounds the uploads still arriving, each
+	// of which may hold up to a bundle's size in staging.
+	MaxConcurrentSubmissionUploads = 4
 
 	staleStagingAge     = time.Hour
 	maxClientLabelRunes = 64
@@ -48,6 +51,8 @@ var (
 	ErrSubmissionInvalid = errors.New("invalid skill submission")
 	// ErrSubmissionQueueFull reports a queue at its count or size cap.
 	ErrSubmissionQueueFull = errors.New("the submission queue is full")
+	// ErrSubmissionBusy reports too many uploads arriving at once.
+	ErrSubmissionBusy = errors.New("the hub is receiving other submissions")
 	// ErrSubmissionNotFound reports an id that names no waiting submission.
 	ErrSubmissionNotFound = errors.New("no such submission")
 )
@@ -87,10 +92,67 @@ func SubmissionFilesDir(root, id string) string {
 	return filepath.Join(submissionsRoot(root), id, submissionFilesDir)
 }
 
+// submissionIntake tracks the uploads of one hub that are still arriving: how
+// many there are, and the bytes each declared, which count against the queue
+// cap before any of them is written.
+type submissionIntake struct {
+	slots    chan struct{}
+	reserved int64
+}
+
+var submissionIntakes = map[string]*submissionIntake{}
+
+func intakeOf(root string) *submissionIntake {
+	submissionMu.Lock()
+	defer submissionMu.Unlock()
+	intake := submissionIntakes[root]
+	if intake == nil {
+		intake = &submissionIntake{slots: make(chan struct{}, MaxConcurrentSubmissionUploads)}
+		submissionIntakes[root] = intake
+	}
+	return intake
+}
+
+// queueRoomLocked checks the count and size caps for submission, counting the
+// bytes other uploads still arriving have reserved. It returns the waiting
+// submissions the new one replaces. submissionMu must be held.
+func queueRoomLocked(root string, intake *submissionIntake, submission Submission, ownReserved int64) ([]string, error) {
+	existing, err := listSubmissionsLocked(root)
+	if err != nil {
+		return nil, err
+	}
+	var replaced []string
+	count, total := 0, submission.TotalBytes+intake.reserved-ownReserved
+	for _, other := range existing {
+		if other.SkillID == submission.SkillID && other.ClientLabel == submission.ClientLabel {
+			replaced = append(replaced, other.ID)
+			continue
+		}
+		count++
+		total += other.TotalBytes
+	}
+	if count >= MaxWaitingSubmissions {
+		return nil, fmt.Errorf("%w: %d submissions are waiting, the most this hub keeps", ErrSubmissionQueueFull, count)
+	}
+	if total > MaxSubmissionQueueBytes {
+		return nil, fmt.Errorf("%w: waiting submissions would use more than %d MiB", ErrSubmissionQueueFull, MaxSubmissionQueueBytes>>20)
+	}
+	return replaced, nil
+}
+
 // AddSubmission queues the bundle in archive. The files are staged and renamed
 // into place in one step, so a reader never sees a half-written submission.
 // A waiting submission of the same skill from the same machine is replaced.
+// Only a few uploads are taken at once, and an upload that cannot fit under
+// the queue caps is refused from its metadata, before any file is written.
 func AddSubmission(root string, archive io.Reader, now time.Time) (Submission, error) {
+	intake := intakeOf(root)
+	select {
+	case intake.slots <- struct{}{}:
+		defer func() { <-intake.slots }()
+	default:
+		return Submission{}, fmt.Errorf("%w: %d submissions are arriving, the most this hub takes at once", ErrSubmissionBusy, MaxConcurrentSubmissionUploads)
+	}
 	queue := submissionsRoot(root)
 	staging := filepath.Join(queue, submissionStaging)
 	if err := os.MkdirAll(staging, 0o700); err != nil {
@@ -106,39 +168,41 @@ func AddSubmission(root string, archive io.Reader, now time.Time) (Submission, e
 	if err := os.Mkdir(files, 0o700); err != nil {
 		return Submission{}, err
 	}
-	metadata, err := skillruntime.ExtractBundle(archive, files)
+	var submission Submission
+	var reserved int64
+	defer func() {
+		if reserved != 0 {
+			submissionMu.Lock()
+			intake.reserved -= reserved
+			submissionMu.Unlock()
+		}
+	}()
+	_, err = skillruntime.ExtractBundleAdmitting(archive, files, func(metadata skillruntime.BundleMetadata) error {
+		described, err := describeSubmission(metadata, now)
+		if err != nil {
+			return err
+		}
+		submissionMu.Lock()
+		defer submissionMu.Unlock()
+		if _, err := queueRoomLocked(root, intake, described, 0); err != nil {
+			return err
+		}
+		submission, reserved = described, described.TotalBytes
+		intake.reserved += reserved
+		return nil
+	})
 	if err != nil {
 		return Submission{}, err
 	}
 	if err := os.Remove(filepath.Join(files, skillruntime.BundleMetadataName)); err != nil {
 		return Submission{}, err
 	}
-	submission, err := describeSubmission(metadata, now)
-	if err != nil {
-		return Submission{}, err
-	}
 
 	submissionMu.Lock()
 	defer submissionMu.Unlock()
-	existing, err := listSubmissionsLocked(root)
+	replaced, err := queueRoomLocked(root, intake, submission, reserved)
 	if err != nil {
 		return Submission{}, err
-	}
-	var replaced []string
-	count, total := 0, submission.TotalBytes
-	for _, other := range existing {
-		if other.SkillID == submission.SkillID && other.ClientLabel == submission.ClientLabel {
-			replaced = append(replaced, other.ID)
-			continue
-		}
-		count++
-		total += other.TotalBytes
-	}
-	if count >= MaxWaitingSubmissions {
-		return Submission{}, fmt.Errorf("%w: %d submissions are waiting, the most this hub keeps", ErrSubmissionQueueFull, count)
-	}
-	if total > MaxSubmissionQueueBytes {
-		return Submission{}, fmt.Errorf("%w: waiting submissions would use more than %d MiB", ErrSubmissionQueueFull, MaxSubmissionQueueBytes>>20)
 	}
 	if err := writeSubmissionRecord(stage, submission); err != nil {
 		return Submission{}, err
@@ -191,7 +255,16 @@ func describeSubmission(metadata skillruntime.BundleMetadata, now time.Time) (Su
 		Excluded:    cleanExcluded(details.Excluded),
 		Files:       make([]SubmissionFile, 0, len(metadata.Files)),
 	}
+	folded := make(map[string]string, len(metadata.Files))
 	for _, file := range metadata.Files {
+		if !printablePath(file.Path) {
+			return invalid("the path %q has characters that cannot be shown safely", file.Path)
+		}
+		lower := strings.ToLower(file.Path)
+		if other, twin := folded[lower]; twin {
+			return invalid("%q and %q differ only in letter case", other, file.Path)
+		}
+		folded[lower] = file.Path
 		if file.Path == CheckoutMarkerName || file.Path == CheckoutMarkerName+".tmp" || workspace.IsHubMeta(file.Path) {
 			return invalid("%s is managed by the hub and cannot be submitted", file.Path)
 		}
@@ -203,6 +276,17 @@ func describeSubmission(metadata skillruntime.BundleMetadata, now time.Time) (Su
 	}
 	sort.Slice(submission.Files, func(i, j int) bool { return submission.Files[i].Path < submission.Files[j].Path })
 	return submission, nil
+}
+
+// printablePath reports whether every character of a submitted path is one a
+// terminal shows as itself: no control, escape or direction-changing character.
+func printablePath(path string) bool {
+	for _, r := range path {
+		if !unicode.IsPrint(r) && r != '/' {
+			return false
+		}
+	}
+	return true
 }
 
 // cleanClientLabel keeps a machine label to one short printable line.
@@ -317,6 +401,34 @@ func DiscardSubmission(root, id string) error {
 	return os.RemoveAll(filepath.Join(submissionsRoot(root), id))
 }
 
+var proposalIDPattern = regexp.MustCompile(`^[A-Za-z0-9._-]{1,128}$`)
+
+func proposalBindingPath(root, id, proposalID string) string {
+	return filepath.Join(submissionsRoot(root), id, "proposal-"+proposalID)
+}
+
+// BindSubmissionProposal records that a proposal was made from a submission,
+// so confirming that proposal, and only that one, may drop the submission.
+func BindSubmissionProposal(root, id, proposalID string) error {
+	if _, err := ReadSubmission(root, id); err != nil {
+		return err
+	}
+	if !proposalIDPattern.MatchString(proposalID) {
+		return fmt.Errorf("%q is not a proposal id", proposalID)
+	}
+	return os.WriteFile(proposalBindingPath(root, id, proposalID), nil, 0o600)
+}
+
+// SubmissionBoundToProposal reports whether proposalID was made from the
+// waiting submission id.
+func SubmissionBoundToProposal(root, id, proposalID string) bool {
+	if !submissionIDPattern.MatchString(id) || !proposalIDPattern.MatchString(proposalID) {
+		return false
+	}
+	_, err := os.Stat(proposalBindingPath(root, id, proposalID))
+	return err == nil
+}
+
 // readSubmissionTree reads the files of a waiting submission, checking each
 // against the size and digest recorded when it arrived.
 func readSubmissionTree(root string, submission Submission) (map[string]treeFile, error) {
@@ -347,6 +459,11 @@ func submissionEntries(root string) []Submission {
 	return submissions
 }
 
+var (
+	idClockMu    sync.Mutex
+	lastIDMillis uint64
+)
+
 // crockford is the ULID alphabet.
 const crockford = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 
@@ -354,7 +471,14 @@ const crockford = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 // the 26 characters of a ULID, so ids order by arrival.
 func newSubmissionID(now time.Time) string {
 	var data [16]byte
+	// Two ids made in one millisecond still order by arrival.
+	idClockMu.Lock()
 	millis := uint64(now.UnixMilli())
+	if millis <= lastIDMillis {
+		millis = lastIDMillis + 1
+	}
+	lastIDMillis = millis
+	idClockMu.Unlock()
 	for index := 0; index < 6; index++ {
 		data[index] = byte(millis >> (8 * (5 - index)))
 	}

@@ -84,15 +84,11 @@ func (s *Server) handleSubmissionDiscard(w http.ResponseWriter, r *http.Request)
 }
 
 // dropAppliedSubmission removes a submission from the queue once the proposal
-// made from it has been confirmed. It leaves any submission that is not for
-// the skill the proposal changed.
-func (s *Server) dropAppliedSubmission(id, skillID string) {
+// made from it has been confirmed. It leaves any submission the proposal was
+// not made from, whatever id the request names.
+func (s *Server) dropAppliedSubmission(id, proposalID string) {
 	id = strings.TrimSpace(id)
-	if id == "" {
-		return
-	}
-	submission, err := app.ReadSubmission(s.workspace, id)
-	if err != nil || submission.SkillID != skillID {
+	if id == "" || !app.SubmissionBoundToProposal(s.workspace, id, proposalID) {
 		return
 	}
 	if err := app.DiscardSubmission(s.workspace, id); err != nil {

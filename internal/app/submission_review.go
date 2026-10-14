@@ -172,6 +172,9 @@ func (service SkillService) PreviewSubmissionApproval(ctx context.Context, path,
 	if err := skill.StoreProposal(plan.root, proposal, time.Now()); err != nil {
 		return SubmissionApprovalPreview{}, err
 	}
+	if err := BindSubmissionProposal(plan.root, submission.ID, proposal.ID); err != nil {
+		return SubmissionApprovalPreview{}, err
+	}
 	return SubmissionApprovalPreview{
 		SkillProposal:  makeSkillProposal(proposal, "The submission is ready to apply and approve."),
 		SubmissionID:   submission.ID,

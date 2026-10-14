@@ -3,8 +3,10 @@ package app
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -420,5 +422,114 @@ func TestAddSubmissionRemovesStaleHalfWrittenUploads(t *testing.T) {
 	}
 	if _, err := os.Stat(fresh); err != nil {
 		t.Fatalf("an upload that may still be arriving was removed: %v", err)
+	}
+}
+
+func TestAddSubmissionRefusesPathsThatCanRewriteWhatTheReviewerSees(t *testing.T) {
+	t.Parallel()
+	hub := newGitHub(t)
+	cases := map[string]map[string]string{
+		"escape sequence":   {"a\x1b[2Jb.md": "x"},
+		"bidi override":     {"notes\u202egnp.md": "x"},
+		"newline":           {"a\nb.md": "x"},
+		"case-folded twins": {"Notes.md": "x", "notes.md": "y"},
+	}
+	for name, extra := range cases {
+		archive, err := BuildSubmissionBundle("alpha", submittedTree("alpha", "x", extra), skillruntime.BundleSubmission{ClientLabel: "m"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := AddSubmission(hub, bytes.NewReader(archive), time.Now()); !errors.Is(err, ErrSubmissionInvalid) {
+			t.Errorf("%s: err = %v", name, err)
+		}
+	}
+	if listed, _ := ListSubmissions(hub); len(listed) != 0 {
+		t.Fatalf("refused submissions were queued: %+v", listed)
+	}
+}
+
+// countingReader reports how much of the upload the hub has read.
+type countingReader struct {
+	reader io.Reader
+	read   int
+}
+
+func (counter *countingReader) Read(p []byte) (int, error) {
+	n, err := counter.reader.Read(p)
+	counter.read += n
+	return n, err
+}
+
+func fillQueueNearCap(t *testing.T, hub string, free int64) {
+	t.Helper()
+	stage := filepath.Join(submissionsRoot(hub), "stage")
+	if err := os.MkdirAll(stage, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	huge := Submission{ID: newSubmissionID(time.Now()), SkillID: "big", ClientLabel: "machine-z", SubmittedAt: "2026-10-14T10:00:00Z", TotalBytes: MaxSubmissionQueueBytes - free, Files: []SubmissionFile{}}
+	if err := writeSubmissionRecord(stage, huge); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(stage, filepath.Join(submissionsRoot(hub), huge.ID)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSubmissionThatCannotFitIsRefusedBeforeItsFilesAreRead(t *testing.T) {
+	t.Parallel()
+	hub := newGitHub(t)
+	fillQueueNearCap(t, hub, 1024)
+	noise := make([]byte, 1<<20)
+	if _, err := rand.Read(noise); err != nil {
+		t.Fatal(err)
+	}
+	archive, err := BuildSubmissionBundle("alpha", submittedTree("alpha", "x", map[string]string{"blob.bin": string(noise)}), skillruntime.BundleSubmission{ClientLabel: "machine-a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	counter := &countingReader{reader: bytes.NewReader(archive)}
+	if _, err := AddSubmission(hub, counter, time.Now()); !errors.Is(err, ErrSubmissionQueueFull) {
+		t.Fatalf("over the byte cap: %v", err)
+	}
+	if counter.read > len(archive)/4 {
+		t.Fatalf("the hub read %d of %d bytes before refusing", counter.read, len(archive))
+	}
+}
+
+func TestStalledUploadsAreBoundedAndTheirBytesReserved(t *testing.T) {
+	t.Parallel()
+	hub := newGitHub(t)
+	var stalled []*io.PipeWriter
+	results := make(chan error, MaxConcurrentSubmissionUploads)
+	for range MaxConcurrentSubmissionUploads {
+		reader, writer := io.Pipe()
+		stalled = append(stalled, writer)
+		go func() {
+			_, err := AddSubmission(hub, reader, time.Now())
+			results <- err
+		}()
+	}
+	archive, _ := BuildSubmissionBundle("alpha", submittedTree("alpha", "x", nil), skillruntime.BundleSubmission{ClientLabel: "m"})
+	slots := intakeOf(hub).slots
+	for deadline := time.Now().Add(10 * time.Second); len(slots) < MaxConcurrentSubmissionUploads; time.Sleep(time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("only %d of the stalled uploads were taken", len(slots))
+		}
+	}
+	if _, err := AddSubmission(hub, bytes.NewReader(archive), time.Now()); !errors.Is(err, ErrSubmissionBusy) {
+		t.Fatalf("an upload beyond the limit: %v", err)
+	}
+	for _, writer := range stalled {
+		_ = writer.CloseWithError(errors.New("client went away"))
+	}
+	for range MaxConcurrentSubmissionUploads {
+		<-results
+	}
+	if _, err := AddSubmission(hub, bytes.NewReader(archive), time.Now()); err != nil {
+		t.Fatalf("a finished upload must free its slot: %v", err)
+	}
+	entries, _ := os.ReadDir(filepath.Join(submissionsRoot(hub), submissionStaging))
+	if len(entries) != 0 {
+		t.Fatalf("staging holds %d leftovers", len(entries))
 	}
 }

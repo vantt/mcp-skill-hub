@@ -271,7 +271,7 @@ func (limited *limitedReader) Read(buffer []byte) (int, error) {
 // digest and every file matches its listed size and digest; anything else in
 // the archive is an error. On error staging may hold partial files.
 func extractBundle(archive io.Reader, digest, staging string) (BundleMetadata, error) {
-	return extractBundleFile(archive, digest, staging)
+	return extractBundleFile(archive, digest, staging, nil)
 }
 
 // ExtractBundle reads a bundle a machine sends to a hub into the empty
@@ -281,12 +281,20 @@ func extractBundle(archive io.Reader, digest, staging string) (BundleMetadata, e
 // matches its listed size and digest. The metadata entry is written into
 // staging as well; on error staging may hold partial files.
 func ExtractBundle(archive io.Reader, staging string) (BundleMetadata, error) {
-	return extractBundleFile(archive, "", staging)
+	return extractBundleFile(archive, "", staging, nil)
+}
+
+// ExtractBundleAdmitting is ExtractBundle that asks admit about the verified
+// metadata before any file is written. When admit fails, its error is returned
+// and staging is left empty, so a bundle the receiver would refuse anyway
+// costs no disk.
+func ExtractBundleAdmitting(archive io.Reader, staging string, admit func(BundleMetadata) error) (BundleMetadata, error) {
+	return extractBundleFile(archive, "", staging, admit)
 }
 
 // extractBundleFile is the shared reader; an empty digest accepts the digest
 // the file list computes.
-func extractBundleFile(archive io.Reader, digest, staging string) (BundleMetadata, error) {
+func extractBundleFile(archive io.Reader, digest, staging string, admit func(BundleMetadata) error) (BundleMetadata, error) {
 	compressed := &limitedReader{reader: archive, remaining: BundleMaxArchiveBytes}
 	decompressor, err := gzip.NewReader(compressed)
 	if err != nil {
@@ -321,6 +329,11 @@ func extractBundleFile(archive io.Reader, digest, staging string) (BundleMetadat
 	}
 	if computed != digest || metadata.ManifestVersion != "sha256:"+digest {
 		return BundleMetadata{}, fmt.Errorf("%w: the file list hashes to %s, not %s", ErrBundleDigestMismatch, computed, digest)
+	}
+	if admit != nil {
+		if err := admit(metadata); err != nil {
+			return BundleMetadata{}, err
+		}
 	}
 	expected := make(map[string]BundleFile, len(metadata.Files))
 	for _, file := range metadata.Files {

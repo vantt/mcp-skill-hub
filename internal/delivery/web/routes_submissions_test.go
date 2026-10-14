@@ -181,3 +181,26 @@ func TestSubmissionDiscardAndUnknownIDs(t *testing.T) {
 		t.Fatal("a discard must not commit")
 	}
 }
+
+func TestSubmissionConfirmDropsOnlyTheSubmissionTheProposalWasMadeFrom(t *testing.T) {
+	t.Parallel()
+	root, srv := newThirdPartyReviewWorkspace(t)
+	applied := queueSubmission(t, root, "release-notes", "machine-a", map[string]string{"SKILL.md": newSkillMD("release-notes")})
+	bystander := queueSubmission(t, root, "release-notes", "machine-b", map[string]string{"SKILL.md": newSkillMD("release-notes"), "notes.md": "other machine\n"})
+	digest := decodeBody(t, get(t, srv, "/api/v1/submissions/"+applied))["content_digest"].(string)
+	rec := postJSON(t, srv, "/api/v1/submissions/"+applied+"/approve/preview", map[string]string{"content_digest": digest})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("approve preview = %d (body: %s)", rec.Code, rec.Body.String())
+	}
+	pins := extractProposalPins(t, rec)
+	// Naming the other submission of the same skill must not drop it.
+	rec = postJSON(t, srv, "/api/v1/skills/proposals/"+pins.ProposalID+"/confirm", map[string]string{
+		"proposal_digest": pins.ProposalDigest, "base_version": pins.BaseVersion, "submission_id": bystander,
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("confirm = %d (body: %s)", rec.Code, rec.Body.String())
+	}
+	if _, err := app.ReadSubmission(root, bystander); err != nil {
+		t.Fatalf("a submission the proposal was not made from left the queue: %v", err)
+	}
+}

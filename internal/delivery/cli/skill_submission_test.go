@@ -303,3 +303,22 @@ func TestRemoteCommitDoesNotSendTheTokenToAHubOnlyTheProjectNames(t *testing.T) 
 		t.Fatalf("--yes to an unknown hub: exit = %d stderr=%s", code, stderr)
 	}
 }
+
+func TestRemoteCheckoutDoesNotSendTheTokenToAHubOnlyTheProjectNames(t *testing.T) {
+	isolateClient(t)
+	tokenFile := filepath.Join(t.TempDir(), "hub-token")
+	if _, err := hubtoken.Ensure(tokenFile); err != nil {
+		t.Fatal(err)
+	}
+	project := projectInDir(t)
+	if code, stdout, stderr := runConnectCLI(t, project, "--hub", "http://hub.example.invalid:7420", "--token-file", tokenFile, "--host", "claude"); code != 0 {
+		t.Fatalf("connect exit = %d\n%s%s", code, stdout, stderr)
+	}
+	code, _, stderr := runCLI(t, "skill", "checkout", "team-release")
+	if code == 0 || !strings.Contains(stderr, "only this project's files name the hub at http://hub.example.invalid:7420") {
+		t.Fatalf("checkout from an unknown hub: exit = %d stderr=%s", code, stderr)
+	}
+	if _, err := os.Stat(filepath.Join(project, ".claude", "skills", "team-release")); err == nil {
+		t.Fatal("a refused checkout left a folder behind")
+	}
+}

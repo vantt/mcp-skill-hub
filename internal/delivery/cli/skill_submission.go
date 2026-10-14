@@ -124,6 +124,19 @@ func writeRemoteCommitPreview(p *termui.Printer, preview app.RemoteCommitPreview
 // runRemoteCheckout copies an active skill of the hub on another machine into
 // the project, through the bundle the agents' proxy fetches.
 func runRemoteCheckout(ctx context.Context, flags skillFlags, stdout, stderr io.Writer) int {
+	// Fetching sends the hub token. A hub only this project's files name could
+	// be anyone's, so a person must say yes first.
+	if !flags.remote.MaySendToken {
+		if flags.jsonOutput || !confirmInteractive(stdout) {
+			return writeInvalidRequest(stdout, stderr, flags.jsonOutput,
+				fmt.Sprintf("only this project's files name the hub at %s, so checkout does not send your hub token there", flags.remote.URL),
+				"Run the command in a terminal and answer the question, or trust that hub with `skillhub connect --hub "+flags.remote.URL+" --user`.")
+		}
+		if !askYesNo(stdout, fmt.Sprintf("Fetch %s from the hub at %s? Your hub token is sent there.", flags.id, flags.remote.URL)) {
+			fmt.Fprintln(stdout, "Nothing fetched.")
+			return 0
+		}
+	}
 	result, err := (app.RemoteCheckoutService{}).Checkout(ctx, *flags.remote, app.SkillCheckoutInput{SkillID: flags.id, ProjectDir: currentDirectory()})
 	if err != nil {
 		return writeSkillErrorFor(flags.id, stdout, stderr, flags.jsonOutput, err)

@@ -1,9 +1,11 @@
 package termui
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"golang.org/x/term"
@@ -72,6 +74,7 @@ func (p *Printer) write(s string) {
 	if p.err != nil || s == "" {
 		return
 	}
+	s = visibleEscapes(s)
 	if p.pendingBlank {
 		if _, err := io.WriteString(p.w, "\n"); err != nil {
 			p.err = err
@@ -353,4 +356,44 @@ func (p *Printer) Error(what, why, fix string) {
 // Raw writes text verbatim (diffs, file contents); it is never wrapped.
 func (p *Printer) Raw(text string) {
 	p.write(text)
+}
+
+// visibleEscapes shows control and direction-changing characters as escapes
+// instead of letting the terminal act on them. Skill files, paths and labels
+// can come from another machine, and an escape sequence in them could rewrite
+// the lines a reviewer reads before approving. Newline and tab pass through.
+func visibleEscapes(s string) string {
+	clean := true
+	for _, r := range s {
+		if needsEscape(r) {
+			clean = false
+			break
+		}
+	}
+	if clean {
+		return s
+	}
+	var out strings.Builder
+	for _, r := range s {
+		switch {
+		case !needsEscape(r):
+			out.WriteRune(r)
+		case r < 0x100:
+			fmt.Fprintf(&out, `\x%02x`, r)
+		default:
+			fmt.Fprintf(&out, `\u%04x`, r)
+		}
+	}
+	return out.String()
+}
+
+func needsEscape(r rune) bool {
+	if r == '\n' || r == '\t' {
+		return false
+	}
+	switch {
+	case unicode.IsControl(r), r == 0x2028, r == 0x2029, r == 0x061c, r == 0x200e, r == 0x200f:
+		return true
+	}
+	return r >= 0x202a && r <= 0x202e || r >= 0x2066 && r <= 0x2069
 }

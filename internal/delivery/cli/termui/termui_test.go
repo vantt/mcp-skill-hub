@@ -281,3 +281,22 @@ func TestWriteSamples(t *testing.T) {
 		t.Fatalf("failed to write samples: %v", err)
 	}
 }
+
+func TestPrinterShowsControlAndDirectionCharactersAsEscapes(t *testing.T) {
+	t.Parallel()
+	var out bytes.Buffer
+	p := New(&out)
+	p.Line("name \x1b[2J\x1b[Hforged")
+	p.Raw("+ line\x1b]0;title\x07\n\tkept tab\r\n+ bidi \u202egnp.md\n")
+	got := out.String()
+	for _, bad := range []string{"\x1b", "\x07", "\r", "\u202e"} {
+		if strings.Contains(got, bad) {
+			t.Errorf("output still holds %q: %q", bad, got)
+		}
+	}
+	for _, want := range []string{`\x1b[2J`, `\x07`, `\x0d`, "\\u202e", "\n\tkept tab"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("output lacks %q: %q", want, got)
+		}
+	}
+}

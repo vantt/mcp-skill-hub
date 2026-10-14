@@ -2,17 +2,20 @@ package mcpserver
 
 import (
 	"archive/tar"
+	"bufio"
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/vantt/skillhub-mcp/internal/app"
 	"github.com/vantt/skillhub-mcp/internal/skillruntime"
@@ -267,5 +270,34 @@ func TestSubmissionEndpointIsRateLimited(t *testing.T) {
 	}
 	if second := send(); second.Code != http.StatusTooManyRequests {
 		t.Fatalf("second request = %d, want 429 from the limiter", second.Code)
+	}
+}
+
+func TestSubmissionEndpointDropsAnUploadThatStalls(t *testing.T) {
+	previous := submissionUploadTimeout
+	submissionUploadTimeout = 300 * time.Millisecond
+	t.Cleanup(func() { submissionUploadTimeout = previous })
+	hub := startHTTPTestHub(t, newBundleHubFixture(t))
+	address := strings.TrimPrefix(hub.baseURL, "http://")
+	connection, err := net.Dial("tcp", address)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connection.Close()
+	head := fmt.Sprintf("POST %s HTTP/1.1\r\nHost: %s\r\nAuthorization: Bearer %s\r\nContent-Type: %s\r\nContent-Length: 1000000\r\n\r\nstart", HTTPSubmissionsPath, address, hub.token, skillruntime.BundleMediaType)
+	if _, err := connection.Write([]byte(head)); err != nil {
+		t.Fatal(err)
+	}
+	_ = connection.SetReadDeadline(time.Now().Add(5 * time.Second))
+	response, err := http.ReadResponse(bufio.NewReader(connection), nil)
+	if err != nil {
+		t.Fatalf("the hub kept waiting for a stalled upload: %v", err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusRequestTimeout {
+		t.Fatalf("stalled upload answered %d, want 408", response.StatusCode)
+	}
+	if queued, _ := app.ListSubmissions(hub.root); len(queued) != 0 {
+		t.Fatalf("a stalled upload was queued: %+v", queued)
 	}
 }

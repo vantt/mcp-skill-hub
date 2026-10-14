@@ -303,6 +303,6 @@ func (s *Server) handleSkillConfirm(w http.ResponseWriter, r *http.Request) {
 		writeAppError(w, result.Error)
 		return
 	}
-	s.dropAppliedSubmission(req.SubmissionID, preview.SkillID)
+	s.dropAppliedSubmission(req.SubmissionID, pID)
 	writeJSON(w, http.StatusOK, result)
 }

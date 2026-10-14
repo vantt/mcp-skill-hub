@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/vantt/skillhub-mcp/internal/app"
@@ -15,6 +16,11 @@ import (
 // waits in a queue on the hub: nothing changes and nothing is served until a
 // person on the hub machine approves it.
 const HTTPSubmissionsPath = "/mcp/submissions"
+
+// submissionUploadTimeout is how long a submission may take to arrive. The
+// server has no body timeout of its own, so a client that stalls would hold its
+// upload, and the disk it uses, for good.
+var submissionUploadTimeout = 2 * time.Minute
 
 type submissionReply struct {
 	SubmissionID string `json:"submission_id"`
@@ -34,6 +40,9 @@ func (adapter *Server) submissionHTTPHandler() http.Handler {
 			writeBundleError(writer, http.StatusUnsupportedMediaType, bundleError{Code: "invalid_request", Message: "Send the skill as " + skillruntime.BundleMediaType + "."})
 			return
 		}
+		if err := http.NewResponseController(writer).SetReadDeadline(time.Now().Add(submissionUploadTimeout)); err != nil {
+			adapter.logger.Warn("submission upload deadline could not be set", "error", err)
+		}
 		body := http.MaxBytesReader(writer, request.Body, skillruntime.BundleMaxArchiveBytes)
 		submission, err := app.AddSubmission(adapter.workspace, body, time.Now())
 		if err != nil {
@@ -51,6 +60,10 @@ func (adapter *Server) submissionHTTPHandler() http.Handler {
 func (adapter *Server) submissionHTTPError(err error) (int, bundleError) {
 	var tooLarge *http.MaxBytesError
 	switch {
+	case errors.Is(err, os.ErrDeadlineExceeded):
+		return http.StatusRequestTimeout, bundleError{Code: "request_timeout", Message: "The submission took too long to arrive. Send it again."}
+	case errors.Is(err, app.ErrSubmissionBusy):
+		return http.StatusServiceUnavailable, bundleError{Code: "submission_busy", Message: err.Error() + ". Try again in a moment."}
 	case errors.Is(err, skillruntime.ErrBundleLimit), errors.As(err, &tooLarge):
 		return http.StatusRequestEntityTooLarge, bundleError{
 			Code:    "resource_limits_exceeded",
