@@ -13,18 +13,22 @@ import (
 	"github.com/vantt/skillhub-mcp/internal/app"
 	"github.com/vantt/skillhub-mcp/internal/delivery/cli/termui"
 	"github.com/vantt/skillhub-mcp/internal/hostintegration"
+	"github.com/vantt/skillhub-mcp/internal/invite"
 )
 
 const connectFix = "Run `skillhub connect [<path>] [-g|--global] [--host claude|codex|gemini] [--dry-run]` in the project folder, or `skillhub connect --hub <url> --token-file <file>` for a hub on another machine."
 
 type connectFlags struct {
 	// hubPath is the optional folder of a hub on this machine.
-	hubPath              string
-	hub, tokenFile       string
+	hubPath        string
+	hub, tokenFile string
+	// invite is the canonical code given with --invite.
+	invite               string
 	hosts                []hostintegration.Host
 	global, dryRun, json bool
 	remove, cache        bool
 	hubSet, tokenFileSet bool
+	inviteSet            bool
 }
 
 // connectUsageError is a flag combination connect refuses, with its own
@@ -261,6 +265,20 @@ func parseConnectFlags(args []string) (connectFlags, error) {
 				return flags, err
 			}
 			flags.tokenFile, flags.tokenFileSet = item, true
+		case "--invite":
+			item, err := value(&index)
+			if err != nil {
+				return flags, err
+			}
+			code, err := invite.ParseCode(item)
+			if err != nil {
+				return flags, &connectUsageError{
+					what: "The invite code is not valid.",
+					why:  "An invite code is twelve letters and digits, for example K7QF-9M2X-4TBD. Nothing was sent.",
+					fix:  "Copy the code `skillhub token invite` printed on the hub machine, or ask for a new one.",
+				}
+			}
+			flags.invite, flags.inviteSet = string(code), true
 		case "--remove":
 			flags.remove = true
 		case "--cache":
@@ -288,9 +306,9 @@ func parseConnectFlags(args []string) (connectFlags, error) {
 		}
 	}
 	switch {
-	case flags.remove && (flags.hubPath != "" || flags.hubSet || flags.tokenFileSet):
+	case flags.remove && (flags.hubPath != "" || flags.hubSet || flags.tokenFileSet || flags.inviteSet):
 		return flags, &connectUsageError{
-			what: "--remove cannot be combined with a hub folder, --hub or --token-file.",
+			what: "--remove cannot be combined with a hub folder, --hub, --token-file or --invite.",
 			why:  "--remove takes out the Skill Hub entry of the scope, whichever hub it points at.",
 			fix:  "Run `skillhub connect --remove [-g|--global] [--host <name>]` in the project folder.",
 		}
@@ -305,6 +323,18 @@ func parseConnectFlags(args []string) (connectFlags, error) {
 			what: "--token-file needs --hub.",
 			why:  "The token file is for a hub on another machine; a hub on this machine needs no token.",
 			fix:  "Add --hub <url>, or leave out --token-file.",
+		}
+	case flags.inviteSet && !flags.hubSet:
+		return flags, &connectUsageError{
+			what: "--invite needs --hub.",
+			why:  "An invite is traded for the token of a hub on another machine, so the command needs that hub's URL.",
+			fix:  "Add --hub <url>, the address `skillhub token invite` printed on the hub machine.",
+		}
+	case flags.inviteSet && flags.dryRun:
+		return flags, &connectUsageError{
+			what: "--invite cannot be combined with --dry-run.",
+			why:  "The hub sends its token only to a request that uses up the invite, so a dry run would use up the invite, which works once.",
+			fix:  "Leave out --dry-run, or run `skillhub connect --hub <url> --token-file <file> --dry-run` with a copy of the token file.",
 		}
 	case flags.cache && !flags.remove:
 		return flags, &connectUsageError{
