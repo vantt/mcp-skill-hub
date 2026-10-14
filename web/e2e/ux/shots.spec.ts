@@ -99,10 +99,10 @@ const SHOTS: Shot[] = [
   },
   {
     file: 'editor-preview',
-    route: skillPath(DEMO_SKILLS.active, 'editor'),
-    state: 'Editor tab with a preview of the change',
-    caption: 'Editor: preview the exact change before it is saved.',
-    alt: 'The editor tab with a dialog that previews the changed description as a diff.',
+    route: skillPath(DEMO_SKILLS.active, 'routing'),
+    state: 'Routing tab with a preview of the change',
+    caption: 'Routing: preview the exact change before it is committed.',
+    alt: 'The routing tab with a dialog that previews the changed description as a diff.',
     fit: 'viewport',
     prepare: async (page) => {
       await page
@@ -114,7 +114,7 @@ const SHOTS: Shot[] = [
   },
   {
     file: 'editor-conflict',
-    route: skillPath(DEMO_SKILLS.deprecated, 'editor'),
+    route: skillPath(DEMO_SKILLS.deprecated, 'routing'),
     state: 'Conflict drawer after an edit made elsewhere',
     caption: 'Conflict: the skill changed somewhere else while the form was open.',
     alt: 'The conflict drawer explaining that the skill changed elsewhere and offering ways to continue.',

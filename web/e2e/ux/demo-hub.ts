@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { attachFilesystemSource, makeCLIRunner, resolveBinaryPath, type CLIRunner } from '../support/seed-workspace';
+import { attachFilesystemSource, createHubSkill, makeCLIRunner, resolveBinaryPath, type CLIRunner } from '../support/seed-workspace';
 import { isolatedEnv } from './seed-states';
 
 // Demo hub for the README and user-guide screenshots. Everything is invented and made
@@ -97,25 +97,15 @@ const SKILLS: DemoSkill[] = [
 ];
 
 function createDemoSkill(runCLI: CLIRunner, root: string, skill: DemoSkill): void {
-  const content = path.join(root, `${skill.id}.md`);
-  fs.writeFileSync(content, `---\nname: ${skill.id}\ndescription: ${JSON.stringify(skill.description)}\n---\n\n${skill.body}`);
-  const args = [
-    'skill', 'create', skill.id,
-    '--collection', 'core',
-    '--name', skill.name,
-    '--description', skill.description,
-    '--content-file', content,
-  ];
-  if (skill.routing) {
-    args.push(
-      '--operation', skill.routing.operation,
-      '--trigger', skill.routing.trigger,
-      '--not-for', skill.routing.notFor,
-      '--min-scope', 'single_step',
-    );
-  }
-  args.push('--yes');
-  runCLI(args);
+  createHubSkill(runCLI, {
+    id: skill.id,
+    name: skill.name,
+    description: skill.description,
+    body: skill.body,
+    ...(skill.routing
+      ? { operation: skill.routing.operation, triggers: [skill.routing.trigger], notFor: [skill.routing.notFor] }
+      : {}),
+  });
   if (skill.runtimeYaml) {
     const runtime = path.join(root, `${skill.id}-runtime.yaml`);
     fs.writeFileSync(runtime, skill.runtimeYaml);

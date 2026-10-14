@@ -1,11 +1,20 @@
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router';
 import { describe, expect, it } from 'vitest';
-import { ContentTrustCard } from './ContentTrustCard';
+import { ContentTrustCard as Card } from './ContentTrustCard';
 import { loadGolden } from '../../test/golden';
 import type { ContentTrust, SkillReviewResult } from '../../api/types';
 
+function ContentTrustCard({ trust }: { trust: ContentTrust }) {
+  return (
+    <MemoryRouter>
+      <Card trust={trust} skillId="vendor-skill" />
+    </MemoryRouter>
+  );
+}
+
 describe('ContentTrustCard', () => {
-  it('renders review required state without approve buttons from golden fixture', () => {
+  it('renders review required state with approval on the review screen from the golden fixture', () => {
     const review = loadGolden<SkillReviewResult>('skill-review-third-party');
     expect(review.content_trust).toBeDefined();
     const trust = review.content_trust!;
@@ -14,22 +23,20 @@ describe('ContentTrustCard', () => {
 
     expect(screen.getByText('Review required')).toBeInTheDocument();
     expect(screen.getByText(trust.content_digest)).toBeInTheDocument();
-    if (trust.approve_command) {
-      expect(screen.getByText(trust.approve_command)).toBeInTheDocument();
-    }
     expect(
-      screen.getByText(
-        'Approval is CLI-only. Review the content, then run this command in your terminal. The WebUI and agents cannot approve content.'
-      )
+      screen.getByText('Approval lives on the review screen: read every changed file there, then approve. Agents cannot approve content.')
     ).toBeInTheDocument();
     expect(
       screen.getByText('Agents get no content and no files from this skill until it is approved.')
     ).toBeInTheDocument();
 
-    // Verify security requirement: no approve button and no form element
-    const approveButtons = screen.queryAllByRole('button', { name: /approve/i });
-    expect(approveButtons).toHaveLength(0);
+    // Approve is not a button here: the card links to the screen where every file is read first.
+    const link = screen.getByRole('link', { name: 'Review and approve the content' });
+    expect(link).toHaveAttribute('href', '/skills/vendor-skill/review-content');
+    expect(screen.queryAllByRole('button', { name: /^approve$/i })).toHaveLength(0);
     expect(container.querySelector('form')).toBeNull();
+    // The copy-a-command block is gone.
+    expect(container.textContent).not.toContain('--approve-content');
   });
 
   it('renders changed since approval with modified paths and diff command', () => {

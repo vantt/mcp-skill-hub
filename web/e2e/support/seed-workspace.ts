@@ -10,7 +10,9 @@ export interface SeededDistillWorkspace {
   ws: string;
 }
 
-export type CLIRunner = (args: string[]) => string;
+// A runner executes the skillhub binary for one hub. A second argument runs it from another folder,
+// for example the project a skill is written in.
+export type CLIRunner = (args: string[], cwd?: string) => string;
 
 export function resolveBinaryPath(): string {
   const binaryPath = path.resolve(__dirname, '../../.e2e/skillhub');
@@ -34,13 +36,79 @@ export function e2eUserConfigDir(): string {
 // to replace the inherited environment (for example an isolated HOME and XDG_*).
 export function makeCLIRunner(ws: string, env: NodeJS.ProcessEnv = process.env): CLIRunner {
   const binaryPath = resolveBinaryPath();
-  return (args) =>
+  return (args, cwd = ws) =>
     execFileSync(binaryPath, args, {
-      cwd: ws,
+      cwd,
       encoding: 'utf-8',
-      env: { SKILLHUB_USER_CONFIG_DIR: e2eUserConfigDir(), ...env, SKILLHUB_WORKSPACE: ws },
+      env: { SKILLHUB_USER_CONFIG_DIR: e2eUserConfigDir(), ...gitIdentity, ...env, SKILLHUB_WORKSPACE: ws },
       stdio: 'pipe',
     });
+}
+
+// Every commit the hub makes needs an author; the suite's own environment has no Git config.
+export const gitIdentity: NodeJS.ProcessEnv = {
+  GIT_AUTHOR_NAME: 'E2E Curator',
+  GIT_AUTHOR_EMAIL: 'e2e@example.invalid',
+  GIT_COMMITTER_NAME: 'E2E Curator',
+  GIT_COMMITTER_EMAIL: 'e2e@example.invalid',
+};
+
+// A skill to put on the hub the way a person does: write it in a project folder, then commit it.
+export interface HubSkillSpec {
+  id: string;
+  // The title people see; set by a metadata edit after the commit.
+  name?: string;
+  description: string;
+  // Markdown after the frontmatter.
+  body: string;
+  collection?: string;
+  operation?: string;
+  triggers?: string[];
+  notFor?: string[];
+  examples?: string[];
+  minScope?: string;
+  // Other files of the skill, relative to its folder.
+  files?: Record<string, string | Buffer>;
+  executable?: string[];
+}
+
+// createHubSkill adds a draft skill to the hub: `skill commit` of a project folder that was never
+// checked out. Routing is given when the skill should be ready to activate.
+export function createHubSkill(runCLI: CLIRunner, spec: HubSkillSpec): void {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'skillhub-e2e-project-'));
+  try {
+    const folder = path.join(project, '.claude', 'skills', spec.id);
+    const write = (rel: string, body: string | Buffer) => {
+      const abs = path.join(folder, rel);
+      fs.mkdirSync(path.dirname(abs), { recursive: true });
+      fs.writeFileSync(abs, body);
+    };
+    write('SKILL.md', `---\nname: ${spec.id}\ndescription: ${JSON.stringify(spec.description)}\n---\n\n${spec.body}`);
+    for (const [rel, body] of Object.entries(spec.files ?? {})) write(rel, body);
+    for (const rel of spec.executable ?? []) fs.chmodSync(path.join(folder, rel), 0o755);
+
+    const args = ['skill', 'commit', spec.id, '--collection', spec.collection ?? 'core', '--min-scope', spec.minScope ?? 'single_step'];
+    for (const trigger of spec.triggers ?? []) args.push('--trigger', trigger);
+    for (const notFor of spec.notFor ?? []) args.push('--not-for', notFor);
+    for (const example of spec.examples ?? []) args.push('--example', example);
+    args.push('--yes');
+    runCLI(args, project);
+    // The commit gives the skill the id as its title and no operation; the metadata edit fixes both.
+    const edit: string[] = [];
+    if (spec.name && spec.name !== spec.id) edit.push('--name', spec.name);
+    if (spec.operation) edit.push('--operation', spec.operation);
+    if (edit.length > 0) runCLI(['skill', 'edit', spec.id, ...edit, '--yes']);
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+}
+
+// commitHub records everything in the hub as one Git commit, so the next change is not refused for
+// files that differ from Git.
+export function commitHub(ws: string, message: string, env: NodeJS.ProcessEnv = process.env): void {
+  for (const args of [['add', '-A'], ['commit', '--quiet', '--allow-empty', '-m', message]]) {
+    execFileSync('git', args, { cwd: ws, env: { ...gitIdentity, ...env }, stdio: 'pipe' });
+  }
 }
 
 // attachFilesystemSource writes a filesystem source into the workspace catalog,
@@ -91,40 +159,15 @@ export function seedDistillWorkspace(env: NodeJS.ProcessEnv = process.env): Seed
   // 1. init in <ws>; create and activate consumer-review
   runCLI(['init']);
 
-  const consumerReviewMd = path.join(os.tmpdir(), `consumer-review-${Date.now()}.md`);
-  fs.writeFileSync(
-    consumerReviewMd,
-    '---\nname: consumer-review\ndescription: Review consumer changes.\n---\n\n# Consumer Review\n\nReview consumer changes carefully.\n',
-  );
-  try {
-    runCLI([
-      'skill',
-      'create',
-      'consumer-review',
-      '--collection',
-      'core',
-      '--name',
-      'Consumer Review',
-      '--description',
-      'Review consumer changes.',
-      '--content-file',
-      consumerReviewMd,
-      '--trigger',
-      'review consumer changes',
-      '--not-for',
-      'write prose',
-      '--min-scope',
-      'single_step',
-      '--yes',
-    ]);
-    runCLI(['skill', 'activate', 'consumer-review', '--yes']);
-  } finally {
-    try {
-      fs.unlinkSync(consumerReviewMd);
-    } catch {
-      // Ignore
-    }
-  }
+  createHubSkill(runCLI, {
+    id: 'consumer-review',
+    name: 'Consumer Review',
+    description: 'Review consumer changes.',
+    body: '# Consumer Review\n\nReview consumer changes carefully.\n',
+    triggers: ['review consumer changes'],
+    notFor: ['write prose'],
+  });
+  runCLI(['skill', 'activate', 'consumer-review', '--yes']);
 
   // 2. Three filesystem sources attached to consumer-review
   const sourceBody = (label: string) => `# Source ${label}\nFirst version of source ${label.toLowerCase()} knowledge.\n`;

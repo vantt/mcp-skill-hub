@@ -12,8 +12,12 @@ import type {
   SkillListResult,
   SkillMutationResult,
   SkillProposal,
-  SkillResourceContent,
-  SkillResourceList,
+  ReviewQueue,
+  SkillChangesInput,
+  SkillChangesPreview,
+  SkillFileContent,
+  SkillFiles,
+  SkillReviewContent,
   SkillReviewResult,
   SkillRuntimeStatus,
   SkillSourcesResult,
@@ -108,6 +112,7 @@ export async function previewSkillCreate(body: {
 export async function confirmSkillMutation(
   proposalId: string,
   pins: { proposalDigest: string; baseVersion: string },
+  commitMessage?: string,
 ): Promise<SkillMutationResult> {
   return apiFetch<SkillMutationResult>(
     `/skills/proposals/${encodeURIComponent(proposalId)}/confirm`,
@@ -116,6 +121,7 @@ export async function confirmSkillMutation(
       body: JSON.stringify({
         proposal_digest: pins.proposalDigest,
         base_version: pins.baseVersion,
+        ...(commitMessage ? { commit_message: commitMessage } : {}),
       }),
     },
   );
@@ -144,34 +150,61 @@ export async function previewSkillUpdate(
   });
 }
 
-// Companion files of a skill (SKILL.md and hub metadata excluded), with whether each can be edited.
-export function useSkillResources(id: string) {
+// Every content file of a skill, SKILL.md first, with the version a changeset is made against.
+export function useSkillFiles(id: string) {
   return useQuery({
-    queryKey: ['skill-resources', id],
-    queryFn: () => apiFetch<SkillResourceList>(`/skills/${encodeURIComponent(id)}/resources`),
+    queryKey: ['skill-files', id],
+    queryFn: () => apiFetch<SkillFiles>(`/skills/${encodeURIComponent(id)}/files`),
     enabled: Boolean(id),
   });
 }
 
-export function useSkillResourceContent(id: string, path: string) {
+export function useSkillFileContent(id: string, path: string, digest: string) {
   return useQuery({
-    queryKey: ['skill-resource', id, path],
+    queryKey: ['skill-file', id, path, digest],
     queryFn: () =>
-      apiFetch<SkillResourceContent>(
-        `/skills/${encodeURIComponent(id)}/resources/content?path=${encodeURIComponent(path)}`,
+      apiFetch<SkillFileContent>(
+        `/skills/${encodeURIComponent(id)}/files/content?path=${encodeURIComponent(path)}`,
       ),
     enabled: Boolean(id) && Boolean(path),
   });
 }
 
-// Previews a one-file edit of a companion file; confirm with confirmSkillMutation.
-export async function previewSkillResourceUpdate(
+// Previews a whole set of file changes as one proposal; confirm with confirmSkillMutation.
+export async function previewSkillChanges(
   id: string,
-  body: { path: string; content: string; expected_digest: string },
-): Promise<SkillProposal> {
-  return apiFetch<SkillProposal>(`/skills/${encodeURIComponent(id)}/resources/preview`, {
+  body: SkillChangesInput,
+): Promise<SkillChangesPreview> {
+  return apiFetch<SkillChangesPreview>(`/skills/${encodeURIComponent(id)}/changes/preview`, {
     method: 'POST',
     body: JSON.stringify(body),
+  });
+}
+
+// Skills that wait for a person: new drafts and third-party content that changed.
+export function useReviewQueue() {
+  return useQuery({
+    queryKey: ['review-queue'],
+    queryFn: () => apiFetch<ReviewQueue>('/review-queue'),
+  });
+}
+
+export function useSkillReviewContent(id: string) {
+  return useQuery({
+    queryKey: ['skill-review-content', id],
+    queryFn: () => apiFetch<SkillReviewContent>(`/skills/${encodeURIComponent(id)}/review-content`),
+    enabled: Boolean(id),
+    // What the person reads must stay what they approve.
+    staleTime: 0,
+    gcTime: 0,
+  });
+}
+
+// Previews approving the content a person has read; confirm with confirmSkillMutation.
+export async function previewSkillApproval(id: string, contentDigest: string): Promise<SkillProposal> {
+  return apiFetch<SkillProposal>(`/skills/${encodeURIComponent(id)}/approve/preview`, {
+    method: 'POST',
+    body: JSON.stringify({ content_digest: contentDigest }),
   });
 }
 

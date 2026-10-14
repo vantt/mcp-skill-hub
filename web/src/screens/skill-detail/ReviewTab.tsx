@@ -16,7 +16,7 @@ const LABEL_STRUCTURALLY_VALID = 'Structurally valid';
 const LABEL_NOT_VALID = 'Not valid';
 const HELP_VALIDITY = 'Whether the skill file follows the required format.';
 const HELP_VALID_OK = 'No format problems found.';
-const HELP_VALID_BAD = 'The skill file has format problems. Fix them in the Editor tab.';
+const HELP_VALID_BAD = 'The skill file has format problems. Fix them in SKILL.md, in the Files tab.';
 const HELP_READINESS = 'What a draft needs before agents can use it. A skill with a missing item cannot be activated.';
 const HELP_RESOURCES = 'Files that ship with the skill.';
 const HELP_CANONICAL_SERVED =
@@ -71,7 +71,7 @@ export function ReviewTab({ skill, review, onGoToEditor, onViewSources }: Review
     >
       {/* Content Trust Card (Third-party only) */}
       {review?.content_trust?.third_party && (
-        <ContentTrustCard trust={review.content_trust} />
+        <ContentTrustCard trust={review.content_trust} skillId={skill.skill_id} />
       )}
 
       {/* Validity Card */}

@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { seedDistillWorkspace } from './support/seed-workspace';
+import { commitHub, gitIdentity, seedDistillWorkspace } from './support/seed-workspace';
 import { startServer, type RunningServer } from './support/server';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -45,14 +45,15 @@ test.describe('Shipped User Flow Journeys (Spec 04 §3)', () => {
     const updatedMeta = `${metaContent.trimEnd()}\nprovenance:\n    origin:\n        kind: github\n        repository: https://github.com/example/skills\n        commit: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n`;
     fs.writeFileSync(metaPath, updatedMeta);
 
-    // 2. Run skillhub maintain rebuild
+    // 2. Run skillhub maintain rebuild, then commit the hand edit so later hub commits start clean
     execFileSync(binaryPath, ['maintain', 'rebuild', '--workspace', ws], { stdio: 'pipe' });
+    commitHub(ws, 'Record where smoke-skill came from');
 
     // 3. Store SECRET_API_KEY with secret value piped on stdin
     const secretValue = 'SECRET-API-KEY-VALUE-DO-NOT-LEAK-1234';
     execFileSync(binaryPath, ['skill', 'env', 'set', 'smoke-skill', 'SECRET_API_KEY'], {
       input: secretValue,
-      env: { ...process.env, SKILLHUB_WORKSPACE: ws },
+      env: { ...process.env, ...gitIdentity, SKILLHUB_WORKSPACE: ws },
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 
@@ -60,14 +61,16 @@ test.describe('Shipped User Flow Journeys (Spec 04 §3)', () => {
     await page.goto(server.url);
     await page.goto(`${server.origin}/skills/smoke-skill`);
 
-    // Review tab shows Review required and approve command
+    // Review tab shows Review required and sends the person to the review screen to approve
     await page.getByRole('tab', { name: 'Review' }).click();
     await expect(page.getByText('Review required')).toBeVisible();
-    await expect(
-      page.getByText(/skillhub skill edit smoke-skill --approve-content sha256:/),
-    ).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Review and approve the content' })).toHaveAttribute(
+      'href',
+      '/skills/smoke-skill/review-content',
+    );
+    await expect(page.getByText('--approve-content')).toHaveCount(0);
 
-    // Security check: no approve button in WebUI
+    // Approve is not a button on this tab: it lives on the review screen, after every file is read
     const approveButtons = page.getByRole('button', { name: /approve/i });
     await expect(approveButtons).toHaveCount(0);
 
@@ -99,7 +102,7 @@ test.describe('Shipped User Flow Journeys (Spec 04 §3)', () => {
         '--yes',
       ],
       {
-        env: { ...process.env, SKILLHUB_WORKSPACE: ws },
+        env: { ...process.env, ...gitIdentity, SKILLHUB_WORKSPACE: ws },
         stdio: 'pipe',
       },
     );
@@ -174,7 +177,7 @@ test.describe('Shipped User Flow Journeys (Spec 04 §3)', () => {
     await page.goto(server.url);
     await page.goto(`${server.origin}/skills/smoke-skill`);
 
-    await page.getByRole('tab', { name: 'Editor' }).click();
+    await page.getByRole('tab', { name: 'Routing' }).click();
     const descInput = page.locator('#edit-desc');
     await descInput.fill('Draft description before conflict.');
 
@@ -183,7 +186,7 @@ test.describe('Shipped User Flow Journeys (Spec 04 §3)', () => {
       binaryPath,
       ['skill', 'edit', 'smoke-skill', '--description', 'Concurrent edit outside', '--yes'],
       {
-        env: { ...process.env, SKILLHUB_WORKSPACE: server.ws },
+        env: { ...process.env, ...gitIdentity, SKILLHUB_WORKSPACE: server.ws },
         stdio: 'pipe',
       },
     );
@@ -261,7 +264,7 @@ test.describe('Shipped User Flow Journeys (Spec 04 §3)', () => {
         '--yes',
       ],
       {
-        env: { ...process.env, SKILLHUB_WORKSPACE: server.ws },
+        env: { ...process.env, ...gitIdentity, SKILLHUB_WORKSPACE: server.ws },
         stdio: 'pipe',
       },
     );
@@ -269,7 +272,7 @@ test.describe('Shipped User Flow Journeys (Spec 04 §3)', () => {
       binaryPath,
       ['skill', 'activate', 'smoke-skill', '--yes'],
       {
-        env: { ...process.env, SKILLHUB_WORKSPACE: server.ws },
+        env: { ...process.env, ...gitIdentity, SKILLHUB_WORKSPACE: server.ws },
         stdio: 'pipe',
       },
     );

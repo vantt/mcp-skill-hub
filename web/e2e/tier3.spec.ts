@@ -21,8 +21,8 @@ test.describe('Tier 3 occasional flows', () => {
     await page.goto(server.url);
 
     const nav = page.getByRole('navigation', { name: 'Primary' });
-    await expect(nav.getByRole('link')).toHaveCount(3);
-    for (const name of ['Skills', 'Sources', 'Home']) {
+    await expect(nav.getByRole('link')).toHaveCount(4);
+    for (const name of ['Skills', 'Waiting for review', 'Sources', 'Home']) {
       await nav.getByRole('link', { name }).click();
       await expect(page.getByText('Page not found.')).toHaveCount(0);
       await expect(page.getByText(/Unknown API path|Failed to load/)).toHaveCount(0);

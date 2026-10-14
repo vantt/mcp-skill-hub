@@ -11,6 +11,7 @@ import {
 } from '../../api/queries';
 import type { SkillProposal } from '../../api/types';
 import { ApiError } from '../../api/client';
+import { commitNote } from '../../api/commit-view';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { NotFoundPage } from '../../components/NotFoundPage';
 import { ProposalPreview } from '../../components/ProposalPreview';
@@ -18,9 +19,9 @@ import { proposalPatch, proposalPaths, proposalWarning } from '../../api/proposa
 import { Skeleton } from '../../components/Skeleton';
 import { StatusBadge } from '../../components/StatusBadge';
 import { Toast } from '../../components/Toast';
-import { EditorTab } from './EditorTab';
+import { FilesTab } from './FilesTab';
 import { OverviewTab } from './OverviewTab';
-import { ResourcesTab } from './ResourcesTab';
+import { RoutingTab } from './RoutingTab';
 import { ReviewTab } from './ReviewTab';
 import { UsagePanel } from './UsagePanel';
 import { RuntimeTab } from './RuntimeTab';
@@ -31,8 +32,8 @@ import { useT } from '../../i18n';
 
 const LABEL_TAB_OVERVIEW = 'Overview';
 const LABEL_TAB_REVIEW = 'Review';
-const LABEL_TAB_EDITOR = 'Editor';
-const LABEL_TAB_RESOURCES = 'Resources';
+const LABEL_TAB_FILES = 'Files';
+const LABEL_TAB_ROUTING = 'Routing';
 const LABEL_TAB_USAGE = 'Usage';
 const LABEL_TAB_RUNTIME = 'Runtime';
 const LABEL_TAB_SOURCES = 'Sources';
@@ -89,7 +90,16 @@ export function SkillDetailScreen() {
   const { id } = useParams<{ id: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const activeTab = searchParams.get('tab') || 'overview';
+  // The Editor and Resources tabs became Files and Routing; an old link still lands somewhere useful.
+  const requestedTab = searchParams.get('tab') || 'overview';
+  const activeTab =
+    requestedTab === 'resources'
+      ? 'files'
+      : requestedTab === 'editor'
+        ? searchParams.get('field') === 'content'
+          ? 'files'
+          : 'routing'
+        : requestedTab;
   const skillId = id || '';
 
   const { data: session } = useSession();
@@ -129,16 +139,25 @@ export function SkillDetailScreen() {
     next.delete('field');
     next.delete('file');
     next.delete('edit');
+    next.delete('view');
     setSearchParams(next);
   };
 
-  // Opens the Editor with the cursor in the field the Review tab pointed at.
+  // Opens the place a Review checklist item points at: SKILL.md in Files for the content, the
+  // Routing form, with the cursor in the field, for everything else.
   const openEditor = (field?: string) => {
     const next = new URLSearchParams(searchParams);
-    next.set('tab', 'editor');
-    if (field) next.set('field', field);
-    else next.delete('field');
-    next.delete('file');
+    next.delete('view');
+    if (field === 'content') {
+      next.set('tab', 'files');
+      next.set('file', 'SKILL.md');
+      next.delete('field');
+    } else {
+      next.set('tab', 'routing');
+      if (field) next.set('field', field);
+      else next.delete('field');
+      next.delete('file');
+    }
     next.delete('edit');
     setSearchParams(next);
   };
@@ -175,9 +194,9 @@ export function SkillDetailScreen() {
     baseVersion: string;
   }) => {
     try {
-      await confirmSkillMutation(pins.proposalId, pins);
+      const done = await confirmSkillMutation(pins.proposalId, pins);
       setProposalOpen(false);
-      setToastMessage(`${skill.skill_id} is now ${transitionTarget || skill.lifecycle_state}.`);
+      setToastMessage(`${skill.skill_id} is now ${transitionTarget || skill.lifecycle_state}. ${commitNote(done.commit)}`);
       queryClient.invalidateQueries({ queryKey: ['skill', skill.skill_id] });
       queryClient.invalidateQueries({ queryKey: ['skill-review', skill.skill_id] });
       queryClient.invalidateQueries({ queryKey: ['skills'] });
@@ -345,21 +364,21 @@ export function SkillDetailScreen() {
         </button>
         <button
           type="button"
-          className={`fg-tab ${activeTab === 'editor' ? 'fg-tab--active' : ''}`}
+          className={`fg-tab ${activeTab === 'files' ? 'fg-tab--active' : ''}`}
           role="tab"
-          aria-selected={activeTab === 'editor'}
-          onClick={() => setTab('editor')}
+          aria-selected={activeTab === 'files'}
+          onClick={() => setTab('files')}
         >
-          <span>{LABEL_TAB_EDITOR}</span>
+          <span>{LABEL_TAB_FILES}</span>
         </button>
         <button
           type="button"
-          className={`fg-tab ${activeTab === 'resources' ? 'fg-tab--active' : ''}`}
+          className={`fg-tab ${activeTab === 'routing' ? 'fg-tab--active' : ''}`}
           role="tab"
-          aria-selected={activeTab === 'resources'}
-          onClick={() => setTab('resources')}
+          aria-selected={activeTab === 'routing'}
+          onClick={() => setTab('routing')}
         >
-          <span>{LABEL_TAB_RESOURCES}</span>
+          <span>{LABEL_TAB_ROUTING}</span>
         </button>
         <button
           type="button"
@@ -434,16 +453,10 @@ export function SkillDetailScreen() {
         />
       )}
 
-      {activeTab === 'editor' && (
-        <EditorTab skill={skill} workspaceId={workspaceId} focusField={searchParams.get('field')} />
-      )}
+      {activeTab === 'files' && <FilesTab skill={skill} workspaceId={workspaceId} />}
 
-      {activeTab === 'resources' && (
-        <ResourcesTab
-          skill={skill}
-          workspaceId={workspaceId}
-          thirdParty={review?.content_trust?.third_party ?? false}
-        />
+      {activeTab === 'routing' && (
+        <RoutingTab skill={skill} workspaceId={workspaceId} focusField={searchParams.get('field')} />
       )}
 
       {activeTab === 'usage' && <UsagePanel skillId={skill.skill_id} />}

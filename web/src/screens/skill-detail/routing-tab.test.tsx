@@ -16,7 +16,7 @@ vi.mock('../../api/client', async (orig) => {
   return { ...actual, apiFetch: (...args: unknown[]) => apiFetch(...args) };
 });
 
-import { EditorTab } from './EditorTab';
+import { RoutingTab } from './RoutingTab';
 
 function makeSkill(over: Partial<SkillDetail> = {}): SkillDetail {
   return {
@@ -36,7 +36,7 @@ function renderEditor(skill: SkillDetail, focusField?: string) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <EditorTab skill={skill} workspaceId="ws" focusField={focusField} />
+      <RoutingTab skill={skill} workspaceId="ws" focusField={focusField} />
     </QueryClientProvider>,
   );
 }
@@ -50,7 +50,7 @@ const proposal = {
   confirmation: { confirmation: { pins: { proposal_id: 'P', proposal_digest: 'D', base_version: 'B' } } },
 };
 
-describe('EditorTab', () => {
+describe('RoutingTab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
@@ -78,9 +78,9 @@ describe('EditorTab', () => {
     expect(button).toBeEnabled();
     fireEvent.click(button);
 
-    expect(await screen.findByText('Save changes to demo?')).toBeInTheDocument();
+    expect(await screen.findByText('Commit changes to demo?')).toBeInTheDocument();
     expect(screen.getByText('Description: "Old words" becomes "New words".')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save changes' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Commit changes' })).toBeInTheDocument();
   });
 
   it('shows the latest saved version on a conflict and does not undo the edit made elsewhere', async () => {

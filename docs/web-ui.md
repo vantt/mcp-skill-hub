@@ -3,7 +3,7 @@
 The web UI lets you look after your skills by clicking instead of typing. It runs on your own machine, in your browser, and reads the same hub as the `skillhub` command.
 
 > [!IMPORTANT]
-> The web UI never commits, never pushes and never approves content for you. The steps that need the terminal are shown as commands you can copy.
+> The web UI never pushes. Every change you confirm becomes one Git commit in your hub, and the page says who gets it: this machine's agents right away, other machines after you push. Third-party content is approved only by you, on a screen where you read every changed file first.
 
 ## Start the web UI
 
@@ -23,7 +23,7 @@ The token keeps other people out, so treat the address like a password: anyone w
 
 ## Do common tasks
 
-The pictures come from a demo hub with invented skills; your screens list your own skills. Each task starts from the menu on the left: **Home**, **Skills** and **Sources**.
+The pictures come from a demo hub with invented skills; your screens list your own skills. Each task starts from the menu on the left: **Home**, **Skills**, **Waiting for review** and **Sources**.
 
 ### See what needs your attention
 
@@ -45,7 +45,7 @@ Under it, **Workspace** shows the hub's health, the search index and whether Git
 
 ### Check one skill
 
-Open a skill, and the **Overview** tab opens first. Its cards are **About**, **Routing** (when an agent is offered the skill), **Provenance** (where it came from) and **Sources**. **Edit** opens the editor and **Manage sources** opens the **Sources** tab.
+Open a skill, and the **Overview** tab opens first. Its cards are **About**, **Routing** (when an agent is offered the skill), **Provenance** (where it came from) and **Sources**. **Edit** opens the **Routing** tab and **Manage sources** opens the **Sources** tab.
 
 The **Review** tab tells you whether agents can use the skill. **Validity** says whether the skill file follows the required format.
 
@@ -55,30 +55,47 @@ The **Review** tab tells you whether agents can use the skill. **Validity** says
 
 A skill you added from someone else's repository also shows a **Content trust** card. Agents get no content from such a skill until you read it and approve it.
 
-This is **content approval**, and it happens only in your terminal. The card shows the exact command to copy. Here `<digest>` is a fingerprint of the content you reviewed.
+This is **content approval**. The card links to **Review and approve the content**, the full review screen described under [Review what waits for you](#review-what-waits-for-you). Here `<digest>` stands for a fingerprint of the content you read; the screen sends it for you, and the terminal equivalent is `skillhub skill edit <skill-id> --approve-content <digest>`.
 
-```bash
-skillhub skill edit <skill-id> --approve-content <digest>
-```
-
-If a draft is not ready, the page says so next to the **Activate skill** button. Each missing item has a **Go to field** link that opens the editor on that field.
+If a draft is not ready, the page says so next to the **Activate skill** button. Each missing item has a **Go to field** link that opens the **Routing** tab on that field, or the **Files** tab on `SKILL.md` for the instructions.
 
 <img src="images/web/skill-review-draft.png" alt="The Review tab of a draft skill listing the missing fields with links to fix each one." width="800"><br><em>A draft that cannot be activated yet, with links to the fields to fix.</em>
 
-The **Resources** tab lists the skill's companion files: scripts, reference documents and other files next to its `SKILL.md`. You change `SKILL.md` itself in the **Editor** tab.
+### Change the files of a skill
 
-- **Edit** opens a simple editor for a text file up to 1 MiB. A Markdown file also shows how it will read.
-- **Preview changes** shows the exact change to that one file. Nothing is written until you confirm it.
-- A binary file, or a text file larger than 1 MiB, opens read-only with **View**.
-- If the file changed on disk meanwhile, you choose to keep your edits on the latest version or discard them.
+The **Files** tab shows the whole skill as a tree: `SKILL.md` first, then its folders and files. A mark next to a file says what you did to it: **A** added, **M** modified, **D** deleted, **R** renamed.
 
-The file in the skill folder is the record, and Git keeps its history, so commit the change yourself. Editing a file of a skill from another repository changes its content. Agents then get no content from that skill until you approve it again in your terminal.
+- Click a file to read it. **Edit** opens a simple editor for a text file up to 1 MiB; a Markdown file also shows how it will read.
+- **+ File**, **+ Folder** and **Upload** add files. A folder exists once it holds a file. An upload may be up to 2 MiB per file; a binary file can be replaced, renamed or deleted but not edited here.
+- **Rename** and **Delete** act on the open file (`SKILL.md` keeps its name and stays). **Restore** puts a deleted file back.
+
+None of this reaches the hub yet. The bar at the bottom counts your pending changes: "2 changes not committed · agents still get the current version". The changes are kept in this browser until you commit or **Discard** them.
+
+1. Click **Review →**. Each file shows its mark and the lines it gains and loses; open one to see its diff. The routing lint says whether the new `SKILL.md` still routes well.
+2. Edit the **Commit message** if you like.
+3. Click **Commit to the hub**. All your changes become one commit, and the page says who gets it: "Committed 4be19c0. This machine's agents get it now; others after you push (`git -C ~/skill-hub push`)."
+
+If the hub changed while you were editing, a drawer opens when you review. Choose **Keep my edits on the latest version** to continue on top of the new files, or **Discard my edits**.
+
+Editing a file of a skill from another repository changes its content, so agents get no content from that skill until you approve it again under **Waiting for review**.
+
+**Checkout to a project** shows the command to try the skill with your agent first: run `skillhub skill checkout <skill-id>` in your project, work with the skill there, then run `skillhub skill commit <skill-id>`.
+
+### Review what waits for you
+
+**Waiting for review** lists what needs a person before agents get it: new drafts, and skills from another repository whose content changed after you approved it. The number next to the menu entry is the count.
+
+1. Click a skill to open its full review. At the top you see its license, its origin and what its files are compared with: the content you last approved, what agents get today, or nothing for a new draft.
+2. Open each changed file to read it with its diff. A file you opened is marked with a check.
+3. **Approve** stays off until every changed file was opened ("open every changed file first: 1 left"). Then it makes one commit and says who gets the skill.
+
+A draft of your own has nothing to approve: read it, then activate it from its page.
 
 ### Activate, deprecate or archive a skill
 
 1. Open the skill and click **Activate skill** (or **Deprecate** for an active one, or **Archive** for a deprecated one). The activate button stays off until the draft is ready.
 2. A confirmation lists the files that will change and says in words what changes. Open **Exact file changes** to see the patch.
-3. Click **Activate skill** in the confirmation to save, or **Cancel** to leave everything as it was.
+3. Click **Activate skill** in the confirmation to apply it, or **Cancel** to leave everything as it was.
 
 <img src="images/web/skill-activate-confirm.png" alt="A confirmation dialog asking to activate a skill, listing what will change." width="800"><br><em>Activate: the confirmation that shows what changes before anything is saved.</em>
 
@@ -88,12 +105,12 @@ A **deprecated** skill is being phased out, and an **archived** one is retired a
 
 ### Fix a skill's description and routing fields
 
-1. Open the skill and choose the **Editor** tab.
+1. Open the skill and choose the **Routing** tab.
 2. Change the fields. Each routing field has a short explanation and an example under it. Your draft is kept in this browser while you work.
 3. Click **Preview changes**. The dialog lists the files touched and describes the change in words.
-4. Click **Save changes** to write it, or **Cancel**.
+4. Click **Commit changes** to write it as one commit, or **Cancel**.
 
-<img src="images/web/editor-preview.png" alt="The editor tab with a dialog that previews the changed description as a diff." width="800"><br><em>Editor: preview the exact change before it is saved.</em>
+<img src="images/web/editor-preview.png" alt="The routing tab with a dialog that previews the changed description as a diff." width="800"><br><em>Routing: preview the exact change before it is committed.</em>
 
 The skill may change somewhere else while the form is open, for example from the terminal. Then a drawer opens when you preview. It shows what you changed and what changed meanwhile, and warns when both touched the same field.
 

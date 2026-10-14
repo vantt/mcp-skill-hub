@@ -69,6 +69,34 @@ html, body { margin: 0; height: 100%; overflow: hidden; }
     font-size: 12px; color: var(--color-text-muted);
   }
   .app-skills td.app-skills__actions { position: absolute; top: var(--space-2); right: var(--space-2); width: auto; }
+}
+
+@media (max-width: 720px) {
+  .app-header { padding: 0 var(--space-3); }
+  :root { --app-rail-w: 52px; }
+  .app-brand { width: auto; }
+  .app-brand__name { display: none; }
+  .app-main { padding: var(--space-4) var(--space-3) var(--space-8); }
+  /* Rail shrinks to an icon strip so the page keeps the width. */
+  .app-rail { padding: var(--space-3) var(--space-2); }
+  .app-rail .fg-nav__label { display: none; }
+  .app-rail .fg-nav__item { justify-content: center; padding-left: 0; padding-right: 0; }
+  .app-rail__status { display: none !important; }
+  .app-field { width: 100%; }
+  .app-field .fg-select { width: 100% !important; }
+  .app-search { max-width: none !important; width: 100%; }
+  .app-actions { width: 100%; }
+  .app-actions > * { flex: 1 1 auto; justify-content: center; }
+  /* Skills table turns into stacked rows so every column stays reachable. */
+  .app-skills thead { display: none; }
+  .app-skills, .app-skills tbody, .app-skills tr, .app-skills td { display: block; width: 100%; box-sizing: border-box; }
+  .app-skills tr { position: relative; padding: var(--space-3); border-bottom: 1px solid var(--color-border); }
+  .app-skills td { border: 0 !important; padding: 2px 0 !important; }
+  .app-skills td[data-label]::before {
+    content: attr(data-label); display: inline-block; min-width: 88px;
+    font-size: 12px; color: var(--color-text-muted);
+  }
+  .app-skills td.app-skills__actions { position: absolute; top: var(--space-2); right: var(--space-2); width: auto; }
   /* The Resources list stacks the same way; the Edit or View button stays top-right of each file. */
   .app-resources thead { display: none; }
   .app-resources, .app-resources tbody, .app-resources tr, .app-resources td { display: block; width: 100%; box-sizing: border-box; }
@@ -92,3 +120,54 @@ html, body { margin: 0; height: 100%; overflow: hidden; }
 
 /* A placeholder must not pass for a typed value. */
 .fg-input::placeholder { font-style: italic; }
+
+/* Files tab: the tree on the left, one file on the right; one column on a narrow screen. */
+.app-files { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: var(--space-4); align-items: start; }
+.app-files__tree, .app-files__pane { min-width: 0; }
+.app-files__tools { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); }
+.app-files__form { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-3); }
+.app-files__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+.app-files__foot { display: flex; justify-content: flex-end; }
+.app-files__editor { min-height: 360px; width: 100%; font-family: var(--font-mono); font-size: 13px; line-height: 1.55; resize: vertical; }
+.app-files__source {
+  margin: 0; padding: var(--space-3) var(--space-4); overflow: auto; max-height: 70vh;
+  border: 1px solid var(--color-border); border-radius: var(--input-radius); background: var(--color-surface-sunken);
+  font-family: var(--font-mono); font-size: 13px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.app-filetree__list { list-style: none; margin: 0; padding: 0; }
+.app-filetree__dir { padding: 4px 8px; font-size: 13px; color: var(--color-text-muted); }
+.app-filetree__file {
+  display: flex; align-items: center; gap: var(--space-2); width: 100%; box-sizing: border-box; border: 0; background: transparent;
+  padding: 4px 8px; border-radius: var(--radius-xs); font: inherit; font-size: 13px; color: var(--color-text); cursor: pointer;
+}
+.app-filetree__file:hover { background: var(--color-surface-hover); }
+.app-filetree__file--active { background: var(--color-surface-sunken); font-weight: 600; }
+.app-filetree__mark { font-family: var(--font-mono); font-size: 11px; font-weight: 700; padding: 0 4px; border-radius: var(--radius-xs); border: 1px solid currentColor; }
+.app-filetree__mark--A { color: var(--color-success); }
+.app-filetree__mark--M { color: var(--color-info); }
+.app-filetree__mark--D { color: var(--color-danger); }
+.app-filetree__mark--R { color: var(--color-text-muted); }
+
+/* Pending changes bar: in the flow at the bottom of the Files tab, sticky so it stays in reach. */
+.app-pending-bar {
+  position: sticky; bottom: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: var(--space-3); padding: var(--space-3) var(--space-4); background: var(--color-surface);
+  border: 1px solid var(--color-border-strong); border-radius: var(--card-radius); box-shadow: var(--shadow-md);
+}
+.app-pending-bar__actions { display: flex; gap: var(--space-2); margin-left: auto; }
+
+.app-review-files, .app-review-queue { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.app-review-files summary { cursor: pointer; padding: var(--space-2) 0; }
+.app-review-queue__item { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.app-nav-badge { margin-left: auto; }
+.app-scrim { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: var(--space-4); background: rgba(0, 0, 0, 0.5); }
+.app-modal {
+  width: 480px; max-width: 100%; display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-4);
+  background: var(--color-surface); border-radius: var(--card-radius); box-shadow: var(--shadow-lg); outline: none;
+}
+
+@media (max-width: 720px) {
+  .app-files { grid-template-columns: 1fr; }
+  .app-pending-bar__actions { width: 100%; }
+  .app-pending-bar__actions > * { flex: 1 1 auto; justify-content: center; }
+}

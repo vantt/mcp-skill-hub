@@ -185,11 +185,11 @@ describe('OverviewTab', () => {
     expect(within(card('Sources')).getByText(/Could not load sources/)).toBeInTheDocument();
   });
 
-  it('opens the Sources tab from Manage sources and the Editor tab from Edit', () => {
+  it('opens the Sources tab from Manage sources and the Routing tab from Edit', () => {
     const { onOpenTab } = renderOverview();
     fireEvent.click(screen.getByRole('button', { name: 'Manage sources' }));
     expect(onOpenTab).toHaveBeenLastCalledWith('sources');
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    expect(onOpenTab).toHaveBeenLastCalledWith('editor');
+    expect(onOpenTab).toHaveBeenLastCalledWith('routing');
   });
 });

@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createHubSkill, gitIdentity, makeCLIRunner } from './seed-workspace';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -27,6 +28,7 @@ function isolatedServerEnv(root: string): NodeJS.ProcessEnv {
   fs.mkdirSync(home, { recursive: true });
   return {
     ...process.env,
+    ...gitIdentity,
     HOME: home,
     USERPROFILE: home,
     XDG_CONFIG_HOME: path.join(root, 'config'),
@@ -45,43 +47,19 @@ export async function startServer(options?: StartServerOptions): Promise<Running
   const customWorkspace = options?.workspace;
   const ws = customWorkspace || fs.mkdtempSync(path.join(os.tmpdir(), 'skillhub-e2e-'));
   const envRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'skillhub-e2e-env-'));
-  const env = options?.env ?? isolatedServerEnv(envRoot);
+  const env = options?.env ? { ...gitIdentity, ...options.env } : isolatedServerEnv(envRoot);
 
   if (!customWorkspace) {
     // 1. Initialize the hub in its own folder: init acts on the current folder.
     execFileSync(binaryPath, ['init'], { cwd: ws, env, stdio: 'pipe' });
-  const contentFile = path.join(os.tmpdir(), `smoke-${Date.now()}.md`);
-  fs.writeFileSync(contentFile, '# Smoke Skill\n\nSmoke test instructions.\n');
 
-  execFileSync(
-    binaryPath,
-    [
-      'skill',
-      'create',
-      'smoke-skill',
-      '--collection',
-      'core',
-      '--name',
-      'Smoke Skill',
-      '--description',
-      'Smoke test skill.',
-      '--content-file',
-      contentFile,
-      '--yes',
-    ],
-    {
-      env: {
-        ...env,
-        SKILLHUB_WORKSPACE: ws,
-      },
-      stdio: 'pipe',
-    },
-  );
-  try {
-    fs.unlinkSync(contentFile);
-  } catch {
-    // Ignore error if file was already removed.
-  }
+    // 2. One draft skill to look at.
+    createHubSkill(makeCLIRunner(ws, env), {
+      id: 'smoke-skill',
+      name: 'Smoke Skill',
+      description: 'Smoke test skill.',
+      body: '# Smoke Skill\n\nSmoke test instructions.\n',
+    });
   }
 
   // 3. Spawn serve web

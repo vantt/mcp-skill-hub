@@ -1,3 +1,4 @@
+import { Link } from 'react-router';
 import type { ContentTrust } from '../../api/types';
 import { CommandBlock } from '../../components/CommandBlock';
 import { CopyButton } from '../../components/CopyButton';
@@ -12,7 +13,7 @@ const LABEL_CONTENT_DIGEST = 'Content digest:';
 const LABEL_MODIFIED = 'Modified:';
 const LABEL_ADDED = 'Added:';
 const LABEL_REMOVED = 'Removed:';
-const LABEL_APPROVE_CONTENT = 'Approve content:';
+const LABEL_REVIEW_CONTENT = 'Review and approve the content';
 const LABEL_SCRIPTS_CHANGED = 'scripts changed';
 const LABEL_RUNTIME_CHANGED = 'runtime changed';
 const LABEL_DEPENDENCIES_CHANGED = 'dependencies changed';
@@ -21,8 +22,8 @@ const MSG_WHAT_IS_TRUST =
   'Skills from other people can contain instructions that agents will follow. Content trust records that you read this content and approved it.';
 const MSG_AGENTS_RECEIVE = "Agents receive this skill's content.";
 const MSG_AGENTS_NO_CONTENT = 'Agents get no content and no files from this skill until it is approved.';
-const MSG_CLI_ONLY =
-  'Approval is CLI-only. Review the content, then run this command in your terminal. The WebUI and agents cannot approve content.';
+const MSG_APPROVE_ON_REVIEW_SCREEN =
+  'Approval lives on the review screen: read every changed file there, then approve. Agents cannot approve content.';
 const MSG_NOT_FOUND_IN_HISTORY =
   'The approved content could not be found in Git history; review the full skill.';
 const MSG_NEVER_APPROVED = 'Never approved: review the full skill.';
@@ -35,9 +36,10 @@ function formatItemList(prefix: string, items?: string[]) {
 
 interface ContentTrustCardProps {
   trust: ContentTrust;
+  skillId: string;
 }
 
-export function ContentTrustCard({ trust }: ContentTrustCardProps) {
+export function ContentTrustCard({ trust, skillId }: ContentTrustCardProps) {
   const badgeLabel = trust.approved
     ? BADGE_APPROVED
     : trust.changes_since_approval
@@ -155,12 +157,13 @@ export function ContentTrustCard({ trust }: ContentTrustCardProps) {
             paddingTop: 'var(--space-2)',
           }}
         >
+          <div>
+            <Link className="fg-btn fg-btn--primary" to={`/skills/${encodeURIComponent(skillId)}/review-content`}>
+              <span>{LABEL_REVIEW_CONTENT}</span>
+            </Link>
+          </div>
           <span className="t-caption" style={{ color: 'var(--color-text-muted)' }}>
-            <span>{LABEL_APPROVE_CONTENT}</span>
-          </span>
-          <CommandBlock command={trust.approve_command} />
-          <span className="t-caption" style={{ color: 'var(--color-text-muted)' }}>
-            <span>{MSG_CLI_ONLY}</span>
+            <span>{MSG_APPROVE_ON_REVIEW_SCREEN}</span>
           </span>
         </div>
       )}

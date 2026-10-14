@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test } from '@playwright/test';
 import type { RunningServer } from './support/server';
+import { commitHub } from './support/seed-workspace';
 import { startServer } from './support/server';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -21,7 +22,7 @@ test.afterAll(async () => {
   }
 });
 
-test('skill-runtime: review shows approve command, no approve button, and runtime tab shows env key without value', async ({
+test('skill-runtime: review links to the approval screen, no approve button, and runtime tab shows env key without value', async ({
   page,
 }) => {
   test.setTimeout(120_000);
@@ -32,8 +33,9 @@ test('skill-runtime: review shows approve command, no approve button, and runtim
   // 1. Mark smoke-skill third-party by adding origin to provenance
   const updatedMeta = `${metaContent.trimEnd()}\nprovenance:\n    origin:\n        kind: github\n        repository: https://github.com/example/skills\n        commit: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n`;
   fs.writeFileSync(metaPath, updatedMeta);
-  // 2. Run skillhub maintain rebuild
+  // 2. Run skillhub maintain rebuild, then commit the hand edit
   execFileSync(binaryPath, ['maintain', 'rebuild', '--workspace', ws], { stdio: 'pipe' });
+  commitHub(ws, 'Record where smoke-skill came from');
 
   // 3. Store E2E_TOKEN with secret value piped on stdin
   const secretValue = 'SECRET-PIPED-VALUE-DO-NOT-LEAK-9988';
@@ -53,11 +55,10 @@ test('skill-runtime: review shows approve command, no approve button, and runtim
   // Review tab
   await page.getByRole('tab', { name: 'Review' }).click();
   await expect(page.getByText('Review required')).toBeVisible();
-  await expect(
-    page.getByText(/skillhub skill edit smoke-skill --approve-content sha256:/),
-  ).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Review and approve the content' })).toBeVisible();
+  await expect(page.getByText('--approve-content')).toHaveCount(0);
 
-  // Assert security requirement: no approve button
+  // Approve is not a button on this tab: it lives on the review screen
   const approveButtons = page.getByRole('button', { name: /approve/i });
   await expect(approveButtons).toHaveCount(0);
 

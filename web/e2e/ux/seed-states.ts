@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   attachFilesystemSource,
+  createHubSkill,
   makeCLIRunner,
   resolveBinaryPath,
   seedDistillWorkspace,
@@ -65,28 +66,14 @@ function createSkill(
   id: string,
   opts: { complete: boolean; runtimeYaml?: string },
 ): void {
-  const content = writeTemp(
-    root,
-    `${id}.md`,
-    `---\nname: ${id}\ndescription: Sample skill for the UX evaluation.\n---\n\n# ${id}\n\nSample instructions.\n`,
-  );
-  const args = [
-    'skill', 'create', id,
-    '--collection', 'core',
-    '--name', id,
-    '--description', 'Sample skill for the UX evaluation.',
-    '--content-file', content,
-  ];
-  if (opts.complete) {
-    args.push(
-      '--operation', 'review',
-      '--trigger', `review ${id} changes`,
-      '--not-for', 'writing new features',
-      '--min-scope', 'single_step',
-    );
-  }
-  args.push('--yes');
-  runCLI(args);
+  createHubSkill(runCLI, {
+    id,
+    description: 'Sample skill for the UX evaluation.',
+    body: `# ${id}\n\nSample instructions.\n`,
+    ...(opts.complete
+      ? { operation: 'review', triggers: [`review ${id} changes`], notFor: ['writing new features'] }
+      : {}),
+  });
   if (opts.runtimeYaml) {
     const runtime = writeTemp(root, `${id}-runtime.yaml`, opts.runtimeYaml);
     runCLI(['skill', 'edit', id, '--runtime-file', runtime, '--yes']);

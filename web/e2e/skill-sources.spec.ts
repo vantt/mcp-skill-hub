@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { expect, test } from '@playwright/test';
 import { startServer, type RunningServer } from './support/server';
-import { makeCLIRunner } from './support/seed-workspace';
+import { commitHub, createHubSkill, makeCLIRunner } from './support/seed-workspace';
 
 const SKILL_ID = 'track-me';
 const UPSTREAM_REPO = 'https://github.com/example/track-me';
@@ -19,27 +19,12 @@ function seedWorkspace(): string {
   const runCLI = makeCLIRunner(ws);
   runCLI(['init']);
 
-  // Outside the workspace: a stray file inside it would be refused as off-layout.
-  const contentFile = path.join(os.tmpdir(), `track-me-content-${process.pid}-${Date.now()}.md`);
-  fs.writeFileSync(contentFile, '# Track Me\n\nInstructions copied from an upstream repository.\n');
-  try {
-    runCLI([
-      'skill',
-      'create',
-      SKILL_ID,
-      '--collection',
-      'core',
-      '--name',
-      'Track Me',
-      '--description',
-      'A skill copied from GitHub without a tracked upstream.',
-      '--content-file',
-      contentFile,
-      '--yes',
-    ]);
-  } finally {
-    fs.rmSync(contentFile, { force: true });
-  }
+  createHubSkill(runCLI, {
+    id: SKILL_ID,
+    name: 'Track Me',
+    description: 'A skill copied from GitHub without a tracked upstream.',
+    body: '# Track Me\n\nInstructions copied from an upstream repository.\n',
+  });
 
   const metaPath = path.join(ws, 'skills', 'core', SKILL_ID, '.meta', 'skill.yaml');
   const meta = fs.readFileSync(metaPath, 'utf-8');
@@ -77,6 +62,8 @@ limits:
   max_file_bytes: 2097152
 `,
   );
+  // The edits above were made by hand; commit them so the web's own commits start from a clean hub.
+  commitHub(ws, 'Track the upstream of the skill by hand');
   return ws;
 }
 

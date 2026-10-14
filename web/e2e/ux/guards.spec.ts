@@ -1,5 +1,8 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+import { makeCLIRunner } from '../support/seed-workspace';
 import { startServer, type RunningServer } from '../support/server';
 import { FLOWS } from './flows';
 import { collectMetrics, openFlow } from './page-checks';
@@ -150,9 +153,12 @@ test.describe('UX regression guards', () => {
 
   test('Home offers a shell command when the hub has uncommitted changes', async ({ page }) => {
     // Home shows a command only for its top action. The shared hub always has sources ready to
-    // distill, which win, so this test starts a small hub whose one skill is not committed to Git.
+    // distill, which win, so this test starts a small hub whose one skill has an edit not committed to Git.
     const dirty = await startServer();
     try {
+      fs.appendFileSync(path.join(dirty.ws, 'skills', 'core', 'smoke-skill', 'SKILL.md'), '\nA hand edit that is not committed.\n');
+      // Rebuild so the index is current: the only thing left to do is to commit the edit.
+      makeCLIRunner(dirty.ws)(['maintain', 'rebuild']);
       await page.goto(dirty.url);
       await page.waitForLoadState('networkidle');
       const commands = page.locator('main code + button').locator('xpath=preceding-sibling::code[1]');
@@ -163,6 +169,31 @@ test.describe('UX regression guards', () => {
         expect(command, 'Home command is an MCP tool name').not.toMatch(/^[a-z]+(?:_[a-z]+)+$/);
       }
       expect(shown, 'the uncommitted-changes action points at the diff command').toContain('skillhub maintain diff');
+    } finally {
+      await dirty.stop();
+    }
+  });
+
+  test('a commit over a file with uncommitted changes is refused in words, and the changes stay', async ({ page }) => {
+    const dirty = await startServer();
+    try {
+      // SKILL.md has a hand edit that Git does not know, and the person edits the same file on the web.
+      fs.appendFileSync(path.join(dirty.ws, 'skills', 'core', 'smoke-skill', 'SKILL.md'), '\nA hand edit that is not committed.\n');
+      await page.goto(dirty.url);
+      await page.goto(`${dirty.origin}/skills/smoke-skill?tab=files`);
+      await page.getByRole('button', { name: 'Edit', exact: true }).click();
+      const editor = page.getByRole('textbox', { name: 'Edit SKILL.md' });
+      await editor.fill(`${await editor.inputValue()}\nA line typed on the web.\n`);
+      await page.getByRole('button', { name: /Review/ }).click();
+      await page.getByRole('button', { name: 'Commit to the hub' }).click();
+
+      const alert = page.getByRole('alert').first();
+      await expect(alert).toBeVisible({ timeout: 15000 });
+      await expectNoRawText(page, 'a refused commit');
+      expect((await alert.textContent())?.length ?? 0, 'the refusal says why').toBeGreaterThan(30);
+      // Nothing was committed, and the person's edit is still pending.
+      await page.getByRole('button', { name: 'Back to files' }).click();
+      await expect(page.getByText('1 change not committed')).toBeVisible();
     } finally {
       await dirty.stop();
     }

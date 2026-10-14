@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
+import { commitHub } from '../support/seed-workspace';
 import { externalEdit, UX_SKILLS, UX_SOURCE, type UxHub } from './seed-states';
 
 export interface FlowContext {
@@ -25,9 +26,10 @@ export interface Flow {
 
 const skillPath = (id: string, tab?: string) => `/skills/${id}${tab ? `?tab=${tab}` : ''}`;
 
-// A companion file of the active skill, written on first use so the resource editor has a
-// file to open on the fixture hub and on a hub clone alike.
-const UX_RESOURCE = `skills/core/${UX_SKILLS.active}/references/checklist.md`;
+// A companion file of the active skill, written on first use so the file tree has a file to open
+// on the fixture hub and on a hub clone alike.
+const UX_RESOURCE_REL = 'references/checklist.md';
+const UX_RESOURCE = `skills/core/${UX_SKILLS.active}/${UX_RESOURCE_REL}`;
 const UX_RESOURCE_BODY = '---\ntitle: Review checklist\n---\n\n# Review checklist\n\n- Read the change description first.\n- Run the checks before you approve.\n';
 
 function ensureCompanionFile(hub: FlowContext['hub']): boolean {
@@ -36,6 +38,7 @@ function ensureCompanionFile(hub: FlowContext['hub']): boolean {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, UX_RESOURCE_BODY);
   hub.runCLI(['maintain', 'rebuild']);
+  commitHub(hub.ws, 'Add a reference document to the active skill');
   return true;
 }
 
@@ -115,8 +118,8 @@ export const FLOWS: Flow[] = [
     id: 'editor',
     row: 5,
     tier: 2,
-    title: 'Fix a skill routing fields: editor',
-    route: skillPath(UX_SKILLS.active, 'editor'),
+    title: 'Fix a skill routing fields: routing tab',
+    route: skillPath(UX_SKILLS.active, 'routing'),
     task: 'Change the description and see what the change does before saving.',
     preconditions: `${UX_SKILLS.active} is active.`,
   },
@@ -125,7 +128,7 @@ export const FLOWS: Flow[] = [
     row: 5,
     tier: 2,
     title: 'Fix a skill routing fields: preview before apply',
-    route: skillPath(UX_SKILLS.active, 'editor'),
+    route: skillPath(UX_SKILLS.active, 'routing'),
     task: 'Read the preview and tell exactly what will change before confirming.',
     preconditions: 'Description edited in the form.',
     prepare: async ({ page }) => {
@@ -139,7 +142,7 @@ export const FLOWS: Flow[] = [
     row: 5,
     tier: 2,
     title: 'Fix a skill routing fields: conflict drawer',
-    route: skillPath(UX_SKILLS.deprecated, 'editor'),
+    route: skillPath(UX_SKILLS.deprecated, 'routing'),
     task: 'Understand that the skill changed elsewhere and choose how to continue.',
     preconditions: 'The skill is edited through the CLI after the form loaded.',
     prepare: async ({ page, hub }) => {
@@ -243,29 +246,66 @@ export const FLOWS: Flow[] = [
     preconditions: 'The inbox route was removed from the app.',
   },
   {
-    id: 'skill-tab-resources',
+    id: 'skill-tab-files',
     row: 12,
     tier: 3,
-    title: 'Skill tabs: Resources',
-    route: skillPath(UX_SKILLS.active, 'resources'),
+    title: 'Skill tabs: Files',
+    route: skillPath(UX_SKILLS.active, 'files'),
     task: 'See which files the skill carries.',
     preconditions: `${UX_SKILLS.active} is active.`,
   },
   {
-    id: 'skill-resource-editor',
+    id: 'skill-file-pending',
     row: 12,
     tier: 3,
-    title: 'Skill tabs: Resources, edit a companion file',
-    route: `${skillPath(UX_SKILLS.active, 'resources')}&file=${encodeURIComponent(UX_RESOURCE)}&edit=1`,
-    task: 'Change a reference document and know that nothing is saved before the preview is confirmed.',
+    title: 'Skill tabs: Files, a pending change',
+    route: `${skillPath(UX_SKILLS.active, 'files')}&file=${encodeURIComponent(UX_RESOURCE_REL)}`,
+    task: 'Change a reference document and know that nothing is committed before the review is confirmed.',
     preconditions: `${UX_SKILLS.active} carries a reference document next to its SKILL.md.`,
     prepare: async ({ page, hub }) => {
       if (ensureCompanionFile(hub)) {
         await page.reload();
         await page.waitForLoadState('networkidle');
       }
-      await page.getByRole('textbox', { name: 'checklist.md content' }).waitFor({ timeout: 10000 });
+      await page.getByRole('button', { name: 'Edit', exact: true }).click();
+      await page.getByRole('textbox', { name: `Edit ${UX_RESOURCE_REL}` }).fill(`${UX_RESOURCE_BODY}- Note what you could not check.\n`);
+      await page.getByText('not committed').waitFor({ timeout: 10000 });
     },
+  },
+  {
+    id: 'skill-files-review',
+    row: 12,
+    tier: 3,
+    title: 'Skill tabs: Files, review the changes',
+    route: `${skillPath(UX_SKILLS.active, 'files')}&file=${encodeURIComponent(UX_RESOURCE_REL)}`,
+    task: 'Read each changed file, the routing lint and the commit message before committing.',
+    preconditions: 'A pending change in the Files tab.',
+    prepare: async ({ page, hub }) => {
+      ensureCompanionFile(hub);
+      await page.reload();
+      await page.getByRole('button', { name: 'Edit', exact: true }).click();
+      await page.getByRole('textbox', { name: `Edit ${UX_RESOURCE_REL}` }).fill(`${UX_RESOURCE_BODY}- Note what you could not check.\n`);
+      await page.getByRole('button', { name: /Review/ }).click();
+      await page.getByLabel('Commit message').waitFor({ timeout: 10000 });
+    },
+  },
+  {
+    id: 'review-queue',
+    row: 14,
+    tier: 3,
+    title: 'Waiting for review: the list',
+    route: '/review',
+    task: 'See what needs a person before agents get it, and open one.',
+    preconditions: 'A draft skill exists.',
+  },
+  {
+    id: 'review-content',
+    row: 14,
+    tier: 3,
+    title: 'Waiting for review: read the whole skill',
+    route: `/skills/${UX_SKILLS.draft}/review-content`,
+    task: 'Read every file of a skill, with its license and origin.',
+    preconditions: `${UX_SKILLS.draft} is a draft.`,
   },
   {
     id: 'skill-tab-usage',

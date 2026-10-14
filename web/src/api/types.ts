@@ -69,33 +69,167 @@ export interface SkillResource {
   size_bytes: number;
 }
 
-// Why a companion file cannot be edited; '' when it can.
-export type ResourceUnavailableReason = '' | 'binary' | 'too_large' | 'missing' | 'not_regular';
-
-export interface SkillResourceItem {
-  path: string; // workspace-relative, same as SkillResource.path
-  kind: string;
+export interface SkillFileEntry {
+  path: string; // relative to the skill folder
   size_bytes: number;
-  digest: string; // working-tree digest, "sha256:..."; "" when missing
+  digest: string; // "sha256:..."
+  text: boolean;
   editable: boolean;
-  reason: ResourceUnavailableReason;
+  executable: boolean;
 }
 
-export interface SkillResourceList {
+export interface SkillFiles {
+  schema_version: string;
+  status: string;
+  summary: string;
+  items: unknown[];
+  suggested_actions: unknown[];
+  warnings: unknown[];
+  error: unknown;
   skill_id: string;
-  items: SkillResourceItem[];
+  state: string;
+  // Names exactly this tree; a changeset is made against it.
+  base_version: string;
+  files: SkillFileEntry[];
 }
 
-export interface SkillResourceContent {
-  skill_id: string;
+export interface SkillFileContent {
   path: string;
   size_bytes: number;
   digest: string;
+  text: boolean;
   editable: boolean;
-  reason: ResourceUnavailableReason;
+  executable: boolean;
+  skill_id: string;
   line_ending: 'lf' | 'crlf' | 'mixed' | 'none';
-  truncated: boolean;
   content?: string; // text files only
+}
+
+export type TreeAction = 'add' | 'modify' | 'delete' | 'rename';
+
+export interface SkillTreeChange {
+  action: TreeAction;
+  path: string;
+  from?: string;
+  content?: string;
+  encoding?: 'utf8' | 'base64';
+  expected_digest?: string;
+}
+
+export interface SkillChangesInput {
+  base_version: string;
+  changes: SkillTreeChange[];
+}
+
+export interface SkillChangeFile {
+  path: string;
+  change: 'A' | 'M' | 'D' | 'R';
+  added: number;
+  removed: number;
+  size: number;
+  status?: string;
+  from?: string;
+  binary: boolean;
+  diff?: string;
+}
+
+export interface RoutingLintFinding {
+  code: string;
+  message: string;
+  fix?: string;
+}
+
+export interface CommitReach {
+  this_hub_now: boolean;
+  push_needed: boolean;
+  remote?: string;
+  push_command?: string;
+}
+
+export interface CommitOutcome {
+  status: 'committed' | 'skipped' | 'failed' | 'deferred';
+  hash?: string;
+  message?: string;
+  reason?: string;
+  manual_command?: string;
+  reach: CommitReach;
+}
+
+export interface SkillChangesPreview {
+  schema_version: string;
+  status: string;
+  summary: string;
+  skill_id?: string;
+  items?: unknown[];
+  suggested_actions?: unknown[];
+  warnings?: unknown[];
+  error?: unknown;
+  command?: string;
+  recovery_id?: string;
+  diff?: DiffSummary | string;
+  full_diff?: string;
+  routing_impact?: { summary: string; warnings: string[] | null } | null;
+  confirmation: SkillProposal['confirmation'];
+  base_version: string;
+  files: SkillChangeFile[];
+  routing_lint: RoutingLintFinding[];
+  default_message: string;
+  trust?: { third_party: boolean; origin?: string; content_digest: string; approved: boolean };
+}
+
+export type ReviewKind = 'draft' | 'content_changed';
+
+export interface ReviewQueueItem {
+  kind: ReviewKind;
+  skill_id: string;
+  title: string;
+  reason: string;
+  since?: string;
+  origin?: string;
+}
+
+export interface ReviewQueue {
+  schema_version: string;
+  status: string;
+  summary: string;
+  items: ReviewQueueItem[];
+  suggested_actions: unknown[];
+  warnings: unknown[];
+  error: unknown;
+}
+
+export interface ReviewFile {
+  path: string;
+  size_bytes: number;
+  binary: boolean;
+  changed: boolean;
+  change?: 'A' | 'M' | 'D';
+  added: number;
+  removed: number;
+  diff?: string;
+  truncated: boolean;
+  content?: string;
+}
+
+export interface SkillReviewContent {
+  schema_version: string;
+  status: string;
+  summary: string;
+  items: unknown[];
+  suggested_actions: unknown[];
+  warnings: unknown[];
+  error: unknown;
+  skill_id: string;
+  state: string;
+  title: string;
+  license: string;
+  origin?: string;
+  third_party: boolean;
+  approved: boolean;
+  content_digest: string;
+  baseline: 'approved' | 'served' | 'none';
+  baseline_commit?: string;
+  files: ReviewFile[];
 }
 
 export interface SkillRouting {
@@ -198,6 +332,7 @@ export interface SkillMutationResult {
   summary: string;
   operation_id: string;
   skill_id?: string;
+  commit?: CommitOutcome;
 }
 
 export interface SkillAddProposal {

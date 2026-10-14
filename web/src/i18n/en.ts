@@ -4,6 +4,7 @@ export const en = {
   'nav.home': 'Home',
   'nav.skills': 'Skills',
   'nav.sources': 'Sources',
+  'nav.review': 'Waiting for review',
   'nav.skip_to_main': 'Skip to main content',
 
   // Appearance

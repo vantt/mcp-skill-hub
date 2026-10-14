@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { commitNote } from '../../api/commit-view';
 import { confirmSkillMutation, previewSkillUpdate } from '../../api/queries';
 import type { SkillDetail, SkillProposal } from '../../api/types';
 import { ApiError, apiFetch } from '../../api/client';
 import { proposalPatch, proposalPaths, proposalWarning } from '../../api/proposal-view';
 import { ActionBar } from '../../components/ActionBar';
 import { ConflictDrawer } from '../../components/ConflictDrawer';
-import { Markdown } from '../../components/Markdown';
 import { ProposalPreview } from '../../components/ProposalPreview';
 import { Toast } from '../../components/Toast';
 import { clearDraft, loadDraft, saveDraft } from '../../state/drafts';
@@ -28,27 +28,24 @@ const LABEL_OPERATIONS = 'Operations';
 const LABEL_TRIGGERS = 'Triggers';
 const LABEL_NOT_FOR = 'Not for / Rationale';
 const LABEL_MIN_SCOPE = 'Min scope';
-const LABEL_EDIT = 'Edit';
-const LABEL_PREVIEW = 'Preview';
 const LABEL_PREVIEW_CHANGES = 'Preview changes';
 const LABEL_REQUIRED_TRIGGER = 'Required before activation.';
 const LABEL_REQUIRED_SCOPE = 'Required before activation.';
 const HINT_NAME = 'The title people see in lists.';
 const HINT_DESCRIPTION = 'One or two sentences on what the skill does. Agents read this to decide whether to load it.';
 const MSG_DRAFT_SAVED = 'Draft saved in this browser';
-const MSG_NO_CHANGES = 'Nothing changed yet. Edit a field, then preview the change before it is saved.';
-const MSG_PREVIEW_NOTE = 'Preview shows what will change. Nothing is saved until you confirm.';
+const MSG_NO_CHANGES = 'Nothing changed yet. Edit a field, then preview the change before it is committed.';
+const MSG_PREVIEW_NOTE = 'Preview shows what will change. Nothing is committed until you confirm.';
 const REQ_STAR = '*';
 
 // Where each field of the Review checklist lives in this form.
 const FOCUS_TARGET: Record<string, string> = {
-  content: 'edit-content',
   triggers: 'edit-trigs',
   operations: 'edit-ops',
   scope: 'edit-scope',
 };
 
-interface EditorTabProps {
+interface RoutingTabProps {
   skill: SkillDetail;
   workspaceId: string;
   focusField?: string | null;
@@ -63,11 +60,14 @@ interface ConflictInfo {
   both: string[];
 }
 
-export function EditorTab({ skill, workspaceId, focusField }: EditorTabProps) {
+export function RoutingTab({ skill, workspaceId, focusField }: RoutingTabProps) {
   const queryClient = useQueryClient();
 
   const initialDraft = loadDraft<EditFields>(workspaceId, 'skill', skill.skill_id, skill.content_digest);
-  const initial: EditFields = initialDraft ? { ...fieldsFromSkill(skill), ...initialDraft.value } : fieldsFromSkill(skill);
+  // SKILL.md is edited in the Files tab, so a draft never carries its text.
+  const initial: EditFields = initialDraft
+    ? { ...fieldsFromSkill(skill), ...initialDraft.value, content: fieldsFromSkill(skill).content }
+    : fieldsFromSkill(skill);
 
   const [content, setContent] = useState(initial.content);
   const [name, setName] = useState(initial.name);
@@ -77,8 +77,6 @@ export function EditorTab({ skill, workspaceId, focusField }: EditorTabProps) {
   const [notFor, setNotFor] = useState(initial.notFor);
   const [minScope, setMinScope] = useState(initial.minScope);
 
-  const [activeView, setActiveView] = useState<'edit' | 'preview'>('edit');
-  const [isWide, setIsWide] = useState(false);
   const [lastSaved, setLastSaved] = useState<number | null>(initialDraft ? initialDraft.savedAt : null);
 
   const [loading, setLoading] = useState(false);
@@ -94,13 +92,6 @@ export function EditorTab({ skill, workspaceId, focusField }: EditorTabProps) {
   const base = fieldsFromSkill(skill);
   const dirty = changedFields(base, mine);
 
-  useEffect(() => {
-    const handleResize = () => setIsWide(window.innerWidth >= 1280);
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
   // "Go to field" from the Review tab lands here: put the cursor in that field.
   useEffect(() => {
     if (!focusField || focusedFor.current === focusField) return;
@@ -110,7 +101,7 @@ export function EditorTab({ skill, workspaceId, focusField }: EditorTabProps) {
     focusedFor.current = focusField;
     el.scrollIntoView?.({ block: 'center' });
     el.focus();
-  }, [focusField, isWide]);
+  }, [focusField]);
 
   // Autosave draft on change
   useEffect(() => {
@@ -194,14 +185,18 @@ export function EditorTab({ skill, workspaceId, focusField }: EditorTabProps) {
 
   const handleConfirm = async (pins: { proposalId: string; proposalDigest: string; baseVersion: string }) => {
     try {
-      await confirmSkillMutation(pins.proposalId, pins);
+      const done = await confirmSkillMutation(pins.proposalId, pins);
       setPreviewOpen(false);
       clearDraft(workspaceId, 'skill', skill.skill_id);
-      setToastMessage(`Saved ${previewChanges.length === 1 ? '1 change' : `${previewChanges.length} changes`} to ${skill.skill_id}.`);
+      setToastMessage(
+        `${skill.skill_id} committed: ${previewChanges.length === 1 ? '1 change' : `${previewChanges.length} changes`}. ${commitNote(done.commit)}`,
+      );
       queryClient.invalidateQueries({ queryKey: ['skill', skill.skill_id] });
       queryClient.invalidateQueries({ queryKey: ['skill-review', skill.skill_id] });
       queryClient.invalidateQueries({ queryKey: ['skills'] });
       queryClient.invalidateQueries({ queryKey: ['home'] });
+      queryClient.invalidateQueries({ queryKey: ['skill-files', skill.skill_id] });
+      queryClient.invalidateQueries({ queryKey: ['review-queue'] });
       // Saving rewrites SKILL.md (its frontmatter follows name and description), so show the saved
       // text; otherwise the form would still count the old frontmatter as an unsaved change.
       try {
@@ -284,98 +279,11 @@ export function EditorTab({ skill, workspaceId, focusField }: EditorTabProps) {
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: isWide ? '1fr 340px' : '1fr',
+          gridTemplateColumns: 'minmax(0, 720px)',
           gap: 'var(--space-4)',
           alignItems: 'start',
         }}
       >
-        {/* Left Pane: Content Editor */}
-        <section className="fg-card" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', minWidth: 0 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
-            <span className="fg-card__title" style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
-              <span>{skill.path}</span>
-            </span>
-
-            {!isWide && (
-              <div className="fg-seg">
-                <button
-                  type="button"
-                  className={`fg-seg__btn ${activeView === 'edit' ? 'fg-seg__btn--active' : ''}`}
-                  onClick={() => setActiveView('edit')}
-                >
-                  <span>{LABEL_EDIT}</span>
-                </button>
-                <button
-                  type="button"
-                  className={`fg-seg__btn ${activeView === 'preview' ? 'fg-seg__btn--active' : ''}`}
-                  onClick={() => setActiveView('preview')}
-                >
-                  <span>{LABEL_PREVIEW}</span>
-                </button>
-              </div>
-            )}
-          </div>
-
-          {isWide ? (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
-              <textarea
-                className="fg-input fg-input--area"
-                style={{
-                  minHeight: '440px',
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '13px',
-                  lineHeight: '1.55',
-                  resize: 'vertical',
-                }}
-                id="edit-content"
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                aria-label="SKILL.md content"
-              />
-              <div
-                style={{
-                  minHeight: '440px',
-                  padding: 'var(--space-3) var(--space-4)',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: 'var(--input-radius)',
-                  background: 'var(--color-surface-sunken)',
-                  overflow: 'auto',
-                }}
-              >
-                <Markdown content={content} />
-              </div>
-            </div>
-          ) : activeView === 'edit' ? (
-            <textarea
-              className="fg-input fg-input--area"
-              style={{
-                minHeight: '380px',
-                fontFamily: 'var(--font-mono)',
-                fontSize: '13px',
-                lineHeight: '1.55',
-                resize: 'vertical',
-              }}
-              id="edit-content"
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              aria-label="SKILL.md content"
-            />
-          ) : (
-            <div
-              style={{
-                minHeight: '380px',
-                padding: 'var(--space-3) var(--space-4)',
-                border: '1px solid var(--color-border)',
-                borderRadius: 'var(--input-radius)',
-                background: 'var(--color-surface-sunken)',
-                overflow: 'auto',
-              }}
-            >
-              <Markdown content={content} />
-            </div>
-          )}
-        </section>
-
         {/* Right Pane: Routing & Metadata */}
         <section className="fg-card" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
           <div className="fg-card__title">
@@ -504,7 +412,7 @@ export function EditorTab({ skill, workspaceId, focusField }: EditorTabProps) {
       {previewOpen && proposal && (
         <ProposalPreview
           open={previewOpen}
-          title={`Save changes to ${skill.skill_id}?`}
+          title={`Commit changes to ${skill.skill_id}?`}
           target={skill.skill_id}
           toState={skill.lifecycle_state}
           paths={proposalPaths(proposal)}
@@ -514,7 +422,7 @@ export function EditorTab({ skill, workspaceId, focusField }: EditorTabProps) {
           proposalId={pins?.proposal_id || ''}
           proposalDigest={pins?.proposal_digest || ''}
           baseVersion={pins?.base_version || ''}
-          confirmLabel="Save changes"
+          confirmLabel="Commit changes"
           onConfirm={handleConfirm}
           onCancel={() => setPreviewOpen(false)}
         />

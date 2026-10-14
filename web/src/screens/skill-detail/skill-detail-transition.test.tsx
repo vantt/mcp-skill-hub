@@ -56,7 +56,10 @@ describe('SkillDetailScreen lifecycle toast', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     previewSkillTransition.mockResolvedValue(proposal);
-    confirmSkillMutation.mockResolvedValue({ operation_id: 'OP-20261014-abc' });
+    confirmSkillMutation.mockResolvedValue({
+      operation_id: 'OP-20261014-abc',
+      commit: { status: 'committed', hash: 'abc1234def', reach: { this_hub_now: true, push_needed: false } },
+    });
   });
 
   it('says what the skill is now and shows no operation id', async () => {
@@ -65,7 +68,7 @@ describe('SkillDetailScreen lifecycle toast', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Deprecate' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Deprecate skill' }));
 
-    expect(await screen.findByText(`${SKILL_ID} is now deprecated.`)).toBeInTheDocument();
+    expect(await screen.findByText(`${SKILL_ID} is now deprecated. This machine's agents get it now.`)).toBeInTheDocument();
     await waitFor(() => expect(confirmSkillMutation).toHaveBeenCalledTimes(1));
     expect(screen.queryByText(/OP-/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Transitioned/)).not.toBeInTheDocument();

@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/vantt/skillhub-mcp/internal/app"
 	"github.com/vantt/skillhub-mcp/internal/skill"
+	"github.com/vantt/skillhub-mcp/internal/workspace"
 )
 
 func init() {
@@ -236,6 +238,23 @@ func (s *Server) handleSkillTransitionPreview(w http.ResponseWriter, r *http.Req
 type skillConfirmRequest struct {
 	ProposalDigest string `json:"proposal_digest"`
 	BaseVersion    string `json:"base_version"`
+	// CommitMessage replaces the subject of the hub commit this confirm makes.
+	CommitMessage string `json:"commit_message,omitempty"`
+}
+
+// maxCommitMessageBytes bounds a commit message typed on the web.
+const maxCommitMessageBytes = 500
+
+// withRequestedCommitMessage makes the commit of this request carry the
+// message the person typed. An empty message keeps the default subject.
+func withRequestedCommitMessage(ctx context.Context, message string) context.Context {
+	message = strings.TrimSpace(message)
+	policy, asked := workspace.CommitPolicyFrom(ctx)
+	if message == "" || !asked {
+		return ctx
+	}
+	policy.Message = message
+	return workspace.WithCommitPolicy(ctx, policy)
 }
 
 func (s *Server) handleSkillConfirm(w http.ResponseWriter, r *http.Request) {
@@ -255,12 +274,20 @@ func (s *Server) handleSkillConfirm(w http.ResponseWriter, r *http.Request) {
 		))
 		return
 	}
-	preview, err := s.skills.LoadSkillProposal(r.Context(), s.workspace, pID)
+	if len(req.CommitMessage) > maxCommitMessageBytes {
+		writeAppError(w, app.NewInvalidRequestError(
+			"The commit message is too long.",
+			"Keep the commit message under 500 characters.",
+		))
+		return
+	}
+	ctx := withRequestedCommitMessage(r.Context(), req.CommitMessage)
+	preview, err := s.skills.LoadSkillProposal(ctx, s.workspace, pID)
 	if err != nil {
 		writeError(w, err, false)
 		return
 	}
-	result, err := s.skills.ConfirmSkillMutation(r.Context(), s.workspace, preview, app.ConfirmationPins{
+	result, err := s.skills.ConfirmSkillMutation(ctx, s.workspace, preview, app.ConfirmationPins{
 		ProposalID:     pID,
 		ProposalDigest: pDigest,
 		BaseVersion:    baseVer,

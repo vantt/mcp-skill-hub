@@ -6,6 +6,8 @@ import { AddSkillScreen } from './screens/skill-add/AddSkillScreen';
 import { CreateSkillScreen } from './screens/skill-create/CreateSkillScreen';
 import { SkillDetailScreen } from './screens/skill-detail/SkillDetailScreen';
 import { SourcesScreen } from './screens/sources/SourcesScreen';
+import { FullReviewScreen } from './screens/review/FullReviewScreen';
+import { WaitingForReviewScreen } from './screens/review/WaitingForReviewScreen';
 import { DistillHandoffScreen } from './screens/distill/DistillHandoffScreen';
 export const routes: RouteObject[] = [
   {
@@ -27,6 +29,14 @@ export const routes: RouteObject[] = [
   {
     path: '/skills/:id',
     Component: SkillDetailScreen,
+  },
+  {
+    path: '/skills/:id/review-content',
+    Component: FullReviewScreen,
+  },
+  {
+    path: '/review',
+    Component: WaitingForReviewScreen,
   },
   {
     path: '/sources',

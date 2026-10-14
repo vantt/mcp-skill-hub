@@ -5,15 +5,16 @@ import { fileURLToPath } from 'node:url';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { seedDistillWorkspace, type SeededDistillWorkspace } from './support/seed-workspace';
+import { commitHub, gitIdentity, seedDistillWorkspace, type SeededDistillWorkspace } from './support/seed-workspace';
 import { startServer, type RunningServer } from './support/server';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const binaryPath = path.resolve(__dirname, '../.e2e/skillhub');
 
-// A companion file of the seeded skill, so the resource view and editor are swept too.
-const RESOURCE_PATH = 'skills/core/consumer-review/references/checklist.md';
-const RESOURCE_ROUTE = `/skills/consumer-review?tab=resources&file=${encodeURIComponent(RESOURCE_PATH)}`;
+// A companion file of the seeded skill, so the file tree and the file view are swept too.
+const RESOURCE_REL = 'references/checklist.md';
+const RESOURCE_PATH = `skills/core/consumer-review/${RESOURCE_REL}`;
+const RESOURCE_ROUTE = `/skills/consumer-review?tab=files&file=${encodeURIComponent(RESOURCE_REL)}`;
 
 async function assertA11y(page: Page, contextName: string) {
   const scan = await new AxeBuilder({ page })
@@ -39,7 +40,8 @@ test.describe('Accessibility and Responsive Sweep (Phase 12)', () => {
     const resource = path.join(seed.ws, RESOURCE_PATH);
     fs.mkdirSync(path.dirname(resource), { recursive: true });
     fs.writeFileSync(resource, '---\ntitle: Review checklist\n---\n\n# Review checklist\n\n- Read the change description first.\n');
-    execFileSync(binaryPath, ['maintain', 'rebuild'], { env: { ...process.env, SKILLHUB_WORKSPACE: seed.ws }, stdio: 'pipe' });
+    execFileSync(binaryPath, ['maintain', 'rebuild'], { env: { ...process.env, ...gitIdentity, SKILLHUB_WORKSPACE: seed.ws }, stdio: 'pipe' });
+    commitHub(seed.ws, 'Add a reference document');
     server = await startServer({ workspace: seed.ws });
   });
 
@@ -70,10 +72,11 @@ test.describe('Accessibility and Responsive Sweep (Phase 12)', () => {
       '/skills/add',
       '/skills/create',
       '/skills/consumer-review',
-      '/skills/consumer-review?tab=editor',
-      '/skills/consumer-review?tab=resources',
+      '/skills/consumer-review?tab=routing',
+      '/skills/consumer-review?tab=files',
       RESOURCE_ROUTE,
-      `${RESOURCE_ROUTE}&edit=1`,
+      '/skills/consumer-review/review-content',
+      '/review',
       '/skills/consumer-review?tab=usage',
       '/skills/consumer-review?tab=runtime',
       '/skills/consumer-review?tab=sources',
@@ -123,9 +126,9 @@ test.describe('Accessibility and Responsive Sweep (Phase 12)', () => {
     await expect(page.getByRole('heading', { name: 'Home' }).first()).toBeVisible();
 
     const nav = page.getByRole('navigation', { name: 'Primary' });
-    // An empty list would pass vacuously, so insist on the three items the app ships.
+    // An empty list would pass vacuously, so insist on the four items the app ships.
     const count = await nav.getByRole('link').count();
-    expect(count).toBeGreaterThanOrEqual(3);
+    expect(count).toBeGreaterThanOrEqual(4);
     for (let i = 0; i < count; i++) {
       const link = nav.getByRole('link').nth(i);
       const name = (await link.getAttribute('aria-label')) ?? (await link.innerText()).trim() ?? `item ${i + 1}`;
@@ -147,8 +150,8 @@ test.describe('Accessibility and Responsive Sweep (Phase 12)', () => {
     await page.goto(server.url);
     await page.setViewportSize({ width: 1280, height: 800 });
 
-    // 1. ProposalPreview and ConflictDrawer on the Editor tab
-    await page.goto(`${server.origin}/skills/consumer-review?tab=editor`);
+    // 1. ProposalPreview and ConflictDrawer on the Routing tab
+    await page.goto(`${server.origin}/skills/consumer-review?tab=routing`);
     await page.waitForLoadState('networkidle');
     await page.locator('#edit-desc').fill('A11y draft description.');
 
@@ -170,7 +173,7 @@ test.describe('Accessibility and Responsive Sweep (Phase 12)', () => {
       binaryPath,
       ['skill', 'edit', 'consumer-review', '--description', 'A11y conflict test', '--yes'],
       {
-        env: { ...process.env, SKILLHUB_WORKSPACE: seed.ws },
+        env: { ...process.env, ...gitIdentity, SKILLHUB_WORKSPACE: seed.ws },
         stdio: 'pipe',
       },
     );
@@ -187,7 +190,7 @@ test.describe('Accessibility and Responsive Sweep (Phase 12)', () => {
 
     // 2. ConfirmDialog: deprecate via CLI, then open the Archive confirmation
     execFileSync(binaryPath, ['skill', 'deprecate', 'consumer-review', '--yes'], {
-      env: { ...process.env, SKILLHUB_WORKSPACE: seed.ws },
+      env: { ...process.env, ...gitIdentity, SKILLHUB_WORKSPACE: seed.ws },
       stdio: 'pipe',
     });
     await page.goto(`${server.origin}/skills/consumer-review`);

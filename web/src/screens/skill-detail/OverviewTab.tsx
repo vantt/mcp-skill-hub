@@ -69,7 +69,7 @@ export interface OverviewTabProps {
   sources?: SkillSourcesResult;
   sourcesLoading: boolean;
   sourcesError: unknown;
-  onOpenTab: (tab: 'sources' | 'editor') => void;
+  onOpenTab: (tab: 'sources' | 'routing') => void;
 }
 
 export function OverviewTab({ skill, review, sources, sourcesLoading, sourcesError, onOpenTab }: OverviewTabProps) {
@@ -98,7 +98,7 @@ export function OverviewTab({ skill, review, sources, sourcesLoading, sourcesErr
           <div className="fg-card__title">
             <span>{TITLE_ABOUT}</span>
           </div>
-          <button type="button" className="fg-btn fg-btn--secondary fg-btn--small" onClick={() => onOpenTab('editor')}>
+          <button type="button" className="fg-btn fg-btn--secondary fg-btn--small" onClick={() => onOpenTab('routing')}>
             <span>{BTN_EDIT}</span>
           </button>
         </div>

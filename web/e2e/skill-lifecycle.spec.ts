@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test } from '@playwright/test';
 import type { RunningServer } from './support/server';
+import { gitIdentity } from './support/seed-workspace';
 import { startServer } from './support/server';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -57,15 +58,19 @@ test('skill lifecycle journey: create, edit routing, activate, deprecate, and ar
   const activateBtn = page.getByRole('button', { name: 'Activate skill' });
   await expect(activateBtn).toBeDisabled();
 
-  // 4. Switch to Editor tab and satisfy activation requirements
-  await page.getByRole('tab', { name: 'Editor' }).click();
-  await page.waitForTimeout(300);
-  // Replace untouched scaffold in content textarea
-  const contentTextarea = page.locator('textarea[aria-label="SKILL.md content"]');
-  await contentTextarea.fill(
+  // 4. Replace the untouched scaffold in SKILL.md on the Files tab: edit, review, commit
+  await page.getByRole('tab', { name: 'Files' }).click();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Edit SKILL.md' }).fill(
     '---\nname: e2e-skill\ndescription: E2E test description.\n---\n\n# E2E Skill\n\nReal procedural instructions to replace untouched scaffold.\n',
   );
-  // Fill Triggers and Min scope
+  await page.getByRole('button', { name: /Review/ }).click();
+  await page.getByRole('button', { name: 'Commit to the hub' }).click();
+  await expect(page.getByTestId('commit-result')).toContainText(/Committed [0-9a-f]{7}/, { timeout: 15000 });
+
+  // Then satisfy the routing requirements on the Routing tab: Triggers and Min scope
+  await page.getByRole('tab', { name: 'Routing' }).click();
+  await page.waitForTimeout(300);
   await page.locator('#edit-trigs').fill('run e2e');
   await page.locator('#edit-notfor').fill('none');
   await page.locator('#edit-scope').selectOption('multi_step');
@@ -75,7 +80,7 @@ test('skill lifecycle journey: create, edit routing, activate, deprecate, and ar
 
   const updateModal = page.locator('.fg-modal');
   await expect(updateModal).toBeVisible({ timeout: 15000 });
-  await updateModal.getByRole('button', { name: /save changes/i }).click();
+  await updateModal.getByRole('button', { name: /commit changes/i }).click();
   await expect(updateModal).toBeHidden({ timeout: 10000 });
 
   // 5. Switch back to Review tab
@@ -140,12 +145,11 @@ test('conflict journey and reload persistence', async ({ page }) => {
 
   // Open startup URL to set session token
   await page.goto(server.url);
-  await page.goto(`${server.origin}/skills/smoke-skill?tab=editor`);
+  await page.goto(`${server.origin}/skills/smoke-skill?tab=routing`);
   await expect(page.locator('.t-title')).toHaveText('Smoke Skill');
 
-  // 1. Edit content in the UI
-  const textarea = page.locator('textarea[aria-label="SKILL.md content"]');
-  await textarea.fill('# Smoke Skill\n\nEdited in UI.');
+  // 1. Edit the description in the UI
+  await page.locator('#edit-desc').fill('Edited in UI.');
 
   // 2. Modify skill outside the UI via CLI
   execFileSync(
@@ -154,6 +158,7 @@ test('conflict journey and reload persistence', async ({ page }) => {
     {
       env: {
         ...process.env,
+        ...gitIdentity,
         SKILLHUB_WORKSPACE: server.ws,
       },
       stdio: 'pipe',
@@ -180,7 +185,7 @@ test('conflict journey and reload persistence', async ({ page }) => {
   // 5. Reload while proposal preview is open -> modal gone, editor still shows draft text
   await page.reload();
   await expect(page.locator('.fg-modal')).toBeHidden();
-  await expect(page.locator('textarea[aria-label="SKILL.md content"]')).toHaveValue(/Edited in UI/);
+  await expect(page.locator('#edit-desc')).toHaveValue(/Edited in UI/);
 });
 
 test('add skill validation rejects local paths without network request', async ({ page }) => {

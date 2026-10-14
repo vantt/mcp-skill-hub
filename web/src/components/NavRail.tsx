@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router';
-import { useHome } from '../api/queries';
+import { useHome, useReviewQueue } from '../api/queries';
 import { useT } from '../i18n';
 
 interface NavItem {
@@ -13,11 +13,14 @@ export function NavRail() {
   const t = useT();
   const location = useLocation();
   const { data: home } = useHome();
+  const { data: queue } = useReviewQueue();
+  const waiting = queue?.items.length ?? 0;
 
 
   const navItems: NavItem[] = [
     { id: 'home', path: '/', labelKey: 'nav.home', icon: '⌂' },
     { id: 'skills', path: '/skills', labelKey: 'nav.skills', icon: '◆' },
+    { id: 'review', path: '/review', labelKey: 'nav.review', icon: '✓' },
     { id: 'sources', path: '/sources', labelKey: 'nav.sources', icon: '⊞' },
   ];
 
@@ -64,6 +67,11 @@ export function NavRail() {
               <span className="fg-nav__label" style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 <span>{label}</span>
               </span>
+              {item.id === 'review' && waiting > 0 && (
+                <span className="fg-chip fg-chip--warning app-nav-badge" aria-label={`${waiting} waiting`}>
+                  {waiting}
+                </span>
+              )}
             </Link>
           );
         })}

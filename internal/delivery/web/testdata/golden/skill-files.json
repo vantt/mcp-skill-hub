@@ -1,0 +1,47 @@
+{
+  "schema_version": "1",
+  "status": "ok",
+  "summary": "review-skill: 4 files.",
+  "items": [],
+  "suggested_actions": [],
+  "warnings": [],
+  "error": null,
+  "skill_id": "review-skill",
+  "state": "active",
+  "base_version": "<DIGEST>",
+  "files": [
+    {
+      "path": "SKILL.md",
+      "size_bytes": 117,
+      "digest": "<DIGEST>",
+      "text": true,
+      "editable": true,
+      "executable": false
+    },
+    {
+      "path": "assets/logo.png",
+      "size_bytes": 16,
+      "digest": "<DIGEST>",
+      "text": false,
+      "editable": false,
+      "executable": false
+    },
+    {
+      "path": "references/checks.md",
+      "size_bytes": 21,
+      "digest": "<DIGEST>",
+      "text": true,
+      "editable": true,
+      "executable": false
+    },
+    {
+      "path": "references/large.txt",
+      "size_bytes": 1049600,
+      "digest": "<DIGEST>",
+      "text": true,
+      "editable": false,
+      "executable": false
+    }
+  ]
+}
+
