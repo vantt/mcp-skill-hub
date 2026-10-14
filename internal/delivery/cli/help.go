@@ -24,7 +24,7 @@ Setup:
   status    Show the state of the hub and its connections, and the next command
 
 Skills:
-  skill     List, show, create, edit, review, add, update from upstream, and change the state of skills
+  skill     List, show, create, checkout, commit, review, add, update from upstream, and change the state of skills
 
 Sources & learning:
   source    Repositories and documents your skills come from or learn from; source check finds updates
@@ -163,12 +163,17 @@ command to run next.
 Subcommands:
   add <locator> [--skill <name> | --all] [--id <id>] [--collection <c>] [--ref <r>] [--path <p>] [--yes]
                                                     Add draft skills from local or remote locator
-  create                                            In a terminal, ask for the skill's name, id, description, when to use it
-                                                    and when not to, then save a draft (no --yes needed)
-  create <id> --collection <c> --name <n> --description <d> [--content-file <f>]
-         [--operation <o>]... [--trigger <t>]... [--not-for <n>]... [--min-scope <s>]
-         [--example <e>]... [--counter-example <e>]... [--yes]
-                                                    Create a new draft skill from flags (--id <id> remains valid)
+  create [<id>] [--description <d>] [--name <n>] [--trigger <t>]... [--not-for <n>]... [--example <e>]...
+                                                    Start a new skill in this project: write .claude/skills/<id>/SKILL.md (nothing
+                                                    changes on the hub). In a terminal it asks what the skill does, when to use it,
+                                                    when not to and for an example; without one the flags fill the same file
+  checkout <id>                                     Copy a skill with every file into .claude/skills/<id>/ of this project to edit and
+                                                    try it; the hub keeps serving the current version and the folder goes into .gitignore
+  commit <id|folder> [--collection <c>] [--accept <p>=hub|project]... [--manual <p>=<f>]... [--write-conflicts <dir>]
+         [--trigger <t>]... [--not-for <n>]... [--example <e>]... [--min-scope <s>] [--edit-routing]
+         [--approve-content <digest>] [--diff] [--yes] [--no-commit] [--json]
+                                                    Bring a project folder back to the hub as one reviewed change and one hub commit.
+                                                    A folder that was never checked out becomes a new skill
   show <id> [--verbose]                             Show a skill in any state
   review <id> [--verbose]                           Comprehensive diagnostic review of a skill
   doctor <id> [--json]                              Check this machine against a skill's runtime block
@@ -186,6 +191,13 @@ Subcommands:
   confirm <proposal-id> | --proposal <id> --proposal-digest <d> --base-version <v>
                                                     Apply a skill add or mutation proposal
   list [--state draft|active|deprecated|archived]   List skills
+
+Editing a skill: "skill checkout <id>" copies it into your project, you and your agent edit and try the files there, then
+"skill commit <id>" shows every changed file (and a three-way merge when the hub changed meanwhile), runs the routing lint
+and asks. Committing the checkout of a third-party skill also approves the new content in the same step, so the skill is
+never blocked; without a terminal that needs --approve-content <digest>, which only a person gives. A new folder is added
+as a draft, and in a terminal you can activate it in the same commit. Routing for a new skill is suggested from its
+description (--edit-routing opens it in $EDITOR). The hub keeps serving the released version until the commit is approved.
 
 Applying a change: in a terminal, a command that changes the hub shows its preview and asks
 "Apply this change? [y/N]". Without a terminal (scripts, agents) or with --json it only previews; run the same
@@ -219,7 +231,10 @@ Results describe this terminal (basis: terminal) and are cached as a hint for ag
 Examples:
   skillhub skill add https://github.com/anthropics/skills --path skills/pdf --yes
   skillhub skill create
-  skillhub skill create my-skill --collection core --name "My Skill" --description "Review changes" --trigger "review code" --not-for "write prose" --min-scope single_step --yes
+  skillhub skill create my-skill --description "Review changes" --trigger "review code" --not-for "write prose"
+  skillhub skill checkout my-skill
+  skillhub skill commit my-skill
+  skillhub skill commit .claude/skills/team-release --collection tools
   skillhub skill review my-skill
   skillhub skill edit my-skill --editor
   skillhub skill edit my-skill --example "review my pull request" --counter-example "write release notes" --yes

@@ -34,6 +34,7 @@ const (
 	ErrorValidationFailed             ErrorCode = "validation_failed"
 	ErrorLocalWatchUnsupported        ErrorCode = "local_watch_unsupported"
 	ErrorResourceContentUnavailable   ErrorCode = "resource_content_unavailable"
+	ErrorContentReviewRequired        ErrorCode = "content_review_required"
 )
 
 // Error is the structured, user-safe error member of a Result.

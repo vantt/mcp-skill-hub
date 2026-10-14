@@ -284,6 +284,11 @@ func hubStateFindings(root string, report RoleReport, state hubState, depth Dept
 	switch {
 	case state.catalog == nil:
 		findings = append(findings, Finding{Code: "hub_index_stale", Label: "Search index", Severity: SeveritySkipped, Message: notChecked})
+	case state.catalog.State == catalogpkg.StateStale && state.catalog.Detail == catalogpkg.DetailCanonicalInputsDiffer:
+		// The files are valid and only newer than the index: the next read
+		// rebuilds it, so a direct edit is not a fault.
+		findings = append(findings, Finding{Code: "hub_index_stale", Label: "Search index", Severity: SeverityNotice,
+			Message: "Search index is behind file edits; it rebuilds on the next read."})
 	case state.catalog.State != catalogpkg.StateHealthy:
 		findings = append(findings, Finding{Code: "hub_index_stale", Label: "Search index", Severity: SeverityProblem,
 			Message: "The search index is " + string(state.catalog.State) + ": " + state.catalog.Detail, Fix: repair,

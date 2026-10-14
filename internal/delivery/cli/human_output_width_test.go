@@ -11,7 +11,7 @@ func TestHumanOutputFitsWidth(t *testing.T) {
 	t.Setenv("SKILLHUB_WORKSPACE", root)
 
 	longDescription := "Review a multi-module change for correctness, regressions, security posture, documentation impact and rollout risk, recording evidence for every finding before recommending a fix, and never approving a change whose cross-module contracts were not traced to their callers."
-	resCode, _, stderr := runCLI(t, "skill", "create", "wide-skill", "--collection", "core", "--name", "Wide Skill", "--description", longDescription, "--yes")
+	resCode, _, stderr := seedSkillCLI(t, "wide-skill", "--collection", "core", "--name", "Wide Skill", "--description", longDescription, "--yes")
 	if resCode != 0 {
 		t.Fatalf("create failed (exit %d): %s", resCode, stderr)
 	}

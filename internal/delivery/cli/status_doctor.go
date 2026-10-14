@@ -87,7 +87,7 @@ func runStatusIn(ctx context.Context, dir string, args []string, stdout, stderr 
 	hub := report.HealthHub()
 	home := emptyHome("This folder is not a hub, and no hub on this machine applies to it.")
 	if hub != "" {
-		home, err = (app.CurationService{NoWait: true}).GetCurationHome(ctx, hub)
+		home, err = (app.CurationService{NoWait: true, ProjectDir: dir}).GetCurationHome(ctx, hub)
 		if errors.Is(err, mutation.ErrWorkspaceBusy) {
 			home, err = emptyHome("The hub is busy with another change."), nil
 			home.Status = app.StatusActionRequired
@@ -220,8 +220,12 @@ func renderHubStatus(p *termui.Printer, section app.Section, home app.CurationHo
 	// upstream updates, lessons to review) stays visible with its command.
 	type waitingItem struct{ line, command string }
 	var waiting []waitingItem
+	var checkouts []string
 	for _, action := range home.Actions {
 		switch action.Kind {
+		case "open_checkout":
+			checkouts = append(checkouts, action.Summary+" · "+action.Command)
+			continue
 		case "repair_workspace", "recover_workspace", "rebuild_index", "host_integration_missing", "review_git_changes", "first_run_commit":
 			continue
 		case "review_lessons":
@@ -243,6 +247,10 @@ func renderHubStatus(p *termui.Printer, section app.Section, home app.CurationHo
 			line += " (" + command + ")"
 		}
 		waiting = append(waiting, waitingItem{line: line})
+	}
+	if len(checkouts) > 0 {
+		p.Heading("Open checkouts in this project")
+		p.Bullets(checkouts...)
 	}
 	if len(waiting) > 0 {
 		p.Heading("Waiting")

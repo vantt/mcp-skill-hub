@@ -482,7 +482,7 @@ func TestWorkspaceEnvironmentPrecedence(t *testing.T) {
 	first := initTestWorkspace(t)
 	second := initTestWorkspace(t)
 	for _, root := range []string{first, second} {
-		if code, _, stderr := runCLI(t, "skill", "create", "--workspace", root, "--id", "only-in-"+filepath.Base(filepath.Dir(root)), "--collection", "software", "--name", "Env "+filepath.Base(filepath.Dir(root)), "--description", "env precedence", "--trigger", "env", "--not-for", "other", "--min-scope", "single_step", "--yes"); code != 0 {
+		if code, _, stderr := seedSkillCLI(t, "--workspace", root, "--id", "only-in-"+filepath.Base(filepath.Dir(root)), "--collection", "software", "--name", "Env "+filepath.Base(filepath.Dir(root)), "--description", "env precedence", "--trigger", "env", "--not-for", "other", "--min-scope", "single_step", "--yes"); code != 0 {
 			t.Fatalf("create exit = %d: %s", code, stderr)
 		}
 	}
@@ -526,7 +526,7 @@ func TestWorkspaceEnvironmentPrecedence(t *testing.T) {
 func TestSkillListShowsIDStateCollectionNameAndFiltersByState(t *testing.T) {
 	t.Parallel()
 	root := initTestWorkspace(t)
-	if code, _, stderr := runCLI(t, "skill", "create", "--workspace", root, "--id", "list-me", "--collection", "software", "--name", "List Me", "--description", "listing", "--trigger", "list", "--not-for", "other", "--min-scope", "single_step", "--yes"); code != 0 {
+	if code, _, stderr := seedSkillCLI(t, "--workspace", root, "--id", "list-me", "--collection", "software", "--name", "List Me", "--description", "listing", "--trigger", "list", "--not-for", "other", "--min-scope", "single_step", "--yes"); code != 0 {
 		t.Fatalf("create exit = %d: %s", code, stderr)
 	}
 

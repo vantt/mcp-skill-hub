@@ -19,7 +19,7 @@ func createActiveDoctorSkill(t *testing.T, root, id, metaSuffix string) {
 	if err := os.WriteFile(contentFile, []byte("---\nname: "+id+"\ndescription: Doctor test skill.\n---\n\n# Doctor Test\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	code, _, stderr := runCLI(t, "skill", "create", id, "--workspace", root,
+	code, _, stderr := seedSkillCLI(t, id, "--workspace", root,
 		"--collection", "core", "--name", "Doctor Test", "--description", "Doctor test skill.",
 		"--trigger", "doctor it", "--not-for", "unrelated", "--min-scope", "single_step",
 		"--content-file", contentFile, "--yes")

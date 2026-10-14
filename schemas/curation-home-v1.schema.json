@@ -62,7 +62,7 @@
       "type": "object", "additionalProperties": false,
       "required": ["kind", "priority", "summary", "command"],
       "properties": {
-        "kind": {"type": "string"}, "id": {"type": "string"}, "count": {"type": "integer"},
+        "kind": {"type": "string", "description": "What the action is about, for example rebuild_index or review_upstream_updates. open_checkout appears only when status runs inside a project: one skill of this hub that the project holds a checkout of, with id the skill id, count the files changed since the checkout and command the skillhub skill commit command."}, "id": {"type": "string"}, "count": {"type": "integer"},
         "priority": {"type": "integer"}, "summary": {"type": "string"},
         "command": {"type": "string", "description": "Command or tool to run. For review_lessons: a command to run from the hub folder, empty when the hub's distill-lab differs from Skill Hub's copy."},
         "script": {"type": "string", "description": "review_lessons: the distill-lab script, relative to the hub folder."},

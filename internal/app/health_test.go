@@ -174,8 +174,12 @@ func TestDoctorFixRepairsTheHubAndLeavesATrackedConnectionFileToThePerson(t *tes
 	}
 	report := RoleReport{Cwd: root, Hub: &HubRef{Root: root}}
 	before := Run(t.Context(), report, DepthFull)
-	if got, want := codesOf(before, SeverityProblem), []string{"machine_file_tracked", "gitignore_entry_missing", "hub_index_stale"}; !slices.Equal(got, want) {
+	if got, want := codesOf(before, SeverityProblem), []string{"machine_file_tracked", "gitignore_entry_missing"}; !slices.Equal(got, want) {
 		t.Fatalf("problems = %v, want %v\n%+v", got, want, before)
+	}
+	// Files newer than the index are a notice, not a fault: the next read rebuilds it.
+	if stale := findingByCode(t, before, "hub_index_stale"); stale.Severity != SeverityNotice || stale.Fix != nil {
+		t.Fatalf("stale index finding = %+v", stale)
 	}
 	tracked := findingByCode(t, before, "machine_file_tracked")
 	if tracked.Fix != nil || tracked.Manual != "git -C "+shellquote.Arg(root)+" rm --cached -- .mcp.json" {
@@ -192,7 +196,7 @@ func TestDoctorFixRepairsTheHubAndLeavesATrackedConnectionFileToThePerson(t *tes
 	fixes := ApplyFixes(t.Context(), before)
 	// The one hub repair also restores the agent connection file, which the
 	// checks reach only once the layout is in order.
-	if len(fixes.Fixed) != 1 || !slices.Equal(fixes.Fixed[0].Codes, []string{"gitignore_entry_missing", "hub_index_stale"}) {
+	if len(fixes.Fixed) != 1 || !slices.Equal(fixes.Fixed[0].Codes, []string{"gitignore_entry_missing"}) {
 		t.Fatalf("fixed = %+v", fixes.Fixed)
 	}
 	if !slices.Contains(fixes.Fixed[0].Changed, ignore) || !slices.Contains(fixes.Fixed[0].Changed, skill) {

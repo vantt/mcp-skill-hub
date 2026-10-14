@@ -101,12 +101,17 @@ func commitSampleHub(t *testing.T, binary string, old machine) sampleHub {
 		t.Fatal(err)
 	}
 	runFreshClone(t, env, hub, "old machine: create the hub", binary, "init")
-	runFreshClone(t, env, hub, "old machine: create the first skill", binary, "skill", "create", "--id", freshCloneCLISkill,
-		"--collection", "default", "--name", "Fresh clone CLI", "--description", "Made with the skill commands.",
-		"--operation", "review", "--trigger", freshCloneCLITrigger, "--not-for", "write marketing prose",
-		"--min-scope", "multi_step", "--idempotency-key", "fresh-clone-create", "--yes")
-	writeFixtureFile(t, filepath.Join(hub, "skills", "default", freshCloneCLISkill, "SKILL.md"),
-		[]byte("---\nname: "+freshCloneCLISkill+"\ndescription: Made with the skill commands.\n---\n\n# Fresh clone CLI\n\nSteps made with the CLI.\n"))
+	// The first skill is written in a project and committed to the hub.
+	authoring := filepath.Join(old.home(), "authoring")
+	if err := os.MkdirAll(authoring, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runFreshClone(t, env, authoring, "old machine: create the first skill in a project", binary, "skill", "create", freshCloneCLISkill,
+		"--description", "Made with the skill commands.", "--trigger", freshCloneCLITrigger, "--not-for", "write marketing prose")
+	writeFixtureFile(t, filepath.Join(authoring, ".claude", "skills", freshCloneCLISkill, "SKILL.md"),
+		[]byte("---\nname: "+freshCloneCLISkill+"\ndescription: Made with the skill commands. Use when "+freshCloneCLITrigger+". Do not use for write marketing prose.\n---\n\n# Fresh clone CLI\n\nSteps made with the CLI.\n"))
+	runFreshClone(t, env, authoring, "old machine: commit the first skill to the hub", binary, "skill", "commit", freshCloneCLISkill,
+		"--workspace", hub, "--operation", "review", "--min-scope", "multi_step", "--yes")
 	runFreshClone(t, env, hub, "old machine: activate the first skill", binary, "skill", "activate", freshCloneCLISkill,
 		"--idempotency-key", "fresh-clone-activate", "--yes")
 

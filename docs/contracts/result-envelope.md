@@ -83,6 +83,24 @@ with `--json`, or for an agent, the preview ends with `Show the diff: <command>
 --diff` and `Apply: <command> --yes`, and nothing is written until `--yes`.
 `--diff` fills `full_diff` in the preview, as the former `--full-diff` did.
 
+`skillhub skill checkout <id>` and `skillhub skill commit <id|folder>` use this
+envelope too. A checkout result adds `skill_id`, `state`, `path` (the project
+folder, relative to the project root), `file_count`, `base_version` and, when
+the skill had no uncommitted edits, `base_commit`; it changes nothing on the
+hub. A commit preview adds `case` (`update`, `merge`, `new` or `replace`),
+`files[]` (`path`, `change` as `A`, `M` or `D`, `added`, `removed`, `size`,
+and for a merge `status` in the words of the person committing),
+`excluded[]` (`path`, `reason`), `merge[]` (`path`, `status`, `action`),
+`conflicts[]` (the files that still need a decision), `routing_suggestions`,
+`routing_lint[]`, `trust` (`third_party`, `origin`, `content_digest`), `checkout`
+(`path`, `base_version`) and `nothing_to_commit`; applying it returns the
+result with `approved`, `activated`, `changed_paths` and the usual `commit`.
+A third-party skill's new content is applied only together with its approval.
+Without a terminal that needs `--approve-content <content_digest>`, otherwise the
+command is refused with `content_review_required`. These fields are additive.
+`skillhub status` run inside a project adds `open_checkout` actions to `actions`
+(see [the curation home schema](../../schemas/curation-home-v1.schema.json)).
+
 State-reporting results explicitly disclose state basis: canonical facts
 derived from the local Git working tree versus served facts from the active SQLite
 catalog generation (`servable`, `catalog_snapshot`, `generation`). Unconfirmed editor

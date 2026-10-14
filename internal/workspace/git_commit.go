@@ -163,6 +163,19 @@ func CommitPaths(ctx context.Context, root string, paths []string, message strin
 	return outcome
 }
 
+// HeadCommit returns the commit the hub's Git repository is at, or "" when root
+// is not the top level of its own repository or has no commit yet.
+func HeadCommit(ctx context.Context, root string) string {
+	if !ownGitRepository(ctx, root) {
+		return ""
+	}
+	output, err := gitCommand(ctx, root, nil, "rev-parse", "--verify", "-q", "HEAD").Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(output))
+}
+
 // ShortHash is the abbreviated commit hash used in one-line reports.
 func ShortHash(hash string) string {
 	if len(hash) > 7 {

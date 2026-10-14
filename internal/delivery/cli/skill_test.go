@@ -25,10 +25,10 @@ func TestSkillCLIEndToEndPreviewConfirmActivateShowAndArchive(t *testing.T) {
 	if err := os.WriteFile(contentFile, []byte("---\nname: consumer-review\ndescription: Review consumers\n---\n\n# Consumer Review\n\nReview consumer workflows and verify error handling.\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	base := []string{"skill", "create", "--workspace", root, "--id", "consumer-review", "--collection", "software", "--name", "Consumer Review", "--description", "Review consumers", "--trigger", "review consumers", "--not-for", "design brokers", "--min-scope", "multi_step", "--content-file", contentFile, "--diff", "--json"}
+	base := []string{"--workspace", root, "--id", "consumer-review", "--collection", "software", "--name", "Consumer Review", "--description", "Review consumers", "--trigger", "review consumers", "--not-for", "design brokers", "--min-scope", "multi_step", "--content-file", contentFile, "--diff", "--json"}
 	stdout.Reset()
 	stderr.Reset()
-	if code := Run(base, &stdout, &stderr); code != 0 {
+	if code := seedSkillRun(base, &stdout, &stderr); code != 0 {
 		t.Fatalf("preview = %d: %s", code, stderr.String())
 	}
 	var preview app.SkillProposal
@@ -44,7 +44,7 @@ func TestSkillCLIEndToEndPreviewConfirmActivateShowAndArchive(t *testing.T) {
 
 	stdout.Reset()
 	stderr.Reset()
-	if code := Run(append(base, "--yes"), &stdout, &stderr); code != 0 {
+	if code := seedSkillRun(append(base, "--yes"), &stdout, &stderr); code != 0 {
 		t.Fatalf("create = %d: stdout=%s stderr=%s", code, stdout.String(), stderr.String())
 	}
 	var created app.SkillMutationResult
@@ -82,10 +82,10 @@ func TestSkillCLIConfirmsStoredExactProposalAndRejectsInterveningEdit(t *testing
 	if code := runInitTo(t, root, &stdout, &stderr); code != 0 {
 		t.Fatal(stderr.String())
 	}
-	create := []string{"skill", "create", "--workspace", root, "--id", "stored-proposal", "--collection", "software", "--name", "Stored Proposal", "--description", "Confirm exact bytes", "--trigger", "confirm proposal", "--not-for", "other", "--min-scope", "single_step", "--json"}
+	create := []string{"--workspace", root, "--id", "stored-proposal", "--collection", "software", "--name", "Stored Proposal", "--description", "Confirm exact bytes", "--trigger", "confirm proposal", "--not-for", "other", "--min-scope", "single_step", "--json"}
 	stdout.Reset()
 	stderr.Reset()
-	if code := Run(create, &stdout, &stderr); code != 0 {
+	if code := seedSkillRun(create, &stdout, &stderr); code != 0 {
 		t.Fatalf("preview = %d: %s", code, stderr.String())
 	}
 	var preview app.SkillProposal
@@ -153,10 +153,10 @@ func TestSkillCLIExternalEditorUsesValidatedMutationFlow(t *testing.T) {
 	if code := runInitTo(t, root, &stdout, &stderr); code != 0 {
 		t.Fatal(stderr.String())
 	}
-	create := []string{"skill", "create", "--workspace", root, "--id", "editor-skill", "--collection", "software", "--name", "Editor Skill", "--description", "Editor flow", "--trigger", "edit skill", "--not-for", "other work", "--min-scope", "single_step", "--yes"}
+	create := []string{"--workspace", root, "--id", "editor-skill", "--collection", "software", "--name", "Editor Skill", "--description", "Editor flow", "--trigger", "edit skill", "--not-for", "other work", "--min-scope", "single_step", "--yes"}
 	stdout.Reset()
 	stderr.Reset()
-	if code := Run(create, &stdout, &stderr); code != 0 {
+	if code := seedSkillRun(create, &stdout, &stderr); code != 0 {
 		t.Fatalf("create = %d: %s", code, stderr.String())
 	}
 	editor := filepath.Join(t.TempDir(), "editor.sh")
@@ -188,7 +188,7 @@ func TestSkillCLIStoredEditorProposalDoesNotReopenEditorAtConfirm(t *testing.T) 
 	if code := runInitTo(t, root, &stdout, &stderr); code != 0 {
 		t.Fatal(stderr.String())
 	}
-	if code := Run([]string{"skill", "create", "--workspace", root, "--id", "editor-confirm", "--collection", "software", "--name", "Editor Confirm", "--description", "Editor proposal", "--trigger", "edit", "--not-for", "other", "--min-scope", "single_step", "--yes"}, &stdout, &stderr); code != 0 {
+	if code := seedSkillRun([]string{"--workspace", root, "--id", "editor-confirm", "--collection", "software", "--name", "Editor Confirm", "--description", "Editor proposal", "--trigger", "edit", "--not-for", "other", "--min-scope", "single_step", "--yes"}, &stdout, &stderr); code != 0 {
 		t.Fatal(stderr.String())
 	}
 	counter := filepath.Join(t.TempDir(), "count")
@@ -252,10 +252,10 @@ func TestSkillCLIRoutingExamplesAndScriptsApproval(t *testing.T) {
 		return value
 	}
 
-	if code := run("skill", "create", "pr-review", "--workspace", root, "--collection", "software", "--name", "PR Review", "--description", "Review pull requests",
+	if code := seedSkillRun([]string{"pr-review", "--workspace", root, "--collection", "software", "--name", "PR Review", "--description", "Review pull requests",
 		"--trigger", "review pull request", "--min-scope", "single_step",
 		"--example", "review my pull request", "--example", "check this diff before merge",
-		"--counter-example", "write release notes", "--yes", "--json"); code != 0 {
+		"--counter-example", "write release notes", "--yes", "--json"}, &stdout, &stderr); code != 0 {
 		t.Fatalf("create = %d: stdout=%s stderr=%s", code, stdout.String(), stderr.String())
 	}
 	routing := section(readMetadata(), "routing")
@@ -317,7 +317,7 @@ func TestParseSkillFlagsValidatesExamplesAndScriptsApproval(t *testing.T) {
 	}{
 		"malformed digest":     {"edit", []string{"pr-review", "--approve-content", "sha256:ABC"}, "--approve-content requires a digest"},
 		"digest without value": {"edit", []string{"pr-review", "--approve-content"}, "--approve-content requires a value"},
-		"create approval":      {"create", []string{"pr-review", "--collection", "software", "--name", "n", "--description", "d", "--approve-content", valid}, "--approve-content is available only for skill edit"},
+		"create approval":      {"create", []string{"pr-review", "--description", "d", "--approve-content", valid}, "--approve-content is available only for skill edit and skill commit"},
 		"activate example":     {"activate", []string{"pr-review", "--example", "a"}, "activate accepts only"},
 		"activate approval":    {"activate", []string{"pr-review", "--approve-content", valid}, "activate accepts only"},
 		"list counter example": {"list", []string{"--counter-example", "a"}, "list accepts only"},
@@ -344,7 +344,7 @@ func TestSkillEditRuntimeFileSetsAndRemovesRuntimeBlock(t *testing.T) {
 	if code := runInitTo(t, root, &stdout, &stderr); code != 0 {
 		t.Fatalf("init = %d: %s", code, stderr.String())
 	}
-	if code := run("skill", "create", "rt-edit", "--workspace", root, "--collection", "software", "--name", "RT Edit", "--description", "Runtime edit fixture", "--yes", "--json"); code != 0 {
+	if code := seedSkillRun([]string{"rt-edit", "--workspace", root, "--collection", "software", "--name", "RT Edit", "--description", "Runtime edit fixture", "--yes", "--json"}, &stdout, &stderr); code != 0 {
 		t.Fatalf("create = %d: %s %s", code, stdout.String(), stderr.String())
 	}
 	runtimeBlock := func() any {

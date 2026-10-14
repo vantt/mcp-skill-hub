@@ -52,11 +52,17 @@ func confirmCases() []confirmCase {
 	}
 	return []confirmCase{
 		{
-			name: "create",
-			args: func(nextStepHub) []string {
-				return []string{"skill", "create", "tbl-new", "--collection", "core", "--name", "New", "--description", "A new skill"}
+			name: "commit",
+			setup: func(t *testing.T, hub nextStepHub) {
+				hub.createReady("tbl-skill")
+				project := projectInDir(t)
+				if code, stdout, stderr := runCLI(t, "skill", "checkout", "tbl-skill", "--workspace", hub.root); code != 0 {
+					t.Fatalf("checkout exit = %d\nstdout=%s\nstderr=%s", code, stdout, stderr)
+				}
+				appendToFile(t, filepath.Join(project, ".claude", "skills", "tbl-skill", "SKILL.md"), "\nOne more line.\n")
 			},
-			subject: "Create tbl-new",
+			args:    func(nextStepHub) []string { return []string{"skill", "commit", "tbl-skill"} },
+			subject: "Commit tbl-skill from a project (1 file)",
 		},
 		{
 			name: "edit", setup: ready,

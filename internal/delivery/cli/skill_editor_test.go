@@ -9,9 +9,10 @@ import (
 	"testing"
 )
 
+// Not parallel: it works from a project directory.
 func TestSkillCreatePositionalIDAndConflict(t *testing.T) {
-	t.Parallel()
 	root := initTestWorkspace(t)
+	project := projectInDir(t)
 
 	// 1. Conflicting positional ID and --id fails immediately
 	var stdout, stderr bytes.Buffer
@@ -24,31 +25,24 @@ func TestSkillCreatePositionalIDAndConflict(t *testing.T) {
 	}
 
 	// 2. Consistent positional ID and --id works
-	contentFile := filepath.Join(t.TempDir(), "content.md")
-	_ = os.WriteFile(contentFile, []byte("---\nname: matching-id\ndescription: Test matching.\n---\n\n# Match\n\nInstructions.\n"), 0o600)
-
 	stdout.Reset()
 	stderr.Reset()
-	code = Run([]string{"skill", "create", "matching-id", "--id", "matching-id",
-		"--collection", "core", "--name", "Match", "--description", "Test matching.",
-		"--trigger", "match it", "--not-for", "unrelated", "--min-scope", "single_step",
-		"--content-file", contentFile, "--workspace", root, "--yes"}, &stdout, &stderr)
+	code = Run([]string{"skill", "create", "matching-id", "--id", "matching-id", "--description", "Test matching."}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("matching IDs failed (exit %d): %s", code, stderr.String())
 	}
 
 	// 3. Positional ID alone works
-	contentFile2 := filepath.Join(t.TempDir(), "content2.md")
-	_ = os.WriteFile(contentFile2, []byte("---\nname: pos-only\ndescription: Test positional only.\n---\n\n# Pos Only\n\nInstructions.\n"), 0o600)
-
 	stdout.Reset()
 	stderr.Reset()
-	code = Run([]string{"skill", "create", "pos-only",
-		"--collection", "core", "--name", "Pos Only", "--description", "Test positional only.",
-		"--trigger", "pos it", "--not-for", "unrelated", "--min-scope", "single_step",
-		"--content-file", contentFile2, "--workspace", root, "--yes"}, &stdout, &stderr)
+	code = Run([]string{"skill", "create", "pos-only", "--description", "Test positional only."}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("positional-only ID failed (exit %d): %s", code, stderr.String())
+	}
+	for _, id := range []string{"matching-id", "pos-only"} {
+		if _, err := os.Stat(filepath.Join(project, ".claude", "skills", id, "SKILL.md")); err != nil {
+			t.Errorf("%s was not scaffolded in the project: %v", id, err)
+		}
 	}
 }
 
@@ -57,7 +51,7 @@ func TestSkillEditorRecoveryLifecycleBUG03AndBUG12(t *testing.T) {
 	contentFile := filepath.Join(t.TempDir(), "content.md")
 	_ = os.WriteFile(contentFile, []byte("---\nname: edit-target\ndescription: Target for editor.\n---\n\n# Target\n\nOriginal instructions.\n"), 0o600)
 
-	code, _, stderr := runCLI(t, "skill", "create", "edit-target",
+	code, _, stderr := seedSkillCLI(t, "edit-target",
 		"--collection", "core", "--name", "Target", "--description", "Target for editor.",
 		"--trigger", "target it", "--not-for", "unrelated", "--min-scope", "single_step",
 		"--content-file", contentFile, "--workspace", root, "--yes")
@@ -181,7 +175,7 @@ func TestSkillMutationCommitHintUsesActualWorkspaceBUG14(t *testing.T) {
 	contentFile := filepath.Join(t.TempDir(), "content.md")
 	_ = os.WriteFile(contentFile, []byte("---\nname: hint-skill\ndescription: Test commit hint.\n---\n\n# Hint\n\nReal procedural instructions to replace untouched scaffold.\n"), 0o600)
 
-	code, stdout, stderr := runCLI(t, "skill", "create", "hint-skill",
+	code, _, stderr := seedSkillCLI(t, "hint-skill",
 		"--collection", "core", "--name", "Hint", "--description", "Test commit hint.",
 		"--trigger", "hint it", "--not-for", "unrelated", "--min-scope", "single_step",
 		"--content-file", contentFile, "--workspace", root, "--yes")
@@ -190,7 +184,7 @@ func TestSkillMutationCommitHintUsesActualWorkspaceBUG14(t *testing.T) {
 	}
 
 	// Activate and check commit hint
-	code, stdout, stderr = runCLI(t, "skill", "activate", "hint-skill", "--workspace", root, "--yes", "--no-commit")
+	code, stdout, stderr := runCLI(t, "skill", "activate", "hint-skill", "--workspace", root, "--yes", "--no-commit")
 	if code != 0 {
 		t.Fatalf("activate failed (exit %d): %s", code, stderr)
 	}

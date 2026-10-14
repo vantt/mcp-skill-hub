@@ -48,11 +48,26 @@ func TestCLICreateActivateThenMCPListGetRead(t *testing.T) {
 		t.Fatal(err)
 	}
 	run("init")
-	run("skill", "create", "--workspace", root, "--id", "created-cli", "--collection", "core", "--name", "Created CLI", "--description", "Created through the canonical CLI lifecycle.", "--operation", "review", "--trigger", "review a created CLI skill", "--not-for", "write prose", "--min-scope", "multi_step", "--idempotency-key", "create-e2e", "--yes")
-	skillPath := filepath.Join(root, "skills", "core", "created-cli", "SKILL.md")
-	if err := os.WriteFile(skillPath, []byte("---\nname: created-cli\ndescription: Created through the canonical CLI lifecycle.\n---\n\n# Created CLI\n\nMeaningful procedures.\n"), 0o644); err != nil {
+	// The skill is written in a project and committed to the hub, then activated.
+	project := filepath.Join(t.TempDir(), "project")
+	if err := os.MkdirAll(project, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	runInProject := func(args ...string) []byte {
+		command := exec.Command(binary, args...)
+		command.Dir = project
+		output, err := command.CombinedOutput()
+		if err != nil {
+			t.Fatalf("skillhub %s: %v\n%s", strings.Join(args, " "), err, output)
+		}
+		return output
+	}
+	runInProject("skill", "create", "created-cli", "--description", "Created through the canonical CLI lifecycle.", "--trigger", "review a created CLI skill", "--not-for", "write prose")
+	folderSkill := filepath.Join(project, ".claude", "skills", "created-cli", "SKILL.md")
+	if err := os.WriteFile(folderSkill, []byte("---\nname: created-cli\ndescription: Created through the canonical CLI lifecycle. Use when review a created CLI skill. Do not use for write prose.\n---\n\n# Created CLI\n\nMeaningful procedures.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runInProject("skill", "commit", "created-cli", "--workspace", root, "--collection", "core", "--operation", "review", "--min-scope", "multi_step", "--yes")
 	run("skill", "activate", "--workspace", root, "created-cli", "--idempotency-key", "activate-e2e", "--yes")
 	contents, err := os.ReadFile(filepath.Join(root, "skills", "core", "created-cli", "SKILL.md"))
 	if err != nil || !bytes.HasPrefix(contents, []byte("---\nname: created-cli\ndescription:")) {

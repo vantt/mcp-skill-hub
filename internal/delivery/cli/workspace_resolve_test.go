@@ -374,7 +374,7 @@ func TestSubcommandTyposAndFlagsReportedBeforeWorkspaceError(t *testing.T) {
 	if code == 0 {
 		t.Fatal("expected skill create --id foo to fail")
 	}
-	if !strings.Contains(stderr.String(), "create requires --id, --collection, --name, and --description") {
+	if !strings.Contains(stderr.String(), "create requires a skill id and --description") {
 		t.Fatalf("expected missing flags error, got:\n%s", stderr.String())
 	}
 

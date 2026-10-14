@@ -9,7 +9,7 @@ import (
 func TestSourceWatchRemoteValidationAndJSON(t *testing.T) {
 	t.Parallel()
 	root := initTestWorkspace(t)
-	runCLI(t, "skill", "create", "--workspace", root, "--id", "test-skill", "--collection", "default", "--name", "Test Skill", "--description", "Test skill description", "--yes")
+	seedSkillCLI(t, "--workspace", root, "--id", "test-skill", "--collection", "default", "--name", "Test Skill", "--description", "Test skill description", "--yes")
 	// 1. Missing locator fails
 	code, _, stderr := runCLI(t, "source", "watch", "--workspace", root)
 	if code != 2 {

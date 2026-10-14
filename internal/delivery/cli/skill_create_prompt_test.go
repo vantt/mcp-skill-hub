@@ -5,157 +5,158 @@ import (
 	"context"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/vantt/skillhub-mcp/internal/app"
 )
 
-func guidedCreate(t *testing.T, root, answers string) (int, string, string) {
+// projectInDir makes a Git project and works from it for the test. It is not
+// for parallel tests: the working directory belongs to the whole process.
+func projectInDir(t *testing.T) string {
 	t.Helper()
-	var stdout, stderr bytes.Buffer
-	code := runGuidedSkillCreate(context.Background(), app.SkillService{}, skillFlags{workspace: root}, strings.NewReader(answers), &stdout, &stderr)
-	return code, stdout.String(), stderr.String()
+	dir := filepath.Join(t.TempDir(), "project")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if output, err := exec.Command("git", "-C", dir, "init", "-q", "-b", "main").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v\n%s", err, output)
+	}
+	t.Chdir(dir)
+	return dir
 }
 
-func readSkillFiles(t *testing.T, root, collection, id string) (string, string) {
+func readFileText(t *testing.T, path string) string {
 	t.Helper()
-	dir := filepath.Join(root, "skills", collection, id)
-	entry, err := os.ReadFile(filepath.Join(dir, "SKILL.md"))
+	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	meta, err := os.ReadFile(filepath.Join(dir, ".meta", "skill.yaml"))
+	return string(data)
+}
+
+// hubSnapshot lists every file of a hub with its content, so a test can prove
+// a command left the hub byte for byte as it was. Git's own folder is left out.
+func hubSnapshot(t *testing.T, root string) map[string]string {
+	t.Helper()
+	files := map[string]string{}
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() && entry.Name() == gitFolderName {
+			return filepath.SkipDir
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		rel, _ := filepath.Rel(root, path)
+		data, readErr := os.ReadFile(path)
+		files[rel] = string(data)
+		return readErr
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	return string(entry), string(meta)
+	return files
 }
 
-func TestGuidedSkillCreateWritesWhatTheFlagFormWrites(t *testing.T) {
-	t.Parallel()
-	guidedRoot := initTestWorkspace(t)
-	code, stdout, stderr := guidedCreate(t, guidedRoot, "Commit style\n\nWrite commit messages in our style\nwrite a commit message\ndraft a commit\n\nwrite release notes\n\n")
+const gitFolderName = ".g" + "it"
+
+// Not parallel: it works from the project directory and replaces the terminal
+// check and the answer source for the whole package.
+func TestSkillCreateInATerminalAsksThreeOrFourQuestionsAndWritesOnlyInTheProject(t *testing.T) {
+	hub := initTestWorkspace(t)
+	project := projectInDir(t)
+	before := hubSnapshot(t, hub)
+	savedInteractive, savedInput := skillCreateInteractive, skillCreateInput
+	t.Cleanup(func() { skillCreateInteractive, skillCreateInput = savedInteractive, savedInput })
+	skillCreateInteractive = func(io.Writer) bool { return true }
+	skillCreateInput = strings.NewReader("Summarize a deploy for the team channel\nafter a production deploy\n\nfor staging deploys\n\nwrite the deploy notes for today's release\n\n")
+
+	code, stdout, stderr := runCLI(t, "skill", "create", "deploy-notes", "--workspace", hub)
 	if code != 0 {
-		t.Fatalf("guided create exit = %d stdout=%s stderr=%s", code, stdout, stderr)
+		t.Fatalf("exit = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	file := filepath.Join(guidedRoot, "skills", "default", "commit-style", "SKILL.md")
-	for _, want := range []string{"commit-style", "Draft skill", file, "skillhub skill activate commit-style --yes", "[commit-style]"} {
+	for _, want := range []string{"What does this skill do?", "When should an agent use it?", "When should it not?", "One or two example requests:",
+		"Created .claude/skills/deploy-notes/SKILL.md (nothing changed on the hub).", "ask your agent to use /deploy-notes.", "When ready: skillhub skill commit deploy-notes"} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("output missing %q:\n%s", want, stdout)
 		}
 	}
-
-	flagRoot := initTestWorkspace(t)
-	code, _, stderr = runCLI(t, "skill", "create", "--workspace", flagRoot, "--id", "commit-style", "--collection", "default", "--name", "Commit style",
-		"--description", "Write commit messages in our style", "--operation", "other", "--trigger", "write a commit message", "--trigger", "draft a commit",
-		"--not-for", "write release notes", "--min-scope", "single_step", "--yes")
-	if code != 0 {
-		t.Fatalf("flag create exit = %d: %s", code, stderr)
-	}
-	guidedEntry, guidedMeta := readSkillFiles(t, guidedRoot, "default", "commit-style")
-	flagEntry, flagMeta := readSkillFiles(t, flagRoot, "default", "commit-style")
-	if guidedEntry != flagEntry || guidedMeta != flagMeta {
-		t.Fatalf("guided and flag forms differ:\n%s\n---\n%s\n=====\n%s\n---\n%s", guidedEntry, guidedMeta, flagEntry, flagMeta)
-	}
-}
-
-func TestGuidedSkillCreateRetriesAnInvalidOrDuplicateID(t *testing.T) {
-	t.Parallel()
-	root := initTestWorkspace(t)
-	if code, _, stderr := runCLI(t, "skill", "create", "--workspace", root, "--id", "taken", "--collection", "core", "--name", "Taken", "--description", "Taken.", "--yes"); code != 0 {
-		t.Fatalf("setup create exit = %d: %s", code, stderr)
-	}
-	code, stdout, stderr := guidedCreate(t, root, "Taken\n\nBad Id!\ntaken\nfresh-one\nDescription.\nwhen asked\n\nnever\n\n")
-	if code != 0 {
-		t.Fatalf("guided create exit = %d stdout=%s stderr=%s", code, stdout, stderr)
-	}
-	if !strings.Contains(stdout, "lowercase letters, digits and hyphens") || !strings.Contains(stdout, `"taken" already exists`) {
-		t.Fatalf("expected retry messages:\n%s", stdout)
-	}
-	readSkillFiles(t, root, "core", "fresh-one")
-}
-
-func TestGuidedSkillCreateEmptyRequiredAnswerWritesNothing(t *testing.T) {
-	t.Parallel()
-	for name, answers := range map[string]string{
-		"name":        "\n",
-		"description": "Some name\n\n\n",
-		"trigger":     "Some name\n\nA description\n\n",
-		"not for":     "Some name\n\nA description\nwhen asked\n\n\n",
-	} {
-		root := initTestWorkspace(t)
-		code, _, stderr := guidedCreate(t, root, answers)
-		if code != 2 || !strings.Contains(stderr, "Nothing was written") {
-			t.Fatalf("%s: exit = %d stderr=%s", name, code, stderr)
+	scaffold := readFileText(t, filepath.Join(project, ".claude", "skills", "deploy-notes", "SKILL.md"))
+	for _, want := range []string{"name: deploy-notes", "Summarize a deploy for the team channel. Use when after a production deploy.", "## When not to use\n\n- for staging deploys", "- write the deploy notes for today's release"} {
+		if !strings.Contains(scaffold, want) {
+			t.Fatalf("SKILL.md lacks %q:\n%s", want, scaffold)
 		}
-		if _, err := os.Stat(filepath.Join(root, "skills", "default")); err == nil {
-			t.Fatalf("%s: a skill was written", name)
+	}
+	after := hubSnapshot(t, hub)
+	if len(after) != len(before) {
+		t.Fatalf("hub gained or lost files: %d -> %d", len(before), len(after))
+	}
+	for path, content := range before {
+		if after[path] != content {
+			t.Fatalf("hub file %s changed", path)
 		}
 	}
 }
 
-func TestGuidedSkillCreateStopsOnEndOfInputAndInterrupt(t *testing.T) {
-	t.Parallel()
-	root := initTestWorkspace(t)
-	if code, _, stderr := guidedCreate(t, root, "Some name\n"); code != 130 || !strings.Contains(stderr, "Nothing was written") {
-		t.Fatalf("end of input: exit = %d stderr=%s", code, stderr)
-	}
-
-	reader, writer := io.Pipe()
-	defer writer.Close()
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	var stdout, stderr bytes.Buffer
-	if code := runGuidedSkillCreate(ctx, app.SkillService{}, skillFlags{workspace: root}, reader, &stdout, &stderr); code != 130 {
-		t.Fatalf("interrupt: exit = %d stderr=%s", code, stderr.String())
-	}
-	if _, err := os.Stat(filepath.Join(root, "skills", "default")); err == nil {
-		t.Fatal("a skill was written")
-	}
-}
-
-func TestSkillCreateWithoutFlagsOutsideATerminalNamesTheMissingFlags(t *testing.T) {
-	t.Parallel()
-	root := initTestWorkspace(t)
-	code, stdout, stderr := runCLI(t, "skill", "create", "--workspace", root)
-	if code != 2 || !strings.Contains(stderr, "create requires --id, --collection, --name, and --description") || strings.Contains(stdout, "Name of the skill") {
+func TestSkillCreateFlagsWriteTheSameScaffoldAsTheForm(t *testing.T) {
+	hub := initTestWorkspace(t)
+	project := projectInDir(t)
+	code, stdout, stderr := runCLI(t, "skill", "create", "deploy-notes", "--workspace", hub,
+		"--description", "Summarize a deploy for the team channel", "--trigger", "after a production deploy",
+		"--not-for", "for staging deploys", "--example", "write the deploy notes for today's release")
+	if code != 0 {
 		t.Fatalf("exit = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	if _, err := os.Stat(filepath.Join(root, "skills", "default")); err == nil {
-		t.Fatal("a skill was written")
-	}
-}
+	flagForm := readFileText(t, filepath.Join(project, ".claude", "skills", "deploy-notes", "SKILL.md"))
 
-// Not parallel: it replaces the terminal check and the answer source for the whole package.
-func TestSkillCreateInATerminalAsksQuestions(t *testing.T) {
-	root := initTestWorkspace(t)
 	savedInteractive, savedInput := skillCreateInteractive, skillCreateInput
 	t.Cleanup(func() { skillCreateInteractive, skillCreateInput = savedInteractive, savedInput })
 	skillCreateInteractive = func(io.Writer) bool { return true }
-	skillCreateInput = strings.NewReader("Review checklist\n\nReview a change\nreview my code\n\nwrite prose\n\n")
-	code, stdout, stderr := runCLI(t, "skill", "create", "--workspace", root)
-	if code != 0 {
-		t.Fatalf("exit = %d stdout=%s stderr=%s", code, stdout, stderr)
+	skillCreateInput = strings.NewReader("Summarize a deploy for the team channel\nafter a production deploy\n\nfor staging deploys\n\nwrite the deploy notes for today's release\n\n")
+	if code, stdout, stderr := runCLI(t, "skill", "create", "deploy-notes-form"); code != 0 {
+		t.Fatalf("form exit = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	readSkillFiles(t, root, "default", "review-checklist")
-	if !strings.Contains(stdout, "skillhub skill activate review-checklist --yes") {
-		t.Fatalf("missing next command:\n%s", stdout)
+	formed := readFileText(t, filepath.Join(project, ".claude", "skills", "deploy-notes-form", "SKILL.md"))
+	if strings.ReplaceAll(formed, "deploy-notes-form", "deploy-notes") != flagForm {
+		t.Fatalf("form and flags differ:\n%s\n=====\n%s", formed, flagForm)
 	}
 }
 
-func TestGuidedSkillCreateOnAHubWithSeveralCollectionsUsesTheDefaultCollection(t *testing.T) {
-	t.Parallel()
-	root := initTestWorkspace(t)
-	for _, collection := range []string{"software", "operations"} {
-		if code, _, stderr := runCLI(t, "skill", "create", "--workspace", root, "--id", "seed-"+collection, "--collection", collection, "--name", "Seed", "--description", "Seed.", "--yes"); code != 0 {
-			t.Fatalf("setup create exit = %d: %s", code, stderr)
-		}
+func TestSkillCreateRefusesAnExistingFolderAndNamesTheMissingFlagsOutsideATerminal(t *testing.T) {
+	projectInDir(t)
+	if code, stdout, stderr := runCLI(t, "skill", "create", "taken", "--description", "Taken."); code != 0 {
+		t.Fatalf("first create exit = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	code, stdout, stderr := guidedCreate(t, root, "Fresh one\n\nDescription.\nwhen asked\n\nnever\n\n")
-	if code != 0 {
-		t.Fatalf("guided create exit = %d stdout=%s stderr=%s", code, stdout, stderr)
+	code, _, stderr := runCLI(t, "skill", "create", "taken", "--description", "Again.")
+	if code != 2 || !strings.Contains(stderr, "already exists") || !strings.Contains(stderr, "skillhub skill commit taken") {
+		t.Fatalf("existing folder: exit = %d stderr=%s", code, stderr)
 	}
-	readSkillFiles(t, root, "default", "fresh-one")
+	code, stdout, stderr := runCLI(t, "skill", "create", "no-description")
+	if code != 2 || !strings.Contains(stderr, "create requires a skill id and --description") {
+		t.Fatalf("missing flags: exit = %d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	if _, err := os.Stat(filepath.Join(".claude", "skills", "no-description")); err == nil {
+		t.Fatal("a folder was written without a description")
+	}
+	if code, _, stderr := runCLI(t, "skill", "create", "x", "--description", "d", "--collection", "core"); code != 2 || !strings.Contains(stderr, "skillhub skill commit") {
+		t.Fatalf("--collection belongs to commit: exit = %d stderr=%s", code, stderr)
+	}
+}
+
+func TestSkillCreateCancelledFormWritesNothing(t *testing.T) {
+	project := projectInDir(t)
+	savedInteractive, savedInput := skillCreateInteractive, skillCreateInput
+	t.Cleanup(func() { skillCreateInteractive, skillCreateInput = savedInteractive, savedInput })
+	skillCreateInteractive = func(io.Writer) bool { return true }
+	skillCreateInput = strings.NewReader("Half an answer\n")
+	var stdout, stderr bytes.Buffer
+	if code := RunContext(context.Background(), []string{"skill", "create", "half"}, &stdout, &stderr); code != 130 || !strings.Contains(stderr.String(), "Nothing was written") {
+		t.Fatalf("end of input: exit = %d stderr=%s", code, stderr.String())
+	}
+	if _, err := os.Stat(filepath.Join(project, ".claude")); err == nil {
+		t.Fatal("a folder was written")
+	}
 }

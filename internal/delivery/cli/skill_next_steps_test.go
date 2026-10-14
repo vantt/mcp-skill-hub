@@ -32,6 +32,17 @@ func (h nextStepHub) run(args ...string) (int, string, string) {
 	return code, stdout.String(), stderr.String()
 }
 
+// mustSeed creates a hub skill from the flags `skill create` took before it
+// moved to the project.
+func (h nextStepHub) mustSeed(args ...string) string {
+	h.t.Helper()
+	code, stdout, stderr := seedSkillArgs(append(args, "--workspace", h.root))
+	if code != 0 {
+		h.t.Fatalf("seed %s = %d: stdout=%s stderr=%s", strings.Join(args, " "), code, stdout, stderr)
+	}
+	return stdout
+}
+
 func (h nextStepHub) mustRun(args ...string) string {
 	h.t.Helper()
 	code, stdout, stderr := h.run(args...)
@@ -48,7 +59,7 @@ func (h nextStepHub) createReady(id string) {
 	if err := os.WriteFile(content, []byte("---\nname: "+id+"\ndescription: Cut a release\n---\n\n# Release\n\nCut a release and tag it.\n"), 0o600); err != nil {
 		h.t.Fatal(err)
 	}
-	h.mustRun("skill", "create", id, "--collection", "software", "--name", "Release", "--description", "Cut a release",
+	h.mustSeed(id, "--collection", "software", "--name", "Release", "--description", "Cut a release",
 		"--trigger", "cut a release", "--not-for", "deploying", "--min-scope", "single_step", "--content-file", content, "--yes")
 }
 
@@ -91,7 +102,7 @@ func TestDraftNextStepFollowsTheReviewNotAlwaysTheEditor(t *testing.T) {
 		t.Fatalf("a complete draft must point at activation, not the editor:\n%s", edited)
 	}
 
-	hub.mustRun("skill", "create", "kafka-review", "--collection", "software", "--name", "Kafka Review", "--description", "Review Kafka consumers",
+	hub.mustSeed("kafka-review", "--collection", "software", "--name", "Kafka Review", "--description", "Review Kafka consumers",
 		"--trigger", "review kafka consumers", "--not-for", "brokers", "--min-scope", "single_step", "--yes")
 	scaffold := hub.mustRun("skill", "edit", "kafka-review", "--trigger", "review kafka consumer lag", "--yes")
 	if !strings.Contains(scaffold, "skill edit kafka-review --editor") {
@@ -102,7 +113,7 @@ func TestDraftNextStepFollowsTheReviewNotAlwaysTheEditor(t *testing.T) {
 func TestActivateFixForAnUntouchedScaffoldNamesTheContentFlags(t *testing.T) {
 	t.Parallel()
 	hub := newNextStepHub(t)
-	hub.mustRun("skill", "create", "kafka-review", "--collection", "software", "--name", "Kafka Review", "--description", "Review Kafka consumers",
+	hub.mustSeed("kafka-review", "--collection", "software", "--name", "Kafka Review", "--description", "Review Kafka consumers",
 		"--trigger", "review kafka consumers", "--not-for", "brokers", "--min-scope", "single_step", "--yes")
 	code, stdout, stderr := hub.run("skill", "activate", "kafka-review", "--yes")
 	if code == 0 {

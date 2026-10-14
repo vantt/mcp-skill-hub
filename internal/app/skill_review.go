@@ -138,24 +138,13 @@ func (SkillService) ReviewSkill(ctx context.Context, path, id string) (SkillRevi
 	metaDoc.Name, metaDoc.Description = catalog.DeriveSkillNameAndDesc(entrypointBytes, metaDoc.Name, metaDoc.Description, id)
 	canonicalIssues, valid := checkCanonicalIssues(root, skillRelDir)
 	readiness, isScaffold, missingFields := checkActivationReadiness(entrypointBytes, metaDoc, valid)
-	if handle, err := catalog.OpenCurrentLocked(ctx, root); err == nil {
-		defer handle.Close()
-		if sqliteCat, catErr := resolverpkg.NewSQLiteCatalog(handle.DB, handle.Pointer.CatalogSnapshot); catErr == nil {
-			if allSkills, skillsErr := sqliteCat.Skills(ctx); skillsErr == nil {
-				var activeSkills []resolverpkg.Skill
-				for _, s := range allSkills {
-					if s.Status == "active" && s.ID != "system-curator" {
-						activeSkills = append(activeSkills, s)
-					}
-				}
-				findings, lintErr := lintReviewedSkill(id, skillMetaBytes, entrypointBytes, activeSkills)
-				if lintErr != nil {
-					readiness.Warnings = append(readiness.Warnings, "lint_skipped: Routing lint skipped: "+lintErr.Error())
-				}
-				for _, f := range findings {
-					readiness.Warnings = append(readiness.Warnings, fmt.Sprintf("%s: %s Fix: %s", f.Code, f.Message, f.Fix))
-				}
-			}
+	if active, ok := activeSkillsForLint(ctx, root); ok {
+		findings, lintErr := lintReviewedSkill(id, skillMetaBytes, entrypointBytes, active)
+		if lintErr != nil {
+			readiness.Warnings = append(readiness.Warnings, "lint_skipped: Routing lint skipped: "+lintErr.Error())
+		}
+		for _, f := range findings {
+			readiness.Warnings = append(readiness.Warnings, fmt.Sprintf("%s: %s Fix: %s", f.Code, f.Message, f.Fix))
 		}
 	}
 	fullSkillDir := filepath.Join(root, filepath.FromSlash(skillRelDir))
@@ -213,6 +202,32 @@ func (SkillService) ReviewSkill(ctx context.Context, path, id string) (SkillRevi
 
 	appendSkillReviewItems(&result, len(resources), totalBytes, missingFields)
 	return result, nil
+}
+
+// activeSkillsForLint lists the active skills of the published catalog that a
+// skill under review is linted against. It reports false when the catalog
+// cannot be read, so the lint is skipped rather than failed.
+func activeSkillsForLint(ctx context.Context, root string) ([]resolverpkg.Skill, bool) {
+	handle, err := catalog.OpenCurrentLocked(ctx, root)
+	if err != nil {
+		return nil, false
+	}
+	defer handle.Close()
+	sqliteCat, err := resolverpkg.NewSQLiteCatalog(handle.DB, handle.Pointer.CatalogSnapshot)
+	if err != nil {
+		return nil, false
+	}
+	allSkills, err := sqliteCat.Skills(ctx)
+	if err != nil {
+		return nil, false
+	}
+	var active []resolverpkg.Skill
+	for _, s := range allSkills {
+		if s.Status == "active" && s.ID != "system-curator" {
+			active = append(active, s)
+		}
+	}
+	return active, true
 }
 
 // lintReviewedSkill decodes the skill the way activation would see it and lints it against

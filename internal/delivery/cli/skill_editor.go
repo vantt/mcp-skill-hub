@@ -51,19 +51,8 @@ func openEditorSession(ctx context.Context, service app.SkillService, workspace,
 		return editorSessionResult{}, err
 	}
 
-	editor := strings.TrimSpace(os.Getenv("VISUAL"))
-	if editor == "" {
-		editor = strings.TrimSpace(os.Getenv("EDITOR"))
-	}
-	fields := strings.Fields(editor)
-	if len(fields) == 0 {
-		return editorSessionResult{}, errors.New("$VISUAL or $EDITOR must be set for --editor")
-	}
-
-	command := exec.CommandContext(ctx, fields[0], append(fields[1:], name)...)
-	command.Stdin, command.Stdout, command.Stderr = os.Stdin, os.Stderr, os.Stderr
-	if err := command.Run(); err != nil {
-		return editorSessionResult{}, fmt.Errorf("external editor failed: %w", err)
+	if err := launchEditor(ctx, name); err != nil {
+		return editorSessionResult{}, err
 	}
 
 	temporaryRoot, err := os.OpenRoot(filepath.Dir(name))
@@ -102,6 +91,24 @@ func openEditorSession(ctx context.Context, service app.SkillService, workspace,
 		recoveryID:     recoveryID,
 		recoveryPath:   recPath,
 	}, nil
+}
+
+// launchEditor opens file in $VISUAL or $EDITOR and waits for it to close.
+func launchEditor(ctx context.Context, file string) error {
+	editor := strings.TrimSpace(os.Getenv("VISUAL"))
+	if editor == "" {
+		editor = strings.TrimSpace(os.Getenv("EDITOR"))
+	}
+	fields := strings.Fields(editor)
+	if len(fields) == 0 {
+		return errors.New("$VISUAL or $EDITOR must be set to edit in an editor")
+	}
+	command := exec.CommandContext(ctx, fields[0], append(fields[1:], file)...)
+	command.Stdin, command.Stdout, command.Stderr = os.Stdin, os.Stderr, os.Stderr
+	if err := command.Run(); err != nil {
+		return fmt.Errorf("external editor failed: %w", err)
+	}
+	return nil
 }
 
 // writeEditorSkillPreview formats preview output for an interactive editor change.

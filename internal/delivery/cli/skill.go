@@ -23,20 +23,20 @@ type skillFlags struct {
 	operations, triggers, notFor, examples, counterExamples, skills, positionals   []string
 	accepts, manuals                                                               []string
 	jsonOutput, yes, diff, editor, verbose, all, check, noCheck, exitCode          bool
-	guided, noCommit                                                               bool
+	noCommit, editRouting                                                          bool
 	// rerun is the command the person typed, for the hint lines of a preview.
 	rerun string
 }
 
 // skillSubcommands lists the skill subcommands in the order `skillhub help
 // skill` shows them; every "which subcommand" hint is built from it.
-var skillSubcommands = []string{"add", "create", "show", "review", "doctor", "env", "edit", "outdated", "upstream", "update", "activate", "deprecate", "archive", "confirm", "list"}
+var skillSubcommands = []string{"add", "create", "checkout", "commit", "show", "review", "doctor", "env", "edit", "outdated", "upstream", "update", "activate", "deprecate", "archive", "confirm", "list"}
 
 var skillSubcommandFix = "Run `skillhub skill " + strings.Join(skillSubcommands, "|") + "`."
 
 // hubChangingSkillSubcommands lists the skill subcommands that write to the hub.
 var hubChangingSkillSubcommands = map[string]bool{
-	"add": true, "create": true, "edit": true, "update": true, "activate": true, "deprecate": true, "archive": true, "confirm": true,
+	"add": true, "commit": true, "edit": true, "update": true, "activate": true, "deprecate": true, "archive": true, "confirm": true,
 }
 
 func runSkill(ctx context.Context, args []string, stdout, stderr io.Writer) int {
@@ -52,8 +52,8 @@ func runSkill(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 		}
 		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Review `skillhub skill "+subcommand+"` arguments and retry.")
 	}
-	if flags.guided {
-		return runGuidedSkillCreateCommand(ctx, flags, stdout, stderr)
+	if subcommand == "create" {
+		return runSkillCreate(ctx, flags, stdout, stderr)
 	}
 	if subcommand == "doctor" {
 		return runSkillDoctor(ctx, flags, stdout, stderr)
@@ -64,6 +64,12 @@ func runSkill(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 	service := app.SkillService{}
 	if subcommand == "add" {
 		return runSkillAdd(ctx, service, flags, stdout, stderr)
+	}
+	if subcommand == "checkout" {
+		return runSkillCheckout(ctx, flags, stdout, stderr)
+	}
+	if subcommand == "commit" {
+		return runSkillCommit(ctx, flags, stdout, stderr)
 	}
 	if subcommand == "outdated" {
 		return runSkillOutdated(ctx, flags, stdout, stderr)
@@ -416,6 +422,8 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 			flags.diff = true
 		case "--no-commit":
 			flags.noCommit = true
+		case "--edit-routing":
+			flags.editRouting = true
 		case "--editor":
 			flags.editor = true
 		case "--verbose":
@@ -540,28 +548,16 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 			return flags, errors.New("list accepts only --state, --workspace, and --json")
 		}
 	case "create":
-		if len(positionals) == 1 {
-			if flags.id != "" && flags.id != positionals[0] {
-				return flags, fmt.Errorf("positional skill ID %q conflicts with --id %q", positionals[0], flags.id)
-			}
-			flags.id = positionals[0]
-		} else if len(positionals) > 1 {
-			return flags, errors.New("create accepts at most one positional skill ID")
+		if err := parseSkillCreateFlags(&flags, positionals); err != nil {
+			return flags, err
 		}
-		if flags.id == "" || flags.collection == "" || flags.name == "" || flags.description == "" {
-			if flags.name != "" || flags.description != "" || flags.jsonOutput {
-				return flags, errors.New(skillCreateMissingFlags)
-			}
-			flags.guided = true
+	case "checkout":
+		if err := parseSkillCheckoutFlags(&flags, positionals); err != nil {
+			return flags, err
 		}
-		if flags.proposalID != "" || flags.proposalDigest != "" || flags.baseVersion != "" {
-			return flags, errors.New("create does not accept confirmation pins")
-		}
-		if flags.editor {
-			return flags, errors.New("--editor is available only for skill edit")
-		}
-		if flags.approveContent != "" {
-			return flags, errors.New("--approve-content is available only for skill edit")
+	case "commit":
+		if err := parseSkillCommitFlags(&flags, positionals); err != nil {
+			return flags, err
 		}
 	case "edit":
 		if len(positionals) == 1 {
@@ -621,7 +617,8 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 	default:
 		return flags, fmt.Errorf("unsupported skill subcommand %q", subcommand)
 	}
-	if flags.guided {
+	if subcommand == "create" {
+		// A create writes in the project only, so it needs no hub.
 		return flags, nil
 	}
 	resolved, resErr := resolveWorkspace(flags.workspace)

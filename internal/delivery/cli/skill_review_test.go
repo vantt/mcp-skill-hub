@@ -19,7 +19,7 @@ func TestSkillReviewHumanAndJSON(t *testing.T) {
 	contentFile := filepath.Join(t.TempDir(), "content.md")
 	_ = os.WriteFile(contentFile, []byte("---\nname: rev-test\ndescription: Review test skill.\n---\n\n# Review Test\n\nInstructions.\n"), 0o600)
 
-	code, _, stderr := runCLI(t, "skill", "create", "rev-test", "--workspace", root,
+	code, _, stderr := seedSkillCLI(t, "rev-test", "--workspace", root,
 		"--collection", "core", "--name", "Review Test", "--description", "Review test skill.",
 		"--trigger", "review it", "--not-for", "unrelated", "--min-scope", "single_step",
 		"--content-file", contentFile, "--yes")
@@ -89,7 +89,7 @@ func TestSkillReviewPrintsScriptApprovalCommandForThirdPartyScripts(t *testing.T
 	root := initTestWorkspace(t)
 	contentFile := filepath.Join(t.TempDir(), "content.md")
 	_ = os.WriteFile(contentFile, []byte("---\nname: trust-test\ndescription: Trust test skill.\n---\n\n# Trust Test\n"), 0o600)
-	code, _, stderr := runCLI(t, "skill", "create", "trust-test", "--workspace", root,
+	code, _, stderr := seedSkillCLI(t, "trust-test", "--workspace", root,
 		"--collection", "core", "--name", "Trust Test", "--description", "Trust test skill.",
 		"--trigger", "trust it", "--not-for", "unrelated", "--min-scope", "single_step",
 		"--content-file", contentFile, "--yes")
@@ -173,7 +173,7 @@ func TestSkillReviewSummarizesChangesSinceApproval(t *testing.T) {
 	root := initTestWorkspace(t)
 	contentFile := filepath.Join(t.TempDir(), "content.md")
 	_ = os.WriteFile(contentFile, []byte("---\nname: delta-test\ndescription: Delta test skill.\n---\n\n# Delta Test\n"), 0o600)
-	if code, _, stderr := runCLI(t, "skill", "create", "delta-test", "--workspace", root,
+	if code, _, stderr := seedSkillCLI(t, "delta-test", "--workspace", root,
 		"--collection", "core", "--name", "Delta Test", "--description", "Delta test skill.",
 		"--trigger", "delta it", "--not-for", "unrelated", "--min-scope", "single_step",
 		"--content-file", contentFile, "--yes"); code != 0 {

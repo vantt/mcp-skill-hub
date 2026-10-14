@@ -13,8 +13,8 @@ func createDraftSkill(t *testing.T, root, id string, extra ...string) {
 	t.Helper()
 	contentFile := filepath.Join(t.TempDir(), id+"-content.md")
 	_ = os.WriteFile(contentFile, []byte("---\nname: "+id+"\ndescription: Demo skill.\n---\n\n# Demo\n\nReal procedural instructions to replace untouched scaffold.\n"), 0o600)
-	args := append([]string{"skill", "create", "--workspace", root, "--id", id, "--collection", "software", "--name", "Demo", "--description", "Demo skill.", "--trigger", "demo it", "--min-scope", "multi_step", "--content-file", contentFile, "--yes"}, extra...)
-	if code, stdout, stderr := runCLI(t, args...); code != 0 {
+	args := append([]string{"--workspace", root, "--id", id, "--collection", "software", "--name", "Demo", "--description", "Demo skill.", "--trigger", "demo it", "--min-scope", "multi_step", "--content-file", contentFile, "--yes"}, extra...)
+	if code, stdout, stderr := seedSkillArgs(args); code != 0 {
 		t.Fatalf("create exit = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
 }
@@ -24,7 +24,7 @@ func TestSkillApplyReportsResultingStateWithoutPreviewText(t *testing.T) {
 	root := initTestWorkspace(t)
 	contentFile := filepath.Join(t.TempDir(), "demo-content.md")
 	_ = os.WriteFile(contentFile, []byte("---\nname: demo\ndescription: Demo skill.\n---\n\n# Demo\n\nReal procedural instructions to replace untouched scaffold.\n"), 0o600)
-	code, stdout, stderr := runCLI(t, "skill", "create", "--workspace", root, "--id", "demo", "--collection", "software", "--name", "Demo", "--description", "Demo skill.", "--trigger", "demo it", "--not-for", "unrelated", "--min-scope", "multi_step", "--content-file", contentFile, "--yes")
+	code, stdout, stderr := seedSkillCLI(t, "--workspace", root, "--id", "demo", "--collection", "software", "--name", "Demo", "--description", "Demo skill.", "--trigger", "demo it", "--not-for", "unrelated", "--min-scope", "multi_step", "--content-file", contentFile, "--yes")
 	if code != 0 {
 		t.Fatalf("create exit = %d: %s", code, stderr)
 	}
@@ -57,7 +57,8 @@ func TestSkillApplyReportsResultingStateWithoutPreviewText(t *testing.T) {
 func TestSkillPreviewStillExplainsHowToApply(t *testing.T) {
 	t.Parallel()
 	root := initTestWorkspace(t)
-	code, stdout, _ := runCLI(t, "skill", "create", "--workspace", root, "--id", "demo", "--collection", "software", "--name", "Demo", "--description", "Demo skill.")
+	createDraftSkill(t, root, "demo")
+	code, stdout, _ := runCLI(t, "skill", "edit", "demo", "--workspace", root, "--description", "Changed.")
 	if code != 0 || !strings.Contains(stdout, "Nothing written yet.") {
 		t.Fatalf("preview exit = %d stdout=%s", code, stdout)
 	}
@@ -183,7 +184,7 @@ func TestStatusNeverCallsACommittedHubNew(t *testing.T) {
 	}
 }
 
-func TestStatusReportsStaleIndexAndRebuildAfterHandEdit(t *testing.T) {
+func TestStatusSaysTheIndexIsBehindAfterAHandEditAndDoesNotFail(t *testing.T) {
 	t.Parallel()
 	root := initTestWorkspace(t)
 	createDraftSkill(t, root, "demo", "--not-for", "unrelated")
@@ -197,7 +198,7 @@ func TestStatusReportsStaleIndexAndRebuildAfterHandEdit(t *testing.T) {
 	}
 	file.Close()
 	code, stdout, _ := runCLI(t, "status", "--workspace", root)
-	if code != 0 || !strings.Contains(stdout, "stale") || !strings.Contains(stdout, "Next: fix what doctor can repair") || !strings.Contains(stdout, "rebuild the search index") || strings.Contains(stdout, "0 active skills") {
+	if code != 0 || !strings.Contains(stdout, "Search index is behind file edits; it rebuilds on the next read.") || strings.Contains(stdout, "FAILED") || strings.Contains(stdout, "Next: fix what doctor can repair") || strings.Contains(stdout, "0 active skills") {
 		t.Fatalf("stale status = %d:\n%s", code, stdout)
 	}
 }
@@ -259,7 +260,7 @@ func TestTelemetryHealthIsCleanAfterPurgingACorruptStore(t *testing.T) {
 func TestSkillCreateStarterTemplateAndNextStep(t *testing.T) {
 	t.Parallel()
 	root := initTestWorkspace(t)
-	code, stdout, stderr := runCLI(t, "skill", "create", "--workspace", root, "--id", "starter-skill", "--collection", "core", "--name", "Starter Skill", "--description", "Starter description.", "--yes")
+	code, stdout, stderr := seedSkillCLI(t, "--workspace", root, "--id", "starter-skill", "--collection", "core", "--name", "Starter Skill", "--description", "Starter description.", "--yes")
 	if code != 0 {
 		t.Fatalf("create exit = %d: %s", code, stderr)
 	}
@@ -280,7 +281,7 @@ func TestSkillCreateStarterTemplateAndNextStep(t *testing.T) {
 func TestSkillShowDisplaysRoutingAndFilePath(t *testing.T) {
 	t.Parallel()
 	root := initTestWorkspace(t)
-	code, _, stderr := runCLI(t, "skill", "create", "--workspace", root, "--id", "show-test", "--collection", "core", "--name", "Show Test", "--description", "Show description.", "--trigger", "review code", "--not-for", "write prose", "--min-scope", "single_step", "--yes")
+	code, _, stderr := seedSkillCLI(t, "--workspace", root, "--id", "show-test", "--collection", "core", "--name", "Show Test", "--description", "Show description.", "--trigger", "review code", "--not-for", "write prose", "--min-scope", "single_step", "--yes")
 	if code != 0 {
 		t.Fatalf("create exit = %d: %s", code, stderr)
 	}
@@ -301,7 +302,7 @@ func TestSkillShowDisplaysRoutingAndFilePath(t *testing.T) {
 func TestSkillActivateMissingRequirementsCombinedCommand(t *testing.T) {
 	t.Parallel()
 	root := initTestWorkspace(t)
-	code, _, stderr := runCLI(t, "skill", "create", "--workspace", root, "--id", "missing-reqs", "--collection", "core", "--name", "Missing Reqs", "--description", "Missing description.", "--yes")
+	code, _, stderr := seedSkillCLI(t, "--workspace", root, "--id", "missing-reqs", "--collection", "core", "--name", "Missing Reqs", "--description", "Missing description.", "--yes")
 	if code != 0 {
 		t.Fatalf("create exit = %d: %s", code, stderr)
 	}
@@ -339,7 +340,7 @@ func TestInitRefusesAFolderWithOtherFiles(t *testing.T) {
 func TestDiffGroupsDraftSkills(t *testing.T) {
 	t.Parallel()
 	root := initTestWorkspace(t)
-	code, _, stderr := runCLI(t, "skill", "create", "--workspace", root, "--id", "draft-diff", "--collection", "core", "--name", "Draft Diff", "--description", "Draft diff description.", "--yes", "--no-commit")
+	code, _, stderr := seedSkillCLI(t, "--workspace", root, "--id", "draft-diff", "--collection", "core", "--name", "Draft Diff", "--description", "Draft diff description.", "--yes", "--no-commit")
 	if code != 0 {
 		t.Fatalf("create exit = %d: %s", code, stderr)
 	}
@@ -361,14 +362,15 @@ func TestDiffGroupsDraftSkills(t *testing.T) {
 func TestSkillPreviewShowsTheApplyCommand(t *testing.T) {
 	t.Parallel()
 	root := initTestWorkspace(t)
-	code, stdout, stderr := runCLI(t, "skill", "create", "--workspace", root, "--id", "preview-test", "--collection", "core", "--name", "Preview Test", "--description", "Preview description.")
+	createDraftSkill(t, root, "preview-test")
+	code, stdout, stderr := runCLI(t, "skill", "edit", "preview-test", "--workspace", root, "--description", "Preview description.")
 	if code != 0 {
-		t.Fatalf("create preview exit = %d: %s", code, stderr)
+		t.Fatalf("edit preview exit = %d: %s", code, stderr)
 	}
-	if !strings.Contains(stdout, "Apply: skillhub skill create") || !strings.Contains(stdout, "--yes\n") {
+	if !strings.Contains(stdout, "Apply: skillhub skill edit") || !strings.Contains(stdout, "--yes\n") {
 		t.Fatalf("preview missing the apply command:\n%s", stdout)
 	}
-	if !strings.Contains(stdout, "Show the diff: skillhub skill create") || !strings.Contains(stdout, "--diff\n") {
+	if !strings.Contains(stdout, "Show the diff: skillhub skill edit") || !strings.Contains(stdout, "--diff\n") {
 		t.Fatalf("preview missing the diff hint:\n%s", stdout)
 	}
 	if !strings.Contains(stdout, "Base version:") {

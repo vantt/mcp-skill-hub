@@ -17,20 +17,19 @@ func TestSkillPreviewCLICommandsApplyReviewedProposal(t *testing.T) {
 	if err := os.WriteFile(contentFile, []byte("---\nname: bound-skill\ndescription: Original description\n---\n\n# Bound Skill\n\nReview bound workflows and verify errors.\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
+	if code, stdout, stderr := seedSkillArgs([]string{"bound-skill", "--collection", "software", "--name", "Bound Skill", "--description", "Original description", "--trigger", "review bound skill", "--not-for", "other", "--min-scope", "single_step", "--content-file", contentFile, "--workspace", root, "--yes"}); code != 0 {
+		t.Fatalf("seed = %d: %s %s", code, stdout, stderr)
+	}
 	for _, step := range []struct {
 		args               []string
 		state, description string
 	}{
-		{[]string{"create", "bound-skill", "--collection", "software", "--name", "Bound Skill", "--description", "Original description", "--trigger", "review bound skill", "--not-for", "other", "--min-scope", "single_step", "--content-file", contentFile}, "draft", "Original description"},
 		{[]string{"edit", "bound-skill", "--description", "Reviewed description"}, "draft", "Reviewed description"},
 		{[]string{"activate", "bound-skill"}, "active", "Reviewed description"},
 		{[]string{"deprecate", "bound-skill"}, "deprecated", "Reviewed description"},
 		{[]string{"archive", "bound-skill"}, "archived", "Reviewed description"},
 	} {
 		args := append([]string{"skill"}, step.args...)
-		if step.args[0] == "create" {
-			args = append(args, "--workspace", filepath.Join(t.TempDir(), "not-the-preview-workspace"))
-		}
 		code, output, stderr := runCLI(t, append(args, "--workspace", root, "--json")...)
 		if code != 0 {
 			t.Fatalf("preview %v = %d: %s %s", step.args, code, output, stderr)

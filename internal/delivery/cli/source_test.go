@@ -135,7 +135,7 @@ func onboardCLIFilesystemSource(t *testing.T) string {
 	if err := os.WriteFile(filepath.Join(fixture, "notes.md"), []byte("upstream content\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if c, _, se := runCLIForTest([]string{"skill", "create", "--workspace", root, "--id", "cli-skill", "--collection", "default", "--name", "CLI Skill", "--description", "CLI test skill", "--yes"}); c != 0 {
+	if c, _, se := seedSkillArgs([]string{"--workspace", root, "--id", "cli-skill", "--collection", "default", "--name", "CLI Skill", "--description", "CLI test skill", "--yes"}); c != 0 {
 		t.Fatalf("skill create failed: %s", se)
 	}
 	code, stdout, stderr := runCLIForTest([]string{"source", "capture", "sources/upstream", "--reason", "private source rationale", "--workspace", root, "--json"})
@@ -189,7 +189,7 @@ func TestSourceImportCLI(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(skillMD), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if c, _, se := runCLIForTest([]string{"skill", "create", "--workspace", root, "--id", "calc-skill", "--collection", "default", "--name", "Calc Skill", "--description", "Calc test skill", "--yes"}); c != 0 {
+	if c, _, se := seedSkillArgs([]string{"--workspace", root, "--id", "calc-skill", "--collection", "default", "--name", "Calc Skill", "--description", "Calc test skill", "--yes"}); c != 0 {
 		t.Fatalf("skill create failed: %s", se)
 	}
 
@@ -309,7 +309,7 @@ func TestSourceBackfillFillsUpstreamIDAndKeepsOtherMetadata(t *testing.T) {
 	root := newSourceCLIWorkspace(t)
 	writeMeta := func(id, meta string) string {
 		t.Helper()
-		if c, _, se := runCLIForTest([]string{"skill", "create", "--workspace", root, "--id", id, "--collection", "default", "--name", id, "--description", "Backfill fixture", "--yes"}); c != 0 {
+		if c, _, se := seedSkillArgs([]string{"--workspace", root, "--id", id, "--collection", "default", "--name", id, "--description", "Backfill fixture", "--yes"}); c != 0 {
 			t.Fatalf("skill create %s failed: %s", id, se)
 		}
 		path := filepath.Join(root, "skills", "default", id, ".meta", "skill.yaml")

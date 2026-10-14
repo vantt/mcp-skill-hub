@@ -28,8 +28,8 @@ func TestErrorStatusCoversSchemaCodes(t *testing.T) {
 	}
 
 	enum := schema.Properties.Code.Enum
-	if len(enum) != 30 {
-		t.Fatalf("expected 30 error codes in schema, got %d", len(enum))
+	if len(enum) != 31 {
+		t.Fatalf("expected 31 error codes in schema, got %d", len(enum))
 	}
 
 	for _, code := range enum {

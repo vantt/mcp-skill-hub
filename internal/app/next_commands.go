@@ -45,7 +45,9 @@ func ShellCommandFor(command, id string) string {
 		// Inspect the affected skill rather than advertise an invalid bare edit.
 		cli = "skillhub skill review" + target
 	case "skill_create":
-		cli = "skillhub skill create" + target
+		// The command line no longer creates a hub draft: a draft made through
+		// the managed tools is inspected like any other skill.
+		cli = "skillhub skill review" + target
 	case "doctor":
 		cli = "skillhub doctor"
 	case "curation_run_start", "curation_run_retry":
@@ -56,7 +58,7 @@ func ShellCommandFor(command, id string) string {
 		} // Declared runtime setup is already a shell command.
 		cli = "skillhub status"
 	}
-	if target == "" && (strings.HasPrefix(cli, "skillhub skill review") || strings.HasPrefix(cli, "skillhub skill edit") || strings.HasPrefix(cli, "skillhub skill create")) {
+	if target == "" && (strings.HasPrefix(cli, "skillhub skill review") || strings.HasPrefix(cli, "skillhub skill edit")) {
 		cli = "skillhub skill list"
 	}
 	return cli

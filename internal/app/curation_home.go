@@ -97,6 +97,9 @@ type CurationService struct {
 	// workspace lock, instead of waiting for it. status sets it; the web Home
 	// and the MCP hub_status tool keep waiting.
 	NoWait bool
+	// ProjectDir, when set, lists the checkouts of this hub that the project
+	// around it holds. The web Home and the MCP tool leave it empty.
+	ProjectDir string
 }
 
 // GetCurationHome reads only workspace files, Git metadata, and the local derived catalog.
@@ -187,7 +190,26 @@ func (service CurationService) GetCurationHome(ctx context.Context, path string)
 		markCatalogCategoriesUnavailable(state.Categories)
 		state.CountsKnown = false
 	}
-	return deriveCurationHome(state), nil
+	home := deriveCurationHome(state)
+	if service.ProjectDir != "" {
+		home.addOpenCheckouts(openCheckoutActions(ctx, root, service.ProjectDir))
+	}
+	return home, nil
+}
+
+// addOpenCheckouts adds the checkouts of the surrounding project to the
+// actions. They are reminders: they never change the status of the hub.
+func (home *CurationHome) addOpenCheckouts(actions []ActionItem) {
+	if len(actions) == 0 {
+		return
+	}
+	home.Actions = append(home.Actions, actions...)
+	sort.SliceStable(home.Actions, func(i, j int) bool {
+		if home.Actions[i].Priority == home.Actions[j].Priority {
+			return home.Actions[i].Kind < home.Actions[j].Kind
+		}
+		return home.Actions[i].Priority > home.Actions[j].Priority
+	})
 }
 
 type homeState struct {

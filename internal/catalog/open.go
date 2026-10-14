@@ -91,6 +91,11 @@ func InspectWhileLocked(ctx context.Context, root string) (Status, error) {
 	return status, err
 }
 
+// DetailCanonicalInputsDiffer is the detail of a stale index whose files are
+// valid but newer than the published generation, as after a direct file edit.
+// The next read rebuilds it, so it is not a fault.
+const DetailCanonicalInputsDiffer = "canonical inputs differ from the published generation"
+
 // inspectWithSnapshotWhileLocked is InspectWhileLocked that also returns the
 // canonical scan the freshness verdict rests on. The snapshot is empty when
 // canonical files were not inspected.
@@ -126,7 +131,7 @@ func inspectCanonicalWhileLocked(root string, pointer Pointer) (Status, canonica
 			ServingMode: ServingFallback,
 			Pointer:     &pointer,
 			Generation:  pointer.Generation,
-			Detail:      "canonical inputs differ from the published generation",
+			Detail:      DetailCanonicalInputsDiffer,
 			Warning:     fmt.Sprintf("canonical inputs differ from published catalog generation %s", pointer.Generation),
 		}, snapshot, nil
 	}

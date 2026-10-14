@@ -20,7 +20,7 @@ import (
 func TestSourceImportLocatorPreviewAndBoundConfirm(t *testing.T) {
 	t.Parallel()
 	root, repo, service := sourceImportLocatorFixture(t)
-	code, _, stderr := runCLIForTest([]string{"skill", "create", "conflict-skill", "--collection", "default", "--name", "Conflict skill", "--description", "Existing skill", "--workspace", root, "--yes"})
+	code, _, stderr := seedSkillArgs([]string{"conflict-skill", "--collection", "default", "--name", "Conflict skill", "--description", "Existing skill", "--workspace", root, "--yes"})
 	if code != 0 {
 		t.Fatalf("create existing skill: %d %s", code, stderr)
 	}

@@ -62,7 +62,7 @@ The machine-owned schema authority for error envelopes is [error-envelope.schema
 | `ambiguous_locator` | Correct locator or specify path/ref | The locator matched multiple potential repositories, refs, or paths; provide an explicit subpath or reference. |
 | `ambiguous_ref` | Specify branch, tag, or commit | The remote reference could not be uniquely resolved; specify the intended branch or commit. |
 | `skill_selection_required` | Select a skill or use `--all` | The source repository contains multiple discovered skills; select one with `--skill <name>` or import all with `--all`. |
-| `skill_conflict` | Rename or use a different ID | A skill with the target ID already exists in the workspace; choose a distinct ID or edit the existing skill. |
+| `skill_conflict` | Rename or use a different ID | A skill with the target ID already exists in the workspace; choose a distinct ID or edit the existing skill. `skillhub skill checkout` returns it when `.claude/skills/<id>/` already exists in the project; the FIX says to commit or edit that folder. |
 | `source_conflict` | Use a different source ID | A monitored source with the specified identifier already exists; choose a distinct source ID. |
 | `resource_limits_exceeded` | Reduce file count or size | The skill or companion assets exceed size limits; remove large files or split the skill. |
 | `source_changed` | Re-run check or preview | The remote source revision changed since preview generation; generate a fresh preview against the new revision. |
@@ -70,7 +70,7 @@ The machine-owned schema authority for error envelopes is [error-envelope.schema
 | `validation_failed` | Correct canonical errors | Canonical workspace files failed schema or consistency validation; inspect the reported file and line errors. |
 | `local_watch_unsupported` | Use a remote Git repository | Watching a local directory is not supported; watching applies only to remote Git repositories. |
 | `resource_content_unavailable` | Re-add or re-import the skill | Required companion resource content is missing or corrupted and historical bytes are never guessed; re-add the skill or restore the resource. |
-| `content_review_required` | Do not retry automatically | The requested skill is from a third-party source and its content has not been approved; the agent must not use the skill and must tell the user to run `skillhub skill review <id>` to review and approve it. |
+| `content_review_required` | Do not retry automatically | The requested skill is from a third-party source and its content has not been approved; the agent must not use the skill and must tell the user to run `skillhub skill review <id>` to review and approve it. `skillhub skill commit` returns it too, without a terminal and without `--approve-content`: new content of a third-party skill is never applied unapproved, because that would stop agents from getting the skill. A person runs the commit in a terminal and answers the approval question. |
 
 `git_dirty_after_apply` is deliberately not an error code: after a successful
 approved apply, uncommitted Git changes are a user-facing status or warning.

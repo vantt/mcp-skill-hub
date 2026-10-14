@@ -234,3 +234,16 @@ func hunkRange(before, count int) string {
 		return fmt.Sprintf("%d,%d", before+1, count)
 	}
 }
+
+// CountLineChanges returns how many lines newer adds to and removes from older.
+func CountLineChanges(older, newer []byte) (added, removed int) {
+	for _, op := range diffLines(splitDiffLines(older), splitDiffLines(newer)) {
+		switch op.kind {
+		case lineInsert:
+			added++
+		case lineDelete:
+			removed++
+		}
+	}
+	return added, removed
+}

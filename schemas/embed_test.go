@@ -348,6 +348,7 @@ func TestErrorEnvelopeSchemaAcceptsNewErrorCodes(t *testing.T) {
 		"validation_failed",
 		"local_watch_unsupported",
 		"resource_content_unavailable",
+		"content_review_required",
 	}
 	for _, code := range codes {
 		t.Run(code, func(t *testing.T) {

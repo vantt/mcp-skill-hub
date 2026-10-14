@@ -106,7 +106,7 @@ Error responses follow the standard Skill Hub Result Envelope (`schema_version`,
 |---|---|---|
 | `400 Bad Request` | `invalid_request`, `validation_failed`, `ambiguous_locator`, `ambiguous_ref`, `local_watch_unsupported`, `unsupported_schema`, `resource_limits_exceeded` | Malformed JSON, validation failure, local path given to remote tool |
 | `401 Unauthorized` | Handled at transport layer | Missing or invalid Bearer token |
-| `403 Forbidden` | `permission_denied` | Mutating operation blocked by security policy |
+| `403 Forbidden` | `permission_denied`, `content_review_required` | Mutating operation blocked by security policy |
 | `404 Not Found` | Handled at route/handler layer | Unknown skill ID, insight ID, run ID, or API route |
 | `409 Conflict` | `skill_conflict`, `source_conflict`, `edit_conflict`, `stale_proposal`, `stale_context`, `source_changed`, `resource_content_unavailable` | Concurrent modification, duplicate ID, hash mismatch |
 | `410 Gone` | `snapshot_expired` | Paged cursor expired due to underlying catalog changes |

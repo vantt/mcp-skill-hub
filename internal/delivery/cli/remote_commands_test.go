@@ -58,7 +58,7 @@ func TestRemoteAddAndWatchCLIConfirmStoredPreviews(t *testing.T) {
 	// Watch uses a different proposal family and must dispatch source confirm,
 	// not regenerate a watch or accidentally confirm through the skill service.
 	root = initTestWorkspace(t)
-	code, output, stderr := runCLI(t, "skill", "create", "remote-tool", "--collection", "default", "--name", "Remote Tool", "--description", "Review remote tools", "--workspace", root, "--yes")
+	code, output, stderr := seedSkillCLI(t, "remote-tool", "--collection", "default", "--name", "Remote Tool", "--description", "Review remote tools", "--workspace", root, "--yes")
 	if code != 0 {
 		t.Fatalf("watch skill: %d %s %s", code, output, stderr)
 	}

@@ -19,6 +19,7 @@ var statusByCode = map[app.ErrorCode]int{
 	app.ErrorUnknownResolution:            http.StatusUnprocessableEntity, // 422
 	app.ErrorClarificationBudgetExhausted: http.StatusUnprocessableEntity, // 422
 	app.ErrorPermissionDenied:             http.StatusForbidden,           // 403
+	app.ErrorContentReviewRequired:        http.StatusForbidden,           // 403
 	app.ErrorSkillConflict:                http.StatusConflict,            // 409
 	app.ErrorSourceConflict:               http.StatusConflict,            // 409
 	app.ErrorEditConflict:                 http.StatusConflict,            // 409

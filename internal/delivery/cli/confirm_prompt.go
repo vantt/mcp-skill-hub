@@ -46,13 +46,34 @@ func confirmInPlace(stdout io.Writer, jsonOutput, canApply bool, print func(inte
 
 // askToApply asks for one answer. Only "y" or "yes" applies the change.
 func askToApply(stdout io.Writer) bool {
-	fmt.Fprint(stdout, "Apply this change? [y/N] ")
-	line, _ := bufio.NewReader(confirmInput).ReadString('\n')
+	return askYesNo(stdout, "Apply this change?")
+}
+
+// askYesNo prints question and reads one answer. Only "y" or "yes" is a yes,
+// so an empty line or anything else is a no. A command that asks several
+// questions reads them all from one reader, so buffered input is never lost
+// between them.
+func askYesNo(stdout io.Writer, question string) bool {
+	fmt.Fprint(stdout, question+" [y/N] ")
+	line, _ := answerReader().ReadString('\n')
 	switch strings.ToLower(strings.TrimSpace(line)) {
 	case "y", "yes":
 		return true
 	}
 	return false
+}
+
+var (
+	answerSource io.Reader
+	answerBuffer *bufio.Reader
+)
+
+// answerReader is the one buffered reader over confirmInput.
+func answerReader() *bufio.Reader {
+	if answerBuffer == nil || answerSource != confirmInput {
+		answerSource, answerBuffer = confirmInput, bufio.NewReader(confirmInput)
+	}
+	return answerBuffer
 }
 
 // previewHints says how a preview ends: the command that applies it, whether

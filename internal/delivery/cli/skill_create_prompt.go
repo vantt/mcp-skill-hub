@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
-	"regexp"
 	"strings"
 
 	"golang.org/x/term"
@@ -16,10 +14,9 @@ import (
 	"github.com/vantt/skillhub-mcp/internal/app"
 	"github.com/vantt/skillhub-mcp/internal/delivery/cli/termui"
 	"github.com/vantt/skillhub-mcp/internal/shellquote"
-	"github.com/vantt/skillhub-mcp/internal/skill"
 )
 
-// skillCreateInput is where the guided questions read answers from. Tests replace it.
+// skillCreateInput is where the create form reads answers from. Tests replace it.
 var skillCreateInput io.Reader = os.Stdin
 
 // skillCreateInteractive reports whether `skill create` may ask questions: both the
@@ -28,16 +25,13 @@ var skillCreateInteractive = func(stdout io.Writer) bool {
 	return term.IsTerminal(int(os.Stdin.Fd())) && stdoutIsTerminal(stdout)
 }
 
-const skillCreateMissingFlags = "create requires --id, --collection, --name, and --description"
+// maxCreateExamples is how many example requests the form collects.
+const maxCreateExamples = 2
 
-var (
-	errGuidedCancelled = errors.New("skill creation cancelled")
-	errGuidedEmpty     = errors.New("an answer is required")
-	nonKebabRun        = regexp.MustCompile(`[^a-z0-9]+`)
-)
+var errCreateCancelled = errors.New("skill creation cancelled")
 
-// guidedPrompter asks one question at a time and reads one line per answer.
-type guidedPrompter struct {
+// createForm asks one question at a time and reads one line per answer.
+type createForm struct {
 	reader *bufio.Reader
 	out    io.Writer
 }
@@ -49,244 +43,118 @@ type lineResult struct {
 
 // readLine returns the next trimmed line. End of input and a cancelled context
 // both mean the person gave up.
-func (p *guidedPrompter) readLine(ctx context.Context) (string, error) {
+func (form *createForm) readLine(ctx context.Context) (string, error) {
 	done := make(chan lineResult, 1)
 	go func() {
-		line, err := p.reader.ReadString('\n')
+		line, err := form.reader.ReadString('\n')
 		done <- lineResult{line: line, err: err}
 	}()
 	select {
 	case <-ctx.Done():
-		return "", errGuidedCancelled
+		return "", errCreateCancelled
 	case res := <-done:
 		if res.err != nil && strings.TrimSpace(res.line) == "" {
-			return "", errGuidedCancelled
+			return "", errCreateCancelled
 		}
 		return strings.TrimSpace(res.line), nil
 	}
 }
 
-// ask prints the question and returns the answer; an empty answer takes the suggestion
-// when there is one and is errGuidedEmpty otherwise.
-func (p *guidedPrompter) ask(ctx context.Context, question, suggestion string) (string, error) {
-	if suggestion != "" {
-		fmt.Fprintf(p.out, "%s [%s]: ", question, suggestion)
-	} else {
-		fmt.Fprintf(p.out, "%s: ", question)
-	}
-	answer, err := p.readLine(ctx)
-	if err != nil {
-		return "", err
-	}
-	if answer == "" {
-		if suggestion == "" {
-			return "", errGuidedEmpty
-		}
-		return suggestion, nil
-	}
-	return answer, nil
+// ask prints a question and returns the answer, which may be empty.
+func (form *createForm) ask(ctx context.Context, question string) (string, error) {
+	fmt.Fprint(form.out, question+" ")
+	return form.readLine(ctx)
 }
 
-// askLines collects one or more lines; the first is required and a blank line ends the list.
-func (p *guidedPrompter) askLines(ctx context.Context, question string) ([]string, error) {
-	var lines []string
-	for {
+// askUntilEmpty collects answers until an empty line, at most limit of them
+// when limit is positive. An empty first answer gives an empty list.
+func (form *createForm) askUntilEmpty(ctx context.Context, question string, limit int) ([]string, error) {
+	var answers []string
+	for limit <= 0 || len(answers) < limit {
 		prompt := question
-		if len(lines) > 0 {
-			prompt = "Another one (blank line to finish)"
+		if len(answers) > 0 {
+			prompt = "Another one?"
 		}
-		answer, err := p.ask(ctx, prompt, "")
-		if errors.Is(err, errGuidedEmpty) && len(lines) > 0 {
-			return lines, nil
-		}
+		answer, err := form.ask(ctx, prompt)
 		if err != nil {
 			return nil, err
 		}
-		lines = append(lines, answer)
+		if answer == "" {
+			break
+		}
+		answers = append(answers, answer)
 	}
+	return answers, nil
 }
 
-// suggestSkillID turns a display name into a kebab-case id, or "" when nothing usable remains.
-func suggestSkillID(name string) string {
-	id := strings.Trim(nonKebabRun.ReplaceAllString(strings.ToLower(name), "-"), "-")
-	if len(id) > 63 {
-		id = strings.Trim(id[:63], "-")
+// runSkillCreate scaffolds a new skill in the project. On a terminal it asks
+// the questions the flags did not answer; without one the flags must carry the
+// id and the description. It writes nothing on the hub.
+func runSkillCreate(ctx context.Context, flags skillFlags, stdout, stderr io.Writer) int {
+	input := app.SkillScaffoldInput{
+		SkillID: flags.id, ProjectDir: currentDirectory(), Name: flags.name, Description: flags.description,
+		Triggers: flags.triggers, NotFor: flags.notFor, Examples: flags.examples,
 	}
-	return id
-}
-
-// existingSkillContext returns the ids in use and the collection a new skill defaults to:
-// the only existing collection, otherwise core.
-func existingSkillContext(ctx context.Context, service app.SkillService, workspace string) (map[string]bool, string, error) {
-	list, err := service.ListSkills(ctx, workspace, "")
-	if err != nil {
-		return nil, "", err
-	}
-	ids := make(map[string]bool, len(list.Skills))
-	collections := map[string]bool{}
-	for _, entry := range list.Skills {
-		ids[entry.ID] = true
-		collections[entry.Collection] = true
-	}
-	if len(collections) == 1 {
-		for name := range collections {
-			return ids, name, nil
+	if flags.id == "" || flags.description == "" {
+		if flags.jsonOutput || !skillCreateInteractive(stdout) {
+			return writeInvalidRequest(stdout, stderr, flags.jsonOutput, "create requires a skill id and --description",
+				"Run `skillhub skill create <id> --description \"<what it does>\" [--trigger <when>] [--not-for <when not>] [--example <request>]`.")
 		}
 	}
-	return ids, skill.DefaultCollection, nil
-}
-
-// checkGuidedID runs the same validation as the flag form by previewing a create for the id.
-// It returns a message when the id can be asked for again, and an error when the preview fails
-// for any other reason.
-func checkGuidedID(ctx context.Context, service app.SkillService, flags skillFlags, ids map[string]bool, id string) (string, error) {
-	if ids[id] {
-		return fmt.Sprintf("A skill with the id %q already exists. Choose another id.", id), nil
-	}
-	_, err := service.PreviewCreate(ctx, flags.workspace, skill.CreateInput{
-		ID: id, Collection: flags.collection, Name: "probe", Description: "probe",
-	}, false)
-	switch {
-	case err == nil:
-		return "", nil
-	case errors.Is(err, skill.ErrAlreadyExists):
-		return fmt.Sprintf("A skill with the id %q already exists. Choose another id.", id), nil
-	case strings.Contains(err.Error(), "kebab-case"):
-		return "Use lowercase letters, digits and hyphens, starting with a letter or digit (for example commit-style).", nil
-	default:
-		return "", err
-	}
-}
-
-// runGuidedSkillCreateCommand starts the guided questions when the session is a terminal and
-// otherwise reports the missing flags, as a create without them always did.
-func runGuidedSkillCreateCommand(ctx context.Context, flags skillFlags, stdout, stderr io.Writer) int {
-	if !skillCreateInteractive(stdout) {
-		return writeInvalidRequest(stdout, stderr, false, skillCreateMissingFlags, "Review `skillhub skill create` arguments and retry.")
-	}
-	resolved, err := resolveWorkspace(flags.workspace)
-	if err != nil {
-		var resErr *WorkspaceResolutionError
-		if errors.As(err, &resErr) {
-			return writeWorkspaceResolutionError(stdout, stderr, false, resErr)
+	if skillCreateInteractive(stdout) && !flags.jsonOutput {
+		if err := askCreateForm(ctx, &input, flags, stdout); err != nil {
+			return createFormExit(err, stdout, stderr)
 		}
-		return writeInvalidRequest(stdout, stderr, false, err.Error(), "Review `skillhub skill create` arguments and retry.")
 	}
-	flags.workspace = resolved
-	return runGuidedSkillCreate(ctx, app.SkillService{}, flags, skillCreateInput, stdout, stderr)
+	result, err := app.ScaffoldProjectSkill(ctx, input)
+	if err != nil {
+		return writeSkillErrorFor(flags.id, stdout, stderr, flags.jsonOutput, err)
+	}
+	return writeResult(stdout, stderr, flags.jsonOutput, result, func(p *termui.Printer) {
+		p.Line(result.Summary)
+		p.Line("Write the instructions there and try them: ask your agent to use /" + result.SkillID + ".")
+		p.Raw("When ready: skillhub skill commit " + shellquote.Arg(result.SkillID) + "\n")
+	})
 }
 
-// runGuidedSkillCreate asks for the skill's identity and routing, shows a summary and saves the
-// draft. The answers are the confirmation, so nothing is written until the last answer is in.
-func runGuidedSkillCreate(ctx context.Context, service app.SkillService, flags skillFlags, in io.Reader, stdout, stderr io.Writer) int {
-	prompter := &guidedPrompter{reader: bufio.NewReader(in), out: stdout}
-	ids, defaultCollection, err := existingSkillContext(ctx, service, flags.workspace)
-	if err != nil {
-		return writeSkillErrorFor(flags.id, stdout, stderr, false, err)
-	}
-	if flags.collection == "" {
-		flags.collection = defaultCollection
-	}
-	if flags.minScope == "" {
-		flags.minScope = "single_step"
-	}
-	if len(flags.operations) == 0 {
-		flags.operations = []string{"other"}
-	}
-
-	p := termui.New(stdout)
-	p.Line("Create a draft skill. Answer each question; press Ctrl-C to stop without writing anything.")
-	p.Blank()
-	answers, err := askGuidedAnswers(ctx, service, &flags, prompter, ids, stdout)
-	if err != nil {
-		return guidedAnswerExit(err, stdout, stderr)
-	}
-	flags.name, flags.description = answers.name, answers.description
-	flags.triggers, flags.notFor = answers.triggers, answers.notFor
-
-	p.Blank()
-	p.Fields(
-		termui.Field{Label: "Skill", Value: fmt.Sprintf("%s (%s)", flags.name, flags.id)},
-		termui.Field{Label: "Collection", Value: flags.collection},
-		termui.Field{Label: "Description", Value: flags.description},
-		termui.Field{Label: "Use when", Value: strings.Join(flags.triggers, "; ")},
-		termui.Field{Label: "Not for", Value: strings.Join(flags.notFor, "; ")},
-		termui.Field{Label: "Min scope", Value: flags.minScope},
-	)
-	p.Blank()
-
-	preview, err := service.PreviewCreate(ctx, flags.workspace, skill.CreateInput{
-		ID: flags.id, Collection: flags.collection, Name: flags.name, Description: flags.description,
-		Routing: skill.RoutingInput{Operations: flags.operations, Triggers: flags.triggers, NotFor: flags.notFor, MinScope: flags.minScope},
-	}, false)
-	if err != nil {
-		return writeSkillErrorFor(flags.id, stdout, stderr, false, err)
-	}
-	result, err := service.ConfirmSkillMutation(commitContext(ctx, flags.noCommit, stdout), flags.workspace, preview, preview.Confirmation.Confirmation.Pins)
-	if err != nil {
-		return writeSkillErrorFor(flags.id, stdout, stderr, false, err)
-	}
-	p.Line(result.Summary)
-	writeCommitLines(p, result.Commit)
-	file := filepath.Join(flags.workspace, "skills", flags.collection, flags.id, "SKILL.md")
-	p.Fields(termui.Field{Label: "File", Value: file})
-	p.Next("replace the starter text in that file with your instructions, then activate the skill:", "skillhub skill activate "+shellquote.Arg(flags.id)+" --yes")
-	return 0
-}
-
-type guidedAnswers struct {
-	name, description string
-	triggers, notFor  []string
-}
-
-// askGuidedAnswers asks the questions in order. The name comes first so the id can be suggested from it.
-func askGuidedAnswers(ctx context.Context, service app.SkillService, flags *skillFlags, prompter *guidedPrompter, ids map[string]bool, stdout io.Writer) (guidedAnswers, error) {
-	var answers guidedAnswers
+// askCreateForm asks, in order, what the flags left open: the id, what the
+// skill does, when to use it, when not to, and a few example requests.
+func askCreateForm(ctx context.Context, input *app.SkillScaffoldInput, flags skillFlags, stdout io.Writer) error {
+	form := &createForm{reader: bufio.NewReader(skillCreateInput), out: stdout}
 	var err error
-	if answers.name, err = prompter.ask(ctx, "Name of the skill (for example: Commit style)", ""); err != nil {
-		return answers, err
-	}
-	if flags.id == "" {
-		suggestion := suggestSkillID(answers.name)
-		for {
-			id, askErr := prompter.ask(ctx, "Skill id (lowercase, hyphens)", suggestion)
-			if askErr != nil {
-				return answers, askErr
-			}
-			message, checkErr := checkGuidedID(ctx, service, *flags, ids, id)
-			if checkErr != nil {
-				return answers, checkErr
-			}
-			if message == "" {
-				flags.id = id
-				break
-			}
-			fmt.Fprintln(stdout, message)
-			suggestion = ""
+	if input.SkillID == "" {
+		if input.SkillID, err = form.ask(ctx, "Skill id (lowercase letters, digits and hyphens)?"); err != nil {
+			return err
 		}
 	}
-	if answers.description, err = prompter.ask(ctx, "One-sentence description of what the skill does", ""); err != nil {
-		return answers, err
+	if input.Description == "" {
+		if input.Description, err = form.ask(ctx, "What does this skill do?"); err != nil {
+			return err
+		}
 	}
-	if answers.triggers, err = prompter.askLines(ctx, "When should an agent use it? (a phrase such as \"write a commit message\")"); err != nil {
-		return answers, err
+	if len(flags.triggers) == 0 {
+		if input.Triggers, err = form.askUntilEmpty(ctx, "When should an agent use it? (empty line to finish)", 0); err != nil {
+			return err
+		}
 	}
-	answers.notFor, err = prompter.askLines(ctx, "When should an agent not use it? (a phrase such as \"write release notes\")")
-	return answers, err
+	if len(flags.notFor) == 0 {
+		if input.NotFor, err = form.askUntilEmpty(ctx, "When should it not? (empty line to finish)", 0); err != nil {
+			return err
+		}
+	}
+	if len(flags.examples) == 0 {
+		input.Examples, err = form.askUntilEmpty(ctx, "One or two example requests:", maxCreateExamples)
+	}
+	return err
 }
 
-// guidedAnswerExit maps a stopped conversation to an exit code; nothing was written.
-func guidedAnswerExit(err error, stdout, stderr io.Writer) int {
-	if errors.Is(err, errGuidedCancelled) {
+// createFormExit maps a stopped form to an exit code; nothing was written.
+func createFormExit(err error, stdout, stderr io.Writer) int {
+	if errors.Is(err, errCreateCancelled) {
 		fmt.Fprintln(stdout)
 		p := termui.New(stderr)
 		p.Line("Cancelled. Nothing was written.")
 		return 130
-	}
-	if errors.Is(err, errGuidedEmpty) {
-		p := termui.New(stderr)
-		p.Error("A required answer was empty.", "Nothing was written.", "Run `skillhub skill create` again and answer every question.")
-		return 2
 	}
 	return writeSkillErrorFor("", stdout, stderr, false, err)
 }
