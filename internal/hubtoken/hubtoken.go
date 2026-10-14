@@ -142,6 +142,16 @@ func Rotate(path string) error {
 	if err != nil {
 		return err
 	}
+	return Save(path, token)
+}
+
+// Save writes token to path as a private file: the folder is created with
+// mode 0700 and an older file is replaced in one step, so a reader never sees
+// a half-written token. It refuses a string that is not a usable token.
+func Save(path, token string) error {
+	if !validToken(token) {
+		return ErrInvalidToken
+	}
 	directory := filepath.Dir(path)
 	if err := os.MkdirAll(directory, 0o700); err != nil {
 		return fmt.Errorf("create token directory: %w", err)
