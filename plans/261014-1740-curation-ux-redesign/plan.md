@@ -228,8 +228,9 @@ under `runtime/submissions/` can be deleted.
 
 ## Open questions
 
-Each has the smallest proposed answer. The implementing phase uses the proposed answer only after the user confirms
-it.
+**Answered 2026-10-14 by the user: every proposed answer below is accepted, with one change to question 22:
+submissions are reviewed with `skillhub skill review <SUB-id>` (and dropped with `--discard`), not with
+`skill commit`.** The text below keeps the questions for the record.
 
 1. **Commit message format.** Proposed: subject `<Verb> <skill-id>[: <detail>]` (for example
    `Activate review-checklist`, `Commit review-checklist from a project (2 files)`, `Add pdf from github.com/anthropics/skills`),
@@ -293,7 +294,7 @@ it.
 21. **Submission queue storage and caps.** Proposed: `runtime/submissions/SUB-<ulid>/` (untracked, machine-local).
     At most 50 waiting submissions and 256 MiB in total. A new submission for the same skill id from the same client
     label replaces the older waiting one.
-22. **Reviewing a submission in the CLI.** Proposed: `skillhub skill commit <SUB-id>` previews it like a folder (D7)
+22. **Reviewing a submission in the CLI.** Proposed: `skillhub skill review <SUB-id>` previews it like a folder (D7)
     and asks on a TTY: apply → approve (always, it is untrusted) → activate (new skill only). The same command with
     `--discard` drops it. Without a TTY, it refuses to apply. `skillhub skill review <id>` and `status` name waiting
     submissions.

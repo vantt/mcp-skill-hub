@@ -81,7 +81,7 @@ review screen, approve).
 
 - `status`: a `submission_waiting` action ("1 submitted skill waits for review: team-release from machine-a,
   2026-10-14") with the next command. `schemas/curation-home-v1.schema.json` gains the kind.
-- CLI (open question 22): `skillhub skill commit SUB-…` previews like a folder commit. On a TTY it asks:
+- CLI (open question 22): `skillhub skill review SUB-…` previews like a folder commit. On a TTY it asks:
   apply → approve (always) → activate (new skill only). All answers land in one commit, and the commit message
   records "submitted from <client_label>" (open question 23). `--discard` drops it. Without a TTY it refuses to
   apply. `skill review <id>` names waiting submissions for that id.
@@ -107,7 +107,7 @@ review screen, approve).
 - Modify `internal/skillruntime/remote_cache.go` (export `ExtractBundle`, with no behaviour change for bundles).
 - Create `internal/app/submissions.go` and its test. Modify `internal/app/skill_commit.go` (the submission source),
   `curation_home.go`, `review_queue.go`.
-- Modify `internal/delivery/cli/workspace_resolve.go`, `skill_commit.go` (remote send, `--discard`),
+- Modify `internal/delivery/cli/workspace_resolve.go`, `skill_commit.go` (remote send), `skill_review.go` (review and `--discard` of submissions),
   `skill_checkout.go` (remote fetch), `status_doctor.go`.
 - Create `internal/delivery/web/routes_submissions.go` and its test. Modify `server.go`.
 - Modify `web/src/screens/review/WaitingForReviewScreen.tsx`, `FullReviewScreen.tsx` and `api/queries.ts`. Extend
@@ -132,7 +132,7 @@ review screen, approve).
    - run `skill create`, edit the folder, then `skill commit --yes`;
    - the hub tree and HEAD are unchanged, `status --json` lists `submission_waiting`, and `skill_resolve` and
      `skill_get` know nothing of the skill;
-   - then, on the hub, `skill commit SUB-…` with TTY answers "y y y" gives one commit, and the skill is served.
+   - then, on the hub, `skill review SUB-…` with TTY answers "y y y" gives one commit, and the skill is served.
 4. Remote checkout test: checkout through the bundle, edit, commit gives a submission with `base_version` = the bundle
    digest. The hub preview shows a diff against that version.
 5. Web route tests and the Playwright waiting-page flow: submission → review → open the files → Approve.
@@ -159,16 +159,16 @@ $ skillhub status
 …
 Waiting
   - 1 submitted skill waits for review: team-release from machine-a (2026-10-14)
-    Review: skillhub skill commit SUB-01JA2…   or the web page "Waiting for review"
+    Review: skillhub skill review SUB-01JA2…   or the web page "Waiting for review"
 
-$ skillhub skill commit SUB-01JA2…
+$ skillhub skill review SUB-01JA2…
 team-release (submitted from machine-a): a new skill.
 Files (2, 227 B):
   SKILL.md            181 B
   scripts/bump.sh      46 B
 Routing, suggested from the description (edit with --edit-routing): …
 Submitted content is untrusted until you approve it.
-Show the diff: skillhub skill commit SUB-01JA2… --diff
+Show the diff: skillhub skill review SUB-01JA2… --diff
 Add team-release as a draft? [y/N] y
 Approve this content for agents? [y/N] y
 Activate team-release now? [y/N] n
