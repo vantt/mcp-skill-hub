@@ -65,3 +65,13 @@ not committed · agents still get the current version" ở dưới cùng với [
 (D3). Sau commit web báo ai nhận bản mới khi nào ("this machine now; others after you push"). Thay đổi cần thử
 trong agent dùng checkout/commit; web có nút "Checkout to a project" kèm lệnh để chép. Bỏ hai tab tách rời và kiểu
 "mỗi file lưu một lần, lưu là live".
+
+## D7. Thêm skill có sẵn (2026-10-14)
+
+**Quyết định:** thêm từ folder là `skill commit <folder>` (D2); lần sau commit lại cùng folder là cập nhật có diff,
+không còn báo conflict. `skill add` chỉ nhận URL GitHub (skill có upstream được theo dõi). Preview liệt kê mọi
+file, nêu file đã bị loại (bí mật/rác như `.env*`, `*.pem`, `id_*`, `node_modules/`), license hiện ở cả chế độ
+text, và hub gợi ý routing (trigger, not_for, ví dụ) từ `description` để chấp nhận hoặc sửa tại chỗ
+(`--edit-routing`). Trong terminal, các câu hỏi y/N lần lượt: thêm làm draft, duyệt nội dung (chỉ khi là bên thứ
+ba), activate; tất cả thành một commit (D3). Không có terminal (agent): dừng ở draft, agent không bao giờ duyệt nội
+dung bên thứ ba.
