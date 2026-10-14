@@ -224,9 +224,8 @@ func (resolver *Resolver) Resolve(ctx context.Context, raw Request) (Response, e
 		candidate := scoreSkill(skill, request, resolver.policy)
 		if candidate.Exclusion == Violated {
 			hardReasons[candidate.HardReason]++
-			excludedRelevance := candidate.Score + resolver.policy.Weights.Constraint*candidate.Features.Constraint + resolver.policy.Weights.NotFor*candidate.Features.NotFor
-			if excludedRelevance > hardExcludedScore {
-				hardExcludedScore = excludedRelevance
+			if relevance := excludedRelevance(candidate, resolver.policy); relevance > hardExcludedScore {
+				hardExcludedScore = relevance
 			}
 			continue
 		}
@@ -334,7 +333,7 @@ func (resolver *Resolver) Resolve(ctx context.Context, raw Request) (Response, e
 	if len(candidates) > 1 {
 		second := candidates[1]
 		linked := linkedByDiscriminator(top.Skill, second.Skill)
-		secondApplicable := second.Score >= resolver.policy.ApplicabilityFloor || linked && second.Score >= resolver.policy.ApplicabilityFloor-.15
+		secondApplicable := runnerUpApplicable(second.Score, linked, resolver.policy)
 		closeScore := secondApplicable && top.Score-second.Score < resolver.policy.MinimumMargin
 		curatedAmbiguity := secondApplicable && linked && top.Score-second.Score < .25 && !singleDiscriminatorChoicePresent(top.Skill, second.Skill, request)
 		if !secondApplicable {
@@ -364,6 +363,61 @@ func (resolver *Resolver) Resolve(ctx context.Context, raw Request) (Response, e
 	response.Supporting = resolver.supporting(top.Skill, byID, request)
 	resolver.cache.Put(key, response)
 	return response, nil
+}
+
+// linkedFloorSlack lowers the applicability floor for a runner-up that is tied
+// to the leader by distinguish_from.
+const linkedFloorSlack = .15
+
+// runnerUpApplicable reports whether a score keeps a candidate in the running
+// as a runner-up: at the floor, or within the slack of it when linked.
+func runnerUpApplicable(score float64, linked bool, policy Policy) bool {
+	return score >= policy.ApplicabilityFloor || linked && score >= policy.ApplicabilityFloor-linkedFloorSlack
+}
+
+// excludedRelevance is how strongly a hard-excluded candidate matched before
+// its penalties were applied.
+func excludedRelevance(candidate scoredCandidate, policy Policy) float64 {
+	return candidate.Score + policy.Weights.Constraint*candidate.Features.Constraint + policy.Weights.NotFor*candidate.Features.NotFor
+}
+
+// Influences reports whether a skill can change the resolution of a request: it
+// would be a candidate at or above the floor, a linked runner-up within the
+// slack, or a hard-excluded skill whose relevance reaches the floor and so can
+// turn the outcome into a constraint conflict. It applies the same request
+// normalization, scope filter, compatibility check and scoring as Resolve and
+// ignores retrieval, so it over-approximates. A request that does not normalize
+// counts as influenced, since the resolver would reject it.
+func Influences(skill Skill, request Request, policy Policy, linked bool) bool {
+	influences, _ := influence(skill, request, policy, linked)
+	return influences
+}
+
+// ExcludedWithinReach reports whether the skill is hard-excluded for the request
+// by its own not_for or constraint evidence while its relevance still reaches
+// the applicability floor, the case in which Resolve answers constraint_conflict.
+func ExcludedWithinReach(skill Skill, request Request, policy Policy) bool {
+	_, excluded := influence(skill, request, policy, false)
+	return excluded
+}
+
+func influence(skill Skill, request Request, policy Policy, linked bool) (influences, excludedWithinReach bool) {
+	normalized, err := NormalizeRequest(request)
+	if err != nil {
+		return true, false
+	}
+	if scopeLevel(normalized.Task.Scope) > 0 && scopeLevel(skill.MinScope) > scopeLevel(normalized.Task.Scope) {
+		return false, false
+	}
+	if evaluateCompatibility(skill, normalized).State == Violated {
+		return false, false
+	}
+	candidate := scoreSkill(skill, normalized, policy)
+	if candidate.Exclusion == Violated {
+		within := excludedRelevance(candidate, policy) >= policy.ApplicabilityFloor
+		return within, within
+	}
+	return runnerUpApplicable(candidate.Score, linked, policy), false
 }
 
 func validateProjectedSkill(skill Skill) error {

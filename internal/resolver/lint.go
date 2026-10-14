@@ -213,3 +213,74 @@ func namesSkill(source, target Skill) bool {
 	}
 	return false
 }
+
+// ExampleResolvesElsewhere reports an example that does not resolve to its own
+// skill. The fix depends on what the resolver did instead: a winning skill, no
+// skill at all, or a question to the user.
+func ExampleResolvesElsewhere(skillID, phrase string, status Status, winner string) LintFinding {
+	finding := LintFinding{
+		Code:    "example_resolves_elsewhere",
+		SkillID: skillID,
+		Field:   "routing.examples",
+		Value:   phrase,
+	}
+	switch {
+	case status == StatusResolved && winner != "":
+		finding.OtherSkillID = winner
+		finding.Message = fmt.Sprintf("example %q of %q resolves to %q", phrase, skillID, winner)
+		finding.Fix = fmt.Sprintf("Add a not_for entry on %s that covers this request, add distinguish_from, or sharpen this skill's triggers", winner)
+	case status == StatusNeedsContext:
+		finding.Message = fmt.Sprintf("example %q of %q needs a choice between skills", phrase, skillID)
+		finding.Fix = "Narrow the triggers so one skill wins, or add distinguish_from with a discriminator question"
+	default:
+		finding.Message = fmt.Sprintf("example %q of %q resolves to no skill", phrase, skillID)
+		finding.Fix = "Add a trigger that names this request's domain object, or rephrase the example"
+	}
+	return finding
+}
+
+// CounterExampleResolvesToSkill reports a counter-example that still resolves to
+// the skill it says the skill is not for.
+func CounterExampleResolvesToSkill(skillID, phrase string) LintFinding {
+	return LintFinding{
+		Code:    "counter_example_resolves_to_skill",
+		SkillID: skillID,
+		Field:   "routing.counter_examples",
+		Value:   phrase,
+		Message: fmt.Sprintf("counter-example %q of %q resolves to %q", phrase, skillID, skillID),
+		Fix:     "Add a not_for entry that covers this request, or narrow the trigger it matches",
+	}
+}
+
+// ExampleTakenBy reports an example of owner that the changed skill taker now
+// wins, or shares with owner in a choice. already is true when the same held
+// before the change.
+func ExampleTakenBy(taker, owner, phrase string, wins, already bool) LintFinding {
+	when := "now"
+	if already {
+		when = "already"
+	}
+	message := fmt.Sprintf("example %q of %q %s resolves to %q", phrase, owner, when, taker)
+	if !wins {
+		need := "now needs a choice"
+		if already {
+			need = "already needs one"
+		}
+		message = fmt.Sprintf("example %q of %q %s between %q and %q", phrase, owner, need, taker, owner)
+	}
+	return LintFinding{
+		Code:         "example_taken_by",
+		SkillID:      taker,
+		OtherSkillID: owner,
+		Field:        "routing.examples",
+		Value:        phrase,
+		Message:      message,
+		Fix:          fmt.Sprintf("Add a not_for entry on %s that covers this request, narrow %s's triggers, or add distinguish_from between %s and %s", taker, taker, taker, owner),
+	}
+}
+
+// SelfResolutionSkipped reports that the examples were not resolved, with the
+// reason. skillID is the single skill under check, or empty.
+func SelfResolutionSkipped(skillID, reason, fix string) LintFinding {
+	return LintFinding{Code: "self_resolution_skipped", SkillID: skillID, Message: "example check skipped: " + reason, Fix: fix}
+}
