@@ -450,6 +450,9 @@ func resolveBaseURL(override string) string {
 	return strings.TrimRight(baseURL, "/")
 }
 
+// maxLatestRedirects bounds the redirects followed while looking for the latest release tag.
+const maxLatestRedirects = 5
+
 func resolveTarget(ctx context.Context, opts Options, baseURL string) (string, string, error) {
 	if strings.TrimSpace(opts.TargetVersion) != "" {
 		raw := strings.TrimSpace(opts.TargetVersion)
@@ -468,68 +471,94 @@ func resolveTarget(ctx context.Context, opts Options, baseURL string) (string, s
 		}
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, latestURL, nil)
-	if err != nil {
-		return "", "", &Error{
-			Summary: "Could not create request for latest release.",
-			Why:     err.Error(),
-			Fix:     "Check the update configuration and retry.",
-			Err:     err,
-		}
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", "", &Error{
-			Summary: "Failed to resolve latest release.",
-			Why:     fmt.Sprintf("Request to %s failed: %v", latestURL, err),
-			Fix:     "Check your internet connection and retry.",
-			Err:     err,
-		}
-	}
-	defer resp.Body.Close()
-
+	// A renamed repository answers with a redirect to the new repository's /releases/latest before the
+	// redirect that names the tag, so follow redirects until one carries a tag.
 	var rawTag string
-	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
-		loc := resp.Header.Get("Location")
-		if loc == "" {
+	current := latestURL
+	for hop := 0; ; hop++ {
+		if hop > maxLatestRedirects {
 			return "", "", &Error{
 				Summary: "Failed to resolve latest release.",
-				Why:     "Server returned redirect with missing Location header.",
-				Fix:     "Retry the update or specify --version <v>.",
+				Why:     fmt.Sprintf("More than %d redirects while checking %s", maxLatestRedirects, latestURL),
+				Fix:     "Specify an explicit target version via `skillhub update --version <v>`.",
 			}
 		}
-		rawTag, err = extractTagFromURL(loc)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, current, nil)
 		if err != nil {
 			return "", "", &Error{
-				Summary: "Failed to parse release tag from redirect.",
+				Summary: "Could not create request for latest release.",
 				Why:     err.Error(),
-				Fix:     "Specify an explicit target version via `skillhub update --version <v>`.",
+				Fix:     "Check the update configuration and retry.",
 				Err:     err,
 			}
 		}
-	} else if resp.StatusCode == http.StatusOK {
-		if resp.Request != nil && resp.Request.URL != nil {
-			rawTag, err = extractTagFromURL(resp.Request.URL.String())
+
+		resp, err := client.Do(req)
+		if err != nil {
+			return "", "", &Error{
+				Summary: "Failed to resolve latest release.",
+				Why:     fmt.Sprintf("Request to %s failed: %v", current, err),
+				Fix:     "Check your internet connection and retry.",
+				Err:     err,
+			}
+		}
+		_ = resp.Body.Close()
+
+		if resp.StatusCode >= 300 && resp.StatusCode < 400 {
+			loc := resp.Header.Get("Location")
+			if loc == "" {
+				return "", "", &Error{
+					Summary: "Failed to resolve latest release.",
+					Why:     "Server returned redirect with missing Location header.",
+					Fix:     "Retry the update or specify --version <v>.",
+				}
+			}
+			next, err := req.URL.Parse(loc)
 			if err != nil {
 				return "", "", &Error{
-					Summary: "Failed to parse release tag from URL.",
+					Summary: "Failed to parse release tag from redirect.",
 					Why:     err.Error(),
 					Fix:     "Specify an explicit target version via `skillhub update --version <v>`.",
 					Err:     err,
 				}
 			}
-		} else {
+			if rawTag, err = extractTagFromURL(next.String()); err == nil {
+				break
+			}
+			if !strings.HasSuffix(strings.TrimRight(next.Path, "/"), "/latest") {
+				return "", "", &Error{
+					Summary: "Failed to parse release tag from redirect.",
+					Why:     err.Error(),
+					Fix:     "Specify an explicit target version via `skillhub update --version <v>`.",
+					Err:     err,
+				}
+			}
+			current = next.String()
+			continue
+		}
+		if resp.StatusCode == http.StatusOK {
+			if resp.Request != nil && resp.Request.URL != nil {
+				var err error
+				rawTag, err = extractTagFromURL(resp.Request.URL.String())
+				if err != nil {
+					return "", "", &Error{
+						Summary: "Failed to parse release tag from URL.",
+						Why:     err.Error(),
+						Fix:     "Specify an explicit target version via `skillhub update --version <v>`.",
+						Err:     err,
+					}
+				}
+				break
+			}
 			return "", "", &Error{
 				Summary: "Failed to resolve latest release.",
-				Why:     fmt.Sprintf("Unexpected status 200 without redirect when checking %s", latestURL),
+				Why:     fmt.Sprintf("Unexpected status 200 without redirect when checking %s", current),
 				Fix:     "Specify an explicit target version via `skillhub update --version <v>`.",
 			}
 		}
-	} else {
 		return "", "", &Error{
 			Summary: "Failed to resolve latest release.",
-			Why:     fmt.Sprintf("HTTP status %d when checking %s", resp.StatusCode, latestURL),
+			Why:     fmt.Sprintf("HTTP status %d when checking %s", resp.StatusCode, current),
 			Fix:     "Check your network connection or specify --version <v>.",
 		}
 	}
@@ -553,8 +582,8 @@ func extractTagFromURL(rawURL string) (string, error) {
 			return parts[i+1], nil
 		}
 	}
-	if len(parts) > 0 && parts[len(parts)-1] != "latest" {
-		return parts[len(parts)-1], nil
+	if last := parts[len(parts)-1]; last != "" && last != "latest" {
+		return last, nil
 	}
 	return "", fmt.Errorf("could not determine release tag from URL path: %s", u.Path)
 }

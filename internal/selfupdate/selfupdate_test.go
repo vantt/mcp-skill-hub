@@ -578,3 +578,51 @@ func TestSelfUpdateWorkflows(t *testing.T) {
 		}
 	})
 }
+
+func TestResolveLatestFollowsARepositoryRename(t *testing.T) {
+	newServer := func(handler http.HandlerFunc) string {
+		server := httptest.NewServer(handler)
+		t.Cleanup(server.Close)
+		return server.URL
+	}
+
+	t.Run("a renamed repository adds one redirect before the tag", func(t *testing.T) {
+		base := newServer(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/old/releases/latest":
+				http.Redirect(w, r, "/new/releases/latest", http.StatusMovedPermanently)
+			case "/new/releases/latest":
+				http.Redirect(w, r, "/new/releases/tag/v1.2.3", http.StatusFound)
+			default:
+				http.NotFound(w, r)
+			}
+		})
+		version, tag, err := resolveTarget(context.Background(), Options{}, base+"/old/releases")
+		if err != nil {
+			t.Fatalf("resolveTarget: %v", err)
+		}
+		if version != "1.2.3" || tag != "v1.2.3" {
+			t.Fatalf("got version %q tag %q, want 1.2.3 and v1.2.3", version, tag)
+		}
+	})
+
+	t.Run("a redirect loop stops", func(t *testing.T) {
+		base := newServer(func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "/loop/releases/latest", http.StatusFound)
+		})
+		_, _, err := resolveTarget(context.Background(), Options{}, base+"/loop/releases")
+		var updateErr *Error
+		if !errors.As(err, &updateErr) || !strings.Contains(updateErr.Why, "redirects") {
+			t.Fatalf("expected a redirect limit error, got %v", err)
+		}
+	})
+
+	t.Run("a redirect that is neither a tag nor latest still fails", func(t *testing.T) {
+		base := newServer(func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "/", http.StatusFound)
+		})
+		if _, _, err := resolveTarget(context.Background(), Options{}, base+"/x/releases"); err == nil {
+			t.Fatal("expected an error for a redirect without a tag")
+		}
+	})
+}
