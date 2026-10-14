@@ -94,7 +94,7 @@ flowchart TB
     P4[4. Content loading<br/>resources/read]
     P5[5. Feedback<br/>custom MCP tool skill_feedback]
     P1 --> P2 --> P3 --> P4 --> P5
-Recommendation và distribution là hai bước tách biệt, nhưng dùng chung một điều kiện: skill nào `skill_resolve` không được phép trả ra thì profile runtime cũng không giao nội dung của nó. Ở profile `runtime`, `skill_get` (cùng `skills/get` và `resources/read`) chỉ trả nội dung của skill **active và phục vụ được** (qua `ValidateServableSkill`); draft, deprecated, archived hoặc skill active nhưng hỏng trả lỗi không kèm nội dung. Profile `curation` vẫn đọc được skill ở mọi trạng thái để curate. Quyết định ngày 2026-10-14.
+Recommendation và distribution là hai bước tách biệt, nhưng dùng chung một điều kiện: skill nào `skill_resolve` không được phép trả ra thì profile runtime cũng không giao nội dung của nó. Ở profile `runtime`, `skill_get` (cùng `skills/get` và `resources/read`) chỉ trả nội dung của skill **active và phục vụ được** (qua `ValidateServableSkill`); draft, deprecated, archived hoặc skill active nhưng hỏng trả lỗi không kèm nội dung: `not_found` cho skill không active (giống ID không tồn tại, nên không lộ sự tồn tại của draft) và `not_servable` cho skill active nhưng không phục vụ được. Profile `curation` vẫn đọc được skill ở mọi trạng thái để curate. Quyết định ngày 2026-10-14.
 
 Khi activate skill qua `skill_get` (hoặc `skills/get`), response trả về kèm object `local`:
 

@@ -8,6 +8,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/vantt/skillhub-mcp/internal/app"
+	"github.com/vantt/skillhub-mcp/internal/catalog"
 	"github.com/vantt/skillhub-mcp/internal/delivery/paging"
 	"github.com/vantt/skillhub-mcp/internal/skill"
 	"github.com/vantt/skillhub-mcp/internal/systemskills"
@@ -154,23 +155,22 @@ func (adapter *Server) registerSkillGetTool(tools *toolRegistry) {
 	addTool(tools, &mcp.Tool{
 		Name:        "skill_get",
 		Title:       "Get skill",
-		Description: "Get a skill by ID in any lifecycle state (routing, content, metadata). For active skills, local.path is a read-only copy of the skill folder and local.state_directory is writable. If local.status is review_required, content is omitted: ask the user to run `skillhub skill review <id>`. Run local.preflight check before scripts; ask before setup.",
+		Description: "Get an active skill by ID (routing, content, metadata). local.path is a read-only copy of the skill folder and local.state_directory is writable. If local.status is review_required, content is omitted: ask the user to run `skillhub skill review <id>`. Run local.preflight check before scripts; ask before setup.",
 		Annotations: annotations(true, false, false, false),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input skillGetInput) (*mcp.CallToolResult, toolOutcome[skillGetResult], error) {
 		id := strings.TrimSpace(input.SkillID)
 		if id == "" {
 			return failure[skillGetResult](fmt.Errorf("skill_id is required"))
 		}
+		if adapter.profile == ProfileRuntime {
+			if refusal := adapter.runtimeSkillRefusal(ctx, id); refusal != nil {
+				return &mcp.CallToolResult{IsError: true}, toolOutcome[skillGetResult]{SchemaVersion: SchemaVersion, Error: refusal}, nil
+			}
+		}
 		detail, err := (app.SkillService{}).ReadSkillCore(ctx, adapter.workspace, id)
 		if err != nil {
 			if errors.Is(err, skill.ErrNotFound) {
-				item := toolError{
-					Code:            "not_found",
-					Message:         fmt.Sprintf("Skill %s not found", id),
-					Retryable:       false,
-					SuggestedAction: "Run skill_list to view available skills.",
-				}
-				return &mcp.CallToolResult{IsError: true}, toolOutcome[skillGetResult]{SchemaVersion: SchemaVersion, Error: &item}, nil
+				return &mcp.CallToolResult{IsError: true}, toolOutcome[skillGetResult]{SchemaVersion: SchemaVersion, Error: skillNotFoundError(id)}, nil
 			}
 			return failure[skillGetResult](err)
 		}
@@ -203,4 +203,40 @@ func (adapter *Server) registerSkillGetTool(tools *toolRegistry) {
 		}
 		return success(result)
 	})
+}
+
+func skillNotFoundError(id string) *toolError {
+	return &toolError{
+		Code:            "not_found",
+		Message:         fmt.Sprintf("Skill %s not found", id),
+		Retryable:       false,
+		SuggestedAction: "Run skill_resolve to find an available skill.",
+	}
+}
+
+// runtimeSkillRefusal applies the delivery rule of the runtime profile: only a
+// skill that skill_resolve may return is served. It asks the distribution
+// service, the source resolution uses, so a skill cannot be resolvable yet
+// refused here or the reverse. A skill that is not active is reported as not
+// found, like an unknown ID, so its existence is not disclosed; an active skill
+// that cannot be served is reported as not_servable. Neither answer carries
+// skill content. It returns nil when the skill may be delivered.
+func (adapter *Server) runtimeSkillRefusal(ctx context.Context, id string) *toolError {
+	_, _, err := adapter.distribution.LookupSkills(ctx, adapter.workspace, []string{id})
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, catalog.ErrSkillNotServable):
+		return &toolError{
+			Code:            "not_servable",
+			Message:         fmt.Sprintf("Skill %s cannot be served.", id),
+			Retryable:       false,
+			SuggestedAction: "Choose another skill from skill_resolve; the skill's author must repair it before it can be delivered.",
+		}
+	case errors.Is(err, skill.ErrNotFound):
+		return skillNotFoundError(id)
+	default:
+		item := safeToolError(err)
+		return &item
+	}
 }

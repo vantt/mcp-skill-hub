@@ -1,7 +1,7 @@
 ---
 title: "Runtime profile serves only active, servable skills"
 description: "skill_get, skills/get and resources/read in the runtime profile return content only for skills that skill_resolve could return: active and servable. The curation profile keeps reading every lifecycle state."
-status: pending
+status: completed
 priority: P1
 effort: 3h
 branch: (implementation gets its own worktree)
