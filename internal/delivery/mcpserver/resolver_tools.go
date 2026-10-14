@@ -12,7 +12,7 @@ import (
 func (adapter *Server) registerResolverTools(tools *toolRegistry) {
 	addTool(tools, &mcp.Tool{
 		Name: "skill_resolve", Title: "Resolve a skill",
-		Description: "Recommend at most one primary skill from task evidence (task.description in English). If setup is review_required, do not use the skill and ask the user to run `skillhub skill review <id>`. This does not load skill content: load the recommended skill with skill_get, or, only when your host supports the MCP skills extension, with skills/get and resources/read.",
+		Description: "Pick at most one skill for the current task from task.description (in English). Then load the recommended skill with skill_get, or with skills/get and resources/read if your host supports the MCP skills extension.",
 		Annotations: annotations(true, false, true, false),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input resolveInput) (*mcp.CallToolResult, toolOutcome[resolveResult], error) {
 		request := resolverpkg.Request(input)
@@ -43,7 +43,7 @@ func (adapter *Server) registerResolverTools(tools *toolRegistry) {
 
 	addTool(tools, &mcp.Tool{
 		Name: "skill_feedback", Title: "Record skill feedback",
-		Description: "Record a bounded, deduplicated runtime outcome for a prior resolution. event_id is required. Feedback never mutates routing policy.",
+		Description: "Report how a resolved skill worked out: resolution_id from skill_resolve, a new event_id, and outcome.",
 		Annotations: annotations(false, false, true, false),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input feedbackInput) (*mcp.CallToolResult, toolOutcome[app.FeedbackResult], error) {
 		if input.SchemaVersion != SchemaVersion || input.ResolutionID == "" || input.EventID == "" || input.Outcome == "" {

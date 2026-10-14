@@ -17,14 +17,14 @@ import (
 const (
 	// runtimeModelVisibleBudget bounds name, description and input schema of
 	// the runtime tools, which is what a client puts in the model's context.
-	runtimeModelVisibleBudget = 5900
+	runtimeModelVisibleBudget = 5600
 	// runtimeInstructionsAllowance bounds the initialize instructions, which
 	// are model-visible too. The 2048-byte client cap stays owned by
 	// instructions_test.go; this is the measured size, kept apart so
 	// instruction text cannot hide tool growth.
 	runtimeInstructionsAllowance = 1900
 	// runtimeWireBudget bounds the serialized tools/list result.
-	runtimeWireBudget = 16500
+	runtimeWireBudget = 16200
 )
 
 type modelVisibleTool struct {

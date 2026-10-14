@@ -155,7 +155,7 @@ func (adapter *Server) registerSkillGetTool(tools *toolRegistry) {
 	addTool(tools, &mcp.Tool{
 		Name:        "skill_get",
 		Title:       "Get skill",
-		Description: "Get an active skill by ID (routing, content, metadata). local.path is a read-only copy of the skill folder and local.state_directory is writable. If local.status is review_required, content is omitted: ask the user to run `skillhub skill review <id>`. Run local.preflight check before scripts; ask before setup.",
+		Description: "Get an active skill by ID (routing, content, metadata), using the id skill_resolve recommended. local.path is a read-only copy of the skill folder; local.state_directory is writable.",
 		Annotations: annotations(true, false, false, false),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input skillGetInput) (*mcp.CallToolResult, toolOutcome[skillGetResult], error) {
 		id := strings.TrimSpace(input.SkillID)
