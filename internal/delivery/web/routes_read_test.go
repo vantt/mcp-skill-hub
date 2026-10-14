@@ -91,3 +91,50 @@ func TestReadEndpointsGolden(t *testing.T) {
 		})
 	}
 }
+
+func TestHomeOffersShellCommands(t *testing.T) {
+	root := newWebWorkspace(t)
+	srv := newTestServer(t, root)
+
+	rec := get(t, srv, "/api/v1/home")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d (body: %s)", rec.Code, rec.Body.String())
+	}
+	var home struct {
+		Actions []struct {
+			Kind    string `json:"kind"`
+			Command string `json:"command"`
+		} `json:"actions"`
+		SuggestedActions []struct {
+			Command string `json:"command"`
+		} `json:"suggested_actions"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &home); err != nil {
+		t.Fatal(err)
+	}
+	var commands []string
+	sawGitChanges := false
+	for _, action := range home.Actions {
+		commands = append(commands, action.Command)
+		if action.Kind == "review_git_changes" {
+			sawGitChanges = true
+		}
+	}
+	for _, action := range home.SuggestedActions {
+		commands = append(commands, action.Command)
+	}
+	if !sawGitChanges {
+		t.Fatalf("fixture hub has no uncommitted changes action: %s", rec.Body.String())
+	}
+	for _, command := range commands {
+		if command == "" {
+			continue
+		}
+		if !strings.HasPrefix(command, "skillhub ") && !strings.HasPrefix(command, "git ") {
+			t.Errorf("home command %q is not a shell command", command)
+		}
+		if command == "workspace_diff" {
+			t.Errorf("home still offers the tool name %q", command)
+		}
+	}
+}

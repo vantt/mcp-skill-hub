@@ -76,7 +76,7 @@ The file in the skill folder is the record, and Git keeps its history, so commit
 
 ### Activate, deprecate or archive a skill
 
-1. Open the skill and click **Activate skill** (or **Deprecate** for an active one). The button stays off until the draft is ready.
+1. Open the skill and click **Activate skill** (or **Deprecate** for an active one, or **Archive** for a deprecated one). The activate button stays off until the draft is ready.
 2. A confirmation lists the files that will change and says in words what changes. Open **Exact file changes** to see the patch.
 3. Click **Activate skill** in the confirmation to save, or **Cancel** to leave everything as it was.
 
@@ -84,7 +84,7 @@ The file in the skill folder is the record, and Git keeps its history, so commit
 
 Skills move in order: draft, active, deprecated, archived. A **draft** is not offered to agents yet, and an **active** skill can be.
 
-A **deprecated** skill is being phased out, and an **archived** one is retired and kept for history. To archive a deprecated skill, run `skillhub skill archive <skill-id> --yes` in the terminal. Without `--yes` it only shows what would change.
+A **deprecated** skill is being phased out, and an **archived** one is retired and kept for history. To archive a deprecated skill, click **Archive** on its page and confirm, or run `skillhub skill archive <skill-id> --yes` in the terminal. Without `--yes` the command only shows what would change.
 
 ### Fix a skill's description and routing fields
 

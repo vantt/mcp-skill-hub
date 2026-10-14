@@ -76,8 +76,12 @@ export function OverviewTab({ skill, review, sources, sourcesLoading, sourcesErr
   const t = useT();
   const description = skill.description.trim();
   const totalBytes =
-    review?.resource_status?.total_bytes ?? skill.resources?.reduce((acc, r) => acc + r.size_bytes, 0) ?? 0;
-  const resourceCount = review?.resource_status?.resource_count ?? skill.resources?.length ?? 0;
+    review?.resource_status?.file_bytes ??
+    review?.resource_status?.total_bytes ??
+    skill.resources?.reduce((acc, r) => acc + r.size_bytes, 0) ??
+    0;
+  const resourceCount =
+    review?.resource_status?.file_count ?? review?.resource_status?.resource_count ?? skill.resources?.length ?? 0;
   const routing = skill.routing;
 
   return (

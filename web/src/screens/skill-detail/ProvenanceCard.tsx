@@ -3,7 +3,7 @@ import type { SkillProvenance } from '../../api/types';
 const TITLE_PROVENANCE = 'Provenance';
 const BTN_VIEW_SOURCES = 'View sources →';
 const HELP_PROVENANCE = 'Where this skill came from.';
-const LABEL_NO_PROVENANCE = 'Created in this workspace';
+const LABEL_NO_PROVENANCE = 'Made on this machine (created here or added from a folder); no tracked source.';
 const LABEL_SOURCE_LOCATOR = 'Source locator';
 const LABEL_UPSTREAM_PATH = 'Upstream path';
 const LABEL_SOURCE_REVISION = 'Source revision';

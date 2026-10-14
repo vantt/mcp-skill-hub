@@ -118,50 +118,9 @@ func cliNextCommand(command, id, workspace string) string {
 		}
 		return cliWorkspace(command, workspace)
 	}
-	target := ""
-	if id != "" {
-		target = " " + shellquote.Arg(id)
-	}
-	var cli string
-	switch command {
-	case "workspace_validate", "ValidateWorkspace":
-		cli = "skillhub maintain validate"
-	case "workspace_rebuild":
-		cli = "skillhub maintain rebuild"
-	case "workspace_diff", "GetCurationDiff":
-		cli = "skillhub maintain diff"
-	case "source_check":
-		cli = "skillhub source check"
-	case "skill_upstream_status":
-		cli = "skillhub skill outdated"
-	case "skill_review":
-		cli = "skillhub skill review" + target
-	case "skill_list":
-		cli = "skillhub skill list"
-	case "skill_active":
-		cli = "skillhub skill activate" + target
-	case "skill_deprecated":
-		cli = "skillhub skill deprecate" + target
-	case "skill_archived":
-		cli = "skillhub skill archive" + target
-	case "skill_edit", "PreviewSkillUpdate":
-		// Original edit inputs are unavailable after a stale confirmation.
-		// Inspect the affected skill rather than advertise an invalid bare edit.
-		cli = "skillhub skill review" + target
-	case "skill_create":
-		cli = "skillhub skill create" + target
-	case "doctor":
-		cli = "skillhub doctor"
-	case "curation_run_start", "curation_run_retry":
-		cli = "skillhub source list"
-	default:
-		if command != "" {
-			return command
-		} // Declared runtime setup is already a shell command.
-		cli = "skillhub status"
-	}
-	if target == "" && (strings.HasPrefix(cli, "skillhub skill review") || strings.HasPrefix(cli, "skillhub skill edit") || strings.HasPrefix(cli, "skillhub skill create")) {
-		cli = "skillhub skill list"
+	cli := app.ShellCommandFor(command, id)
+	if !strings.HasPrefix(cli, "skillhub ") {
+		return cli // Declared runtime setup is already a shell command.
 	}
 	return cliWorkspace(cli, workspace)
 }

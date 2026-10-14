@@ -64,7 +64,27 @@ describe('OverviewTab', () => {
     expect(about.getByText('Review changed code safely.')).toBeInTheDocument();
     expect(about.getByText('core')).toBeInTheDocument();
     expect(about.getByText('Active')).toBeInTheDocument();
-    expect(about.getByText(/^4 files · \d+ bytes$/)).toBeInTheDocument();
+    expect(about.getByText(/^3 files · 207 bytes$/)).toBeInTheDocument();
+  });
+
+  it('counts the files the author put in the skill, not the hub metadata', () => {
+    const review = loadGolden<SkillReviewResult>('skill-review-third-party');
+    renderOverview({
+      review: {
+        ...review,
+        resource_status: { ...review.resource_status, resource_count: 2, total_bytes: 400, file_count: 1, file_bytes: 120 },
+      },
+    });
+    expect(within(card('About')).getByText('1 file · 120 bytes')).toBeInTheDocument();
+  });
+
+  it('falls back to the older counts when the review has no file counts', () => {
+    const review = loadGolden<SkillReviewResult>('skill-review-third-party');
+    const status = { ...review.resource_status, resource_count: 2, total_bytes: 400 };
+    delete status.file_count;
+    delete status.file_bytes;
+    renderOverview({ review: { ...review, resource_status: status } });
+    expect(within(card('About')).getByText('2 files · 400 bytes')).toBeInTheDocument();
   });
 
   it('shows the routing scope and lists', () => {
@@ -85,7 +105,7 @@ describe('OverviewTab', () => {
     expect(triggers!.compareDocumentPosition(scope) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     const about = card('About');
-    const files = within(about).getByText(/^4 files/);
+    const files = within(about).getByText(/^3 files/);
     const description = within(about).getByText('Review changed code safely.');
     expect(files.compareDocumentPosition(description) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });

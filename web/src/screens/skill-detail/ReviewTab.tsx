@@ -51,8 +51,13 @@ export function ReviewTab({ skill, review, onGoToEditor, onViewSources }: Review
   };
   const checklist = activationChecklist(skill, review);
 
-  const totalBytes = review?.resource_status?.total_bytes ?? skill.resources?.reduce((acc, r) => acc + r.size_bytes, 0) ?? 0;
-  const resourceCount = review?.resource_status?.resource_count ?? skill.resources?.length ?? 1;
+  const totalBytes =
+    review?.resource_status?.file_bytes ??
+    review?.resource_status?.total_bytes ??
+    skill.resources?.reduce((acc, r) => acc + r.size_bytes, 0) ??
+    0;
+  const resourceCount =
+    review?.resource_status?.file_count ?? review?.resource_status?.resource_count ?? skill.resources?.length ?? 1;
   const resourceSummary = resourceSummaryText(resourceCount, totalBytes);
 
   return (

@@ -145,6 +145,9 @@ export interface SkillReviewResult {
     entrypoint_digest: string;
     resource_count: number;
     total_bytes: number;
+    // What the author put in the skill, without the hub's own metadata files.
+    file_count?: number;
+    file_bytes?: number;
     resources: SkillResource[];
   };
   diverged: boolean;
@@ -223,6 +226,8 @@ export interface SkillAddProposal {
   };
   resources?: Array<{ path: string; bytes: number }> | null;
   total_bytes?: number;
+  // Files of a folder that the import left out, with the reason for each.
+  excluded?: { path: string; reason: string }[];
   diff?: DiffSummary | string;
   full_diff?: string;
   assessment?: { warning?: string; diverged?: boolean };

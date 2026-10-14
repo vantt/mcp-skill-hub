@@ -9,7 +9,6 @@ const LABEL_PATH = 'Path';
 const LABEL_KIND = 'Kind';
 const LABEL_SIZE = 'Size';
 const LABEL_DIGEST = 'Digest';
-const LABEL_STATE = 'State';
 const LABEL_ACTIONS = 'Actions';
 const LABEL_EDIT = 'Edit';
 const LABEL_VIEW = 'View';
@@ -17,7 +16,6 @@ const LABEL_NO_RESOURCES =
   'No companion resources. This skill is only its SKILL.md. Scripts, reference documents or other files you put in the skill folder are listed here.';
 const NOTICE_RESOURCES =
   'Changed resource: if only the catalog is out of date, run skillhub maintain rebuild. If a file is missing, restore it or re-add the skill. Edits go through a preview you confirm; nothing is saved without it.';
-const LABEL_ACTIVE = 'Active';
 const ELLIPSIS = '…';
 
 const PARAM_FILE = 'file';
@@ -148,9 +146,6 @@ export function ResourcesTab({ skill, workspaceId, thirdParty }: ResourcesTabPro
               <th>
                 <span>{LABEL_DIGEST}</span>
               </th>
-              <th>
-                <span>{LABEL_STATE}</span>
-              </th>
               <th style={{ textAlign: 'right' }}>
                 <span>{LABEL_ACTIONS}</span>
               </th>
@@ -185,11 +180,6 @@ export function ResourcesTab({ skill, workspaceId, thirdParty }: ResourcesTabPro
                     style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--color-text-muted)' }}
                   >
                     <span>{digestText}</span>
-                  </td>
-                  <td data-label={LABEL_STATE}>
-                    <span className="fg-chip fg-chip--neutral">
-                      <span>{LABEL_ACTIVE}</span>
-                    </span>
                   </td>
                   <td className="app-resources__actions" style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                     {editable ? (

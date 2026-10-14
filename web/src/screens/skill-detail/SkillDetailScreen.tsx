@@ -175,9 +175,9 @@ export function SkillDetailScreen() {
     baseVersion: string;
   }) => {
     try {
-      const res = await confirmSkillMutation(pins.proposalId, pins);
+      await confirmSkillMutation(pins.proposalId, pins);
       setProposalOpen(false);
-      setToastMessage(`Transitioned · ${res.operation_id}`);
+      setToastMessage(`${skill.skill_id} is now ${transitionTarget || skill.lifecycle_state}.`);
       queryClient.invalidateQueries({ queryKey: ['skill', skill.skill_id] });
       queryClient.invalidateQueries({ queryKey: ['skill-review', skill.skill_id] });
       queryClient.invalidateQueries({ queryKey: ['skills'] });

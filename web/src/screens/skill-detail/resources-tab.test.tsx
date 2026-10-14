@@ -67,7 +67,7 @@ function currentSearch(): URLSearchParams {
   return new URLSearchParams(screen.getByTestId('location-search').textContent ?? '');
 }
 
-function renderTab(url: string, seed: (client: QueryClient) => void = () => {}) {
+function renderTab(url: string, seed: (client: QueryClient) => void = () => {}, shown: SkillDetail = skill) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
@@ -80,7 +80,7 @@ function renderTab(url: string, seed: (client: QueryClient) => void = () => {}) 
             path="/skills/:id"
             element={
               <>
-                <ResourcesTab skill={skill} workspaceId="ws-1" thirdParty={false} />
+                <ResourcesTab skill={shown} workspaceId="ws-1" thirdParty={false} />
                 <LocationProbe />
               </>
             }
@@ -132,12 +132,19 @@ describe('ResourcesTab', () => {
     expect(screen.queryByRole('button', { name: `Edit ${NEW_DOC}` })).not.toBeInTheDocument();
   });
 
+  it('does not label files with a lifecycle state, even on a draft skill', () => {
+    renderTab(`/skills/${SKILL_ID}?tab=resources`, seedList, { ...skill, lifecycle_state: 'draft' });
+
+    expect(screen.queryByText('Active')).not.toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'State' })).not.toBeInTheDocument();
+  });
+
   it('labels each cell so a narrow screen can stack a row with the action beside the path', () => {
     renderTab(`/skills/${SKILL_ID}?tab=resources`, seedList);
 
     const row = rowFor(SCRIPT);
     const labels = Array.from(row.querySelectorAll('td[data-label]')).map((td) => td.getAttribute('data-label'));
-    expect(labels).toEqual(['Kind', 'Size', 'Digest', 'State']);
+    expect(labels).toEqual(['Kind', 'Size', 'Digest']);
     const actions = row.querySelector('td.app-resources__actions');
     expect(actions).not.toBeNull();
     expect(within(actions as HTMLElement).getByRole('button', { name: `Edit ${SCRIPT}` })).toBeInTheDocument();

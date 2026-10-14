@@ -27,9 +27,12 @@ describe('ProvenanceCard', () => {
     expect(onViewSources).toHaveBeenCalledTimes(1);
   });
 
-  it('renders Created in this workspace when provenance is absent', () => {
+  it('says the skill was made on this machine when provenance is absent', () => {
     render(<ProvenanceCard provenance={undefined} onViewSources={vi.fn()} />);
-    expect(screen.getByText('Created in this workspace')).toBeInTheDocument();
+    expect(
+      screen.getByText('Made on this machine (created here or added from a folder); no tracked source.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Created in this workspace')).not.toBeInTheDocument();
   });
 });
 

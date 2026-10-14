@@ -41,7 +41,25 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err, false)
 		return
 	}
-	writeJSON(w, http.StatusOK, home)
+	writeJSON(w, http.StatusOK, shellCommandsForWeb(home))
+}
+
+// shellCommandsForWeb returns a copy of the home result whose commands are
+// shell commands a person can paste, not the MCP tool names agents receive.
+func shellCommandsForWeb(home app.CurationHome) app.CurationHome {
+	home.Actions = append([]app.ActionItem(nil), home.Actions...)
+	for i := range home.Actions {
+		if home.Actions[i].Command != "" {
+			home.Actions[i].Command = app.ShellCommandFor(home.Actions[i].Command, home.Actions[i].ID)
+		}
+	}
+	home.SuggestedActions = append([]app.Action(nil), home.SuggestedActions...)
+	for i := range home.SuggestedActions {
+		if home.SuggestedActions[i].Command != "" {
+			home.SuggestedActions[i].Command = app.ShellCommandFor(home.SuggestedActions[i].Command, "")
+		}
+	}
+	return home
 }
 
 func (s *Server) handleSkills(w http.ResponseWriter, r *http.Request) {

@@ -108,6 +108,8 @@ test.describe('UX regression guards', () => {
   test('a taken skill id is refused with its reason, not a generic rule message', async ({ page }) => {
     await page.goto(`${server.origin}/skills/create`);
     await page.locator('#create-id').fill('ux-active');
+    // The fixture's skills are filed under core; the form's default collection is `default`.
+    await page.locator('#create-col').selectOption('core');
     await page.locator('#create-name').fill('Taken');
     await page.locator('#create-desc').fill('The id already exists.');
     await page.getByRole('button', { name: 'Preview draft' }).click();
@@ -143,6 +145,26 @@ test.describe('UX regression guards', () => {
       expect(frame.pageScrolls, `${flow.id}: the page scrolls on top of its columns`).toBe(false);
       expect(frame.bodyMargin, `${flow.id}: the frame is offset by a body margin`).toBe('0px');
       expect(frame.scrollers, `${flow.id}: a scrollbar with next to nothing to scroll`).toEqual([]);
+    }
+  });
+
+  test('Home offers a shell command when the hub has uncommitted changes', async ({ page }) => {
+    // Home shows a command only for its top action. The shared hub always has sources ready to
+    // distill, which win, so this test starts a small hub whose one skill is not committed to Git.
+    const dirty = await startServer();
+    try {
+      await page.goto(dirty.url);
+      await page.waitForLoadState('networkidle');
+      const commands = page.locator('main code + button').locator('xpath=preceding-sibling::code[1]');
+      await expect(commands.first(), 'Home shows a command to copy').toBeVisible();
+      const shown = (await commands.allTextContents()).map((text) => text.trim());
+      for (const command of shown) {
+        expect(command, 'Home command is a shell command').toMatch(/^(skillhub|git) /);
+        expect(command, 'Home command is an MCP tool name').not.toMatch(/^[a-z]+(?:_[a-z]+)+$/);
+      }
+      expect(shown, 'the uncommitted-changes action points at the diff command').toContain('skillhub maintain diff');
+    } finally {
+      await dirty.stop();
     }
   });
 

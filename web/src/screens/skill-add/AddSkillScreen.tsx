@@ -32,11 +32,14 @@ const HINT_GITHUB_URL = 'The address of a public GitHub repository, or of a fold
 const HINT_DISCOVER =
   'Discover only looks. It fetches the repository and lists the skills it contains. Nothing is written to your hub until you confirm on the next step, and imported skills start as drafts.';
 const HINT_ADVANCED = 'Optional. Choose where new skills are filed and what to call a single skill.';
-const HINT_COLLECTION = 'The folder the imported skills are filed under. Leave it as core if unsure.';
+const DEFAULT_COLLECTION = 'default';
+const HINT_COLLECTION = 'The folder the imported skills are filed under. Pick default if unsure.';
 const HINT_TARGET_ID = 'Use a different ID than the one in the repository. Only for a single skill; leave empty otherwise.';
 const PLACEHOLDER_URL = 'https://github.com/OWNER/REPO/tree/main/skills';
 const LABEL_TRUST = 'Trust';
 const LABEL_FILES = 'Files that would be written';
+const LABEL_LEFT_OUT = 'Left out (not copied into the hub)';
+const leftOutReason = (reason: string) => ` (${reason})`;
 const LABEL_CONFLICTS = 'Conflicts';
 const LABEL_EXACT = 'Exact file changes';
 const MSG_TRUST_DRAFT =
@@ -61,7 +64,7 @@ export function AddSkillScreen() {
 
   const [step, setStep] = useState<1 | 2>(1);
   const [locator, setLocator] = useState('');
-  const [collection, setCollection] = useState('core');
+  const [collection, setCollection] = useState(DEFAULT_COLLECTION);
   const [targetId, setTargetId] = useState('');
   const [selection, setSelection] = useState('');
 
@@ -165,6 +168,7 @@ export function AddSkillScreen() {
   const pins = proposal ? (proposal.confirmation.confirmation?.pins ?? proposal.confirmation.pins) : null;
   const files = proposal ? proposalFiles(proposal) : { added: [], modified: [], deleted: [] };
   const patch = proposal ? proposalPatch(proposal) : '';
+  const excluded = proposal?.excluded ?? [];
   const addedIds = proposal ? (proposal.skill_ids && proposal.skill_ids.length > 0 ? proposal.skill_ids : proposal.skill_id ? [proposal.skill_id] : []) : [];
   const license = proposal?.license;
   const licenseNote = license
@@ -492,6 +496,21 @@ export function AddSkillScreen() {
                   <li key={f}>{f}</li>
                 ))}
               </ul>
+              {excluded.length > 0 && (
+                <>
+                  <span className="t-caption" style={{ color: 'var(--color-text-subtle)' }}>
+                    <span>{LABEL_LEFT_OUT}</span>
+                  </span>
+                  <ul className="t-body-sm app-wrap" style={{ margin: 0, paddingLeft: 'var(--space-4)' }}>
+                    {excluded.map((f) => (
+                      <li key={f.path}>
+                        <span style={{ fontFamily: 'var(--font-mono)' }}>{f.path}</span>
+                        {f.reason ? <span>{leftOutReason(f.reason)}</span> : null}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
             </section>
           </div>
 
