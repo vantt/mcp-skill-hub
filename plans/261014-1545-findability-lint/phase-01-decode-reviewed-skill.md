@@ -30,6 +30,9 @@ decode it. The catalog does that in `catalog.parseEntity` (internal/catalog/inpu
   normalization the catalog build uses. Do not write a second YAML-to-JSON path.
 - When decoding fails, review reports one warning instead of skipping silently: code
   `lint_skipped`, matching the code `workspaceLintWarnings` already uses.
+- The same function must also decode skill files read from Git blobs: HEAD versions, and index
+  versions from `CaptureGitIndexSnapshot`. Phase 4 uses these as the before-state and the staged
+  after-state. Its input is therefore bytes, not a path.
 
 ## Files
 
