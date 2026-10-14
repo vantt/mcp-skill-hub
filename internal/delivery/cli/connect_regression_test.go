@@ -284,7 +284,7 @@ func TestConnectNamesHostFilesTheSameWayOnEveryPlatform(t *testing.T) {
 		{"mcp", ".mcp.json", ".mcp.json"},
 		{"mcp", ".claude.json", ".claude.json"},
 		{"host-permissions", ".claude/settings.local.json", ".claude/settings.local.json"},
-		{"bootstrap", ".codex/AGENTS.md", "AGENTS.md"},
+		{"bootstrap", ".codex/AGENTS.md", "AGENTS.md (old Skill Hub block removed)"},
 		{"native-skill", ".claude/skills/distill-lab/SKILL.md", "distill-lab skill"},
 		{"shared-skill", ".agents/skills/system-curator/SKILL.md", "system-curator skill"},
 		{"shared-skill", ".agents/skills/distill-lab/scripts/lib/js-yaml.mjs", "distill-lab skill"},

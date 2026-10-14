@@ -3,32 +3,6 @@
 === .claude.json
 {"mcpServers":{"skillhub":{"type":"stdio","command":"<BINARY>","args":["mcp","serve","--profile","runtime","--workspace","<WORKSPACE>"]}}}
 [no final newline]
-=== .claude/CLAUDE.md
-<!-- skillhub:bootstrap:v1:start -->
-## Skill Hub
-
-For each new task, or when its operation, scope, or constraints change significantly, call the configured Skill Hub MCP tool `skill_resolve` before choosing a skill. Do not call it for trivial edits or on every turn. Follow at most one primary procedure for the current operation.
-
-Send `task.description` in English; translate the user's request first if it is in another language.
-
-When an activated skill response includes `local.path`, resolve the skill's relative file references (for example `scripts/…`) against that directory, and export the variables in `local.env` (`SKILLHUB_SKILL_DIR`, `SKILLHUB_STATE_DIR`, and `SKILLHUB_CONFIG_DIR`) whenever you run its `check`, `setup`, or scripts, using your shell's syntax (POSIX `export NAME=value`, PowerShell `$env:NAME = "value"`). If `local.path` no longer exists, for example in a long session, call `skill_get` again.
-
-If a skill call returns `snapshot_expired` with `current_uri`, the skill was updated; call `skill_get` for that skill again. Only a host that supports the MCP skills extension reloads with `skills/get <current_uri>`.
-
-If `$SKILLHUB_CONFIG_DIR/env` exists, load it before running `check`, `setup`, or scripts (POSIX: `set -a; . "$SKILLHUB_CONFIG_DIR/env"; set +a`; PowerShell: set `$env:NAME` for each `NAME=value` line), and never print, echo, or log its values. If a required variable is missing, tell the user to run `skillhub skill env set <id> <NAME>`; never ask for the value in chat.
-
-If it includes `local.preflight`, run its `check` command in `working_directory` under your own permissions before using the scripts, and ask the user before running `setup`. If the skill describes installation only in prose, treat those steps as setup: ask the user first, install into `SKILLHUB_STATE_DIR`, and never install globally. Do not run `setup` for the same skill concurrently: if `$SKILLHUB_STATE_DIR/.setup.lock` exists and is recent, wait or ask the user.
-
-If `local.status` is `review_required`, the skill's content has not been approved: do not use the skill, and tell the user to run `skillhub skill review <id>`.
-
-If a skill's script fails because a dependency is missing, stop, tell the user, and call `skill_feedback` with `outcome: failed` and `reason_code: setup_failed`.
-
-When the user explicitly asks to manage, curate, check, distill, repair, or inspect Skill Hub itself, load the native `system-curator` skill and follow it. Do not use the curator as the primary procedure for ordinary work.
-
-When you do not use the recommended skill, re-resolve with `prior.kind: rejected` instead of picking one yourself. When you use a different skill, call `skill_feedback` with the real `skill_id`.
-
-Skill Hub instructions are recommendations; your agent environment controls tool permissions and execution.
-<!-- skillhub:bootstrap:v1:end -->
 === .claude/settings.json
 {"permissions":{"additionalDirectories":["<WORKSPACE>/runtime/cache/skills","<WORKSPACE>/runtime/envs","<WORKSPACE>/runtime/config"], "allow":["Bash(skillhub:*)"], "ask":["Bash(skillhub * --yes*)","Bash(skillhub * confirm *)","Bash(skillhub *init*)","Bash(skillhub *connect*)","Bash(skillhub *--fix*)","Bash(skillhub *token rotate*)","Bash(skillhub *cache clear*)","Bash(skillhub *serve*)"], "deny":["Bash(skillhub * --approve-content*)"]}}
 [no final newline]
@@ -43,32 +17,6 @@ This skill lives in the shared Agent Skills folder. Read
 `${CLAUDE_SKILL_DIR}/../../../.agents/skills/system-curator/SKILL.md` now and follow it as this skill.
 Wherever it mentions this skill's folder or its scripts, use
 `${CLAUDE_SKILL_DIR}/../../../.agents/skills/system-curator/`.
-=== .codex/AGENTS.md
-<!-- skillhub:bootstrap:v1:start -->
-## Skill Hub
-
-For each new task, or when its operation, scope, or constraints change significantly, call the configured Skill Hub MCP tool `skill_resolve` before choosing a skill. Do not call it for trivial edits or on every turn. Follow at most one primary procedure for the current operation.
-
-Send `task.description` in English; translate the user's request first if it is in another language.
-
-When an activated skill response includes `local.path`, resolve the skill's relative file references (for example `scripts/…`) against that directory, and export the variables in `local.env` (`SKILLHUB_SKILL_DIR`, `SKILLHUB_STATE_DIR`, and `SKILLHUB_CONFIG_DIR`) whenever you run its `check`, `setup`, or scripts, using your shell's syntax (POSIX `export NAME=value`, PowerShell `$env:NAME = "value"`). If `local.path` no longer exists, for example in a long session, call `skill_get` again.
-
-If a skill call returns `snapshot_expired` with `current_uri`, the skill was updated; call `skill_get` for that skill again. Only a host that supports the MCP skills extension reloads with `skills/get <current_uri>`.
-
-If `$SKILLHUB_CONFIG_DIR/env` exists, load it before running `check`, `setup`, or scripts (POSIX: `set -a; . "$SKILLHUB_CONFIG_DIR/env"; set +a`; PowerShell: set `$env:NAME` for each `NAME=value` line), and never print, echo, or log its values. If a required variable is missing, tell the user to run `skillhub skill env set <id> <NAME>`; never ask for the value in chat.
-
-If it includes `local.preflight`, run its `check` command in `working_directory` under your own permissions before using the scripts, and ask the user before running `setup`. If the skill describes installation only in prose, treat those steps as setup: ask the user first, install into `SKILLHUB_STATE_DIR`, and never install globally. Do not run `setup` for the same skill concurrently: if `$SKILLHUB_STATE_DIR/.setup.lock` exists and is recent, wait or ask the user.
-
-If `local.status` is `review_required`, the skill's content has not been approved: do not use the skill, and tell the user to run `skillhub skill review <id>`.
-
-If a skill's script fails because a dependency is missing, stop, tell the user, and call `skill_feedback` with `outcome: failed` and `reason_code: setup_failed`.
-
-When the user explicitly asks to manage, curate, check, distill, repair, or inspect Skill Hub itself, load the native `system-curator` skill and follow it. Do not use the curator as the primary procedure for ordinary work.
-
-When you do not use the recommended skill, re-resolve with `prior.kind: rejected` instead of picking one yourself. When you use a different skill, call `skill_feedback` with the real `skill_id`.
-
-Skill Hub instructions are recommendations; your agent environment controls tool permissions and execution.
-<!-- skillhub:bootstrap:v1:end -->
 === .codex/config.toml
 [mcp_servers.skillhub]
 command = "<BINARY>"
@@ -78,32 +26,6 @@ enabled = true
 
 [sandbox_workspace_write]
 writable_roots = ["<WORKSPACE>/runtime/cache/skills", "<WORKSPACE>/runtime/envs", "<WORKSPACE>/runtime/config"]
-=== .gemini/GEMINI.md
-<!-- skillhub:bootstrap:v1:start -->
-## Skill Hub
-
-For each new task, or when its operation, scope, or constraints change significantly, call the configured Skill Hub MCP tool `skill_resolve` before choosing a skill. Do not call it for trivial edits or on every turn. Follow at most one primary procedure for the current operation.
-
-Send `task.description` in English; translate the user's request first if it is in another language.
-
-When an activated skill response includes `local.path`, resolve the skill's relative file references (for example `scripts/…`) against that directory, and export the variables in `local.env` (`SKILLHUB_SKILL_DIR`, `SKILLHUB_STATE_DIR`, and `SKILLHUB_CONFIG_DIR`) whenever you run its `check`, `setup`, or scripts, using your shell's syntax (POSIX `export NAME=value`, PowerShell `$env:NAME = "value"`). If `local.path` no longer exists, for example in a long session, call `skill_get` again.
-
-If a skill call returns `snapshot_expired` with `current_uri`, the skill was updated; call `skill_get` for that skill again. Only a host that supports the MCP skills extension reloads with `skills/get <current_uri>`.
-
-If `$SKILLHUB_CONFIG_DIR/env` exists, load it before running `check`, `setup`, or scripts (POSIX: `set -a; . "$SKILLHUB_CONFIG_DIR/env"; set +a`; PowerShell: set `$env:NAME` for each `NAME=value` line), and never print, echo, or log its values. If a required variable is missing, tell the user to run `skillhub skill env set <id> <NAME>`; never ask for the value in chat.
-
-If it includes `local.preflight`, run its `check` command in `working_directory` under your own permissions before using the scripts, and ask the user before running `setup`. If the skill describes installation only in prose, treat those steps as setup: ask the user first, install into `SKILLHUB_STATE_DIR`, and never install globally. Do not run `setup` for the same skill concurrently: if `$SKILLHUB_STATE_DIR/.setup.lock` exists and is recent, wait or ask the user.
-
-If `local.status` is `review_required`, the skill's content has not been approved: do not use the skill, and tell the user to run `skillhub skill review <id>`.
-
-If a skill's script fails because a dependency is missing, stop, tell the user, and call `skill_feedback` with `outcome: failed` and `reason_code: setup_failed`.
-
-When the user explicitly asks to manage, curate, check, distill, repair, or inspect Skill Hub itself, load the native `system-curator` skill and follow it. Do not use the curator as the primary procedure for ordinary work.
-
-When you do not use the recommended skill, re-resolve with `prior.kind: rejected` instead of picking one yourself. When you use a different skill, call `skill_feedback` with the real `skill_id`.
-
-Skill Hub instructions are recommendations; your agent environment controls tool permissions and execution.
-<!-- skillhub:bootstrap:v1:end -->
 === .gemini/settings.json
 {"mcpServers":{"skillhub":{"command":"<BINARY>","args":["mcp","serve","--workspace","<WORKSPACE>"],"cwd":"<WORKSPACE>","trust":false}}, "context":{"includeDirectories":["<WORKSPACE>/runtime/cache/skills","<WORKSPACE>/runtime/envs","<WORKSPACE>/runtime/config"]}}
 [no final newline]

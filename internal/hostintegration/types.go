@@ -30,7 +30,7 @@ const (
 
 // ChangeKind names what a change writes. Plans order changes by changeRank:
 // MCP, permissions, shared skill files, native skill files, shared skill
-// removals, then bootstrap instructions.
+// removals, then the removal of obsolete instruction blocks.
 type ChangeKind string
 
 const (
@@ -127,7 +127,7 @@ func (a Adapter) relativePaths(scope Scope) (config, instructions string) {
 // is pointed at a hub on another machine: the host starts the stdio proxy,
 // Workspace stays empty and Root must be set. With Remove set every Skill Hub
 // surface in the scope is removed (the entry, its allowed directories and
-// permission rules, the instruction block and an unchanged curator skill);
+// permission rules, an obsolete instruction block and an unchanged curator skill);
 // Workspace stays empty and Root must be set.
 type Request struct {
 	Workspace string

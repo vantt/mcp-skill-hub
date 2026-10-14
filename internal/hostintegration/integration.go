@@ -169,35 +169,13 @@ func prepare(ctx context.Context, request Request) (preparedInspection, error) {
 		}
 		host.files = append(host.files, skills.hosts[adapter.Host]...)
 		instructionPath := filepath.Join(root, filepath.FromSlash(instructionRel))
-		if mode.remove {
-			if request.KeepInstructions {
-				prepared.hosts = append(prepared.hosts, host)
-				continue
-			}
-			instructions, err := prepareInstructionsRemoval(instructionPath, root)
+		if !mode.remove || !request.KeepInstructions {
+			instructions, err := prepareInstructionFile(instructionPath, root)
 			if err != nil {
 				return preparedInspection{}, err
 			}
 			host.files = append(host.files, instructions)
-			prepared.hosts = append(prepared.hosts, host)
-			continue
 		}
-		globalHasBootstrap := false
-		if scope == ScopeProject {
-			if home, homeErr := os.UserHomeDir(); homeErr == nil {
-				userInstructionPath := filepath.Join(home, filepath.FromSlash(adapter.UserInstructionRelativePath))
-				if userContent, err := os.ReadFile(userInstructionPath); err == nil {
-					if bytes.Contains(userContent, []byte(bootstrapStart)) {
-						globalHasBootstrap = true
-					}
-				}
-			}
-		}
-		instructions, err := prepareInstructions(instructionPath, root, globalHasBootstrap)
-		if err != nil {
-			return preparedInspection{}, err
-		}
-		host.files = append(host.files, instructions)
 		prepared.hosts = append(prepared.hosts, host)
 	}
 	return prepared, nil
@@ -404,18 +382,6 @@ func desiredGeminiConfig(raw []byte, binary, workspace string, supportsToggle bo
 		}
 	}
 	return desiredGeminiAllowedDirs(registered, workspace)
-}
-
-func prepareInstructions(path, root string, globalHasBootstrap bool) (preparedFile, error) {
-	raw, mode, exists, err := readManagedFile(path, root)
-	if err != nil {
-		return preparedFile{}, err
-	}
-	if globalHasBootstrap && !bytes.Contains(raw, []byte(bootstrapStart)) {
-		return newPreparedFile("", ChangeBootstrap, path, raw, raw, mode, exists, ""), nil
-	}
-	desired, conflict := updateBootstrap(raw)
-	return newPreparedFile("", ChangeBootstrap, path, raw, desired, mode, exists, conflict), nil
 }
 
 func newPreparedFile(host Host, kind ChangeKind, path string, raw, desired []byte, mode os.FileMode, exists bool, conflict string) preparedFile {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io/fs"
 	"maps"
 	"os"
@@ -155,8 +156,13 @@ func TestRemotePlanWritesTheProxyEntryForEveryHost(t *testing.T) {
 		}
 	}
 
-	for _, name := range []string{"CLAUDE.md", "AGENTS.md", "GEMINI.md"} {
-		assertContains(t, filepath.Join(root, name), bootstrapStart)
+	for name, want := range map[string]string{"CLAUDE.md": "# Project notes\n\nKeep tests fast.\n", "AGENTS.md": "Use tabs."} {
+		if got := string(readTestFile(t, filepath.Join(root, name))); got != want {
+			t.Fatalf("%s = %q, want it untouched", name, got)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(root, "GEMINI.md")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("GEMINI.md was created, stat error = %v", err)
 	}
 	for relative, content := range fileTree(t, root) {
 		if strings.Contains(content, token) {
@@ -409,23 +415,39 @@ func TestReadRegistrationTellsLocalAndRemoteEntriesApart(t *testing.T) {
 	}
 }
 
-func TestRemoveBootstrapUndoesAppend(t *testing.T) {
-	for _, original := range []string{"", "notes\n", "notes", "a\r\nb\r\n", "# t\n\n\n"} {
-		appended := appendBootstrap([]byte(original))
-		removed, conflict := removeBootstrap(appended)
-		want := strings.TrimRight(original, "\r\n")
-		if strings.HasSuffix(original, "\n") && want != "" {
-			want += detectNewline([]byte(original))
-		}
-		if conflict != "" || string(removed) != want {
-			t.Errorf("remove(append(%q)) = %q, %q", original, removed, conflict)
+func TestRemoveBootstrapKeepsSurroundingText(t *testing.T) {
+	block := legacyBlock()
+	for _, test := range []struct{ name, raw, want string }{
+		{"middle", "top\n\n" + block + "\n\nbottom\n", "top\n\nbottom\n"},
+		{"crlf", "top\r\n\r\n" + strings.ReplaceAll(block, "\n", "\r\n") + "\r\n\r\nbottom\r\n", "top\r\n\r\nbottom\r\n"},
+		{"after user text", "notes\n\n" + block + "\n", "notes\n"},
+		{"first", block + "\n\nrest\n", "rest\n"},
+		{"only block", block + "\n\n", ""},
+		{"v2 markers", "a\n\n<!-- skillhub:bootstrap:v2:start -->\nx\n<!-- skillhub:bootstrap:v2:end -->\n\nb\n", "a\n\nb\n"},
+		{"no block", "notes\n", "notes\n"},
+	} {
+		removed, conflict := removeBootstrap([]byte(test.raw))
+		if conflict != "" || string(removed) != test.want {
+			t.Errorf("%s: removeBootstrap = %q, %q; want %q", test.name, removed, conflict, test.want)
 		}
 	}
-	middle := []byte("top\n\n" + string(bootstrapBlock("\n")) + "\n\nbottom\n")
-	if removed, _ := removeBootstrap(middle); string(removed) != "top\n\nbottom\n" {
-		t.Fatalf("middle block removal = %q", removed)
-	}
-	if _, conflict := removeBootstrap([]byte(bootstrapStart + "\n")); conflict == "" {
+	if _, conflict := removeBootstrap([]byte(legacyStart + "\n")); conflict == "" {
 		t.Fatal("unmatched marker accepted")
+	}
+}
+
+func TestIsBootstrapOnlyFile(t *testing.T) {
+	for raw, want := range map[string]bool{
+		legacyBlock():                     true,
+		legacyBlock() + "\n":              true,
+		"\n" + legacyBlock() + "\r\n\r\n": true,
+		"user\n\n" + legacyBlock() + "\n": false,
+		"":                                false,
+		"user\n":                          false,
+		legacyStart + "\n" + legacyStart:  false,
+	} {
+		if got := IsBootstrapOnlyFile([]byte(raw)); got != want {
+			t.Errorf("IsBootstrapOnlyFile(%q) = %v, want %v", raw, got, want)
+		}
 	}
 }

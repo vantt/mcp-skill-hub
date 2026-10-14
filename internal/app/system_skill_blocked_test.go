@@ -51,7 +51,7 @@ func TestConnectListsAChangedSkillFileAndWritesTheRest(t *testing.T) {
 	}) {
 		t.Fatalf("warnings = %+v", result.Warnings)
 	}
-	if _, err := os.Stat(filepath.Join(project, ".mcp.json")); err != nil {
+	if _, err := os.Stat(filepath.Join(project, ".claude", "settings.local.json")); err != nil {
 		t.Fatalf("MCP entry not written: %v", err)
 	}
 	if got, _ := os.ReadFile(edited); string(got) != "my own curator\n" {
@@ -87,7 +87,7 @@ func TestBlockedHubFileDoesNotStopTheProjectRepair(t *testing.T) {
 	project := connectProject(t, hub, hostintegration.HostClaude)
 	canonical := filepath.Join(hub, ".agents", "skills", "system-curator", "SKILL.md")
 	writeFileForTest(t, canonical, "not the curator\n")
-	if err := os.Remove(filepath.Join(project, "CLAUDE.md")); err != nil {
+	if err := os.Remove(filepath.Join(project, ".claude", "settings.local.json")); err != nil {
 		t.Fatal(err)
 	}
 	report := DetectRole(project, t.TempDir(), userconfig.Config{})
@@ -100,7 +100,7 @@ func TestBlockedHubFileDoesNotStopTheProjectRepair(t *testing.T) {
 	if !slices.ContainsFunc(fixes.NotFixed, func(item NotFixedItem) bool { return item.Code == "system_skill_blocked" }) {
 		t.Fatalf("not fixed = %+v", fixes.NotFixed)
 	}
-	if _, err := os.Stat(filepath.Join(project, "CLAUDE.md")); err != nil {
+	if _, err := os.Stat(filepath.Join(project, ".claude", "settings.local.json")); err != nil {
 		t.Fatalf("project repair skipped: %v (fixes %+v)", err, fixes)
 	}
 	if got, _ := os.ReadFile(canonical); string(got) != "not the curator\n" {

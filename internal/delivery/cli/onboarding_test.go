@@ -305,14 +305,12 @@ func TestConnectPreviewThenApplyWritesProjectFilesOnly(t *testing.T) {
 		t.Fatalf(".mcp.json is missing workspace %q:\n%s", workspace, registration)
 	}
 
-	before, _ := os.ReadFile(filepath.Join(project, "CLAUDE.md"))
 	code, stdout, stderr = runConnectCLI(t, project, workspace)
 	if code != 0 || !strings.Contains(stdout, "already current") {
 		t.Fatalf("idempotent rerun exit = %d stdout = %q stderr = %q", code, stdout, stderr)
 	}
-	after, _ := os.ReadFile(filepath.Join(project, "CLAUDE.md"))
-	if !bytes.Equal(before, after) {
-		t.Fatal("idempotent rerun changed CLAUDE.md")
+	if _, err := os.Stat(filepath.Join(project, "CLAUDE.md")); !os.IsNotExist(err) {
+		t.Fatalf("connect wrote CLAUDE.md, stat error = %v", err)
 	}
 }
 
@@ -325,9 +323,6 @@ func TestConnectUsesTheStoredHubAndHonorsHostFilter(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit = %d: %s", code, stderr)
 	}
-	if _, err := os.Stat(filepath.Join(project, "AGENTS.md")); err != nil {
-		t.Fatalf("codex files missing: %v", err)
-	}
 	raw, err := os.ReadFile(filepath.Join(project, ".codex", "config.toml"))
 	if err != nil {
 		t.Fatal(err)
@@ -335,7 +330,7 @@ func TestConnectUsesTheStoredHubAndHonorsHostFilter(t *testing.T) {
 	if got := hostintegration.ReadRegistration(hostintegration.HostCodex, raw).Workspace; got != workspace {
 		t.Fatalf("connect used hub %q, want the stored hub %q", got, workspace)
 	}
-	for _, path := range []string{"CLAUDE.md", "GEMINI.md", ".mcp.json"} {
+	for _, path := range []string{"CLAUDE.md", "AGENTS.md", "GEMINI.md", ".mcp.json"} {
 		if _, err := os.Stat(filepath.Join(project, path)); !os.IsNotExist(err) {
 			t.Fatalf("%s should not be written for --host codex, stat error = %v", path, err)
 		}
@@ -450,7 +445,7 @@ func TestConnectGlobalWritesUserScopeAndPreservesClaudeConfig(t *testing.T) {
 	if !strings.Contains(string(got), workspace) && !strings.Contains(string(got), escapedWorkspace) {
 		t.Fatalf("~/.claude.json is missing workspace %q:\n%s", workspace, got)
 	}
-	for _, path := range []string{".claude/CLAUDE.md", ".claude/skills/system-curator/SKILL.md", ".codex/config.toml", ".codex/AGENTS.md", ".agents/skills/system-curator/SKILL.md", ".gemini/settings.json", ".gemini/GEMINI.md"} {
+	for _, path := range []string{".claude/skills/system-curator/SKILL.md", ".codex/config.toml", ".agents/skills/system-curator/SKILL.md", ".gemini/settings.json"} {
 		if _, err := os.Stat(filepath.Join(home, filepath.FromSlash(path))); err != nil {
 			t.Fatalf("missing %s: %v", path, err)
 		}

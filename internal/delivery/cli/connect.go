@@ -225,13 +225,14 @@ func formatChangeKind(kind, summary, relPath string) string {
 		}
 		return "skill file"
 	case "bootstrap-instructions", "bootstrap":
-		if strings.Contains(summary, "AGENTS.md") {
-			return "AGENTS.md"
+		file := "CLAUDE.md"
+		switch {
+		case strings.Contains(summary, "AGENTS.md"):
+			file = "AGENTS.md"
+		case strings.Contains(summary, "GEMINI.md"):
+			file = "GEMINI.md"
 		}
-		if strings.Contains(summary, "GEMINI.md") {
-			return "GEMINI.md"
-		}
-		return "CLAUDE.md"
+		return file + " (old Skill Hub block removed)"
 	default:
 		return kind
 	}

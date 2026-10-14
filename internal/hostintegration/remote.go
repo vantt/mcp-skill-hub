@@ -490,9 +490,10 @@ func claudePermissionsChangePreview(raw, desired []byte) string {
 	return boundPreview(out.String())
 }
 
-// prepareInstructionsRemoval removes the Skill Hub instruction block, and the
-// file when nothing else is left in it.
-func prepareInstructionsRemoval(path, root string) (preparedFile, error) {
+// prepareInstructionFile plans the removal of an obsolete Skill Hub instruction
+// block. It deletes the file when nothing else is left in it, because a file
+// that held only the block is one an older connect created.
+func prepareInstructionFile(path, root string) (preparedFile, error) {
 	raw, fileMode, exists, err := readManagedFile(path, root)
 	if err != nil {
 		return preparedFile{}, err
@@ -508,17 +509,17 @@ func prepareInstructionsRemoval(path, root string) (preparedFile, error) {
 	return file, nil
 }
 
-// removeBootstrap takes out the Skill Hub instruction block together with the
-// blank line connect put before it.
+// removeBootstrap takes out the obsolete instruction block together with the
+// blank line an older connect put before it. Content without a block comes
+// back unchanged.
 func removeBootstrap(raw []byte) ([]byte, string) {
-	matches := bootstrapMarkerPattern.FindAllSubmatchIndex(raw, -1)
-	if len(matches) == 0 {
-		return raw, ""
-	}
-	if _, conflict := updateBootstrap(raw); conflict != "" {
+	start, end, found, conflict := bootstrapSpan(raw)
+	if conflict != "" {
 		return nil, conflict
 	}
-	start, end := matches[0][0], matches[len(matches)-1][1]
+	if !found {
+		return raw, ""
+	}
 	before := bytes.TrimRight(raw[:start], "\r\n")
 	after := bytes.TrimLeft(raw[end:], "\r\n")
 	newline := detectNewline(raw)

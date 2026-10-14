@@ -176,15 +176,15 @@ func sanitizeManagedValue(value []byte) string {
 func bootstrapChangePreview(raw, desired []byte) string {
 	before := managedBootstrapBlock(raw)
 	after := managedBootstrapBlock(desired)
-	return "managed bootstrap block only:\n--- before\n" + before + "\n+++ after\n" + after
+	return "obsolete Skill Hub block (removed):\n--- before\n" + before + "\n+++ after\n" + after
 }
 
 func managedBootstrapBlock(content []byte) string {
-	matches := bootstrapMarkerPattern.FindAllIndex(content, -1)
-	if len(matches) != 2 {
+	start, end, found, _ := bootstrapSpan(content)
+	if !found {
 		return "<absent>"
 	}
-	return string(content[matches[0][0]:matches[1][1]])
+	return string(content[start:end])
 }
 
 func contentDescriptor(content []byte, exists bool) string {

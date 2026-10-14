@@ -93,8 +93,8 @@ func TestDoctorFixAppliesAllHostArtifactsAndIsIdempotent(t *testing.T) {
 		before[relative] = content
 	}
 	for _, relative := range []string{"CLAUDE.md", "AGENTS.md", "GEMINI.md"} {
-		if count := strings.Count(string(before[relative]), "<!-- skillhub:bootstrap:v1:start -->"); count != 1 {
-			t.Fatalf("%s bootstrap block count = %d", relative, count)
+		if _, err := os.Stat(filepath.Join(root, relative)); !os.IsNotExist(err) {
+			t.Fatalf("doctor --fix created %s: %v", relative, err)
 		}
 	}
 	if entries, err := os.ReadDir(filepath.Join(root, "history", "operations")); err != nil || len(entries) != 0 {
@@ -346,9 +346,6 @@ func hostArtifactPaths() []string {
 		".claude/skills/distill-lab/SKILL.md",
 		".agents/skills/distill-lab/SKILL.md",
 		".agents/skills/distill-lab/scripts/distill.mjs",
-		"CLAUDE.md",
-		"AGENTS.md",
-		"GEMINI.md",
 	}
 }
 

@@ -32,7 +32,9 @@ func TestProjectRootIsSeparateFromServedWorkspace(t *testing.T) {
 
 	assertJSONRegistration(t, filepath.Join(project, ".mcp.json"), binary, workspace, false)
 	assertContains(t, filepath.Join(project, ".codex/config.toml"), "cwd = "+tomlString(workspace))
-	assertContains(t, filepath.Join(project, "CLAUDE.md"), bootstrapStart)
+	if _, err := os.Stat(filepath.Join(project, "CLAUDE.md")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("connect wrote CLAUDE.md, stat error = %v", err)
+	}
 	if _, err := os.Stat(filepath.Join(workspace, ".mcp.json")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("workspace received host files, stat error = %v", err)
 	}
@@ -69,13 +71,14 @@ func TestUserScopeWritesHomeFilesAndPreservesUnrelatedClaudeKeys(t *testing.T) {
 	assertContains(t, filepath.Join(home, ".claude.json"), `"other": {"command": "other"}`)
 	assertMode(t, filepath.Join(home, ".claude.json"), 0o600)
 	assertContains(t, filepath.Join(home, ".claude", "CLAUDE.md"), "# My global rules")
-	assertContains(t, filepath.Join(home, ".claude", "CLAUDE.md"), bootstrapStart)
+	if got := string(readTestFile(t, filepath.Join(home, ".claude", "CLAUDE.md"))); got != "# My global rules\n" {
+		t.Fatalf("user CLAUDE.md = %q, want it untouched", got)
+	}
 
 	for _, path := range []string{
 		".claude/skills/system-curator/SKILL.md",
 		".agents/skills/system-curator/SKILL.md",
-		".codex/config.toml", ".codex/AGENTS.md",
-		".gemini/settings.json", ".gemini/GEMINI.md",
+		".codex/config.toml", ".gemini/settings.json",
 	} {
 		if _, err := os.Stat(filepath.Join(home, filepath.FromSlash(path))); err != nil {
 			t.Fatalf("expected user-scope file %s: %v", path, err)

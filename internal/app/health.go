@@ -369,7 +369,11 @@ func describeChange(root string, change hostintegration.Change) string {
 	if host == "" {
 		host = SharedSkillsItemKey
 	}
-	return host + " " + string(change.Kind) + " " + displayPath(root, change.Path)
+	kind := string(change.Kind)
+	if change.Kind == hostintegration.ChangeBootstrap {
+		kind = "obsolete Skill Hub instruction block"
+	}
+	return host + " " + kind + " " + displayPath(root, change.Path)
 }
 
 // blockedSkillFinding reports the system skill files a plan leaves unchanged

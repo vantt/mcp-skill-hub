@@ -16,6 +16,16 @@ import (
 	"github.com/vantt/skillhub-mcp/internal/systemskills"
 )
 
+// The block older versions wrote, in a short synthetic form. Connect no longer
+// writes it and removes it wherever it finds one.
+const (
+	legacyStart = "<!-- skillhub:bootstrap:v1:start -->"
+	legacyEnd   = "<!-- skillhub:bootstrap:v1:end -->"
+	legacyBody  = "## Skill Hub\n\nold text\n"
+)
+
+func legacyBlock() string { return legacyStart + "\n" + legacyBody + legacyEnd }
+
 func TestPlanApplyAllHostsIsDependencyOrderedAndIdempotent(t *testing.T) {
 	workspace := t.TempDir()
 	binary := filepath.Join(workspace, "bin", "skillhub")
@@ -77,15 +87,17 @@ func TestPlanApplyAllHostsIsDependencyOrderedAndIdempotent(t *testing.T) {
 	assertContains(t, filepath.Join(workspace, ".codex/config.toml"), "command = "+tomlString(binary))
 
 	assertSystemSkillLayout(t, workspace, systemskills.CuratorSkillID, systemskills.DistillSkillID)
-	for _, name := range []string{"CLAUDE.md", "AGENTS.md", "GEMINI.md"} {
-		content := string(readTestFile(t, filepath.Join(workspace, name)))
-		if strings.Count(content, bootstrapStart) != 1 || strings.Count(content, bootstrapEnd) != 1 {
-			t.Fatalf("%s managed marker counts are invalid", name)
+	for name, want := range map[string]string{
+		"CLAUDE.md": "# User instructions\r\n\r\nKeep this exact prose.", "AGENTS.md": "# Agent rules\n", "GEMINI.md": "# Gemini rules\n",
+	} {
+		if got := string(readTestFile(t, filepath.Join(workspace, name))); got != want {
+			t.Fatalf("%s = %q, want it untouched: %q", name, got, want)
 		}
 	}
-	claudeContent := readTestFile(t, filepath.Join(workspace, "CLAUDE.md"))
-	if !strings.Contains(string(claudeContent), "# User instructions\r\n\r\nKeep this exact prose.\r\n\r\n") || strings.Contains(strings.ReplaceAll(string(claudeContent), "\r\n", ""), "\n") {
-		t.Fatal("CLAUDE.md user bytes or CRLF style were not preserved")
+	for _, change := range plan.Changes {
+		if change.Kind == ChangeBootstrap {
+			t.Fatalf("connect planned an instruction file change: %s", change.Path)
+		}
 	}
 	assertMode(t, filepath.Join(workspace, ".mcp.json"), 0o600)
 	assertMode(t, filepath.Join(workspace, "CLAUDE.md"), 0o640)
@@ -108,10 +120,10 @@ func TestPlanApplyAllHostsIsDependencyOrderedAndIdempotent(t *testing.T) {
 
 func TestManagedBlockConflictsAreReportedWithoutWrites(t *testing.T) {
 	tests := map[string]string{
-		"duplicate": bootstrapStart + "\na\n" + bootstrapEnd + "\n" + bootstrapStart + "\nb\n" + bootstrapEnd,
-		"nested":    bootstrapStart + "\n" + bootstrapStart + "\n" + bootstrapEnd + "\n" + bootstrapEnd,
-		"reversed":  bootstrapEnd + "\n" + bootstrapStart,
-		"unmatched": bootstrapStart + "\nbody",
+		"duplicate": legacyStart + "\na\n" + legacyEnd + "\n" + legacyStart + "\nb\n" + legacyEnd,
+		"nested":    legacyStart + "\n" + legacyStart + "\n" + legacyEnd + "\n" + legacyEnd,
+		"reversed":  legacyEnd + "\n" + legacyStart,
+		"unmatched": legacyStart + "\nbody",
 	}
 	for name, content := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -298,7 +310,7 @@ func TestPlanChangePreviewsAreBoundedAndExcludeUnmanagedValues(t *testing.T) {
 	workspace := t.TempDir()
 	secret := "UNRELATED-CONFIG-SECRET-MUST-NOT-APPEAR"
 	writeTestFile(t, filepath.Join(workspace, ".mcp.json"), []byte(`{"unrelatedSecret":"`+secret+`","mcpServers":{"skillhub":{"type":"stdio","command":"OLD-MANAGED-SECRET","args":["old"]}}}`), 0o600)
-	writeTestFile(t, filepath.Join(workspace, "CLAUDE.md"), []byte("user prose "+secret+"\n"), 0o644)
+	writeTestFile(t, filepath.Join(workspace, "CLAUDE.md"), []byte("user prose "+secret+"\n\n"+legacyBlock()+"\n"), 0o644)
 	plan, err := Plan(context.Background(), Request{Workspace: workspace, Binary: filepath.Join(workspace, "skillhub"), Hosts: []Host{HostClaude}})
 	if err != nil {
 		t.Fatalf("Plan: %v", err)
@@ -322,8 +334,8 @@ func TestPlanChangePreviewsAreBoundedAndExcludeUnmanagedValues(t *testing.T) {
 				t.Fatalf("native skill preview lacks digest/size: %q", change.Preview)
 			}
 		case ChangeBootstrap:
-			if !strings.Contains(change.Preview, bootstrapStart) || strings.Contains(change.Preview, "user prose") {
-				t.Fatalf("bootstrap preview is not managed-block-only: %q", change.Preview)
+			if !strings.Contains(change.Preview, "obsolete Skill Hub block (removed)") || !strings.Contains(change.Preview, legacyStart) || strings.Contains(change.Preview, "user prose") {
+				t.Fatalf("bootstrap preview is not block-only: %q", change.Preview)
 			}
 		}
 	}
@@ -470,45 +482,6 @@ func TestTOMLUpdaterRejectsAlternateSkillhubDefinitions(t *testing.T) {
 				t.Fatalf("expected conflict, got output %q", out)
 			}
 		})
-	}
-}
-
-func TestBootstrapBlockInstructsEnglishTasksAndLocalSnapshotUse(t *testing.T) {
-	block := string(bootstrapBlock("\n"))
-	for _, want := range []string{
-		"Send `task.description` in English; translate the user's request first if it is in another language.",
-		"When an activated skill response includes `local.path`, resolve the skill's relative file references",
-		"export the variables in `local.env` (`SKILLHUB_SKILL_DIR`, `SKILLHUB_STATE_DIR`, and `SKILLHUB_CONFIG_DIR`) whenever you run its `check`, `setup`, or scripts, using your shell's syntax",
-		"run its `check` command in `working_directory` under your own permissions before using the scripts, and ask the user before running `setup`.",
-		"If the skill describes installation only in prose, treat those steps as setup: ask the user first, install into `SKILLHUB_STATE_DIR`, and never install globally.",
-		"If `local.status` is `review_required`, the skill's content has not been approved: do not use the skill, and tell the user to run `skillhub skill review <id>`.",
-		"(POSIX `export NAME=value`, PowerShell `$env:NAME = \"value\"`)",
-		"If `local.path` no longer exists, for example in a long session, call `skill_get` again.",
-		"If `$SKILLHUB_CONFIG_DIR/env` exists, load it before running `check`, `setup`, or scripts",
-		"never print, echo, or log its values",
-		"`skillhub skill env set <id> <NAME>`; never ask for the value in chat.",
-		"Do not run `setup` for the same skill concurrently: if `$SKILLHUB_STATE_DIR/.setup.lock` exists and is recent, wait or ask the user.",
-		"call `skill_feedback` with `outcome: failed` and `reason_code: setup_failed`.",
-		"When you do not use the recommended skill, re-resolve with `prior.kind: rejected` instead of picking one yourself.",
-		"When you use a different skill, call `skill_feedback` with the real `skill_id`.",
-	} {
-		if !strings.Contains(block, want) {
-			t.Fatalf("bootstrap block is missing %q:\n%s", want, block)
-		}
-	}
-	if !strings.HasPrefix(block, bootstrapStart) || !strings.HasSuffix(block, bootstrapEnd) {
-		t.Fatal("bootstrap block must keep the v1 markers")
-	}
-
-	// An older v1 block is replaced in place, leaving surrounding prose intact.
-	previous := "# Mine\n\n" + bootstrapStart + "\n## Skill Hub\n\nold text\n" + bootstrapEnd + "\n\nTrailing prose.\n"
-	updated, conflict := updateBootstrap([]byte(previous))
-	if conflict != "" {
-		t.Fatalf("updateBootstrap conflict: %s", conflict)
-	}
-	want := "# Mine\n\n" + block + "\n\nTrailing prose.\n"
-	if string(updated) != want {
-		t.Fatalf("updated block:\n%s\nwant:\n%s", updated, want)
 	}
 }
 
@@ -680,6 +653,57 @@ func TestClaudeConnectionMigratesOnlyOwnedCurationServer(t *testing.T) {
 			}
 			if string(config.MCPServers["other"]) != `{"command":"keep"}` {
 				t.Fatal("unrelated server changed")
+			}
+		})
+	}
+}
+
+func TestConnectWritesNoInstructionFile(t *testing.T) {
+	workspace := t.TempDir()
+	plan := planAndApply(t, Request{Workspace: workspace, Binary: filepath.Join(workspace, "skillhub")})
+	for _, change := range plan.Changes {
+		if change.Kind == ChangeBootstrap {
+			t.Fatalf("connect planned an instruction file: %s", change.Path)
+		}
+	}
+	for _, name := range []string{"CLAUDE.md", "AGENTS.md", "GEMINI.md"} {
+		if _, err := os.Stat(filepath.Join(workspace, name)); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("%s was created, stat error = %v", name, err)
+		}
+	}
+}
+
+func TestConnectRemovesObsoleteBlock(t *testing.T) {
+	crlf := func(s string) string { return strings.ReplaceAll(s, "\n", "\r\n") }
+	v2 := "<!-- skillhub:bootstrap:v2:start -->\nnewer text\n<!-- skillhub:bootstrap:v2:end -->"
+	tests := []struct {
+		name, raw, want string
+		deleted         bool
+	}{
+		{"user text around it", "before\n\n" + legacyBlock() + "\n\nafter\n", "before\n\nafter\n", false},
+		{"CRLF", crlf("before\n\n" + legacyBlock() + "\n\nafter\n"), crlf("before\n\nafter\n"), false},
+		{"only the block", legacyBlock(), "", true},
+		{"block and trailing newlines", legacyBlock() + "\n\n\n", "", true},
+		{"another marker version", "before\n\n" + v2 + "\n", "before\n", false},
+		{"no block", "plain\n", "plain\n", false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			workspace := t.TempDir()
+			path := filepath.Join(workspace, "CLAUDE.md")
+			writeTestFile(t, path, []byte(test.raw), 0o644)
+			planAndApply(t, Request{Workspace: workspace, Binary: filepath.Join(workspace, "skillhub"), Hosts: []Host{HostClaude}})
+			got, err := os.ReadFile(path)
+			if test.deleted {
+				if !errors.Is(err, os.ErrNotExist) {
+					t.Fatalf("file holding only the block survived: %q, %v", got, err)
+				}
+			} else if err != nil || string(got) != test.want {
+				t.Fatalf("CLAUDE.md = %q, %v; want %q", got, err, test.want)
+			}
+			again, err := Plan(context.Background(), Request{Workspace: workspace, Binary: filepath.Join(workspace, "skillhub"), Hosts: []Host{HostClaude}})
+			if err != nil || len(again.Changes) != 0 {
+				t.Fatalf("second plan = %d changes, %v; want none", len(again.Changes), err)
 			}
 		})
 	}

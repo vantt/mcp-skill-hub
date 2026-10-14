@@ -247,15 +247,11 @@ func expectedChange(root string, covered []systemskills.SystemSkill, change Chan
 	case ChangeNativeSkill, ChangeSharedSkill:
 		return expectedSkillChange(root, covered, change, raw, mode)
 	case ChangeBootstrap:
-		update := updateBootstrap
-		if mode.remove {
-			update = removeBootstrap
-		}
-		desired, conflict := update(raw)
+		desired, conflict := removeBootstrap(raw)
 		if conflict != "" {
 			return nil, false, &ConflictError{Path: change.Path, Reason: conflict}
 		}
-		if mode.remove && len(bytes.TrimSpace(desired)) == 0 {
+		if !bytes.Equal(raw, desired) && len(bytes.TrimSpace(desired)) == 0 {
 			return nil, true, nil
 		}
 		return desired, false, nil

@@ -160,7 +160,7 @@ func roleFixtures() []roleFixture {
 				hub := initHub(t, filepath.Join(t.TempDir(), "hub"))
 				gitOutput(t, hub, "add", "-f", ".mcp.json")
 				gitOutput(t, hub, "-c", "user.name=T", "-c", "user.email=t@skillhub.invalid", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "track")
-				if err := os.Remove(filepath.Join(hub, "GEMINI.md")); err != nil {
+				if err := os.Remove(filepath.Join(hub, ".codex", "config.toml")); err != nil {
 					t.Fatal(err)
 				}
 				return hub

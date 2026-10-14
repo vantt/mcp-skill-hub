@@ -1,9 +1,9 @@
 $ connect -g <WORKSPACE> --host claude,codex,gemini --dry-run
 Dry run: agent connection for your user account (all projects) was not written.
 Would change:
-  - Claude Code: will connect (.claude.json, .claude/settings.json, system-curator skill, CLAUDE.md)
-  - Codex: will connect (.codex/config.toml, AGENTS.md)
-  - Gemini CLI: will connect (.gemini/settings.json, GEMINI.md)
+  - Claude Code: will connect (.claude.json, .claude/settings.json, system-curator skill)
+  - Codex: will connect (.codex/config.toml)
+  - Gemini CLI: will connect (.gemini/settings.json)
   - Agent Skills folder (.agents/skills): will connect (system-curator skill)
 
 Claude Code: curation runs through the CLI. It asks before skillhub commands that change the hub,
@@ -18,9 +18,9 @@ $ connect -g <WORKSPACE>
 Connected your user account (all projects) to the hub at
 <WORKSPACE>.
 Agent connection written: claude-code, codex-cli, gemini-cli.
-  - Claude Code: connected (.claude.json, .claude/settings.json, system-curator skill, CLAUDE.md)
-  - Codex: connected (.codex/config.toml, AGENTS.md)
-  - Gemini CLI: connected (.gemini/settings.json, GEMINI.md)
+  - Claude Code: connected (.claude.json, .claude/settings.json, system-curator skill)
+  - Codex: connected (.codex/config.toml)
+  - Gemini CLI: connected (.gemini/settings.json)
   - Agent Skills folder (.agents/skills): connected (system-curator skill)
 WARNING: Host activation coordination is instruction-only and best effort; each Agent Host remains
          responsible for permissions and activation.

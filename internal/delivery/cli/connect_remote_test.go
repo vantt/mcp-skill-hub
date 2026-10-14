@@ -138,9 +138,9 @@ func TestConnectHubWritesEachHostsEntryAndNeverTheToken(t *testing.T) {
 	}
 	var outputs strings.Builder
 	files := map[string][]string{
-		"claude": {".claude/settings.local.json", ".mcp.json", "CLAUDE.md"},
-		"codex":  {".codex/config.toml", "AGENTS.md"},
-		"gemini": {".gemini/settings.json", "GEMINI.md"},
+		"claude": {".claude/settings.local.json", ".mcp.json"},
+		"codex":  {".codex/config.toml"},
+		"gemini": {".gemini/settings.json"},
 	}
 	for _, host := range []string{"claude", "codex", "gemini"} {
 		project := t.TempDir()
@@ -206,7 +206,7 @@ func TestConnectHubWritesEachHostsEntryAndNeverTheToken(t *testing.T) {
 	if response.Status != app.StatusApplied || response.Remote.Hub != hub || response.Remote.Check.Outcome != app.ProbeAccepted || response.Remote.CacheDir != cacheDir {
 		t.Fatalf("global JSON: %s", stdout)
 	}
-	want := []string{".claude.json", ".claude/CLAUDE.md", ".claude/settings.json", ".codex/AGENTS.md", ".codex/config.toml", ".gemini/GEMINI.md", ".gemini/settings.json"}
+	want := []string{".claude.json", ".claude/settings.json", ".codex/config.toml", ".gemini/settings.json"}
 	homeTree := treeOf(t, home)
 	if got := slices.Sorted(maps.Keys(homeTree)); !slices.Equal(got, want) {
 		t.Fatalf("global connect wrote %v, want %v", got, want)
@@ -387,10 +387,6 @@ func TestConnectRemoveCacheClearsTheHubsFetchedSkills(t *testing.T) {
 	if code != 0 || !strings.Contains(stdout, "Cached skills that will be cleared:") || !strings.Contains(stdout, "http://127.0.0.1:7420  1       1         2.0 KB") ||
 		!strings.Contains(flatText(stdout), "WARNING: Claude Code in your user account still uses http://127.0.0.1:7420; its agents fetch the skills again after the cache is cleared.") {
 		t.Fatalf("preview:\n%s", stdout)
-	}
-	code, stdout, _ = runCLI(t, "connect", "--remove", "-g", "--dry-run")
-	if code != 0 || !strings.Contains(flatText(stdout), "Projects that were connected while your user account had the Skill Hub instructions did not get their own copy") {
-		t.Fatalf("global removal preview:\n%s", stdout)
 	}
 	code, stdout, _ = runConnectCLI(t, project, "--remove", "--cache", "--json", "--dry-run")
 	var preview struct {
@@ -698,7 +694,7 @@ func TestRemoteConnectAndRemoveOutputGolden(t *testing.T) {
 	}, true)
 	want = "Dry run: the Skill Hub connection for project /home/a/app was not removed.\n" +
 		"Would change:\n" +
-		"  - Claude Code: will remove (.mcp.json deleted, CLAUDE.md)\n" +
+		"  - Claude Code: will remove (.mcp.json deleted, CLAUDE.md (old Skill Hub block removed))\n" +
 		"The entries point at:\n" +
 		"  - Claude Code: the remote hub at http://127.0.0.1:7420\n" +
 		"\n" +

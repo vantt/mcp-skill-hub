@@ -480,9 +480,6 @@ func (service ConnectService) Disconnect(ctx context.Context, request Disconnect
 	if err != nil || result.Error != nil {
 		return result, nil, err
 	}
-	if request.Global && removesInstructions(result) {
-		warnings = append(warnings, Warning{Code: "global_instructions_removed", Summary: "Projects that were connected while your user account had the Skill Hub instructions did not get their own copy; run `skillhub connect` in those projects again if they keep using Skill Hub."})
-	}
 	result.Warnings = append(result.Warnings, warnings...)
 	if result.Status == StatusReady && !cacheToClear {
 		result.Summary = "No Skill Hub connection in " + label + "; nothing to remove."
@@ -497,16 +494,6 @@ func (service ConnectService) Disconnect(ctx context.Context, request Disconnect
 	result.Status = StatusApplied
 	result.Summary = "Skill Hub connection for " + label + " removed."
 	return result, disconnection, nil
-}
-
-// removesInstructions reports whether a removal takes out an instruction block.
-func removesInstructions(result Result) bool {
-	for _, item := range result.Items {
-		if strings.HasSuffix(item.ID, "_"+string(hostintegration.ChangeBootstrap)) {
-			return true
-		}
-	}
-	return false
 }
 
 // sharedHubWarnings names the other scope that still uses a hub whose cache

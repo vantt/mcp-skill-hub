@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/vantt/skillhub-mcp/internal/catalog"
+	"github.com/vantt/skillhub-mcp/internal/hostintegration"
 	"github.com/vantt/skillhub-mcp/internal/userconfig"
 )
 
@@ -61,6 +62,9 @@ func TestMissingGitignoreEntryIsOnlyAFixableFinding(t *testing.T) {
 	}
 }
 
+// What older versions wrote into instruction files, in a short synthetic form.
+const legacyInstructionBlock = "<!-- skillhub:bootstrap:v1:start -->\n## Skill Hub\n\nold text\n<!-- skillhub:bootstrap:v1:end -->"
+
 // In a hub, CLAUDE.md, AGENTS.md and GEMINI.md are committed hub content:
 // removing the connection takes out the machine files and leaves them alone.
 func TestDisconnectInAHubKeepsItsCommittedInstructionFiles(t *testing.T) {
@@ -69,8 +73,8 @@ func TestDisconnectInAHubKeepsItsCommittedInstructionFiles(t *testing.T) {
 	t.Setenv("USERPROFILE", os.Getenv("HOME"))
 	instructions := map[string][]byte{}
 	for _, name := range []string{"CLAUDE.md", "AGENTS.md", "GEMINI.md"} {
-		raw, err := os.ReadFile(filepath.Join(root, name))
-		if err != nil {
+		raw := []byte("# Hub rules\n\n" + legacyInstructionBlock + "\n")
+		if err := os.WriteFile(filepath.Join(root, name), raw, 0o644); err != nil {
 			t.Fatal(err)
 		}
 		instructions[name] = raw
@@ -92,8 +96,8 @@ func TestDisconnectInAHubKeepsItsCommittedInstructionFiles(t *testing.T) {
 	}
 }
 
-// In a client project the managed block goes; the user's own text stays, and a
-// file that held nothing else is deleted.
+// In a client project connect writes no instruction file, and removal leaves
+// the user's own text alone.
 func TestDisconnectInAProjectKeepsUserTextAndDeletesAnEmptiedFile(t *testing.T) {
 	hub := healthHub(t)
 	t.Setenv("HOME", t.TempDir())
@@ -115,5 +119,33 @@ func TestDisconnectInAProjectKeepsUserTextAndDeletesAnEmptiedFile(t *testing.T) 
 	}
 	if _, err := os.Stat(filepath.Join(project, "AGENTS.md")); !os.IsNotExist(err) {
 		t.Fatalf("AGENTS.md was created by connect and held nothing else: %v", err)
+	}
+}
+
+func TestDoctorReportsAndRemovesObsoleteInstructionBlock(t *testing.T) {
+	t.Parallel()
+	hub := healthHub(t)
+	project := connectProject(t, hub, hostintegration.HostClaude)
+	path := filepath.Join(project, "CLAUDE.md")
+	userText := "# Mine\n\nKeep this.\n"
+	if err := os.WriteFile(path, []byte(userText+"\n"+legacyInstructionBlock+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run := func() []Section {
+		return Run(t.Context(), DetectRole(project, t.TempDir(), userconfig.Config{}), DepthFull)
+	}
+	sections := run()
+	finding := findingByCode(t, sections, "client_entry_outdated")
+	if !strings.Contains(finding.Message, "obsolete Skill Hub instruction block") {
+		t.Fatalf("finding = %+v", finding)
+	}
+	if fixes := ApplyFixes(t.Context(), sections); len(fixes.NotFixed) != 0 {
+		t.Fatalf("not fixed = %+v", fixes.NotFixed)
+	}
+	if got, err := os.ReadFile(path); err != nil || string(got) != userText {
+		t.Fatalf("CLAUDE.md after the fix = %q, %v; want %q", got, err, userText)
+	}
+	if problems := codesOf(run(), SeverityProblem); len(problems) != 0 {
+		t.Fatalf("second doctor run reports %v, want current", problems)
 	}
 }

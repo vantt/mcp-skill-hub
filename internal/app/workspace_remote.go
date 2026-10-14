@@ -493,14 +493,14 @@ type trackedFileReport struct {
 // checkTrackedFiles inspects what the fetched ref tracks before anything is
 // checked out. runtime/ and .skillhub/transactions/ refuse the hub; agent
 // configuration that agents load is named in a warning, except an instruction
-// file whose content is exactly what init writes.
+// file that holds nothing but an obsolete Skill Hub block, which an older
+// connect wrote.
 func checkTrackedFiles(ctx context.Context, root, ref string) (trackedFileReport, error) {
 	var report trackedFileReport
 	output, err := runLocalGit(ctx, root, "ls-tree", "-r", "--name-only", "-z", ref)
 	if err != nil {
 		return report, fmt.Errorf("list the files of the fetched hub: %w", err)
 	}
-	fresh := hostintegration.FreshInstructionFile()
 	refusedDirs := map[string]bool{}
 	var configs []string
 	for _, path := range strings.Split(output, "\x00") {
@@ -517,7 +517,7 @@ func checkTrackedFiles(ctx context.Context, root, ref string) (trackedFileReport
 			configs = append(configs, path)
 		case path == "CLAUDE.md", path == "AGENTS.md", path == "GEMINI.md":
 			content, err := runLocalGit(ctx, root, "cat-file", "blob", ref+":"+path)
-			if err != nil || strings.TrimSpace(content) != strings.TrimSpace(string(fresh)) {
+			if err != nil || !hostintegration.IsBootstrapOnlyFile([]byte(content)) {
 				configs = append(configs, path)
 			}
 		}
