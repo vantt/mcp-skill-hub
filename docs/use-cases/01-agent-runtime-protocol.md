@@ -53,7 +53,7 @@ Giao thức gồm 4 giai đoạn tuần tự:
 
 ### Giai đoạn 1: Bootstrap & Điều kiện kích hoạt
 
-Agent Host được kết nối với Skill Hub qua lệnh cấu hình (ví dụ `skillhub connect`). Hướng dẫn bootstrap được đặt tại file chỉ dẫn gốc của dự án (`AGENTS.md`, `CLAUDE.md`, hoặc system prompt):
+Agent Host được kết nối với Skill Hub qua lệnh cấu hình (ví dụ `skillhub connect`). Hướng dẫn giao thức đến từ MCP server instructions ngay khi kết nối, không nằm trong file chỉ dẫn của dự án:
 
 > *"Khi bắt đầu một tác vụ mới, hoặc khi phạm vi/ràng buộc thay đổi đáng kể, hãy gọi MCP tool `skill_resolve` trước khi chọn kỹ năng. Không gọi lại ở mỗi turn hoặc cho các sửa lỗi hiển nhiên."*
 

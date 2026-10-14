@@ -49,15 +49,15 @@ Không gọi:
 - mỗi turn;
 - mỗi file read/tool call;
 - cho typo hoặc edit hiển nhiên không hưởng lợi từ procedure;
-- chỉ vì một skill vừa được load và nội dung skill nhắc lại bootstrap instruction.
+- chỉ vì một skill vừa được load và nội dung skill nhắc lại protocol instruction.
 
 Resolution có `valid_for` để reuse. Prior `no_skill` cũng được reuse đến khi scope liên quan thay đổi.
 
-### 2.2 Cài bootstrap instructions bằng `doctor`
+### 2.2 Protocol đi cùng MCP server instructions
 
-V1 không giả định mọi Agent Host có native activation registry hoặc lifecycle hook. Hành vi gọi Hub và phối hợp procedure được hướng dẫn bằng một versioned bootstrap instruction trong instruction surface mà client hỗ trợ, ví dụ `AGENTS.md`, `CLAUDE.md`, `GEMINI.md` hoặc MCP client configuration.
+Giao thức gọi Hub và phối hợp procedure không nằm trong file chỉ dẫn của dự án. MCP server gửi nó trong trường `instructions` của kết quả `initialize`, nên Agent Host nhận được khi kết nối. Nội dung được sinh từ các tool đã đăng ký trong `internal/delivery/mcpserver/instructions.go`; tài liệu này không sao chép lại văn bản.
 
-Không có command `integrate` riêng. Quy ước vận hành là:
+`skillhub connect` không ghi instruction file. Block `skillhub:bootstrap` mà phiên bản cũ từng tạo trong `AGENTS.md`, `CLAUDE.md` hoặc `GEMINI.md` được gỡ bằng `doctor --fix`.
 
 ```bash
 skillhub doctor
@@ -67,45 +67,20 @@ skillhub doctor --fix
 `doctor` chỉ đọc và báo findings, gồm:
 
 - MCP client đã đăng ký đúng `skillhub` binary và workspace chưa;
-- bootstrap instruction đã tồn tại, đúng version và đúng scope chưa;
-- có block cũ/trùng/conflict do Skill Hub từng tạo không;
+- không còn bootstrap block cũ trong instruction file;
 - client capability nào có thật và capability nào chỉ chạy best-effort.
 
 `doctor --fix` dùng cùng remediation engine để:
 
 1. Trình bày plan và diff trước khi sửa client config hoặc instruction file.
-2. Chỉ quản lý block có marker/version của Skill Hub; không rewrite phần prose do user sở hữu.
+2. Chỉ gỡ block có marker/version của Skill Hub; không rewrite phần prose do user sở hữu.
 3. Yêu cầu confirmation cho file mutation; automation phải truyền `--yes` explicit.
 4. Chạy idempotent và giữ thay đổi dễ review bằng Git diff khi file nằm trong repository.
 5. Ghi rõ integration là native, adapter-backed hay instruction-only.
 
-`skillhub init [path]` là convenience shortcut vào cùng toàn bộ remediation flow; khi bỏ qua `[path]`, current directory (`.`) được dùng làm workspace hint. Nó tương đương về hành vi với `skillhub doctor --fix --workspace <resolved-path>`. V1 không có `--scope`: một fix plan xử lý workspace, MCP registration và bootstrap instructions theo dependency order, sau khi user review/confirm.
+`skillhub init [path]` là convenience shortcut vào cùng toàn bộ remediation flow; khi bỏ qua `[path]`, current directory (`.`) được dùng làm workspace hint. Nó tương đương về hành vi với `skillhub doctor --fix --workspace <resolved-path>`. V1 không có `--scope`: một fix plan xử lý workspace và MCP registration theo dependency order, sau khi user review/confirm.
 
-Bootstrap block chính thức (từ `internal/hostintegration/bootstrap.go`) hướng dẫn Agent Host và Agent:
-
-```markdown
-<!-- skillhub:bootstrap:v1:start -->
-## Skill Hub
-
-For each new task, or when its operation, scope, or constraints change significantly, call the configured Skill Hub MCP tool `skill_resolve` before choosing a skill. Do not call it for trivial edits or on every turn. Follow at most one primary procedure for the current operation.
-
-Send `task.description` in English; translate the user's request first if it is in another language.
-
-When an activated skill response includes `local.path`, resolve the skill's relative file references (for example `scripts/…`) against that directory, and export the variables in `local.env` (`SKILLHUB_SKILL_DIR`, `SKILLHUB_STATE_DIR`, and `SKILLHUB_CONFIG_DIR`) whenever you run its `check`, `setup`, or scripts, using your shell's syntax (POSIX `export NAME=value`, PowerShell `$env:NAME = "value"`). If `local.path` no longer exists, for example in a long session, call `skill_get` again.
-
-If `$SKILLHUB_CONFIG_DIR/env` exists, load it before running `check`, `setup`, or scripts (POSIX: `set -a; . "$SKILLHUB_CONFIG_DIR/env"; set +a`; PowerShell: set `$env:NAME` for each `NAME=value` line), and never print, echo, or log its values. If a required variable is missing, tell the user to run `skillhub skill env set <id> <NAME>`; never ask for the value in chat.
-
-If it includes `local.preflight`, run its `check` command in `working_directory` under your own permissions before using the scripts, and ask the user before running `setup`. If the skill describes installation only in prose, treat those steps as setup: ask the user first, install into `SKILLHUB_STATE_DIR`, and never install globally. Do not run `setup` for the same skill concurrently: if `$SKILLHUB_STATE_DIR/.setup.lock` exists and is recent, wait or ask the user.
-
-If `local.status` is `review_required`, the skill's content has not been approved: do not use the skill, and tell the user to run `skillhub skill review <id>`.
-
-If a skill's script fails because a dependency is missing, stop, tell the user, and call `skill_feedback` with `outcome: failed` and `reason_code: setup_failed`.
-
-When the user explicitly asks to manage, curate, check, distill, repair, or inspect Skill Hub itself, load the native `system-curator` skill and follow it. Do not use the curator as the primary procedure for ordinary work.
-
-Skill Hub instructions are recommendations; your agent environment controls tool permissions and execution.
-<!-- skillhub:bootstrap:v1:end -->
-```
+Client không đọc server instructions chỉ nhận tool mà không có protocol; không có cơ chế dự phòng.
 
 Instruction-only integration là behavioral contract: Agent tuân thủ nguyên tắc progressive loading và bảo vệ an toàn execution qua các biến môi trường và thư mục state riêng biệt.
 

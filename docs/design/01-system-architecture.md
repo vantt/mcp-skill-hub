@@ -339,7 +339,7 @@ skillhub doctor --fix --workspace ~/skillhub-data
 
 Khi không truyền path, `skillhub init` dùng current directory (`.`); explicit path vẫn được hỗ trợ cho dedicated workspace.
 
-Không nên shell-exec chính CLI; cả hai command gọi cùng application service và sinh cùng finding/fix IDs để test, telemetry và recovery nhất quán. Flow kiểm tra/sửa toàn bộ workspace, MCP client registration và bootstrap instructions; không có partial scope model trong V1.
+Không nên shell-exec chính CLI; cả hai command gọi cùng application service và sinh cùng finding/fix IDs để test, telemetry và recovery nhất quán. Flow kiểm tra/sửa toàn bộ workspace, MCP client registration và việc gỡ block bootstrap cũ; không có partial scope model trong V1.
 
 Workspace fix phải:
 
@@ -352,7 +352,7 @@ Workspace fix phải:
 7. Không tự commit; người dùng/automation quyết định commit và remote Git.
 8. Idempotent: chạy lại chỉ sửa finding còn tồn tại, không reset valid user data.
 
-`doctor --fix` xử lý mọi finding có thể sửa theo dependency order: workspace trước, sau đó MCP registrations và bootstrap instructions. Nó phải preview plan/file diffs và yêu cầu confirmation trước mutation; automation dùng `--yes` một cách explicit. Nếu chưa có workspace path, interactive mode hỏi user, còn non-interactive mode yêu cầu `--workspace`.
+`doctor --fix` xử lý mọi finding có thể sửa theo dependency order: workspace trước, sau đó MCP registrations và gỡ block bootstrap cũ (obsolete). Nó phải preview plan/file diffs và yêu cầu confirmation trước mutation; automation dùng `--yes` một cách explicit. Nếu chưa có workspace path, interactive mode hỏi user, còn non-interactive mode yêu cầu `--workspace`.
 
 Mở hoặc rebuild workspace có sẵn:
 

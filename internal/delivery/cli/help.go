@@ -83,9 +83,9 @@ A folder with other files is refused; init takes no folder argument.
                         [--host claude|codex|gemini]... [--dry-run] [--json]
 
 Connect the agents of the current folder to the hub. Writes the MCP
-registration, the Skill Hub instruction block, and the system-curator skill,
-and prints what it changed. It never overwrites your own content in those
-files.
+registration and the system-curator skill, removes an old Skill Hub
+instruction block, and prints what it changed. It never overwrites your own
+content in those files.
 
   <path>            A hub folder on this machine (default: the hub ` + "`skillhub init`" + `
                     set up last on this machine)
@@ -116,8 +116,8 @@ A hub on another machine (through an SSH tunnel or Tailscale):
 
 Undo a connection:
   --remove          Remove the Skill Hub entry of the scope (local or remote hub), its
-                    instruction block and an unchanged system-curator skill; unrelated
-                    host configuration stays
+                    old instruction block, if any, and an unchanged system-curator
+                    skill; unrelated host configuration stays
   --cache           With --remove, also clear the skills fetched from the remote hub
 
 <path> is a local folder and --hub a URL; they exclude each other: one scope

@@ -37,9 +37,9 @@ Dry run: agent connection for project
 <home>/<your-project>
 was not written.
 Would change:
-  - Claude Code: will connect (.mcp.json, .claude/settings.local.json, system-curator skill, CLAUDE.md)
-  - Codex: will connect (.codex/config.toml, AGENTS.md)
-  - Gemini CLI: will connect (.gemini/settings.json, GEMINI.md)
+  - Claude Code: will connect (.mcp.json, .claude/settings.local.json, system-curator skill)
+  - Codex: will connect (.codex/config.toml)
+  - Gemini CLI: will connect (.gemini/settings.json)
   - Agent Skills folder (.agents/skills): will connect (system-curator skill)
 ```
 
@@ -63,7 +63,7 @@ skillhub connect -g --host claude
 Connected your user account (all projects) to the hub at
 <home>/skill-hub.
 Agent connection written: claude-code.
-  - Claude Code: connected (.claude.json, .claude/settings.json, system-curator skill, CLAUDE.md)
+  - Claude Code: connected (.claude.json, .claude/settings.json, system-curator skill)
   - Agent Skills folder (.agents/skills): connected (system-curator skill)
 ```
 
@@ -75,15 +75,15 @@ Output is trimmed. `-g` (or `--global`) fits when you want the hub everywhere. C
 
 | Scope | Files |
 |---|---|
-| Project | `.mcp.json`, `.codex/config.toml`, `.gemini/settings.json` (hub registration); `.claude/settings.local.json` (Claude Code permissions); `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` (a short block between `skillhub:bootstrap` comments); the `system-curator` skill in `.agents/skills/system-curator/` and its pointer file `.claude/skills/system-curator/SKILL.md` |
-| Global (`-g`) | `~/.claude.json`, `~/.codex/config.toml`, `~/.gemini/settings.json` (hub registration); `~/.claude/settings.json` (Claude Code permissions); `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, `~/.gemini/GEMINI.md` (the same block); the `system-curator` skill in `~/.agents/skills/system-curator/` and its pointer file `~/.claude/skills/system-curator/SKILL.md` |
+| Project | `.mcp.json`, `.codex/config.toml`, `.gemini/settings.json` (hub registration); `.claude/settings.local.json` (Claude Code permissions); the `system-curator` skill in `.agents/skills/system-curator/` and its pointer file `.claude/skills/system-curator/SKILL.md` |
+| Global (`-g`) | `~/.claude.json`, `~/.codex/config.toml`, `~/.gemini/settings.json` (hub registration); `~/.claude/settings.json` (Claude Code permissions); the `system-curator` skill in `~/.agents/skills/system-curator/` and its pointer file `~/.claude/skills/system-curator/SKILL.md` |
 | Folder access | Each agent may read and write the hub's `runtime/cache/skills`, `runtime/envs` and `runtime/config`: Claude Code `permissions.additionalDirectories`, Codex `[sandbox_workspace_write] writable_roots`, Gemini CLI `context.includeDirectories` |
 
 Skill Hub writes its skills once, in the shared Agent Skills folder `.agents/skills/`, which Codex and Gemini CLI read directly (Gemini CLI from v0.28.0). Claude Code reads only `.claude/skills/`, so it gets a short pointer file there that tells it to read the skill in `.agents/skills/`. Nothing is written under `.gemini/skills/`; `doctor --fix` removes an old copy there from an earlier version, unless you changed it. In the hub folder itself, `init` also writes the `distill-lab` skill the same way ([Sources and learning](sources-and-learning.md#hand-changes-to-your-curator-agent)). These generated skill folders stay out of Git through entries in the hub's `.gitignore`, which `init` adds, or `doctor --fix` in an older hub. A skill file you changed is never overwritten or deleted: Skill Hub skips that one file and names it.
 
 Claude Code follows the pointer file through `${CLAUDE_SKILL_DIR}`, as its [skills documentation](https://code.claude.com/docs/en/skills) describes; Codex and Gemini CLI reading `.agents/skills/` rests on their own documentation. With the user-account pointer (`~/.claude/skills/` to `~/.agents/skills/`), Claude Code is expected to ask for permission the first time it reads `~/.agents/skills/` from another project in its default permission mode, because that folder lies outside the project; see its [permissions documentation](https://code.claude.com/docs/en/permissions).
 
-`connect` adds missing entries and never removes or reorders your own. Your own text in `CLAUDE.md`, `AGENTS.md` and `GEMINI.md` stays; Skill Hub manages only the marked block. Running `connect` again on a current connection changes nothing.
+`connect` adds missing entries and never removes or reorders your own. `connect` writes no instruction files: the protocol reaches your agent through the MCP server itself (see [How the agent picks a skill](#how-the-agent-picks-a-skill)). If an earlier version left a Skill Hub block in `CLAUDE.md`, `AGENTS.md` or `GEMINI.md`, `doctor --fix` removes it; Skill Hub only removes its old marked block, and your own text stays byte-for-byte. Running `connect` again on a current connection changes nothing.
 
 The registration holds the absolute paths of the `skillhub` program and of your hub. If you move the program, run `connect` again. If you move the hub, run `cd <new-location> && skillhub init` there, then `skillhub doctor --fix` in each project. Older connections are upgraded when you run `connect` or `doctor --fix`.
 
@@ -116,7 +116,7 @@ Claude Code asks you before any `skillhub` command with `--yes` or `confirm`, an
 
 ### Undo a connection
 
-`connect --remove` takes out the Skill Hub entry, the marked block and the Skill Hub skills, unless you changed them. Other agent settings stay as they are. In a project, text you wrote in `CLAUDE.md`, `AGENTS.md` or `GEMINI.md` stays, and a file that held only the block is deleted. Run in the hub folder itself, it leaves those three files alone, because the hub commits them as its own content; `doctor --fix` restores the rest of the hub's connection. Run it in the connected project:
+`connect --remove` takes out the Skill Hub entry, an old marked block if one is left, and the Skill Hub skills, unless you changed them. Other agent settings stay as they are. In a project, text you wrote in `CLAUDE.md`, `AGENTS.md` or `GEMINI.md` stays, and a file that held only an old block is deleted. Run in the hub folder itself, it leaves those three files alone, because the hub commits them as its own content; `doctor --fix` restores the rest of the hub's connection. Run it in the connected project:
 
 ```bash
 cd <your-project> && skillhub connect --remove
@@ -132,7 +132,7 @@ Moved to [Curating skills](curating-skills.md).
 
 ## How the agent picks a skill
 
-Your agent is told to ask the hub which skill fits at the start of each new task. Trivial edits skip this; the connection block in `CLAUDE.md` carries that instruction. The hub compares the task with each skill's description, triggers, examples and "not for" entries.
+Your agent is told to ask the hub which skill fits at the start of each new task. Trivial edits skip this; the Skill Hub MCP server sends that instruction when your agent connects (MCP server instructions). Claude Code, Codex CLI and Gemini CLI read it (Gemini CLI loads MCP servers, and so their instructions, only in trusted folders); Cursor's behaviour is not documented. A client that ignores server instructions gets the tools without the protocol, and there is no fallback. The hub compares the task with each skill's description, triggers, examples and "not for" entries.
 
 The hub sends back a **recommendation**: the skill that fits, or "no skill fits". Your agent still decides whether to load it.
 

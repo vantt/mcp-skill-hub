@@ -160,9 +160,9 @@ cd <your-project> && skillhub connect --hub http://192.168.1.20:7420 --token-fil
 Agent connection for project
 /home/you/your-project
 to the hub at http://192.168.1.20:7420 written.
-  - Claude Code: connected (.mcp.json, .claude/settings.local.json, CLAUDE.md)
-  - Codex: connected (.codex/config.toml, AGENTS.md)
-  - Gemini CLI: connected (.gemini/settings.json, GEMINI.md)
+  - Claude Code: connected (.mcp.json, .claude/settings.local.json)
+  - Codex: connected (.codex/config.toml)
+  - Gemini CLI: connected (.gemini/settings.json)
 
 Hub:          http://192.168.1.20:7420
 Token:        /home/you/.skillhub-token-192.168.1.20-7420
@@ -202,7 +202,7 @@ What gets written, per agent:
 | MCP entry `skillhub` | `skillhub mcp proxy --hub <url> --token-file <path>`; only the token file's path, never the token |
 | Allowed directories | The skill cache of that hub, `<state>/skillhub/remote/<hub-id>` |
 | Claude Code permission rules | The same rules as for a hub on this machine |
-| Instruction block in `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` | The same as for a hub on this machine |
+| Instructions | Sent by the proxy's MCP server; no file. `doctor` reports an old block in a remote-connected project; run the `connect --hub` command it prints to remove it |
 | `system-curator` and `distill-lab` skills, `skillhub-curation` entry | Not installed: curation stays on machine B. A `system-curator` skill that a local connection wrote earlier is removed, unless another agent in the folder still uses a hub on this machine |
 
 ### Choose the addresses the server listens on
@@ -540,9 +540,9 @@ cd <your-project> && skillhub connect --remove --cache
 Skill Hub connection for project
 /home/you/your-project
 removed.
-  - Claude Code: removed (.mcp.json deleted, .claude/settings.local.json deleted, CLAUDE.md deleted)
-  - Codex: removed (.codex/config.toml deleted, AGENTS.md deleted)
-  - Gemini CLI: removed (.gemini/settings.json deleted, GEMINI.md deleted)
+  - Claude Code: removed (.mcp.json deleted, .claude/settings.local.json deleted)
+  - Codex: removed (.codex/config.toml deleted)
+  - Gemini CLI: removed (.gemini/settings.json deleted)
 The removed entries pointed at:
   - Claude Code: the remote hub at http://127.0.0.1:7420 (token file
     /home/you/.skillhub-token-127.0.0.1-7420)
