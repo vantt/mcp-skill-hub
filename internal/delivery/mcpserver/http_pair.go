@@ -20,6 +20,7 @@ const (
 	httpPairMaxBody     = 1 << 10
 	httpPairReadTimeout = 5 * time.Second
 	httpPairTransport   = "pairing is only offered over Tailscale or an SSH tunnel"
+	httpPairFailureKey  = "pair|"
 )
 
 // Redeemer consumes a one-time invite. It reports an error for any invite that
@@ -48,7 +49,9 @@ func (gate *httpGate) servePair(writer http.ResponseWriter, request *http.Reques
 		http.Error(writer, httpPairTransport, http.StatusForbidden)
 		return
 	}
-	remote := remoteHost(request.RemoteAddr)
+	// Pairing keeps its own failure count: a stale bearer token on the same
+	// address (every tunnel client is 127.0.0.1) must not block re-pairing.
+	remote := httpPairFailureKey + remoteHost(request.RemoteAddr)
 	if gate.failures.blocked(remote) {
 		writer.Header().Set("Retry-After", fmt.Sprint(int(httpAuthFailureWindow.Seconds())))
 		http.Error(writer, "too many failed attempts; wait a minute", http.StatusTooManyRequests)

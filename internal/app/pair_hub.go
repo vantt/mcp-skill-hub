@@ -66,8 +66,10 @@ func PairHub(ctx context.Context, hubURL, invite string) (string, error) {
 		return reply.Token, nil
 	case response.StatusCode == http.StatusForbidden && strings.Contains(string(answer), "Tailscale or an SSH tunnel"):
 		return "", pairFailure("The hub refused the invite.", "pairing is only offered over Tailscale or an SSH tunnel.", "Use the Tailscale address of the hub or an SSH tunnel, or use the scp line from `skillhub serve`.")
-	case response.StatusCode == http.StatusForbidden:
+	case response.StatusCode == http.StatusForbidden && strings.Contains(string(answer), "invite not valid"):
 		return "", pairFailure("The invite was not accepted.", "this invite is not valid: it expired, was already used, or is wrong.", "On the hub machine run `skillhub token invite` for a new one.")
+	case response.StatusCode == http.StatusForbidden:
+		return "", pairFailure("The hub refused the request.", "the hub answered 403 before it looked at the invite, so the invite is still unused.", "If you reach the hub by a name, add `--allow-host <name>` to `skillhub serve` on the hub machine, or connect with an address `skillhub serve` prints.")
 	case response.StatusCode == http.StatusNotFound:
 		return "", pairFailure("The hub does not take invites.", "this hub does not offer invites.", "Use the scp line from `skillhub serve` to copy the token file.")
 	case response.StatusCode == http.StatusTooManyRequests:

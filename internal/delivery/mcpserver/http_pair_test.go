@@ -254,13 +254,36 @@ func TestPairThrottlesFailedInvitesPerRemote(t *testing.T) {
 	}
 }
 
+func TestPairIsNotBlockedByBearerFailuresFromTheSameAddress(t *testing.T) {
+	gate, _, _ := newPairGate(t, pairTestInvite)
+	for attempt := 0; attempt < httpAuthFailureLimit+5; attempt++ {
+		gate.failures.record("127.0.0.1")
+	}
+	if !gate.failures.blocked("127.0.0.1") {
+		t.Fatal("setup: bearer failures did not block the address")
+	}
+	if response := pairRequest(gate, "127.0.0.1:50000", "127.0.0.1", http.MethodPost, pairBody(pairTestInvite), nil); response.Code != http.StatusOK {
+		t.Fatalf("pairing after bearer failures status = %d, want 200", response.Code)
+	}
+}
+
+func TestPairFailuresDoNotBlockBearerRequests(t *testing.T) {
+	gate, _, _ := newPairGate(t, pairTestInvite)
+	for attempt := 0; attempt < httpAuthFailureLimit+5; attempt++ {
+		pairRequest(gate, "127.0.0.1:50000", "127.0.0.1", http.MethodPost, pairBody("wrong"), nil)
+	}
+	if gate.failures.blocked("127.0.0.1") {
+		t.Fatal("failed pairing attempts blocked the bearer check for the address")
+	}
+}
+
 func TestPairRefusedTransportIsNotCounted(t *testing.T) {
 	gate, _, _ := newPairGate(t, pairTestInvite)
 	for attempt := 0; attempt < httpAuthFailureLimit+5; attempt++ {
 		pairRequest(gate, "192.168.1.20:50000", "127.0.0.1", http.MethodPost, pairBody("wrong"), nil)
 		pairRequest(gate, "127.0.0.1:50000", "127.0.0.1", http.MethodPost, pairBody("wrong"), func(r *http.Request) { r.Header.Set("Via", "x") })
 	}
-	if gate.failures.blocked("192.168.1.20") || gate.failures.blocked("127.0.0.1") {
+	if gate.failures.blocked(httpPairFailureKey+"192.168.1.20") || gate.failures.blocked(httpPairFailureKey+"127.0.0.1") {
 		t.Fatal("a request refused for its transport counted as a failure")
 	}
 	if response := pairRequest(gate, "127.0.0.1:50000", "127.0.0.1", http.MethodPost, pairBody(pairTestInvite), nil); response.Code != http.StatusOK {
@@ -280,7 +303,7 @@ func TestPairUnreadableTokenLeavesInviteUnused(t *testing.T) {
 	if redeemer.callCount() != 0 || !redeemer.redeemable(pairTestInvite) {
 		t.Fatal("an unreadable token consumed the invite")
 	}
-	if gate.failures.blocked("127.0.0.1") {
+	if gate.failures.blocked(httpPairFailureKey + "127.0.0.1") {
 		t.Fatal("an unreadable token counted as a failed invite")
 	}
 }

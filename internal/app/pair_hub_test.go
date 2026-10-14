@@ -53,6 +53,7 @@ func TestPairHubStatusMessages(t *testing.T) {
 	}{
 		{"invite not valid", 403, "invite not valid", "this invite is not valid: it expired, was already used, or is wrong"},
 		{"pairing refused", 403, "pairing is only offered over Tailscale or an SSH tunnel", "pairing is only offered over Tailscale or an SSH tunnel"},
+		{"host refused", 403, "Forbidden: the Host header is not allowed", "the invite is still unused"},
 		{"no route", 404, "", "this hub does not offer invites"},
 		{"throttled", 429, "", "the hub is refusing attempts for a minute"},
 		{"unavailable", 503, "the hub is shutting down", "the hub answered with an error (HTTP 503)"},
