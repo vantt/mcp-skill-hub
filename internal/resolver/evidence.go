@@ -197,6 +197,12 @@ func overlap(left, right []string) float64 {
 	return float64(common) / float64(denominator)
 }
 
+// PhraseOverlap returns how much two phrasings share, from 0 to 1, with the
+// same tokenization and measure the resolver scores examples with.
+func PhraseOverlap(a, b string) float64 {
+	return overlap(tokenize(a), tokenize(b))
+}
+
 func bestOverlap(query []string, values []string) float64 {
 	best := 0.0
 	for _, value := range values {

@@ -39,6 +39,28 @@ var (
 	emailRegex       = regexp.MustCompile(`(?i)[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}`)
 )
 
+// redactionMarkers lists every placeholder Redact writes in place of removed
+// text, apart from a home path (see homePathRegex). Redact and ContainsRedaction
+// share this list, so a new placeholder is detected as soon as it is added.
+var redactionMarkers = []string{
+	"[PRIVATE KEY]", "[CREDS]", "[REDACTED]", "[JWT]", "[AWS KEY]",
+	"[GITHUB TOKEN]", "[SLACK TOKEN]", "[TOKEN]", "[EMAIL]", "<repo>",
+}
+
+// homePathRegex matches a path that Redact shortened to start at "~".
+var homePathRegex = regexp.MustCompile(`(?:^|[\s"'(=:])~(?:[/\\]|\s|$)`)
+
+// ContainsRedaction reports whether text carries any placeholder that Redact
+// writes, which means part of the original text was removed.
+func ContainsRedaction(text string) bool {
+	for _, marker := range redactionMarkers {
+		if strings.Contains(text, marker) {
+			return true
+		}
+	}
+	return homePathRegex.MatchString(text)
+}
+
 // Redact applies secret removal, path normalization, and length capping.
 func (r *Redactor) Redact(text string) string {
 	if text == "" {

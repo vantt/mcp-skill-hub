@@ -2,6 +2,8 @@ package telemetry
 
 import (
 	"os"
+	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -147,7 +149,28 @@ done`,
 			if strings.Contains(got, tt.notCont) {
 				t.Errorf("expected output to NOT contain %q, got %q", tt.notCont, got)
 			}
+			if !ContainsRedaction(got) {
+				t.Errorf("ContainsRedaction missed the marker in %q", got)
+			}
+			for _, marker := range emittedMarkerRegex.FindAllString(got, -1) {
+				if !slices.Contains(redactionMarkers, marker) {
+					t.Errorf("redactor emitted %q, which is not in the marker list", marker)
+				}
+			}
 		})
+	}
+}
+
+var emittedMarkerRegex = regexp.MustCompile(`\[[A-Z ]+\]|<repo>`)
+
+func TestContainsRedactionIgnoresPlainText(t *testing.T) {
+	for _, text := range []string{"review the pull request", "about ~5 minutes", "a [draft] note", "use the repo layout"} {
+		if ContainsRedaction(text) {
+			t.Errorf("plain text %q reported as redacted", text)
+		}
+	}
+	if !ContainsRedaction("open ~/notes") {
+		t.Error("a home path was not detected")
 	}
 }
 
