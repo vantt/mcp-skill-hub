@@ -180,5 +180,10 @@ before the first new release.
 - 2026-10-13: v0.6.6 tagged and released by 68 (Release workflow green, signed, smoke installs passed on three
   OSes). Checked from this side: the new and the old `install.sh` URLs resolve to the same asset, and
   `go list -m github.com/vantt/skillhub-mcp@v0.6.6` resolves through the Go proxy.
-- Not run: the v0.6.4 `self-update` fail-safe on a throwaway HOME. The design says it aborts without changing
-  anything; confirm it the first time someone on v0.6.4 or earlier reports a failed update.
+- 2026-10-14: the v0.6.4 `update` fail-safe was run on a copy of the v0.6.4 binary in a throwaway HOME (the copy
+  needs a `.skillhub-managed` marker; the real install was untouched). Both paths abort and leave the binary
+  byte-identical: plain `skillhub update` stops with "Failed to parse release tag from redirect" (it reads the
+  repository redirect, `/vantt/skillhub-mcp/releases/latest`, as the final URL), and `skillhub update --version
+  0.6.6` stops with "Signature verification failed" because the certificate subject is the new workflow. Neither
+  message says the repository was renamed, and v0.6.4 cannot be changed, so the release notes must tell people on
+  v0.6.4 or earlier to reinstall with the install one-liner.
