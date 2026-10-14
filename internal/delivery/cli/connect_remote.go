@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/netip"
 	"net/url"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -134,6 +135,11 @@ func acceptInvite(ctx context.Context, flags *connectFlags, stdout, stderr io.Wr
 	destination, err := filepath.Abs(destination)
 	if err != nil {
 		return fail("The invite was not sent.", "The token file path cannot be resolved: "+err.Error()+".", "Pass an absolute --token-file path.")
+	}
+	if flags.tokenFile != "" {
+		if _, err := os.Lstat(destination); err == nil {
+			return fail("The invite was not sent.", destination+" already exists, and saving the token there would overwrite it. The invite is still unused.", "Pass a --token-file path that does not exist yet, or leave --token-file out to use the default place.")
+		}
 	}
 	if err := hubtoken.CheckWritable(destination); err != nil {
 		return fail("The invite was not sent.", "The token cannot be saved at "+destination+": "+err.Error()+". The invite is still unused.", "Pass --token-file <path> in a folder you can write, or fix the folder, then run this command again.")

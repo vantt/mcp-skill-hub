@@ -171,6 +171,25 @@ func TestConnectInviteWithTokenFileWritesThere(t *testing.T) {
 	}
 }
 
+func TestConnectInviteRefusesATokenFileThatAlreadyExists(t *testing.T) {
+	isolateInviteClient(t)
+	hub := startFakeInviteHub(t)
+	destination := filepath.Join(t.TempDir(), "token")
+	if err := os.WriteFile(destination, []byte("another hub's file"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	code, stdout, stderr := runConnectCLI(t, t.TempDir(), "--hub", hub.URL, "--invite", hub.Code.Format(), "--token-file", destination, "--host", "claude")
+	if code == 0 {
+		t.Fatalf("the invite was accepted over an existing file: %s%s", stdout, stderr)
+	}
+	if got, _ := os.ReadFile(destination); string(got) != "another hub's file" {
+		t.Fatalf("the existing file changed: %q", got)
+	}
+	if hub.Requests.Load() != 0 {
+		t.Fatalf("the hub received %d requests; the invite must stay unused", hub.Requests.Load())
+	}
+}
+
 func TestConnectInviteRefusals(t *testing.T) {
 	isolateInviteClient(t)
 	hub := startFakeInviteHub(t)
