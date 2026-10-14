@@ -370,9 +370,13 @@ func TestHTTPServesSeveralListenersWithOneToken(t *testing.T) {
 	ready := make(chan []net.Addr, 1)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	// The workspace is built before the server starts: building it runs git and
+	// takes many seconds on a slow runner, which must neither count against the
+	// readiness timeout nor call t.Fatal from a goroutine.
+	workspace := newMCPWorkspace(t)
 	done := make(chan error, 1)
 	go func() {
-		done <- ServeHTTP(ctx, listeners, HTTPOptions{Workspace: newMCPWorkspace(t), TokenFile: tokenFile, Diagnostics: &lockedBuffer{}, Ready: func(addresses []net.Addr) { ready <- addresses }})
+		done <- ServeHTTP(ctx, listeners, HTTPOptions{Workspace: workspace, TokenFile: tokenFile, Diagnostics: &lockedBuffer{}, Ready: func(addresses []net.Addr) { ready <- addresses }})
 	}()
 	var addresses []net.Addr
 	select {
