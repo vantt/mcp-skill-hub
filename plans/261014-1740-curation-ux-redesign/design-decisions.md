@@ -38,15 +38,16 @@ cần passphrase mà không có TTY thì file vẫn được ghi và hướng d�
 **Lý do:** hub luôn sạch, lịch sử Git là audit log (revert bằng `git revert`), không mất việc khi chuyển máy qua
 Git, web làm trọn một việc mà không cần terminal, và bỏ các câu gợi ý commit đang sai.
 
-## D4. Đẩy skill từ máy khác lên hub (2026-10-14, hướng đã chọn, còn một chi tiết mở)
+## D4. Đẩy skill từ máy khác lên hub (2026-10-14)
 
 **Quyết định:** hỗ trợ `skillhub skill commit` từ máy dùng hub ở xa. Không thêm tool MCP (mỗi tool runtime tốn
 token trong `tools/list` của mọi session); thay vào đó là một HTTP endpoint thường trên `skillhub serve`
-(cổng 7420), cùng kiểu với `GET /mcp/bundle` hiện có. Endpoint tắt mặc định kể cả khi `serve` đang chạy. Bài nộp
-vào hàng chờ trên máy hub, luôn phải được duyệt như nội dung bên thứ ba, không sửa thẳng skill nào; `skillhub
-status` trên máy hub báo bài chờ duyệt. Agent ở máy khác chỉ chạy lệnh CLI, không cần tool mới.
+(cổng 7420), cùng kiểu với `GET /mcp/bundle` hiện có. Máy nào có token của hub là nộp được, không cần công tắc hay
+token riêng: ưu tiên dễ dùng trước, bảo mật làm sau. An toàn dựa vào một điều không đổi: bài nộp chỉ vào hàng chờ
+trên máy hub, không sửa thẳng skill nào, và chỉ được release khi người trên máy hub duyệt (như nội dung bên thứ
+ba). `skillhub status` và web trên máy hub báo bài chờ duyệt. Agent ở máy khác chỉ chạy lệnh CLI.
 
-**Còn mở:** bật nhận bài nộp bằng một công tắc trên hub, hay bằng token riêng có quyền nộp.
+**Để sau:** quyền nộp theo từng invite (`token invite --can-submit`) nếu hub được chia cho người không tin hết.
 
 ## D5. Xác nhận: terminal hỏi y/N, agent dùng `--yes` (2026-10-14)
 
@@ -56,8 +57,11 @@ giữ kiểu hai bước: không `--yes` là xem trước, có `--yes` là áp d
 vẫn bắt người duyệt. Preview có một cờ dễ nhớ để xem diff đầy đủ (ví dụ `--diff`) và in sẵn dòng gợi ý đó; bỏ
 cờ ẩn `--full-diff`. Áp dụng cho mọi lệnh thay đổi hub, không chỉ `commit`.
 
-## Đề xuất chờ xác nhận
+## D6. Web sửa nhanh, gom thành một commit (2026-10-14)
 
-- **Web sửa nhanh:** web sửa được từng file, thêm, đổi tên, xoá, tải lên; các thay đổi gom thành "thay đổi đang
-  chờ", một nút xem diff đầy đủ và confirm thành một commit (D3). Thay đổi cần thử trong agent thì dùng
-  checkout/commit; web có nút "Checkout to a project" kèm lệnh để chép.
+**Quyết định:** màn hình sửa skill có cây file bên trái (sửa, thêm, đổi tên, xoá, tải lên) và một thanh "N changes
+not committed · agents still get the current version" ở dưới cùng với [Discard] [Review →]. Review hiện từng file
+(A/M/D, số dòng, diff mở/đóng được), routing lint và commit message sửa được; [Commit to the hub] tạo một commit
+(D3). Sau commit web báo ai nhận bản mới khi nào ("this machine now; others after you push"). Thay đổi cần thử
+trong agent dùng checkout/commit; web có nút "Checkout to a project" kèm lệnh để chép. Bỏ hai tab tách rời và kiểu
+"mỗi file lưu một lần, lưu là live".
