@@ -17,7 +17,7 @@ Output: `reports/scorecard.md` and `reports/scorecard.json`, rendered by `go run
 ## Table format
 
 One row per field: `notable`, `contrast`, `score.relevance`, `score.facts`/`impact`, `score.evidence`,
-`score.effort`, `score.why`, `final_score` (ordering), and a summary row "R/E/F as a block".
+`score.effort`, `score.why`, `final_score` (ordering), and a summary row "Score weights as a block".
 
 | Field | A: decision association (preliminary) | B: information / ordering | C1 triage Δ vs full | C2 reconstruct agreement | C3 apply Δ vs full | Consumers (file:line) | Recommendation | Confidence | If dropped |
 |---|---|---|---|---|---|---|---|---|---|
@@ -54,7 +54,7 @@ in-use evidence is clear. Low: static evidence only, or the methods disagree. Me
   3291 B of 6857 B after gzip). Likely keep, unless C3 shows no effect.
 - `contrast` is the only signal that separates the 8 already-covered lessons from the 14 new-but-outside-goal
   ones (all 22 have impact 0), and fact `b` is defined through it. Likely keep, possibly optional.
-- R/E/F: 24 of 42 lessons score 0, and the order among them falls back to layer and key. `final_score` follows
+- Score weights: 24 of 42 lessons score 0, and the order among them falls back to layer and key. `final_score` follows
   `impact` almost exactly (Spearman 0.98); `effort` (−0.12) and `evidence` (0.28) barely move it. Candidates for
   "drop a component" are `effort` and `evidence` if ordering sensitivity confirms it. `relevance` decides the
   "outside the goal" call, so C1 must show whether the agent can do without it.

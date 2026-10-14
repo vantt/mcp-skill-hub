@@ -205,7 +205,7 @@ func TestEndToEndWithAStubProducesAScorecard(t *testing.T) {
 		t.Fatal(err)
 	}
 	md, _ := os.ReadFile(filepath.Join(reportDir, "scorecard.md"))
-	for _, want := range []string{"| notable |", "| contrast |", "| R/E/F as a block |", "Limits:", "Run manifest"} {
+	for _, want := range []string{"| notable |", "| contrast |", "| Score weights as a block |", "Limits:", "Run manifest"} {
 		if !strings.Contains(string(md), want) {
 			t.Errorf("scorecard lacks %q", want)
 		}

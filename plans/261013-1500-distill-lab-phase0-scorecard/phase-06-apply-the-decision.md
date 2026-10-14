@@ -35,7 +35,7 @@ phase reduces to step 7 (docs and D7 note) and no code changes.
    curator precedent is `600fb9b`).
 2. **Script.** For a dropped field, `format` removes it and prints one `WARN: removed deprecated field <name>
    from N lessons` line. `check` warns about it but does not fail. Any other unknown field still fails. For a
-   field made optional, remove only the required check. For R/E/F changes, update `impactOf`/`finalScore`/sort and
+   field made optional, remove only the required check. For score-weight changes, update `impactOf`/`finalScore`/sort and
    define where unscored lessons sort (proposal: after scored ones, then layer, then key).
 3. **Skill text.** Update the schema example, the step-5 recording rules, the four-weights section, the
    description (only if it names the field) and the experiment log, which closes with the scorecard result.

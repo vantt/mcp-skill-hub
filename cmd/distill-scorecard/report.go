@@ -90,7 +90,7 @@ func fieldSpecs() []fieldSpec {
 		{name: "final_score (ordering)", variant: variantNoScore, orderingTau: "tau_b_impact_alone",
 			consumers: consumersScore, ifDropped: "strip `score` and `final_score` on `format`; `list` order becomes layer then key; `pending_high_value_insights` needs a new rule",
 			static: tauOf("tau_b_impact_alone")},
-		{name: "R/E/F as a block", variant: variantNoScore,
+		{name: "Score weights as a block", variant: variantNoScore,
 			consumers: consumersScore, ifDropped: "remove impactOf, finalScore, sort, Go Score type, schema block, tab row and about 60 lines of SKILL.md",
 			static: func(r Result) (string, bool) {
 				v, ok := r["score.components"]["spearman_impact_final"].(float64)
@@ -213,7 +213,7 @@ func recommend(ran, keep, rebuild, leanDrop bool) (string, string) {
 
 func associationText(stats Result, field string) string {
 	key := map[string]string{"score.relevance": "relevance", "score.facts / impact": "impact", "score.evidence": "evidence",
-		"score.effort": "effort", "final_score (ordering)": "final_score", "R/E/F as a block": "final_score"}[field]
+		"score.effort": "effort", "final_score (ordering)": "final_score", "Score weights as a block": "final_score"}[field]
 	if key == "" {
 		return "n/a (text field)"
 	}

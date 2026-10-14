@@ -87,7 +87,7 @@
       "if_dropped": "strip `score` and `final_score` on `format`; `list` order becomes layer then key; `pending_high_value_insights` needs a new rule"
     },
     {
-      "field": "R/E/F as a block",
+      "field": "Score weights as a block",
       "a_decision_association": "preliminary: chance 0.025 by luck, 3 decided",
       "b_information_or_ordering": "final_score tracks impact (Spearman 0.98); 24 of 42 lessons score 0",
       "c1_triage_vs_full": "not run",

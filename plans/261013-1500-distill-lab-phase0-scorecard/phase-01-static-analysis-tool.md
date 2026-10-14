@@ -45,7 +45,7 @@ Go, as `cmd/distill-scorecard` (package `main`) in this module. Reasons:
     trigrams shared by 3 or more lessons (template wording);
   - `contrast`: Shannon entropy, cross-tables against `impact == 0` and against fact `b`, and the conditional
     entropy H(contrast | facts), which shows how much of `contrast` the score already implies;
-  - R/E/F: the distribution of each component, ties at `final_score == 0`, Spearman between components, and
+  - score weights: the distribution of each component, ties at `final_score == 0`, Spearman between components, and
     **ordering sensitivity**: Kendall tau-b between the stored priority order and the order recomputed with one
     component held constant (relevance, impact, evidence, effort), and with `impact` alone;
   - `score.why`: words and trigram reuse.

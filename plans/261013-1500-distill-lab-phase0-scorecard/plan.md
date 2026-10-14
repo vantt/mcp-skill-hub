@@ -1,5 +1,5 @@
 ---
-title: "distill-lab Phase 0 scorecard: keep or drop notable, contrast and R/E/F"
+title: "distill-lab Phase 0 scorecard: keep or drop notable, contrast and the score weights"
 description: "Measure each experimental lesson field of distill-lab with read-only static analysis and an opt-in agent ablation test, so the user decides from one table instead of scoring 42 lessons by hand."
 status: in-progress
 priority: P2
@@ -15,12 +15,14 @@ created: 2026-10-13
 
 ## Outcome, constraints, non-goals
 
-- **Outcome.** One table (`reports/scorecard.md`) gives, for `notable`, `contrast` and each part of R/E/F, the
+- **Outcome.** One table (`reports/scorecard.md`) gives, for `notable`, `contrast` and each of the four score weights, the
   evidence from every method, a keep / keep-optional / drop recommendation, a confidence level and what dropping
   it would change. The user reviews that table, sets thresholds and decides. No hand-scoring of 42 lessons.
-- **R/E/F** is the `score` block plus `final_score` of distill-lab. The name comes from the older `distill` skill's
-  Reach / Evidence / Effort rubric. Evidence: [scout notes §1](reports/scout-field-inventory.md). The user
-  confirms this mapping in Phase 5.
+- **The score weights** are the four weights of distill-lab's `score` block (`relevance`, `impact` counted from
+  `facts`, `evidence`, `effort`), plus the `final_score` computed from them and the `why` sentence. Older documents
+  call this "R/E/F" after the older `distill` skill's Reach / Evidence / Effort rubric, which had three criteria and
+  no impact; this plan uses "score weights" instead. Evidence: [scout notes §1](reports/scout-field-inventory.md).
+  The user confirms the scope in Phase 5.
 - **Constraints.** Read the live hub, never write to it. `/home/vantt/skill-hub`, `~/.claude`, `~/.codex` and
   `~/.gemini` are never written. Experiments run on a clone under a temp dir with its own HOME and XDG_* dirs, and
   every `skillhub` call there passes `--workspace`. distill-lab's behaviour and the lesson schema stay unchanged
@@ -64,7 +66,7 @@ Phase 1 when the user declines Phase 3; the table then shows static evidence onl
 | Variant files, prompts, stub-run pipeline, scoring, report assembly | fully automatable | `variants`, `run --claude <stub>`, `report` subcommands, Go tests |
 | `claude -p` runs and judge runs (about 70 runs, capped by `--max-budget-usd`) | automatable, needs the user's go | Phase 3 after preflight and budget approval |
 | Credentials for `claude -p` under an isolated HOME | needs the user's go | Phase 3 preflight; never copied without approval |
-| Confirm or drop the R/E/F mapping, thresholds, final keep/drop per field | user only | Phase 5 |
+| Confirm the name and scope of the score weights, thresholds, final keep/drop per field | user only | Phase 5 |
 | Change distill-lab, schema, Go model, fixtures; migrate the live `distill.yaml` | agent implements after the go; the user runs `format` on the live hub and commits | Phase 6 |
 
 ## Must not / failure protocol
