@@ -1,14 +1,10 @@
-<div align="center">
+<h1 align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/brand/skill-hub-logo-dark.svg"><img src="docs/images/brand/skill-hub-logo-light.svg" alt="Skill Hub" width="280"></picture></h1>
 
-<h1><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/brand/skill-hub-logo-dark.svg"><img src="docs/images/brand/skill-hub-logo-light.svg" alt="Skill Hub" width="280"></picture></h1>
+<p align="center">Skill của bạn ở một nơi. Mọi agent kéo về khi cần.</p>
 
-Skill của bạn ở một nơi. Mọi agent kéo về khi cần.<br>
+<p align="center"><a href="https://github.com/vantt/skillhub-mcp/releases/latest"><img src="https://img.shields.io/github/v/release/vantt/skillhub-mcp" alt="Latest release"></a> <a href="https://github.com/vantt/skillhub-mcp/actions/workflows/ci.yml"><img src="https://github.com/vantt/skillhub-mcp/actions/workflows/ci.yml/badge.svg" alt="CI"></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License: MIT"></a></p>
 
-[![Latest release](https://img.shields.io/github/v/release/vantt/skillhub-mcp)](https://github.com/vantt/skillhub-mcp/releases/latest) [![CI](https://github.com/vantt/skillhub-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/vantt/skillhub-mcp/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-
-[English](README.md) · [Bắt đầu nhanh](#bắt-đầu-nhanh) · [Dùng Skill Hub](docs/user-guide.md) · [Quản lý skill](docs/curating-skills.md)
-
-</div>
+<p align="center"><a href="README.md">English</a> · <a href="#bắt-đầu-nhanh">Bắt đầu nhanh</a> · <a href="docs/user-guide.md">Dùng Skill Hub</a> · <a href="docs/curating-skills.md">Quản lý skill</a></p>
 
 Skill Hub phục vụ các skill của agent qua MCP từ một kho Git của riêng bạn, nên không có gì phải cài hay sao chép vào từng dự án: agent hỏi hub skill phù hợp khi bắt đầu một việc.
 Vì thư viện nằm một chỗ, bạn có thể thu thập skill từ bất kỳ kho nào, chỉnh sửa và tinh chỉnh theo tiêu chí của riêng bạn, kèm phản hồi từ việc dùng thật và một bước duyệt trước khi bất cứ thứ gì đến tay agent.
@@ -58,19 +54,16 @@ Khởi động lại agent và nói: **curate my Skill Hub**. Xong: mọi dự �
 
 #### Hub ở một máy, agent ở máy khác
 
-Cả hai máy cần [Tailscale](https://tailscale.com) (hoặc một đường hầm SSH tới máy hub). Cài Skill Hub trên cả hai máy, rồi:
+Hai máy phải thấy nhau qua mạng (cùng Wi-Fi hoặc LAN, hoặc qua [Tailscale](https://tailscale.com)). Cài Skill Hub trên cả hai máy, rồi:
 
-**Trên máy hub.** Tạo hub như trên (`init`), rồi khởi động server và để nó chạy:
-
-```bash
-cd ~/skill-hub && skillhub serve
-```
-
-Ở một terminal thứ hai, tạo mã dùng một lần:
+**Trên máy hub.** Tạo hub như trên (`init`), rồi khởi động server dưới dạng dịch vụ nền và tạo mã dùng một lần:
 
 ```bash
-cd ~/skill-hub && skillhub token invite
+cd ~/skill-hub && skillhub serve --install-service
+skillhub token invite
 ```
+
+Dịch vụ tự khởi động lại khi lỗi và khi máy bật (Linux và macOS; trên Linux lệnh in thêm một dòng nếu cần `loginctl enable-linger` để chạy khi bạn đã đăng xuất). Trên Windows, hãy chạy `skillhub serve` trong một terminal riêng và để nó mở.
 
 Nó in ra một dòng sẵn để dán, ví dụ:
 
@@ -85,6 +78,8 @@ cd <dự-án-của-bạn> && skillhub connect --hub http://100.121.46.35:7420 --
 ```
 
 Mã chỉ dùng được một lần và hết hạn sau 10 phút; chạy lại `token invite` để lấy mã mới. Máy agent không giữ skill nào, chỉ có một file token trong thư mục cấu hình của Skill Hub. Thêm `-g` vào dòng đã dán để áp dụng cho mọi dự án.
+
+Cách này chạy qua HTTP thường trên mạng của bạn: ổn ở nhà hoặc văn phòng. Trên mạng bạn không tin cậy, xem `skillhub help serve` (`--strict-pairing`, đường hầm SSH).
 
 ### 3. Kiểm tra
 

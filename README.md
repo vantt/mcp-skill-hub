@@ -1,14 +1,10 @@
-<div align="center">
+<h1 align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/brand/skill-hub-logo-dark.svg"><img src="docs/images/brand/skill-hub-logo-light.svg" alt="Skill Hub" width="280"></picture></h1>
 
-<h1><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/brand/skill-hub-logo-dark.svg"><img src="docs/images/brand/skill-hub-logo-light.svg" alt="Skill Hub" width="280"></picture></h1>
+<p align="center">Your skills in one place. Pulled by any agent, on demand.</p>
 
-Your skills in one place. Pulled by any agent, on demand.<br>
+<p align="center"><a href="https://github.com/vantt/skillhub-mcp/releases/latest"><img src="https://img.shields.io/github/v/release/vantt/skillhub-mcp" alt="Latest release"></a> <a href="https://github.com/vantt/skillhub-mcp/actions/workflows/ci.yml"><img src="https://github.com/vantt/skillhub-mcp/actions/workflows/ci.yml/badge.svg" alt="CI"></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License: MIT"></a></p>
 
-[![Latest release](https://img.shields.io/github/v/release/vantt/skillhub-mcp)](https://github.com/vantt/skillhub-mcp/releases/latest) [![CI](https://github.com/vantt/skillhub-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/vantt/skillhub-mcp/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-
-[Tiếng Việt](README.vi.md) · [Get started](#quickstart) · [Using Skill Hub](docs/user-guide.md) · [Curating skills](docs/curating-skills.md)
-
-</div>
+<p align="center"><a href="README.vi.md">Tiếng Việt</a> · <a href="#quickstart">Get started</a> · <a href="docs/user-guide.md">Using Skill Hub</a> · <a href="docs/curating-skills.md">Curating skills</a></p>
 
 Skill Hub serves your agent skills over MCP from one Git repository you own, so there is nothing to install or copy into each project: your agent asks the hub for the right skill when a task starts.
 Because the library is central, you can collect skills from any repository, edit them, and tune them to your own criteria, with feedback from real use and an approval step before anything reaches an agent.
@@ -58,19 +54,16 @@ Restart your agent and say: **curate my Skill Hub**. Done: every project you ope
 
 #### Hub on one computer, agent on another
 
-Both computers need [Tailscale](https://tailscale.com) (or an SSH tunnel to the hub computer). Install Skill Hub on both, then:
+Both computers must reach each other on the network (same Wi-Fi or LAN, or [Tailscale](https://tailscale.com)). Install Skill Hub on both, then:
 
-**On the hub computer.** Create the hub as above (`init`), then start the server and leave it running:
-
-```bash
-cd ~/skill-hub && skillhub serve
-```
-
-In a second terminal, make a one-time code:
+**On the hub computer.** Create the hub as above (`init`), then start the server as a background service and make a one-time code:
 
 ```bash
-cd ~/skill-hub && skillhub token invite
+cd ~/skill-hub && skillhub serve --install-service
+skillhub token invite
 ```
+
+The service restarts after a failure and when the computer starts (Linux and macOS; on Linux the command prints one more line if it needs `loginctl enable-linger` to run while you are logged out). On Windows, run `skillhub serve` in its own terminal and leave it open.
 
 It prints a ready-to-paste line, for example:
 
@@ -85,6 +78,8 @@ cd <your-project> && skillhub connect --hub http://100.121.46.35:7420 --invite K
 ```
 
 The code works once and expires in 10 minutes; run `token invite` again for a new one. The agent computer keeps no skills, only a token file in its Skill Hub config folder. Add `-g` to the paste line to cover every project.
+
+This runs over plain HTTP on your network: fine at home or in an office. On a network you do not trust, see `skillhub help serve` (`--strict-pairing`, SSH tunnel).
 
 ### 3. Check
 
