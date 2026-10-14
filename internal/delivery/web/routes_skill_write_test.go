@@ -366,3 +366,27 @@ func TestSkillCreatePreviewExplainsWhyItWasRejected(t *testing.T) {
 		t.Fatalf("missing description: WHY should name the field, got %q", got)
 	}
 }
+
+func TestSkillCreatePreviewWithoutCollectionTargetsTheDefaultCollection(t *testing.T) {
+	root := newWebWorkspace(t)
+	srv := newTestServer(t, root)
+
+	rec := postJSON(t, srv, "/api/v1/skills/create/preview", skillCreatePreviewRequest{
+		ID: "no-collection", Name: "No Collection", Description: "Created without choosing a collection.",
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("create preview failed: %d, body: %s", rec.Code, rec.Body.String())
+	}
+	var proposal app.SkillProposal
+	if err := json.Unmarshal(rec.Body.Bytes(), &proposal); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range proposal.Diff.Added {
+		if !strings.HasPrefix(path, "skills/default/no-collection/") {
+			t.Fatalf("a create without a collection must target skills/default/: %v", proposal.Diff.Added)
+		}
+	}
+	if len(proposal.Diff.Added) == 0 {
+		t.Fatalf("preview adds nothing: %+v", proposal.Diff)
+	}
+}

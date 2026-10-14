@@ -133,7 +133,7 @@ func existingSkillContext(ctx context.Context, service app.SkillService, workspa
 			return ids, name, nil
 		}
 	}
-	return ids, "core", nil
+	return ids, skill.DefaultCollection, nil
 }
 
 // checkGuidedID runs the same validation as the flag form by previewing a create for the id.

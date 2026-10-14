@@ -38,8 +38,8 @@ func writeSkillReview(stdout, stderr io.Writer, jsonOutput, verbose bool, result
 		fields = append(fields, termui.Field{Label: "State", Value: fmt.Sprintf("%s (%s; routing: %s; %s)", result.LifecycleState, validStr, eligibleStr, servableStr)})
 
 		filesStr := fmt.Sprintf("%s, %s (entrypoint: %s)",
-			termui.Plural(result.ResourceStatus.ResourceCount, "file", "files"),
-			termui.Bytes(result.ResourceStatus.TotalBytes),
+			termui.Plural(result.ResourceStatus.FileCount, "file", "files"),
+			termui.Bytes(result.ResourceStatus.FileBytes),
 			result.ResourceStatus.EntrypointPath)
 		fields = append(fields, termui.Field{Label: "Files", Value: filesStr})
 

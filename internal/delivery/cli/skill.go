@@ -151,7 +151,7 @@ func runSkill(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 		_ = cleanupProposalRecovery(flags.workspace, flags.proposalID)
 		switch r := res.(type) {
 		case app.SkillMutationResult:
-			return writeSkillMutation(stdout, stderr, flags.jsonOutput, flags.verbose, r, flags.workspace)
+			return writeSkillMutation(stdout, stderr, flags.jsonOutput, flags.verbose, r, nextStepForSkill(ctx, service, r, flags.workspace))
 		case app.SkillAddResult:
 			return writeResult(stdout, stderr, flags.jsonOutput, r, func(p *termui.Printer) {
 				writeSkillAddResult(p, flags.verbose, r)
@@ -291,10 +291,15 @@ func runSkill(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 		}
 		return writeSkillPreview(stdout, stderr, flags.jsonOutput, preview)
 	}
-	if !flags.jsonOutput && preview.RoutingImpact != nil {
-		for _, warning := range preview.RoutingImpact.Warnings {
-			p := termui.New(stdout)
-			p.Warning(warning)
+	if !flags.jsonOutput {
+		p := termui.New(stdout)
+		if preview.RoutingImpact != nil {
+			for _, warning := range preview.RoutingImpact.Warnings {
+				p.Warning(warning)
+			}
+		}
+		for _, warning := range preview.Warnings {
+			p.Warning(warning.Summary)
 		}
 	}
 	result, err := service.ConfirmSkillMutation(ctx, flags.workspace, preview, preview.Confirmation.Confirmation.Pins)
@@ -308,7 +313,7 @@ func runSkill(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 	if flags.jsonOutput {
 		result.Proposal = &preview
 	}
-	return writeSkillMutation(stdout, stderr, flags.jsonOutput, flags.verbose, result, flags.workspace)
+	return writeSkillMutation(stdout, stderr, flags.jsonOutput, flags.verbose, result, nextStepForSkill(ctx, service, result, flags.workspace))
 }
 
 func subcommandTarget(subcommand string) string {
@@ -715,6 +720,9 @@ func writeSkillPreview(stdout, stderr io.Writer, jsonOutput bool, preview app.Sk
 				p.Warning(warning)
 			}
 		}
+		for _, warning := range preview.Warnings {
+			p.Warning(warning.Summary)
+		}
 		if preview.FullDiff != "" {
 			p.Raw(preview.FullDiff)
 			if !strings.HasSuffix(preview.FullDiff, "\n") {
@@ -735,7 +743,7 @@ func skillConfirmCommand(pins app.ConfirmationPins) string {
 	return fmt.Sprintf("skillhub skill confirm --proposal %s --proposal-digest %s --base-version %s", shellquote.Arg(pins.ProposalID), shellquote.Arg(pins.ProposalDigest), shellquote.Arg(pins.BaseVersion))
 }
 
-func writeSkillMutation(stdout, stderr io.Writer, jsonOutput, verbose bool, result app.SkillMutationResult, workspacePath string) int {
+func writeSkillMutation(stdout, stderr io.Writer, jsonOutput, verbose bool, result app.SkillMutationResult, next string) int {
 	return writeResult(stdout, stderr, jsonOutput, result, func(p *termui.Printer) {
 		p.Line(result.Summary)
 		if verbose {
@@ -746,23 +754,32 @@ func writeSkillMutation(stdout, stderr io.Writer, jsonOutput, verbose bool, resu
 				termui.Field{Label: "Git dirty", Value: fmt.Sprintf("%t", result.GitDirty)},
 			)
 		}
-		if next := nextStepForSkill(result, workspacePath); next != "" {
+		if next != "" {
 			p.Next(next, "")
 		}
 	})
 }
 
-func nextStepForSkill(result app.SkillMutationResult, workspacePath string) string {
+// nextStepForSkill names what to do after a skill change. A draft gets the
+// step the review computes for its current state; every other state ends with
+// the commit command `skillhub status` prints for the same hub.
+func nextStepForSkill(ctx context.Context, service app.SkillService, result app.SkillMutationResult, workspacePath string) string {
+	root := workspacePath
+	if resolved, err := skill.ResolveWorkspace(workspacePath); err == nil {
+		root = resolved
+	}
+	commit := "`" + app.GitCommitCommand(root, result.ChangedPaths) + "`"
 	summary := result.Summary
 	switch {
 	case strings.Contains(summary, "Draft skill") && strings.Contains(summary, "saved"):
-		return fmt.Sprintf("edit the instructions with `skillhub skill edit %s --editor`, then preview activation with `skillhub skill activate %s`.", result.SkillID, result.SkillID)
+		if review, err := service.ReviewSkill(ctx, workspacePath, result.SkillID); err == nil {
+			return review.NextAction
+		}
+		return fmt.Sprintf("preview activation with `skillhub skill activate %s`.", result.SkillID)
 	case strings.Contains(summary, "active") || strings.Contains(summary, "activated"):
-		return fmt.Sprintf("ask your agent to use it, or inspect with `skillhub skill show %s`. Commit with `git -C %s commit`.", result.SkillID, workspacePath)
-	case strings.Contains(summary, "deprecated") || strings.Contains(summary, "archived"):
-		return fmt.Sprintf("commit with `git -C %s commit`.", workspacePath)
+		return fmt.Sprintf("ask your agent to use it, or inspect with `skillhub skill show %s`. Commit with %s.", result.SkillID, commit)
 	default:
-		return fmt.Sprintf("commit with `git -C %s commit`.", workspacePath)
+		return fmt.Sprintf("commit with %s.", commit)
 	}
 }
 
@@ -788,6 +805,7 @@ func writeSkillErrorFor(id string, stdout, stderr io.Writer, jsonOutput bool, er
 	var missingErr *app.MissingActivationRequirementsError
 	if errors.As(err, &missingErr) {
 		var editFlags []string
+		needsContent := false
 		for _, m := range missingErr.Missing {
 			switch {
 			case strings.Contains(m, "trigger"):
@@ -796,15 +814,26 @@ func writeSkillErrorFor(id string, stdout, stderr io.Writer, jsonOutput bool, er
 				editFlags = append(editFlags, `--not-for "<when not to use>"`)
 			case strings.Contains(m, "min_scope"):
 				editFlags = append(editFlags, `--min-scope single_step`)
+			case strings.Contains(m, "content"):
+				needsContent = true
 			}
 		}
 		targetID := missingErr.SkillID
 		if targetID == "" {
 			targetID = id
 		}
-		fixCmd := fmt.Sprintf("skillhub skill edit %s %s", targetID, strings.Join(editFlags, " "))
 		why = fmt.Sprintf("skill %s requires: %s", targetID, strings.Join(missingErr.Missing, ", "))
-		fix := fmt.Sprintf("Preview the fix with `%s`, review and confirm it, then preview `skillhub skill activate %s`.", fixCmd, targetID)
+		var fixes []string
+		if len(editFlags) > 0 {
+			fixes = append(fixes, fmt.Sprintf("`skillhub skill edit %s %s`", targetID, strings.Join(editFlags, " ")))
+		}
+		if needsContent {
+			fixes = append(fixes, fmt.Sprintf("`skillhub skill edit %s --editor` (or `--content-file <file>`) to replace the untouched scaffold instructions", targetID))
+		}
+		if len(fixes) == 0 {
+			fixes = append(fixes, fmt.Sprintf("`skillhub skill review %s`", targetID))
+		}
+		fix := fmt.Sprintf("Preview the fix with %s, review and confirm it, then preview `skillhub skill activate %s`.", strings.Join(fixes, " and "), targetID)
 		return writeInvalidRequest(stdout, stderr, jsonOutput, why, fix)
 	}
 	if errors.Is(err, skill.ErrNotFound) || why == "skill not found" {

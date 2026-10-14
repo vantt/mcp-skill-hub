@@ -92,3 +92,65 @@ func TestSkillUpdateRejectsInvalidRuntimeBlock(t *testing.T) {
 		}
 	}
 }
+
+func TestSkillEditWarnsWhenAnApprovedThirdPartySkillLosesItsApproval(t *testing.T) {
+	t.Parallel()
+	root := newSkillWorkspace(t)
+	createActiveDistributionSkill(t, root, "warned-edit", "Warned Edit")
+	updateSkillMeta(t, root, "warned-edit", markThirdParty)
+	review, err := (SkillService{}).ReviewSkill(t.Context(), root, "warned-edit")
+	if err != nil {
+		t.Fatal(err)
+	}
+	confirmSkillUpdate(t, root, "warned-edit", skill.UpdateInput{ContentReviewedDigest: &review.ContentTrust.ContentDigest})
+
+	hasWarning := func(proposal SkillProposal) bool {
+		for _, warning := range proposal.Warnings {
+			if warning.Code == "content_review_required_after_apply" {
+				if !strings.Contains(warning.Summary, "skillhub skill review warned-edit") {
+					t.Fatalf("warning does not name the review command: %q", warning.Summary)
+				}
+				return true
+			}
+		}
+		return false
+	}
+
+	content, err := (SkillService{}).PreviewSkillUpdate(t.Context(), root, "warned-edit", skill.UpdateInput{Content: []byte("# Changed\n"), SetContent: true}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasWarning(content) {
+		t.Fatalf("a content edit of an approved third-party skill needs the warning: %+v", content.Warnings)
+	}
+
+	runtime, err := (SkillService{}).PreviewSkillUpdate(t.Context(), root, "warned-edit", skill.UpdateInput{Runtime: map[string]any{"requires": map[string]any{"env": []any{"WARN_TOKEN"}}}}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasWarning(runtime) {
+		t.Fatalf("a runtime edit needs the warning: %+v", runtime.Warnings)
+	}
+
+	routing, err := (SkillService{}).PreviewSkillUpdate(t.Context(), root, "warned-edit", skill.UpdateInput{Routing: &skill.RoutingInput{Triggers: []string{"another trigger"}, NotFor: []string{"system maintenance"}, MinScope: "multi_step"}}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hasWarning(routing) {
+		t.Fatalf("a metadata-only edit must not warn: %+v", routing.Warnings)
+	}
+}
+
+func TestSkillEditDoesNotWarnForALocalSkill(t *testing.T) {
+	t.Parallel()
+	root := newSkillWorkspace(t)
+	createActiveDistributionSkill(t, root, "local-edit", "Local Edit")
+
+	proposal, err := (SkillService{}).PreviewSkillUpdate(t.Context(), root, "local-edit", skill.UpdateInput{Content: []byte("# Changed\n"), SetContent: true}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(proposal.Warnings) != 0 {
+		t.Fatalf("a locally authored skill needs no approval warning: %+v", proposal.Warnings)
+	}
+}

@@ -75,7 +75,7 @@ cd <your-project> && skillhub skill create
 Scripts and agents, which cannot answer questions, pass flags instead. The flags tell the hub when the skill applies (`--trigger`, `--example`) and when it does not (`--not-for`). At least 3 examples are recommended; one is enough to start:
 
 ```bash
-cd <your-project> && skillhub skill create commit-style --collection core --name "Commit style" \
+cd <your-project> && skillhub skill create commit-style --collection default --name "Commit style" \
   --description "Write Git commit messages in our team style" --content-file ~/commit-style.md \
   --operation document --trigger "write a commit message" --not-for "writing release notes" \
   --min-scope single_step --example "write a commit message for my staged changes" --yes
@@ -207,12 +207,12 @@ Capture a workflow your team repeats. In a terminal, `skillhub skill create` ask
 skillhub skill create
 ```
 
-The guided form uses the collection `core` (or the only collection you have), the minimum scope `single_step` and the operation `other`, and gives the skill starter text. When stdin or stdout is not a terminal, the command never asks: it names the missing flags instead.
+The guided form uses the collection `default` (or the only collection you have), the minimum scope `single_step` and the operation `other`, and gives the skill starter text. When stdin or stdout is not a terminal, the command never asks: it names the missing flags instead.
 
 To script it, write the instructions in a Markdown file first, then create the skill with all its routing fields in one command:
 
 ```bash
-skillhub skill create commit-style --collection core --name "Commit style" \
+skillhub skill create commit-style --collection default --name "Commit style" \
   --description "Write Git commit messages in our team style" --content-file ~/commit-style.md \
   --operation document --trigger "write a commit message" --not-for "writing release notes" \
   --min-scope single_step --example "write a commit message for my staged changes" --yes

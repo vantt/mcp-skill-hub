@@ -27,13 +27,14 @@ const LABEL_WRITE = 'Write';
 const LABEL_CANCEL = 'Cancel';
 const LABEL_PREVIEW_DRAFT = 'Preview draft';
 const REQ_STAR = '*';
-const COLLECTIONS = ['core', 'default', 'engineering', 'operations', 'docs'];
+const DEFAULT_COLLECTION = 'default';
+const COLLECTIONS = [DEFAULT_COLLECTION, 'core', 'engineering', 'operations', 'docs'];
 const MSG_FILE_LOADED = 'File loaded successfully.';
 
 const HINT_SKILL_ID = 'Lowercase, hyphenated. It cannot be changed later (e.g. release-checklist).';
 const HINT_NAME = 'The title people see in lists.';
 const HINT_DESCRIPTION = 'One or two sentences on what the skill does. Agents read this to decide whether to load it.';
-const HINT_COLLECTION = 'The folder the skill is filed under. Pick core if unsure.';
+const HINT_COLLECTION = 'The folder the skill is filed under. Pick default if unsure.';
 const HINT_ROUTING = 'Routing tells agents when to pick this skill. You can leave it empty now, but it is required before the skill can be activated.';
 const HINT_SCAFFOLD = 'A default scaffold will be used. An untouched scaffold cannot be activated.';
 const HINT_UPLOAD = 'Drop a .md file or click to browse. Max size 1 MB.';
@@ -45,7 +46,7 @@ export function CreateSkillScreen() {
   const [id, setId] = useState('');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [collection, setCollection] = useState('core');
+  const [collection, setCollection] = useState(DEFAULT_COLLECTION);
 
   const [operations, setOperations] = useState('');
   const [triggers, setTriggers] = useState('');
@@ -137,7 +138,7 @@ export function CreateSkillScreen() {
         id: id.trim(),
         name: name.trim(),
         description: description.trim(),
-        collection: collection.trim() || 'core',
+        collection: collection.trim() || DEFAULT_COLLECTION,
         content: getContent(),
         routing:
           ops.length > 0 || trigs.length > 0 || nots.length > 0 || minScope
@@ -497,7 +498,7 @@ export function CreateSkillScreen() {
           toState="draft"
           paths={proposalPaths(proposal)}
           changes={[
-            `Adds the skill "${name.trim()}" to the ${collection.trim() || 'core'} collection as a draft.`,
+            `Adds the skill "${name.trim()}" to the ${collection.trim() || DEFAULT_COLLECTION} collection as a draft.`,
             'A draft is not routed to agents yet. Activate it from its page once it is ready.',
           ]}
           warning={proposalWarning(proposal)}

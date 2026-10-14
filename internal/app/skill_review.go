@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -19,6 +20,7 @@ import (
 	resolverpkg "github.com/vantt/skillhub-mcp/internal/resolver"
 	"github.com/vantt/skillhub-mcp/internal/skill"
 	"github.com/vantt/skillhub-mcp/internal/skillruntime"
+	"github.com/vantt/skillhub-mcp/internal/workspace"
 	"gopkg.in/yaml.v3"
 )
 
@@ -39,11 +41,15 @@ type ResourceItem struct {
 
 // SkillResourceStatus details canonical files on disk.
 type SkillResourceStatus struct {
-	EntrypointPath   string         `json:"entrypoint_path"`
-	EntrypointDigest string         `json:"entrypoint_digest,omitempty"`
-	ResourceCount    int            `json:"resource_count"`
-	TotalBytes       int64          `json:"total_bytes"`
-	Resources        []ResourceItem `json:"resources,omitempty"`
+	EntrypointPath   string `json:"entrypoint_path"`
+	EntrypointDigest string `json:"entrypoint_digest,omitempty"`
+	ResourceCount    int    `json:"resource_count"`
+	TotalBytes       int64  `json:"total_bytes"`
+	// FileCount and FileBytes count what the author put in the skill: the same
+	// walk as ResourceCount and TotalBytes without the hub's own metadata.
+	FileCount int            `json:"file_count"`
+	FileBytes int64          `json:"file_bytes"`
+	Resources []ResourceItem `json:"resources,omitempty"`
 }
 
 // SkillProvenance captures origin and creation metadata from skill.meta.yaml.
@@ -170,7 +176,11 @@ func (SkillService) ReviewSkill(ctx context.Context, path, id string) (SkillRevi
 	contentTrust.ChangesSinceApproval = reviewChangesSinceApproval(ctx, approvalDiffInput{Root: root, SkillRelDir: skillRelDir, SkillMetaBytes: skillMetaBytes, Resources: resources, Trust: contentTrust, HistoryLimit: approvalHistoryLimit})
 	runtimeHints, _ := canonicalRuntimeHints(root, id)
 
-	nextAction := computeNextAction(id, skillRelDir, metaDoc.Status, valid, canonicalIssues, readiness, isScaffold, missingFields, diverged, changedResources, missingResources, servedFacts, gitSummary)
+	nextAction := computeNextAction(nextActionInput{
+		Root: root, ID: id, RelDir: skillRelDir, Status: metaDoc.Status, Valid: valid, CanonicalIssues: canonicalIssues,
+		Readiness: readiness, IsScaffold: isScaffold, MissingFields: missingFields, Diverged: diverged,
+		Changed: changedResources, Missing: missingResources, Served: servedFacts, Git: gitSummary,
+	})
 
 	activeLocally := (metaDoc.Status == "active")
 	routingEligible := activeLocally && (!servedFacts.Known || servedFacts.Servable)
@@ -347,7 +357,8 @@ func checkActivationReadiness(entrypointBytes []byte, metaDoc skillReviewMeta, v
 
 func inventorySkillResources(root, fullSkillDir, entrypointRelPath, entrypointDigest string) (SkillResourceStatus, []ResourceItem, int64) {
 	var resources []ResourceItem
-	var totalBytes int64
+	var totalBytes, fileBytes int64
+	fileCount := 0
 	_ = filepath.WalkDir(fullSkillDir, func(p string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil || d.IsDir() {
 			return nil
@@ -372,6 +383,10 @@ func inventorySkillResources(root, fullSkillDir, entrypointRelPath, entrypointDi
 			SizeBytes: info.Size(),
 		})
 		totalBytes += info.Size()
+		if !workspace.IsHubMeta(cleanRel) {
+			fileCount++
+			fileBytes += info.Size()
+		}
 		return nil
 	})
 	sort.Slice(resources, func(i, j int) bool { return resources[i].Path < resources[j].Path })
@@ -381,6 +396,8 @@ func inventorySkillResources(root, fullSkillDir, entrypointRelPath, entrypointDi
 		EntrypointDigest: entrypointDigest,
 		ResourceCount:    len(resources),
 		TotalBytes:       totalBytes,
+		FileCount:        fileCount,
+		FileBytes:        fileBytes,
 		Resources:        resources,
 	}
 	return resourceStatus, resources, totalBytes
@@ -595,7 +612,24 @@ func appendSkillReviewItems(result *SkillReviewResult, resCount int, totalBytes 
 	result.Items = append(result.Items, Item{ID: "next_action", Summary: result.NextAction, Impact: "Recommended next step."})
 }
 
-func computeNextAction(id, relDir, status string, valid bool, canonicalIssues []string, readiness ActivationReadiness, isScaffold bool, missingFields []string, diverged bool, changed, missing []string, served catalog.ServedSkillFacts, git SkillGitSummary) string {
+// nextActionInput is what the review's "next step" depends on.
+type nextActionInput struct {
+	Root, ID, RelDir, Status string
+	Valid                    bool
+	CanonicalIssues          []string
+	Readiness                ActivationReadiness
+	IsScaffold               bool
+	MissingFields            []string
+	Diverged                 bool
+	Changed, Missing         []string
+	Served                   catalog.ServedSkillFacts
+	Git                      SkillGitSummary
+}
+
+func computeNextAction(in nextActionInput) string {
+	id, relDir, status, valid, canonicalIssues := in.ID, in.RelDir, in.Status, in.Valid, in.CanonicalIssues
+	isScaffold, missingFields, diverged := in.IsScaffold, in.MissingFields, in.Diverged
+	changed, missing, served, git := in.Changed, in.Missing, in.Served, in.Git
 	if !valid {
 		return fmt.Sprintf("Fix %d canonical validation error(s) in %s.", len(canonicalIssues), relDir)
 	}
@@ -616,7 +650,8 @@ func computeNextAction(id, relDir, status string, valid bool, canonicalIssues []
 			return fmt.Sprintf("Resolve servability issue: %s.", served.ServableReason)
 		}
 		if git.Dirty {
-			return "Stage the skill folder with `git -C <ws> add <skill folder>`, then commit it with `git -C <ws> commit`."
+			dirty := slices.Concat(git.Staged, git.Unstaged, git.Untracked)
+			return fmt.Sprintf("Commit the skill with `%s`.", GitCommitCommand(in.Root, dirty))
 		}
 		return "Skill is active and available for agent routing."
 	case "deprecated":

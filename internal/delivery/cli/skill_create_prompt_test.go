@@ -40,7 +40,7 @@ func TestGuidedSkillCreateWritesWhatTheFlagFormWrites(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("guided create exit = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	file := filepath.Join(guidedRoot, "skills", "core", "commit-style", "SKILL.md")
+	file := filepath.Join(guidedRoot, "skills", "default", "commit-style", "SKILL.md")
 	for _, want := range []string{"commit-style", "Draft skill", file, "skillhub skill activate commit-style --yes", "[commit-style]"} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("output missing %q:\n%s", want, stdout)
@@ -48,14 +48,14 @@ func TestGuidedSkillCreateWritesWhatTheFlagFormWrites(t *testing.T) {
 	}
 
 	flagRoot := initTestWorkspace(t)
-	code, _, stderr = runCLI(t, "skill", "create", "--workspace", flagRoot, "--id", "commit-style", "--collection", "core", "--name", "Commit style",
+	code, _, stderr = runCLI(t, "skill", "create", "--workspace", flagRoot, "--id", "commit-style", "--collection", "default", "--name", "Commit style",
 		"--description", "Write commit messages in our style", "--operation", "other", "--trigger", "write a commit message", "--trigger", "draft a commit",
 		"--not-for", "write release notes", "--min-scope", "single_step", "--yes")
 	if code != 0 {
 		t.Fatalf("flag create exit = %d: %s", code, stderr)
 	}
-	guidedEntry, guidedMeta := readSkillFiles(t, guidedRoot, "core", "commit-style")
-	flagEntry, flagMeta := readSkillFiles(t, flagRoot, "core", "commit-style")
+	guidedEntry, guidedMeta := readSkillFiles(t, guidedRoot, "default", "commit-style")
+	flagEntry, flagMeta := readSkillFiles(t, flagRoot, "default", "commit-style")
 	if guidedEntry != flagEntry || guidedMeta != flagMeta {
 		t.Fatalf("guided and flag forms differ:\n%s\n---\n%s\n=====\n%s\n---\n%s", guidedEntry, guidedMeta, flagEntry, flagMeta)
 	}
@@ -90,7 +90,7 @@ func TestGuidedSkillCreateEmptyRequiredAnswerWritesNothing(t *testing.T) {
 		if code != 2 || !strings.Contains(stderr, "Nothing was written") {
 			t.Fatalf("%s: exit = %d stderr=%s", name, code, stderr)
 		}
-		if _, err := os.Stat(filepath.Join(root, "skills", "core")); err == nil {
+		if _, err := os.Stat(filepath.Join(root, "skills", "default")); err == nil {
 			t.Fatalf("%s: a skill was written", name)
 		}
 	}
@@ -111,7 +111,7 @@ func TestGuidedSkillCreateStopsOnEndOfInputAndInterrupt(t *testing.T) {
 	if code := runGuidedSkillCreate(ctx, app.SkillService{}, skillFlags{workspace: root}, reader, &stdout, &stderr); code != 130 {
 		t.Fatalf("interrupt: exit = %d stderr=%s", code, stderr.String())
 	}
-	if _, err := os.Stat(filepath.Join(root, "skills", "core")); err == nil {
+	if _, err := os.Stat(filepath.Join(root, "skills", "default")); err == nil {
 		t.Fatal("a skill was written")
 	}
 }
@@ -123,7 +123,7 @@ func TestSkillCreateWithoutFlagsOutsideATerminalNamesTheMissingFlags(t *testing.
 	if code != 2 || !strings.Contains(stderr, "create requires --id, --collection, --name, and --description") || strings.Contains(stdout, "Name of the skill") {
 		t.Fatalf("exit = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	if _, err := os.Stat(filepath.Join(root, "skills", "core")); err == nil {
+	if _, err := os.Stat(filepath.Join(root, "skills", "default")); err == nil {
 		t.Fatal("a skill was written")
 	}
 }
@@ -139,8 +139,23 @@ func TestSkillCreateInATerminalAsksQuestions(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	readSkillFiles(t, root, "core", "review-checklist")
+	readSkillFiles(t, root, "default", "review-checklist")
 	if !strings.Contains(stdout, "skillhub skill activate review-checklist --yes") {
 		t.Fatalf("missing next command:\n%s", stdout)
 	}
+}
+
+func TestGuidedSkillCreateOnAHubWithSeveralCollectionsUsesTheDefaultCollection(t *testing.T) {
+	t.Parallel()
+	root := initTestWorkspace(t)
+	for _, collection := range []string{"software", "operations"} {
+		if code, _, stderr := runCLI(t, "skill", "create", "--workspace", root, "--id", "seed-"+collection, "--collection", collection, "--name", "Seed", "--description", "Seed.", "--yes"); code != 0 {
+			t.Fatalf("setup create exit = %d: %s", code, stderr)
+		}
+	}
+	code, stdout, stderr := guidedCreate(t, root, "Fresh one\n\nDescription.\nwhen asked\n\nnever\n\n")
+	if code != 0 {
+		t.Fatalf("guided create exit = %d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	readSkillFiles(t, root, "default", "fresh-one")
 }

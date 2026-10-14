@@ -1,7 +1,7 @@
 {
   "schema_version": "1",
   "status": "ok",
-  "summary": "Review for skill review-skill: Stage the skill folder with `git -C <ws> add <skill folder>`, then commit it with `git -C <ws> commit`.",
+  "summary": "Review for skill review-skill: Commit the skill with `git -C <WORKSPACE> add -- skills && git -C <WORKSPACE> commit -m 'Update skills'`.",
   "items": [
     {
       "id": "status",
@@ -30,7 +30,7 @@
     },
     {
       "id": "next_action",
-      "summary": "Stage the skill folder with `git -C <ws> add <skill folder>`, then commit it with `git -C <ws> commit`.",
+      "summary": "Commit the skill with `git -C <WORKSPACE> add -- skills && git -C <WORKSPACE> commit -m 'Update skills'`.",
       "impact": "Recommended next step."
     }
   ],
@@ -54,6 +54,8 @@
     "entrypoint_digest": "<DIGEST>",
     "resource_count": 3,
     "total_bytes": 423,
+    "file_count": 2,
+    "file_bytes": 138,
     "resources": [
       {
         "path": "skills/core/review-skill/.meta/skill.yaml",
@@ -114,6 +116,6 @@
     "install_prose_detected": false,
     "install_cues": []
   },
-  "next_action": "Stage the skill folder with `git -C <ws> add <skill folder>`, then commit it with `git -C <ws> commit`."
+  "next_action": "Commit the skill with `git -C <WORKSPACE> add -- skills && git -C <WORKSPACE> commit -m 'Update skills'`."
 }
 

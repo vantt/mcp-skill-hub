@@ -328,3 +328,57 @@ func TestSkillGitSummaryCountsAFolderThatIsUntrackedAsAWhole(t *testing.T) {
 		t.Fatalf("a skill inside an untracked collection folder must not read as clean: %+v", summary)
 	}
 }
+
+func TestReviewNextActionNamesTheCommitCommandStatusPrints(t *testing.T) {
+	t.Parallel()
+	root := newSkillWorkspace(t)
+	createAndActivateSkill(t, SkillService{}, root)
+
+	review, err := (SkillService{}).ReviewSkill(t.Context(), root, "consumer-review")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !review.Git.Dirty {
+		t.Fatalf("a new skill must read as uncommitted: %+v", review.Git)
+	}
+	for _, placeholder := range []string{"<ws>", "<skill folder>"} {
+		if strings.Contains(review.NextAction, placeholder) {
+			t.Fatalf("next action keeps the placeholder %s: %s", placeholder, review.NextAction)
+		}
+	}
+	want := GitCommitCommand(root, []string{"skills"})
+	if !strings.Contains(review.NextAction, want) {
+		t.Fatalf("next action = %q, want it to contain %q", review.NextAction, want)
+	}
+}
+
+func TestReviewCountsOnlyUserFilesAsFiles(t *testing.T) {
+	t.Parallel()
+	root := newSkillWorkspace(t)
+	createAndActivateSkill(t, SkillService{}, root)
+	script := filepath.Join(root, "skills", "software", "consumer-review", "scripts", "bump.sh")
+	if err := os.MkdirAll(filepath.Dir(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(script, []byte("echo bump\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	review, err := (SkillService{}).ReviewSkill(t.Context(), root, "consumer-review")
+	if err != nil {
+		t.Fatal(err)
+	}
+	status := review.ResourceStatus
+	if status.FileCount != 2 || status.ResourceCount != 3 {
+		t.Fatalf("file_count = %d, resource_count = %d, want 2 and 3: %+v", status.FileCount, status.ResourceCount, status.Resources)
+	}
+	var userBytes int64
+	for _, resource := range status.Resources {
+		if !strings.Contains(resource.Path, "/.meta/") {
+			userBytes += resource.SizeBytes
+		}
+	}
+	if status.FileBytes != userBytes || status.FileBytes >= status.TotalBytes {
+		t.Fatalf("file_bytes = %d, total_bytes = %d, want user bytes %d below the total", status.FileBytes, status.TotalBytes, userBytes)
+	}
+}

@@ -32,7 +32,7 @@ func (adapter *Server) registerSkillCreateTools(tools *toolRegistry) {
 		}
 		collection := strings.TrimSpace(input.Collection)
 		if collection == "" {
-			collection = "core"
+			collection = skill.DefaultCollection
 		}
 		createInput := skill.CreateInput{
 			ID:             strings.TrimSpace(input.SkillID),

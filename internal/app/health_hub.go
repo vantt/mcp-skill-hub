@@ -537,18 +537,30 @@ func changedPaths(root string, result Result) Changed {
 // commitCommand is the Git line that commits the changed hub files: the
 // changed top-level folders and files by name, never everything.
 func commitCommand(root string, files []DiffFile) string {
-	var paths []string
+	paths := make([]string, 0, len(files))
 	for _, file := range files {
-		path := file.Path
+		paths = append(paths, file.Path)
+	}
+	return GitCommitCommand(root, paths)
+}
+
+// GitCommitCommand is the Git line that records the given hub paths: each
+// path reduced to its top-level folder (".skillhub" stays whole), quoted, then
+// added and committed. Every commit hint the CLI and the review print comes
+// from here so they agree with `skillhub status`.
+func GitCommitCommand(root string, paths []string) string {
+	var tops []string
+	for _, path := range paths {
 		if top, _, nested := strings.Cut(path, "/"); nested && top != ".skillhub" {
 			path = top
 		}
-		if !slices.Contains(paths, path) {
-			paths = append(paths, path)
+		if !slices.Contains(tops, path) {
+			tops = append(tops, path)
 		}
 	}
-	quoted := make([]string, 0, len(paths))
-	for _, path := range paths {
+	slices.Sort(tops)
+	quoted := make([]string, 0, len(tops))
+	for _, path := range tops {
 		quoted = append(quoted, shellquote.Arg(path))
 	}
 	git := "git -C " + shellquote.Arg(root)

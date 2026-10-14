@@ -146,7 +146,7 @@ func (s *Server) handleSkillCreatePreview(w http.ResponseWriter, r *http.Request
 	}
 	col := strings.TrimSpace(req.Collection)
 	if col == "" {
-		col = "core"
+		col = skill.DefaultCollection
 	}
 	input := skill.CreateInput{
 		ID:             strings.TrimSpace(req.ID),

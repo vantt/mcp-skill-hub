@@ -710,3 +710,30 @@ func TestSkillTransitionConfirmRefusesUpstreamUpdateProposal(t *testing.T) {
 		t.Fatalf("expected error result from skill_transition_confirm on upstream_update proposal, got %#v", res)
 	}
 }
+
+func TestSkillCreatePreviewWithoutCollectionTargetsTheDefaultCollection(t *testing.T) {
+	t.Parallel()
+	session := connectInMemoryServer(t, newEmptyMCPWorkspace(t))
+
+	res, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name: "skill_create_preview",
+		Arguments: map[string]any{
+			"skill_id":    "no-collection",
+			"name":        "No Collection",
+			"description": "Created without choosing a collection.",
+		},
+	})
+	if err != nil || res.IsError {
+		t.Fatalf("create preview failed: %#v, %v", res, err)
+	}
+	var outcome toolOutcome[app.SkillProposal]
+	decodeStructuredContent(t, res, &outcome)
+	if outcome.Result == nil || len(outcome.Result.Diff.Added) == 0 {
+		t.Fatalf("unexpected outcome: %#v", outcome)
+	}
+	for _, path := range outcome.Result.Diff.Added {
+		if !strings.HasPrefix(path, "skills/default/no-collection/") {
+			t.Fatalf("a create without a collection must target skills/default/: %v", outcome.Result.Diff.Added)
+		}
+	}
+}

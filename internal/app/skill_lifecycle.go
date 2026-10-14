@@ -10,6 +10,9 @@ import (
 
 	"github.com/vantt/skillhub-mcp/internal/mutation"
 	"github.com/vantt/skillhub-mcp/internal/skill"
+	"github.com/vantt/skillhub-mcp/internal/skillruntime"
+	"github.com/vantt/skillhub-mcp/internal/workspace"
+	"gopkg.in/yaml.v3"
 )
 
 // SkillService is the shared application boundary for CLI and future MCP tools.
@@ -127,7 +130,41 @@ func (service SkillService) PreviewSkillUpdate(ctx context.Context, path, id str
 	if err := skill.StoreProposal(root, proposal, time.Now()); err != nil {
 		return SkillProposal{}, err
 	}
-	return makeSkillProposal(proposal, "Skill edit is ready for review."), nil
+	preview := makeSkillProposal(proposal, "Skill edit is ready for review.")
+	if warning, ok := approvalLostWarning(root, id, input, proposal.Summary); ok {
+		preview.Warnings = append(preview.Warnings, warning)
+	}
+	return preview, nil
+}
+
+// approvalLostWarning tells the editor that applying the proposal withholds a
+// third-party skill's content from agents until it is approved again. Only a
+// change to a file other than hub metadata or to the runtime block alters the
+// approved content digest.
+func approvalLostWarning(root, id string, input skill.UpdateInput, diff skill.DiffSummary) (Warning, bool) {
+	changesContent := input.Runtime != nil
+	for _, paths := range [][]string{diff.Added, diff.Modified, diff.Deleted} {
+		for _, path := range paths {
+			if !workspace.IsHubMeta(path) {
+				changesContent = true
+			}
+		}
+	}
+	if !changesContent {
+		return Warning{}, false
+	}
+	_, _, metaBytes, err := locateSkillDir(root, id)
+	if err != nil {
+		return Warning{}, false
+	}
+	var document contentTrustDocument
+	if yaml.Unmarshal(metaBytes, &document) != nil || !skillruntime.IsThirdParty(document.provenance()) {
+		return Warning{}, false
+	}
+	return Warning{
+		Code:    "content_review_required_after_apply",
+		Summary: fmt.Sprintf("After applying, agents get no content from %s until you approve it again: skillhub skill review %s.", id, id),
+	}, true
 }
 
 func (service SkillService) PreviewActivate(ctx context.Context, path, id string, fullDiff bool) (SkillProposal, error) {

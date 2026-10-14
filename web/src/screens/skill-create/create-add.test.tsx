@@ -22,6 +22,14 @@ describe('CreateSkillScreen', () => {
     expect(document.getElementById('create-notfor')).toHaveAttribute('placeholder', 'one-off typo fixes, writing new features');
     expect(document.getElementById('create-scope')).toBeInTheDocument();
   });
+
+  it('files a new skill under the default collection unless told otherwise', () => {
+    wrap(<CreateSkillScreen />);
+    const select = document.getElementById('create-col') as HTMLSelectElement;
+    expect(select.value).toBe('default');
+    expect(Array.from(select.options)[0]?.value).toBe('default');
+    expect(screen.getByText(/Pick default if unsure/)).toBeInTheDocument();
+  });
 });
 
 describe('AddSkillScreen', () => {
