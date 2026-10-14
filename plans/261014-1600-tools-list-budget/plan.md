@@ -1,7 +1,7 @@
 ---
 title: "A context budget for the runtime tool list"
 description: "Measure the part of the runtime MCP surface that reaches the model, assert a budget that only blocks growth, then cut what the model actually pays for without changing the public resolver contract silently."
-status: pending
+status: completed
 priority: P2
 effort: 5h
 branch: (implementation gets its own worktree)
