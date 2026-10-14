@@ -1,7 +1,7 @@
 ---
 title: "Curation UX redesign: checkout, commit, auto-commit and review"
 description: "Implement design decisions D1-D9: every confirmed change becomes one hub Git commit, terminals confirm with y/N, skills are edited and tried in a project checkout and brought back with skill commit, the web edits whole skills and approves content, and remote machines can submit skills to a review queue."
-status: pending
+status: completed
 priority: P1
 effort: 15d
 branch: (each phase gets its own worktree)
