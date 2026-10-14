@@ -768,18 +768,18 @@ V1 favors correctness over transparent mixed-state serving. Resolver must never 
 
 ### 17.1 External editor
 
-Direct edits are allowed because files are canonical.
+Files are canonical, so an edit made directly in the hub folder is possible, but it is not the managed path. The managed paths are `skill checkout` + `skill commit` (try the change in a project, then bring it back as one reviewed change) and the web file editor (one commit per review). A direct edit is previewed and tried by nobody and is served at once; it is the user's job to commit it.
 
 After edit:
 
 ```text
-skillhub validate
-skillhub rebuild
+skillhub maintain validate
+skillhub maintain rebuild
 ```
 
-or System Curator Skill detects stale state and offers the same application commands.
+or System Curator Skill detects stale state and offers the same application commands. A stale index caused by a hand edit is a notice, not a failure.
 
-External edit has no managed operation receipt unless user explicitly adopts/records it. Git diff remains its audit evidence. Rebuild must not silently create canonical files merely to record detection.
+External edit has no managed operation receipt unless user explicitly adopts/records it. Git diff remains its audit evidence. Rebuild must not silently create canonical files merely to record detection. A managed change whose files already differ from Git is refused (section 17.3), so a hand edit is never swept into a commit it was not part of.
 
 ### 17.2 Git pull/checkout/merge
 
@@ -791,11 +791,20 @@ Before Git operation, no managed transaction may be pending. After operation:
 4. keep previous generation if validation fails;
 5. report current branch/dirty state without treating Git HEAD as local truth.
 
-Skill Hub V1 does not run automatic `git pull`, commit or push during normal curation.
+Skill Hub does not run automatic `git pull` or push during normal curation. It does commit its own confirmed changes (section 17.3).
 
 ### 17.3 Git commit
 
-Commit is user-controlled durability/sharing/review boundary. Commit may group several operation receipts. One operation does not imply one commit.
+Every confirmed managed change (add, create, edit, upstream update, lifecycle change, source import, a checkout commit, an approved submission) ends in one Git commit in the hub:
+
+- **Scope.** The commit holds exactly the paths of that change's write set. The index and the working tree outside those paths are left as they were, so a person's staged files and unrelated edits are never committed.
+- **Message.** Skill Hub writes a short subject from the operation and the skill ids.
+- **Hooks and signing.** The commit runs with the user's own Git configuration: hooks run and `commit.gpgsign` applies. Skill Hub bypasses neither. When no terminal is attached, a commit that waits for a hook or a signing passphrase gives up after a bounded time; the files stay written, the outcome is `failed`, and it carries the command that finishes the commit by hand. A missing Git or a hub that is not a repository gives outcome `skipped`.
+- **Never pushed.** The outcome says whether other clones need a push and prints the command (`push_needed`, `push_command`). Agents on this machine get the change when canonical files and the catalog generation are published, as in section 10, not when the commit is made.
+- **Refusal rule.** Before it writes anything, a change checks whether any of its paths already differ from Git. If so it is refused with `edit_conflict` and the list of paths: commit them, discard them, or re-run with `--no-commit`.
+- **`--no-commit`.** Writes the files and skips the commit, for a user who gathers several operations into one commit. This is the former behavior, where one commit may group several operation receipts.
+
+Reverting a change is `git revert` of its commit. The commit is the audit record next to the operation receipt.
 
 ## 18. Event and log policy
 
@@ -853,7 +862,7 @@ Migration is idempotent and records source/target schema versions in operation r
 - Limit file count/size and total transaction bytes.
 - Verify staged digest before every replacement.
 - Never execute resource files during scan/rebuild.
-- Treat Git hooks as external executable behavior; Skill Hub does not invoke commits automatically.
+- Treat Git hooks as external executable behavior; they run on Skill Hub's own scoped commits, with the user's configuration.
 
 ## 21. Application-service boundaries
 

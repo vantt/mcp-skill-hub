@@ -14,11 +14,11 @@ Every command acts on the folder you run it in. Inside the hub or a connected pr
 
 **Source.** A Git repository linked to one or more skills. An **upstream** is the source a skill was copied from; you can pull its updates. A **learning reference** is a source your curator agent reads for ideas; nothing is copied ([Sources and learning](sources-and-learning.md)).
 
-**Content approval.** Agents receive nothing from a skill copied from someone else's repository until you approve its content. Only you can approve it, in your terminal.
+**Content approval.** Agents receive nothing from a skill copied from someone else's repository, or sent from another machine, until you approve its content. Only a person can approve it: with a `y/N` question in a terminal, or on the web page **Waiting for review**. Your agent cannot.
 
-**Preview first.** Commands that change skills show a preview. Nothing is written until you add `--yes` or confirm. Setup commands such as `init`, `connect` and `doctor --fix` act at once and print what they changed; add `--dry-run` to see the changes first. How previews are pinned and how state is reported is in the [result envelope contract](contracts/result-envelope.md).
+**Preview first.** Commands that change skills show a preview. In a terminal the command asks `Apply this change? [y/N]` under it; without a terminal (an agent, a script) nothing is written until you add `--yes` or confirm. `--diff` adds the full diff. Setup commands such as `init`, `connect` and `doctor --fix` act at once and print what they changed; add `--dry-run` to see the changes first. How previews are pinned and how state is reported is in the [result envelope contract](contracts/result-envelope.md).
 
-**Nothing commits for you.** Skill Hub writes your skill changes but never commits or pushes them. Only `skillhub init` makes the hub's first commit, and pushes it to an empty repository when you give it one. `skillhub status` tells you when the hub has uncommitted changes.
+**One change, one commit.** Each change you apply becomes one Git commit in the hub with only its own files, using your hooks and signing. Skill Hub never pushes, apart from `skillhub init` pushing the first commit to an empty repository when you give it one; other machines get a change after you push. `--no-commit` writes the files and skips the commit. `skillhub status` tells you when the hub has uncommitted changes, such as files you edited by hand.
 
 ## Set up and connect agents
 
@@ -105,7 +105,7 @@ In the same permissions file, `connect` adds exactly these rules:
 | ask | `Bash(skillhub *serve*)` |
 | deny | `Bash(skillhub * --approve-content*)` |
 
-Claude Code asks you before any `skillhub` command with `--yes` or `confirm`, and before `init`, `connect`, `doctor --fix`, `token rotate`, `cache clear` and `serve`, wherever their flags stand. It blocks `--approve-content`. Codex and Gemini CLI have no such rules, so they do not ask first. Connections made by an earlier release lack the newer rules; `skillhub doctor` reports them and `skillhub doctor --fix` adds them. The first time you open the folder, its trust dialog lists `Bash(skillhub:*)`. Permission-bypass modes do not enforce these rules.
+Claude Code asks you before any `skillhub` command with `--yes` or `confirm`, and before `init`, `connect`, `doctor --fix`, `token rotate`, `cache clear` and `serve`, wherever their flags stand. So an agent can preview a `skill commit`, and you see the prompt when it applies the commit with `--yes`. It blocks `--approve-content`, so an agent never approves content. Codex and Gemini CLI have no such rules, so they do not ask first. Connections made by an earlier release lack the newer rules; `skillhub doctor` reports them and `skillhub doctor --fix` adds them. The first time you open the folder, its trust dialog lists `Bash(skillhub:*)`. Permission-bypass modes do not enforce these rules.
 
 `connect` notes which of these rules it added itself, in `permission-records.json` in your Skill Hub user configuration folder (not in Claude's settings file). `connect --remove` takes out only those, so a rule you already had, such as your own `Bash(skillhub:*)`, stays. `doctor --fix` notes the rules it adds the same way. A connection made before this record existed has none, and `connect --remove` then takes out every rule in the table.
 
@@ -248,7 +248,7 @@ What `init` does depends on the repository:
 - **It already holds this hub:** `init` sets it as `origin` and pushes nothing.
 - **It holds anything else:** `init` refuses and changes nothing.
 
-After that, you commit and push skill changes with Git yourself.
+After that, Skill Hub commits each change you confirm; you push with Git yourself when you want a backup or want other machines to get it.
 
 ## Move to another machine
 
@@ -257,7 +257,7 @@ Your skills live in Git, so moving is a fetch. Before you leave the old machine,
 If you would rather keep one hub and let agents on other computers use it, see [Use one hub from several machines](remote-hub-guide.md).
 
 > [!IMPORTANT]
-> Skill Hub never commits or pushes your skill changes for you. Commit and push the hub yourself before you move.
+> Skill Hub commits each confirmed change but never pushes. Push the hub yourself before you move, and commit any file you edited by hand (`skillhub status` lists them).
 
 On the new machine, [install Skill Hub](installation.md), then fetch the hub into an empty folder. `init` builds its search index and makes it the hub of this machine:
 

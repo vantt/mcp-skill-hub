@@ -205,11 +205,12 @@ Unknown intent should produce a small clarification, not a command list dump.
 | Defer unreadable scope with durable coverage gap | Present in result; ask only if materially blocking |
 | Plan insight | Explicit user intent |
 | Reject insight | Explicit decision + rationale |
-| Apply insight/direct skill edit | Preview + explicit approval pinned to digest |
+| Apply insight/skill edit (checkout + commit, web review, or `skill edit`) | Preview + explicit approval: `y/N` in a terminal, `--yes` pinned to the digest without one |
 | Change routing metadata | Impact preview + explicit approval |
 | Deprecate/archive/unlink | Impact preview + confirmation |
-| Git commit | Explicit user request |
-| Git push | Never automatic in V1 |
+| Git commit of a confirmed change | Automatic: one scoped commit per confirmed change (`--no-commit` opts out); hooks and signing apply |
+| Git push | Never automatic; the result says who gets the change and prints the push command |
+| Approve third-party or submitted content | A person only: `y/N` in a terminal or the web review page after every changed file was opened; never an agent |
 | Migration/recovery with alternatives | Show plan and request confirmation |
 
 “Explicit user request” includes a clear batch intent such as “distill all changed sources”; System Skill không hỏi lại từng mechanical step.
@@ -273,7 +274,7 @@ Show the full diff.
 Applied INS-42.
 
 The updated skill is active locally.
-3 canonical files changed and are not committed to Git.
+3 canonical files changed. Committed 4be19c0 "Update <skill-id>"; other clones get it after you push.
 Operation: OP-81
 
 Next: review the diff, review another insight, or stop.
@@ -428,7 +429,7 @@ sequenceDiagram
     U->>S: Approve
     S->>H: insight_apply_confirm(proposal ID, digest)
     H-->>S: operation ID and changed files
-    S-->>U: active/uncommitted status and next actions
+    S-->>U: active status, commit hash and who gets the change
 ```
 
 If base content or proposal changed after preview:
@@ -555,10 +556,11 @@ Approved apply or active-skill edit
 → canonical content and local catalog update immediately
 
 Git commit
-→ durability/sharing/review boundary, not local publish gate
+→ made by Skill Hub right after the publish, scoped to the change's own files;
+  durability/sharing/review boundary, not local publish gate
 ```
 
-Every active mutation states explicitly: **active locally** and **committed/uncommitted**. Canonical staging, transaction journal, operation receipts và immutable database generations được định nghĩa trong [07-storage-and-mutation-model.md](07-storage-and-mutation-model.md); UX không tự triển khai write semantics.
+Every active mutation states explicitly: **active locally** and **committed** (hash) or **not committed** (reason and the command that finishes it). Một thay đổi mà file của nó đang khác Git (sửa tay chưa commit) bị từ chối trước khi ghi. Canonical staging, transaction journal, operation receipts và immutable database generations được định nghĩa trong [07-storage-and-mutation-model.md](07-storage-and-mutation-model.md); UX không tự triển khai write semantics.
 
 ### 14.2 Undo guidance
 
@@ -625,6 +627,7 @@ Distillation semantic work is executed with the distill-lab skill writing direct
 - Human default: concise summary + next action.
 - `--json`: stable machine schema.
 - `--quiet`: only requested IDs/paths/result.
+- Trong terminal, lệnh đổi hub hỏi `Apply this change? [y/N]` ngay dưới preview; không có terminal (agent, script) thì chỉ preview, `--yes` mới áp dụng. `--diff` in diff đầy đủ; `--no-commit` bỏ bước commit.
 - `--yes`: skips confirmation only where command policy permits; never skips validation.
 - Long detail uses pager; edit uses `$EDITOR` where applicable.
 - Automation never parses decorative terminal tables.
@@ -723,13 +726,13 @@ User-facing copy translates these states and normally exposes only actionable tr
 - Semantic mutation requires pinned preview + explicit approval.
 - Stale proposal cannot be confirmed.
 - Destructive and routing changes show impact first.
-- Git push is never automatic.
+- Git push is never automatic. Git commit of a confirmed change is automatic and scoped (`--no-commit` opts out).
 
 ### Workspace/Git
 
 - Routine unchanged scheduler checks do not dirty Git.
 - Meaningful source revision changes and human decisions remain canonical.
-- Every mutation reports active/uncommitted status and operation ID.
+- Every mutation reports active status, commit outcome (hash, or why not committed) and operation ID.
 - `doctor --fix` remains independent recovery path.
 
 ### Surface consistency

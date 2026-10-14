@@ -74,7 +74,7 @@ skillhub doctor --fix
 
 1. Trình bày plan và diff trước khi sửa client config hoặc instruction file.
 2. Chỉ gỡ block có marker/version của Skill Hub; không rewrite phần prose do user sở hữu.
-3. Yêu cầu confirmation cho file mutation; automation phải truyền `--yes` explicit.
+3. Yêu cầu confirmation cho file mutation: trong terminal lệnh hỏi `[y/N]` ngay dưới preview; không có terminal (agent, automation) phải truyền `--yes` explicit.
 4. Chạy idempotent và giữ thay đổi dễ review bằng Git diff khi file nằm trong repository.
 5. Ghi rõ integration là native, adapter-backed hay instruction-only.
 

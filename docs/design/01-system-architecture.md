@@ -349,7 +349,7 @@ Workspace fix phải:
 4. Tạo canonical skeleton, `.skillhub/schema-version` và `.gitignore` cho `runtime/` cùng `.skillhub/transactions/`.
 5. Validate files vừa tạo rồi build/publish SQLite/FTS derived generation.
 6. Không copy binary, source code hoặc frontend source vào workspace.
-7. Không tự commit; người dùng/automation quyết định commit và remote Git.
+7. Init/rebuild không tự commit canonical files; thay đổi curation đã confirm tự commit riêng phần file của nó, còn push và remote Git do người dùng/automation quyết định.
 8. Idempotent: chạy lại chỉ sửa finding còn tồn tại, không reset valid user data.
 
 `doctor --fix` xử lý mọi finding có thể sửa theo dependency order: workspace trước, sau đó MCP registrations và gỡ block bootstrap cũ (obsolete). Nó phải preview plan/file diffs và yêu cầu confirmation trước mutation; automation dùng `--yes` một cách explicit. Nếu chưa có workspace path, interactive mode hỏi user, còn non-interactive mode yêu cầu `--workspace`.
@@ -421,7 +421,7 @@ Các use case chính:
 - review patch trước khi cập nhật skill, ledger và history;
 - edit content hoặc routing metadata trực tiếp;
 - deprecate/archive skill nhưng giữ provenance;
-- xem canonical diff và tự quyết định Git commit.
+- xem canonical diff; mỗi thay đổi đã confirm tự thành một Git commit gọn trong hub (không push), `git revert` để hoàn tác.
 
 Skill, source, distill run, observation và insight có lifecycle độc lập. Một skill `active` có thể đồng thời có source `changed`, failed run, tombstoned observations và insights `pending`.
 
@@ -429,7 +429,7 @@ Distill submission hợp lệ được binary auto-finalize và chỉ advance `l
 
 Routine unchanged source checks chỉ cập nhật runtime operational state và không làm Git dirty. Revision change/human decision mới là canonical state.
 
-Mọi approved/direct save đi qua staged write-ahead transaction: validate virtual result, ghi canonical files có recovery journal, build immutable SQLite generation rồi atomically publish generation pointer. Proposal chưa approved không ảnh hưởng skill đang được serve. Git commit là durability/sharing boundary, không phải publish gate của local runtime.
+Mọi approved/direct save đi qua staged write-ahead transaction: validate virtual result, ghi canonical files có recovery journal, build immutable SQLite generation rồi atomically publish generation pointer. Proposal chưa approved không ảnh hưởng skill đang được serve. Git commit (Skill Hub tự tạo sau publish, chỉ gồm file của thay đổi) là durability/sharing boundary, không phải publish gate của local runtime.
 
 Authoritative transaction, recovery, operation receipt và database-generation semantics nằm trong [07-storage-and-mutation-model.md](07-storage-and-mutation-model.md).
 

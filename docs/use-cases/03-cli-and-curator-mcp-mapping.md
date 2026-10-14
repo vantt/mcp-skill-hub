@@ -93,8 +93,8 @@ skillhub skill add https://github.com/anthropics/skills/tree/main/skills/pdf --y
 # Nạp toàn bộ các skill có trong repo
 skillhub skill add https://github.com/anthropics/skills --all --yes
 
-# Nạp từ thư mục máy cục bộ (chỉ hỗ trợ trên CLI)
-skillhub skill add ./local-skills/my-helper --yes
+# Thư mục trên máy: dùng skill commit từ một project đã connect (skill add chỉ nhận URL GitHub)
+skillhub skill commit ./local-skills/my-helper --yes
 
 # Xác nhận proposal đã sinh trước đó
 skillhub skill confirm PROP-4a8f9c1b

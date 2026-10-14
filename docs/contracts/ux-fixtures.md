@@ -102,7 +102,7 @@ successful work was discarded.
 ## Required journey coverage
 
 The fixture suite covers healthy and invalid/recovery-required Curation Home;
-intent-first skill add, skill create, skill review, and source watch workflows;
+intent-first skill add (GitHub), skill create (in a project), skill checkout and commit, skill review, and source watch workflows;
 due, changed, and unavailable sources; high-value insight review; stale
 proposal and dirty-Git-after-apply paths; staged validation (`validate --staged`)
 reading literal index blobs without filters; and interrupted or partially failed

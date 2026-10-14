@@ -9,10 +9,10 @@ A **source** is a Git repository linked to one or more skills. It plays one of t
 
 Nothing runs in the background. Skill Hub checks a source only when you run a check, from the terminal or the web UI.
 
-The commands below run inside the hub or a connected project, for example `cd <your-project> && skillhub source list`. Each one that changes files shows a preview first; add `--yes` to apply it.
+The commands below run inside the hub or a connected project, for example `cd <your-project> && skillhub source list`. Each one that changes files shows a preview first. In a terminal it then asks `Apply this change? [y/N]`; without a terminal (an agent, a script) add `--yes` to apply it.
 
 > [!IMPORTANT]
-> Skill Hub never commits or pushes for you, and it never approves content for you. You review each change and commit it yourself.
+> Each change you apply becomes one Git commit in the hub, with only its own files, and Skill Hub never pushes. It never approves content for you: a person does, in a terminal or on the web page **Waiting for review**. Lessons that your curator agent writes into a skill's `.meta/distill.yaml` are files Skill Hub did not apply; you commit those yourself.
 
 ## Keep copied skills up to date
 
@@ -131,8 +131,9 @@ skillhub source watch https://github.com/anthropics/skills --skill-id <skill-id>
 ```
 
 ```text
-Watching source anthropic-skills (https://github.com/anthropics/skills). Cadence: weekly. Changes
-are not committed.
+Watching source anthropic-skills (https://github.com/anthropics/skills). Cadence: weekly.
+Committed 4be19c0 "Watch anthropic-skills, <skill-id>".
+Agents using this hub get it now.
 Next: skillhub source check anthropic-skills
 ```
 
@@ -205,7 +206,7 @@ node '<hub>/.agents/skills/distill-lab/scripts/distill.mjs' list '<hub>/skills/<
 
 `status` prints that command only while the hub's distill-lab files are the ones Skill Hub installed; otherwise it asks you to run `skillhub doctor`.
 
-Nothing in your skill changes until you act on a lesson. Stage the new lesson file with your other changes. [Review and commit workspace changes](curating-skills.md#review-and-commit-workspace-changes) explains why you add only these paths.
+Nothing in your skill changes until you act on a lesson. The agent writes the lesson file by hand, so Skill Hub has not committed it. Stage the new lesson file with your other changes. [What gets committed and who gets it](curating-skills.md#what-gets-committed-and-who-gets-it) explains why you add only the hub's own paths.
 
 ```bash
 git -C ~/skillhub add .gitignore .skillhub skills sources history registry config distill evals
@@ -239,7 +240,7 @@ The preview also prints a `skillhub source import --proposal ... --yes` line. Ru
 
 Choose skills with `--skill <name>` (repeatable) or `--all`, but not both. `--ref <r>` picks a branch or tag; `--path <p>` picks a folder.
 
-Skills you already have are skipped, never overwritten. Import never approves content, activates a skill or watches the source, so `skillhub skill outdated` shows them as **not tracked**. Review and activate each draft as in [Curating skills](curating-skills.md#review-diagnostic-facts-skillhub-skill-review).
+Skills you already have are skipped, never overwritten. Import never approves content, activates a skill or watches the source, so `skillhub skill outdated` shows them as **not tracked**. Each draft is committed to the hub. Review and activate each as in [Curating skills](curating-skills.md#review-and-approve).
 
 Sources larger than 8 MiB are refused. For a large repository, use a URL that points at the skill's folder (`/tree/<branch>/<folder>`), as above.
 

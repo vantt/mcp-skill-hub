@@ -5,7 +5,8 @@ Find the command for a task here. For every flag, run `skillhub help` or `skillh
 - Every command acts on the folder you run it in. Run hub commands inside the hub or a connected project: `cd <folder> && skillhub <command>`. For scripts, command help names `--workspace <path>` (a hub folder on this machine) and `SKILLHUB_WORKSPACE`; `--hub` always takes a URL.
 - Most commands accept `--json` for machine-readable output.
 - Setup commands (`init`, `connect`, `doctor --fix`, `token rotate`, `cache clear`) act at once and print what they changed; add `--dry-run` to see the changes first.
-- Commands that change skills or sources show a preview first. Add `--yes` to write. `source capture` and `skill env set|unset` write at once.
+- Commands that change skills or sources show a preview first: the files, the line counts and any routing warnings. In a terminal the command then asks `Apply this change? [y/N]` under the preview, so you do not retype it. Without a terminal (an agent, a script, `--json`) it only previews; run it again with `--yes` to apply. `--diff` adds the full diff to a preview, and the preview prints that hint. `source capture` and `skill env set|unset` write at once.
+- Every change you apply becomes one Git commit in the hub, with only that change's files, a message Skill Hub writes, and your hooks and signing. Nothing is pushed. `--no-commit` writes the files and leaves the commit to you. A change is refused when its files already differ from Git: commit or discard them, or use `--no-commit`.
 - Only Claude Code is verified end to end; `connect` also writes files for Codex and Gemini CLI.
 
 ## Set up
@@ -34,19 +35,23 @@ Find the command for a task here. For every flag, run `skillhub help` or `skillh
 |---|---|
 | List skills | `skillhub skill list [--state draft\|active\|deprecated\|archived]` |
 | Read a skill in any state | `skillhub skill show <skill-id> [--verbose]` |
-| Add a skill from GitHub or a local folder, as a draft | `skillhub skill add <locator> [--path <p>] [--skill <name>\|--all] [--yes]` |
-| Create a draft skill | `skillhub skill create` in a terminal asks the questions; scripts use `skillhub skill create <skill-id> --collection <c> --name <n> --description <d> [--content-file <f>] [routing flags] [--yes]` |
+| Add a skill from GitHub, as a draft | `skillhub skill add <github-url> [--path <p>] [--skill <name>\|--all] [--ref <r>] [--edit-routing] [--yes]` |
+| Start a new skill in this project (nothing changes on the hub) | `skillhub skill create` in a terminal asks the questions; scripts use `skillhub skill create <skill-id> --name <n> --description <d> [--trigger <t>] [--not-for <n>] [--example <e>]` |
+| Copy a skill into this project to edit and try it | `skillhub skill checkout <skill-id>` |
+| Bring a project folder back to the hub as one commit (a new folder becomes a draft) | `skillhub skill commit <skill-id\|folder> [--collection <c>] [--runtime-file <yaml>] [--edit-routing] [--diff] [--yes] [--no-commit]` |
 | Review a skill before you activate it | `skillhub skill review <skill-id> [--verbose]` |
 | Review a skill another machine sent to this hub (terminal: apply, approve, activate) | `skillhub skill review <SUB-id> [--diff]`; drop it with `skillhub skill review <SUB-id> --discard` |
-| Edit instructions in your editor | `skillhub skill edit <skill-id> --editor` |
+| Edit instructions quickly in your editor (to try changes first, use `checkout`) | `skillhub skill edit <skill-id> --editor` |
 | Change the description or routing fields | `skillhub skill edit <skill-id> [--description <d>] [--trigger <t>] [--not-for <n>] [--min-scope <s>] [--yes]` |
 | Add requests that should, or should not, pick the skill | `skillhub skill edit <skill-id> --example <e> --counter-example <e> [--yes]` |
 | Declare the tools a skill needs | `skillhub skill edit <skill-id> --runtime-file <yaml> [--yes]` |
-| Approve content from someone else's repository (terminal only) | `skillhub skill edit <skill-id> --approve-content <digest>` |
+| Approve content from someone else's repository (a person, in a terminal: the questions of `skill add`, `skill commit` and `skill review <SUB-id>`, or the web page **Waiting for review**) | `skillhub skill edit <skill-id> --approve-content <digest>` |
 | Check this machine against a skill's needs | `skillhub skill doctor <skill-id>` |
 | Store, remove or list a skill's secrets | `skillhub skill env set\|unset <skill-id> <KEY>`, `skillhub skill env list <skill-id>` |
 | Apply a previewed change | `skillhub skill confirm <proposal-id>` |
 | Activate, deprecate or archive a skill | `skillhub skill activate\|deprecate\|archive <skill-id> [--yes]` |
+
+`skill checkout` copies the whole skill into `.claude/skills/<skill-id>/` of the project and adds that folder to the project's `.gitignore`; the hub keeps serving the current version until you commit. `skill commit` shows every changed file, runs the routing lint and, for a skill from someone else's repository, approves the new content in the same step. Without a terminal that needs `--approve-content <digest>`, which only a person gives. In a project connected to a hub on another machine, `checkout` fetches the active skill and `commit` sends the folder to that hub's review queue (`Sent as SUB-…`); see [From another machine](curating-skills.md#from-another-machine). `skill add` takes GitHub addresses only; to add a skill from a folder on this machine, run `skill commit <folder>`.
 
 Routing flags for `create` and `edit`: `--operation`, `--trigger`, `--not-for`, `--min-scope`, `--example`, `--counter-example`. Activation needs real instructions, not the untouched starter text. It also needs a trigger, a `--not-for` entry (or `--rationale`) and `--min-scope`.
 
@@ -82,7 +87,7 @@ Routing flags for `create` and `edit`: `--operation`, `--trigger`, `--not-for`, 
 | Rebuild the search index | `skillhub maintain rebuild [--verbose]` |
 | Preview or apply a file format migration | `skillhub maintain migrate [--to <version>] [--yes]` |
 
-Skill Hub never commits or pushes your skill changes for you. Add the hub's own paths by name; never stage the whole folder. See [Curating skills](curating-skills.md#review-and-commit-workspace-changes).
+Skill Hub commits each change you confirm, with only its own files, and never pushes. These commands cover what happens outside that, such as files you edited by hand in the hub folder. See [Curating skills](curating-skills.md#what-gets-committed-and-who-gets-it).
 
 ## Serve other machines
 

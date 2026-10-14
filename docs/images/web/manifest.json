@@ -53,12 +53,12 @@
     {
       "file": "editor-preview.png",
       "route": "/skills/release-checklist?…",
-      "state": "Editor tab with a preview of the change",
+      "state": "Routing tab with a preview of the change",
       "width": 1280,
       "height": 800,
       "theme": "light",
-      "caption": "Editor: preview the exact change before it is saved.",
-      "alt": "The editor tab with a dialog that previews the changed description as a diff."
+      "caption": "Routing: preview the exact change before it is committed.",
+      "alt": "The routing tab with a dialog that previews the changed description as a diff."
     },
     {
       "file": "editor-conflict.png",

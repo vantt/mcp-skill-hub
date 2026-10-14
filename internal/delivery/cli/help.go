@@ -161,8 +161,10 @@ command to run next.
 	"skill": `Usage: skillhub skill <subcommand> [flags]
 
 Subcommands:
-  add <locator> [--skill <name> | --all] [--id <id>] [--collection <c>] [--ref <r>] [--path <p>] [--yes]
-                                                    Add draft skills from local or remote locator
+  add <github-url> [--skill <name> | --all] [--id <id>] [--collection <c>] [--ref <r>] [--path <p>] [--edit-routing]
+      [--diff] [--yes] [--no-commit]
+                                                    Add draft skills from a GitHub repository, tracked for upstream updates
+                                                    (a folder on this machine: skill commit <folder>)
   create [<id>] [--description <d>] [--name <n>] [--trigger <t>]... [--not-for <n>]... [--example <e>]...
                                                     Start a new skill in this project: write .claude/skills/<id>/SKILL.md (nothing
                                                     changes on the hub). In a terminal it asks what the skill does, when to use it,

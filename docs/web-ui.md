@@ -125,9 +125,9 @@ Choose **Keep my edits on the latest version** to apply them on top of the saved
 1. Open **Skills** and click **Create skill**.
 2. Fill in the skill id, display name and description. You cannot change the id later.
 3. Fill in the routing fields (operations, triggers, not for, minimum scope). You can leave them empty now, but activation needs them.
-4. Click **Preview draft**, check the files that will be written, then confirm.
+4. Click **Preview draft**, check the files that will be written, then confirm. The draft becomes one commit in your hub.
 
-The new skill is a draft: agents do not use it until you activate it.
+The new skill is a draft: agents do not use it until you activate it. To write a skill in your project and try it in your agent first, use `skillhub skill create` and `skillhub skill commit` ([Curating skills](curating-skills.md#create-your-first-skill)).
 
 <details>
 <summary>See the create skill form</summary>
@@ -142,7 +142,7 @@ The new skill is a draft: agents do not use it until you activate it.
 2. Paste the address of a public repository, or of a folder or file inside it, and click **Discover skills**. Discover only looks: it lists the skills it finds and writes nothing.
 3. Read where the skills come from, the revision, the trust note, the files that would be written and any conflicts. Choose the skills (or **Import all**), then click **Confirm import**.
 
-Imported skills start as drafts. A skill from someone else's repository also needs your content approval before agents receive it (see [Check one skill](#check-one-skill)).
+Imported skills start as drafts and arrive as one hub commit. A skill from someone else's repository also needs your content approval before agents receive it (see [Check one skill](#check-one-skill)).
 
 <img src="images/web/add-from-github-discover.png" alt="The add from GitHub form with a repository address filled in." width="800"><br><em>Add from GitHub: paste a repository address to find skills in it.</em>
 

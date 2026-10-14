@@ -55,6 +55,18 @@ If the web UI changed since the last release, rerun `make web-shots` before tagg
 - **A flaky test blocks the release.** The release workflow runs the whole test suite on Linux, macOS and Windows before it builds anything, so a flaky test stops the tag with nothing published. If the failure is a known flake, rerun only the failed job with `gh run rerun <run-id> --failed`. If the code or a test must change, no release exists yet: fix it, wait for green CI, and use the next prerelease number (for example `v0.5.0-alpha.2`) or delete the unpublished tag and tag again.
 - **Prereleases.** A tag such as `v0.5.0-alpha.1` is published as a GitHub prerelease and is never "latest", so the installers behind `releases/latest/download/` do not offer it. Install it with the installer attached to that tag and an explicit version, for example `curl -fsSL https://github.com/vantt/skillhub-mcp/releases/download/v0.5.0-alpha.1/install.sh | sh -s -- --version 0.5.0-alpha.1`. On Windows set `$env:SKILLHUB_VERSION = '0.5.0-alpha.1'` first and run the `install.ps1` from the same tag.
 
+### Release notes for the curation redesign
+
+Release notes are generated from the merged changes (`gh release create --generate-notes`), so the repository keeps no notes file. For the first release that carries the checkout and commit workflow, add a "Breaking changes" section by hand that names:
+
+- `skill add <folder>` is gone: `skill add` takes GitHub addresses only. Add a folder with `skill commit <folder>` from a connected project.
+- `skill create` writes `.claude/skills/<id>/` in the project and no longer creates a draft in the hub; bring it to the hub with `skill commit <id>`. The new commands `skill checkout` and `skill commit` replace editing hub files directly as the official path.
+- `--full-diff` is replaced by `--diff`, which every previewing command accepts.
+- Every confirmed change is committed to the hub automatically (one scoped commit, never pushed); `--no-commit` restores the old behavior. A change to files that already differ from Git is refused.
+- Third-party and submitted content can be approved on the web page **Waiting for review**, after every changed file was opened, and with a `y/N` question in a terminal. Anyone who can open the web UI can approve.
+- Skills can be sent for review from a project connected to a hub on another machine (`skill commit`, reviewed with `skill review <SUB-id>`); both machines need this release, and `app.RemoteAPILevel` rules in the next section apply.
+- The bundled curator skill changed (version 1.7.0), so existing installs report a system skill update through `doctor`. The shipped digest of the previous file is in `internal/systemskills/known-digests.go`.
+
 ### Network MCP listener and remote clients
 
 `skillhub serve` is a network listener that serves the three runtime tools to agents on other machines, and `skillhub mcp proxy` is the client side that `skillhub connect --hub` registers (see the [remote hub guide](remote-hub-guide.md)). Before tagging a release that touches the MCP server, the proxy, the skill cache, `connect` or `doctor`:

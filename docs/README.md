@@ -10,7 +10,7 @@ Find the page you need, grouped by what you want to do.
 ## Guides
 
 - [Using Skill Hub](user-guide.md): use Skill Hub day to day after setup.
-- [Curating skills](curating-skills.md): add, create, review, edit and change the state of the skills in your collection.
+- [Curating skills](curating-skills.md): create, add, edit and try, review and approve, and change the state of the skills in your collection.
 - [Sources and learning](sources-and-learning.md): keep copied skills up to date and learn from what others publish.
 - [Web UI guide](web-ui.md): look after your skills by clicking instead of typing, in your own browser.
 - [Use one hub from several machines](remote-hub-guide.md): let agents on other computers use this hub on your LAN, over Tailscale or through an SSH tunnel.

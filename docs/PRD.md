@@ -1538,7 +1538,7 @@ Uncommitted
 Last commit
 ```
 
-But Git commit itself can remain CLI-controlled in V1.
+Git commit of a confirmed change is made by Skill Hub itself (one scoped commit per change, `--no-commit` opts out); push stays with the user.
 
 ---
 

@@ -212,7 +212,7 @@ WHY: skill bare-skill requires: content (replace untouched scaffold instructions
      or rationale (quality.routing_review_rationale), min_scope
 ```
 
-Add your instructions and the missing fields in one edit:
+Add your instructions and the missing fields in one edit (to try new instructions in your agent first, use `skillhub skill checkout <skill-id>` and `skillhub skill commit <skill-id>` instead):
 
 ```bash
 skillhub skill edit <skill-id> --content-file <file> --trigger "<when to use>" \
@@ -232,17 +232,31 @@ Then activate it with `skillhub skill activate <skill-id> --yes`. At least 3 exa
 
 ### The agent reports `review_required`
 
-Agents get nothing from a skill copied from someone else's repository until you approve its content. Only you can do that, in the terminal. Start the review:
+Agents get nothing from a skill copied from someone else's repository, or sent from another machine, until a person approves its content. Your agent cannot. Start the review:
 
 ```bash
 skillhub skill review <skill-id>
 ```
 
-After you read its files, run the exact `skillhub skill edit <skill-id> --approve-content <digest>` command from the **Content trust** block. The digest is a fingerprint of the content you reviewed. See [Safety model](curating-skills.md#safety-model).
+After you read its files, approve in a terminal: the `y/N` question that `skill add`, `skill commit` and `skill review <SUB-id>` ask, or the exact `skillhub skill edit <skill-id> --approve-content <digest>` command from the **Content trust** block. The web page **Waiting for review** approves too, once you have opened every changed file. The digest is a fingerprint of the content you reviewed. See [Safety model](curating-skills.md#safety-model).
 
 ### The agent reports `setup_failed`
 
 A skill's script failed because a tool or variable is missing here. `skillhub skill doctor <skill-id>` shows which binary, environment variable or setup check failed.
+
+### A change is refused because files have uncommitted edits
+
+Skill Hub commits each change with only its own files. If a file the change touches already differs from Git, usually because you edited it by hand in the hub folder, the command stops before it writes anything. The message names the files and says `has edits that were not committed`. Commit them yourself, discard them, or run the command again with `--no-commit`, which writes the files and leaves the commit to you:
+
+```bash
+cd ~/skill-hub && git diff -- skills
+```
+
+Edit skills through `skillhub skill checkout` and `skillhub skill commit` to avoid this. See [Working inside the hub folder](curating-skills.md#working-inside-the-hub-folder).
+
+### The commit failed because of a hook or signing
+
+The change was written to the hub, but the Git commit did not finish. The command prints `Not committed:` with the reason and a `Finish it with:` line. Without a terminal, a commit that waits for a signing passphrase or an interactive hook gives up after about a minute with `The commit did not finish within 60 seconds`. Run the printed line in the hub from a terminal, fix the hook (the output of a failing hook is in the reason), or run the command again with `--no-commit`. Nothing is lost: the files are in place and `skillhub status` lists them as uncommitted.
 
 ### Adding a large GitHub repository fails
 
@@ -258,7 +272,7 @@ For bulk imports, see [Import many skills from a repository](sources-and-learnin
 
 ### The search index is stale
 
-`skillhub status` says the search index is stale after you edit hub files by hand. Read commands such as `skill list` rebuild it when the files are valid. To rebuild yourself, validate first:
+`skillhub status` shows a notice, not `FAILED`, that the search index is stale after you edit hub files by hand. Read commands such as `skill list` rebuild it when the files are valid. To rebuild yourself, validate first:
 
 ```bash
 cd ~/skill-hub && skillhub maintain validate
