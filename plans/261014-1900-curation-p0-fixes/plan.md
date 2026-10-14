@@ -101,6 +101,19 @@ Narrowest test first in each phase, then `make check` (Go) and `make web-check` 
 
 ## Open questions
 
+**Answered 2026-10-14 by the lead, following the user's accepted design (D7, D8 and the redesign's answer to its
+question 15); the user may still overrule:**
+1. No keep flag in this plan; the redesign's `commit` preview lists what was left out, and an `--include` can be
+   added there later if needed.
+2. Confirmed, with one change: keep `.env.example` and `.env.sample` (templates without secrets); exclude `.env` and
+   every other `.env.*`.
+3. Not now: carrying modes through the three-way merge goes with the upstream update UX work; tracked in the
+   backlog.
+4. Leave it to the redesign (D8 owns the `status` change and its JSON value).
+5. Confirmed: `default` is the one default collection.
+6. Confirmed: neutral label now; recording the origin is D7 work.
+
+
 1. **Keeping an excluded file.** The plan adds no flag to keep `.env` and similar files (D7 lists exclusion, not an
    override). Is "rename the file or add it by hand" acceptable until the redesign, or should D7's `commit` get an
    `--include`?
