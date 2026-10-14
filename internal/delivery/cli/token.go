@@ -3,14 +3,20 @@ package cli
 import (
 	"fmt"
 	"io"
+	"net"
+	"net/netip"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 
 	"golang.org/x/term"
 
 	"github.com/vantt/skillhub-mcp/internal/delivery/cli/termui"
+	"github.com/vantt/skillhub-mcp/internal/delivery/hostpolicy"
 	"github.com/vantt/skillhub-mcp/internal/hubtoken"
+	"github.com/vantt/skillhub-mcp/internal/invite"
 	"github.com/vantt/skillhub-mcp/internal/shellquote"
 )
 
@@ -27,16 +33,20 @@ var stdoutIsTerminal = func(w io.Writer) bool {
 type tokenConfig struct {
 	workspacePath string
 	tokenFile     string
+	addrFlag      string
 	dryRun        bool
 }
 
 func runToken(args []string, stdout, stderr io.Writer) int {
-	if len(args) == 0 || (args[0] != "show" && args[0] != "rotate") {
-		return writeInvalidRequest(stdout, stderr, false, "token requires the show or rotate subcommand", "Run `skillhub token show` or `skillhub token rotate`.")
+	if len(args) == 0 || (args[0] != "show" && args[0] != "rotate" && args[0] != "invite") {
+		return writeInvalidRequest(stdout, stderr, false, "token requires the show, rotate or invite subcommand", "Run `skillhub token show`, `skillhub token rotate` or `skillhub token invite`.")
 	}
-	cfg, reason := parseTokenFlags(args[1:], args[0] == "rotate")
+	cfg, reason := parseTokenFlags(args[1:], args[0])
 	if reason != "" {
 		return writeInvalidRequest(stdout, stderr, false, reason, "Run `skillhub help token`.")
+	}
+	if args[0] == "invite" {
+		return runTokenInvite(cfg, stdout, stderr)
 	}
 	path := cfg.tokenFile
 	if path != "" {
@@ -58,22 +68,33 @@ func runToken(args []string, stdout, stderr io.Writer) int {
 	return runTokenRotate(path, cfg, stdout, stderr)
 }
 
-func parseTokenFlags(args []string, rotate bool) (tokenConfig, string) {
+// parseTokenFlags reads the flags of one token subcommand: --dry-run belongs
+// to rotate, --addr to invite, --token-file to show and rotate.
+func parseTokenFlags(args []string, subcommand string) (tokenConfig, string) {
 	var cfg tokenConfig
 	for index := 0; index < len(args); index++ {
 		switch args[index] {
-		case "--workspace", "--token-file":
+		case "--workspace", "--token-file", "--addr":
+			if (args[index] == "--token-file" && subcommand == "invite") || (args[index] == "--addr" && subcommand != "invite") {
+				return cfg, fmt.Sprintf("unknown argument %q", args[index])
+			}
 			if index+1 == len(args) || strings.HasPrefix(args[index+1], "-") {
+				if args[index] == "--addr" {
+					return cfg, "--addr requires a value"
+				}
 				return cfg, args[index] + " requires a path"
 			}
-			if args[index] == "--workspace" {
+			switch args[index] {
+			case "--workspace":
 				cfg.workspacePath = args[index+1]
-			} else {
+			case "--addr":
+				cfg.addrFlag = args[index+1]
+			default:
 				cfg.tokenFile = args[index+1]
 			}
 			index++
 		case "--dry-run":
-			if !rotate {
+			if subcommand != "rotate" {
 				return cfg, "unknown argument \"--dry-run\""
 			}
 			cfg.dryRun = true
@@ -178,6 +199,106 @@ func tokenRotateCommand(cfg tokenConfig) string {
 		command += " --token-file " + shellquote.Arg(cfg.tokenFile)
 	} else if cfg.workspacePath != "" {
 		command += " --workspace " + shellquote.Arg(cfg.workspacePath)
+	}
+	return command
+}
+
+// systemInterfaces lists this machine's network interfaces; tests replace it.
+var systemInterfaces = hostpolicy.SystemInterfaces
+
+// runTokenInvite issues a one-time invite and prints the connect line for each
+// address the pairing route accepts. It runs only on a terminal, because the
+// code lets whoever holds it fetch the hub token. It creates no hub token and
+// starts nothing.
+func runTokenInvite(cfg tokenConfig, stdout, stderr io.Writer) int {
+	if !stdoutIsTerminal(stdout) {
+		e := termui.New(stderr)
+		e.Error(
+			"An invite is created only on a terminal.",
+			"The invite code lets whoever holds it fetch the hub token, so it must not end up in a file, a log, or an agent transcript.",
+			"Run this command in a terminal:",
+		)
+		e.Command(tokenInviteCommand(cfg))
+		return 1
+	}
+	addresses, reason, fix := listenAddressesFor(serveConfig{mode: serveModeMCP, addrFlag: cfg.addrFlag})
+	if reason != "" {
+		return writeInvalidRequest(stdout, stderr, false, reason, fix)
+	}
+	bound := make([]net.Addr, 0, len(addresses))
+	for _, address := range addresses {
+		if address.port == 0 {
+			return writeInvalidRequest(stdout, stderr, false, "token invite needs a fixed port, but "+address.String()+" asks the system for a free one when the server starts", "Give the port the server uses, for example --addr 0.0.0.0:7420.")
+		}
+		ip := net.IPv6unspecified
+		if address.host != "" {
+			parsed, err := netip.ParseAddr(address.host)
+			if err != nil {
+				return writeInvalidRequest(stdout, stderr, false, "cannot read the address "+address.String(), "Run `skillhub help token`.")
+			}
+			ip = net.IP(parsed.AsSlice())
+		}
+		bound = append(bound, &net.TCPAddr{IP: ip, Port: address.port})
+	}
+	workspace, resErr := resolveWorkspace(cfg.workspacePath)
+	if resErr != nil {
+		return writeWorkspaceResolutionError(stdout, stderr, false, resErr)
+	}
+	var code invite.Code
+	var expires time.Time
+	store, err := invite.NewFileStore(filepath.Join(workspace, "runtime", "config", "invites"))
+	if err == nil {
+		code, expires, err = invite.NewService(store, nil, nil).Issue()
+	}
+	if err != nil {
+		termui.New(stderr).Error(
+			"Could not create the invite.",
+			err.Error(),
+			"Check that "+filepath.Join(workspace, "runtime", "config")+" is writable and private to your user account, then run the command again.",
+		)
+		return 1
+	}
+
+	interfaces, _ := systemInterfaces()
+	login := currentUserName()
+	if login == "" {
+		login = "<user>"
+	}
+	p := termui.New(stdout)
+	p.Line("Invite created. It works once and expires at " + expires.Local().Format("15:04") + " (" + strconv.Itoa(int(invite.Life.Minutes())) + " minutes).")
+	p.Fields(termui.Field{Label: "Hub folder", Value: workspace})
+	skipped := false
+	for _, option := range connectTargets(bound, interfaces) {
+		if option.kind == targetLAN {
+			skipped = true
+			continue
+		}
+		p.Blank()
+		if option.kind == targetLoopback {
+			p.Line("This machine only (" + net.JoinHostPort(option.host, strconv.Itoa(option.port)) + "); on the other machine, open an SSH tunnel and keep it running:")
+			p.Command(sshTunnelCommand(option, login))
+			p.Line("Then, in another terminal there:")
+		} else {
+			p.Line(option.label + " (" + option.host + "), on the other machine:")
+		}
+		p.Command("skillhub connect --hub " + option.hubURL + " --invite " + code.String())
+	}
+	p.Blank()
+	if skipped {
+		p.Line("Other addresses are not listed: an invite works only over Tailscale or an SSH tunnel. The `scp` way that `skillhub serve` prints still works there.")
+	}
+	p.Line("The code is not the hub token. Running this command again gives a new code.")
+	p.Line("Run it with the same --workspace and --addr the server uses: the invite counts only for the `skillhub serve` that uses this hub folder. If the server is not running, start `skillhub serve`.")
+	return printerCode(p)
+}
+
+func tokenInviteCommand(cfg tokenConfig) string {
+	command := "skillhub token invite"
+	if cfg.workspacePath != "" {
+		command += " --workspace " + shellquote.Arg(cfg.workspacePath)
+	}
+	if cfg.addrFlag != "" {
+		command += " --addr " + shellquote.Arg(cfg.addrFlag)
 	}
 	return command
 }

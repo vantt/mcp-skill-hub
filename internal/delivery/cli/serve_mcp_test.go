@@ -192,6 +192,7 @@ func TestMCPBannerGolden(t *testing.T) {
 		"  $ scp -p ann@100.101.102.103:skill-hub/runtime/config/.hub-token ~/.skillhub-token-100.101.102.103-" + portText + "\n" +
 		"  $ skillhub connect --hub http://100.101.102.103:" + portText + " --token-file ~/.skillhub-token-100.101.102.103-" + portText + "\n" +
 		"\n" +
+		"To connect a machine without copying the token file, run `skillhub token invite`.\n" +
 		"The token itself is never printed. Stop the server with Ctrl-C.\n"
 	if out.String() != want {
 		t.Fatalf("wildcard banner:\n%s\nwant:\n%s", out.String(), want)
@@ -225,6 +226,7 @@ func TestMCPBannerGolden(t *testing.T) {
 		"  $ scp -p ann@<this-machine>:skill-hub/runtime/config/.hub-token ~/.skillhub-token-127.0.0.1-" + portText + "\n" +
 		"  $ skillhub connect --hub http://127.0.0.1:" + portText + " --token-file ~/.skillhub-token-127.0.0.1-" + portText + "\n" +
 		"\n" +
+		"To connect a machine without copying the token file, run `skillhub token invite`.\n" +
 		"The token itself is never printed. Stop the server with Ctrl-C.\n"
 	if out.String() != want {
 		t.Fatalf("loopback banner:\n%s\nwant:\n%s", out.String(), want)
@@ -510,7 +512,7 @@ func TestTokenCommands(t *testing.T) {
 		t.Fatal("token rotate printed a token")
 	}
 
-	if code, _, stderr := runCLI(t, "token"); code != 2 || !strings.Contains(stderr, "show or rotate") {
+	if code, _, stderr := runCLI(t, "token"); code != 2 || !strings.Contains(stderr, "show, rotate or invite") {
 		t.Fatalf("bare token: exit %d, stderr %q", code, stderr)
 	}
 	if code, _, stderr := runCLI(t, "token", "show", "--yes", "--workspace", ws); code != 2 || !strings.Contains(stderr, `unknown argument "--yes"`) {
