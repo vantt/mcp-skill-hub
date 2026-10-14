@@ -83,3 +83,20 @@ thay vì trong hub. Form hỏi 3-4 câu: làm gì, khi nào dùng, khi nào khô
 thử trong agent, rồi `skill commit <id>` đi luồng D7. Agent không cần form: tự viết folder rồi `skill commit`.
 Sửa thẳng file trong hub không còn là đường chính thức; docs, form và curator skill nói cùng một điều (sửa bằng
 checkout, sửa nhanh bằng web). `status` không báo `FAILED` cho index cũ sau khi có người sửa tay.
+
+## D9. Duyệt và release (2026-10-14)
+
+**Quyết định:** web có trang "Waiting for review" liệt kê bài nộp từ máy khác (D4), draft mới và skill đổi nội dung.
+Mỗi mục mở màn hình đọc toàn bộ skill: mọi file, diff so với bản đang phục vụ, license, nguồn gốc. Duyệt nội dung
+bên thứ ba làm được ngay trên web; nút Approve chỉ bật sau khi người dùng đã mở hết các file thay đổi. Terminal vẫn
+duyệt bằng y/N (D5, D7); agent không bao giờ duyệt. Nguy cơ agent điều khiển trình duyệt bấm hộ được chấp nhận lúc
+này và xử lý sau cùng phần security. Sửa skill bên thứ ba qua checkout không còn làm skill bị chặn: hub phục vụ bản
+cũ tới khi commit, và nội dung mới được duyệt ngay trong bước commit. Mọi commit báo ai nhận bản mới khi nào.
+
+## Còn lại sau vòng thiết kế
+
+- Port Git host (GitHub-only hiện nay, tách `HostProvider`): đã đồng ý hướng, làm như một việc nhỏ riêng.
+- Các lỗi P0 nhỏ trong hai báo cáo không phụ thuộc thiết kế mới (lọc `.env`, mất bit thực thi, thông điệp sai, nút
+  copy `workspace_diff`, placeholder `<ws>`, toast `OP-…`) có thể sửa trước.
+- Plan đang hoãn: findability-lint giữ (phase 1 sửa lỗi review không bao giờ chạy lint), cảnh báo hiện trong preview
+  của `commit`; session-mining tiếp tục hoãn.
