@@ -42,51 +42,6 @@ lessons:
     final_score: 18
     decision: {state: candidate}
 
-  - key: model-callable-list-needs-guard
-    domains:
-      - skill-recommendation
-      - skill-over-mcp
-    layer: wording
-    what: >-
-      tech-leads-club's list_skills requires the literal argument explicit_request: true and
-      says "Only when the user explicitly asks to see every skill", returning one short
-      sentence per skill, so an agent does not pull the whole catalog into context instead
-      of searching. zouyingcao-agentskills shows the unguarded alternative as its design: a
-      no-argument load_skill_metadata returns one "- name: description" line for every
-      SKILL.md, and both README and the demo system prompt tell the agent to call it first
-      in every task.
-    notable: >-
-      A schema-level guard turns a wording rule into one the model cannot skip by accident;
-      the second source shows what happens without one: the full catalog becomes a per-task
-      fixed cost that grows with every skill added. The host's model-callable skill_list
-      takes only an optional state filter, has no limit or guard, and its description does
-      not steer the agent to skill_resolve; on a hub with hundreds of skills one call floods
-      the context the goal protects.
-    where:
-      - tech-leads-club@120b67676388:packages/mcp/src/tools/list-tool.ts#L7-L37
-      - >-
-        zouyingcao-agentskills@32589389aacf:mcp_agentskills/core/tools/load_skill_metadata_op.py#L162-L189
-      - zouyingcao-agentskills@32589389aacf:tests/skill_agent_prompt.py#L8-L10
-      - zouyingcao-agentskills@32589389aacf:README.md#L214-L215
-    contrast: new
-    host: internal/delivery/mcpserver/skill_tools.go
-    score:
-      relevance: 3
-      facts:
-        - a
-        - b
-        - d
-      impact: 3
-      evidence: 2
-      effort: 1
-      why: >-
-        Core of the goal (load only what the task needs). a: skill_list returns the catalog
-        with no limit or guard; b: nothing steers listing to explicit requests; d: a literal
-        guard in the input schema enforces it. Two independent sources (one guard, one
-        showing the unguarded dump as the default path); small change.
-    final_score: 18
-    decision: {state: candidate}
-
   - key: project-signal-detector
     domains:
       - skill-recommendation
@@ -504,6 +459,59 @@ lessons:
       evidence: 2
       effort: 1
       why: Already covered by the host routing eval gate.
+    decision: {state: candidate}
+
+  - key: model-callable-list-needs-guard
+    domains:
+      - skill-recommendation
+      - skill-over-mcp
+    layer: wording
+    what: >-
+      tech-leads-club's list_skills requires the literal argument explicit_request: true and
+      says "Only when the user explicitly asks to see every skill", returning one short
+      sentence per skill, so an agent does not pull the whole catalog into context instead
+      of searching. zouyingcao-agentskills shows the unguarded alternative as its design: a
+      no-argument load_skill_metadata returns one "- name: description" line for every
+      SKILL.md, and both README and the demo system prompt tell the agent to call it first
+      in every task.
+    notable: >-
+      A schema-level guard turns a wording rule into one the model cannot skip by accident;
+      the second source shows what happens without one: the full catalog becomes a per-task
+      fixed cost that grows with every skill added. The host reaches the same end by a
+      different mechanism, a tool profile instead of a schema guard: an agent working on a
+      task never sees skill_list, and the curation copy is bounded and steers to
+      skill_resolve.
+    where:
+      - tech-leads-club@120b67676388:packages/mcp/src/tools/list-tool.ts#L7-L37
+      - >-
+        zouyingcao-agentskills@32589389aacf:mcp_agentskills/core/tools/load_skill_metadata_op.py#L162-L189
+      - zouyingcao-agentskills@32589389aacf:tests/skill_agent_prompt.py#L8-L10
+      - zouyingcao-agentskills@32589389aacf:README.md#L214-L215
+    contrast: already-covered
+    host: internal/delivery/mcpserver/tool_registration.go
+    score:
+      relevance: 3
+      facts: []
+      impact: 0
+      evidence: 2
+      effort: 1
+      why: >-
+        Already covered; the first scoring misread the host, checked against the code on
+        2026-10-14. (1) Projects get only the runtime profile: `skillhub connect` writes
+        `mcp serve --profile runtime` for Claude, Gemini and Codex
+        (internal/hostintegration/integration.go L347, L376; runtime_access.go L185), and
+        registerRuntimeTools registers only skill_resolve and skill_get
+        (internal/delivery/mcpserver/tool_registration.go L18-L21), so an agent doing a task
+        cannot call skill_list at all. skill_list is registered only through
+        registerSkillCurationTools in the curation profile (skill_tools.go L16-L19,
+        tool_registration.go L23-L33), used inside the hub folder. (2) The curation
+        skill_list is bounded: limit defaults to 50, is refused above 100
+        (paging.MaximumLimit) and pages with a cursor (skill_tools.go L115-L120, types.go
+        L135-L139). (3) Its description already steers to resolution: "for curation; to pick
+        a skill for a task, call skill_resolve" (skill_tools.go L112). The only part not
+        adopted is the literal explicit_request: true guard; it would act only in a curation
+        session, where listing is usually deliberate and already capped, so no goal failure
+        remains (fact a does not hold).
     decision: {state: candidate}
 
   - key: name-path-substring-search
