@@ -1,7 +1,7 @@
 ---
 title: "Routing suggestions mined from telemetry"
 description: "The hub reads its own case journal and usage events for routing misses and suggests examples, counter_examples and not_for entries for existing skills; every suggestion becomes an ordinary skill edit preview that a human confirms or dismisses."
-status: on-hold # deferred 2026-10-14: wait for the curation UX review; this plan may change after it
+status: in-progress
 priority: P2
 effort: 13h
 branch: TBD (own worktree, see Execution)
@@ -172,6 +172,35 @@ skill edit <skill> --from-suggestion <id> ──► re-mine, find id ──► P
 - Normalization trims the text and collapses whitespace. Equality ignores case.
 - Dismissals are machine-local runtime state, like the telemetry they come from. They are not written to Git.
   Losing the file only brings suggestions back.
+
+## Reconciliation with the curation redesign (2026-10-15)
+
+Recorded by the coordinator before any phase runs, against
+`plans/261014-1740-curation-ux-redesign/design-decisions.md` (D1-D9) and the redesign and findability lint as
+implemented on branch `feat/curation-wave`. It overrides the plan text below where they differ.
+
+- **D3 auto-commit.** Confirming a suggestion's edit (`skill confirm <proposal-id>`, `--yes`, or "y" at the
+  terminal prompt) goes through `ConfirmSkillMutation` and therefore creates one hub Git commit holding only that
+  skill's routing change and its receipt; with `--no-commit` it stays a Git-dirty edit. Acceptance criterion 5
+  reads "the result is one hub commit (or, with `--no-commit`, a Git-dirty routing edit)". The commit message is
+  the one skillhub writes for an edit; it must not contain the suggested phrasing beyond what the edit subject
+  already carries (phrasings are untrusted data).
+- **D5 confirm.** `skill edit <id> --from-suggestion <sid>` prints the preview and, on a terminal with a person, asks
+  `Apply this change? [y/N]`; without a terminal or with `--json` it keeps the two steps (preview, then
+  `skill confirm <proposal-id>` or `--yes`). `--diff` shows the full diff. No new confirm path, no new flag beyond
+  `--from-suggestion`.
+- **Edit flows (D7, D8).** `skill edit` with routing fields remains the CLI path for routing-only changes; checkout
+  and `skill commit` are for content. `--from-suggestion` therefore stays on `skill edit`. The web and MCP do not get
+  suggestions (open questions 1 and 2 keep their default "no").
+- **Routing check reuses the findability lint.** Phase 3 must not build a second what-if overlay. It calls the
+  shared lint path (`lintProposedSkill` in `internal/app/skill_review.go`, backed by `checkSkillChanges` and the
+  overlay catalog in `internal/app/self_resolution.go`) with the suggested routing as the proposed skill, and shows
+  its findings (`example_resolves_elsewhere`, `counter_example_resolves_to_skill`, `example_taken_by`,
+  `self_resolution_skipped`) in the preview. "Whether the phrase now routes as intended" is the absence of an
+  `example_resolves_elsewhere` (or `counter_example_resolves_to_skill`) finding for the suggested phrase. The check
+  is exact against the served generation, so the "approximate" label is dropped. This answers open question 3.
+- **Open questions 1, 2, 4-7** keep the plan's stated defaults (no MCP, no web, feedback stays evidence only,
+  thresholds as written, no edited text through `--from-suggestion`, the retention doc mismatch is not fixed here).
 
 ## Phases
 
