@@ -40,7 +40,14 @@ lessons:
         failure (ms search rust returned Testing Best Practices). One source with a measured
         incident; one rule to add to the design.
     final_score: 18
-    decision: {state: candidate}
+    decision:
+      state: adapted
+      reason: >-
+        Became a design rule in docs/design/03-resolver-design.md §13: vector only re-ranks
+        lexical matches, hits with similarity <= 0 are dropped before fusion, and the
+        enabling eval must include no_skill cases. Code applies it when the vector channel
+        is enabled.
+      at: e999668e8d8c
 
   - key: project-signal-detector
     domains:

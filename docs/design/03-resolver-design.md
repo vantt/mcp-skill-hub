@@ -495,6 +495,9 @@ Requirements:
 - index derived và rebuildable;
 - model artifact có immutable identity và distribution policy;
 - failure degrade về lexical/rules, reason code ghi channel unavailable;
+- vector chỉ re-rank candidate mà lexical (BM25) đã match, không tự thêm candidate mới: RRF cộng điểm theo thứ hạng, nên một channel luôn trả đủ k hit sẽ đẩy skill không liên quan vào kết quả;
+- hit có similarity ≤ 0 bị loại trước fusion;
+- eval bật vector phải có case `no_skill` và chứng minh vector không làm mất abstention;
 - chỉ bật nếu held-out quality gain vượt cost/size/latency threshold đã định.
 
 So sánh tối thiểu: BM25 baseline vs BM25+vector trên cùng candidate/ranker và corpus.
