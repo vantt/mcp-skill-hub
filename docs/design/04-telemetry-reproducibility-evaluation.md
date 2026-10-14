@@ -470,6 +470,8 @@ sequenceDiagram
 
 Không promote tự động. Reviewer phải xác nhận không còn secret/PII và label có rationale.
 
+Quy trình gợi ý routing (`skillhub telemetry cases suggest`) theo cùng quy tắc: không tự động áp dụng, mỗi diff do người xác nhận bằng `skillhub skill edit <skill-id> --from-suggestion <id>`. Đầu vào gồm case journal (task đã redact, chỉ khi journal bật), sự kiện `skill_loaded` và các lần re-resolve `rejected` đã được xác minh trong raw events; cụm từ có phần bị redact hoặc ký tự điều khiển không bao giờ được gợi ý.
+
 ## 8. Experiment design
 
 ### 8.1 Boundary architectures

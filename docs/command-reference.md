@@ -44,6 +44,7 @@ Find the command for a task here. For every flag, run `skillhub help` or `skillh
 | Edit instructions quickly in your editor (to try changes first, use `checkout`) | `skillhub skill edit <skill-id> --editor` |
 | Change the description or routing fields | `skillhub skill edit <skill-id> [--description <d>] [--trigger <t>] [--not-for <n>] [--min-scope <s>] [--yes]` |
 | Add requests that should, or should not, pick the skill | `skillhub skill edit <skill-id> --example <e> --counter-example <e> [--yes]` |
+| Add routing entries that usage suggests | `skillhub telemetry cases suggest`, then `skillhub skill edit <skill-id> --from-suggestion <id> [--diff] [--yes]` |
 | Declare the tools a skill needs | `skillhub skill edit <skill-id> --runtime-file <yaml> [--yes]` |
 | Approve content from someone else's repository (a person, in a terminal: the questions of `skill add`, `skill commit` and `skill review <SUB-id>`, or the web page **Waiting for review**) | `skillhub skill edit <skill-id> --approve-content <digest>` |
 | Check this machine against a skill's needs | `skillhub skill doctor <skill-id>` |
@@ -115,6 +116,7 @@ These are developer commands; `skillhub help --dev` lists them.
 | Measure routing quality across skill examples | `skillhub eval routing [--no-skill <file>] [--policy <file>]` |
 | Check the local usage record | `skillhub telemetry health` |
 | See how often skills are recommended and used | `skillhub telemetry funnel [--since <YYYY-MM-DD\|Nd>] [--skill <skill-id>]` |
+| Stop a routing suggestion from coming back | `skillhub telemetry cases dismiss <suggestion-id>` |
 | Import tool use from Claude Code transcripts | `skillhub telemetry import-transcripts --project <dir>` |
 | Preview or write a sanitized export | `skillhub telemetry export [--output <file> --yes]` |
 

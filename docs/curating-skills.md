@@ -421,6 +421,21 @@ skillhub telemetry import-transcripts --project ~/myproject
 
 It reads only tool-call entries from the transcripts. The usage record stays on your machine unless you export it.
 
+### Improve routing from usage
+
+Agents often tell you what your routing is missing without meaning to: they ask for a skill and get none, they reject a recommendation and phrase the task again, or they load a skill the resolver never suggested. `skillhub telemetry cases suggest` reads those moments and proposes one routing entry at a time, so you do not have to guess which examples to write.
+
+It looks for three signals. A task that found no skill, followed by loading skill X, suggests adding that task as an example of X. A rejected recommendation of X, followed by loading Y for the original task, suggests a counter-example on X and an example on Y. Three or more such rejections of X from at least two sessions suggest one `not_for` entry on X instead.
+
+This only works while the case journal is on, because the task text comes from it. Run `skillhub telemetry cases enable` once; only sessions after that count. Nothing changes until you confirm: `suggest` lists each entry with the reason and the evidence (how many events and sessions, and when), and phrasings with a redacted part are never offered, so private text cannot move into Git.
+
+```bash
+skillhub telemetry cases suggest
+skillhub skill edit code-review --from-suggestion rs_3f9a0c41d27b8e55a610
+```
+
+The second command shows the exact line it would add, the reason, and a routing check that replays the change against the skills agents are served now. Read the warnings: a warning names another skill whose example would start resolving to this skill. In a terminal it then asks `Apply this change? [y/N]`; without one, apply it with `skillhub skill confirm` or `--yes`. The check covers the examples of your skills, so it is approximate evidence about real requests; run `skillhub eval routing` after confirming. If a suggestion is wrong, `skillhub telemetry cases dismiss <suggestion-id>` hides it on this machine.
+
 ## Check routing quality (`skillhub eval routing`)
 
 Test whether your active skills' examples pick the right skill. Each example is matched with itself left out, so the score shows how well new requests will match:

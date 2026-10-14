@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/vantt/skillhub-mcp/internal/app"
+	"github.com/vantt/skillhub-mcp/internal/telemetry"
 	"gopkg.in/yaml.v3"
 )
 
@@ -430,5 +431,51 @@ func TestSkillSubcommandHintMatchesHelp(t *testing.T) {
 	code, _, stderr := runCLI(t, "skill")
 	if code != 2 || !strings.Contains(stderr, "skillhub skill "+strings.Join(skillSubcommands, "|")) {
 		t.Fatalf("bare skill: exit %d, stderr %q", code, stderr)
+	}
+}
+
+func TestSkillEditFromSuggestionAsksBeforeApplying(t *testing.T) {
+	const phrasing = "audit the diff for hidden bugs"
+	root, _ := telemetryCLIWorkspace(t)
+	if err := telemetry.SetCaseJournalEnabled(root, true); err != nil {
+		t.Fatal(err)
+	}
+	seedSuggestionCases(t, root, phrasing)
+	gitOutput(t, root, "add", "-A")
+	gitOutput(t, root, "-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "-m", "fixture skills")
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"telemetry", "cases", "suggest", "--json", "--workspace", root}, &stdout, &stderr); code != 0 {
+		t.Fatalf("suggest code=%d: %s", code, stderr.String())
+	}
+	var report app.RoutingSuggestionReport
+	if err := json.Unmarshal(stdout.Bytes(), &report); err != nil || len(report.Suggestions) != 1 {
+		t.Fatalf("suggest output: %v %s", err, stdout.String())
+	}
+	edit := []string{"skill", "edit", "code-review", "--from-suggestion", report.Suggestions[0].ID, "--workspace", root}
+	metaPath := filepath.Join(root, "skills", "core", "code-review", "skill.meta.yaml")
+	head := hubHead(t, root)
+
+	atTerminal(t, "n\n")
+	stdout.Reset()
+	if code := Run(edit, &stdout, &stderr); code != 0 || !strings.Contains(stdout.String(), "Apply this change? [y/N]") || !strings.Contains(stdout.String(), "Nothing written.") {
+		t.Fatalf("declined: code=%d\n%s", code, stdout.String())
+	}
+	if meta, _ := os.ReadFile(metaPath); strings.Contains(string(meta), phrasing) || hubHead(t, root) != head {
+		t.Fatal("declining wrote to the hub")
+	}
+
+	atTerminal(t, "y\n")
+	stdout.Reset()
+	if code := Run(edit, &stdout, &stderr); code != 0 {
+		t.Fatalf("accepted: code=%d\n%s %s", code, stdout.String(), stderr.String())
+	}
+	if meta, _ := os.ReadFile(metaPath); !strings.Contains(string(meta), phrasing) {
+		t.Fatalf("accepting did not add the example:\n%s", meta)
+	}
+	if hubHead(t, root) == head {
+		t.Fatal("accepting did not create a hub commit")
+	}
+	if subject := gitOutput(t, root, "log", "-1", "--format=%B"); strings.Contains(subject, phrasing) {
+		t.Fatalf("the commit message carries the phrasing: %q", subject)
 	}
 }

@@ -191,6 +191,9 @@ Subcommands:
   edit <id> [--name <n>] [--description <d>] [--rationale <r>] [--content-file <f>|--editor]
        [--operation <o>]... [--trigger <t>]... [--not-for <n>]... [--min-scope <s>]
        [--example <e>]... [--counter-example <e>]... [--runtime-file <yaml>] [--approve-content <digest>] [--yes]
+  edit <id> --from-suggestion <suggestion-id> [--diff] [--yes] [--json]
+                                                    Preview a routing entry that "skillhub telemetry cases suggest" found, and apply it
+                                                    like any edit. It cannot be combined with other edit flags
   outdated [--check] [--all] [--exit-code] [--json]
                                                     Show repository skills that differ from upstream
   upstream <id> [--check] [--json]                  Show upstream repository details and drift for a skill
@@ -229,6 +232,7 @@ Allowed --min-scope values: single_step, multi_step, project.
 On edit, routing flags you pass replace that field; the others keep their values.
 --example and --counter-example record requests that should (or should not) route to the
 skill: at most 10 each, up to 300 characters.
+--from-suggestion adds one suggested routing entry, as suggested, to the skill it was found for.
 --runtime-file replaces the skill's runtime block with the YAML mapping in the file (on commit: for a new skill only) (requires.bins/env/platforms,
 setup.check/command); a file containing {} removes the block. Changing it makes an earlier --approve-content stale.
 --approve-content records your review of a skill's whole content (files and runtime block); pass the
@@ -356,6 +360,9 @@ Subcommands:
   cases [list] [--since <YYYY-MM-DD|Nd>] [--kind <kind>]
                                       List case journal entries (also the bare cases command)
   cases <status|enable|disable>        Inspect or toggle the case journal
+  cases suggest [--since <YYYY-MM-DD|Nd>] [--skill <id>] [--min-events <1-100>]
+                                      Suggest routing entries from cases and usage (default --since 30d)
+  cases dismiss <suggestion-id>        Never suggest this entry again on this machine
   chains [--since <YYYY-MM-DD|Nd>] [--kind override|after_no_skill|reformulation]
                                       Show disagreement chains
   import-transcripts --project <dir> [--since <YYYY-MM-DD|Nd>]

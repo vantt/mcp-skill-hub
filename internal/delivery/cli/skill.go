@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/vantt/skillhub-mcp/internal/app"
@@ -18,6 +19,7 @@ import (
 
 type skillFlags struct {
 	workspace, id, collection, name, description, contentFile, minScope, rationale string
+	fromSuggestion                                                                 string
 	proposalID, proposalDigest, baseVersion, idempotencyKey, state                 string
 	locator, ref, subPath, approveContent, runtimeFile, target, writeConflicts     string
 	operations, triggers, notFor, examples, counterExamples, skills, positionals   []string
@@ -208,6 +210,7 @@ func runSkill(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 	}
 
 	var preview app.SkillProposal
+	var suggestion *app.RoutingSuggestion
 	var recoveryID string
 	switch subcommand {
 	case "create":
@@ -224,6 +227,13 @@ func runSkill(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 			return writeSkillErrorFor(flags.id, stdout, stderr, flags.jsonOutput, err)
 		}
 	case "edit":
+		if flags.fromSuggestion != "" {
+			var code int
+			if preview, suggestion, code = previewSuggestionEdit(ctx, service, flags, stdout, stderr); code != 0 {
+				return code
+			}
+			break
+		}
 		var content []byte
 		var setContent bool
 		var expectedDigest string
@@ -319,6 +329,9 @@ func runSkill(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 				writeEditorSkillPreview(stdout, preview, flags.rerun, interactive)
 				return 0
 			}
+			if suggestion != nil {
+				return writeSuggestionPreview(stdout, stderr, flags, preview, *suggestion, interactive)
+			}
 			return writeSkillPreview(stdout, stderr, flags.jsonOutput, preview, previewHints{rerun: flags.rerun, diffShown: flags.diff, interactive: interactive})
 		})
 		if !apply {
@@ -367,7 +380,7 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 			return args[index], nil
 		}
 		switch value {
-		case "--workspace", "--id", "--collection", "--name", "--description", "--content-file", "--min-scope", "--rationale", "--operation", "--trigger", "--not-for", "--example", "--counter-example", "--approve-content", "--runtime-file", "--proposal", "--proposal-digest", "--base-version", "--idempotency-key", "--state", "--ref", "--path", "--skill", "--target", "--write-conflicts", "--accept", "--manual":
+		case "--workspace", "--id", "--collection", "--name", "--description", "--content-file", "--min-scope", "--rationale", "--operation", "--trigger", "--not-for", "--example", "--counter-example", "--approve-content", "--runtime-file", "--from-suggestion", "--proposal", "--proposal-digest", "--base-version", "--idempotency-key", "--state", "--ref", "--path", "--skill", "--target", "--write-conflicts", "--accept", "--manual":
 			item, err := next()
 			if err != nil {
 				return flags, err
@@ -387,6 +400,8 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 				flags.contentFile = item
 			case "--min-scope":
 				flags.minScope = item
+			case "--from-suggestion":
+				flags.fromSuggestion = item
 			case "--rationale":
 				flags.rationale = item
 			case "--operation":
@@ -472,6 +487,9 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 	}
 	if flags.runtimeFile != "" && subcommand != "edit" && subcommand != "commit" {
 		return flags, errors.New("--runtime-file is available only for skill edit and skill commit")
+	}
+	if flags.fromSuggestion != "" && subcommand != "edit" {
+		return flags, errors.New("--from-suggestion is available only for skill edit")
 	}
 	switch subcommand {
 	case "outdated":
@@ -609,8 +627,12 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 		if flags.editor && flags.contentFile != "" {
 			return flags, errors.New("--editor and --content-file cannot be combined")
 		}
-		if !flags.editor && flags.contentFile == "" && flags.name == "" && flags.description == "" && flags.rationale == "" && !flags.hasRoutingFlags() && flags.approveContent == "" && flags.runtimeFile == "" {
-			return flags, errors.New("edit requires changed fields, --content-file, --runtime-file, or --editor")
+		if flags.fromSuggestion != "" {
+			if flags.editor || flags.contentFile != "" || flags.name != "" || flags.description != "" || flags.rationale != "" || flags.hasRoutingFlags() || flags.approveContent != "" || flags.runtimeFile != "" {
+				return flags, errors.New("--from-suggestion adds the suggested text as it is, so it cannot be combined with --example, --counter-example, --not-for, --trigger, --operation, --min-scope, --description, --name, --rationale, --approve-content, --content-file, --runtime-file or --editor")
+			}
+		} else if !flags.editor && flags.contentFile == "" && flags.name == "" && flags.description == "" && flags.rationale == "" && !flags.hasRoutingFlags() && flags.approveContent == "" && flags.runtimeFile == "" {
+			return flags, errors.New("edit requires changed fields, --content-file, --runtime-file, --editor, or --from-suggestion")
 		}
 		if flags.approveContent != "" && !contentDigestPattern.MatchString(flags.approveContent) {
 			return flags, errors.New("--approve-content requires a digest of the form sha256:<64 lowercase hex characters>")
@@ -961,4 +983,54 @@ func runSkillList(ctx context.Context, service app.SkillService, flags skillFlag
 		}
 		p.Table(headers, rows)
 	})
+}
+
+// previewSuggestionEdit stores the edit preview of a suggestion. It returns a
+// non-zero exit code when the command is over.
+func previewSuggestionEdit(ctx context.Context, service app.SkillService, flags skillFlags, stdout, stderr io.Writer) (app.SkillProposal, *app.RoutingSuggestion, int) {
+	proposal, err := service.PreviewRoutingSuggestion(ctx, flags.workspace, flags.fromSuggestion)
+	if err != nil {
+		return app.SkillProposal{}, nil, writeSkillErrorFor(flags.id, stdout, stderr, flags.jsonOutput, err)
+	}
+	if proposal.Suggestion.SkillID != flags.id {
+		mismatch := app.NewInvalidRequestError(
+			fmt.Sprintf("Suggestion %s is for skill %s, not %s.", flags.fromSuggestion, proposal.Suggestion.SkillID, flags.id),
+			"Run `skillhub skill edit "+shellquote.Arg(proposal.Suggestion.SkillID)+" --from-suggestion "+shellquote.Arg(flags.fromSuggestion)+"`.")
+		return app.SkillProposal{}, nil, writeSkillErrorFor(flags.id, stdout, stderr, flags.jsonOutput, mismatch)
+	}
+	if proposal.Error != nil {
+		if flags.jsonOutput {
+			_ = writeJSON(stdout, proposal)
+			return app.SkillProposal{}, nil, 2
+		}
+		p := termui.New(stderr)
+		p.Error(proposal.Error.Render.Error, proposal.Error.Render.Why, proposal.Error.Render.Fix)
+		return app.SkillProposal{}, nil, 2
+	}
+	return proposal.SkillProposal, &proposal.Suggestion, 0
+}
+
+// writeSuggestionPreview prints a suggestion's reason and evidence before the
+// ordinary edit preview. The preview always holds the full diff, so it is shown
+// only when --diff asked for it. Phrasings are untrusted: the printer escapes
+// them, and the only command printed holds IDs.
+func writeSuggestionPreview(stdout, stderr io.Writer, flags skillFlags, preview app.SkillProposal, suggestion app.RoutingSuggestion, interactive bool) int {
+	if flags.jsonOutput {
+		return writeResult(stdout, stderr, true, app.RoutingSuggestionProposal{SkillProposal: preview, Suggestion: suggestion}, nil)
+	}
+	p := termui.New(stdout)
+	p.Fields(
+		termui.Field{Label: "Suggestion", Value: fmt.Sprintf("%s  %s  %s", suggestion.ID, suggestion.Field, strconv.Quote(suggestion.Text))},
+		termui.Field{Label: "Why", Value: suggestion.Evidence.Reason},
+		termui.Field{Label: "Evidence", Value: suggestionEvidenceLine(suggestion.Evidence)},
+	)
+	shown := preview
+	if !flags.diff {
+		shown.FullDiff = ""
+	}
+	code := writeSkillPreview(stdout, stderr, false, shown, previewHints{rerun: flags.rerun, diffShown: flags.diff, interactive: interactive})
+	if code == 0 && !interactive {
+		termui.New(stdout).Raw("Or apply this proposal later: " + skillConfirmCommand(preview.Confirmation.Confirmation.Pins) + "\n")
+	}
+	return code
 }
