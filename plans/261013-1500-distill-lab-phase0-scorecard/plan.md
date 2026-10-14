@@ -1,7 +1,7 @@
 ---
 title: "distill-lab Phase 0 scorecard: keep or drop notable, contrast and the score weights"
 description: "Measure each experimental lesson field of distill-lab with read-only static analysis and an opt-in agent ablation test, so the user decides from one table instead of scoring 42 lessons by hand."
-status: in-progress
+status: on-hold
 priority: P2
 effort: 25h
 branch: main
@@ -12,6 +12,14 @@ created: 2026-10-13
 ---
 
 # distill-lab Phase 0 scorecard (backlog M6)
+
+## On hold (2026-10-14)
+
+The user put this plan on hold to add more skills to the hub, activate them and compare again. Phases 1, 2 and 4
+are done and stay as they are: `cmd/distill-scorecard` and `reports/scorecard.md` (static evidence only, every row
+at low confidence). Phase 3 (paid runs), phase 5 (decisions) and phase 6 (changes to distill-lab) are not started.
+Nothing in distill-lab, the schema or the fixtures changed. To resume, run the tool on each new skill's
+`distill.yaml` (`stats`, then `report`); one skill with 42 lessons and three decisions is too little to decide on.
 
 ## Outcome, constraints, non-goals
 
