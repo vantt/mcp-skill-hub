@@ -18,7 +18,8 @@ Behaviour the assertions rest on (read in source, 2026-10-14):
 - `skill_get` on it returns `local.status = unavailable`, `reason_codes = [not_servable]`
   (`internal/app/skill_snapshot.go:424-425`), and `skills/list` omits it
   (`distribution_integrity_test.go:116`). `skill_get` still returns `content` from the canonical `SKILL.md`
-  (`skill_tools.go:178`); see [plan.md](plan.md) open question 5; the test does not assert on `content`.
+  (`skill_tools.go:178`) today. Decided 2026-10-14: in the runtime profile it must not; plan
+  `261014-1650-runtime-skill-get-gate` lands first, and this test asserts the runtime refusal.
 
 ## Requirements
 
@@ -80,7 +81,8 @@ Behaviour the assertions rest on (read in source, 2026-10-14):
      `SKILL.md`; for B also `references/notes.md`.
    - `resolveFor(t, session, <C's trigger>, ...)` → primary is nil or not `fresh-clone-broken`, and C is in no
      `Supporting` entry.
-   - `skill_get` C: `local.status == "unavailable"`, `reason_codes == ["not_servable"]`, `local.path == ""`.
+   - `skill_get` C (runtime profile): a tool error with no `content` and no `local.path`, as defined by
+     plan `261014-1650-runtime-skill-get-gate`.
    - `skills/list` (all pages): A and B listed, C absent.
 6. **Nothing else changed.** After both subtests: old hub HEAD and `git status --porcelain` unchanged, bare refs
    unchanged.

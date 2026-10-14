@@ -6,7 +6,7 @@ priority: P2
 effort: 5h
 branch: TBD (own worktree, see Execution)
 tags: [testing, e2e, portability, mcp, docs]
-blockedBy: []
+blockedBy: [261014-1650-runtime-skill-get-gate]
 blocks: []
 created: 2026-10-14
 ---
@@ -118,7 +118,7 @@ git add + commit; git push -> bare repo                -> ~/project/.mcp.json  {
                                                       skill_resolve(good trigger) -> primary = good
                                                       skill_get(good)  -> ready, content = committed SKILL.md
                                                       skill_resolve(broken trigger) -> primary != broken
-                                                      skill_get(broken) -> unavailable / not_servable, no snapshot
+                                                      skill_get(broken) -> tool error, no content (runtime profile)
                                                     old hub and bare repo unchanged (HEAD, status)
 second subtest: git clone bare ~/skill-hub, then sh -c "<troubleshooting init line>", same assertions
 ```
@@ -205,7 +205,9 @@ unless the measured time forces the fallback target.
 4. After this lands, should the lesson's decision in `docs/distillery/lessons/evaluation.yaml` be recorded as
    adopted, citing the test commit? That is the user's decision through the distill workflow, not part of this
    plan's code change.
-5. `skill_get` on an active but unservable skill still returns its `content` from the canonical `SKILL.md`
+5. **Decided 2026-10-14:** the runtime profile must not return it; delivered by plan
+   `261014-1650-runtime-skill-get-gate`, and this test asserts the refusal. Original question:
+   `skill_get` on an active but unservable skill still returns its `content` from the canonical `SKILL.md`
    (`internal/delivery/mcpserver/skill_tools.go:178`) while reporting `local.status = unavailable / not_servable`,
    and the resolver and `skills/list` skip it. Is returning the content intended ("not served" = no snapshot, not
    resolved, not listed) or a gap? The test asserts the first three and does not assert on `content` until the
