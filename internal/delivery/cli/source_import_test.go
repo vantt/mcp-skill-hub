@@ -326,7 +326,7 @@ func TestSourceImportPreviewNamesWhatWasLeftOut(t *testing.T) {
 		},
 	}
 	var stdout, stderr bytes.Buffer
-	if code := writeSourceImportProposal(&stdout, &stderr, false, proposal); code != 0 {
+	if code := writeSourceImportProposal(&stdout, &stderr, false, proposal, "skillhub source import x", false); code != 0 {
 		t.Fatalf("exit %d: %s", code, stderr.String())
 	}
 	out := flatText(stdout.String())

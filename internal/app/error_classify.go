@@ -9,6 +9,7 @@ import (
 
 	"github.com/vantt/skillhub-mcp/internal/catalog"
 	"github.com/vantt/skillhub-mcp/internal/mutation"
+	"github.com/vantt/skillhub-mcp/internal/shellquote"
 	"github.com/vantt/skillhub-mcp/internal/skill"
 	sourcepkg "github.com/vantt/skillhub-mcp/internal/source"
 	"github.com/vantt/skillhub-mcp/internal/telemetry"
@@ -157,6 +158,9 @@ func classifyLifecycleMutationSentinels(err error) *Error {
 				Fix:   "Refresh the object state, correct the request, and retry.",
 			},
 		}
+	}
+	if uncommitted := UncommittedEditsError(err); uncommitted != nil {
+		return uncommitted
 	}
 	if errors.Is(err, mutation.ErrConflict) {
 		return &Error{
@@ -323,4 +327,27 @@ func ErrorOf(value any, err error) *Error {
 		return appErrHolder.ApplicationError()
 	}
 	return nil
+}
+
+// UncommittedEditsError renders the refusal of a change whose files already
+// differ from Git, or returns nil when err is something else.
+func UncommittedEditsError(err error) *Error {
+	var refused *mutation.UncommittedEditsError
+	if !errors.As(err, &refused) {
+		return nil
+	}
+	root := shellquote.Arg(refused.Root)
+	quoted := make([]string, len(refused.Paths))
+	for index, path := range refused.Paths {
+		quoted[index] = shellquote.Arg(path)
+	}
+	list := strings.Join(quoted, " ")
+	return &Error{
+		Code: ErrorEditConflict,
+		Render: ErrorRender{
+			Error: refused.Error() + ".",
+			Why:   "Skill Hub commits each change with only its own files, and these files already differ from Git.",
+			Fix:   fmt.Sprintf("Commit them (git -C %s add -- %s && git -C %s commit), discard them, or re-run on the command line with --no-commit.", root, list, root),
+		},
+	}
 }

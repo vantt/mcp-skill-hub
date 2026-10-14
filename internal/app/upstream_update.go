@@ -77,11 +77,12 @@ type UpstreamUpdatePreview struct {
 
 type UpstreamUpdateResult struct {
 	Result
-	SkillID      string           `json:"skill_id"`
-	OperationID  string           `json:"operation_id"`
-	Receipt      mutation.Receipt `json:"receipt"`
-	ChangedPaths []string         `json:"changed_paths"`
-	TrustImpact  TrustImpact      `json:"trust_impact"`
+	SkillID      string                   `json:"skill_id"`
+	OperationID  string                   `json:"operation_id"`
+	Receipt      mutation.Receipt         `json:"receipt"`
+	ChangedPaths []string                 `json:"changed_paths"`
+	TrustImpact  TrustImpact              `json:"trust_impact"`
+	Commit       *workspace.CommitOutcome `json:"commit,omitempty"`
 }
 
 type UpstreamService struct {
@@ -1076,6 +1077,10 @@ func (service UpstreamService) ConfirmUpdate(ctx context.Context, path string, p
 			ReviewRequiredAfterApply: reviewRequired,
 			ReviewCommand:            fmt.Sprintf("skillhub skill review %s", skillID),
 		},
+		Commit: commitView(receipt.Commit),
+	}
+	if receipt.Commit.Status != "" {
+		result.Items = append(result.Items, commitItem(receipt.Commit, receipt.GitDirty))
 	}
 	return result, nil
 }

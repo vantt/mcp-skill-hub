@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 
 	"github.com/vantt/skillhub-mcp/internal/app"
+	"github.com/vantt/skillhub-mcp/internal/workspace"
 )
 
 var requestSequence atomic.Uint64
@@ -154,5 +155,15 @@ func (s *Server) withMiddleware(next http.Handler) http.Handler {
 	handler = panicRecoveryMiddleware(handler)
 	handler = s.hostAllowlistMiddleware(handler)
 	handler = requestIDMiddleware(handler)
+	handler = commitPolicyMiddleware(handler)
 	return handler
+}
+
+// commitPolicyMiddleware makes every confirmed change from the web a Git
+// commit, the same as from the command line. The web has no terminal, so a
+// commit that needs a passphrase fails and reports the command to finish it.
+func commitPolicyMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		next.ServeHTTP(w, r.WithContext(workspace.WithCommitPolicy(r.Context(), workspace.CommitPolicy{})))
+	})
 }

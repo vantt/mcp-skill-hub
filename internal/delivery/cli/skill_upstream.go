@@ -361,7 +361,23 @@ func runSkillUpdate(ctx context.Context, flags skillFlags, stdout, stderr io.Wri
 		}
 	}
 
-	if flags.yes {
+	apply := flags.yes
+	if !apply && !flags.jsonOutput && app.ErrorOf(preview, nil) == nil && len(preview.Unresolved) == 0 {
+		repoStr := ""
+		if info, infoErr := app.GetSkillUpstream(ctx, flags.workspace, skillID); infoErr == nil {
+			repoStr = info.Repository
+		}
+		var code int
+		apply, code = confirmInPlace(stdout, false, true, func(interactive bool) int {
+			return writeResult(stdout, stderr, false, preview, func(p *termui.Printer) {
+				renderUpstreamUpdatePreview(p, skillID, repoStr, preview, flags.verbose, previewHints{rerun: flags.rerun, interactive: interactive})
+			})
+		})
+		if !apply {
+			return code
+		}
+	}
+	if apply {
 		if appErr := app.ErrorOf(preview, nil); appErr != nil {
 			return writeResult(stdout, stderr, flags.jsonOutput, preview, nil)
 		}
@@ -369,12 +385,13 @@ func runSkillUpdate(ctx context.Context, flags skillFlags, stdout, stderr io.Wri
 			msg := fmt.Sprintf("%d file(s) need a decision before this update can be applied.", len(preview.Unresolved))
 			return writeInvalidRequest(stdout, stderr, flags.jsonOutput, msg, "Pass --accept or --manual to resolve conflicts.")
 		}
-		result, confirmErr := upstreamService.ConfirmUpdate(ctx, flags.workspace, preview, preview.Confirmation.Confirmation.Pins)
+		result, confirmErr := upstreamService.ConfirmUpdate(commitContext(ctx, flags.noCommit, stdout), flags.workspace, preview, preview.Confirmation.Confirmation.Pins)
 		if confirmErr != nil {
 			return writeSkillErrorFor(skillID, stdout, stderr, flags.jsonOutput, confirmErr)
 		}
 		return writeResult(stdout, stderr, flags.jsonOutput, result, func(p *termui.Printer) {
 			p.Line(result.Summary)
+			writeCommitLines(p, result.Commit)
 			if result.TrustImpact.ReviewRequiredAfterApply {
 				p.Line(fmt.Sprintf("Next: skillhub skill review %s", skillID))
 			}
@@ -390,11 +407,11 @@ func runSkillUpdate(ctx context.Context, flags skillFlags, stdout, stderr io.Wri
 		repoStr = info.Repository
 	}
 	return writeResult(stdout, stderr, false, preview, func(p *termui.Printer) {
-		renderUpstreamUpdatePreview(p, skillID, repoStr, preview, flags.verbose)
+		renderUpstreamUpdatePreview(p, skillID, repoStr, preview, flags.verbose, previewHints{rerun: flags.rerun})
 	})
 }
 
-func renderUpstreamUpdatePreview(p *termui.Printer, skillID string, repoURL string, preview app.UpstreamUpdatePreview, verbose bool) {
+func renderUpstreamUpdatePreview(p *termui.Printer, skillID string, repoURL string, preview app.UpstreamUpdatePreview, verbose bool, hints previewHints) {
 	if len(preview.Unresolved) == 0 {
 		renderUpdateDiffs(p, preview, verbose)
 	}
@@ -452,10 +469,7 @@ func renderUpstreamUpdatePreview(p *termui.Printer, skillID string, repoURL stri
 		p.Line(fmt.Sprintf("After applying, agents cannot use %s until you approve the new content:", skillID))
 		p.Raw(fmt.Sprintf("  skillhub skill review %s\n", skillID))
 	}
-	p.Line("No collection files changed.")
-	pins := preview.Confirmation.Confirmation.Pins
-	p.Line("Next:")
-	p.Command(skillConfirmCommand(pins))
+	previewTail(p, hints.rerun, true, hints.interactive)
 }
 
 // renderUpdateDiffs prints the diffs ahead of the summary so the file table and the next step are

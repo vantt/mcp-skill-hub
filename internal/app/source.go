@@ -93,12 +93,13 @@ func (p SourceProposal) WriteCommand() string {
 
 type SourceMutationResult struct {
 	Result
-	SourceID        string   `json:"source_id,omitempty"`
-	OperationID     string   `json:"operation_id"`
-	ChangedPaths    []string `json:"changed_paths"`
-	CatalogSnapshot string   `json:"catalog_snapshot"`
-	Generation      string   `json:"generation"`
-	GitDirty        bool     `json:"git_dirty"`
+	SourceID        string                   `json:"source_id,omitempty"`
+	OperationID     string                   `json:"operation_id"`
+	ChangedPaths    []string                 `json:"changed_paths"`
+	CatalogSnapshot string                   `json:"catalog_snapshot"`
+	Generation      string                   `json:"generation"`
+	GitDirty        bool                     `json:"git_dirty"`
+	Commit          *workspace.CommitOutcome `json:"commit,omitempty"`
 }
 
 type SourceCheckItem struct {
@@ -972,7 +973,7 @@ func (service SourceService) CheckSources(ctx context.Context, path string, ids 
 }
 
 func confirmAndPublish(ctx context.Context, root string, proposal mutation.Proposal) (mutation.Receipt, error) {
-	return mutation.ConfirmMutationWithOptions(root, proposal, mutation.Confirmation{ProposalID: proposal.ID, ProposalDigest: proposal.Digest, BaseCatalogSnapshot: proposal.BaseCatalogSnapshot}, mutation.Options{PostCanonical: func(expected string) (mutation.Publication, error) {
+	return mutation.ConfirmMutationWithOptions(root, proposal, mutation.Confirmation{ProposalID: proposal.ID, ProposalDigest: proposal.Digest, BaseCatalogSnapshot: proposal.BaseCatalogSnapshot}, mutation.Options{Context: ctx, CommitMessage: commitSubject(proposal.WriteSet), PostCanonical: func(expected string) (mutation.Publication, error) {
 		built, err := catalog.BuildCatalogGenerationWhileLocked(ctx, root, expected, catalog.BuildOptions{})
 		if err != nil {
 			return mutation.Publication{}, err
@@ -1244,7 +1245,11 @@ func sourceLocator(value, adapter, ref, path string) sourcepkg.Locator {
 }
 func mustYAML(value any) []byte { data, _ := sourcepkg.MarshalCanonical(value); return data }
 func sourceMutationResult(summary, id string, receipt mutation.Receipt) SourceMutationResult {
-	return SourceMutationResult{Result: NewResult(StatusApplied, summary), SourceID: id, OperationID: receipt.OperationID, ChangedPaths: receipt.ChangedPaths, CatalogSnapshot: receipt.CatalogSnapshot, Generation: receipt.Generation, GitDirty: receipt.GitDirty}
+	result := SourceMutationResult{Result: NewResult(StatusApplied, summary), SourceID: id, OperationID: receipt.OperationID, ChangedPaths: receipt.ChangedPaths, CatalogSnapshot: receipt.CatalogSnapshot, Generation: receipt.Generation, GitDirty: receipt.GitDirty, Commit: commitView(receipt.Commit)}
+	if receipt.Commit.Status != "" {
+		result.Items = append(result.Items, commitItem(receipt.Commit, receipt.GitDirty))
+	}
+	return result
 }
 func nextCheck(now time.Time, cadence string) time.Time {
 	switch cadence {

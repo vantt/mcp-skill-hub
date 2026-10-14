@@ -187,6 +187,12 @@ Subcommands:
                                                     Apply a skill add or mutation proposal
   list [--state draft|active|deprecated|archived]   List skills
 
+Applying a change: in a terminal, a command that changes the hub shows its preview and asks
+"Apply this change? [y/N]". Without a terminal (scripts, agents) or with --json it only previews; run the same
+command with --yes to apply. --diff adds the full diff to a preview. Every applied change becomes one Git commit
+of only its own files in the hub (never pushed); --no-commit writes the files without committing. A change to
+files that already differ from Git is refused until you commit or discard those files.
+
 Note: skillhub skill update <id> updates a skill from its upstream repository; skillhub update updates the skillhub binary itself.
 outdated exit codes: 0 normally; with --exit-code, 1 when any skill needs attention (update available, diverged, removed upstream), 2 on invalid flags.
 
@@ -254,6 +260,8 @@ Subcommands:
                                       Apply the stored, reviewed import proposal without rediscovery
 
 capture and confirm write source records only; your skills are never changed.
+Commands that change the hub ask "Apply this change? [y/N]" in a terminal and preview only without one (apply
+with --yes). Each applied change is one Git commit of only its own files, never pushed; --no-commit skips it.
 Watching a source does not auto-import skills; import creates draft skills that you review and activate.
 Import previews contact the source and may cache a proposal in runtime. No canonical files change.
 Use --json for machine-readable output.
@@ -288,7 +296,8 @@ the repairs most people need; these are the single steps.
   rebuild    Rebuild the search index from the hub files; only files that pass
              validation are published. Safe at any time. --verbose adds progress
              events and table row counts.
-  migrate    Preview a schema migration; --yes applies it. --to defaults to 1.
+  migrate    Preview a schema migration; --yes applies it, or answer y at the prompt in a terminal.
+             --to defaults to 1. The migration is one Git commit; --no-commit skips it.
   diff       Show the uncommitted changes of the hub's Git repository.
 
 Examples:

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -492,4 +493,15 @@ func (a fakeSourceAdapter) List(_ context.Context, src sourcepkg.Source, rev sou
 		result = append(result, sourcepkg.Resource{Path: path, Size: int64(len(contents))})
 	}
 	return result, nil
+}
+
+// commitFixture records everything a fixture wrote, so a change confirmed
+// through a handler starts from a hub whose files match Git.
+func commitFixture(t *testing.T, root string) {
+	t.Helper()
+	for _, args := range [][]string{{"add", "-A"}, {"commit", "-q", "--allow-empty", "-m", "fixture"}} {
+		if output, err := exec.Command("git", append([]string{"-C", root}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, output)
+		}
+	}
 }

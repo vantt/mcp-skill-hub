@@ -39,7 +39,7 @@ func runSourceImport(ctx context.Context, service app.SourceImportService, flags
 		if err != nil {
 			return writeSourceError(stdout, stderr, flags.jsonOutput, err)
 		}
-		result, err := service.ConfirmSourceImport(ctx, flags.workspace, preview, app.ConfirmationPins{
+		result, err := service.ConfirmSourceImport(commitContext(ctx, flags.noCommit, stdout), flags.workspace, preview, app.ConfirmationPins{
 			ProposalID:     flags.proposalID,
 			ProposalDigest: flags.proposalDigest,
 			BaseVersion:    flags.baseVersion,
@@ -63,10 +63,18 @@ func runSourceImport(ctx context.Context, service app.SourceImportService, flags
 	if err != nil {
 		return writeSourceError(stdout, stderr, flags.jsonOutput, err)
 	}
-	if !flags.yes || preview.Error != nil || len(preview.Importable) == 0 {
-		return writeSourceImportProposal(stdout, stderr, flags.jsonOutput, preview)
+	if preview.Error != nil || len(preview.Importable) == 0 {
+		return writeSourceImportProposal(stdout, stderr, flags.jsonOutput, preview, flags.rerun, false)
 	}
-	result, err := service.ConfirmSourceImport(ctx, flags.workspace, preview, preview.Confirmation.Confirmation.Pins)
+	if !flags.yes {
+		apply, code := confirmInPlace(stdout, flags.jsonOutput, true, func(interactive bool) int {
+			return writeSourceImportProposal(stdout, stderr, flags.jsonOutput, preview, flags.rerun, interactive)
+		})
+		if !apply {
+			return code
+		}
+	}
+	result, err := service.ConfirmSourceImport(commitContext(ctx, flags.noCommit, stdout), flags.workspace, preview, preview.Confirmation.Confirmation.Pins)
 	return writeSourceImportResult(stdout, stderr, flags.jsonOutput, result, err)
 }
 

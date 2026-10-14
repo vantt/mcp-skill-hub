@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -41,6 +42,7 @@ func newResourceWebWorkspace(t *testing.T) (string, *Server) {
 	if _, err := (app.CatalogService{}).BuildCatalogGeneration(context.Background(), root); err != nil {
 		t.Fatal(err)
 	}
+	commitFixture(t, root)
 	return root, newTestServer(t, root)
 }
 
@@ -264,8 +266,18 @@ func TestSkillResourcePreviewAndConfirmRoute(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("confirm status = %d (body: %s)", rec.Code, rec.Body.String())
 	}
-	if confirmed := decodeBody(t, rec); confirmed["status"] != "applied" || confirmed["lifecycle_state"] != "active" {
+	confirmed := decodeBody(t, rec)
+	if confirmed["status"] != "applied" || confirmed["lifecycle_state"] != "active" {
 		t.Fatalf("confirm = %v", confirmed)
+	}
+	if commit, _ := confirmed["commit"].(map[string]any); commit["status"] != "committed" || commit["hash"] == "" {
+		t.Fatalf("a change confirmed through the web must be committed: %v", confirmed["commit"])
+	}
+	if subject, err := exec.Command("git", "-C", root, "log", "-1", "--format=%s").Output(); err != nil || strings.TrimSpace(string(subject)) != "Edit review-skill" {
+		t.Fatalf("last commit = %q, %v", subject, err)
+	}
+	if status, err := exec.Command("git", "-C", root, "status", "--porcelain=v1").Output(); err != nil || len(status) != 0 {
+		t.Fatalf("the commit left changes behind: %q, %v", status, err)
 	}
 	if onDisk, _ := os.ReadFile(filepath.Join(root, filepath.FromSlash(path))); string(onDisk) != updated {
 		t.Fatalf("file after confirm = %q", onDisk)

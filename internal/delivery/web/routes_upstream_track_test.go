@@ -95,6 +95,7 @@ func TestTrackUpstreamPreviewAndConfirmTracksTheUpstream(t *testing.T) {
 	t.Parallel()
 	root := newWebWorkspace(t)
 	metaPath := addUntrackedUpstreamSkill(t, root)
+	commitFixture(t, root)
 	srv := newTestServer(t, root)
 
 	res := previewTrack(t, srv, "plan-runner")

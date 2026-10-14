@@ -9,6 +9,7 @@ import (
 
 	"github.com/vantt/skillhub-mcp/internal/app"
 	"github.com/vantt/skillhub-mcp/internal/delivery/cli/termui"
+	"github.com/vantt/skillhub-mcp/internal/workspace"
 )
 
 // runSkillAdd executes the intent-first skill add workflow.
@@ -61,7 +62,7 @@ func runSkillAdd(ctx context.Context, service app.SkillService, flags skillFlags
 		All:            flags.all,
 		TargetID:       flags.id,
 		Collection:     flags.collection,
-		FullDiff:       flags.fullDiff,
+		FullDiff:       flags.diff,
 		IdempotencyKey: flags.idempotencyKey,
 	}
 
@@ -71,14 +72,22 @@ func runSkillAdd(ctx context.Context, service app.SkillService, flags skillFlags
 		return writeSkillErrorFor(flags.id, stdout, stderr, flags.jsonOutput, err)
 	}
 	// An error preview has nothing to confirm; show its own cause even under --yes.
-	if !flags.yes || app.ErrorOf(preview, nil) != nil {
-		return writeResult(stdout, stderr, flags.jsonOutput, preview, func(p *termui.Printer) {
-			writeSkillAddPreview(p, preview)
+	if app.ErrorOf(preview, nil) != nil {
+		return writeResult(stdout, stderr, flags.jsonOutput, preview, nil)
+	}
+	if !flags.yes {
+		apply, code := confirmInPlace(stdout, flags.jsonOutput, !preview.Replayed, func(interactive bool) int {
+			return writeResult(stdout, stderr, flags.jsonOutput, preview, func(p *termui.Printer) {
+				writeSkillAddPreview(p, preview, flags.rerun, flags.diff, interactive)
+			})
 		})
+		if !apply {
+			return code
+		}
 	}
 
 	// Apply immediately with fresh preview pins
-	result, err := addService.ConfirmSkillAdd(ctx, flags.workspace, preview, preview.Confirmation.Confirmation.Pins)
+	result, err := addService.ConfirmSkillAdd(commitContext(ctx, flags.noCommit, stdout), flags.workspace, preview, preview.Confirmation.Confirmation.Pins)
 	if err != nil {
 		return writeSkillErrorFor(flags.id, stdout, stderr, flags.jsonOutput, err)
 	}
@@ -88,7 +97,7 @@ func runSkillAdd(ctx context.Context, service app.SkillService, flags skillFlags
 	})
 }
 
-func writeSkillAddPreview(p *termui.Printer, preview app.SkillAddProposal) {
+func writeSkillAddPreview(p *termui.Printer, preview app.SkillAddProposal, rerun string, diffShown, interactive bool) {
 	skillName := preview.SkillID
 	if len(preview.SkillIDs) > 1 {
 		skillName = strings.Join(preview.SkillIDs, ", ")
@@ -143,10 +152,13 @@ func writeSkillAddPreview(p *termui.Printer, preview app.SkillAddProposal) {
 			p.Line(fmt.Sprintf("Upstream: tracked by source %s.", preview.UpstreamSource.SourceID))
 		}
 	}
-	p.Line("No collection files changed.")
-	pins := preview.Confirmation.Confirmation.Pins
-	p.Line("Next:")
-	p.Command(skillConfirmCommand(pins))
+	if preview.FullDiff != "" {
+		p.Raw(preview.FullDiff)
+		if !strings.HasSuffix(preview.FullDiff, "\n") {
+			p.Raw("\n")
+		}
+	}
+	previewTail(p, rerun, diffShown, interactive)
 }
 
 func writeSkillAddResult(p *termui.Printer, verbose bool, result app.SkillAddResult) {
@@ -159,10 +171,11 @@ func writeSkillAddResult(p *termui.Printer, verbose bool, result app.SkillAddRes
 		skillName = strings.Join(result.SkillIDs, ", ")
 	}
 	if result.UpstreamSource != nil {
-		p.Line(fmt.Sprintf("Draft %s added. Agent use: off. Upstream: %s. Changes are not committed.", skillName, result.UpstreamSource.SourceID))
+		p.Line(fmt.Sprintf("Draft %s added. Agent use: off. Upstream: %s.%s", skillName, result.UpstreamSource.SourceID, notCommittedNote(result.Commit)))
 	} else {
-		p.Line(fmt.Sprintf("Draft %s added. Agent use: off. Changes are not committed.", skillName))
+		p.Line(fmt.Sprintf("Draft %s added. Agent use: off.%s", skillName, notCommittedNote(result.Commit)))
 	}
+	writeCommitLines(p, result.Commit)
 	if verbose {
 		p.Fields(
 			termui.Field{Label: "Operation", Value: result.OperationID},
@@ -195,4 +208,12 @@ func writeLeftOut(p *termui.Printer, heading string, excluded []app.ExcludedFile
 		items = append(items, fmt.Sprintf("%s (%s)", file.Path, file.Reason))
 	}
 	p.Bullets(items...)
+}
+
+// notCommittedNote is the sentence for a change that no commit covers.
+func notCommittedNote(outcome *workspace.CommitOutcome) string {
+	if outcome == nil {
+		return " Changes are not committed."
+	}
+	return ""
 }

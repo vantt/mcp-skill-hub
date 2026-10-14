@@ -106,7 +106,7 @@ func openEditorSession(ctx context.Context, service app.SkillService, workspace,
 
 // writeEditorSkillPreview formats preview output for an interactive editor change.
 // It renders the actual diff and the exact short confirm command without advising --yes (BUG-12).
-func writeEditorSkillPreview(stdout io.Writer, preview app.SkillProposal) {
+func writeEditorSkillPreview(stdout io.Writer, preview app.SkillProposal, rerun string, interactive bool) {
 	p := termui.New(stdout)
 	p.Line(preview.Summary)
 	p.Bullets(fmt.Sprintf("%d added, %d modified, %d deleted file(s).",
@@ -129,7 +129,10 @@ func writeEditorSkillPreview(stdout io.Writer, preview app.SkillProposal) {
 			p.Raw("\n")
 		}
 	}
-	p.Line("No files changed. Confirm with:")
+	if interactive {
+		return
+	}
+	p.Line("Nothing written yet. Apply with:")
 	p.Command(skillConfirmCommand(pins))
 }
 

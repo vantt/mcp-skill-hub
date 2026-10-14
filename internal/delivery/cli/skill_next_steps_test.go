@@ -68,7 +68,7 @@ func TestSkillMutationHintsPrintTheCommitCommandStatusPrints(t *testing.T) {
 	t.Parallel()
 	hub := newNextStepHub(t)
 	hub.createReady("team-release")
-	activated := hub.mustRun("skill", "activate", "team-release", "--yes")
+	activated := hub.mustRun("skill", "activate", "team-release", "--yes", "--no-commit")
 	want := hub.statusCommitCommand()
 	if !strings.Contains(activated, want) {
 		t.Fatalf("activate output must carry the status command %q:\n%s", want, activated)
@@ -76,7 +76,7 @@ func TestSkillMutationHintsPrintTheCommitCommandStatusPrints(t *testing.T) {
 	if strings.Contains(activated, "commit`") && !strings.Contains(activated, "add --") {
 		t.Fatalf("activate hint commits without adding the new files:\n%s", activated)
 	}
-	deprecated := hub.mustRun("skill", "deprecate", "team-release", "--yes")
+	deprecated := hub.mustRun("skill", "deprecate", "team-release", "--yes", "--no-commit")
 	if want := hub.statusCommitCommand(); !strings.Contains(deprecated, want) {
 		t.Fatalf("deprecate output must carry the status command %q:\n%s", want, deprecated)
 	}

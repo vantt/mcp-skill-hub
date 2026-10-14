@@ -24,7 +24,7 @@ const skillEnvMaxInput = 64 << 10
 // value is never an argument: it would end up in shell history and process
 // listings.
 func parseSkillEnvArgs(flags *skillFlags, positionals []string) error {
-	if flags.id != "" || flags.collection != "" || flags.name != "" || flags.description != "" || flags.contentFile != "" || flags.hasRoutingFlags() || flags.approveContent != "" || flags.editor || flags.yes || flags.fullDiff || flags.idempotencyKey != "" || flags.proposalID != "" || flags.all {
+	if flags.id != "" || flags.collection != "" || flags.name != "" || flags.description != "" || flags.contentFile != "" || flags.hasRoutingFlags() || flags.approveContent != "" || flags.editor || flags.yes || flags.diff || flags.idempotencyKey != "" || flags.proposalID != "" || flags.all {
 		return errors.New("env accepts only its action, skill ID, variable name, --workspace, and --json")
 	}
 	if len(positionals) == 0 {

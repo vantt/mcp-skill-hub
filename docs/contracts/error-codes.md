@@ -66,7 +66,7 @@ The machine-owned schema authority for error envelopes is [error-envelope.schema
 | `source_conflict` | Use a different source ID | A monitored source with the specified identifier already exists; choose a distinct source ID. |
 | `resource_limits_exceeded` | Reduce file count or size | The skill or companion assets exceed size limits; remove large files or split the skill. |
 | `source_changed` | Re-run check or preview | The remote source revision changed since preview generation; generate a fresh preview against the new revision. |
-| `edit_conflict` | Review recovery file and retry | The canonical skill was modified while the external editor was open; original edits were saved to a 24-hour recovery file in `runtime/edits/`. |
+| `edit_conflict` | Review recovery file and retry | The canonical skill was modified while the external editor was open; original edits were saved to a 24-hour recovery file in `runtime/edits/`. It also refuses a change whose files already differ from Git ("has edits that were not committed"), before anything is written: commit or discard those files, or re-run on the command line with `--no-commit`. |
 | `validation_failed` | Correct canonical errors | Canonical workspace files failed schema or consistency validation; inspect the reported file and line errors. |
 | `local_watch_unsupported` | Use a remote Git repository | Watching a local directory is not supported; watching applies only to remote Git repositories. |
 | `resource_content_unavailable` | Re-add or re-import the skill | Required companion resource content is missing or corrupted and historical bytes are never guessed; re-add the skill or restore the resource. |
@@ -74,8 +74,9 @@ The machine-owned schema authority for error envelopes is [error-envelope.schema
 
 `git_dirty_after_apply` is deliberately not an error code: after a successful
 approved apply, uncommitted Git changes are a user-facing status or warning.
-The result must say that the change is active locally and uncommitted; it must
-not imply that a commit or push occurred.
+The result must say whether the change was committed (`commit`), and when it was
+not, that it is active locally and uncommitted; it must not imply that a push
+occurred.
 
 ## Classification and extension
 

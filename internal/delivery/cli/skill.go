@@ -22,8 +22,10 @@ type skillFlags struct {
 	locator, ref, subPath, approveContent, runtimeFile, target, writeConflicts     string
 	operations, triggers, notFor, examples, counterExamples, skills, positionals   []string
 	accepts, manuals                                                               []string
-	jsonOutput, yes, fullDiff, editor, verbose, all, check, noCheck, exitCode      bool
-	guided                                                                         bool
+	jsonOutput, yes, diff, editor, verbose, all, check, noCheck, exitCode          bool
+	guided, noCommit                                                               bool
+	// rerun is the command the person typed, for the hint lines of a preview.
+	rerun string
 }
 
 // skillSubcommands lists the skill subcommands in the order `skillhub help
@@ -31,6 +33,11 @@ type skillFlags struct {
 var skillSubcommands = []string{"add", "create", "show", "review", "doctor", "env", "edit", "outdated", "upstream", "update", "activate", "deprecate", "archive", "confirm", "list"}
 
 var skillSubcommandFix = "Run `skillhub skill " + strings.Join(skillSubcommands, "|") + "`."
+
+// hubChangingSkillSubcommands lists the skill subcommands that write to the hub.
+var hubChangingSkillSubcommands = map[string]bool{
+	"add": true, "create": true, "edit": true, "update": true, "activate": true, "deprecate": true, "archive": true, "confirm": true,
+}
 
 func runSkill(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
@@ -144,7 +151,7 @@ func runSkill(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 				BaseVersion:    flags.baseVersion,
 			}
 		}
-		res, err := service.DispatchConfirmProposal(ctx, flags.workspace, flags.proposalID, pins)
+		res, err := service.DispatchConfirmProposal(commitContext(ctx, flags.noCommit, stdout), flags.workspace, flags.proposalID, pins)
 		if err != nil {
 			return writeSkillErrorFor(flags.id, stdout, stderr, flags.jsonOutput, err)
 		}
@@ -190,7 +197,7 @@ func runSkill(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 			ID: flags.id, IdempotencyKey: flags.idempotencyKey, Collection: flags.collection, Name: flags.name, Description: flags.description, Content: content,
 			Routing:   skill.RoutingInput{Operations: flags.operations, Triggers: flags.triggers, NotFor: flags.notFor, MinScope: flags.minScope, Examples: flags.examples, CounterExamples: flags.counterExamples},
 			Rationale: flags.rationale,
-		}, flags.fullDiff)
+		}, flags.diff)
 		if err != nil {
 			return writeSkillErrorFor(flags.id, stdout, stderr, flags.jsonOutput, err)
 		}
@@ -251,7 +258,7 @@ func runSkill(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 			}
 			update.Routing = mergeRouting(current, flags)
 		}
-		fullDiff := flags.fullDiff || flags.editor
+		fullDiff := flags.diff || flags.editor
 		preview, err = service.PreviewSkillUpdate(ctx, flags.workspace, flags.id, update, fullDiff)
 		if err != nil {
 			if recoveryID != "" && !flags.jsonOutput {
@@ -277,7 +284,7 @@ func runSkill(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 			_, _ = service.SaveEditorRecovery(ctx, flags.workspace, preview.Confirmation.Confirmation.Pins.ProposalID, content)
 		}
 	case "activate", "deprecate", "archive":
-		preview, err = service.PreviewTransitionWithKey(ctx, flags.workspace, flags.id, subcommandTarget(subcommand), flags.fullDiff, flags.idempotencyKey)
+		preview, err = service.PreviewTransitionWithKey(ctx, flags.workspace, flags.id, subcommandTarget(subcommand), flags.diff, flags.idempotencyKey)
 	default:
 		return writeInvalidRequest(stdout, stderr, flags.jsonOutput, fmt.Sprintf("unsupported skill subcommand %q", subcommand), skillSubcommandFix)
 	}
@@ -285,11 +292,16 @@ func runSkill(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 		return writeSkillErrorFor(flags.id, stdout, stderr, flags.jsonOutput, err)
 	}
 	if !flags.yes {
-		if flags.editor && !flags.jsonOutput {
-			writeEditorSkillPreview(stdout, preview)
-			return 0
+		apply, code := confirmInPlace(stdout, flags.jsonOutput, preview.Error == nil, func(interactive bool) int {
+			if flags.editor && !flags.jsonOutput {
+				writeEditorSkillPreview(stdout, preview, flags.rerun, interactive)
+				return 0
+			}
+			return writeSkillPreview(stdout, stderr, flags.jsonOutput, preview, previewHints{rerun: flags.rerun, diffShown: flags.diff, interactive: interactive})
+		})
+		if !apply {
+			return code
 		}
-		return writeSkillPreview(stdout, stderr, flags.jsonOutput, preview)
 	}
 	if !flags.jsonOutput {
 		p := termui.New(stdout)
@@ -302,7 +314,7 @@ func runSkill(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 			p.Warning(warning.Summary)
 		}
 	}
-	result, err := service.ConfirmSkillMutation(ctx, flags.workspace, preview, preview.Confirmation.Confirmation.Pins)
+	result, err := service.ConfirmSkillMutation(commitContext(ctx, flags.noCommit, stdout), flags.workspace, preview, preview.Confirmation.Confirmation.Pins)
 	if err != nil {
 		return writeSkillErrorFor(flags.id, stdout, stderr, flags.jsonOutput, err)
 	}
@@ -400,8 +412,10 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 			flags.jsonOutput = true
 		case "--yes":
 			flags.yes = true
-		case "--full-diff":
-			flags.fullDiff = true
+		case "--diff":
+			flags.diff = true
+		case "--no-commit":
+			flags.noCommit = true
 		case "--editor":
 			flags.editor = true
 		case "--verbose":
@@ -420,6 +434,10 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 		}
 	}
 	flags.positionals = positionals
+	flags.rerun = rerunCommand("skillhub skill", append([]string{subcommand}, args...))
+	if flags.noCommit && !hubChangingSkillSubcommands[subcommand] {
+		return flags, fmt.Errorf("--no-commit is available only for commands that change the hub")
+	}
 	if flags.state != "" && subcommand != "list" {
 		return flags, errors.New("--state is available only for skill list")
 	}
@@ -495,7 +513,7 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 		} else {
 			return flags, errors.New("review requires exactly one skill ID")
 		}
-		if flags.yes || flags.fullDiff || flags.idempotencyKey != "" || flags.editor || flags.contentFile != "" || flags.proposalID != "" {
+		if flags.yes || flags.diff || flags.idempotencyKey != "" || flags.editor || flags.contentFile != "" || flags.proposalID != "" {
 			return flags, errors.New("review does not accept mutation flags")
 		}
 	case "doctor":
@@ -507,7 +525,7 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 		} else if len(positionals) != 0 || flags.id == "" {
 			return flags, errors.New("doctor requires exactly one skill ID")
 		}
-		if flags.collection != "" || flags.name != "" || flags.description != "" || flags.contentFile != "" || flags.minScope != "" || flags.rationale != "" || flags.hasRoutingFlags() || flags.approveContent != "" || flags.editor || flags.yes || flags.fullDiff || flags.idempotencyKey != "" || flags.proposalID != "" || flags.proposalDigest != "" || flags.baseVersion != "" || flags.all || len(flags.skills) != 0 || flags.ref != "" || flags.subPath != "" {
+		if flags.collection != "" || flags.name != "" || flags.description != "" || flags.contentFile != "" || flags.minScope != "" || flags.rationale != "" || flags.hasRoutingFlags() || flags.approveContent != "" || flags.editor || flags.yes || flags.diff || flags.idempotencyKey != "" || flags.proposalID != "" || flags.proposalDigest != "" || flags.baseVersion != "" || flags.all || len(flags.skills) != 0 || flags.ref != "" || flags.subPath != "" {
 			return flags, errors.New("doctor accepts only its skill ID, --workspace, and --json")
 		}
 	case "env":
@@ -518,7 +536,7 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 		if len(positionals) != 0 {
 			return flags, errors.New("list accepts no positional arguments")
 		}
-		if flags.id != "" || flags.collection != "" || flags.name != "" || flags.description != "" || flags.contentFile != "" || flags.minScope != "" || flags.rationale != "" || flags.hasRoutingFlags() || flags.approveContent != "" || flags.editor || flags.yes || flags.fullDiff || flags.idempotencyKey != "" || flags.proposalID != "" || flags.proposalDigest != "" || flags.baseVersion != "" {
+		if flags.id != "" || flags.collection != "" || flags.name != "" || flags.description != "" || flags.contentFile != "" || flags.minScope != "" || flags.rationale != "" || flags.hasRoutingFlags() || flags.approveContent != "" || flags.editor || flags.yes || flags.diff || flags.idempotencyKey != "" || flags.proposalID != "" || flags.proposalDigest != "" || flags.baseVersion != "" {
 			return flags, errors.New("list accepts only --state, --workspace, and --json")
 		}
 	case "create":
@@ -582,7 +600,7 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 		if flags.collection != "" || flags.name != "" || flags.description != "" || flags.contentFile != "" || flags.minScope != "" || flags.rationale != "" || flags.hasRoutingFlags() || flags.approveContent != "" || flags.editor || flags.proposalID != "" || flags.proposalDigest != "" || flags.baseVersion != "" {
 			return flags, fmt.Errorf("%s accepts only its skill ID and output, workspace, diff, or confirmation flags", subcommand)
 		}
-		if subcommand == "show" && (flags.yes || flags.fullDiff || flags.idempotencyKey != "") {
+		if subcommand == "show" && (flags.yes || flags.diff || flags.idempotencyKey != "") {
 			return flags, errors.New("show does not accept mutation flags")
 		}
 	case "confirm":
@@ -597,7 +615,7 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 		if flags.proposalID == "" {
 			return flags, errors.New("confirm requires a proposal ID")
 		}
-		if flags.id != "" || flags.collection != "" || flags.name != "" || flags.description != "" || flags.contentFile != "" || flags.minScope != "" || flags.rationale != "" || flags.hasRoutingFlags() || flags.approveContent != "" || flags.editor || flags.fullDiff || flags.idempotencyKey != "" {
+		if flags.id != "" || flags.collection != "" || flags.name != "" || flags.description != "" || flags.contentFile != "" || flags.minScope != "" || flags.rationale != "" || flags.hasRoutingFlags() || flags.approveContent != "" || flags.editor || flags.diff || flags.idempotencyKey != "" {
 			return flags, errors.New("confirm accepts only workspace, proposal pins, --yes, and output flags")
 		}
 	default:
@@ -704,16 +722,18 @@ func mergeRouting(current skill.RoutingInput, flags skillFlags) *skill.RoutingIn
 	return &current
 }
 
-func writeSkillPreview(stdout, stderr io.Writer, jsonOutput bool, preview app.SkillProposal) int {
+func writeSkillPreview(stdout, stderr io.Writer, jsonOutput bool, preview app.SkillProposal, hints previewHints) int {
 	return writeResult(stdout, stderr, jsonOutput, preview, func(p *termui.Printer) {
 		p.Line(preview.Summary)
 		p.Bullets(fmt.Sprintf("%d added, %d modified, %d deleted file(s).", len(preview.Diff.Added), len(preview.Diff.Modified), len(preview.Diff.Deleted)))
 		pins := preview.Confirmation.Confirmation.Pins
-		p.Fields(
-			termui.Field{Label: "Proposal", Value: pins.ProposalID},
-			termui.Field{Label: "Digest", Value: pins.ProposalDigest},
-			termui.Field{Label: "Base version", Value: pins.BaseVersion},
-		)
+		if !hints.interactive {
+			p.Fields(
+				termui.Field{Label: "Proposal", Value: pins.ProposalID},
+				termui.Field{Label: "Digest", Value: pins.ProposalDigest},
+				termui.Field{Label: "Base version", Value: pins.BaseVersion},
+			)
+		}
 		if preview.RoutingImpact != nil {
 			p.Fields(termui.Field{Label: "Routing impact", Value: preview.RoutingImpact.Summary})
 			for _, warning := range preview.RoutingImpact.Warnings {
@@ -729,11 +749,7 @@ func writeSkillPreview(stdout, stderr io.Writer, jsonOutput bool, preview app.Sk
 				p.Raw("\n")
 			}
 		}
-		p.Line("No files changed. Confirm with:")
-		p.Command(skillConfirmCommand(pins))
-		p.Line("or:")
-		p.Command("skillhub skill confirm " + shellquote.Arg(pins.ProposalID))
-		p.Line("or re-run with --yes to apply directly.")
+		previewTail(p, hints.rerun, hints.diffShown, hints.interactive)
 	})
 }
 
@@ -746,6 +762,7 @@ func skillConfirmCommand(pins app.ConfirmationPins) string {
 func writeSkillMutation(stdout, stderr io.Writer, jsonOutput, verbose bool, result app.SkillMutationResult, next string) int {
 	return writeResult(stdout, stderr, jsonOutput, result, func(p *termui.Printer) {
 		p.Line(result.Summary)
+		writeCommitLines(p, result.Commit)
 		if verbose {
 			p.Fields(
 				termui.Field{Label: "Operation", Value: result.OperationID},
@@ -762,7 +779,8 @@ func writeSkillMutation(stdout, stderr io.Writer, jsonOutput, verbose bool, resu
 
 // nextStepForSkill names what to do after a skill change. A draft gets the
 // step the review computes for its current state; every other state ends with
-// the commit command `skillhub status` prints for the same hub.
+// the commit command `skillhub status` prints for the same hub, unless the
+// change was committed already or the commit line named the manual command.
 func nextStepForSkill(ctx context.Context, service app.SkillService, result app.SkillMutationResult, workspacePath string) string {
 	root := workspacePath
 	if resolved, err := skill.ResolveWorkspace(workspacePath); err == nil {
@@ -777,7 +795,12 @@ func nextStepForSkill(ctx context.Context, service app.SkillService, result app.
 		}
 		return fmt.Sprintf("preview activation with `skillhub skill activate %s`.", result.SkillID)
 	case strings.Contains(summary, "active") || strings.Contains(summary, "activated"):
+		if result.Commit != nil {
+			return fmt.Sprintf("ask your agent to use it, or inspect with `skillhub skill show %s`.", result.SkillID)
+		}
 		return fmt.Sprintf("ask your agent to use it, or inspect with `skillhub skill show %s`. Commit with %s.", result.SkillID, commit)
+	case result.Commit != nil:
+		return ""
 	default:
 		return fmt.Sprintf("commit with %s.", commit)
 	}
@@ -799,6 +822,10 @@ func writeSkillErrorFor(id string, stdout, stderr io.Writer, jsonOutput bool, er
 	}
 	if errors.Is(err, skill.ErrResourceDigestMismatch) {
 		writeStructuredSkillError(stdout, stderr, jsonOutput, app.NewResourceDigestMismatchError(err.Error()))
+		return 2
+	}
+	if refusal := app.UncommittedEditsError(err); refusal != nil {
+		writeStructuredSkillError(stdout, stderr, jsonOutput, refusal)
 		return 2
 	}
 	why := err.Error()

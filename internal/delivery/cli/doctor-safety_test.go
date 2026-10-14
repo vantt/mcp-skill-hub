@@ -109,7 +109,9 @@ func TestDoctorFixAddsIgnoreEntriesOfAHubThatStillNeedsItsMigration(t *testing.T
 	if got := strings.TrimSpace(gitOutput(t, hub, "rev-parse", "HEAD")); got != head {
 		t.Fatalf("doctor --fix made a commit: %s -> %s", head, got)
 	}
-	if code, _, stderr := runCLI(t, "maintain", "migrate", "--workspace", hub, "--yes"); code != 0 {
+	// The fixture deletes a tracked marker and doctor --fix edits .gitignore, so
+	// the files differ from Git; the migration is applied without a commit.
+	if code, _, stderr := runCLI(t, "maintain", "migrate", "--workspace", hub, "--yes", "--no-commit"); code != 0 {
 		t.Fatalf("migrate after doctor --fix exit = %d: %s", code, stderr)
 	}
 	if code, stdout, stderr := runCLI(t, "doctor", "--workspace", hub, "--fix"); code != 0 {

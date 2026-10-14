@@ -234,6 +234,7 @@ func TestUpstreamRoutesReviewAndConfirm(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = addRes
+	commitFixture(t, root)
 
 	// Now modify upstream repository
 	_ = os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\nname: my-up-skill\ndescription: Test\n---\nBody v2 updated\n"), 0o644)

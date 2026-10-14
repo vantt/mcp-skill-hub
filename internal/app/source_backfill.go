@@ -48,8 +48,9 @@ type BackfillPreview struct {
 
 type BackfillResult struct {
 	Result
-	UpdatedSkills  []string `json:"updated_skills"`
-	CreatedSources []string `json:"created_sources"`
+	UpdatedSkills  []string                 `json:"updated_skills"`
+	CreatedSources []string                 `json:"created_sources"`
+	Commit         *workspace.CommitOutcome `json:"commit,omitempty"`
 }
 
 type BackfillService struct {
@@ -486,7 +487,8 @@ func (service BackfillService) ApplyBackfill(ctx context.Context, path string, p
 		}, nil
 	}
 
-	if _, err := confirmAndPublish(ctx, root, preview.planned); err != nil {
+	receipt, err := confirmAndPublish(ctx, root, preview.planned)
+	if err != nil {
 		return BackfillResult{}, err
 	}
 
@@ -505,6 +507,7 @@ func (service BackfillService) ApplyBackfill(ctx context.Context, path string, p
 		Result:         NewResult(StatusOK, fmt.Sprintf("Backfilled %s and created %s.", termCount(len(updatedSkills), "skill", "skills"), termCount(len(createdSources), "source", "sources"))),
 		UpdatedSkills:  updatedSkills,
 		CreatedSources: createdSources,
+		Commit:         commitView(receipt.Commit),
 	}, nil
 }
 

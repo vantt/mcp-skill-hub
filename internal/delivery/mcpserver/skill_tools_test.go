@@ -210,6 +210,19 @@ func TestSkillToolsLifecycleInMemory(t *testing.T) {
 	if actConfOutcome.Result == nil || actConfOutcome.Result.State != "active" {
 		t.Fatalf("unexpected state after activation: %#v", actConfOutcome)
 	}
+	if commit := actConfOutcome.Result.Commit; commit == nil || commit.Status != "committed" || commit.Hash == "" {
+		t.Fatalf("a confirmed change through a tool must be committed: %#v", actConfOutcome.Result.Commit)
+	}
+	subjects, err := exec.Command("git", "-C", root, "log", "-3", "--format=%s").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "Activate reliability-review\nEdit reliability-review\nCreate reliability-review\n"; string(subjects) != want {
+		t.Fatalf("hub history = %q, want %q", subjects, want)
+	}
+	if status, err := exec.Command("git", "-C", root, "status", "--porcelain=v1").Output(); err != nil || len(status) != 0 {
+		t.Fatalf("every tool change is committed, but the hub has changes left: %q, %v", status, err)
+	}
 
 	// 8. skill_list shows active skill
 	listRes, err := session.CallTool(t.Context(), &mcp.CallToolParams{

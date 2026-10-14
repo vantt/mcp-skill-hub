@@ -12,13 +12,14 @@ import (
 
 // MigrationReceipt is the public, structured result of an applied migration.
 type MigrationReceipt struct {
-	OperationID         string   `json:"operation_id"`
-	ChangedPaths        []string `json:"changed_paths"`
-	CatalogSnapshot     string   `json:"catalog_snapshot"`
-	Generation          string   `json:"generation"`
-	GitDirty            bool     `json:"git_dirty"`
-	SourceSchemaVersion int      `json:"source_schema_version"`
-	TargetSchemaVersion int      `json:"target_schema_version"`
+	OperationID         string                   `json:"operation_id"`
+	ChangedPaths        []string                 `json:"changed_paths"`
+	CatalogSnapshot     string                   `json:"catalog_snapshot"`
+	Generation          string                   `json:"generation"`
+	GitDirty            bool                     `json:"git_dirty"`
+	Commit              *workspace.CommitOutcome `json:"commit,omitempty"`
+	SourceSchemaVersion int                      `json:"source_schema_version"`
+	TargetSchemaVersion int                      `json:"target_schema_version"`
 }
 
 // MigrationResult is shared by human and JSON delivery adapters.
@@ -89,7 +90,7 @@ func (service MigrationService) Migrate(ctx context.Context, path string, target
 	}
 	confirmed, err := mutation.ConfirmMutationWithOptions(root, proposal.Mutation, mutation.Confirmation{
 		ProposalID: proposal.ID, ProposalDigest: proposal.Digest, BaseCatalogSnapshot: proposal.BaseSnapshot,
-	}, mutation.Options{PostCanonical: func(expected string) (mutation.Publication, error) {
+	}, mutation.Options{Context: ctx, CommitMessage: fmt.Sprintf("Migrate the hub to schema version %d", proposal.TargetVersion), PostCanonical: func(expected string) (mutation.Publication, error) {
 		built, err := catalogpkg.BuildCatalogGenerationWhileLocked(ctx, root, expected, catalogpkg.BuildOptions{})
 		if err != nil {
 			return mutation.Publication{}, err
@@ -120,6 +121,9 @@ func (service MigrationService) Migrate(ctx context.Context, path string, target
 	result.Summary = fmt.Sprintf("Canonical schema migration %d to %d was applied and the catalog was rebuilt.", proposal.SourceVersion, proposal.TargetVersion)
 	result.SuggestedActions = []Action{}
 	result.Receipt = migrationReceipt(confirmed)
+	if confirmed.Commit.Status != "" {
+		result.Items = append(result.Items, commitItem(confirmed.Commit, confirmed.GitDirty))
+	}
 	return result, nil
 }
 
@@ -177,7 +181,7 @@ func migrationReceipt(receipt mutation.Receipt) *MigrationReceipt {
 	}
 	return &MigrationReceipt{
 		OperationID: receipt.OperationID, ChangedPaths: receipt.ChangedPaths,
-		CatalogSnapshot: receipt.CatalogSnapshot, Generation: receipt.Generation, GitDirty: receipt.GitDirty,
+		CatalogSnapshot: receipt.CatalogSnapshot, Generation: receipt.Generation, GitDirty: receipt.GitDirty, Commit: commitView(receipt.Commit),
 		SourceSchemaVersion: source, TargetSchemaVersion: target,
 	}
 }

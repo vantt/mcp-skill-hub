@@ -69,18 +69,19 @@ func (e *MissingActivationRequirementsError) Error() string {
 // SkillMutationResult reports active local state and the Git boundary.
 type SkillMutationResult struct {
 	Result
-	SkillID         string              `json:"skill_id"`
-	State           string              `json:"state,omitempty"`
-	LifecycleState  string              `json:"lifecycle_state,omitempty"`
-	RoutingEligible bool                `json:"routing_eligible"`
-	OperationID     string              `json:"operation_id"`
-	ChangedPaths    []string            `json:"changed_paths"`
-	CatalogSnapshot string              `json:"catalog_snapshot"`
-	Generation      string              `json:"generation"`
-	ActiveLocally   bool                `json:"active_locally"`
-	GitDirty        bool                `json:"git_dirty"`
-	Confirmation    *ConfirmationPolicy `json:"confirmation,omitempty"`
-	Proposal        *SkillProposal      `json:"proposal,omitempty"`
+	SkillID         string                   `json:"skill_id"`
+	State           string                   `json:"state,omitempty"`
+	LifecycleState  string                   `json:"lifecycle_state,omitempty"`
+	RoutingEligible bool                     `json:"routing_eligible"`
+	OperationID     string                   `json:"operation_id"`
+	ChangedPaths    []string                 `json:"changed_paths"`
+	CatalogSnapshot string                   `json:"catalog_snapshot"`
+	Generation      string                   `json:"generation"`
+	ActiveLocally   bool                     `json:"active_locally"`
+	GitDirty        bool                     `json:"git_dirty"`
+	Commit          *workspace.CommitOutcome `json:"commit,omitempty"`
+	Confirmation    *ConfirmationPolicy      `json:"confirmation,omitempty"`
+	Proposal        *SkillProposal           `json:"proposal,omitempty"`
 }
 
 // SkillReadResult is the basic progressive-disclosure read surface.
@@ -269,7 +270,7 @@ func (service SkillService) ConfirmSkillMutation(ctx context.Context, path strin
 		SkillID: preview.SkillID, State: state, LifecycleState: state,
 		RoutingEligible: activeLocally, OperationID: result.OperationID, ChangedPaths: result.ChangedPaths,
 		CatalogSnapshot: result.CatalogSnapshot, Generation: result.Generation,
-		ActiveLocally: activeLocally, GitDirty: result.GitDirty,
+		ActiveLocally: activeLocally, GitDirty: result.GitDirty, Commit: commitView(result.Commit),
 	}
 	if preview.proposal.RecoveryID != "" {
 		_ = skill.DeleteEditorRecovery(root, preview.proposal.RecoveryID)
@@ -278,7 +279,7 @@ func (service SkillService) ConfirmSkillMutation(ctx context.Context, path strin
 		Item{ID: "operation", Summary: result.OperationID, Impact: "Immutable managed-mutation receipt."},
 		Item{ID: "catalog_snapshot", Summary: result.CatalogSnapshot, Impact: "Active local catalog version."},
 		Item{ID: "generation", Summary: result.Generation, Impact: "Published immutable catalog generation."},
-		Item{ID: "git_state", Summary: gitMutationSummary(result.GitDirty), Impact: "Git commit remains user-controlled."},
+		commitItem(result.Commit, result.GitDirty),
 	)
 	return response, nil
 }

@@ -25,7 +25,7 @@ func TestSkillCLIEndToEndPreviewConfirmActivateShowAndArchive(t *testing.T) {
 	if err := os.WriteFile(contentFile, []byte("---\nname: consumer-review\ndescription: Review consumers\n---\n\n# Consumer Review\n\nReview consumer workflows and verify error handling.\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	base := []string{"skill", "create", "--workspace", root, "--id", "consumer-review", "--collection", "software", "--name", "Consumer Review", "--description", "Review consumers", "--trigger", "review consumers", "--not-for", "design brokers", "--min-scope", "multi_step", "--content-file", contentFile, "--full-diff", "--json"}
+	base := []string{"skill", "create", "--workspace", root, "--id", "consumer-review", "--collection", "software", "--name", "Consumer Review", "--description", "Review consumers", "--trigger", "review consumers", "--not-for", "design brokers", "--min-scope", "multi_step", "--content-file", contentFile, "--diff", "--json"}
 	stdout.Reset()
 	stderr.Reset()
 	if code := Run(base, &stdout, &stderr); code != 0 {
@@ -51,7 +51,7 @@ func TestSkillCLIEndToEndPreviewConfirmActivateShowAndArchive(t *testing.T) {
 	if err := json.Unmarshal(stdout.Bytes(), &created); err != nil {
 		t.Fatal(err)
 	}
-	if created.OperationID == "" || created.CatalogSnapshot == "" || created.Generation == "" || created.ActiveLocally || !created.GitDirty {
+	if created.OperationID == "" || created.CatalogSnapshot == "" || created.Generation == "" || created.ActiveLocally || created.GitDirty || created.Commit == nil || created.Commit.Status != "committed" {
 		t.Fatalf("create result = %#v", created)
 	}
 

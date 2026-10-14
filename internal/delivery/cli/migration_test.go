@@ -21,6 +21,8 @@ func TestMigrateCLIJSONPreviewAndConfirmation(t *testing.T) {
 	if err := os.Remove(filepath.Join(root, ".skillhub", "schema-version")); err != nil {
 		t.Fatal(err)
 	}
+	gitOutput(t, root, "add", "-A")
+	gitOutput(t, root, "commit", "-q", "-m", "simulate a hub without a schema marker")
 	stdout.Reset()
 	stderr.Reset()
 	if code := Run([]string{"maintain", "migrate", "--workspace", root, "--to", "5", "--json"}, &stdout, &stderr); code != 0 {

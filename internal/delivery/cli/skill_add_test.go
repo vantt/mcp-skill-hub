@@ -33,11 +33,14 @@ func TestSkillAddLocalPreviewAndConfirm(t *testing.T) {
 	if !strings.Contains(stdout, "Add pdf-tools as a draft") {
 		t.Errorf("preview missing summary: %s", stdout)
 	}
-	if !strings.Contains(stdout, "skillhub skill confirm --proposal") || !strings.Contains(stdout, "--proposal-digest sha256:") || !strings.Contains(stdout, "--base-version") {
-		t.Errorf("preview confirm guidance must carry the proposal digest and base version: %s", stdout)
+	if !strings.Contains(stdout, "Apply: skillhub skill add ") || !strings.Contains(stdout, " --yes\n") {
+		t.Errorf("preview must end with the command that applies it: %s", stdout)
 	}
-	if !strings.Contains(stdout, "No collection files changed.") {
-		t.Errorf("preview should note no files changed: %s", stdout)
+	if !strings.Contains(stdout, "Show the diff: skillhub skill add ") || !strings.Contains(stdout, " --diff\n") {
+		t.Errorf("preview must say how to see the diff: %s", stdout)
+	}
+	if !strings.Contains(stdout, "Nothing written yet.") {
+		t.Errorf("preview should note that nothing was written: %s", stdout)
 	}
 
 	// Verify no canonical files changed yet
@@ -164,7 +167,7 @@ func TestSkillAddPreviewAndResultRenderUpstream(t *testing.T) {
 			Created:  true,
 		},
 	}
-	writeSkillAddPreview(p, preview)
+	writeSkillAddPreview(p, preview, "skillhub skill add x", false, false)
 	out := buf.String()
 	wantPreviewLine := "Upstream: tracked by new source anthropics-skills (checked weekly by `skillhub source check`; nothing runs in the background)."
 	if !strings.Contains(flatText(out), wantPreviewLine) {
@@ -177,7 +180,7 @@ func TestSkillAddPreviewAndResultRenderUpstream(t *testing.T) {
 	// 2. Preview with existing upstream source
 	buf.Reset()
 	preview.UpstreamSource.Created = false
-	writeSkillAddPreview(p, preview)
+	writeSkillAddPreview(p, preview, "skillhub skill add x", false, false)
 	outExisting := buf.String()
 	wantExistingLine := "Upstream: tracked by source anthropics-skills."
 	if !strings.Contains(outExisting, wantExistingLine) {
@@ -332,7 +335,8 @@ func TestSkillAddPreviewShowsLicenseWarningOnlyWhenItMatters(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, stderr)
 	}
-	if strings.Contains(strings.ToLower(stdout), "license") {
+	preview, _, _ := strings.Cut(stdout, "Nothing written yet.")
+	if strings.Contains(strings.ToLower(preview), "license") {
 		t.Errorf("a folder of your own needs no license line:\n%s", stdout)
 	}
 }

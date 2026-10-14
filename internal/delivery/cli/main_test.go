@@ -73,6 +73,20 @@ func TestMain(m *testing.M) {
 			os.Exit(1)
 		}
 	}
+	// Hubs made by tests are Git repositories, and confirmed changes commit
+	// into them, so Git needs an identity that is not the machine's. Tests that
+	// care about identity set their own GIT_CONFIG_GLOBAL.
+	gitConfig := filepath.Join(root, "gitconfig")
+	if err := os.WriteFile(gitConfig, []byte("[user]\n\tname = Skill Hub Tests\n\temail = tests@example.invalid\n"), 0o600); err != nil {
+		fmt.Fprintf(os.Stderr, "write the test Git config: %v\n", err)
+		os.Exit(1)
+	}
+	for key, value := range map[string]string{"GIT_CONFIG_GLOBAL": gitConfig, "GIT_CONFIG_NOSYSTEM": "1"} {
+		if err := os.Setenv(key, value); err != nil {
+			fmt.Fprintf(os.Stderr, "set %s: %v\n", key, err)
+			os.Exit(1)
+		}
+	}
 	code := m.Run()
 	if err := os.RemoveAll(root); err != nil {
 		fmt.Fprintf(os.Stderr, "clean up isolated test files in %s (test exit code %d): %v\n", root, code, err)

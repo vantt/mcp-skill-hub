@@ -190,7 +190,7 @@ func TestSkillMutationCommitHintUsesActualWorkspaceBUG14(t *testing.T) {
 	}
 
 	// Activate and check commit hint
-	code, stdout, stderr = runCLI(t, "skill", "activate", "hint-skill", "--workspace", root, "--yes")
+	code, stdout, stderr = runCLI(t, "skill", "activate", "hint-skill", "--workspace", root, "--yes", "--no-commit")
 	if code != 0 {
 		t.Fatalf("activate failed (exit %d): %s", code, stderr)
 	}

@@ -17,8 +17,10 @@ import (
 type sourceFlags struct {
 	workspace, reason, status, decision, sourceID, adapter, ref, sourcePath, license, trust, cadence, skillID, newSkillID string
 	proposalID, proposalDigest, baseVersion, idempotencyKey                                                               string
-	jsonOutput, monitoring, yes, all                                                                                      bool
+	jsonOutput, monitoring, yes, all, noCommit                                                                            bool
 	skills                                                                                                                []string
+	// rerun is the command the person typed, for the hint lines of a preview.
+	rerun string
 }
 
 func runSource(ctx context.Context, args []string, stdout, stderr io.Writer) int {
@@ -37,6 +39,10 @@ func runSource(ctx context.Context, args []string, stdout, stderr io.Writer) int
 	flags, positionals, err := parseSourceFlags(args[1:])
 	if err != nil {
 		return writeInvalidRequest(stdout, stderr, hasJSONFlag(args), err.Error(), "Review source command arguments and retry.")
+	}
+	flags.rerun = rerunCommand("skillhub source", args)
+	if flags.noCommit && (sub == "list" || sub == "show") {
+		return writeInvalidRequest(stdout, stderr, flags.jsonOutput, "--no-commit is available only for commands that change the hub", sub+" does not change the hub.")
 	}
 	switch sub {
 	case "watch":
@@ -142,7 +148,7 @@ func runSource(ctx context.Context, args []string, stdout, stderr io.Writer) int
 		}
 		finishTelemetry := startCommandTelemetry(flags.workspace, func(sink app.TelemetrySink) { service.Telemetry = sink })
 		defer finishTelemetry()
-		result, err := service.CaptureSourceCandidate(ctx, flags.workspace, app.SourceCandidateInput{Locator: positionals[0], Reason: flags.reason, IdempotencyKey: flags.idempotencyKey})
+		result, err := service.CaptureSourceCandidate(commitContext(ctx, flags.noCommit, stdout), flags.workspace, app.SourceCandidateInput{Locator: positionals[0], Reason: flags.reason, IdempotencyKey: flags.idempotencyKey})
 		return writeSourceValue(stdout, stderr, flags.jsonOutput, result, err)
 	case "list":
 		if len(positionals) != 0 {
@@ -175,12 +181,12 @@ func runSource(ctx context.Context, args []string, stdout, stderr io.Writer) int
 		}
 		finishTelemetry := startCommandTelemetry(flags.workspace, func(sink app.TelemetrySink) { service.Telemetry = sink })
 		defer finishTelemetry()
-		proposal, result, err := service.TriageSourceCandidate(ctx, flags.workspace, app.SourceTriageInput{CandidateID: positionals[0], Decision: flags.decision, DecisionReason: flags.reason, SourceID: flags.sourceID, Adapter: flags.adapter, Ref: flags.ref, SourcePath: flags.sourcePath, License: flags.license, Trust: flags.trust, Cadence: flags.cadence, SkillID: flags.skillID, NewSkillID: flags.newSkillID, MonitoringEnabled: flags.monitoring, IdempotencyKey: flags.idempotencyKey})
+		proposal, result, err := service.TriageSourceCandidate(commitContext(ctx, flags.noCommit, stdout), flags.workspace, app.SourceTriageInput{CandidateID: positionals[0], Decision: flags.decision, DecisionReason: flags.reason, SourceID: flags.sourceID, Adapter: flags.adapter, Ref: flags.ref, SourcePath: flags.sourcePath, License: flags.license, Trust: flags.trust, Cadence: flags.cadence, SkillID: flags.skillID, NewSkillID: flags.newSkillID, MonitoringEnabled: flags.monitoring, IdempotencyKey: flags.idempotencyKey})
 		if err != nil {
 			return writeSourceError(stdout, stderr, flags.jsonOutput, err)
 		}
 		if flags.decision == "accept" {
-			return writeSourceProposal(stdout, stderr, flags.jsonOutput, proposal)
+			return writeSourceProposal(stdout, stderr, flags.jsonOutput, proposal, "", false)
 		}
 		return writeSourceMutation(stdout, stderr, flags.jsonOutput, result)
 	case "confirm":
@@ -193,7 +199,7 @@ func runSource(ctx context.Context, args []string, stdout, stderr io.Writer) int
 		if err != nil {
 			return writeSourceError(stdout, stderr, flags.jsonOutput, err)
 		}
-		result, err := service.ConfirmSourceProposal(ctx, flags.workspace, preview, app.ConfirmationPins{ProposalID: flags.proposalID, ProposalDigest: flags.proposalDigest, BaseVersion: flags.baseVersion})
+		result, err := service.ConfirmSourceProposal(commitContext(ctx, flags.noCommit, stdout), flags.workspace, preview, app.ConfirmationPins{ProposalID: flags.proposalID, ProposalDigest: flags.proposalDigest, BaseVersion: flags.baseVersion})
 		if err != nil {
 			return writeSourceError(stdout, stderr, flags.jsonOutput, err)
 		}
@@ -223,40 +229,19 @@ func runSource(ctx context.Context, args []string, stdout, stderr io.Writer) int
 		if err != nil {
 			return writeSourceError(stdout, stderr, flags.jsonOutput, err)
 		}
-		if flags.yes {
-			result, confirmErr := service.ConfirmSourceProposal(ctx, flags.workspace, preview, preview.Confirmation.Confirmation.Pins)
-			if confirmErr != nil {
-				return writeSourceError(stdout, stderr, flags.jsonOutput, confirmErr)
-			}
-			return writeSourceMutation(stdout, stderr, flags.jsonOutput, result)
-		}
-		return writeSourceProposal(stdout, stderr, flags.jsonOutput, preview)
+		return applySourceProposal(ctx, service, flags, preview, stdout, stderr)
 	case "detach":
 		preview, err := service.PreviewDetach(ctx, flags.workspace, flags.skillID, positionals[0])
 		if err != nil {
 			return writeSourceError(stdout, stderr, flags.jsonOutput, err)
 		}
-		if flags.yes {
-			result, confirmErr := service.ConfirmSourceProposal(ctx, flags.workspace, preview, preview.Confirmation.Confirmation.Pins)
-			if confirmErr != nil {
-				return writeSourceError(stdout, stderr, flags.jsonOutput, confirmErr)
-			}
-			return writeSourceMutation(stdout, stderr, flags.jsonOutput, result)
-		}
-		return writeSourceProposal(stdout, stderr, flags.jsonOutput, preview)
+		return applySourceProposal(ctx, service, flags, preview, stdout, stderr)
 	case "unwatch":
 		preview, err := service.PreviewUnwatch(ctx, flags.workspace, positionals[0])
 		if err != nil {
 			return writeSourceError(stdout, stderr, flags.jsonOutput, err)
 		}
-		if flags.yes {
-			result, confirmErr := service.ConfirmSourceProposal(ctx, flags.workspace, preview, preview.Confirmation.Confirmation.Pins)
-			if confirmErr != nil {
-				return writeSourceError(stdout, stderr, flags.jsonOutput, confirmErr)
-			}
-			return writeSourceMutation(stdout, stderr, flags.jsonOutput, result)
-		}
-		return writeSourceProposal(stdout, stderr, flags.jsonOutput, preview)
+		return applySourceProposal(ctx, service, flags, preview, stdout, stderr)
 	case "backfill":
 		input := app.BackfillInput{
 			SkillID:  flags.skillID,
@@ -274,18 +259,35 @@ func runSource(ctx context.Context, args []string, stdout, stderr io.Writer) int
 			p.Line("Nothing to backfill.")
 			return 0
 		}
-		if flags.yes {
-			result, applyErr := service.ApplyBackfill(ctx, flags.workspace, preview)
-			if applyErr != nil {
-				return writeSourceError(stdout, stderr, flags.jsonOutput, applyErr)
-			}
-			return writeResult(stdout, stderr, flags.jsonOutput, result, func(p *termui.Printer) {
-				p.Line(result.Summary)
-			})
-		}
-		if flags.jsonOutput {
+		if !flags.yes && flags.jsonOutput {
 			return writeResult(stdout, stderr, true, preview, nil)
 		}
+		if !flags.yes {
+			apply, code := confirmInPlace(stdout, false, true, func(interactive bool) int {
+				writeBackfillPreview(stdout, preview, flags.rerun, interactive)
+				return 0
+			})
+			if !apply {
+				return code
+			}
+		}
+		result, applyErr := service.ApplyBackfill(commitContext(ctx, flags.noCommit, stdout), flags.workspace, preview)
+		if applyErr != nil {
+			return writeSourceError(stdout, stderr, flags.jsonOutput, applyErr)
+		}
+		return writeResult(stdout, stderr, flags.jsonOutput, result, func(p *termui.Printer) {
+			p.Line(result.Summary)
+			writeCommitLines(p, result.Commit)
+		})
+	default:
+		return writeInvalidRequest(stdout, stderr, flags.jsonOutput, fmt.Sprintf("unsupported source subcommand %q", sub), "Run `skillhub source capture|list|show|triage|confirm`.")
+	}
+}
+
+// writeBackfillPreview prints the table of backfill candidates and the lines
+// that say how to apply them.
+func writeBackfillPreview(stdout io.Writer, preview app.BackfillPreview, rerun string, interactive bool) {
+	{
 		p := termui.New(stdout)
 		p.Line(preview.Summary)
 		p.Blank()
@@ -315,10 +317,7 @@ func runSource(ctx context.Context, args []string, stdout, stderr io.Writer) int
 		}
 		p.Table(headers, rows)
 		p.Blank()
-		p.Line("Next: skillhub source backfill --yes")
-		return 0
-	default:
-		return writeInvalidRequest(stdout, stderr, flags.jsonOutput, fmt.Sprintf("unsupported source subcommand %q", sub), "Run `skillhub source capture|list|show|triage|confirm`.")
+		previewTail(p, rerun, true, interactive)
 	}
 }
 
@@ -387,6 +386,8 @@ func parseSourceFlags(args []string) (sourceFlags, []string, error) {
 			}
 		case "--yes":
 			flags.yes = true
+		case "--no-commit":
+			flags.noCommit = true
 		case "--all":
 			flags.all = true
 		case "--json":
@@ -406,6 +407,7 @@ func parseSourceFlags(args []string) (sourceFlags, []string, error) {
 func runCheck(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	path := ""
 	jsonOutput := false
+	noCommit := false
 	allDue := false
 	ids := []string{}
 	for i := 0; i < len(args); i++ {
@@ -418,6 +420,8 @@ func runCheck(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 			path = args[i]
 		case "--json":
 			jsonOutput = true
+		case "--no-commit":
+			noCommit = true
 		case "--all-due":
 			allDue = true
 		case "--all":
@@ -436,7 +440,7 @@ func runCheck(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 	service := app.SourceService{}
 	finishTelemetry := startCommandTelemetry(path, func(sink app.TelemetrySink) { service.Telemetry = sink })
 	defer finishTelemetry()
-	result, err := service.CheckSources(ctx, path, ids, allDue)
+	result, err := service.CheckSources(commitContext(ctx, noCommit, stdout), path, ids, allDue)
 	return writeSourceValue(stdout, stderr, jsonOutput, result, err)
 }
 
@@ -599,7 +603,28 @@ func writeSourceList(stdout, stderr io.Writer, jsonOutput bool, result app.Sourc
 	})
 }
 
-func writeSourceProposal(stdout, stderr io.Writer, jsonOutput bool, result app.SourceProposal) int {
+// applySourceProposal applies a previewed source change on --yes, or after a
+// person at a terminal answers y. Otherwise it only prints the preview.
+func applySourceProposal(ctx context.Context, service app.SourceService, flags sourceFlags, preview app.SourceProposal, stdout, stderr io.Writer) int {
+	if !flags.yes {
+		apply, code := confirmInPlace(stdout, flags.jsonOutput, preview.Error == nil, func(interactive bool) int {
+			return writeSourceProposal(stdout, stderr, flags.jsonOutput, preview, flags.rerun, interactive)
+		})
+		if !apply {
+			return code
+		}
+	}
+	result, err := service.ConfirmSourceProposal(commitContext(ctx, flags.noCommit, stdout), flags.workspace, preview, preview.Confirmation.Confirmation.Pins)
+	if err != nil {
+		return writeSourceError(stdout, stderr, flags.jsonOutput, err)
+	}
+	return writeSourceMutation(stdout, stderr, flags.jsonOutput, result)
+}
+
+// writeSourceProposal prints a source preview. With rerun set, it ends with
+// the hint lines for applying the same command; without, with the command that
+// confirms the stored proposal.
+func writeSourceProposal(stdout, stderr io.Writer, jsonOutput bool, result app.SourceProposal, rerun string, interactive bool) int {
 	if result.Error != nil {
 		if jsonOutput {
 			return writeSourceJSON(stdout, stderr, result)
@@ -617,23 +642,30 @@ func writeSourceProposal(stdout, stderr io.Writer, jsonOutput bool, result app.S
 	}
 	pins := result.Confirmation.Confirmation.Pins
 	p.Line(result.Summary)
+	showPins := rerun == "" || !interactive
 	if result.Source.ID != "" && result.Source.CurrentRevision != nil {
 		p.Line(fmt.Sprintf("Detected: %s; adapter %s; revision %s; license %s; trust %s; cadence %s.",
 			result.Source.Identity.Name, result.Source.Adapter, result.Source.CurrentRevision.Value,
 			firstText(result.Source.License, "unknown"), result.Source.Trust.Source, result.Source.Monitoring.Cadence))
-		p.Fields(
-			termui.Field{Label: "Proposal", Value: pins.ProposalID},
-			termui.Field{Label: "Digest", Value: pins.ProposalDigest},
-			termui.Field{Label: "Base version", Value: pins.BaseVersion},
-		)
-	} else if pins.ProposalID != "" {
+		if showPins {
+			p.Fields(
+				termui.Field{Label: "Proposal", Value: pins.ProposalID},
+				termui.Field{Label: "Digest", Value: pins.ProposalDigest},
+				termui.Field{Label: "Base version", Value: pins.BaseVersion},
+			)
+		}
+	} else if pins.ProposalID != "" && showPins {
 		p.Fields(
 			termui.Field{Label: "Proposal", Value: pins.ProposalID},
 			termui.Field{Label: "Digest", Value: pins.ProposalDigest},
 			termui.Field{Label: "Base version", Value: pins.BaseVersion},
 		)
 	}
-	p.Line("No files changed.")
+	if rerun != "" {
+		previewTail(p, rerun, true, interactive)
+		return 0
+	}
+	p.Line("Nothing written yet.")
 	if result.Confirmation.ApplicationCommand == "PreviewSkillAdd" || result.Confirmation.ApplicationCommand == "SkillAdd" {
 		p.Line("Next:")
 		p.Command(skillConfirmCommand(pins))
@@ -672,7 +704,7 @@ func writeSingleSource(stdout, stderr io.Writer, jsonOutput bool, item app.Sourc
 	return 0
 }
 
-func writeSourceImportProposal(stdout, stderr io.Writer, jsonOutput bool, proposal app.SourceImportProposal) int {
+func writeSourceImportProposal(stdout, stderr io.Writer, jsonOutput bool, proposal app.SourceImportProposal, rerun string, interactive bool) int {
 	return writeResult(stdout, stderr, jsonOutput, proposal, func(p *termui.Printer) {
 		p.Line(proposal.Summary)
 		var bullets []string
@@ -687,16 +719,10 @@ func writeSourceImportProposal(stdout, stderr io.Writer, jsonOutput bool, propos
 		for _, warn := range proposal.Warnings {
 			p.Warning(warn.Summary)
 		}
-		p.Line("No canonical files changed during preview.")
-		if proposal.Confirmation.Confirmation.Required {
-			p.Blank()
-			pins := proposal.Confirmation.Confirmation.Pins
-			p.Fields(
-				termui.Field{Label: "Proposal", Value: pins.ProposalID},
-				termui.Field{Label: "Digest", Value: pins.ProposalDigest},
-				termui.Field{Label: "Base version", Value: pins.BaseVersion},
-			)
-			p.Line(fmt.Sprintf("Confirm with:\n  skillhub source import --proposal %s --proposal-digest %s --base-version %s --yes", pins.ProposalID, pins.ProposalDigest, pins.BaseVersion))
+		if proposal.Confirmation.Confirmation.Required && len(proposal.Importable) > 0 {
+			previewTail(p, rerun, true, interactive)
+		} else {
+			p.Line("Nothing written yet.")
 		}
 	})
 }
@@ -710,6 +736,7 @@ func writeSourceImportResult(stdout, stderr io.Writer, jsonOutput bool, result a
 		if len(result.SkippedIDs) > 0 {
 			p.Line(fmt.Sprintf("Skipped %d existing skill(s): %s", len(result.SkippedIDs), strings.Join(result.SkippedIDs, ", ")))
 		}
+		writeCommitLines(p, result.Commit)
 	})
 }
 
@@ -717,9 +744,11 @@ func writeSourceMutation(stdout, stderr io.Writer, jsonOutput bool, result app.S
 	return writeResult(stdout, stderr, jsonOutput, result, func(p *termui.Printer) {
 		if result.SourceID != "" {
 			p.Line(fmt.Sprintf("Watching %s. To learn from it, start an agent in this hub folder and ask it to distill with the distill-lab skill; it writes .meta/distill.yaml. Porting lessons to skill content uses skill_update.\nWatching does not auto-import skills.", result.SourceID))
+			writeCommitLines(p, result.Commit)
 			return
 		}
 		p.Line(result.Summary)
+		writeCommitLines(p, result.Commit)
 		p.Fields(
 			termui.Field{Label: "Operation", Value: result.OperationID},
 			termui.Field{Label: "Catalog snapshot", Value: result.CatalogSnapshot},
@@ -738,6 +767,10 @@ func writeSourceJSON(stdout, stderr io.Writer, value any) int {
 }
 
 func writeSourceError(stdout, stderr io.Writer, jsonOutput bool, err error) int {
+	if refusal := app.UncommittedEditsError(err); refusal != nil {
+		writeStructuredSkillError(stdout, stderr, jsonOutput, refusal)
+		return 2
+	}
 	var limitErr *sourcepkg.LimitExceededError
 	if errors.As(err, &limitErr) {
 		why := fmt.Sprintf("Source resource limit exceeded: %s (%d > %d).", limitErr.Limit, limitErr.Actual, limitErr.Max)

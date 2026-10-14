@@ -222,11 +222,12 @@ func runGuidedSkillCreate(ctx context.Context, service app.SkillService, flags s
 	if err != nil {
 		return writeSkillErrorFor(flags.id, stdout, stderr, false, err)
 	}
-	result, err := service.ConfirmSkillMutation(ctx, flags.workspace, preview, preview.Confirmation.Confirmation.Pins)
+	result, err := service.ConfirmSkillMutation(commitContext(ctx, flags.noCommit, stdout), flags.workspace, preview, preview.Confirmation.Confirmation.Pins)
 	if err != nil {
 		return writeSkillErrorFor(flags.id, stdout, stderr, false, err)
 	}
 	p.Line(result.Summary)
+	writeCommitLines(p, result.Commit)
 	file := filepath.Join(flags.workspace, "skills", flags.collection, flags.id, "SKILL.md")
 	p.Fields(termui.Field{Label: "File", Value: file})
 	p.Next("replace the starter text in that file with your instructions, then activate the skill:", "skillhub skill activate "+shellquote.Arg(flags.id)+" --yes")

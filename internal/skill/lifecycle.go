@@ -179,6 +179,8 @@ type MutationResult struct {
 	CatalogSnapshot string
 	Generation      string
 	GitDirty        bool
+	// Commit is empty when the confirming surface did not ask for a commit.
+	Commit workspace.CommitOutcome
 }
 
 // Manager owns domain planning and confirmation. Clock and hook are optional.
@@ -503,7 +505,7 @@ func (manager Manager) Confirm(ctx context.Context, root string, proposal Propos
 	}
 	receipt, err := mutation.ConfirmMutationWithOptions(root, proposal.planned, mutation.Confirmation{
 		ProposalID: proposal.ID, ProposalDigest: proposal.Digest, BaseCatalogSnapshot: proposal.BaseSnapshot,
-	}, mutation.Options{PostCanonical: func(expected string) (mutation.Publication, error) {
+	}, mutation.Options{Context: ctx, CommitMessage: commitSubject(proposal), PostCanonical: func(expected string) (mutation.Publication, error) {
 		built, err := catalog.BuildCatalogGenerationWhileLocked(ctx, root, expected, catalog.BuildOptions{})
 		if err != nil {
 			return mutation.Publication{}, err
@@ -516,7 +518,20 @@ func (manager Manager) Confirm(ctx context.Context, root string, proposal Propos
 	return MutationResult{
 		OperationID: receipt.OperationID, ChangedPaths: receipt.ChangedPaths,
 		CatalogSnapshot: receipt.CatalogSnapshot, Generation: receipt.Generation, GitDirty: receipt.GitDirty,
+		Commit: receipt.Commit,
 	}, nil
+}
+
+// commitSubject is the Git commit subject of a confirmed skill change.
+func commitSubject(proposal Proposal) string {
+	verb := map[string]string{
+		"skill_create": "Create", "skill_edit": "Edit", "skill_add": "Add",
+		"skill_active": "Activate", "skill_deprecated": "Deprecate", "skill_archived": "Archive",
+	}[proposal.Command]
+	if verb == "" {
+		verb = "Update"
+	}
+	return verb + " " + proposal.SkillID
 }
 
 func (manager Manager) appliedProposal(root, id, command string, receipt mutation.Receipt, requestDigest, idempotencyKey string) Proposal {

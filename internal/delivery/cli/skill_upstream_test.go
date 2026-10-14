@@ -386,7 +386,7 @@ func TestSkillUpdate(t *testing.T) {
 
 		var outBuf bytes.Buffer
 		p := termui.New(&outBuf)
-		renderUpstreamUpdatePreview(p, "docx", "https://github.com/anthropics/skills", preview, false)
+		renderUpstreamUpdatePreview(p, "docx", "https://github.com/anthropics/skills", preview, false, previewHints{rerun: "skillhub skill update x"})
 		out := outBuf.String()
 
 		// Verify table rows
@@ -444,7 +444,7 @@ func TestSkillUpdate(t *testing.T) {
 
 		var outBuf bytes.Buffer
 		p := termui.New(&outBuf)
-		renderUpstreamUpdatePreview(p, "pdf", "https://github.com/anthropics/skills", preview, false)
+		renderUpstreamUpdatePreview(p, "pdf", "https://github.com/anthropics/skills", preview, false, previewHints{rerun: "skillhub skill update x"})
 		out := outBuf.String()
 
 		if !strings.Contains(out, "After applying, agents cannot use pdf until you approve the new content:") {
@@ -453,11 +453,11 @@ func TestSkillUpdate(t *testing.T) {
 		if !strings.Contains(out, "skillhub skill review pdf") {
 			t.Fatalf("missing review command in output:\n%s", out)
 		}
-		if !strings.Contains(out, "No collection files changed.") {
-			t.Fatalf("missing no collection files changed line in output:\n%s", out)
+		if !strings.Contains(out, "Nothing written yet.") {
+			t.Fatalf("missing nothing written line in output:\n%s", out)
 		}
-		if !strings.Contains(out, "$ skillhub skill confirm --proposal PROP-12345 --proposal-digest sha256:1111111111111111111111111111111111111111111111111111111111111111 --base-version sha256:2222222222222222222222222222222222222222222222222222222222222222") {
-			t.Fatalf("missing confirm next hint in output:\n%s", out)
+		if !strings.Contains(out, "Apply: skillhub skill update x --yes") {
+			t.Fatalf("missing apply hint in output:\n%s", out)
 		}
 	})
 
@@ -555,7 +555,7 @@ func TestPrintableTextEscapesTerminalControlSequences(t *testing.T) {
 	}
 	var outBuf bytes.Buffer
 	p := termui.New(&outBuf)
-	renderUpstreamUpdatePreview(p, "sec-skill", "https://github.com/example/repo", preview, false)
+	renderUpstreamUpdatePreview(p, "sec-skill", "https://github.com/example/repo", preview, false, previewHints{rerun: "skillhub skill update x"})
 	out := outBuf.String()
 
 	if strings.Contains(out, "\x1b[31m") {
@@ -687,7 +687,7 @@ func TestUpstreamUpdatePreviewResolvedConflict(t *testing.T) {
 				}},
 			}
 			var buf bytes.Buffer
-			renderUpstreamUpdatePreview(termui.New(&buf), "docx", "", preview, false)
+			renderUpstreamUpdatePreview(termui.New(&buf), "docx", "", preview, false, previewHints{rerun: "skillhub skill update x"})
 			out := buf.String()
 			if !strings.Contains(out, tc.want) || strings.Contains(out, "needs decision") {
 				t.Fatalf("expected %q and no \"needs decision\":\n%s", tc.want, out)
@@ -722,7 +722,7 @@ func TestUpstreamUpdatePreviewSummaryComesLast(t *testing.T) {
 		},
 	}
 	var buf bytes.Buffer
-	renderUpstreamUpdatePreview(termui.New(&buf), "pdf", "", preview, false)
+	renderUpstreamUpdatePreview(termui.New(&buf), "pdf", "", preview, false, previewHints{rerun: "skillhub skill update x"})
 	out := buf.String()
 
 	lastHunk := strings.LastIndex(out, "@@")
@@ -732,8 +732,8 @@ func TestUpstreamUpdatePreviewSummaryComesLast(t *testing.T) {
 	if idx := strings.Index(out, "FILE"); idx < lastHunk {
 		t.Fatalf("file table must come after the last diff hunk:\n%s", out)
 	}
-	if idx := strings.Index(out, "skill confirm"); idx < lastHunk {
-		t.Fatalf("confirm command must come after the last diff hunk:\n%s", out)
+	if idx := strings.Index(out, "Apply: "); idx < lastHunk {
+		t.Fatalf("apply command must come after the last diff hunk:\n%s", out)
 	}
 	for _, row := range []string{"+2 -1", "+1 -1"} {
 		if !strings.Contains(out, row) {

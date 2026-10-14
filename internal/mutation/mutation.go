@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/vantt/skillhub-mcp/internal/canonical"
+	"github.com/vantt/skillhub-mcp/internal/workspace"
 )
 
 var (
@@ -79,6 +80,20 @@ type Receipt struct {
 	GitDirty            bool
 	SourceSchemaVersion *int
 	TargetSchemaVersion *int
+	// Commit says whether the change became a Git commit. It is empty for a
+	// replayed operation, which committed when it was first applied.
+	Commit workspace.CommitOutcome
+}
+
+// UncommittedEditsError refuses a change whose files already differ from Git,
+// because a scoped commit would otherwise record edits Skill Hub did not make.
+type UncommittedEditsError struct {
+	Root  string
+	Paths []string
+}
+
+func (e *UncommittedEditsError) Error() string {
+	return fmt.Sprintf("%s has edits that were not committed", strings.Join(e.Paths, ", "))
 }
 
 // Publication identifies the derived generation published for the exact
@@ -115,6 +130,9 @@ type Options struct {
 	Context       context.Context
 	Fault         func(FaultPoint) error
 	PostCanonical func(expectedCatalogSnapshot string) (Publication, error)
+	// CommitMessage is the subject of the Git commit, unless the commit policy
+	// in Context carries its own message.
+	CommitMessage string
 }
 
 func (o Options) inject(point FaultPoint) error {
@@ -221,32 +239,59 @@ func CommitWithOptions(root string, set WriteSet, options Options) (Receipt, err
 	if err != nil {
 		return Receipt{}, err
 	}
-	defer lock.Unlock()
-	return commitWhileLocked(root, set, options)
+	receipt, replayed, err := commitWhileLocked(root, set, options)
+	// The commit runs after the lock is released because the hub's pre-commit
+	// hook may run skillhub itself.
+	_ = lock.Unlock()
+	if err != nil || replayed {
+		return receipt, err
+	}
+	policy, asked := workspace.CommitPolicyFrom(ctx)
+	switch {
+	case !asked || policy.Disabled:
+	case policy.Defer:
+		receipt.Commit = workspace.CommitOutcome{Status: workspace.CommitDeferred}
+	default:
+		message := policy.Message
+		if message == "" {
+			message = options.CommitMessage
+		}
+		if message == "" {
+			message = "Apply " + set.Command
+		}
+		message += "\n\nSkillhub-Operation: " + receipt.OperationID
+		receipt.Commit = workspace.CommitPaths(ctx, root, receipt.ChangedPaths, message, policy.Interactive)
+		if receipt.Commit.Status == workspace.CommitCommitted {
+			if dirty, err := gitDirty(root); err == nil {
+				receipt.GitDirty = dirty
+			}
+		}
+	}
+	return receipt, nil
 }
 
-func commitWhileLocked(root string, set WriteSet, options Options) (Receipt, error) {
+func commitWhileLocked(root string, set WriteSet, options Options) (Receipt, bool, error) {
 	if options.Context != nil {
 		if err := options.Context.Err(); err != nil {
-			return Receipt{}, err
+			return Receipt{}, false, err
 		}
 	}
 	if ids, err := pendingUnlocked(root); err != nil {
 	} else if len(ids) != 0 {
-		return Receipt{}, ErrRecoveryRequired
+		return Receipt{}, false, ErrRecoveryRequired
 	}
 	if recorded, found, err := existingOperation(root, set); err != nil {
-		return Receipt{}, err
+		return Receipt{}, false, err
 	} else if found {
-		return recorded, nil
+		return recorded, true, nil
 	}
 	if set.BaseCatalogSnapshot != "" {
 		snapshot, err := canonical.Scan(root)
 		if err != nil {
-			return Receipt{}, err
+			return Receipt{}, false, err
 		}
 		if snapshot.CatalogSnapshot != set.BaseCatalogSnapshot {
-			return Receipt{}, ErrConflict
+			return Receipt{}, false, ErrConflict
 		}
 	}
 	changes := append([]Change(nil), set.Changes...)
@@ -254,16 +299,19 @@ func commitWhileLocked(root string, set WriteSet, options Options) (Receipt, err
 	for _, item := range changes {
 		actual, err := digestAt(root, item.Path)
 		if err != nil {
-			return Receipt{}, err
+			return Receipt{}, false, err
 		}
 		if actual != item.BeforeDigest {
-			return Receipt{}, fmt.Errorf("%w: %s", ErrConflict, item.Path)
+			return Receipt{}, false, fmt.Errorf("%w: %s", ErrConflict, item.Path)
 		}
 	}
 	if set.ProposalID != "" {
 		if set.ProposalDigest == "" || proposalDigest(set) != set.ProposalDigest {
-			return Receipt{}, ErrConflict
+			return Receipt{}, false, ErrConflict
 		}
+	}
+	if err := refuseUncommittedEdits(root, changes, options); err != nil {
+		return Receipt{}, false, err
 	}
 	// The operation receipt is part of the canonical tree once applied, so the
 	// pre-commit limit check must include it. Receipt history is not catalog
@@ -272,14 +320,41 @@ func commitWhileLocked(root string, set WriteSet, options Options) (Receipt, err
 	occurredAt := operationTime()
 	placeholder, err := receiptYAML(root, set, changes, digest(nil), occurredAt)
 	if err != nil {
-		return Receipt{}, err
+		return Receipt{}, false, err
 	}
 	virtualChanges := append(append([]Change(nil), changes...), Change{Path: operationPath(set.OperationID, occurredAt), Contents: placeholder})
 	resultSnapshot, err := validateVirtualSnapshot(root, virtualChanges)
 	if err != nil {
-		return Receipt{}, err
+		return Receipt{}, false, err
 	}
-	return commitPrepared(root, set, changes, resultSnapshot.CatalogSnapshot, occurredAt, options)
+	receipt, err := commitPrepared(root, set, changes, resultSnapshot.CatalogSnapshot, occurredAt, options)
+	return receipt, false, err
+}
+
+// refuseUncommittedEdits stops a change whose files already differ from Git,
+// before anything is written. A chain that commits once at its end checks up
+// front instead, because its own earlier steps leave those files dirty.
+func refuseUncommittedEdits(root string, changes []Change, options Options) error {
+	ctx := options.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	policy, asked := workspace.CommitPolicyFrom(ctx)
+	if !asked || policy.Disabled || policy.Defer {
+		return nil
+	}
+	paths := make([]string, len(changes))
+	for index, item := range changes {
+		paths[index] = item.Path
+	}
+	dirty, err := workspace.DirtyPaths(ctx, root, paths)
+	if err != nil {
+		return err
+	}
+	if len(dirty) > 0 {
+		return &UncommittedEditsError{Root: root, Paths: dirty}
+	}
+	return nil
 }
 
 // LookupOperation returns an already-applied result before callers inspect the

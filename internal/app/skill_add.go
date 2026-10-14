@@ -116,6 +116,7 @@ type SkillAddResult struct {
 	CatalogSnapshot string                       `json:"catalog_snapshot"`
 	Generation      string                       `json:"generation"`
 	GitDirty        bool                         `json:"git_dirty"`
+	Commit          *workspace.CommitOutcome     `json:"commit,omitempty"`
 	Assessment      catalog.SkillStateAssessment `json:"assessment"`
 	Origin          SkillOrigin                  `json:"origin"`
 	License         SkillLicenseInfo             `json:"license"`
@@ -963,7 +964,7 @@ func (service SkillAddService) ConfirmSkillAdd(ctx context.Context, path string,
 
 	assessment, _ := catalog.AssessSkillState(ctx, root, preview.SkillID)
 
-	return SkillAddResult{
+	result := SkillAddResult{
 		Result:          NewResult(StatusOK, fmt.Sprintf("Added draft skill %q. Next: review with `skillhub skill show %s`, then preview activation with `skillhub skill activate %s`.", preview.SkillID, preview.SkillID, preview.SkillID)),
 		SkillID:         preview.SkillID,
 		SkillIDs:        preview.SkillIDs,
@@ -975,13 +976,18 @@ func (service SkillAddService) ConfirmSkillAdd(ctx context.Context, path string,
 		CatalogSnapshot: receipt.CatalogSnapshot,
 		Generation:      receipt.Generation,
 		GitDirty:        receipt.GitDirty,
+		Commit:          commitView(receipt.Commit),
 		Assessment:      assessment,
 		Origin:          preview.Origin,
 		License:         preview.License,
 		Resources:       preview.Resources,
 		Excluded:        preview.Excluded,
 		UpstreamSource:  upstreamSource,
-	}, nil
+	}
+	if receipt.Commit.Status != "" {
+		result.Items = append(result.Items, commitItem(receipt.Commit, receipt.GitDirty))
+	}
+	return result, nil
 }
 
 // ConfirmSkillAddProposal adapts a loaded Phase 3 domain proposal for confirmation.

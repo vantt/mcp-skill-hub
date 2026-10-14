@@ -64,6 +64,25 @@ threshold retains the metrics, returns `action_required` with
 `routing_threshold_failed` warnings and a null operational `error`, and exits 1.
 Successful evaluation exits 0; invalid requests still use an error envelope.
 
+Every applied change to the hub becomes one Git commit that holds only that
+change's files and its operation receipt. The result carries it as `commit`
+(see the schema): `status` is `committed`, `skipped`, `failed` or `deferred`,
+`hash` and `message` name the commit, `reach` says who gets the new version
+(`this_hub_now`, and `push_needed` with the remote's `push_command`), and a
+`failed` or `skipped` commit gives its `reason` and the exact `manual_command`
+that finishes it. The files stay written when a commit fails: signing, a Git
+hook or a missing identity can stop it, and nothing is rolled back. `commit` is
+absent when the caller did not ask for a commit (`--no-commit` on the command
+line). The CLI, the MCP curation tools and the web all commit; only the CLI has
+`--no-commit`. A change is refused before anything is written when its files
+already differ from Git; see `edit_conflict` in [Error codes](error-codes.md).
+
+In a terminal, a hub-changing CLI command asks `Apply this change? [y/N]` under
+its preview and applies exactly the previewed change on `y`. Without a terminal,
+with `--json`, or for an agent, the preview ends with `Show the diff: <command>
+--diff` and `Apply: <command> --yes`, and nothing is written until `--yes`.
+`--diff` fills `full_diff` in the preview, as the former `--full-diff` did.
+
 State-reporting results explicitly disclose state basis: canonical facts
 derived from the local Git working tree versus served facts from the active SQLite
 catalog generation (`servable`, `catalog_snapshot`, `generation`). Unconfirmed editor

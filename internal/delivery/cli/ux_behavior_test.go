@@ -58,7 +58,7 @@ func TestSkillPreviewStillExplainsHowToApply(t *testing.T) {
 	t.Parallel()
 	root := initTestWorkspace(t)
 	code, stdout, _ := runCLI(t, "skill", "create", "--workspace", root, "--id", "demo", "--collection", "software", "--name", "Demo", "--description", "Demo skill.")
-	if code != 0 || !strings.Contains(stdout, "No files changed") {
+	if code != 0 || !strings.Contains(stdout, "Nothing written yet.") {
 		t.Fatalf("preview exit = %d stdout=%s", code, stdout)
 	}
 }
@@ -339,7 +339,7 @@ func TestInitRefusesAFolderWithOtherFiles(t *testing.T) {
 func TestDiffGroupsDraftSkills(t *testing.T) {
 	t.Parallel()
 	root := initTestWorkspace(t)
-	code, _, stderr := runCLI(t, "skill", "create", "--workspace", root, "--id", "draft-diff", "--collection", "core", "--name", "Draft Diff", "--description", "Draft diff description.", "--yes")
+	code, _, stderr := runCLI(t, "skill", "create", "--workspace", root, "--id", "draft-diff", "--collection", "core", "--name", "Draft Diff", "--description", "Draft diff description.", "--yes", "--no-commit")
 	if code != 0 {
 		t.Fatalf("create exit = %d: %s", code, stderr)
 	}
@@ -358,15 +358,18 @@ func TestDiffGroupsDraftSkills(t *testing.T) {
 	}
 }
 
-func TestSkillPreviewShowsExactConfirmCommand(t *testing.T) {
+func TestSkillPreviewShowsTheApplyCommand(t *testing.T) {
 	t.Parallel()
 	root := initTestWorkspace(t)
 	code, stdout, stderr := runCLI(t, "skill", "create", "--workspace", root, "--id", "preview-test", "--collection", "core", "--name", "Preview Test", "--description", "Preview description.")
 	if code != 0 {
 		t.Fatalf("create preview exit = %d: %s", code, stderr)
 	}
-	if !strings.Contains(stdout, "skillhub skill confirm --proposal") || !strings.Contains(stdout, "--base-version") {
-		t.Fatalf("preview missing exact confirm command:\n%s", stdout)
+	if !strings.Contains(stdout, "Apply: skillhub skill create") || !strings.Contains(stdout, "--yes\n") {
+		t.Fatalf("preview missing the apply command:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "Show the diff: skillhub skill create") || !strings.Contains(stdout, "--diff\n") {
+		t.Fatalf("preview missing the diff hint:\n%s", stdout)
 	}
 	if !strings.Contains(stdout, "Base version:") {
 		t.Fatalf("preview should use 'Base version', got:\n%s", stdout)

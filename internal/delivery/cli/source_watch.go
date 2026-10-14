@@ -32,29 +32,18 @@ func runSourceWatch(ctx context.Context, service app.SourceService, flags source
 		return writeSourceError(stdout, stderr, flags.jsonOutput, err)
 	}
 	if !flags.yes {
-		return writeResult(stdout, stderr, flags.jsonOutput, proposal, func(p *termui.Printer) {
-			pins := proposal.Confirmation.Confirmation.Pins
-			cadence := proposal.Source.Monitoring.Cadence
-			if cadence == "" {
-				cadence = flags.cadence
-			}
-			if cadence == "" {
-				cadence = "weekly"
-			}
-			sourceID := proposal.Source.ID
-			if sourceID == "" {
-				sourceID = flags.sourceID
-			}
-			p.Line(fmt.Sprintf("Watch source %s (%s).", sourceID, locator))
-			p.Line(fmt.Sprintf("Cadence: %s. Watching: on.", cadence))
-			p.Line("No collection files changed.")
-			p.Line(fmt.Sprintf("Next: skillhub source confirm --proposal %s --proposal-digest %s --base-version %s",
-				pins.ProposalID, pins.ProposalDigest, pins.BaseVersion))
+		apply, code := confirmInPlace(stdout, flags.jsonOutput, proposal.Error == nil, func(interactive bool) int {
+			return writeResult(stdout, stderr, flags.jsonOutput, proposal, func(p *termui.Printer) {
+				writeWatchPreview(p, proposal, flags, locator, interactive)
+			})
 		})
+		if !apply {
+			return code
+		}
 	}
 
 	// Immediate confirmation with fresh preview pins
-	result, err := service.ConfirmSourceWatch(ctx, flags.workspace, proposal, proposal.Confirmation.Confirmation.Pins)
+	result, err := service.ConfirmSourceWatch(commitContext(ctx, flags.noCommit, stdout), flags.workspace, proposal, proposal.Confirmation.Confirmation.Pins)
 	if err != nil {
 		return writeSourceError(stdout, stderr, flags.jsonOutput, err)
 	}
@@ -64,8 +53,27 @@ func runSourceWatch(ctx context.Context, service app.SourceService, flags source
 		if cadence == "" {
 			cadence = "weekly"
 		}
-		p.Line(fmt.Sprintf("Watching source %s (%s). Cadence: %s. Changes are not committed.",
-			result.SourceID, locator, cadence))
+		p.Line(fmt.Sprintf("Watching source %s (%s). Cadence: %s.%s",
+			result.SourceID, locator, cadence, notCommittedNote(result.Commit)))
+		writeCommitLines(p, result.Commit)
 		p.Line(fmt.Sprintf("Next: skillhub source check %s", result.SourceID))
 	})
+}
+
+// writeWatchPreview prints what a watch would add and how to apply it.
+func writeWatchPreview(p *termui.Printer, proposal app.SourceProposal, flags sourceFlags, locator string, interactive bool) {
+	cadence := proposal.Source.Monitoring.Cadence
+	if cadence == "" {
+		cadence = flags.cadence
+	}
+	if cadence == "" {
+		cadence = "weekly"
+	}
+	sourceID := proposal.Source.ID
+	if sourceID == "" {
+		sourceID = flags.sourceID
+	}
+	p.Line(fmt.Sprintf("Watch source %s (%s).", sourceID, locator))
+	p.Line(fmt.Sprintf("Cadence: %s. Watching: on.", cadence))
+	previewTail(p, flags.rerun, true, interactive)
 }

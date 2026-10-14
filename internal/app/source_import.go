@@ -62,16 +62,17 @@ type SourceImportProposal struct {
 
 type SourceImportResult struct {
 	Result
-	SourceID        string   `json:"source_id"`
-	ImportedCount   int      `json:"imported_count"`
-	SkippedCount    int      `json:"skipped_count"`
-	ImportedIDs     []string `json:"imported_ids"`
-	SkippedIDs      []string `json:"skipped_ids"`
-	OperationID     string   `json:"operation_id"`
-	ChangedPaths    []string `json:"changed_paths"`
-	CatalogSnapshot string   `json:"catalog_snapshot"`
-	Generation      string   `json:"generation"`
-	GitDirty        bool     `json:"git_dirty"`
+	SourceID        string                   `json:"source_id"`
+	ImportedCount   int                      `json:"imported_count"`
+	SkippedCount    int                      `json:"skipped_count"`
+	ImportedIDs     []string                 `json:"imported_ids"`
+	SkippedIDs      []string                 `json:"skipped_ids"`
+	OperationID     string                   `json:"operation_id"`
+	ChangedPaths    []string                 `json:"changed_paths"`
+	CatalogSnapshot string                   `json:"catalog_snapshot"`
+	Generation      string                   `json:"generation"`
+	GitDirty        bool                     `json:"git_dirty"`
+	Commit          *workspace.CommitOutcome `json:"commit,omitempty"`
 }
 
 func (service SourceImportService) defaults(root string) SourceImportService {
@@ -444,6 +445,7 @@ func (service SourceImportService) ConfirmSourceImport(ctx context.Context, path
 		CatalogSnapshot: receipt.CatalogSnapshot,
 		Generation:      receipt.Generation,
 		GitDirty:        true,
+		Commit:          commitView(receipt.Commit),
 	}
 	for _, id := range importedIDs {
 		result.Items = append(result.Items, Item{ID: id, Summary: "Imported draft skill", Impact: "Saved in draft state; review and activate before use."})
