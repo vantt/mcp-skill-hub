@@ -53,7 +53,60 @@ Skills whose content waits for your approval stay blocked for machine A exactly 
 > [!WARNING]
 > `skillhub serve` listens on every network interface (`0.0.0.0`) by default, over plain HTTP. Anyone who can watch that network can read the hub token and the task text your agents send. The web UI (`skillhub serve web`) works the same way, and it can change skills: anyone who gets its address can add or edit the skills every connected agent uses. Tailscale and SSH encrypt the traffic; on any other network you do not trust, use the [SSH tunnel](#on-an-untrusted-network-use-an-ssh-tunnel).
 
-## Set up on your LAN or Tailscale
+## Connect with an invite (Tailscale or an SSH tunnel)
+
+An invite hands machine A the hub token in one step, without `scp` and without an SSH login to machine B. It works only where the traffic is encrypted: over Tailscale, or through an SSH tunnel to machine B's loopback address.
+
+1. Start the server on machine B and leave it running. For Tailscale, `skillhub serve`; for a tunnel, `skillhub serve --addr 127.0.0.1:7420` and open the tunnel from machine A as in [On an untrusted network](#on-an-untrusted-network-use-an-ssh-tunnel).
+2. On machine B, in another terminal, run the same folder and `--addr` the server uses:
+
+   ```bash
+   cd ~/skill-hub && skillhub token invite
+   ```
+
+   ```text
+   Invite created. It works once and expires at 14:04 (10 minutes).
+   Hub folder:  /home/you/skill-hub
+
+   Tailscale (100.121.46.35), on the other machine:
+     $ skillhub connect --hub http://100.121.46.35:7420 --invite K7QF-9M2X-4TBD
+   ```
+
+   The command needs a terminal (the code must not land in a file, a log or an agent transcript). It lists only the addresses where an invite is accepted, and one line says so when a plain LAN address was left out.
+3. On machine A, paste the line inside your project:
+
+   ```bash
+   cd <your-project> && skillhub connect --hub http://100.121.46.35:7420 --invite K7QF-9M2X-4TBD
+   ```
+
+   `connect` checks everything it can first (the address, that the code is well formed, that the token file can be written), then trades the code for the hub token, saves it and connects the project as usual. It prints the path of the saved file, never the token or the code.
+
+**Where the token is saved on machine A.** In your Skill Hub configuration folder, one file per hub named `<host>-<port>`, readable by you only:
+
+| System | Folder |
+|---|---|
+| Linux | `~/.config/skillhub/hub-tokens/` (or `$XDG_CONFIG_HOME/skillhub/hub-tokens/`) |
+| macOS | `~/Library/Application Support/skillhub/hub-tokens/` |
+| Windows | `%AppData%\skillhub\hub-tokens\` (Windows does not use the Unix permission bits; the folder is private to your account by default) |
+
+`SKILLHUB_USER_CONFIG_DIR` replaces the `skillhub` folder on every system. `--token-file <path>` saves somewhere else, and it must not exist yet. Connections made earlier with `~/.skillhub-token-<host>-<port>` keep working unchanged.
+
+**What an invite is.** A 12 character code, valid for 10 minutes and for one use, kept on machine B only as a hash in `runtime/config/invites/`. It is not the hub token: running `token invite` again gives a new code and changes nothing for machines already connected. If the code expires or is used, run `token invite` again.
+
+**When it refuses.**
+
+| Message | What to do |
+|---|---|
+| This invite is not valid: it expired, was already used, or is wrong | Run `skillhub token invite` on machine B for a new one |
+| Pairing is only offered over Tailscale or an SSH tunnel | Use the Tailscale address or the tunnel, or copy the token file with the `scp` lines |
+| The hub refused the request (403 before the invite was looked at) | Reaching the hub by a name it does not know: add `--allow-host <name>` to `skillhub serve`, or use an address `serve` prints |
+| The hub is refusing attempts for a minute | Wait a minute, then run the command again |
+| This hub does not offer invites | The server is older than this feature; update Skill Hub on machine B, or use the `scp` lines |
+| `<path>` already exists | With `--token-file`, pick a path that does not exist yet, or leave `--token-file` out |
+
+**Limits to know.** The invite appears in the command line on machine A for the moment the command runs, so another user of that machine could read it from the process list; it works once and expires in 10 minutes. Tailscale's address range (100.64.0.0/10) is the generic carrier-grade NAT range, so the server cannot tell Tailscale from another network that uses the same range; the server also refuses requests that carry proxy headers (`Forwarded`, `X-Forwarded-*`, `Via`), including those from `tailscale serve` and Funnel. A user who can already log in to machine B can use the route like any client, and two hubs reached through the same `127.0.0.1:<port>` tunnel on machine A would share one saved file.
+
+## Set up on your LAN or Tailscale with `scp`
 
 ### 1. On machine B: start the server
 
@@ -322,7 +375,7 @@ Skill Hub uses two different tokens. Keep both private.
 | | Hub token | Web session token |
 |---|---|---|
 | What it is for | Lets agents on other machines use the hub | Lets your browser use the web UI |
-| Where it lives | The file `runtime/config/.hub-token` in the hub, readable by you only; machine A keeps a copy in `~/.skillhub-token-<host>-<port>` | In the address `skillhub serve web` prints, after `#token=` |
+| Where it lives | The file `runtime/config/.hub-token` in the hub, readable by you only; machine A keeps a copy under `hub-tokens/` in the Skill Hub configuration folder when it connects with an invite, or in `~/.skillhub-token-<host>-<port>` when you copy it with `scp` | In the address `skillhub serve web` prints, after `#token=` |
 | How long it lasts | Until you run `skillhub token rotate` | Until that `serve web` stops; every start makes a new one |
 | Who uses it | The proxy that `connect --hub` registers on machine A | Your browser only |
 | What someone who has it can do | Resolve tasks and read approved skills, like an agent on machine A | Add and change skills in the hub, which reaches every connected agent |

@@ -242,29 +242,40 @@ Chạy hub trên một máy và cho agent ở các máy khác dùng nó qua mạ
 
 | Máy | Vai trò | Việc làm ở máy đó |
 |---|---|---|
-| **Máy hub** | Giữ thư mục hub chứa skill của bạn | Cài Skill Hub, [tạo hub](#bước-1-cài-hub), chạy `skillhub serve` |
-| **Máy agent** | Chạy agent của bạn, như Claude Code | Cài Skill Hub, sao chép file token, chạy `skillhub connect` trong dự án |
+| **Máy hub** | Giữ thư mục hub chứa skill của bạn | Cài Skill Hub, [tạo hub](#bước-1-cài-hub), chạy `skillhub serve`, rồi `skillhub token invite` |
+| **Máy agent** | Chạy agent của bạn, như Claude Code | Cài Skill Hub, dán dòng mà `token invite` in ra, trong dự án của bạn |
 
 Hãy cài Skill Hub trên cả hai máy trước, như ở phần [Cài đặt](#cài-đặt). Sau đó:
 
-1. **Trên máy hub**, khởi động server:
+1. **Trên máy hub**, khởi động server và để nó chạy:
 
    ```bash
    cd ~/skill-hub && skillhub serve
    ```
 
-   Với mỗi địa chỉ mà máy kia dùng được, nó in ra hai dòng để chạy trên máy agent: một dòng `scp` sao chép file token của hub, và dòng `connect`. Cứ để nó chạy.
-
-2. **Trên máy agent**, chạy hai dòng đó. Chạy dòng `connect` trong dự án của bạn:
+2. **Trên máy hub**, ở một terminal khác, tạo một lời mời:
 
    ```bash
-   scp -p you@<máy-hub>:skill-hub/runtime/config/.hub-token ~/.skillhub-token-<máy-hub>-7420
-   cd <dự-án-của-bạn> && skillhub connect --hub http://<máy-hub>:7420 --token-file ~/.skillhub-token-<máy-hub>-7420
+   cd ~/skill-hub && skillhub token invite
    ```
 
-   Hãy chép đúng các dòng server in ra; chúng chứa đúng địa chỉ và tên file. Nếu không dùng được `scp` (không có tài khoản SSH vào máy hub), hãy sao chép file token sang máy agent bằng cách riêng tư nào đó và chạy `chmod 600` cho nó; `connect` chỉ cần đường dẫn của file đó. Thêm `-g` vào `connect` để kết nối mọi dự án của tài khoản người dùng cùng lúc.
+   Nó in một dòng cho mỗi địa chỉ an toàn để dùng, ví dụ:
 
-3. **Khởi động lại agent** và kiểm tra kết nối:
+   ```text
+   skillhub connect --hub http://100.121.46.35:7420 --invite K7QF-9M2X-4TBD
+   ```
+
+   Mã chỉ dùng được một lần và hết hạn sau 10 phút. Nó không phải token của hub. Chạy lại lệnh để lấy mã mới.
+
+3. **Trên máy agent**, dán dòng đó trong dự án của bạn:
+
+   ```bash
+   cd <dự-án-của-bạn> && skillhub connect --hub http://100.121.46.35:7420 --invite K7QF-9M2X-4TBD
+   ```
+
+   Lệnh đổi mã lấy token của hub, lưu token vào thư mục cấu hình của Skill Hub (`~/.config/skillhub/hub-tokens/` trên Linux, `~/Library/Application Support/skillhub/hub-tokens/` trên macOS, `%AppData%\skillhub\hub-tokens\` trên Windows) và kết nối dự án. Thêm `-g` để kết nối mọi dự án của tài khoản người dùng cùng lúc.
+
+4. **Khởi động lại agent** và kiểm tra kết nối:
 
    ```bash
    cd <dự-án-của-bạn> && skillhub doctor
@@ -272,14 +283,14 @@ Hãy cài Skill Hub trên cả hai máy trước, như ở phần [Cài đặt](
 
    Nó kiểm tra hub có trả lời và có nhận token của bạn không, và in một cách sửa cho mỗi mục lỗi. Nếu nó báo "Nothing answers", hãy chạy `skillhub serve` trên máy hub.
 
-`serve` lắng nghe trên mọi giao diện mạng qua HTTP thường, nên chỉ dùng trên mạng của riêng bạn hoặc qua [Tailscale](https://tailscale.com). Trên mạng bạn không tin cậy, hãy để server chỉ nghe trên địa chỉ của chính máy hub và mở một đường hầm SSH từ máy agent:
+Lời mời chỉ được nhận qua [Tailscale](https://tailscale.com) hoặc qua đường hầm SSH, nơi lưu lượng được mã hoá, và `connect` từ chối gửi mã tới nơi khác. Trên mạng bạn không tin cậy, hãy để server chỉ nghe trên địa chỉ của chính máy hub và mở đường hầm từ máy agent, rồi dùng dòng loopback mà `token invite` in ra:
 
 ```bash
 cd ~/skill-hub && skillhub serve --addr 127.0.0.1:7420     # trên máy hub
 ssh -N -L 7420:127.0.0.1:7420 you@<máy-hub>                 # trên máy agent, để nó chạy
 ```
 
-Sau đó chạy các dòng `scp` và `connect` cho `127.0.0.1:7420` mà server đã in. Trên máy hub, `skillhub serve --install-service` giữ server chạy sau khi bạn đóng terminal (Linux và macOS). Việc quản lý skill vẫn ở máy hub. [Dùng một hub từ nhiều máy](docs/remote-hub-guide.md) nói về token, Windows, dịch vụ nền, xoay token và quay về một máy.
+Hãy chạy `token invite` với cùng `--workspace` và `--addr` như server. Trên mạng thường, hoặc khi không có Tailscale, hãy sao chép file token bằng các dòng `scp` mà `skillhub serve` in ra. Trên máy hub, `skillhub serve --install-service` giữ server chạy sau khi bạn đóng terminal (Linux và macOS). Việc quản lý skill vẫn ở máy hub. [Dùng một hub từ nhiều máy](docs/remote-hub-guide.md) nói chi tiết về lời mời, cách `scp`, Windows, dịch vụ nền, xoay token và quay về một máy.
 
 ## Xem thử
 

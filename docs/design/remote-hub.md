@@ -71,7 +71,15 @@ itself. Network mode always serves the runtime profile only. The stdio proxy
 `skillhub mcp proxy --hub <url> [--token-file <path>]` is the entry that `connect --hub` writes; users
 do not type it. On the wire the listener answers `/mcp` (MCP Streamable HTTP), `GET /mcp/bundle` (a
 whole approved skill as one digest-addressed archive, with `ETag` and `304`) and `GET /mcp/status`
-(version and remote protocol level), all behind the same bearer token.
+(version and remote protocol level), all behind the same bearer token, and `POST /mcp/pair`, which takes
+a one-time invite instead of the bearer token and answers with the hub token. The pair route is off unless
+the server was given an invite store. It answers only when both the local and the remote address of the
+connection are loopback or in `100.64.0.0/10` and the request has no forwarding header; otherwise it
+answers 403 without looking at the invite. An invite is a 12 character code kept on the hub as an empty
+file named by its SHA-256, whose modification time is its expiry; it is claimed by an atomic rename, so
+exactly one request wins, and it expires after 10 minutes. Failures are counted per remote address apart from
+bearer failures, every failure answers the same 403, and the hub token is read before the invite is claimed
+so a token problem never wastes an invite.
 
 ## Threat model
 

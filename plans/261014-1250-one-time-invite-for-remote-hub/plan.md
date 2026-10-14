@@ -1,7 +1,7 @@
 ---
 title: "One-time invite to hand the hub token to another machine"
 description: "skillhub token invite prints a single-use, short-lived code; skillhub connect --hub <url> --invite <code> redeems it over the network listener and saves the shared hub token in the user config directory, so the scp step is no longer needed."
-status: pending
+status: in-progress
 priority: P2
 effort: 8h
 branch: main
@@ -170,3 +170,16 @@ Every critical and high finding was checked against the code and is folded into 
 - [ ] `serve --print` is gone from the code, `help serve`, both READMEs, the guide and the command reference, with no
       leftover test or doc reference.
 - [ ] Docs describe invite as the default way and `scp` as the fallback, in both READMEs and the guide.
+
+## Progress
+
+- 2026-10-14: phases 1 to 4 implemented in parallel worktrees and merged into local `main`; a run on a temp hub
+  (isolated HOME) went through issue, redeem, saved token (0600 in a 0700 folder), connected project, second use
+  refused, LAN host refused, `--dry-run` refused, no terminal refused.
+- 2026-10-14: independent review ([review-261014-invite-implementation.md](../reports/review-261014-invite-implementation.md)):
+  no blocker, one high. The high (pairing failures sharing the bearer throttle, so a stale token on a tunnel could lock
+  out re-pairing) and the mislabelled Host/Origin refusal are fixed with tests; an existing `--token-file` is now
+  refused before the invite is used. Left as documented limits: invite visible in the command line, DNS answering
+  differently between the client's check and its request, two hubs behind one tunnel port sharing a saved file.
+- 2026-10-14: docs written (both READMEs, remote hub guide, command reference, design note).
+- Next: release v0.6.7 (needs a session with push and tag rights; the releasing session was closed).
