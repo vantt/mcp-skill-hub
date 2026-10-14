@@ -136,11 +136,13 @@ flowchart LR
 
 ## Xem thử
 
-Khởi động giao diện web từ hub của bạn, chỉ trên máy này. Nó in ra một liên kết kèm token phiên; hãy mở nó trong trình duyệt. [Hướng dẫn giao diện web](docs/web-ui.md) đi qua từng tác vụ.
+Khởi động giao diện web từ hub của bạn. Nó in ra liên kết cho máy này, mạng của bạn và Tailscale, mỗi liên kết kèm token phiên; hãy mở một liên kết trong trình duyệt. [Hướng dẫn giao diện web](docs/web-ui.md) đi qua từng tác vụ.
 
 ```bash
-cd ~/skill-hub && skillhub serve web --addr 127.0.0.1:7421
+cd ~/skill-hub && skillhub serve web
 ```
+
+Nó nghe trên mọi giao diện mạng, nên ai có liên kết đều sửa được skill của bạn. Muốn giữ nó trên máy này, thêm `--addr 127.0.0.1:7421`.
 
 <img src="docs/images/web/skill-review.png" alt="Tab Review của một skill đang dùng, hiển thị kiểm tra nội dung và mức sẵn sàng." width="800">
 

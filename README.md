@@ -136,11 +136,13 @@ flowchart LR
 
 ## See it
 
-Start the web UI from your hub, on this machine only. It prints a link with a session token; open it in your browser. The [web UI guide](docs/web-ui.md) walks through each task.
+Start the web UI from your hub. It prints a link for this computer, your network and Tailscale, each with a session token; open one in your browser. The [web UI guide](docs/web-ui.md) walks through each task.
 
 ```bash
-cd ~/skill-hub && skillhub serve web --addr 127.0.0.1:7421
+cd ~/skill-hub && skillhub serve web
 ```
+
+It listens on every network interface, so anyone with the link can change your skills. To keep it on this computer, add `--addr 127.0.0.1:7421`.
 
 <img src="docs/images/web/skill-review.png" alt="The Review tab of an active skill showing its content check and readiness." width="800">
 
