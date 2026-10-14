@@ -3,6 +3,8 @@
 **Phạm vi:** thêm, tạo, sửa, thử và công bố skill qua `skillhub` CLI và qua agent (curator skill gọi CLI, hoặc MCP profile `curation`). Web UI do người đánh giá khác phụ trách; ở đây chỉ đọc code web để so sánh.
 **Cách làm:** binary build từ `main` tại `f337753` (có `9cb61e4`), chạy trên một hub tạm (`skillhub init`), HOME và `XDG_*` tách riêng, một project tạm đã `connect`, một thư mục local và GitHub thật (`anthropics/skills`, `--path skills/pdf`) làm nguồn. Đường runtime được thử bằng cách nói chuyện thẳng với `skillhub mcp serve --profile runtime` qua stdio (JSON-RPC), giữ một phiên mở trong khi sửa skill. Hub thật `/home/vantt/skill-hub`, HOME thật và project thật không bị đụng tới.
 
+**Bổ sung lần 2 (cùng ngày):** sau ba quyết định và một yêu cầu mới của người dùng, báo cáo có thêm bốn phần. (1) Git host: tạm thời chỉ hỗ trợ GitHub, nhưng phải dựng dưới dạng một interface (port) để sau này thêm GitLab; xem phần [Port cho Git host](#port-cho-git-host). (2) Cập nhật từ upstream: giữ mô hình hiện tại (không tự áp dụng; luôn preview/confirm), chỉ làm cho UX thật tốt; xem phần [Cập nhật từ upstream](#cập-nhật-từ-upstream-outdated--upstream--update). Mọi gợi ý kiểu tự cập nhật đã bị loại khỏi báo cáo. (3) Use case mới UC5: một agent ở project có một skill chưa có trên hub và muốn đẩy nó lên để duyệt và publish, với cả hub cùng máy lẫn hub ở máy khác; xem phần [UC5](#uc5-đưa-một-skill-mới-từ-project-lên-hub). (4) Người dùng muốn thiết kế và bàn UX cùng hình dạng lệnh *trước* khi làm. Vì vậy mọi tên lệnh, cờ và output trong báo cáo này là **phương án để thảo luận**, không phải thiết kế đã chốt. Phần [Hình dạng lệnh để thảo luận](#hình-dạng-lệnh-để-thảo-luận) đưa ra hai phương án cho mỗi luồng chính, kèm transcript mẫu và đánh đổi. Báo cáo cố ý không có kế hoạch triển khai. Phần bổ sung được kiểm tra thực tế trên một hub tạm khác (HOME/XDG riêng), có `skillhub serve` chạy ở `127.0.0.1:47931` cho trường hợp hub ở xa; server đã được dừng sau khi thử.
+
 ## Kết luận chung
 
 Phần lõi đã chắc chắn: preview/confirm bám pin, quy tắc trust cho nội dung bên thứ ba, và đường phục vụ runtime nhận bản sửa ngay ở lần `skill_get` kế tiếp (10–50 ms, tự rebuild, không cần khởi động lại agent; đã kiểm chứng với cả bản sửa có quản lý lẫn sửa file trực tiếp). Cảm giác "chưa đúng" không đến từ một lệnh hỏng nào. Nó đến từ ba khoảng trống trong mô hình. (1) **Không có cách thử một skill trong agent thật trước khi activate**: draft không có `local.path` nên script không chạy được, và đường duy nhất còn lại (gọi `skill_get` draft bằng ID) sẽ bị gỡ khi plan `261014-1650-runtime-skill-get-gate` được làm. (2) **Mỗi lần sửa chỉ đụng được `SKILL.md` và metadata.** Script và file reference chỉ sửa được trên web UI hoặc bằng cách sửa file trong hub, mà curator skill lại cấm agent làm vậy. (3) **Preview không cho thấy thay đổi**: `--content-file` và MCP `skill_update_preview` chỉ liệt kê tên file, trong khi curator yêu cầu agent "cho người dùng xem diff". Thêm vào đó, mỗi lần chủ hub tự sửa một skill bên thứ ba đã duyệt, skill đó im lặng trở thành không phục vụ được ở *mọi* project, mà resolver vẫn tiếp tục gợi ý nó. Tôi đề xuất sửa nhóm P0 nhỏ trước (diff, các câu "Next" sai, cảnh báo trust), rồi thêm **một** cơ chế mới là `skillhub skill checkout` / `checkin`. Cơ chế này gộp được ba khoảng trống còn lại (thử trong agent thật, sửa nhiều file, cập nhật từ thư mục) mà không thêm trạng thái mới vào Git.
@@ -60,13 +62,14 @@ Khoảng 8–9 lệnh. Người dùng phải biết thêm các khái niệm prop
 
 **Điểm đau:**
 
-1. **Cao: chỉ hỗ trợ github.com công khai.** Repo nội bộ trên GitLab, Gitea hay server tự host, và cả một bản clone local, đều không vào được với upstream được theo dõi. Cách vòng là `git clone` rồi `skill add <dir>`, nhưng khi đó origin thành "local authoring" và mất `skill update` (merge 3 bên). Với người dùng ở công ty, đây có thể là chặn cứng. Xem câu hỏi mở 1.
+1. **Đã có quyết định: chỉ hỗ trợ github.com công khai.** Repo trên GitLab, Gitea hay server tự host, và cả một bản clone local, đều không vào được với upstream được theo dõi. Cách vòng hiện có là `git clone` rồi `skill add <dir>`, nhưng khi đó origin thành "local authoring" và mất `skill update` (merge 3 bên). Người dùng đã chọn giữ GitHub-only lúc này và tách phần phụ thuộc GitHub ra sau một port; xem phần [Port cho Git host](#port-cho-git-host).
+   - Thêm một lỗi đi kèm: `--ref` không nhận commit SHA, chỉ nhận branch hoặc tag. Bản preview báo đúng lỗi (`reference not found for "3d59511/skills/docx"`). Nhưng cùng lệnh đó với `--yes` lại báo `ERROR: The proposal is stale … FIX: Regenerate the add proposal.` (exit 2), tức là che mất nguyên nhân thật và dẫn người dùng đi thử lại vô ích. Tôi gặp lỗi này hai lần liên tiếp trên một hub mới khởi tạo.
 2. **Trung bình: lỗi repo quá lớn chỉ sai hướng.** `source exceeded bytes limit (8560432 > 8388608)` đi kèm `FIX: Correct the skill fields or workspace state and retry.` FIX đúng phải là "dùng `--path <thư mục skill>` hoặc `--skill <tên>`".
 3. **Trung bình: cảnh báo license bị ẩn ở chế độ người đọc.** Preview dạng text không in cảnh báo "Proprietary"; cảnh báo này chỉ có trong `--json` (`warnings[].code = license_warning`). Người dùng gõ tay không bao giờ thấy nó.
 4. **Trung bình: duyệt nội dung là thao tác hai bước dù người đã xem.** `--approve-content <digest>` tạo thêm một preview ("Skill edit is ready for review … No files changed"), phải chạy lại với `--yes`. Sau khi duyệt xong, dòng "Next" lại bảo "edit the instructions with `--editor`", trong khi bước kế tiếp thực ra là điền routing hoặc activate.
 5. **Thấp:** ngay sau khi add, `status` đã báo "1 source is due for an update check", tức là thêm việc ngay ở lần đầu.
 
-**Luồng lý tưởng:** `skill add <url>` → một màn hình gồm file, license, routing gợi ý và lệnh duyệt → người dùng gõ một lệnh confirm, trong terminal có thể kèm `--approve-content`, vì chính họ vừa đọc diff đó. Agent vẫn không bao giờ được duyệt. Hỗ trợ mọi URL HTTPS Git, không chỉ GitHub.
+**Luồng lý tưởng:** `skill add <url>` → một màn hình gồm file, license, routing gợi ý và lệnh duyệt → người dùng gõ một lệnh confirm, trong terminal có thể kèm `--approve-content`, vì chính họ vừa đọc diff đó. Agent vẫn không bao giờ được duyệt.
 
 ---
 
@@ -139,7 +142,9 @@ Kết luận: profile split (runtime cho project, CLI cho curation) không phả
 
 Các ràng buộc cần tôn trọng: Git là database; ít file; không over-engineer; người duyệt nội dung bên thứ ba; mọi mutation có preview/confirm.
 
-### Phương án A: `skillhub skill checkout` / `checkin` (đề xuất)
+Ba phương án dưới đây là các *mô hình*. Tên lệnh dùng ở đây (`checkout`, `checkin`, `trial`) chỉ để gọi tên cho dễ bàn; hai cách đặt tên và cách trình bày cho mỗi luồng nằm ở phần [Hình dạng lệnh để thảo luận](#hình-dạng-lệnh-để-thảo-luận).
+
+### Phương án A: lấy skill ra project, sửa, rồi đẩy về (`checkout` / `checkin`; hướng đề xuất)
 
 ```text
 skillhub skill checkout review-checklist            # mặc định: <project>/.claude/skills/review-checklist/
@@ -154,7 +159,7 @@ skillhub skill checkin review-checklist --yes       # người chấp thuận; t
 - **Trust:** checkin một skill bên thứ ba làm approval thành stale, giống mọi lần sửa khác. Khác biệt là preview của checkin cảnh báo trước. Khi người đang ở TTY, cho phép `checkin --yes --approve-content` trong cùng bước, vì họ vừa xem đúng diff đó; agent vẫn bị deny. Với skill đang active, bản trong hub không đổi cho tới khi checkin được confirm, nên các project khác không bị chặn trong lúc đang thử. Đây là cải tiến lớn so với hiện tại.
 - **Ưu điểm:** thử trong agent thật, có script, với cả draft lẫn active. Không cần trạng thái mới trong Git. Agent dùng công cụ file mà nó giỏi nhất. Sửa nhiều file thành một lần duyệt. Không đụng tới gate plan.
 - **Nhược điểm:** có hai bản sao (có thể quên checkin; `status` nên liệt kê các checkout đang mở, đọc từ file đánh dấu trong project đã connect). Thử bằng cách gọi trực tiếp, nên **không** thử được routing; routing được kiểm bằng lint/eval ngay trong preview của checkin. Mức hỗ trợ skill native khác nhau giữa các host: Claude Code và Codex có, Gemini cần kiểm tra.
-- **Công sức:** khoảng 3 ngày (checkout 0.5 ngày, checkin + merge + resource add/delete 1.5–2 ngày, curator/docs 0.5 ngày).
+- **Cỡ việc (ước lượng thô, không phải kế hoạch):** khoảng 3 ngày.
 
 ### Phương án B: sửa thẳng trong Git worktree của hub
 
@@ -174,54 +179,440 @@ skillhub skill checkin review-checklist --yes       # người chấp thuận; t
 
 ### Đề xuất
 
-Chọn **A**. Nó là phương án duy nhất giải được cùng lúc cả ba khoảng trống (thử trước khi publish, sửa nhiều file, cập nhật từ thư mục). Hub chỉ làm đúng vai "cung cấp chức năng" như người dùng hình dung: export, import thành proposal, merge, duyệt. Git vẫn là database, và mỗi checkout chỉ thêm đúng một file đánh dấu nằm ngoài hub. Ghi B vào docs như đường cho người làm trực tiếp trong hub, kèm sửa thông điệp `status`. Để C cho sau, chỉ khi dùng A một thời gian mà vẫn thấy cần thử *routing* trong phiên thật; lint/eval trong preview của checkin có thể đã đủ.
+Hướng đề xuất là mô hình **A**; tên lệnh và output vẫn để bàn. Nó là phương án duy nhất giải được cùng lúc cả ba khoảng trống (thử trước khi publish, sửa nhiều file, cập nhật từ thư mục). Hub chỉ làm đúng vai "cung cấp chức năng" như người dùng hình dung: export, import thành proposal, merge, duyệt. Git vẫn là database, và mỗi checkout chỉ thêm đúng một file đánh dấu nằm ngoài hub. Ghi B vào docs như đường cho người làm trực tiếp trong hub, kèm sửa thông điệp `status`. Để C cho sau, chỉ khi dùng A một thời gian mà vẫn thấy cần thử *routing* trong phiên thật; lint/eval trong preview của checkin có thể đã đủ.
 
 ---
 
 ## Ảnh hưởng tới các plan đang hoãn
 
 - **`261014-1545-findability-lint`: giữ, nhưng đổi thứ tự và nơi hiển thị.** Phase 1 sửa một lỗi thật: `ReviewSkill` chưa bao giờ báo routing lint, vì `DecodeSkillDocument` chỉ đọc JSON. Phase này nên làm ngay, độc lập với phần còn lại. Giá trị lớn nhất của lint là hiện ngay trong preview của edit, create và checkin (câu hỏi mở 1 của plan: nối vào `RoutingImpactHook`). Đề xuất đưa việc đó vào phạm vi, vì hiện tại "Routing impact" trong preview chỉ là câu vô nghĩa ("Direct routing fields … were evaluated against sha256:…"). Nếu form create không hỏi ví dụ thì lint không có gì để kiểm, nên P1 #11 bên dưới là điều kiện để lint có tác dụng.
-- **`261014-1540-session-mining-routing-proposals`: tiếp tục hoãn (P2).** Plan này cải thiện metadata của skill *đã active* dựa trên telemetry; nó không chạm tới nỗi đau hiện tại (thêm, tạo, sửa, thử, publish). Plan cần case journal (opt-in), và đầu ra `--from-suggestion` của nó là một edit preview, mà hiện edit preview chưa có diff. Nên làm sau P0 #1. Không cần đổi thiết kế.
-- **`261014-1650-runtime-skill-get-gate` (không hoãn nhưng có liên quan):** quy tắc này đúng cho runtime sạch, nhưng nó gỡ đường thử draft duy nhất hiện có. Nên làm cùng lúc hoặc sau `checkout` (câu hỏi mở 2), và đổi lý do `not_servable` cho draft thành một mã dễ hiểu hơn (ví dụ `draft_not_served`).
+- **`261014-1540-session-mining-routing-proposals`: tiếp tục hoãn (P2).** Plan này cải thiện metadata của skill *đã active* dựa trên telemetry; nó không chạm tới nỗi đau hiện tại (thêm, tạo, sửa, thử, publish). Plan cần case journal (opt-in), và đầu ra `--from-suggestion` của nó là một edit preview, mà hiện edit preview chưa có diff. Nên làm sau P0 "preview có diff". Không cần đổi thiết kế.
+- **`261014-1650-runtime-skill-get-gate` (không hoãn nhưng có liên quan):** quy tắc này đúng cho runtime sạch, nhưng nó gỡ đường thử draft duy nhất hiện có. Nên làm cùng lúc hoặc sau `checkout` (câu hỏi mở 2), và đổi lý do `not_servable` cho draft thành một mã dễ hiểu hơn (ví dụ `draft_not_served`). Với UC5 ở hub xa, plan này không đổi gì: proxy vốn chỉ có 3 tool runtime.
+
+---
+
+## UC5: Đưa một skill mới từ project lên hub
+
+Tình huống: agent đang làm việc trong một project và có một skill **chưa có trên hub**. Skill đó có thể nằm trong `.claude/skills/<id>/` của project hoặc ở một thư mục bất kỳ, và có thể do chính agent viết trong phiên làm việc. Agent muốn đẩy skill lên hub để người duyệt rồi publish. Tôi thử với một skill `team-release` gồm `SKILL.md`, `scripts/bump.sh` và một file `.env` chứa `API_TOKEN=do-not-ship`. File `.env` mô phỏng một thứ thường bị bỏ quên trong thư mục làm việc.
+
+### 5a. Hub cùng máy (project được `skillhub connect` tới hub local): đã chạy
+
+```text
+cd <project> && skillhub skill add .claude/skills/team-release        # preview
+cd <project> && skillhub skill add .claude/skills/team-release --yes  # draft trong skills/default/
+skillhub skill review team-release
+skillhub skill edit team-release --trigger … --not-for … --min-scope … --yes
+skillhub skill activate team-release --yes
+git -C <hub> add -- history skills && git -C <hub> commit …
+```
+
+Cũng giống UC1a: 5–6 lệnh. Agent làm được qua curator (CLI với `--json`), với hai lớp chấp thuận ở mỗi bước ghi.
+
+**Điểm đau:**
+
+1. **Nghiêm trọng: bí mật trong thư mục bị copy vào hub một cách im lặng, rồi sẵn sàng bị commit.** Preview dạng text chỉ báo "2 files, 227 B". Nó không liệt kê file nào, và không cảnh báo gì về `.env`. Chỉ trong `--json` mới thấy `resources: ['.env', 'scripts/bump.sh']`; cảnh báo duy nhất có ở đó là `license_warning`. Sau `--yes`, `.env` nằm trong `<hub>/skills/default/team-release/`. `skillhub maintain validate` báo "Workspace validation passed". `.gitignore` của hub không loại `.env` (`git check-ignore` không khớp), nên chính lệnh `git add -- history skills` mà `status` gợi ý sẽ stage file bí mật này. `docs/curating-skills.md` có dặn "keep secrets out of it", nhưng sản phẩm không giúp người dùng làm việc đó. Rủi ro tăng khi agent là người gửi skill lên: agent hay để lại file tạm, cache, `.env` hay log trong thư mục làm việc.
+2. **Cao: một skill do agent viết được coi là first-party và không cần duyệt nội dung.** Origin là `local` ("local authoring"), nên không có bước `--approve-content`, và skill có thể activate ngay. Với cùng một người trên cùng một máy thì điều này hợp lý. Nhưng agent có thể đã chép script từ Internet vào thư mục đó, nên "do project viết" chưa chắc là "do chủ hub viết". Xem câu hỏi mở về trust.
+3. **Trung bình: sau khi đẩy lên hub, bản gốc vẫn nằm trong `.claude/skills/` của project.** Claude Code sẽ nạp bản native đó, còn hub lại phục vụ bản trong hub. Hai bản sẽ trôi xa nhau, và lần `skill add` thứ hai báo `Skill conflict detected` (UC1a). Không có lời nhắc nào về việc dọn bản trong project hay biến nó thành một bản checkout có đánh dấu.
+4. **Thấp:** id lấy từ tên thư mục và collection là `default`. Không có cách gán collection hay routing ngay trong preview.
+
+### 5b. Hub ở máy khác (`connect --hub …`, chạy qua `skillhub mcp proxy`): đã chạy
+
+`skillhub serve --addr 127.0.0.1:47931` chạy trên hub. Project được kết nối bằng `skillhub connect --hub http://127.0.0.1:47931 --token-file …`.
+
+- Khi `connect`, lệnh tự nói rõ: "Curation stays on the hub machine: no curation server and no system-curator skill are installed here."
+- `skillhub mcp proxy` chỉ có 3 tool: `skill_feedback`, `skill_get`, `skill_resolve`. Gọi `skill_create_preview` qua proxy bị trả lỗi `unknown tool "skill_create_preview"`.
+- Trong project đó, `skillhub skill add .claude/skills/team-release`, `skill create …`, và cả `skill list` đều trả cùng một lỗi rõ ràng: "This project uses the hub at http://127.0.0.1:47931. Skills are curated on the hub machine. FIX: Run this command on the hub machine." Các lệnh này trả exit 2, đúng như mong đợi.
+- `docs/remote-hub-guide.md:491-493` coi điều này là chủ ý: "Curation tools … any write to your skills … never travel", và một token bị đánh cắp "does not allow any curation".
+- MCP `skill_create_preview` của profile curation, ngay cả trên hub cùng máy, chỉ nhận `content` (một chuỗi `SKILL.md`; `internal/delivery/mcpserver/types.go:117-125`). Không có trường cho file kèm theo. Vì thế, kể cả khi mở tool này qua mạng, nó cũng không mang được `scripts/` lên.
+
+**Kết luận 5b:** hôm nay **không có đường nào** để đưa một skill từ máy A lên hub ở máy B, trừ những cách thủ công ngoài sản phẩm: chép thư mục sang B rồi chạy `skill add` ở B, hoặc commit vào một repo GitHub rồi `skill add <url>` ở B. Cách thứ hai biến skill của chính mình thành third-party, và repo phải công khai.
+
+### UC5: luồng lý tưởng và hub cần cung cấp gì
+
+UC5 chính là trường hợp "check-in một thư mục chưa có dấu checkout" của mô hình A. Nên dùng chung một cơ chế với UC4, không đặt thêm lệnh riêng:
+
+1. **Cùng máy:** agent chạy lệnh đẩy lên trên thư mục. Không có file đánh dấu nghĩa là đây là **skill mới**, nên lệnh tạo proposal *tạo draft*. Có file đánh dấu nghĩa là đây là bản đang sửa, nên lệnh tạo proposal *cập nhật* (UC4).
+   - Preview phải liệt kê **mọi file** cùng kích thước.
+   - Preview phải loại mặc định các file giống bí mật hoặc rác (`.env*`, `*.pem`, `id_*`, `.DS_Store`, `node_modules/`, `__pycache__/`) và nói rõ đã loại file nào. Muốn giữ một file thì người dùng phải chủ động thêm.
+   - Preview phải cho gán collection và routing ngay.
+   - Sau khi confirm, bản trong project được chuyển thành một bản checkout có đánh dấu, hoặc được gợi ý xóa, để hết chuyện hai bản trôi nhau.
+2. **Hub ở xa:** máy A không đọc được hệ thống file của B và ngược lại, nên file phải đi qua mạng. Có hai lựa chọn khác nhau về bản chất (xem luồng "Gửi skill lên hub ở xa" trong phần hình dạng lệnh):
+   - **(R1) Nộp qua MCP:** proxy có thêm một tool để nộp skill. Tool này nhận các file dưới dạng base64, trong giới hạn hiện có (2 MiB/file, 8 MiB tổng, 2048 file). Ở B, skill vào hàng chờ như một **draft cách ly**, mang origin "submitted from <machine>". Nó luôn cần người ở B duyệt nội dung bằng `--approve-content`, giống third-party. Server chỉ nhận bài nộp khi chủ hub bật rõ ràng, ví dụ khi `serve` được bật cho nhận skill nộp lên, vì cho phép nộp làm rộng những gì một token bị đánh cắp có thể làm.
+   - **(R2) Đi qua Git:** máy A đóng gói skill (một file bundle, hoặc đẩy lên một nhánh `submissions/<id>` của remote Git của hub). Ở B, chủ hub chạy `skill add` từ bundle hoặc từ nhánh đó. Không cần mở thêm gì trên server MCP, và hợp với "Git là database". Đổi lại, máy A phải có quyền push vào remote Git, và luồng này không còn gói gọn trong một câu lệnh agent.
+3. **Trust (đề xuất để bàn):** skill tạo từ project cùng máy coi là first-party như hiện nay, vì cùng người và cùng máy; bộ lọc bí mật cùng danh sách file đầy đủ là điều kiện tối thiểu. Skill nộp từ máy khác thì coi là **chưa duyệt**, giống third-party, cho tới khi người ở hub duyệt. Lý do: token runtime không chứng minh được ai đã viết nội dung.
+4. **Cỡ việc (thô):** UC5 cùng máy gần như được miễn phí nếu đã có `checkin` của mô hình A (cộng khoảng 0.5 ngày cho bộ lọc bí mật và danh sách file; phần này nên làm ngay ở P0 cho `skill add <dir>`). R1 khoảng 2–3 ngày (tool mới trên proxy và HTTP listener, giới hạn kích thước, hàng chờ, cấu hình bật/tắt, tài liệu bảo mật). R2 khoảng 1–2 ngày.
+
+---
+
+## Cập nhật từ upstream (`outdated` → `upstream` → `update`)
+
+Người dùng giữ mô hình hiện tại: không tự áp dụng, luôn preview/confirm. Phần này chỉ đánh giá UX của mô hình đó.
+
+**Cách dựng tình huống:** trên hub tạm, tôi add `docx` từ nhánh cũ `klazuka/export-20260203` (`d5119f8`) của `anthropics/skills`, rồi chuyển ref theo dõi sang `main` (`dbd4588`). Các digest đều do hub tự tính, nên trạng thái này tương đương một skill được add từ lâu. Upstream đổi 17 file, trong đó `SKILL.md` đổi gần như toàn bộ (482 → 92 dòng).
+
+### Đã chạy và đếm bước
+
+```text
+skillhub skill outdated              # "not checked", chỉ có cache
+skillhub skill outdated --check      # 2.4 s: "1 of 1 … need attention … 17 files … update available"
+skillhub skill upstream docx         # liệt kê 17 file đổi upstream (không bắt buộc)
+skillhub skill update docx           # preview: bảng file + toàn bộ diff (2,864 dòng)
+skillhub skill confirm --proposal … --proposal-digest … --base-version …   (hoặc --yes)
+skillhub skill review docx           # approval đã stale, có lệnh git diff so với bản đã duyệt
+skillhub skill edit docx --approve-content sha256:… --yes
+git add / commit
+```
+
+Không có xung đột: khoảng 7 lệnh. Có xung đột (sau khi tôi sửa cục bộ `SKILL.md` và `scripts/office/validators/docx.py`), thêm `update --write-conflicts <dir>`, sửa file, `update --manual SKILL.md=<file>` (preview), rồi chạy lại với `--yes`: khoảng 10–11 lệnh.
+
+### Những gì đã tốt, và nên giữ
+
+- Bảng tóm tắt trước diff rất rõ: mỗi file có một cột `CHANGE` (changed upstream / added / removed / changed here and upstream) và một cột `ACTION` (take upstream / merged / needs decision). Ngoài ra có dòng "48 file(s) unchanged".
+- Merge 3 bên tự động chạy được: `validators/docx.py` có sửa ở cả hai phía nhưng không chồng dòng, nên được đánh dấu `merged`.
+- Khi có xung đột, output in đủ ba lựa chọn cho từng file (`--accept SKILL.md=upstream|local`, `--manual SKILL.md=<file>`) cùng lệnh `--write-conflicts`. File xung đột có marker `<<<<<<< local` / `>>>>>>> upstream` chuẩn, và chỉ bao đúng đoạn chồng nhau (dòng 10–26).
+- Preview nói trước: "After applying, agents cannot use docx until you approve the new content". `review` sau đó in sẵn `git diff fd317b3f3024 -- skills/default/docx`, tức là diff so với bản đã duyệt. Đây đúng là thứ còn thiếu ở luồng edit (UC3, điểm đau 2).
+- Sau `--yes`, cả bản sửa cục bộ (`TEAM NOTE`, `# team tweak`) lẫn phần thay đổi của upstream đều được giữ.
+
+### Điểm đau
+
+1. **Cao: lỗi bị giấu ở chế độ text, và exit code là 0.** Khi skill đã cập nhật, hoặc không có upstream, `skill update` in "Update docx from - to - (…, source )." cùng một lệnh confirm có pin rỗng, và trả **exit 0**. JSON thì đúng: `status: error`, "Upstream is unchanged." Đây là cùng một lỗi hiển thị với `skill add` thêm lại thư mục (UC1a): bộ in text bỏ qua `status: error`.
+2. **Cao: `skill upstream` gợi ý một bước không làm gì.** Khi trạng thái là "up to date (local copy is clean)", lệnh vẫn in "Next: skillhub skill update docx", và lệnh đó chính là no-op lỗi ở điểm 1.
+3. **Trung bình: preview đổ toàn bộ diff (2,864 dòng) ra terminal.** Bảng tóm tắt bị cuộn mất. Cảnh báo về approval và dòng "Next" nằm ở cuối cùng. Luồng `edit` thì ngược lại: không có diff (UC3, điểm đau 3). Hai luồng cần một quy ước chung, xem luồng "Cách hiện preview" trong phần hình dạng lệnh.
+4. **Trung bình: sau khi đã giải quyết xung đột, preview vẫn báo "needs decision".** Khi đã truyền `--manual SKILL.md=<file>`, bảng vẫn ghi `needs decision (1 conflict)` cho `SKILL.md`, dù lần apply ngay sau đó thành công. Người dùng không biết mình đã giải quyết xong hay chưa.
+5. **Trung bình: phần giải quyết xung đột thiếu một nước đi tự nhiên.** Muốn sửa thì phải `--write-conflicts` ra một thư mục, sửa, rồi truyền lại `--manual <path>=<file>` cho từng file. Không có cách "mở xung đột trong editor ngay tại chỗ" khi đang ở TTY, cũng không có lựa chọn `--accept-all=upstream`. Với 1 file thì chấp nhận được; với 5 file thì nặng nề.
+6. **Thấp: hai bước chỉ để kiểm tra.** `outdated` (cache) báo "not checked" và bảo chạy `--check`, rồi `--check` mới cho kết quả. Lệnh `upstream` lặp lại phần lớn thông tin của `update` preview. Ba động từ cho một việc làm tăng số bước.
+7. **Thấp:** approval sau cập nhật vẫn là bước riêng (`--approve-content` dạng preview, rồi `--yes`), dù người dùng vừa xem đúng diff đó ngay trong preview của update.
+
+**Luồng lý tưởng (giữ preview/confirm):** một lệnh kiểm tra cho ra danh sách skill có cập nhật. Một lệnh cập nhật cho ra bảng tóm tắt, mặc định chỉ thống kê theo file, và xem diff đầy đủ qua pager hoặc theo yêu cầu. Xung đột được hỏi từng file khi ở TTY (upstream / giữ của mình / mở editor). Có một lần confirm, và người ở TTY có thể duyệt nội dung luôn trong lần đó. Hai phương án hình dạng lệnh nằm ở luồng "Cập nhật từ upstream" bên dưới.
+
+---
+
+## Port cho Git host
+
+Quyết định của người dùng: tạm thời chỉ hỗ trợ GitHub, nhưng phải dựng sao cho sau này thêm GitLab mà không đụng nhiều chỗ. Phần này chỉ đánh giá chỗ nối hiện có và đề xuất port nhỏ nhất; không có kế hoạch triển khai.
+
+### Hiện trạng
+
+- **Đã trung lập về host:** `Adapter` (`internal/source/types.go`: `Identify`, `CurrentRevision`, `Diff`, `Read`, `List`) và `GitRepositoryAdapter` (`internal/source/git_repository.go`) làm việc với bất kỳ URL HTTPS Git nào qua go-git: mirror, liệt kê ref, đọc commit, giới hạn kích thước. Dữ liệu lưu trong Git cũng đã trung lập: `NormalizedLocator.Kind` nhận `"github"` hoặc `"git"` (`locator.go:102`, `:114`), và schema canonical đã chấp nhận `kind: git` (`internal/canonical/skill.go:205`). `ResolveGitHubRoute` (`locator.go:287`) thực ra cũng trung lập; chỉ có tên là GitHub.
+- **Phần phụ thuộc GitHub:**
+  - `ParseGitHubLocatorWithOptions` chặn host ở `locator.go:213-214` (`host != "github.com"`).
+  - Dựng URL canonical ở `locator.go:238`.
+  - Hiểu dạng đường dẫn `/tree/<ref>/…` và `/blob/<ref>/…/SKILL.md` của GitHub, và dùng `validGitHubName` ở `:510`.
+- **Nơi gọi:**
+  - `internal/app/skill_add.go:364` và `:378`;
+  - `internal/app/source_watch.go:95` và `:104`;
+  - `internal/app/source.go:486`, `:491` và `:1224`.
+- **Origin `"github"` được ghi cứng:**
+  - `internal/app/skill_add.go:452`;
+  - `internal/app/source_import.go:630` và `:700`;
+  - `internal/app/source_backfill.go:405`.
+  - Ngoài ra nhiều chỗ so sánh `== "github" || == "git"`, trong đó có `internal/skillruntime/trust.go:39`. Chỗ này quyết định một skill có phải third-party hay không, nên host mới **bắt buộc** phải map vào một trong hai kind này.
+- **Câu chữ GitHub-only:**
+  - `internal/app/skill_add.go:367`;
+  - `internal/app/source_watch.go:17`, `:31`, `:73`, `:80` và `:98`;
+  - `internal/delivery/web/locator.go:60`;
+  - mô tả schema MCP ở `internal/delivery/mcpserver/types.go:34` và `:44`, cùng `skill_add_tools.go:23`;
+  - web UI: `web/src/screens/skill-add/AddSkillScreen.tsx` và `web/src/screens/skill-detail/AddSourceForm.tsx`.
+
+### Port nhỏ nhất, giữ nguyên hành vi hiện nay
+
+Một interface "nhà cung cấp host" trong `internal/source`. Interface này chỉ lo phần *hiểu URL*; phần Git vẫn do `GitRepositoryAdapter` làm:
+
+```go
+// HostProvider turns a web URL of a hosting service into a Git repository route.
+type HostProvider interface {
+    Kind() string                                   // "github"; stored as origin kind
+    Matches(u *url.URL) bool                        // host check (today: github.com)
+    ParseRoute(u *url.URL, ref, path string) (*ParsedRoute, error) // tree/blob/root shapes, canonical repo URL
+}
+```
+
+- Có một registry chỉ chứa `GitHubProvider`. Hàm `ParseLocatorWithOptions` duyệt qua registry; host không khớp provider nào trả lại đúng lỗi hiện tại (`unsupported host …; only public github.com is supported`), nên hành vi và test hiện có giữ nguyên.
+- `ParsedGitHubRoute` và `ResolveGitHubRoute` đổi tên thành `ParsedRoute` và `ResolveRoute`, kèm type alias tạm để giảm diff. Nhánh `file://` dành cho test vẫn giữ.
+- Bốn chỗ ghi cứng `"github"` lấy `Kind()` từ provider. Các phép so sánh `"github" || "git"` giữ nguyên, vì một provider GitLab sau này có thể ghi `kind: git`, hoặc thêm kind của nó vào cùng chỗ.
+- Câu chữ cho người dùng lấy từ registry ("supported hosts: github.com"), để khi thêm host thì không phải sửa câu ở năm chỗ.
+- **File đụng tới:**
+  - `internal/source/locator.go` (tách phần GitHub);
+  - một file mới `internal/source/host_github.go`;
+  - `internal/app/skill_add.go`, `source_watch.go`, `source.go`, `source_import.go`, `source_backfill.go`;
+  - câu chữ ở `internal/delivery/web/locator.go` và `internal/delivery/mcpserver/types.go`.
+  - Test hiện có trong `internal/source/locator_test.go` trở thành test của provider GitHub và phải pass mà không đổi kỳ vọng.
+  - Digest danh sách tool MCP sẽ đổi nếu mô tả schema đổi; có thể giữ nguyên câu chữ để tránh việc này.
+- **Cỡ việc:** khoảng 0.5–1 ngày, tùy có kéo theo web UI hay không.
+- **Những gì port này cố ý *chưa* giải quyết, và GitLab tự host sau này sẽ cần:**
+  - Chính sách địa chỉ chặn IP nội bộ và riêng tư (`internal/source/policy.go`, `deniedAddressRanges`), nên một GitLab trong mạng LAN công ty vẫn bị chặn dù đã có provider.
+  - Chỉ hỗ trợ HTTPS không có thông tin đăng nhập (URL có user info bị từ chối), nên repo riêng tư cần thêm một cơ chế credential.
+  - Nên nêu hai điểm này ngay trong ghi chú thiết kế của port, để không ai tưởng "có provider là đủ".
+
+---
+
+## Hình dạng lệnh để thảo luận
+
+Mỗi luồng dưới đây có hai phương án, kèm transcript mẫu (bịa ra để minh họa, không phải output thật) và đánh đổi. Không phương án nào đã được chọn. Tôi chỉ nêu nghiêng của mình khi có lý do rõ.
+
+### Luồng 1: Lấy skill ra project để sửa và thử (UC3/UC4)
+
+**Phương án 1A: một cặp động từ riêng, `checkout` / `checkin`.**
+
+```text
+$ skillhub skill checkout review-checklist
+Copied review-checklist (active, 4 files) to .claude/skills/review-checklist/
+Hub copy unchanged; agents in other projects keep using it.
+Try it: ask your agent to use /review-checklist.
+Next: skillhub skill checkin review-checklist
+
+$ skillhub skill checkin review-checklist
+review-checklist: 2 files changed since checkout (hub copy unchanged)
+  M SKILL.md                 +3 -1
+  M scripts/lint-diff.sh     +1 -1
+Routing: 3/3 examples still resolve to review-checklist.
+Show the diff: skillhub skill checkin review-checklist --diff
+Apply: skillhub skill checkin review-checklist --yes
+```
+
+**Phương án 1B: không thêm động từ; `edit` có một chế độ làm việc trong project.**
+
+```text
+$ skillhub skill edit review-checklist --here
+Working copy of review-checklist in .claude/skills/review-checklist/ (4 files).
+Edit and try it there; when you are done:
+  skillhub skill edit review-checklist --from .claude/skills/review-checklist
+
+$ skillhub skill edit review-checklist --from .claude/skills/review-checklist
+Skill edit is ready for review: 2 files changed (+4 -2).
+  M SKILL.md, M scripts/lint-diff.sh
+Next: skillhub skill edit review-checklist --from … --yes
+```
+
+**Đánh đổi:**
+
+- **1A:** dễ nhớ và có tên cho một trạng thái thật ("đang có người sửa bên ngoài"), nên `status` có thể liệt kê các checkout đang mở. Đổi lại, có thêm hai động từ, và cặp từ này gợi cảm giác khóa (lock) mà thực tế không có.
+- **1B:** giữ bộ lệnh nhỏ, đúng với sở thích tối giản, và `--from <dir>` dùng lại được cho UC1a (cập nhật từ thư mục nguồn). Đổi lại, "bản làm việc đang mở" khó hiện trong `status`, và người dùng phải nhớ cặp cờ `--here` / `--from`.
+- **Nghiêng của tôi:** 1B nếu ưu tiên ít động từ, 1A nếu muốn `status` nhắc các bản đang sửa dở.
+
+### Luồng 2: Đẩy một skill mới từ project lên hub cùng máy (UC5a)
+
+**Phương án 2A: dùng lại `skill add <dir>`, và làm preview cho đủ.**
+
+```text
+$ skillhub skill add .claude/skills/team-release
+Add team-release as a draft (collection: core) from this project.
+Files (2, 227 B):
+  SKILL.md            181 B
+  scripts/bump.sh      46 B
+Left out (looks like a secret or build output):
+  .env                 include with --include .env
+Routing: none yet. Suggested from the description:
+  trigger "cut a release"; add more with --trigger/--example.
+After adding, .claude/skills/team-release/ stays in this project; it will
+drift from the hub copy. Remove it, or keep it as a working copy (--keep-as-working-copy).
+Next: skillhub skill add .claude/skills/team-release --yes
+```
+
+**Phương án 2B: một động từ "đẩy lên" duy nhất cho cả skill mới lẫn skill đã có.**
+
+```text
+$ skillhub skill publish .claude/skills/team-release
+team-release is not on the hub: this creates a new draft.
+Files: SKILL.md, scripts/bump.sh   (left out: .env)
+Next: skillhub skill publish .claude/skills/team-release --yes
+
+$ skillhub skill publish .claude/skills/review-checklist
+review-checklist is on the hub (active); this updates it: 2 files changed.
+Next: … --diff | … --yes
+```
+
+**Đánh đổi:**
+
+- **2A:** không thêm lệnh, và người dùng đã biết `add`. Đổi lại, `add` vẫn còn khác với "cập nhật từ thư mục", nên cần thêm luồng 1 cho phần cập nhật.
+- **2B:** một động từ, và agent không cần biết skill đã tồn tại hay chưa. Đổi lại, có rủi ro ghi đè nhầm khi trùng id (bắt buộc phải có một câu hỏi rõ ràng "this updates an existing skill"). Ngoài ra, chữ "publish" dễ bị hiểu thành activate, trong khi thực ra skill chỉ vào hub dưới dạng draft.
+- **Dù chọn phương án nào**, danh sách file đầy đủ cùng bộ lọc bí mật nên làm ngay (P0).
+
+### Luồng 3: Gửi skill lên hub ở máy khác (UC5b)
+
+**Phương án 3A: nộp qua MCP (proxy có thêm một tool nộp).**
+
+```text
+(machine A) $ skillhub skill submit .claude/skills/team-release
+Hub http://hub-b:7420 accepts submissions.
+Sent team-release (2 files, 227 B; left out: .env) as a submission.
+On the hub machine it waits as a draft that needs content approval:
+  skillhub skill review team-release      (run on hub-b)
+
+(machine B) $ skillhub status
+Waiting
+  - 1 submitted skill needs review: team-release (from machine-a, 2026-10-14)
+```
+
+**Phương án 3B: đi qua Git, không mở thêm gì trên server.**
+
+```text
+(machine A) $ skillhub skill pack .claude/skills/team-release --to submissions/team-release
+Pushed branch submissions/team-release to the hub's Git remote (2 files; left out: .env).
+Ask the hub owner to run: skillhub skill add --branch submissions/team-release
+
+(machine B) $ skillhub skill add --branch submissions/team-release
+Add team-release as a draft from branch submissions/team-release (pushed by t@t).
+```
+
+**Đánh đổi:**
+
+- **3A:** agent tự làm trọn được, và trải nghiệm giống hệt cùng máy. Đổi lại, nó làm rộng những gì token runtime cho phép (hôm nay một token bị đánh cắp chỉ đọc được). Nó cần một chỗ bật/tắt, giới hạn kích thước, hàng chờ, và tài liệu bảo mật mới.
+- **3B:** không đổi gì ở bề mặt mạng, đúng tinh thần "Git là database", và có sẵn danh tính người push trong Git. Đổi lại, máy A phải có quyền push vào remote của hub (nhiều người dùng một hub qua SSH tunnel thì không có), và cần thêm một bước người làm trên B.
+- **Dù chọn phương án nào**, skill đến từ máy khác nên được coi là chưa duyệt cho tới khi người ở B duyệt.
+
+### Luồng 4: Cách hiện preview (edit, add, update)
+
+**Phương án 4A: tóm tắt trước, diff theo yêu cầu.**
+
+```text
+$ skillhub skill update docx
+Update docx d5119f8 → dbd4588 (upstream commit of 2026-10-09)
+  17 files: 9 changed, 5 added, 3 removed; 1 needs a decision (SKILL.md)
+  SKILL.md   changed here and upstream   needs decision
+  …
+After applying, agents cannot use docx until you approve the new content.
+See the diff:   skillhub skill update docx --diff        (or --diff SKILL.md)
+Decide SKILL.md: --accept SKILL.md=upstream|local, or --manual SKILL.md=<file>
+```
+
+**Phương án 4B: diff đầy đủ luôn có, nhưng qua pager khi ở TTY.**
+
+```text
+$ skillhub skill update docx
+(opens $PAGER: summary table on the first screen, then the full diff)
+(after the pager closes)
+1 file needs a decision. Next: … --accept SKILL.md=upstream|local
+```
+
+**Đánh đổi:**
+
+- **4A:** màn hình đầu luôn ngắn. Agent đọc JSON và tự lấy `full_diff`. Người dùng phải gõ thêm một lệnh nếu muốn xem. Nếu chọn 4A thì `edit` cũng phải có `--diff`, và curator phải dùng nó.
+- **4B:** không bỏ sót gì và đúng tinh thần "chỉ duyệt thứ mình đã thấy". Đổi lại, pager khó dùng trong một số terminal hay CI (khi không ở TTY thì phải tự tắt), và kết quả hai lần chạy khác nhau tùy môi trường.
+- **Nghiêng của tôi:** 4A, với điều kiện JSON và MCP *luôn* trả `full_diff`, để agent luôn có diff thật để cho người xem.
+
+### Luồng 5: Cập nhật từ upstream
+
+**Phương án 5A: giữ ba động từ, sửa output.**
+
+`outdated` (cache), `outdated --check`, `upstream <id>` và `update <id>` giữ nguyên tên. Các thay đổi:
+- `outdated` tự kiểm tra khi cache đã cũ hơn N ngày (đây vẫn chỉ là kiểm tra, không phải áp dụng);
+- `upstream` không gợi ý `update` khi không có gì để cập nhật;
+- `update` dùng luồng 4;
+- xung đột được hỏi từng file khi ở TTY:
+
+```text
+$ skillhub skill update docx
+… 1 file needs a decision.
+SKILL.md changed here and upstream.
+  [u] take upstream  [l] keep mine  [e] edit merged file in $EDITOR  [d] show diff  [q] quit
+> e
+(editor opens with conflict markers; save without markers)
+Resolved SKILL.md. Apply update? Agents cannot use docx until you approve it. [y/N/a=apply and approve]
+```
+
+**Phương án 5B: một động từ.**
+
+`skillhub skill update` không kèm id trở thành danh sách những skill có cập nhật (thay cho `outdated`). Thông tin của `upstream <id>` được gộp vào phần đầu của `update <id>`.
+
+```text
+$ skillhub skill update
+2 skills have upstream changes (checked 3 min ago):
+  docx   d5119f8 → dbd4588   17 files   diverged (you changed 2 files)
+  pdf    dbd4588 → 1ed29a0    3 files   update available
+Next: skillhub skill update docx
+```
+
+**Đánh đổi:**
+
+- **5A:** không đổi thói quen hay docs, và chỉ sửa đúng chỗ đau. Đổi lại, vẫn có ba động từ cho một việc.
+- **5B:** ít bước hơn và dễ đoán. Đổi lại, phải giữ `outdated` và `upstream` làm alias một thời gian, và `update` không kèm id dễ bị nhầm với `skillhub update` (lệnh cập nhật chính binary). Help hiện đã phải có một dòng "Note" để phân biệt hai lệnh này.
+- **Cả hai** đều giữ nguyên preview/confirm, đúng quyết định của người dùng.
+
+### Luồng 6: Duyệt nội dung bên thứ ba (chỉ người, chỉ ở terminal)
+
+**Phương án 6A: gắn vào lần confirm.**
+
+```text
+$ skillhub skill update docx --yes --approve
+Applied the upstream update and approved the content you just reviewed
+(sha256:290fa83…). Agents can use docx again.
+```
+
+`--approve` chỉ chạy được ở TTY. Agent bị chặn bằng luật `deny` hiện có, mở rộng thêm cho cờ mới.
+
+**Phương án 6B: một động từ riêng, không bắt người dùng nhìn digest.**
+
+```text
+$ skillhub skill approve docx
+docx changed since you last approved it (fd317b3):
+  A scripts/merge_runs.py  M SKILL.md  … (17 files; attention: scripts changed)
+Show the diff? [Y/n] y   (pager)
+Approve exactly this content? [y/N] y
+Approved. Agents can use docx.
+```
+
+**Đánh đổi:**
+
+- **6A:** ít bước nhất, đúng lúc người dùng vừa xem diff. Đổi lại, nó gộp hai quyết định (áp dụng và tin cậy) vào một cờ, và luật `deny` của host phải phủ thêm cờ mới.
+- **6B:** rõ ràng, tách biệt, và digest được ghim ở bên trong chứ không bắt người dùng chép 64 ký tự hex. Đổi lại, vẫn là một bước riêng. Nó cũng cần TTY thật, nên không chạy được trong script; điều này đúng với ý đồ.
 
 ---
 
 ## Danh sách cải tiến theo ưu tiên
 
-### P0: nhỏ, sửa ngay (tổng khoảng 1.5 ngày)
+Đây là danh sách *việc nên làm*. Hình dạng lệnh của các mục P1 vẫn chờ người dùng chọn ở phần trên. Cỡ việc là ước lượng thô.
 
-1. **Preview luôn có unified diff:** text, `--json` (`full_diff`) và MCP; ghi `--full-diff` vào help hoặc bỏ cờ này. Đổi câu "No files changed" thành "Nothing written yet". Công sức 2–3 giờ.
-2. **Cảnh báo trust khi sửa skill bên thứ ba:** preview nói rõ "agents get no content until you re-approve" và in sẵn lệnh duyệt. Resolver không trả skill đang `review_required` làm primary, hoặc trả kèm chú thích. Công sức khoảng 0.5–1 ngày.
-3. **Thêm lại thư mục local không đổi:** text phải nói "already in the hub (active, edited since); nothing changed", và không in lệnh confirm với pin rỗng. Tương tự cho `skill update` trên skill không có upstream (`from - to - (source )`, exit 0). Công sức khoảng 2 giờ.
-4. **Gợi ý commit sau activate/edit:** dùng cùng lệnh `add -- … && commit` như `status`. Công sức 0.5 giờ.
-5. **FIX khi activate với starter text:** in `--editor` hoặc `--content-file <file>`. Công sức 0.5 giờ.
-6. **FIX khi repo vượt 8 MiB:** "dùng `--path` hoặc `--skill`". Công sức 0.5 giờ.
-7. **In cảnh báo license ở chế độ text.** Công sức 0.5 giờ.
-8. **"Next" sau `--approve-content`:** chỉ tới routing hoặc activate, không phải `--editor`. Công sức 0.5 giờ.
-9. **`status` sau khi sửa file trực tiếp:** thông báo nhẹ (hoặc tự rebuild), không phải `FAILED` + `doctor --fix`. Thống nhất thông điệp giữa form create, curator và doc 07 về việc sửa trực tiếp. Công sức 2 giờ.
+### P0: nhỏ, sửa ngay (tổng khoảng 2–2.5 ngày)
 
-### P1: thay đổi mô hình (khoảng 5 ngày)
+1. **Thêm skill từ thư mục: liệt kê đủ file và chặn bí mật.**
+   - Preview dạng text liệt kê mọi file cùng kích thước.
+   - Mặc định loại các file giống bí mật hoặc rác (`.env*`, khóa, `node_modules/`, `__pycache__/`, …), báo rõ đã loại file nào, và cho người dùng giữ lại một cách chủ động.
+   - `maintain validate` cảnh báo khi trong `skills/` có file giống bí mật.
+   - Cỡ việc khoảng 0.5 ngày. **Mức cao nhất trong danh sách:** hiện `.env` đi thẳng vào hub và sẵn sàng bị commit.
+2. **Preview luôn có unified diff:** text (theo luồng 4), `--json` (`full_diff`) và MCP. Ghi `--full-diff` vào help, hoặc bỏ cờ này. Đổi câu "No files changed" thành "Nothing written yet". Cỡ việc 2–3 giờ.
+3. **Bộ in text phải tôn trọng `status: error` và exit code.**
+   - `skill update` khi không có gì để cập nhật, hoặc khi skill không có upstream: hiện in "from - to -" với pin rỗng và trả exit 0.
+   - `skill add <dir>` thêm lại một thư mục không đổi: báo "Draft added" sai sự thật.
+   - `--ref <sha>` cùng `--yes` báo "proposal is stale" thay vì "reference not found".
+   - `skill upstream` không được gợi ý `update` khi đã cập nhật.
+   - Cỡ việc khoảng 0.5 ngày.
+4. **Cảnh báo trust khi sửa skill bên thứ ba:** preview của edit nói rõ "agents get no content until you re-approve", giống như preview của update đã làm. Resolver không trả skill đang `review_required` làm primary, hoặc trả kèm chú thích. Cỡ việc khoảng 0.5–1 ngày.
+5. **Gợi ý commit sau activate/edit:** dùng cùng lệnh `add -- … && commit` như `status`. Cỡ việc 0.5 giờ.
+6. **FIX khi activate với starter text:** in `--editor` hoặc `--content-file <file>`. Cỡ việc 0.5 giờ.
+7. **FIX khi repo vượt 8 MiB:** "dùng `--path` hoặc `--skill`". Cỡ việc 0.5 giờ.
+8. **In cảnh báo license ở chế độ text.** Cỡ việc 0.5 giờ.
+9. **"Next" sau `--approve-content`:** chỉ tới routing hoặc activate, không phải `--editor`. Cỡ việc 0.5 giờ.
+10. **`status` sau khi sửa file trực tiếp:** thông báo nhẹ (hoặc tự rebuild), không phải `FAILED` + `doctor --fix`. Thống nhất thông điệp giữa form create, curator và doc 07. Cỡ việc 2 giờ.
+11. **Update preview với `--manual`:** không ghi "needs decision" cho file đã được giải quyết. Cỡ việc 1 giờ.
 
-10. **`skill checkout` / `checkin`** (phương án A). Cơ chế này gộp việc sửa resource cho CLI/agent và cập nhật từ thư mục. Công sức khoảng 3 ngày.
-11. **Form create hỏi 1–3 ví dụ và mở editor ở cuối;** thống nhất collection mặc định giữa `add` và `create`. Công sức khoảng 0.5 ngày.
-12. **Duyệt nội dung một bước khi người ở TTY:** `--approve-content` không tạo thêm preview; cho phép kèm vào confirm của edit/checkin. Công sức khoảng 2 giờ.
-13. **findability-lint phase 1** (lỗi decode trong review) và nối lint vào preview. Phase 1 mất vài giờ; phần nối vào preview theo plan.
-14. **Locator Git tổng quát:** mọi host HTTPS, hoặc ít nhất ghi lại upstream cho một bản clone local. Công sức 1–2 ngày, tùy câu trả lời ở câu hỏi mở 1.
+### P1: thay đổi mô hình, sau khi người dùng chọn hình dạng lệnh (khoảng 5–6 ngày)
+
+12. **Lấy ra, sửa, đẩy về (mô hình A; luồng 1 và 2).** Một cơ chế dùng chung cho UC3, UC4 và UC5 cùng máy: sửa nhiều file, cập nhật từ thư mục, tạo skill mới từ thư mục, merge 3 bên khi hub đã đổi. Cỡ việc khoảng 3 ngày.
+13. **UX cập nhật upstream (luồng 4, 5 và 6):** tóm tắt trước diff, hỏi xung đột từng file khi ở TTY, `upstream` không gợi ý no-op, duyệt nội dung ngay sau khi xem diff. Cỡ việc khoảng 1–1.5 ngày.
+14. **Port Git host** (phần [Port cho Git host](#port-cho-git-host)): hành vi giữ nguyên, chỉ GitHub. Cỡ việc khoảng 0.5–1 ngày.
+15. **Form create hỏi 1–3 ví dụ và mở editor ở cuối;** thống nhất collection mặc định giữa `add` và `create`. Cỡ việc khoảng 0.5 ngày.
+16. **findability-lint phase 1** (lỗi decode trong review) và nối lint vào preview (edit, create, đẩy về). Phase 1 mất vài giờ; phần nối vào preview theo plan.
 
 ### P2
 
-15. Trial scope (phương án C), chỉ khi vẫn cần sau khi đã có A.
-16. Giảm nhiễu `history/operations` (ví dụ gộp receipt theo phiên, hoặc chỉ giữ cho mutation bên thứ ba). Cần người dùng quyết.
-17. Dọn thư mục cache cũ theo phiên bản trong `runtime/cache/skills`.
-18. Không đánh dấu source "due" ngay sau khi add; thống nhất cách đếm file giữa preview và review.
+17. **UC5 hub ở xa** (luồng 3: nộp qua MCP hoặc đi qua Git). Đây là mức P2 vì nó mở rộng bề mặt bảo mật và cần người dùng chọn hướng trước. Cỡ việc khoảng 1–3 ngày, tùy phương án.
+18. Trial scope (phương án C), chỉ khi vẫn cần sau khi đã có mô hình A.
+19. Giảm nhiễu `history/operations` (gộp receipt theo phiên, hoặc chỉ giữ cho thay đổi bên thứ ba). Cần người dùng quyết.
+20. Dọn thư mục cache cũ theo phiên bản trong `runtime/cache/skills`.
+21. Không đánh dấu source "due" ngay sau khi add; thống nhất cách đếm file giữa preview và review. `--ref` nhận commit SHA (hiện chỉ nhận branch hoặc tag).
+22. Khi thêm GitLab tự host: chính sách địa chỉ cho mạng nội bộ và credential cho repo riêng tư (nằm ngoài port ở P1 #14).
 
 ---
 
 ## Câu hỏi mở cho người dùng
 
-1. Skill của anh/chị có nằm ở GitLab, Gitea hay server nội bộ không? Nếu có, P1 #14 lên P0, vì hiện chỉ có `github.com` công khai.
-2. Có chấp nhận để gate plan `261014-1650` đợi `checkout` không? Nếu gate làm trước thì trong một thời gian, cách duy nhất để thử draft là activate.
-3. Khi chính anh/chị (trong terminal) sửa một skill bên thứ ba đã duyệt, có muốn duyệt luôn trong cùng lần confirm không, hay vẫn giữ hai bước riêng?
-4. Thư mục checkout nên đặt ở đâu mặc định: `.claude/skills/<id>` (Claude Code nạp native) hay một thư mục trung tính như `.skillhub/checkout/<id>`, rồi chỉ agent cách nạp?
-5. Receipt `history/operations/*.yaml` có còn cần commit cho mỗi lần sửa không, khi Git diff đã là bằng chứng?
-6. Có muốn ghi sửa trực tiếp trong hub (phương án B) vào docs như một đường chính thức cho người dùng, và nới lệnh cấm trong curator cho skill tự viết, không?
+1. **Luồng 1:** chọn cặp động từ riêng `checkout`/`checkin` (1A), hay một chế độ của `edit` với `--here`/`--from` (1B)? Thư mục làm việc đặt mặc định ở `.claude/skills/<id>` (Claude Code nạp native) hay ở một chỗ trung tính?
+2. **Luồng 2:** đẩy skill mới lên bằng `add <dir>` có preview đầy đủ (2A), hay bằng một động từ chung cho cả mới và cập nhật (2B)? Nếu là 2B, có muốn dùng chữ khác "publish" để khỏi bị hiểu thành activate không?
+3. **UC5 hub ở xa (luồng 3):** có thật sự cần agent ở máy A nộp skill lên không? Nếu cần, chọn nộp qua MCP, chấp nhận mở rộng token runtime (3A), hay đi qua Git, cần quyền push vào remote của hub (3B)?
+4. **Trust của skill viết trong project:** skill tạo từ project cùng máy coi là first-party như hiện nay (không cần `--approve-content`), còn skill nộp từ máy khác coi là chưa duyệt. Anh/chị đồng ý với cách chia này không?
+5. **Luồng 4 và 6:** preview mặc định là "tóm tắt + `--diff`" (4A) hay "diff đầy đủ qua pager" (4B)? Duyệt nội dung gắn vào confirm (6A) hay là một động từ `approve` riêng có hỏi y/N (6B)?
+6. **Luồng 5:** giữ `outdated`/`upstream`/`update` (5A) hay gộp thành một `skill update` (5B)?
+7. Có chấp nhận để gate plan `261014-1650` đợi mô hình A không? Nếu gate làm trước thì trong một thời gian, cách duy nhất để thử draft là activate.
+8. Receipt `history/operations/*.yaml` có còn cần commit cho mỗi lần sửa không, khi Git diff đã là bằng chứng?
+9. Có muốn ghi việc sửa trực tiếp trong hub (phương án B) vào docs như một đường chính thức cho người làm ngay trong hub, và nới lệnh cấm trong curator cho skill tự viết không?
