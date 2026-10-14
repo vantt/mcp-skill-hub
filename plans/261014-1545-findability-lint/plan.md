@@ -152,6 +152,9 @@ phase 2 benchmarks it before it is fixed. The same bound applies to every mode.
 
 ## Validate modes (decision and justification)
 
+Accepted by the user on 2026-10-14: `maintain validate` checks only changed skills by default, and
+`maintain validate --staged` (pre-commit) runs the same check, warnings only.
+
 - **`maintain validate` defaults to the changed skills. `--full` scans every active skill.**
   - Justification: the warnings a curator needs after an edit are the ones the edit causes. The cost
     then scales with the change, not the library, and a validate on a clean tree costs nothing.
