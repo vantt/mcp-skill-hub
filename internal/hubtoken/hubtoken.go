@@ -259,6 +259,9 @@ func (source *Source) Valid(presented string) bool {
 	return subtle.ConstantTimeCompare([]byte(presented), []byte(token)) == 1
 }
 
+// Token returns the current token, or the reason it cannot be read.
+func (source *Source) Token() (string, error) { return source.current() }
+
 func (source *Source) current() (string, error) {
 	info, err := os.Stat(source.path)
 	if err != nil {

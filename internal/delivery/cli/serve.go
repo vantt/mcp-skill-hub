@@ -10,6 +10,7 @@ import (
 	"net/netip"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/vantt/skillhub-mcp/internal/delivery/mcpserver"
 	"github.com/vantt/skillhub-mcp/internal/delivery/web"
 	"github.com/vantt/skillhub-mcp/internal/hubtoken"
+	"github.com/vantt/skillhub-mcp/internal/invite"
 )
 
 // mcpDefaultPort is the port `skillhub serve` listens on when --addr names
@@ -197,11 +199,22 @@ func runServeMCP(ctx context.Context, cfg serveConfig, addresses []listenAddress
 	}
 	defer closeListeners(listeners)
 
-	err := mcpserver.ServeHTTP(ctx, listeners, mcpserver.HTTPOptions{
+	inviteStore, err := invite.NewFileStore(filepath.Join(workspaceRoot, "runtime", "config", "invites"))
+	if err != nil {
+		termui.New(stderr).Error(
+			"Could not open the invite folder.",
+			err.Error(),
+			"Check the permissions of the workspace's runtime/config folder, then start it again.",
+		)
+		return 1
+	}
+
+	err = mcpserver.ServeHTTP(ctx, listeners, mcpserver.HTTPOptions{
 		Workspace:   workspaceRoot,
 		TokenFile:   tokenFile,
 		AllowHosts:  cfg.allowHosts,
 		Diagnostics: stderr,
+		Invites:     invite.NewService(inviteStore, nil, nil),
 		Ready: func(bound []net.Addr) {
 			interfaces, _ := hostpolicy.SystemInterfaces()
 			home, _ := os.UserHomeDir()

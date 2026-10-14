@@ -63,6 +63,9 @@ type HTTPOptions struct {
 	// Ready, when set, is called once the server accepts requests on every
 	// listener, with the addresses the listeners are bound to.
 	Ready func(addresses []net.Addr)
+	// Invites redeems the one-time codes presented to POST /mcp/pair; nil
+	// turns that route off (404).
+	Invites Redeemer
 }
 
 // ServeHTTP serves the runtime tools (skill_resolve, skill_get,
@@ -101,6 +104,7 @@ func ServeHTTP(ctx context.Context, listeners []net.Listener, options HTTPOption
 	hosts := hostpolicy.New(hostpolicy.Options{Listeners: addresses, AllowHosts: options.AllowHosts, Hostname: hostname})
 	gate := newHTTPGate(server, tokens, hosts, originHosts(addresses, options.AllowHosts), adapter.logger)
 	gate.bundle = adapter.bundleHTTPHandler(server)
+	gate.invites = options.Invites
 	httpServer := &http.Server{
 		Handler:           gate,
 		ReadHeaderTimeout: httpReadHeaderTimeout,
@@ -171,6 +175,7 @@ type httpGate struct {
 	server  *mcp.Server
 	handler http.Handler
 	bundle  http.Handler
+	invites Redeemer
 	tokens  *hubtoken.Source
 	hosts   *hostpolicy.Policy
 	// origins is the strict Origin set; it does not follow the Host policy's
@@ -222,7 +227,9 @@ func (gate *httpGate) ServeHTTP(writer http.ResponseWriter, request *http.Reques
 		http.Error(writer, "Forbidden: cross-origin requests are not accepted", http.StatusForbidden)
 		return
 	}
-	if request.URL.Path != HTTPEndpointPath && request.URL.Path != HTTPStatusPath && (request.URL.Path != HTTPBundlePath || gate.bundle == nil) {
+	if request.URL.Path != HTTPEndpointPath && request.URL.Path != HTTPStatusPath &&
+		(request.URL.Path != HTTPBundlePath || gate.bundle == nil) &&
+		(request.URL.Path != HTTPPairPath || gate.invites == nil) {
 		http.NotFound(writer, request)
 		return
 	}
@@ -233,6 +240,12 @@ func (gate *httpGate) ServeHTTP(writer http.ResponseWriter, request *http.Reques
 	if gate.closing.Load() {
 		writer.Header().Set("Connection", "close")
 		http.Error(writer, "the hub is shutting down", http.StatusServiceUnavailable)
+		return
+	}
+	// Pairing carries no bearer token: the invite is its credential, checked by
+	// the handler behind its own transport check and failure budget.
+	if request.URL.Path == HTTPPairPath {
+		gate.servePair(writer, request)
 		return
 	}
 	// A valid token always passes. The throttle slows down only requests
