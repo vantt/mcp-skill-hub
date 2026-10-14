@@ -221,43 +221,12 @@ func evaluatePositiveCases(ctx context.Context, root string, view *catalog.View,
 	for _, skill := range skills {
 		skillTotal := len(skill.Examples)
 		skillCorrect := 0
-		facts := buildPreconditionFacts(skill)
-		caps := buildPreconditionCapabilities(skill)
-		op := ""
-		if len(skill.Operations) > 0 {
-			op = skill.Operations[0]
-		}
-
-		for i, phrase := range skill.Examples {
+		for _, c := range ownCases(skill) {
+			if c.Kind != selfCaseExample {
+				continue
+			}
 			acc.totalP++
-			req := resolverpkg.Request{
-				SchemaVersion: "1",
-				RequestID:     fmt.Sprintf("routing-eval-%s-ex-%d", skill.ID, i),
-				Task: resolverpkg.Task{
-					Description: phrase,
-					Scope:       skill.MinScope,
-				},
-				Operation: op,
-				Context: resolverpkg.RequestContext{
-					Facts: facts,
-					Execution: resolverpkg.Execution{
-						Capabilities: caps,
-					},
-				},
-			}
-
-			decorator := func(base resolverpkg.Catalog) resolverpkg.Catalog {
-				return leaveOneOutCatalog{
-					Catalog:       base,
-					targetSkillID: skill.ID,
-					removeKind:    "example",
-					removeIndex:   i,
-				}
-			}
-
-			inst := svc
-			inst.Cache = resolverpkg.NewCache(64)
-			resp, err := inst.resolveWithin(ctx, root, view, req, decorator)
+			resp, err := resolveSelfCase(ctx, root, view, svc, c, skill)
 			if err != nil {
 				return fmt.Errorf("resolve positive case for %s: %w", skill.ID, err)
 			}
@@ -280,8 +249,8 @@ func evaluatePositiveCases(ctx context.Context, root string, view *catalog.View,
 				acc.failures = append(acc.failures, RoutingEvalCaseFailure{
 					SkillID:    skill.ID,
 					Kind:       "positive",
-					Index:      i,
-					Phrase:     phrase,
+					Index:      c.Index,
+					Phrase:     c.Phrase,
 					GotStatus:  string(resp.Status),
 					GotPrimary: gotPrimary,
 				})
@@ -303,43 +272,12 @@ func evaluatePositiveCases(ctx context.Context, root string, view *catalog.View,
 
 func evaluateCounterCases(ctx context.Context, root string, view *catalog.View, skills []resolverpkg.Skill, svc ResolverService, acc *routingEvalAccumulator) error {
 	for _, skill := range skills {
-		facts := buildPreconditionFacts(skill)
-		caps := buildPreconditionCapabilities(skill)
-		op := ""
-		if len(skill.Operations) > 0 {
-			op = skill.Operations[0]
-		}
-
-		for i, phrase := range skill.CounterExamples {
+		for _, c := range ownCases(skill) {
+			if c.Kind != selfCaseCounter {
+				continue
+			}
 			acc.totalN++
-			req := resolverpkg.Request{
-				SchemaVersion: "1",
-				RequestID:     fmt.Sprintf("routing-eval-%s-cx-%d", skill.ID, i),
-				Task: resolverpkg.Task{
-					Description: phrase,
-					Scope:       skill.MinScope,
-				},
-				Operation: op,
-				Context: resolverpkg.RequestContext{
-					Facts: facts,
-					Execution: resolverpkg.Execution{
-						Capabilities: caps,
-					},
-				},
-			}
-
-			decorator := func(base resolverpkg.Catalog) resolverpkg.Catalog {
-				return leaveOneOutCatalog{
-					Catalog:       base,
-					targetSkillID: skill.ID,
-					removeKind:    "counter_example",
-					removeIndex:   i,
-				}
-			}
-
-			inst := svc
-			inst.Cache = resolverpkg.NewCache(64)
-			resp, err := inst.resolveWithin(ctx, root, view, req, decorator)
+			resp, err := resolveSelfCase(ctx, root, view, svc, c, skill)
 			if err != nil {
 				return fmt.Errorf("resolve counter case for %s: %w", skill.ID, err)
 			}
@@ -349,8 +287,8 @@ func evaluateCounterCases(ctx context.Context, root string, view *catalog.View, 
 				acc.failures = append(acc.failures, RoutingEvalCaseFailure{
 					SkillID:    skill.ID,
 					Kind:       "counter",
-					Index:      i,
-					Phrase:     phrase,
+					Index:      c.Index,
+					Phrase:     c.Phrase,
 					GotStatus:  string(resp.Status),
 					GotPrimary: resp.Primary.ID,
 				})
@@ -358,6 +296,14 @@ func evaluateCounterCases(ctx context.Context, root string, view *catalog.View, 
 		}
 	}
 	return nil
+}
+
+// resolveSelfCase resolves one case of a skill through the served resolver
+// path, with the case's own phrase left out of its owner.
+func resolveSelfCase(ctx context.Context, root string, view *catalog.View, svc ResolverService, c selfResolutionCase, owner resolverpkg.Skill) (resolverpkg.Response, error) {
+	inst := svc
+	inst.Cache = resolverpkg.NewCache(64)
+	return inst.resolveWithin(ctx, root, view, selfResolutionRequest(c, owner), c.withoutPhrase)
 }
 
 func evaluateNoSkillCases(ctx context.Context, root string, view *catalog.View, noSkillFile string, svc ResolverService, acc *routingEvalAccumulator) error {
