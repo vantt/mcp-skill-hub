@@ -306,7 +306,13 @@ lessons:
         unfindable until someone misses it; b: lint does not run the resolver on a skill's
         own examples; d: lands as a lint check. One source.
     final_score: 3
-    decision: {state: candidate}
+    decision:
+      state: planned
+      reason: >-
+        Plan plans/261014-1545-findability-lint (on hold until the curation UX review):
+        self-resolution warnings in review and validate, checking only the examples a skill
+        change can affect.
+      at: e999668e8d8c
 
   - key: owner-trial-before-publish
     domains:

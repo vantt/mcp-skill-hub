@@ -246,7 +246,13 @@ lessons:
       - skills_system
       - server instructions
       - bootstrap
-    decision: {state: candidate}
+    decision:
+      state: planned
+      reason: >-
+        Plan plans/261014-1509-server-instructions-protocol: the protocol travels only in
+        MCP server instructions; connect stops writing the instruction-file block and doctor
+        --fix removes it.
+      at: 51334ae94919
 
   - key: stable-skill-uri-for-recovery
     domains:

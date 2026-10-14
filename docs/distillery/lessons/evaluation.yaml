@@ -80,7 +80,13 @@ lessons:
         2026-10-08 and current tests cover only absent directories; d: lands as a CI job; e:
         the sources show the claim failing silently. Five independent sources agree.
     final_score: 13.5
-    decision: {state: candidate}
+    decision:
+      state: planned
+      reason: >-
+        Plan plans/261014-1530-fresh-clone-e2e-test: an end-to-end test runs the documented
+        move-to-another-machine commands (init/connect) on a fresh clone with the built
+        binary and real MCP calls, and must be able to fail.
+      at: e999668e8d8c
 
   - key: behavior-eval-per-curated-skill
     domains:

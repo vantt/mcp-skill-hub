@@ -156,7 +156,13 @@ lessons:
         b: nothing proposes metadata from telemetry; c: every resolution that misses. One
         source, and the host-side step is a new pipeline.
     final_score: 3
-    decision: {state: candidate}
+    decision:
+      state: planned
+      reason: >-
+        Plan plans/261014-1540-session-mining-routing-proposals (on hold until the curation
+        UX review): proposals for examples/counter_examples/not_for on existing skills from
+        the case journal, applied only through preview/confirm.
+      at: e999668e8d8c
 
   - key: embedder-identity-in-index-state
     domains:
