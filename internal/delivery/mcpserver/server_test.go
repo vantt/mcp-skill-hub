@@ -197,11 +197,15 @@ func TestModernAndLegacySDKContracts(t *testing.T) {
 					if schemaErr != nil {
 						t.Fatal(schemaErr)
 					}
-					wantJSON, _ := json.Marshal(committed)
+					wantJSON, _ := json.Marshal(advertisedRequestSchema(committed.CloneSchemas()))
 					var gotContract, wantContract any
 					if json.Unmarshal(inputSchema, &gotContract) != nil || json.Unmarshal(wantJSON, &wantContract) != nil || !reflect.DeepEqual(gotContract, wantContract) {
-						t.Fatalf("tool %s discovery schema differs from committed resolver request schema\n got: %s\nwant: %s", tool.Name, inputSchema, wantJSON)
+						t.Fatalf("tool %s discovery schema differs from the projected committed resolver request schema\n got: %s\nwant: %s", tool.Name, inputSchema, wantJSON)
 					}
+					fullJSON, _ := json.Marshal(committed)
+					var full any
+					_ = json.Unmarshal(fullJSON, &full)
+					assertRequestSchemaCovers(t, tool.Name, "", gotContract, full)
 					committedResponse, schemaErr := contractschemas.ResolverResponse()
 					if schemaErr != nil {
 						t.Fatal(schemaErr)
@@ -764,4 +768,41 @@ func newMCPWorkspace(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return root
+}
+
+// assertRequestSchemaCovers fails when the advertised schema lacks a property,
+// a required name, an enum value, a const, a type or a closed-object flag that
+// the committed schema carries. Only validator-only keywords may be missing.
+func assertRequestSchemaCovers(t *testing.T, tool, path string, advertised, committed any) {
+	t.Helper()
+	switch want := committed.(type) {
+	case map[string]any:
+		got, ok := advertised.(map[string]any)
+		if !ok {
+			t.Fatalf("tool %s schema at %q is not an object", tool, path)
+		}
+		for key, wantValue := range want {
+			gotValue, present := got[key]
+			switch key {
+			case "$id", "$schema", "maxLength", "minLength", "maxItems", "uniqueItems", "format":
+				if present {
+					t.Fatalf("tool %s still advertises validator-only keyword %s at %q", tool, key, path)
+				}
+				continue
+			}
+			if !present {
+				t.Fatalf("tool %s schema drops %s at %q", tool, key, path)
+			}
+			assertRequestSchemaCovers(t, tool, path+"/"+key, gotValue, wantValue)
+		}
+	case []any:
+		got, ok := advertised.([]any)
+		if !ok || !reflect.DeepEqual(got, want) {
+			t.Fatalf("tool %s schema at %q = %v, want %v", tool, path, advertised, want)
+		}
+	default:
+		if !reflect.DeepEqual(advertised, committed) {
+			t.Fatalf("tool %s schema at %q = %v, want %v", tool, path, advertised, committed)
+		}
+	}
 }

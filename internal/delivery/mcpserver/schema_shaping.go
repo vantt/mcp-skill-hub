@@ -1,6 +1,7 @@
 package mcpserver
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -190,7 +191,7 @@ func deriveToolSchemas[In, Out any](name string, options toolSchemaOptions) (inp
 		if embedErr := embedResolverResponse(output, committedResponse); embedErr != nil {
 			panic(fmt.Sprintf("resolver output schema for %s: %v", name, embedErr))
 		}
-		input = committedRequest
+		input = advertisedRequestSchema(committedRequest)
 	}
 	return input, output
 }
@@ -254,4 +255,52 @@ func curationSessionInputSchema(schema *jsonschema.Schema) {
 			property.Minimum, property.Maximum = &minimum, &maximum
 		}
 	}
+}
+
+// advertisedRequestSchema projects the committed resolver request schema onto
+// what a client needs to build a call: types, properties, required lists, enums,
+// closed objects, references and descriptions. It drops the keywords only a
+// validator reads (identifiers, length and count bounds, uniqueness, formats),
+// because every call is validated against the full committed schema by
+// validateResolverArguments. It edits and returns the schema it is given.
+func advertisedRequestSchema(committed *jsonschema.Schema) *jsonschema.Schema {
+	walkSchema(committed, func(node *jsonschema.Schema) bool {
+		node.ID, node.Schema, node.Format = "", "", ""
+		node.MaxLength, node.MinLength, node.MaxItems = nil, nil, nil
+		node.UniqueItems = false
+		return true
+	})
+	return committed
+}
+
+// committedRequestValidator resolves the full committed resolver request schema
+// once per process.
+var committedRequestValidator = sync.OnceValues(func() (*jsonschema.Resolved, error) {
+	committed, err := committedResolverSchemas()
+	if err != nil {
+		return nil, err
+	}
+	return committed[0].CloneSchemas().Resolve(&jsonschema.ResolveOptions{})
+})
+
+// validateResolverArguments checks the raw arguments of a resolver tool call
+// against the full committed request schema, including the bounds that
+// discovery no longer advertises. Its error carries the wording the SDK uses for
+// arguments that break the advertised schema.
+func validateResolverArguments(raw json.RawMessage) error {
+	validator, err := committedRequestValidator()
+	if err != nil {
+		return fmt.Errorf("load committed resolver request schema: %w", err)
+	}
+	arguments := map[string]any{}
+	if len(raw) > 0 {
+		if err := json.Unmarshal(raw, &arguments); err != nil {
+			return fmt.Errorf("validating \"arguments\": unmarshaling arguments: %w", err)
+		}
+	}
+	var instance any = arguments
+	if err := validator.Validate(&instance); err != nil {
+		return fmt.Errorf("validating \"arguments\": %v", err)
+	}
+	return nil
 }

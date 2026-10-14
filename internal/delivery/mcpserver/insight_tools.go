@@ -68,7 +68,10 @@ func (adapter *Server) registerInsightTools(tools *toolRegistry) {
 		Description: "Evaluate a routing request with the deterministic resolver against the current catalog. This read-only evaluation never changes policy.",
 		Annotations: annotations(true, false, true, false),
 	},
-		func(ctx context.Context, _ *mcp.CallToolRequest, input resolveInput) (*mcp.CallToolResult, toolOutcome[routingEvaluationResult], error) {
+		func(ctx context.Context, req *mcp.CallToolRequest, input resolveInput) (*mcp.CallToolResult, toolOutcome[routingEvaluationResult], error) {
+			if err := validateResolverArguments(req.Params.Arguments); err != nil {
+				return nil, toolOutcome[routingEvaluationResult]{}, err
+			}
 			request := resolverpkg.Request(input)
 			if _, err := resolverpkg.NormalizeRequest(request); err != nil {
 				return failure[routingEvaluationResult](err)

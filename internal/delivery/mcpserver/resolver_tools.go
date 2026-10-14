@@ -15,6 +15,9 @@ func (adapter *Server) registerResolverTools(tools *toolRegistry) {
 		Description: "Pick at most one skill for the current task from task.description (in English). Then load the recommended skill with skill_get, or with skills/get and resources/read if your host supports the MCP skills extension.",
 		Annotations: annotations(true, false, true, false),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input resolveInput) (*mcp.CallToolResult, toolOutcome[resolveResult], error) {
+		if err := validateResolverArguments(req.Params.Arguments); err != nil {
+			return nil, toolOutcome[resolveResult]{}, err
+		}
 		request := resolverpkg.Request(input)
 		if _, err := resolverpkg.NormalizeRequest(request); err != nil {
 			return failure[resolveResult](err)
