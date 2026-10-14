@@ -46,7 +46,14 @@ lessons:
         tech-leads-club measured its own cut. Evidence 3: tech-leads-club and skillport
         reached a minimal-description runtime surface independently.
     final_score: 22.5
-    decision: {state: candidate}
+    decision:
+      state: planned
+      reason: >-
+        Plan plans/261014-1600-tools-list-budget: a model-visible and wire byte budget test
+        for the runtime tool list, shorter tool descriptions after server instructions land,
+        and a compact advertised resolver request schema validated against the full
+        contract.
+      at: 120b67676388
 
   - key: entrypoint-length-budget-lint
     domains:
