@@ -286,7 +286,17 @@ func runSkillUpstream(ctx context.Context, flags skillFlags, stdout, stderr io.W
 	}
 
 	p.Blank()
-	p.Line(fmt.Sprintf("Next: skillhub skill update %s", printableText(upstream.SkillID)))
+	id := printableText(upstream.SkillID)
+	switch upstream.Status {
+	case "update_available", "diverged":
+		p.Line(fmt.Sprintf("Next: skillhub skill update %s", id))
+	case "unknown", "unavailable":
+		p.Line(fmt.Sprintf("Next: skillhub source check %s", printableText(upstream.SourceID)))
+	case "upstream_removed":
+		p.Line(fmt.Sprintf("The skill folder no longer exists upstream. Keep your copy, or archive it: skillhub skill deprecate %s", id))
+	default:
+		p.Line("Nothing to update.")
+	}
 	return 0
 }
 
@@ -352,6 +362,9 @@ func runSkillUpdate(ctx context.Context, flags skillFlags, stdout, stderr io.Wri
 	}
 
 	if flags.yes {
+		if appErr := app.ErrorOf(preview, nil); appErr != nil {
+			return writeResult(stdout, stderr, flags.jsonOutput, preview, nil)
+		}
 		if len(preview.Unresolved) > 0 {
 			msg := fmt.Sprintf("%d file(s) need a decision before this update can be applied.", len(preview.Unresolved))
 			return writeInvalidRequest(stdout, stderr, flags.jsonOutput, msg, "Pass --accept or --manual to resolve conflicts.")
@@ -372,16 +385,20 @@ func runSkillUpdate(ctx context.Context, flags skillFlags, stdout, stderr io.Wri
 		return writeResult(stdout, stderr, true, preview, nil)
 	}
 
-	p := termui.New(stdout)
 	repoStr := ""
 	if info, err := app.GetSkillUpstream(ctx, flags.workspace, skillID); err == nil {
 		repoStr = info.Repository
 	}
-	renderUpstreamUpdatePreview(p, skillID, repoStr, preview, flags.verbose)
-	return 0
+	return writeResult(stdout, stderr, false, preview, func(p *termui.Printer) {
+		renderUpstreamUpdatePreview(p, skillID, repoStr, preview, flags.verbose)
+	})
 }
 
 func renderUpstreamUpdatePreview(p *termui.Printer, skillID string, repoURL string, preview app.UpstreamUpdatePreview, verbose bool) {
+	if len(preview.Unresolved) == 0 {
+		renderUpdateDiffs(p, preview, verbose)
+	}
+
 	commitDate := dateStr(preview.TargetCommittedAt)
 	b7 := shortSHA(preview.BaseCommit)
 	u7 := shortSHA(preview.TargetCommit)
@@ -400,7 +417,7 @@ func renderUpstreamUpdatePreview(p *termui.Printer, skillID string, repoURL stri
 		printableText(skillID), b7, u7, repoPart, dateClause))
 	p.Blank()
 
-	headers := []string{"FILE", "CHANGE", "ACTION"}
+	headers := []string{"FILE", "CHANGE", "ACTION", "LINES"}
 	var rows [][]string
 	for _, f := range preview.Files {
 		if f.Status == "unchanged" {
@@ -410,6 +427,7 @@ func renderUpstreamUpdatePreview(p *termui.Printer, skillID string, repoURL stri
 			printableText(f.Path),
 			formatChangeWord(f.Status),
 			formatActionWord(f),
+			formatLineCounts(f.ResultDiff),
 		})
 	}
 	p.Table(headers, rows)
@@ -430,9 +448,26 @@ func renderUpstreamUpdatePreview(p *termui.Printer, skillID string, repoURL stri
 		return
 	}
 
-	// Clean preview diffs
+	if preview.TrustImpact.ReviewRequiredAfterApply {
+		p.Line(fmt.Sprintf("After applying, agents cannot use %s until you approve the new content:", skillID))
+		p.Raw(fmt.Sprintf("  skillhub skill review %s\n", skillID))
+	}
+	p.Line("No collection files changed.")
+	pins := preview.Confirmation.Confirmation.Pins
+	p.Line("Next:")
+	p.Command(skillConfirmCommand(pins))
+}
+
+// renderUpdateDiffs prints the diffs ahead of the summary so the file table and the next step are
+// the last thing on screen.
+func renderUpdateDiffs(p *termui.Printer, preview app.UpstreamUpdatePreview, verbose bool) {
+	var printed bool
 	for _, f := range preview.Files {
 		if f.ResultDiff != "" {
+			if !printed {
+				p.Line("Changes:")
+				printed = true
+			}
 			p.Raw(f.ResultDiff + "\n")
 		}
 		if verbose {
@@ -446,15 +481,27 @@ func renderUpstreamUpdatePreview(p *termui.Printer, skillID string, repoURL stri
 			}
 		}
 	}
-
-	if preview.TrustImpact.ReviewRequiredAfterApply {
-		p.Line(fmt.Sprintf("After applying, agents cannot use %s until you approve the new content:", skillID))
-		p.Raw(fmt.Sprintf("  skillhub skill review %s\n", skillID))
+	if printed || verbose {
+		p.Blank()
 	}
-	p.Line("No collection files changed.")
-	pins := preview.Confirmation.Confirmation.Pins
-	p.Line("Next:")
-	p.Command(skillConfirmCommand(pins))
+}
+
+// formatLineCounts returns "+N -M" for a unified diff, or "-" when there is no diff.
+func formatLineCounts(diff string) string {
+	if diff == "" {
+		return "-"
+	}
+	var added, removed int
+	for _, line := range strings.Split(diff, "\n") {
+		switch {
+		case strings.HasPrefix(line, "+++"), strings.HasPrefix(line, "---"):
+		case strings.HasPrefix(line, "+"):
+			added++
+		case strings.HasPrefix(line, "-"):
+			removed++
+		}
+	}
+	return fmt.Sprintf("+%d -%d", added, removed)
 }
 
 func writeConflictsFiles(dir string, files []app.UpstreamFile) error {
@@ -554,6 +601,16 @@ func formatChangeWord(status string) string {
 }
 
 func formatActionWord(f app.UpstreamFile) string {
+	if f.Conflicts > 0 && f.Status != "blocked" {
+		switch f.Action {
+		case "manual":
+			return "use your file (resolved)"
+		case "upstream":
+			return "take upstream (resolved)"
+		case "local":
+			return "keep local (resolved)"
+		}
+	}
 	if f.Conflicts > 0 {
 		return fmt.Sprintf("needs decision (%d conflict)", f.Conflicts)
 	}

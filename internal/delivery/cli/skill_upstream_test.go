@@ -565,3 +565,179 @@ func TestPrintableTextEscapesTerminalControlSequences(t *testing.T) {
 		t.Fatalf("rendered output missing escaped \\x1b text: %q", out)
 	}
 }
+
+func seedUpstreamFixture(t *testing.T, skillID, state string) (root string) {
+	t.Helper()
+	root = initTestWorkspace(t)
+	sourceID := "anthropics-skills"
+	repo := "https://github.com/anthropics/skills"
+	baseCommit := "3f9c2a1b4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a"
+	latestCommit := "81d04be7c2aa1111222233334444555566667777"
+	seedSourceRecord(t, root, sourceID, repo, "main")
+	seedTrackedSkill(t, root, skillID, sourceID, app.SkillOrigin{
+		Kind:        "github",
+		Repository:  repo,
+		Ref:         "main",
+		Path:        "skills/" + skillID,
+		Commit:      baseCommit,
+		FilesDigest: "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+	})
+	latest := latestCommit
+	if state == "same" {
+		latest = baseCommit
+	}
+	recordUpstreamState(t, root, skillID, sourceID, repo, "main", "skills/"+skillID, baseCommit, latest, 0, state)
+	return root
+}
+
+func TestSkillUpdateReportsNoOpAsError(t *testing.T) {
+	t.Parallel()
+
+	t.Run("up to date skill exits 2 without an empty preview", func(t *testing.T) {
+		root := seedUpstreamFixture(t, "pdf", "same")
+		var stdout, stderr bytes.Buffer
+		code := Run([]string{"skill", "update", "pdf", "--no-check", "--workspace", root}, &stdout, &stderr)
+		if code != 2 {
+			t.Fatalf("expected exit 2, got %d\nstdout: %s\nstderr: %s", code, stdout.String(), stderr.String())
+		}
+		if !strings.Contains(stderr.String(), "Upstream is unchanged") {
+			t.Fatalf("expected the cause on stderr, got: %s", stderr.String())
+		}
+		if strings.Contains(stdout.String(), "from -") || strings.Contains(stdout.String(), "--proposal ''") {
+			t.Fatalf("stdout must not carry an empty preview:\n%s", stdout.String())
+		}
+	})
+
+	t.Run("untracked skill with --yes names the cause", func(t *testing.T) {
+		root := initTestWorkspace(t)
+		service := app.SkillService{}
+		prev, err := service.PreviewCreate(context.Background(), root, skill.CreateInput{
+			ID: "local-skill", Collection: "default", Name: "Local Skill", Description: "Local untracked skill",
+		}, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := service.ConfirmSkillMutation(context.Background(), root, prev, prev.Confirmation.Confirmation.Pins); err != nil {
+			t.Fatal(err)
+		}
+		var stdout, stderr bytes.Buffer
+		code := Run([]string{"skill", "update", "local-skill", "--yes", "--no-check", "--workspace", root}, &stdout, &stderr)
+		if code != 2 {
+			t.Fatalf("expected exit 2, got %d\nstdout: %s\nstderr: %s", code, stdout.String(), stderr.String())
+		}
+		if !strings.Contains(stderr.String(), "not tracked") || strings.Contains(stderr.String(), "stale") {
+			t.Fatalf("expected the not-tracked cause, got: %s", stderr.String())
+		}
+	})
+}
+
+func TestSkillUpstreamNextLine(t *testing.T) {
+	t.Parallel()
+
+	t.Run("up to date has nothing to update", func(t *testing.T) {
+		root := seedUpstreamFixture(t, "pdf", "same")
+		var stdout, stderr bytes.Buffer
+		code := Run([]string{"skill", "upstream", "pdf", "--workspace", root}, &stdout, &stderr)
+		if code != 0 {
+			t.Fatalf("expected exit 0, got %d: %s", code, stderr.String())
+		}
+		out := stdout.String()
+		if !strings.Contains(out, "Nothing to update") || strings.Contains(out, "skill update") {
+			t.Fatalf("expected no update command for an up-to-date skill:\n%s", out)
+		}
+	})
+
+	t.Run("update available suggests the update", func(t *testing.T) {
+		root := seedUpstreamFixture(t, "pdf", "changed")
+		var stdout, stderr bytes.Buffer
+		code := Run([]string{"skill", "upstream", "pdf", "--workspace", root}, &stdout, &stderr)
+		if code != 0 {
+			t.Fatalf("expected exit 0, got %d: %s", code, stderr.String())
+		}
+		if !strings.Contains(stdout.String(), "skillhub skill update pdf") {
+			t.Fatalf("expected the update command:\n%s", stdout.String())
+		}
+	})
+}
+
+func TestUpstreamUpdatePreviewResolvedConflict(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		action string
+		want   string
+	}{
+		{"manual", "use your file (resolved)"},
+		{"upstream", "take upstream (resolved)"},
+		{"local", "keep local (resolved)"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.action, func(t *testing.T) {
+			preview := app.UpstreamUpdatePreview{
+				SkillID:      "docx",
+				SourceID:     "anthropics-skills",
+				BaseCommit:   "3f9c2a1b4d5e",
+				TargetCommit: "81d04be7c2aa",
+				Files: []app.UpstreamFile{{
+					Path:       "SKILL.md",
+					Status:     "both_changed",
+					Conflicts:  1,
+					Action:     tc.action,
+					ResultDiff: "--- a/SKILL.md\n+++ b/SKILL.md\n@@ -1 +1 @@\n-old\n+new\n",
+				}},
+			}
+			var buf bytes.Buffer
+			renderUpstreamUpdatePreview(termui.New(&buf), "docx", "", preview, false)
+			out := buf.String()
+			if !strings.Contains(out, tc.want) || strings.Contains(out, "needs decision") {
+				t.Fatalf("expected %q and no \"needs decision\":\n%s", tc.want, out)
+			}
+		})
+	}
+}
+
+func TestUpstreamUpdatePreviewSummaryComesLast(t *testing.T) {
+	t.Parallel()
+
+	preview := app.UpstreamUpdatePreview{
+		SkillID:        "pdf",
+		SourceID:       "anthropics-skills",
+		BaseCommit:     "3f9c2a1b4d5e",
+		TargetCommit:   "81d04be7c2aa",
+		UnchangedCount: 2,
+		Files: []app.UpstreamFile{
+			{
+				Path: "SKILL.md", Status: "upstream_only", Action: "upstream",
+				ResultDiff: "--- a/SKILL.md\n+++ b/SKILL.md\n@@ -1,2 +1,3 @@\n-old\n+new one\n+new two\n keep\n",
+			},
+			{
+				Path: "scripts/run.sh", Status: "upstream_only", Action: "upstream",
+				ResultDiff: "--- a/scripts/run.sh\n+++ b/scripts/run.sh\n@@ -1 +1 @@\n-a\n+b\n",
+			},
+		},
+		Confirmation: app.ConfirmationPolicy{
+			Confirmation: app.ConfirmationRequirement{
+				Pins: app.ConfirmationPins{ProposalID: "PROP-1", ProposalDigest: "sha256:aa", BaseVersion: "sha256:bb"},
+			},
+		},
+	}
+	var buf bytes.Buffer
+	renderUpstreamUpdatePreview(termui.New(&buf), "pdf", "", preview, false)
+	out := buf.String()
+
+	lastHunk := strings.LastIndex(out, "@@")
+	if lastHunk < 0 {
+		t.Fatalf("expected diff hunks in output:\n%s", out)
+	}
+	if idx := strings.Index(out, "FILE"); idx < lastHunk {
+		t.Fatalf("file table must come after the last diff hunk:\n%s", out)
+	}
+	if idx := strings.Index(out, "skill confirm"); idx < lastHunk {
+		t.Fatalf("confirm command must come after the last diff hunk:\n%s", out)
+	}
+	for _, row := range []string{"+2 -1", "+1 -1"} {
+		if !strings.Contains(out, row) {
+			t.Fatalf("expected line counts %q in the table:\n%s", row, out)
+		}
+	}
+}
