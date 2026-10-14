@@ -76,8 +76,8 @@ a one-time invite instead of the bearer token and answers with the hub token. Th
 the server was given an invite store. It answers only when both the local and the remote address of the
 connection are loopback or in `100.64.0.0/10` and the request has no forwarding header; otherwise it
 answers 403 without looking at the invite. An invite is a 12 character code kept on the hub as an empty
-file named by its SHA-256, whose modification time is its expiry; it is claimed by an atomic rename, so
-exactly one request wins, and it expires after 10 minutes. Failures are counted per remote address apart from
+file named by its SHA-256, whose modification time is its expiry; it is claimed by creating a `.used` marker
+with exclusive creation, which exactly one request can do on every system, and it expires after 10 minutes. Failures are counted per remote address apart from
 bearer failures, every failure answers the same 403, and the hub token is read before the invite is claimed
 so a token problem never wastes an invite.
 

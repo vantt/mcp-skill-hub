@@ -8,19 +8,20 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 )
 
 const (
-	claimedSuffix = ".claimed"
-	hashFileName  = 2 * sha256.Size
+	usedSuffix   = ".used"
+	hashFileName = 2 * sha256.Size
 )
 
 // FileStore keeps one empty file per pending invite, named hex(hash), whose
-// modification time is the expiry. No file is ever opened to claim it: Claim
-// stats it and renames it, which is atomic, lets exactly one caller win across
-// threads and processes, and works on Windows where removing an open file
-// fails. Several FileStores on one folder cooperate without any lock file.
+// modification time is the expiry. Claim stats the invite and then creates a
+// <hex>.used marker exclusively, which lets exactly one caller win across
+// threads and processes on every system. Several FileStores on one folder
+// cooperate without any lock file.
 type FileStore struct {
 	dir string
 	now func() time.Time
@@ -74,8 +75,9 @@ func (s *FileStore) Put(hash [32]byte, expires time.Time) error {
 	return nil
 }
 
-// prune removes expired invite files. Failures are ignored: a leftover file is
-// only clutter because Claim checks expiry itself.
+// prune removes expired invite files and the used markers that are old enough
+// that the invite they guard would have expired anyway. Failures are ignored:
+// a leftover file is only clutter because Claim checks expiry itself.
 func (s *FileStore) prune() {
 	entries, err := os.ReadDir(s.dir)
 	if err != nil {
@@ -83,18 +85,32 @@ func (s *FileStore) prune() {
 	}
 	now := s.now()
 	for _, e := range entries {
-		if len(e.Name()) != hashFileName || e.IsDir() {
+		if e.IsDir() {
 			continue
 		}
-		if info, err := e.Info(); err == nil && !info.ModTime().After(now) {
-			_ = os.Remove(filepath.Join(s.dir, e.Name()))
+		name := e.Name()
+		invite := len(name) == hashFileName
+		marker := len(name) == hashFileName+len(usedSuffix) && strings.HasSuffix(name, usedSuffix)
+		if !invite && !marker {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		if (invite && !info.ModTime().After(now)) || (marker && now.Sub(info.ModTime()) > 2*Life) {
+			_ = os.Remove(filepath.Join(s.dir, name))
 		}
 	}
 }
 
-// Claim takes the invite if it exists and is unexpired at now. A failed
-// rename means another caller won or the file vanished: that is "not
-// present", not an error.
+// Claim takes the invite if it exists and is unexpired at now. The claim is
+// the exclusive creation of <hex>.used, which succeeds for exactly one caller
+// on every system, Windows included; the marker is left in place until it is
+// old enough that the invite would have expired anyway, so a slow second
+// caller cannot create it again. A caller that loses, or finds the invite
+// gone, gets "not present", not an error. Removing the invite file itself is
+// housekeeping: the marker is what makes the invite single use.
 func (s *FileStore) Claim(hash [32]byte, now time.Time) (bool, error) {
 	path := s.path(hash)
 	info, err := os.Stat(path)
@@ -105,10 +121,11 @@ func (s *FileStore) Claim(hash [32]byte, now time.Time) (bool, error) {
 		_ = os.Remove(path)
 		return false, nil
 	}
-	claimed := path + claimedSuffix
-	if err := os.Rename(path, claimed); err != nil {
+	marker, err := os.OpenFile(path+usedSuffix, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
 		return false, nil
 	}
-	_ = os.Remove(claimed)
+	_ = marker.Close()
+	_ = os.Remove(path)
 	return true, nil
 }

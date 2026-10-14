@@ -183,3 +183,7 @@ Every critical and high finding was checked against the code and is folded into 
   differently between the client's check and its request, two hubs behind one tunnel port sharing a saved file.
 - 2026-10-14: docs written (both READMEs, remote hub guide, command reference, design note).
 - Next: release v0.6.7 (needs a session with push and tag rights; the releasing session was closed).
+- 2026-10-14: the Windows CI job showed that the claim by rename let several callers win (3 of 20) there. The claim is
+  now the exclusive creation of a `<hex>.used` marker, which only one caller can do on every system; the marker is
+  kept until it is older than twice the invite's life, and the test repeats the 20-caller race 50 times. The
+  paragraphs above that describe the claim by rename are superseded by this entry.

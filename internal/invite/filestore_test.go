@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -55,8 +56,9 @@ func TestFileStoreClaimTwice(t *testing.T) {
 	if ok, err := fs.Claim(h, time.Now()); ok || err != nil {
 		t.Fatalf("second claim = %v, %v", ok, err)
 	}
-	if entries, _ := os.ReadDir(dir); len(entries) != 0 {
-		t.Fatalf("%d files left after a claim", len(entries))
+	entries, _ := os.ReadDir(dir)
+	if len(entries) != 1 || !strings.HasSuffix(entries[0].Name(), usedSuffix) {
+		t.Fatalf("after a claim only the used marker should remain, got %d files", len(entries))
 	}
 }
 
@@ -98,33 +100,53 @@ func TestFileStorePutRemovesExpiredInvites(t *testing.T) {
 
 func TestFileStoreConcurrentClaimHasOneWinner(t *testing.T) {
 	fs, _ := newTestFileStore(t)
-	h := hashOf(6)
+	const claimers = 20
+	for round := 0; round < 50; round++ {
+		h := hashOf(byte(round))
+		if err := fs.Put(h, time.Now().Add(Life)); err != nil {
+			t.Fatal(err)
+		}
+		var wins int
+		var mu sync.Mutex
+		var wg sync.WaitGroup
+		start := make(chan struct{})
+		for i := 0; i < claimers; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				<-start
+				if ok, err := fs.Claim(h, time.Now()); err != nil {
+					t.Error(err)
+				} else if ok {
+					mu.Lock()
+					wins++
+					mu.Unlock()
+				}
+			}()
+		}
+		close(start)
+		wg.Wait()
+		if wins != 1 {
+			t.Fatalf("round %d: %d claimers won, want exactly 1", round, wins)
+		}
+	}
+}
+
+func TestFileStoreClaimedInviteStaysUsedUntilItWouldHaveExpired(t *testing.T) {
+	fs, _ := newTestFileStore(t)
+	h := hashOf(9)
 	if err := fs.Put(h, time.Now().Add(Life)); err != nil {
 		t.Fatal(err)
 	}
-	const claimers = 20
-	var wins int
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-	start := make(chan struct{})
-	for i := 0; i < claimers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			<-start
-			if ok, err := fs.Claim(h, time.Now()); err != nil {
-				t.Error(err)
-			} else if ok {
-				mu.Lock()
-				wins++
-				mu.Unlock()
-			}
-		}()
+	if ok, _ := fs.Claim(h, time.Now()); !ok {
+		t.Fatal("first claim lost")
 	}
-	close(start)
-	wg.Wait()
-	if wins != 1 {
-		t.Fatalf("%d claimers won, want exactly 1", wins)
+	// Even if the invite file reappears (a slow writer, a restored backup), the used marker blocks a second claim.
+	if err := fs.Put(h, time.Now().Add(Life)); err != nil {
+		t.Fatal(err)
+	}
+	if ok, _ := fs.Claim(h, time.Now()); ok {
+		t.Fatal("a used invite was claimed again")
 	}
 }
 
