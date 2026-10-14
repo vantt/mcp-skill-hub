@@ -62,3 +62,7 @@ func CheckWritable(path string) error {
 	probe.Close()
 	return os.Remove(probe.Name())
 }
+
+// ValidToken reports whether token has the form of a hub token, so a caller
+// can check a token it received before it saves it.
+func ValidToken(token string) bool { return validToken(token) }

@@ -568,7 +568,7 @@ func TestConnectUsageErrorsGolden(t *testing.T) {
 		},
 		{
 			[]string{"connect", "--remove", "--hub", "http://127.0.0.1:7420"},
-			"ERROR: --remove cannot be combined with a hub folder, --hub or --token-file.\n" +
+			"ERROR: --remove cannot be combined with a hub folder, --hub, --token-file or --invite.\n" +
 				"WHY: --remove takes out the Skill Hub entry of the scope, whichever hub it points at.\n" +
 				"FIX: Run `skillhub connect --remove [-g|--global] [--host <name>]` in the project folder.\n",
 		},
@@ -759,7 +759,7 @@ func TestDoctorSectionOutputGolden(t *testing.T) {
 
 func TestHelpDescribesRemoteConnect(t *testing.T) {
 	code, stdout, _ := runCLI(t, "help", "connect")
-	for _, want := range []string{"--hub <url>", "--token-file <file>", "--remove", "--cache", "SKILLHUB_HUB_TOKEN", "scp", "system-curator"} {
+	for _, want := range []string{"--hub <url>", "--invite <code>", "skillhub token invite", "--token-file <file>", "--remove", "--cache", "SKILLHUB_HUB_TOKEN", "scp", "system-curator"} {
 		if code != 0 || !strings.Contains(stdout, want) {
 			t.Fatalf("help connect lacks %q:\n%s", want, stdout)
 		}

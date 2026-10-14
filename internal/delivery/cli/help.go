@@ -77,6 +77,8 @@ A folder with other files is refused; init takes no folder argument.
 	"connect": `Usage: skillhub connect [<path>] [-g|--global] [--host claude|codex|gemini]... [--dry-run] [--json]
        skillhub connect --hub <url> --token-file <file> [-g|--global]
                         [--host claude|codex|gemini]... [--dry-run] [--json]
+       skillhub connect --hub <url> --invite <code> [--token-file <file>] [-g|--global]
+                        [--host claude|codex|gemini]... [--json]
        skillhub connect --remove [--cache] [-g|--global]
                         [--host claude|codex|gemini]... [--dry-run] [--json]
 
@@ -102,6 +104,13 @@ A hub on another machine (through an SSH tunnel or Tailscale):
                     machine with scp and chmod 600 it; only its path is written,
                     never the token. Without it, the agent host must start the proxy
                     with SKILLHUB_HUB_TOKEN set.
+  --invite <code>   Take the token from a one-time invite instead of copying the file:
+                    run ` + "`skillhub token invite`" + ` on the hub machine and pass the code
+                    it prints, with the Tailscale or SSH-tunnel URL it prints. The
+                    token is saved in this machine's Skill Hub config folder (or at
+                    --token-file) and then connected as usual. The invite works once
+                    and expires; it is sent only over Tailscale or to this machine,
+                    so it cannot be combined with --dry-run or --remove.
 
 Undo a connection:
   --remove          Remove the Skill Hub entry of the scope (local or remote hub), its

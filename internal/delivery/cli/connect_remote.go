@@ -2,14 +2,23 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"net"
+	"net/netip"
+	"net/url"
+	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/vantt/skillhub-mcp/internal/app"
 	"github.com/vantt/skillhub-mcp/internal/delivery/cli/termui"
+	"github.com/vantt/skillhub-mcp/internal/delivery/hostpolicy"
 	"github.com/vantt/skillhub-mcp/internal/hubtoken"
+	"github.com/vantt/skillhub-mcp/internal/shellquote"
+	"github.com/vantt/skillhub-mcp/internal/userconfig"
 )
 
 // tokenHandOff tells how the hub's token reaches this machine. It is printed
@@ -21,11 +30,22 @@ func tokenHandOff(hubURL string) string {
 // runConnectHub handles `skillhub connect --hub <url>`: the host entry starts
 // the stdio proxy for a hub on another machine.
 func runConnectHub(ctx context.Context, dir string, flags connectFlags, stdout, stderr io.Writer) int {
+	saved := ""
+	if flags.inviteSet {
+		var code int
+		var done bool
+		if saved, code, done = acceptInvite(ctx, &flags, stdout, stderr); done {
+			return code
+		}
+	}
 	result, connection, err := (app.ConnectService{}).ConnectRemote(ctx, app.RemoteConnectRequest{
 		Project: dir, Global: flags.global, Hosts: flags.hosts,
 		Hub: flags.hub, TokenFile: flags.tokenFile, DryRun: flags.dryRun,
 	})
 	if err != nil || result.Error != nil {
+		if saved != "" {
+			result, err = noteSavedToken(result, err, flags, saved)
+		}
 		if code, handled := writeConnectSymlinkError(err, stdout, stderr, flags.json); handled {
 			return code
 		}
@@ -38,8 +58,117 @@ func runConnectHub(ctx context.Context, dir string, flags connectFlags, stdout, 
 		}{Result: result, Remote: connection})
 	}
 	p := termui.New(stdout)
+	if saved != "" {
+		p.Line("Invite accepted. Hub token saved to " + saved)
+		p.Blank()
+	}
 	renderRemoteConnect(p, result, connection)
 	return printerCode(p)
+}
+
+// pairingLookup resolves the name of a hub for the address check before an
+// invite is sent; tests replace it.
+var pairingLookup = func(ctx context.Context, host string) ([]netip.Addr, error) {
+	return net.DefaultResolver.LookupNetIP(ctx, "ip", host)
+}
+
+const pairingRefused = "an invite is only sent over Tailscale or to this machine (SSH tunnel); use the scp line instead"
+
+// checkPairingHost refuses a hub address an invite must not be sent to: the
+// host must be an address that is loopback or Tailscale, or a name that
+// resolves only to such addresses. A name that does not resolve is refused
+// too, so the code never goes where it was not checked.
+func checkPairingHost(ctx context.Context, hubURL string) error {
+	parsed, err := url.Parse(hubURL)
+	if err != nil {
+		return errors.New(pairingRefused)
+	}
+	host := parsed.Hostname()
+	if address, err := netip.ParseAddr(host); err == nil {
+		if !hostpolicy.PairingIP(address) {
+			return errors.New(pairingRefused)
+		}
+		return nil
+	}
+	if strings.EqualFold(host, "localhost") {
+		return nil
+	}
+	lookupCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	addresses, err := pairingLookup(lookupCtx, host)
+	if err != nil || len(addresses) == 0 {
+		return errors.New(pairingRefused)
+	}
+	for _, address := range addresses {
+		if !hostpolicy.PairingIP(address) {
+			return errors.New(pairingRefused)
+		}
+	}
+	return nil
+}
+
+// acceptInvite trades the invite for the hub's token and saves it, after
+// every check that does not need the hub has passed. On success it points
+// flags.tokenFile at the saved file and returns its path. done reports that
+// the command is over, with the exit code.
+func acceptInvite(ctx context.Context, flags *connectFlags, stdout, stderr io.Writer) (saved string, code int, done bool) {
+	fail := func(what, why, fix string) (string, int, bool) {
+		result := app.ErrorResult(&app.Error{Code: app.ErrorInvalidRequest, Render: app.ErrorRender{Error: what, Why: why, Fix: fix}})
+		return "", writeWorkspaceResult(result, nil, stdout, stderr, flags.json), true
+	}
+	hubURL, problem := app.NormalizeConnectHubURL(flags.hub)
+	if problem != nil {
+		return "", writeWorkspaceResult(app.ErrorResult(problem), nil, stdout, stderr, flags.json), true
+	}
+	if err := checkPairingHost(ctx, hubURL); err != nil {
+		return fail("The invite was not sent.", err.Error()+".", "Use the hub's Tailscale address or an SSH tunnel to it, or copy the token file with the scp line `skillhub serve` prints.")
+	}
+	destination := flags.tokenFile
+	if destination == "" {
+		configDir, err := userconfig.Dir()
+		if err != nil {
+			return fail("The invite was not sent.", "This machine has no folder for the hub token: "+err.Error()+".", "Pass --token-file <path> for the file to write the token to.")
+		}
+		destination = hubtoken.ClientStorePath(configDir, hubURL)
+	}
+	destination, err := filepath.Abs(destination)
+	if err != nil {
+		return fail("The invite was not sent.", "The token file path cannot be resolved: "+err.Error()+".", "Pass an absolute --token-file path.")
+	}
+	if err := hubtoken.CheckWritable(destination); err != nil {
+		return fail("The invite was not sent.", "The token cannot be saved at "+destination+": "+err.Error()+". The invite is still unused.", "Pass --token-file <path> in a folder you can write, or fix the folder, then run this command again.")
+	}
+	token, err := app.PairHub(ctx, hubURL, flags.invite)
+	if err != nil {
+		var failure *app.Error
+		if errors.As(err, &failure) {
+			return "", writeWorkspaceResult(app.ErrorResult(failure), nil, stdout, stderr, flags.json), true
+		}
+		return "", writeWorkspaceResult(app.Result{}, err, stdout, stderr, flags.json), true
+	}
+	if err := hubtoken.Save(destination, token); err != nil {
+		return fail("The invite was used, but the token could not be saved.", err.Error()+".", "On the hub machine run `skillhub token invite` for a new invite, fix the problem with "+destination+", then run this command again.")
+	}
+	flags.tokenFile = destination
+	return destination, 0, false
+}
+
+// noteSavedToken adds to a failed connect the fact that the invite is used
+// and the token is on disk, with the command that connects without it.
+func noteSavedToken(result app.Result, err error, flags connectFlags, saved string) (app.Result, error) {
+	command := "skillhub connect --hub " + flags.hub + " --token-file " + shellquote.Arg(saved)
+	if flags.global {
+		command += " --global"
+	}
+	for _, host := range flags.hosts {
+		command += " --host " + string(host)
+	}
+	note := "The invite was used and the hub token is saved at " + saved + "; run `" + command + "` once the problem is fixed."
+	if result.Error != nil {
+		result.Error.Render.Fix = strings.TrimSpace(note + " " + result.Error.Render.Fix)
+		return result, err
+	}
+	return result, fmt.Errorf("%s: %w", note, err)
 }
 
 // renderRemoteConnect prints the result of `connect --hub`, or with
