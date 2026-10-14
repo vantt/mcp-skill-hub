@@ -75,3 +75,11 @@ text, và hub gợi ý routing (trigger, not_for, ví dụ) từ `description` �
 (`--edit-routing`). Trong terminal, các câu hỏi y/N lần lượt: thêm làm draft, duyệt nội dung (chỉ khi là bên thứ
 ba), activate; tất cả thành một commit (D3). Không có terminal (agent): dừng ở draft, agent không bao giờ duyệt nội
 dung bên thứ ba.
+
+## D8. Tạo skill mới trong project (2026-10-14)
+
+**Quyết định:** giữ tên `skill create <id>`, nhưng nó tạo folder trong project (`.claude/skills/<id>/SKILL.md`)
+thay vì trong hub. Form hỏi 3-4 câu: làm gì, khi nào dùng, khi nào không, một hai ví dụ. Người viết hướng dẫn và
+thử trong agent, rồi `skill commit <id>` đi luồng D7. Agent không cần form: tự viết folder rồi `skill commit`.
+Sửa thẳng file trong hub không còn là đường chính thức; docs, form và curator skill nói cùng một điều (sửa bằng
+checkout, sửa nhanh bằng web). `status` không báo `FAILED` cho index cũ sau khi có người sửa tay.
