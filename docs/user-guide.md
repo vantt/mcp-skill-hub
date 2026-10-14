@@ -234,9 +234,25 @@ Moved to [The web UI](web-ui.md).
 
 Moved to [The web UI: Do common tasks](web-ui.md#do-common-tasks).
 
+## Keep the hub on GitHub
+
+Create an empty repository on GitHub, without a README or license file. Then give its URL to `init` in your hub:
+
+```bash
+cd ~/skill-hub && skillhub init <git-url>
+```
+
+What `init` does depends on the repository:
+
+- **It is empty:** `init` pushes the hub there and sets it as `origin`. This is the only push Skill Hub ever makes for you.
+- **It already holds this hub:** `init` sets it as `origin` and pushes nothing.
+- **It holds anything else:** `init` refuses and changes nothing.
+
+After that, you commit and push skill changes with Git yourself.
+
 ## Move to another machine
 
-Your skills live in Git, so moving is a fetch. Before you leave the old machine, push the hub to a remote you own. [Keep the hub on GitHub](../README.md#step-1-install-the-hub) shows how `init` sets one up.
+Your skills live in Git, so moving is a fetch. Before you leave the old machine, push the hub to a remote you own. [Keep the hub on GitHub](#keep-the-hub-on-github) shows how `init` sets one up.
 
 If you would rather keep one hub and let agents on other computers use it, see [Use one hub from several machines](remote-hub-guide.md).
 

@@ -63,7 +63,7 @@ var docsWithCommands = []struct {
 	path string
 	min  int
 }{
-	{"README.md", 15},
+	{"README.md", 8},
 	{"docs/remote-hub-guide.md", 45},
 	{"docs/troubleshooting.md", 30},
 	{"docs/installation.md", 3},

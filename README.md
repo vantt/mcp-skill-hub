@@ -6,7 +6,7 @@ Your skills in one place. Pulled by any agent, on demand.<br>
 
 [![Latest release](https://img.shields.io/github/v/release/vantt/skillhub-mcp)](https://github.com/vantt/skillhub-mcp/releases/latest) [![CI](https://github.com/vantt/skillhub-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/vantt/skillhub-mcp/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-[Tiếng Việt](README.vi.md) · [Quickstart](#quickstart) · [Using Skill Hub](docs/user-guide.md) · [Curating skills](docs/curating-skills.md)
+[Tiếng Việt](README.vi.md) · [Get started](#quickstart) · [Using Skill Hub](docs/user-guide.md) · [Curating skills](docs/curating-skills.md)
 
 </div>
 
@@ -20,11 +20,89 @@ Because the library is central, you can collect skills from any repository, edit
 
 *Skills: every skill with its state, and filters to find one.*
 
+## Quickstart
+
+You need Git and an agent such as Claude Code. Setup takes about two minutes.
+
+### 1. Install
+
+```bash
+curl -fsSL https://github.com/vantt/skillhub-mcp/releases/latest/download/install.sh | sh
+```
+
+<details>
+<summary>Windows (PowerShell)</summary>
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://github.com/vantt/skillhub-mcp/releases/latest/download/install.ps1 | iex"
+```
+
+PowerShell 5.1 has no `&&`: write each command below on its own line, or separate them with `;`.
+
+</details>
+
+Open a new terminal and run `skillhub --version` to check it.
+
+### 2. Set it up
+
+Pick the case that fits you.
+
+#### One computer
+
+```bash
+mkdir -p ~/skill-hub && cd ~/skill-hub && skillhub init
+skillhub connect -g
+```
+
+Restart your agent and say: **curate my Skill Hub**. Done: every project you open now uses your hub.
+
+#### Hub on one computer, agent on another
+
+Both computers need [Tailscale](https://tailscale.com) (or an SSH tunnel to the hub computer). Install Skill Hub on both, then:
+
+**On the hub computer.** Create the hub as above (`init`), then start the server and leave it running:
+
+```bash
+cd ~/skill-hub && skillhub serve
+```
+
+In a second terminal, make a one-time code:
+
+```bash
+cd ~/skill-hub && skillhub token invite
+```
+
+It prints a ready-to-paste line, for example:
+
+```text
+skillhub connect --hub http://100.121.46.35:7420 --invite K7QF-9M2X-4TBD
+```
+
+**On the agent computer.** Paste that line inside your project, then restart your agent:
+
+```bash
+cd <your-project> && skillhub connect --hub http://100.121.46.35:7420 --invite K7QF-9M2X-4TBD
+```
+
+The code works once and expires in 10 minutes; run `token invite` again for a new one. The agent computer keeps no skills, only a token file in its Skill Hub config folder. Add `-g` to the paste line to cover every project.
+
+### 3. Check
+
+```bash
+skillhub doctor
+```
+
+It tells you what works and prints one fix for anything that does not. `skillhub doctor --fix` repairs what it can. The [troubleshooting guide](docs/troubleshooting.md) covers every message.
+
+**Next:** [create your first skill](docs/curating-skills.md#create-your-first-skill).
+
+More: [keep the hub on GitHub](docs/user-guide.md#keep-the-hub-on-github) · [run the server in the background, use SSH tunnels, rotate the token](docs/remote-hub-guide.md) · [installation details](docs/installation.md)
+
 ## How it works
 
-1. You keep your skills in a hub: a folder of its own, kept in a Git repository.
-2. You connect your user account once, or a single project, so your agent finds the hub.
-3. Your agent is told to ask the hub which skill fits a task, and the hub answers.
+1. Your skills live in a hub: a folder in a Git repository you own.
+2. You connect your agent to the hub once.
+3. When a task starts, your agent asks the hub which skill fits, and the hub answers.
 
 ```mermaid
 flowchart LR
@@ -52,243 +130,14 @@ flowchart LR
     class gh externalNode
 ```
 
+
 ## Why Skill Hub
 
-- **No per-project install.** Connect your user account once with `skillhub connect -g` and your project folders stay untouched. Your agent asks the hub for a skill when a task starts, so nothing is copied into each project.
-- **Make skills yours.** Collect skills from any repository, edit them, and tune them to your own criteria. Feedback from real use shows which ones help, and new skills start as drafts you approve.
-- **One recommendation per task.** Your agent is told to ask the hub with a short task description. It gets one recommendation, or "no skill fits", and the full skill text loads only after it picks one.
-- **You approve every skill change.** New skills start as drafts that agents are not offered. Skills from someone else's repository reach your agent only after you approve them in the terminal.
-- **One program, nothing to keep running.** Skill Hub is a single binary. Your agent starts it when needed; nothing runs in the background.
-- **Git is the database.** Your skills are plain files in your own repository. Review them, share them with teammates, and roll them back with Git.
-- **A local web UI.** Browse, review and edit skills in your browser, on your own machine.
-
-## Quickstart
-
-You set up Skill Hub in two steps. First you install the **hub**, the folder that holds your skills. Then you install a **client project**, a project whose agents use the hub. You need Git and an agent such as Claude Code.
-
-### Install
-
-Install Skill Hub on Linux or macOS with one command.
-
-```bash
-curl -fsSL https://github.com/vantt/skillhub-mcp/releases/latest/download/install.sh | sh
-```
-
-<details>
-<summary>Windows (PowerShell)</summary>
-
-```powershell
-powershell -ExecutionPolicy ByPass -c "irm https://github.com/vantt/skillhub-mcp/releases/latest/download/install.ps1 | iex"
-```
-
-</details>
-
-Open a new terminal, then check that the command works:
-
-```bash
-skillhub --version
-```
-
-[Installation](docs/installation.md) covers versions, signatures, upgrades and building from source.
-
-### Step 1: Install the hub
-
-The hub is a folder of its own, kept in its own Git repository. Create an empty folder and make it your hub:
-
-```bash
-mkdir -p ~/skill-hub && cd ~/skill-hub && skillhub init
-```
-
-```text
-Hub created at <home>/skill-hub.
-Agent connection written: claude-code, codex-cli, gemini-cli.
-First commit <commit>: "Initialize Skill Hub hub".
-Git hooks and commit signing were skipped for this first commit.
-This is now the hub of this machine; `skillhub connect` uses it.
-
-Next: connect a project to this hub:
-  $ cd <your-project> && skillhub connect
-```
-
-`<home>` stands for your home folder. `init` turned the folder into a Git repository with the hub layout and made the first commit. It also connected the agents you open in that folder, and stored the hub's path for this machine. If Git has no user name or email yet, `init` makes this one commit as `Skill Hub <skillhub@localhost>` and says so.
-
-<details>
-<summary>Windows (PowerShell)</summary>
-
-Windows PowerShell 5.1 has no `&&`. Separate the commands with `;` instead:
-
-```powershell
-mkdir -Force ~/skill-hub; cd ~/skill-hub; skillhub init
-```
-
-</details>
-
-<details>
-<summary>Keep the hub on GitHub</summary>
-
-Create an empty repository on GitHub, without a README or license file. Then give its URL to `init` in your hub:
-
-```bash
-cd ~/skill-hub && skillhub init <git-url>
-```
-
-What `init` does depends on the repository:
-
-- **It is empty:** `init` pushes the hub there and sets it as `origin`. This is the only push Skill Hub ever makes for you.
-- **It already holds this hub:** `init` sets it as `origin` and pushes nothing.
-- **It holds anything else:** `init` refuses and changes nothing.
-
-After that, you commit and push skill changes with Git yourself.
-
-</details>
-
-<details>
-<summary>Use the hub on a second machine</summary>
-
-On the second machine, run `init` in an empty folder with the URL of your hub's repository:
-
-```bash
-mkdir -p ~/skill-hub && cd ~/skill-hub && skillhub init <git-url>
-```
-
-`init` fetches the hub into the folder, builds its search index and makes it the hub of this machine. To use one hub over the network instead, see [Use one hub from several machines](docs/remote-hub-guide.md).
-
-</details>
-
-### Step 2: Install the client project
-
-A client project is a project whose agents use the hub. Go to a project you work on and connect it:
-
-```bash
-cd <your-project> && skillhub connect
-```
-
-```text
-Connected project <home>/<your-project>
-to the hub at <home>/skill-hub.
-Agent connection written: claude-code, codex-cli, gemini-cli.
-  - Claude Code: connected (.mcp.json, .claude/settings.local.json, system-curator skill, CLAUDE.md)
-  - Codex: connected (.codex/config.toml, AGENTS.md)
-  - Gemini CLI: connected (.gemini/settings.json, GEMINI.md)
-  - Agent Skills folder (.agents/skills): connected (system-curator skill)
-
-Next: restart your agent and ask it: "curate my Skill Hub"
-```
-
-Output is trimmed. `connect` finds the hub that `init` stored, and never overwrites your own content in those files. Add `--dry-run` to see what it would write first. [What gets written](docs/user-guide.md#what-gets-written) lists every file.
-
-Restart your agent in that folder and ask it:
-
-> curate my Skill Hub
-
-The curator skill that `connect` installed tells your agent to show the hub's status and one next step. The first time you open the folder, Claude Code shows a trust dialog that lists `Bash(skillhub:*)`.
-
-> [!TIP]
-> Run `skillhub connect -g` to connect every project of your user account at once.
-
-<details>
-<summary>Windows (PowerShell)</summary>
-
-```powershell
-cd <your-project>; skillhub connect
-```
-
-</details>
-
-Want your agents on another machine to use this hub? See [Use one hub from several machines](#use-one-hub-from-several-machines).
-
-### Check
-
-`skillhub status` shows the state of the hub and of this folder's connections. It always ends with the one command to run next.
-
-```bash
-cd <your-project> && skillhub status
-```
-
-```text
-Hub at <home>/skill-hub
-Status:     Skill Hub is up to date.
-Health:     Workspace valid; search index current; Git clean.
-Inventory:  No skills yet.
-
-This project uses this hub
-
-Check        Status  Detail
-Claude Code  ok      project entry in .mcp.json
-Codex        ok      project entry in .codex/config.toml
-Gemini CLI   ok      project entry in .gemini/settings.json
-
-Next: create your first skill (you will be asked a few questions):
-  $ skillhub skill create
-```
-
-When something is wrong, `status` names it. These are the common cases and their fix:
-
-- "No hub is set up on this machine": create one with `mkdir -p ~/skill-hub && cd ~/skill-hub && skillhub init`.
-- "This folder is not a Skill Hub hub or a connected project": connect it with `skillhub connect`.
-- "Nothing answers at `<url>`" for a hub on another machine: on that machine, run `cd ~/skill-hub && skillhub serve`.
-- "The hub folder `<path>` is gone": run `cd <new-location> && skillhub init` where the hub is now, then `skillhub doctor --fix` in each project.
-- Connection files or Claude Code permission rules are out of date: run `skillhub doctor --fix`.
-
-[Troubleshooting](docs/troubleshooting.md) covers every message, step by step.
-
-Next: [create your first skill](docs/curating-skills.md#create-your-first-skill).
-
-## Use one hub from several machines
-
-Run the hub on one machine and let agents on your other machines use it over the network. Nothing is copied: the agent machine keeps no skills and no hub folder.
-
-| Machine | Role | What you do there |
-|---|---|---|
-| **Hub machine** | Holds the hub folder with your skills | Install Skill Hub, [create the hub](#step-1-install-the-hub), run `skillhub serve`, then `skillhub token invite` |
-| **Agent machine** | Runs your agent, such as Claude Code | Install Skill Hub, paste the line `token invite` printed, in your project |
-
-Install Skill Hub on both machines first, as in [Install](#install). Then:
-
-1. **On the hub machine**, start the server, and keep it running:
-
-   ```bash
-   cd ~/skill-hub && skillhub serve
-   ```
-
-2. **On the hub machine**, in another terminal, make an invite:
-
-   ```bash
-   cd ~/skill-hub && skillhub token invite
-   ```
-
-   It prints one line for each address that is safe to use, for example:
-
-   ```text
-   skillhub connect --hub http://100.121.46.35:7420 --invite K7QF-9M2X-4TBD
-   ```
-
-   The code works once and expires after 10 minutes. It is not the hub token. Run the command again for a new code.
-
-3. **On the agent machine**, paste that line inside your project:
-
-   ```bash
-   cd <your-project> && skillhub connect --hub http://100.121.46.35:7420 --invite K7QF-9M2X-4TBD
-   ```
-
-   It trades the code for the hub token, saves the token in your Skill Hub configuration folder (`~/.config/skillhub/hub-tokens/` on Linux, `~/Library/Application Support/skillhub/hub-tokens/` on macOS, `%AppData%\skillhub\hub-tokens\` on Windows) and connects the project. Add `-g` to connect every project of your user account at once.
-
-4. **Restart your agent** and check the connection:
-
-   ```bash
-   cd <your-project> && skillhub doctor
-   ```
-
-   It checks that the hub answers and accepts your token, and prints one fix for anything that fails. If it says "Nothing answers", start `skillhub serve` on the hub machine.
-
-An invite is only accepted over [Tailscale](https://tailscale.com) or through an SSH tunnel, where the traffic is encrypted, and `connect` refuses to send one anywhere else. On a network you do not trust, keep the server on the hub machine's own address and open a tunnel from the agent machine, then use the loopback line `token invite` prints:
-
-```bash
-cd ~/skill-hub && skillhub serve --addr 127.0.0.1:7420     # on the hub machine
-ssh -N -L 7420:127.0.0.1:7420 you@<hub-machine>             # on the agent machine, keep it running
-```
-
-Run `token invite` with the same `--workspace` and `--addr` as the server. On a plain network, or without Tailscale, copy the token file with the `scp` lines `skillhub serve` prints instead. On the hub machine, `skillhub serve --install-service` keeps the server running after you close the terminal (Linux and macOS). Curation stays on the hub machine. [Use one hub from several machines](docs/remote-hub-guide.md) covers invites in detail, the `scp` way, Windows, the service, rotating the token and going back to one machine.
+- **Nothing to install per project.** Connect once; no skill folders to copy around.
+- **Make skills yours.** Collect skills from any repository, edit them, tune them to your own criteria. New skills start as drafts you approve.
+- **One recommendation per task.** The full skill text loads only after your agent picks one.
+- **Git is the database.** Plain files in your own repository: review, share and roll back with Git.
+- **A local web UI** to browse, review and edit skills.
 
 ## See it
 

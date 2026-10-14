@@ -6,13 +6,13 @@ Skill Hub needs Git. [Node](https://nodejs.org) 18 or newer and Git 2.45.0 or ne
 
 ## Install with one command
 
-The install command for Linux, macOS and Windows is in the [README Quickstart](../README.md#install). After it runs, open a new terminal so the new `PATH` applies, then check that the command works:
+The install command for Linux, macOS and Windows is in the [README Quickstart](../README.md#1-install). After it runs, open a new terminal so the new `PATH` applies, then check that the command works:
 
 ```bash
 skillhub --version
 ```
 
-It prints the version, commit and build date. Next, [install the hub](../README.md#step-1-install-the-hub).
+It prints the version, commit and build date. Next, [set up your hub](../README.md#2-set-it-up).
 
 ## Choose options
 
