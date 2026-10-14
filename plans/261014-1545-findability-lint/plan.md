@@ -1,7 +1,7 @@
 ---
 title: "Self-resolution lint for skill examples"
 description: "Warn when a skill's own examples do not resolve to it, its counter-examples do, or a change to it takes other skills' examples. Review and validate check only the examples a change can affect; a bounded full scan stays as the safety net."
-status: on-hold # deferred 2026-10-14: wait for the curation UX review; this plan may change after it
+status: in-progress
 priority: P2
 effort: 3d
 branch: worktree-agent-adf317bed349da81c
@@ -176,6 +176,32 @@ Accepted by the user on 2026-10-14: `maintain validate` checks only changed skil
   - Failure semantics are unchanged: these are warnings only, the hook's exit code depends only on
     validation errors, and a missing catalog generation skips the check silently.
 - **MCP workspace validate** uses the default (changed) mode. Full mode is CLI-only (open question 4).
+
+## Reconciliation with the curation redesign (2026-10-14)
+
+Recorded by the coordinator before the remaining phases run, against
+`plans/261014-1740-curation-ux-redesign/design-decisions.md` (D1-D9) and the redesign as implemented on branch
+`feat/curation-wave`.
+
+- **Phase 1 is done** (commit `565976b`): review decodes the skill like the catalog and lints it through
+  `lintReviewedSkill` (`internal/app/skill_review.go`). Skip it.
+- **One lint entry point, three consumers.** `lintReviewedSkill` is now called by `skill review`
+  (`skill_review.go`), the `skill commit` preview (`internal/app/skill_commit_plan.go`) and the web changes
+  preview (`internal/app/skill_tree_edit.go`). Phase 4 wires the affected-examples check into that shared path,
+  not into `ReviewSkill` alone, so its warnings show in the `skill commit` preview (CLI, checkout or folder, new
+  skill or update) and in the web Review screen as well as in `skill review`. The after-state is the proposed
+  skill (`plan.final` files); the before-state for review and both previews is the served generation, as the
+  plan already says for review.
+- **Drafts come from a project folder now** (D7, D8): a new skill reaches review first as a `skill commit
+  <folder>` preview, before any hub draft exists. The draft case of phase 3 must therefore accept the proposed
+  bytes directly (the bytes input phase 1 already added), not only a hub draft.
+- **Validate modes are unchanged.** Every confirmed change is auto-committed through Git (D3), so the pre-commit
+  hook's `maintain validate --staged` runs on each skillhub commit. It stays warnings-only and must stay inside the
+  same work bound; it must not take the commit lock (`runtime/locks/commit.lock`).
+- **Open question 1 is answered by the redesign:** `skill edit` and `skill create` previews are no longer the
+  editing path; the `skill commit` and web previews above are, and they get the findings through the shared path.
+- **No command, flag or flow from D1-D9 changes.** `--full` and `--staged` on `maintain validate` are this
+  plan's own flags.
 
 ## Phases
 
