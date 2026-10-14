@@ -32,7 +32,7 @@ Sources & learning:
 Serve:
   serve     Let agents on other machines use this hub (listens on 0.0.0.0:7420)
   serve web Run the web UI (listens on 0.0.0.0:7421)
-  token     Show or rotate the hub token that serve requires
+  token     Show, rotate or invite a machine with the hub token that serve requires
 
 Maintenance:
   maintain  validate files, rebuild the search index, migrate the schema, show uncommitted changes
@@ -381,6 +381,7 @@ Examples:
 `,
 	"token": `Usage: skillhub token show [--workspace <path>] [--token-file <path>]
        skillhub token rotate [--workspace <path>] [--token-file <path>] [--dry-run]
+       skillhub token invite [--workspace <path>] [--addr <host:port>[,<host:port>...]]
 
 Manage the shared bearer token of the network MCP listener (skillhub serve).
 The token is created on first use in <workspace>/runtime/config/.hub-token
@@ -394,12 +395,22 @@ Other machines get a copy of the file: skillhub serve prints the scp line.
                     that connects needs the new file (rotate prints the scp
                     line to run there); a running listener uses it from its
                     next request
+  invite            Create a one-time code, valid for 10 minutes and usable
+                    once, and print the skillhub connect --invite line for each
+                    address it works over (Tailscale or an SSH tunnel). The
+                    other machine then fetches the token itself; the code is
+                    not the token. Only in a terminal. Run it again for a new
+                    code
   --workspace <p>   Workspace whose token to use
+  --addr <list>     invite: the --addr the server uses, to list the right
+                    addresses (default 0.0.0.0:7420). Pass the same --workspace
+                    and --addr as skillhub serve
   --token-file <p>  Use this token file instead of the workspace one
 
 Examples:
   skillhub token show
   skillhub token rotate
+  skillhub token invite
 `,
 	"update": `Usage: skillhub update [--version <v>] [--check] [--json]
 

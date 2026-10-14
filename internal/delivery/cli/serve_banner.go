@@ -3,6 +3,7 @@ package cli
 import (
 	"io"
 	"net"
+	"net/netip"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -57,35 +58,87 @@ func writeMCPBanner(w io.Writer, banner mcpBanner) {
 		}
 		p.Command("skillhub connect --hub " + hubURL + " --token-file " + clientPath)
 	}
-	for _, address := range banner.addresses {
+	for _, target := range connectTargets(banner.addresses, banner.interfaces) {
+		if target.kind == targetLoopback {
+			hostPort := net.JoinHostPort(target.host, strconv.Itoa(target.port))
+			p.Heading(target.label + " (" + hostPort + "); on the other machine, open an SSH tunnel and keep it running:")
+			p.Command(sshTunnelCommand(target, login))
+			p.Line("Then, in another terminal there:")
+		} else {
+			p.Heading(target.label + " (" + target.host + "), on the other machine:")
+		}
+		tokenLines(target.machine, target.hubURL)
+	}
+	p.Blank()
+	p.Line("To connect a machine without copying the token file, run `skillhub token invite`.")
+	p.Line("The token itself is never printed. Stop the server with Ctrl-C.")
+}
+
+// Kinds of connect target: how another machine reaches the hub.
+const (
+	targetLoopback  = "loopback"  // only through an SSH tunnel
+	targetTailscale = "tailscale" // a Tailscale address
+	targetLAN       = "lan"       // any other address of this machine
+)
+
+// connectTarget is one way another machine can reach a listener.
+type connectTarget struct {
+	label string // "Tailscale", an interface name, or "This machine only"
+	host  string // the address the hub URL carries
+	// machine is the host an scp line uses: the address, bracketed for IPv6,
+	// or the <this-machine> placeholder behind a tunnel.
+	machine string
+	hubURL  string
+	kind    string
+	port    int
+}
+
+// connectTargets turns the addresses a server is bound to into the targets
+// another machine can use, in listener order. A loopback listener, and a
+// wildcard one on a machine with no usable network address, yield one
+// loopback target; every other address yields one Tailscale or LAN target.
+func connectTargets(addresses []net.Addr, interfaces []hostpolicy.Interface) []connectTarget {
+	var targets []connectTarget
+	for _, address := range addresses {
 		tcp, ok := address.(*net.TCPAddr)
 		if !ok {
 			continue
 		}
 		port := strconv.Itoa(tcp.Port)
-		reachable := hostpolicy.Reachable(address, banner.interfaces)
+		reachable := hostpolicy.Reachable(address, interfaces)
 		if hostpolicy.IsLoopback(address) || (hostpolicy.IsWildcard(address) && len(reachable) == 0) {
 			host := "127.0.0.1"
 			if hostpolicy.IsLoopback(address) {
 				host = tcp.IP.String()
 			}
-			hostPort := net.JoinHostPort(host, port)
-			p.Heading("This machine only (" + hostPort + "); on the other machine, open an SSH tunnel and keep it running:")
-			p.Command("ssh -N -L " + port + ":" + hostPort + " " + login + "@<this-machine>")
-			p.Line("Then, in another terminal there:")
-			tokenLines("<this-machine>", "http://"+hostPort)
+			targets = append(targets, connectTarget{
+				label: "This machine only", host: host, machine: "<this-machine>",
+				hubURL: "http://" + net.JoinHostPort(host, port), kind: targetLoopback, port: tcp.Port,
+			})
 		}
 		for _, item := range reachable {
 			machine := item.IP.String()
 			if item.IP.To4() == nil {
 				machine = "[" + machine + "]"
 			}
-			p.Heading(item.Label + " (" + item.IP.String() + "), on the other machine:")
-			tokenLines(machine, "http://"+net.JoinHostPort(item.IP.String(), port))
+			kind := targetLAN
+			if ip, ok := netip.AddrFromSlice(item.IP); ok && hostpolicy.PairingIP(ip) {
+				kind = targetTailscale
+			}
+			targets = append(targets, connectTarget{
+				label: item.Label, host: item.IP.String(), machine: machine,
+				hubURL: "http://" + net.JoinHostPort(item.IP.String(), port), kind: kind, port: tcp.Port,
+			})
 		}
 	}
-	p.Blank()
-	p.Line("The token itself is never printed. Stop the server with Ctrl-C.")
+	return targets
+}
+
+// sshTunnelCommand is the line that forwards the hub's port to the machine
+// that runs it.
+func sshTunnelCommand(target connectTarget, login string) string {
+	port := strconv.Itoa(target.port)
+	return "ssh -N -L " + port + ":" + net.JoinHostPort(target.host, port) + " " + login + "@<this-machine>"
 }
 
 // scpCommand is the line a client machine runs to copy the hub's token file:
