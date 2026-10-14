@@ -104,19 +104,41 @@ func commitInputFromFlags(flags skillFlags) (app.SkillCommitInput, error) {
 	if flags.hasRoutingFlags() {
 		input.Routing = &skill.RoutingInput{Operations: flags.operations, Triggers: flags.triggers, NotFor: flags.notFor, MinScope: flags.minScope, Examples: flags.examples, CounterExamples: flags.counterExamples}
 	}
+	resolutions, err := resolutionsFromFlags(flags)
+	if err != nil {
+		return input, err
+	}
+	input.Resolutions = resolutions
+	return input, nil
+}
+
+// resolutionsFromFlags reads the person's decisions on files both sides changed.
+func resolutionsFromFlags(flags skillFlags) ([]app.SkillCommitResolution, error) {
+	var resolutions []app.SkillCommitResolution
 	for _, item := range flags.accepts {
 		path, choice, _ := strings.Cut(item, "=")
-		input.Resolutions = append(input.Resolutions, app.SkillCommitResolution{Path: path, Choice: choice})
+		resolutions = append(resolutions, app.SkillCommitResolution{Path: path, Choice: choice})
 	}
 	for _, item := range flags.manuals {
 		path, file, _ := strings.Cut(item, "=")
 		content, err := os.ReadFile(strings.TrimSpace(file))
 		if err != nil {
-			return input, fmt.Errorf("read the manual file for %s: %w", path, err)
+			return nil, fmt.Errorf("read the manual file for %s: %w", path, err)
 		}
-		input.Resolutions = append(input.Resolutions, app.SkillCommitResolution{Path: path, Choice: "manual", Content: content})
+		resolutions = append(resolutions, app.SkillCommitResolution{Path: path, Choice: "manual", Content: content})
 	}
-	return input, nil
+	return resolutions, nil
+}
+
+// resolutionInput is the service input of a submission review: its decisions
+// and its routing flags; the files come from the hub's queue.
+func resolutionInput(flags skillFlags) app.SkillCommitInput {
+	input := app.SkillCommitInput{}
+	if flags.hasRoutingFlags() {
+		input.Routing = &skill.RoutingInput{Operations: flags.operations, Triggers: flags.triggers, NotFor: flags.notFor, MinScope: flags.minScope, Examples: flags.examples, CounterExamples: flags.counterExamples}
+	}
+	input.Resolutions, _ = resolutionsFromFlags(flags)
+	return input
 }
 
 // askCommitQuestions asks what the commit needs, in order, and reports whether
@@ -220,7 +242,11 @@ func writeSkillCommitPreview(p *termui.Printer, preview app.SkillCommitPreview, 
 	}
 	writeCommitRouting(p, preview)
 	writeCommitLint(p, preview.RoutingLint)
-	writeCommitTrust(p, preview)
+	if hints.submission {
+		p.Line("Submitted content is untrusted until you approve it.")
+	} else {
+		writeCommitTrust(p, preview)
+	}
 	if len(preview.Conflicts) > 0 {
 		writeCommitConflicts(p, preview, hints.rerun)
 		return
@@ -395,6 +421,10 @@ func writeCommitTail(p *termui.Printer, preview app.SkillCommitPreview, hints pr
 		p.Raw("Show the diff: " + hints.rerun + " --diff\n")
 	}
 	if hints.interactive {
+		return
+	}
+	if hints.submission {
+		p.Line("Only a person approves a submission: run this in a terminal on the hub machine, or use the web page \"Waiting for review\".")
 		return
 	}
 	apply := hints.rerun + " --yes"

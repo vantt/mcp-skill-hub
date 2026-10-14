@@ -27,6 +27,12 @@ type CheckoutMarker struct {
 	// skill had uncommitted edits at checkout.
 	BaseCommit   string `json:"base_commit,omitempty"`
 	CheckedOutAt string `json:"checked_out_at"`
+	// BundleDigest is the manifest digest of the bundle a checkout from a
+	// remote hub was made from.
+	BundleDigest string `json:"bundle_digest,omitempty"`
+	// BaseFiles lists the digest of each file a remote checkout wrote, so a
+	// later commit can say which files changed without the hub's history.
+	BaseFiles map[string]string `json:"base_files,omitempty"`
 }
 
 // ReadCheckoutMarker reads the marker of a skill folder. The bool is false when

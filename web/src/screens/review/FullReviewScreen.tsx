@@ -3,8 +3,22 @@ import { Link, useParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { ApiError } from '../../api/client';
 import { commitSentence } from '../../api/commit-view';
-import { confirmSkillMutation, previewSkillApproval, useSkillReviewContent } from '../../api/queries';
-import type { ReviewFile, SkillMutationResult, SkillReviewContent } from '../../api/types';
+import {
+  confirmSkillMutation,
+  discardSubmission,
+  previewSkillApproval,
+  previewSubmissionApproval,
+  useSkillReviewContent,
+  useSubmissionReview,
+} from '../../api/queries';
+import type {
+  ReviewFile,
+  SkillMutationResult,
+  SkillProposal,
+  SkillReviewContent,
+  SubmissionApprovalPreview,
+  SubmissionReview,
+} from '../../api/types';
 import { DiffView } from '../../components/DiffView';
 import { NotFoundPage } from '../../components/NotFoundPage';
 import { Skeleton } from '../../components/Skeleton';
@@ -15,6 +29,7 @@ const CHANGE_WORD: Record<NonNullable<ReviewFile['change']>, string> = { A: 'add
 const BASELINE_TEXT: Record<SkillReviewContent['baseline'], string> = {
   approved: 'Compared with the content you last approved',
   served: 'Compared with what agents get today',
+  hub: 'Compared with the skill on this hub today',
   none: 'A new draft: every file is new',
 };
 
@@ -32,6 +47,16 @@ const TEXT = {
   openSkill: 'Open the skill',
   approve: 'Approve',
   approving: 'Approving…',
+  discard: 'Discard',
+  confirmDiscard: 'Discard this submission? Nothing is applied and it leaves the queue.',
+  yesDiscard: 'Yes, discard',
+  keep: 'Keep it',
+  discarded: 'Discarded.',
+  newDraftNote: 'It is a draft now: open the skill to activate it when it is ready.',
+  leftOut: 'Left out by the submitting machine: ',
+  conflictsHead: 'The hub and the submission both changed these files since it was checked out:',
+  conflictsFix: 'Decide each in a terminal on the hub machine: skillhub skill review ',
+  acceptFlag: ' --accept <path>=hub',
   alreadyApproved: 'Agents already get this content: it is approved.',
   nothingToApprove:
     'This skill is not from another repository, so there is nothing to approve. Activate it from its page when it is ready.',
@@ -58,14 +83,21 @@ function counts(file: ReviewFile): string {
 }
 
 // Every file of a skill in order, changed files first-class with their diffs, and the license and
-// origin on top. Approving is possible once every changed file was opened.
+// origin on top. Approving is possible once every changed file was opened. The same screen reviews a
+// skill another machine submitted: approving then applies the files and approves them in one commit.
 export function FullReviewScreen() {
-  const { id } = useParams<{ id: string }>();
-  const skillId = id ?? '';
+  const { id, sid } = useParams<{ id: string; sid: string }>();
+  const submissionId = sid ?? '';
   const queryClient = useQueryClient();
-  const { data, isLoading, error } = useSkillReviewContent(skillId);
+  const skillQuery = useSkillReviewContent(submissionId ? '' : (id ?? ''));
+  const submissionQuery = useSubmissionReview(submissionId);
+  const { data, isLoading, error } = submissionId ? submissionQuery : skillQuery;
+  const submission: SubmissionReview | undefined = submissionId ? submissionQuery.data : undefined;
+  const skillId = data?.skill_id ?? id ?? '';
   const [opened, setOpened] = useState<Set<string>>(new Set());
   const [approving, setApproving] = useState(false);
+  const [confirmingDiscard, setConfirmingDiscard] = useState(false);
+  const [discarded, setDiscarded] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [result, setResult] = useState<SkillMutationResult | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -83,6 +115,8 @@ export function FullReviewScreen() {
   const changed = data.files.filter((file) => file.changed);
   const unchanged = data.files.filter((file) => !file.changed);
   const left = changed.filter((file) => !opened.has(file.path)).length;
+  const conflicts = submission?.conflicts ?? [];
+  const conflictText = `${TEXT.conflictsHead} ${conflicts.join(', ')}. ${TEXT.conflictsFix}${submissionId}${TEXT.acceptFlag}`;
   const needsApproval = data.third_party && !data.approved;
   const heading = `${data.title || skillId}${TEXT.headingTail}`;
   const facts = `${TEXT.license} ${data.license}${TEXT.originSep}${data.origin || TEXT.thisHub}`;
@@ -94,14 +128,39 @@ export function FullReviewScreen() {
 
   const markOpened = (path: string) => setOpened((prev) => (prev.has(path) ? prev : new Set(prev).add(path)));
 
+  const discard = async () => {
+    setFailure(null);
+    try {
+      await discardSubmission(submissionId);
+      setDiscarded(true);
+      queryClient.invalidateQueries({ queryKey: ['review-queue'] });
+      queryClient.invalidateQueries({ queryKey: ['home'] });
+    } catch (err) {
+      setFailure(errorText(err));
+    } finally {
+      setConfirmingDiscard(false);
+    }
+  };
+
   const approve = async () => {
     setApproving(true);
     setFailure(null);
     try {
-      const proposal = await previewSkillApproval(skillId, data.content_digest);
+      let message: string | undefined;
+      let proposal: SkillProposal | SubmissionApprovalPreview;
+      if (submissionId) {
+        const preview = await previewSubmissionApproval(submissionId, data.content_digest);
+        message = preview.default_message;
+        proposal = preview;
+      } else {
+        proposal = await previewSkillApproval(skillId, data.content_digest);
+      }
       const pins = proposal.confirmation?.confirmation?.pins ?? proposal.confirmation?.pins;
       if (!pins) throw new Error('The approval could not be prepared.');
-      const done = await confirmSkillMutation(pins.proposal_id, { proposalDigest: pins.proposal_digest, baseVersion: pins.base_version });
+      const confirmPins = { proposalDigest: pins.proposal_digest, baseVersion: pins.base_version };
+      const done = submissionId
+        ? await confirmSkillMutation(pins.proposal_id, confirmPins, message, submissionId)
+        : await confirmSkillMutation(pins.proposal_id, confirmPins);
       setResult(done);
       setToast(`${data.title || skillId} approved`);
       for (const key of [['skill', skillId], ['skill-review', skillId], ['skills'], ['home'], ['review-queue']]) {
@@ -167,12 +226,23 @@ export function FullReviewScreen() {
         </span>
       </header>
 
+      {conflicts.length > 0 && (
+        <div className="fg-banner fg-banner--danger" role="alert">
+          <span>{conflictText}</span>
+        </div>
+      )}
       {failure && (
         <div className="fg-banner fg-banner--danger" role="alert">
           <span>{failure}</span>
         </div>
       )}
 
+      {submission && submission.excluded.length > 0 && (
+        <span className="t-caption" style={{ color: 'var(--color-text-muted)' }}>
+          {TEXT.leftOut}
+          {submission.excluded.map((file) => `${file.path} (${file.reason})`).join('; ')}
+        </span>
+      )}
       <ul className="app-review-files" aria-label="Changed files">
         {changed.map(renderFile)}
       </ul>
@@ -186,20 +256,56 @@ export function FullReviewScreen() {
         </details>
       )}
 
-      {result ? (
+      {discarded ? (
+        <div className="fg-card" data-testid="discard-result">
+          <p className="t-body" style={{ margin: 0 }}>
+            {TEXT.discarded}
+          </p>
+          <Link to="/review" className="fg-btn fg-btn--secondary" style={{ marginTop: 'var(--space-3)' }}>
+            <span>{TEXT.backToQueue}</span>
+          </Link>
+        </div>
+      ) : result ? (
         <div className="fg-card" data-testid="approve-result">
           <p className="t-body" style={{ margin: 0 }}>
             {approvedLine}
           </p>
+          {submission?.case === 'new' && (
+            <p className="t-body-sm" style={{ margin: 0 }}>
+              {TEXT.newDraftNote}{' '}
+              <Link to={`/skills/${encodeURIComponent(skillId)}`}>{TEXT.openSkill}</Link>
+            </p>
+          )}
           <Link to="/review" className="fg-btn fg-btn--secondary" style={{ marginTop: 'var(--space-3)' }}>
             <span>{TEXT.backToQueue}</span>
           </Link>
         </div>
       ) : needsApproval ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
-          <button type="button" className="fg-btn fg-btn--primary" disabled={left > 0 || approving} onClick={() => void approve()}>
+          <button
+            type="button"
+            className="fg-btn fg-btn--primary"
+            disabled={left > 0 || approving || conflicts.length > 0}
+            onClick={() => void approve()}
+          >
             <span>{approving ? TEXT.approving : TEXT.approve}</span>
           </button>
+          {submissionId &&
+            (confirmingDiscard ? (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                <span className="t-body-sm">{TEXT.confirmDiscard}</span>
+                <button type="button" className="fg-btn fg-btn--secondary" onClick={() => void discard()}>
+                  <span>{TEXT.yesDiscard}</span>
+                </button>
+                <button type="button" className="fg-btn fg-btn--secondary" onClick={() => setConfirmingDiscard(false)}>
+                  <span>{TEXT.keep}</span>
+                </button>
+              </span>
+            ) : (
+              <button type="button" className="fg-btn fg-btn--secondary" onClick={() => setConfirmingDiscard(true)}>
+                <span>{TEXT.discard}</span>
+              </button>
+            ))}
           {left > 0 && (
             <span className="t-caption" data-testid="approve-hint">
               {leftHint}

@@ -13,6 +13,8 @@ import (
 const (
 	ReviewKindDraft          = "draft"
 	ReviewKindContentChanged = "content_changed"
+	// ReviewKindSubmission is a skill another machine sent for review.
+	ReviewKindSubmission = "submission"
 )
 
 // ReviewQueueItem is one skill that needs a human before agents get it.
@@ -25,10 +27,13 @@ type ReviewQueueItem struct {
 	// Since is the date of the skill's last commit, or empty without Git.
 	Since  string `json:"since,omitempty"`
 	Origin string `json:"origin,omitempty"`
+	// SubmissionID names the waiting submission of a "submission" item.
+	SubmissionID string `json:"submission_id,omitempty"`
 }
 
-// ReviewQueueResult lists what waits for review: new drafts, and active skills
-// whose third-party content changed after its last approval.
+// ReviewQueueResult lists what waits for review: new drafts, active skills
+// whose third-party content changed after its last approval, and skills other
+// machines submitted.
 type ReviewQueueResult struct {
 	Result
 	Items []ReviewQueueItem `json:"items"`
@@ -65,6 +70,9 @@ func (service SkillService) ReviewQueue(ctx context.Context, path string) (Revie
 		item.Since, item.Origin = queueFacts(ctx, root, entry.ID)
 		items = append(items, item)
 	}
+	for _, submission := range submissionEntries(root) {
+		items = append(items, submissionQueueItem(root, submission))
+	}
 	sort.SliceStable(items, func(i, j int) bool {
 		if items[i].Since != items[j].Since {
 			return items[i].Since > items[j].Since
@@ -91,4 +99,21 @@ func queueFacts(ctx context.Context, root, id string) (since, origin string) {
 		origin = thirdPartyOrigin(meta)
 	}
 	return since, origin
+}
+
+// submissionQueueItem describes a waiting submission as a queue row. A skill
+// the hub already has keeps its own title; a new one is named by its id.
+func submissionQueueItem(root string, submission Submission) ReviewQueueItem {
+	item := ReviewQueueItem{
+		Kind: ReviewKindSubmission, SkillID: submission.SkillID, SubmissionID: submission.ID, Title: submission.SkillID,
+		Reason: "a new skill submitted for review", Origin: "Submitted from " + submission.ClientLabel,
+		Since: submission.SubmittedAt[:min(10, len(submission.SubmittedAt))],
+	}
+	if hub, err := loadHubSkill(root, submission.SkillID); err == nil && hub != nil {
+		item.Reason = "a change submitted for review"
+		if name := parseSkillReviewMeta(hub.meta).Name; name != "" {
+			item.Title = name
+		}
+	}
+	return item
 }

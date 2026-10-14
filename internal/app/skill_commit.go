@@ -145,6 +145,9 @@ type commitPlan struct {
 	hubVersion                                               string
 	finalVersion                                             string
 	nonce                                                    string
+	// submission is set when the files came from another machine; the folder
+	// is then the hub's queue, which nothing is synced back into.
+	submission *Submission
 }
 
 // hubSkill is a skill as the hub holds it today.
@@ -186,27 +189,44 @@ func (service SkillCommitService) Preview(ctx context.Context, path string, inpu
 	if refusal != nil {
 		return commitPreviewError(refusal), nil
 	}
+	return service.previewTree(ctx, root, target, folderContents{tree: projectTree, excluded: excluded}, input, nil)
+}
+
+// folderContents is a skill folder as read: its files and what was left out.
+type folderContents struct {
+	tree     map[string]treeFile
+	excluded []ExcludedFile
+}
+
+// previewTree plans the commit of a folder already read. A submission is the
+// same plan over the files another machine sent, with its own checkout base.
+func (service SkillCommitService) previewTree(ctx context.Context, root string, target commitTarget, contents folderContents, input SkillCommitInput, submission *Submission) (SkillCommitPreview, error) {
+	projectTree, excluded := contents.tree, contents.excluded
 	hub, err := loadHubSkill(root, target.id)
 	if err != nil {
 		return SkillCommitPreview{}, err
 	}
 	if hub != nil {
-		if refusal = normalizeProjectSkillMD(projectTree, target.id, hub); refusal != nil {
+		if refusal := normalizeProjectSkillMD(projectTree, target.id, hub); refusal != nil {
 			return commitPreviewError(refusal), nil
 		}
+		if submission != nil {
+			keepHubExecutableBits(projectTree, hub.tree)
+		}
 	}
-	plan := &commitPlan{root: root, id: target.id, folder: target.dir, marker: target.marker, hub: hub, projectTree: copyTree(projectTree), nonce: newCommitNonce()}
+	plan := &commitPlan{root: root, id: target.id, folder: target.dir, marker: target.marker, hub: hub, projectTree: copyTree(projectTree), nonce: newCommitNonce(), submission: submission}
 	preview := SkillCommitPreview{SkillID: target.id, Folder: target.dir, Excluded: excluded, Files: []SkillCommitFile{}, Merge: []SkillCommitMerge{}, RoutingLint: []SkillCommitLint{}, plan: plan}
 	if preview.Excluded == nil {
 		preview.Excluded = []ExcludedFile{}
 	}
 	sort.Slice(preview.Excluded, func(i, j int) bool { return preview.Excluded[i].Path < preview.Excluded[j].Path })
-	if target.marker != nil {
+	if target.marker != nil && submission == nil {
 		preview.Checkout = &SkillCommitCheckout{Path: target.dir, BaseVersion: target.marker.BaseVersion}
 		if !sameHub(target.marker.Hub, root) {
 			preview.Warnings = append(preview.Warnings, Warning{Code: "other_hub", Summary: fmt.Sprintf("This folder was checked out from the hub at %s; you are committing to %s.", target.marker.Hub, root)})
 		}
 	}
+	var refusal *Error
 	if hub == nil {
 		refusal, err = service.planNewSkill(&preview, input, projectTree)
 	} else {
@@ -222,6 +242,18 @@ func (service SkillCommitService) Preview(ctx context.Context, path string, inpu
 		return commitPreviewError(refusal), nil
 	}
 	return service.finishPreview(ctx, preview, input)
+}
+
+// keepHubExecutableBits keeps the execute bit of a file the hub already has
+// executable: a bundle the hub serves carries no modes, so a machine that
+// checked the skill out remotely cannot tell which scripts were executable.
+func keepHubExecutableBits(tree, hub map[string]treeFile) {
+	for rel, file := range tree {
+		if hubFile, ok := hub[rel]; ok && hubFile.Executable && !file.Executable {
+			file.Executable = true
+			tree[rel] = file
+		}
+	}
 }
 
 // newCommitNonce makes the idempotency key of one preview its own: applying
@@ -300,7 +332,11 @@ func (service SkillCommitService) planExistingSkill(ctx context.Context, preview
 	switch {
 	case plan.marker == nil:
 		plan.caseName = commitCaseReplace
-		preview.Warnings = append(preview.Warnings, Warning{Code: "folder_not_checked_out", Summary: fmt.Sprintf("This folder was not checked out; it replaces the hub copy of %s.", plan.id)})
+		summary := fmt.Sprintf("This folder was not checked out; it replaces the hub copy of %s.", plan.id)
+		if plan.submission != nil {
+			summary = fmt.Sprintf("It was sent without a checkout of the hub's copy; it replaces the hub copy of %s.", plan.id)
+		}
+		preview.Warnings = append(preview.Warnings, Warning{Code: "folder_not_checked_out", Summary: summary})
 	case plan.marker.BaseVersion == hub.version:
 		plan.caseName = commitCaseUpdate
 	default:

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -131,4 +132,89 @@ test('the content trust card sends a person to the review screen, not to a comma
   await expect(page.getByText('--approve-content')).toHaveCount(0);
   await link.click();
   await expect(page).toHaveURL(new RegExp(`/skills/${PDF}/review-content$`));
+});
+
+// A skill another machine sent: the hub keeps it in a queue under runtime/ until a person reads it.
+// The queue is written the way the hub's /mcp/submissions endpoint writes it.
+const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+
+function seedSubmission(skillId: string, label: string, files: Record<string, string>): string {
+  let tail = '';
+  for (let i = 0; i < 26; i += 1) tail += CROCKFORD[Math.floor(Math.random() * CROCKFORD.length)];
+  const id = `SUB-${tail}`;
+  const dir = path.join(ws, 'runtime', 'submissions', id);
+  const listed = Object.entries(files).map(([rel, body]) => {
+    const full = path.join(dir, 'files', rel);
+    fs.mkdirSync(path.dirname(full), { recursive: true });
+    fs.writeFileSync(full, body);
+    return { path: rel, size: Buffer.byteLength(body), digest: `sha256:${createHash('sha256').update(body).digest('hex')}` };
+  });
+  fs.writeFileSync(
+    path.join(dir, 'submission.json'),
+    JSON.stringify({
+      submission_id: id,
+      skill_id: skillId,
+      client_label: label,
+      submitted_at: '2026-10-14T10:00:00Z',
+      excluded: [{ path: '.env', reason: 'looks like a secret' }],
+      files: listed,
+      total_bytes: listed.reduce((sum, file) => sum + file.size, 0),
+    }),
+  );
+  return id;
+}
+
+test('waiting for review: a skill submitted from another machine is read in full and approved', async ({ page }) => {
+  test.setTimeout(120_000);
+  const skillMd = '---\nname: release-notes\ndescription: Write the release notes. Use when the team ships.\n---\n\n# Release notes\n\nSummarize what shipped.\n';
+  const sub = seedSubmission('release-notes', 'machine-a', { 'SKILL.md': skillMd, 'scripts/notes.sh': 'echo notes\n' });
+  const headBefore = Number(git('rev-list', '--count', 'HEAD'));
+
+  await page.goto(server.url);
+  await page.goto(`${server.origin}/review`);
+  const queue = page.getByRole('list', { name: 'Skills waiting for review' });
+  await expect(queue.getByText('Submitted · needs approval')).toBeVisible();
+  await expect(queue.getByText('Submitted from machine-a')).toBeVisible();
+  await queue.getByRole('link', { name: 'release-notes' }).click();
+  await expect(page).toHaveURL(new RegExp(`/review/submissions/${sub}$`));
+
+  await expect(page.getByText(/Origin: Submitted from machine-a/)).toBeVisible();
+  await expect(page.getByText(/Left out by the submitting machine: \.env \(looks like a secret\)/)).toBeVisible();
+  const approve = page.getByRole('button', { name: 'Approve' });
+  await expect(approve).toBeDisabled();
+  const changed = page.getByRole('list', { name: 'Changed files' });
+  await expect(changed.locator('li')).toHaveCount(2);
+  await changed.locator('summary', { hasText: 'scripts/notes.sh' }).click();
+  await expect(changed.getByText('echo notes')).toBeVisible();
+  await expect(approve).toBeDisabled();
+  await changed.locator('summary', { hasText: 'SKILL.md' }).click();
+  await expect(approve).toBeEnabled();
+
+  await approve.click();
+  await expect(page.getByTestId('approve-result')).toContainText(/Approved\. Committed [0-9a-f]{7}\./, { timeout: 15000 });
+  await expect(page.getByTestId('approve-result')).toContainText('It is a draft now');
+  expect(Number(git('rev-list', '--count', 'HEAD'))).toBe(headBefore + 1);
+  expect(git('log', '-1', '--format=%s')).toBe('Add release-notes (submitted from machine-a), approve content');
+  expect(git('status', '--porcelain=v1')).toBe('');
+  expect(fs.existsSync(path.join(ws, 'runtime', 'submissions', sub))).toBe(false);
+
+  await page.getByRole('link', { name: 'Back to Waiting for review' }).click();
+  await expect(page.getByRole('list', { name: 'Skills waiting for review' }).getByText('Submitted · needs approval')).toHaveCount(0);
+});
+
+test('waiting for review: a submission can be discarded and changes nothing', async ({ page }) => {
+  const sub = seedSubmission('scratch-skill', 'machine-b', {
+    'SKILL.md': '---\nname: scratch-skill\ndescription: Scratch. Use when testing.\n---\n\n# Scratch\n',
+  });
+  const head = git('rev-parse', 'HEAD');
+  await page.goto(server.url);
+  await page.goto(`${server.origin}/review/submissions/${sub}`);
+  await page.getByRole('button', { name: 'Discard' }).click();
+  await expect(page.getByText('Discard this submission?')).toBeVisible();
+  await page.getByRole('button', { name: 'Yes, discard' }).click();
+  await expect(page.getByTestId('discard-result')).toContainText('Discarded.');
+  expect(fs.existsSync(path.join(ws, 'runtime', 'submissions', sub))).toBe(false);
+  expect(git('rev-parse', 'HEAD')).toBe(head);
+  await page.goto(`${server.origin}/review/submissions/${sub}`);
+  await expect(page.getByText('Page not found.')).toBeVisible();
 });

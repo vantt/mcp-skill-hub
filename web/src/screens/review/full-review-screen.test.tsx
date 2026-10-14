@@ -2,14 +2,20 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { SkillReviewContent } from '../../api/types';
+import type { SkillReviewContent, SubmissionReview } from '../../api/types';
 
 const previewSkillApproval = vi.fn();
 const confirmSkillMutation = vi.fn();
+const previewSubmissionApproval = vi.fn();
+const discardSubmission = vi.fn();
 let review: SkillReviewContent;
+let submission: SubmissionReview;
 
 vi.mock('../../api/queries', () => ({
-  useSkillReviewContent: () => ({ data: review, isLoading: false, error: null }),
+  useSkillReviewContent: (id: string) => ({ data: id ? review : undefined, isLoading: false, error: null }),
+  useSubmissionReview: (id: string) => ({ data: id ? submission : undefined, isLoading: false, error: null }),
+  previewSubmissionApproval: (...args: unknown[]) => previewSubmissionApproval(...args),
+  discardSubmission: (...args: unknown[]) => discardSubmission(...args),
   previewSkillApproval: (...args: unknown[]) => previewSkillApproval(...args),
   confirmSkillMutation: (...args: unknown[]) => confirmSkillMutation(...args),
 }));
@@ -44,13 +50,31 @@ function makeReview(over: Partial<SkillReviewContent> = {}): SkillReviewContent 
   };
 }
 
-function renderScreen() {
+function makeSubmission(over: Partial<SubmissionReview> = {}): SubmissionReview {
+  const base = makeReview({ skill_id: 'team-release', title: 'Team release', state: 'new', baseline: 'none', origin: 'Submitted from machine-a', baseline_commit: undefined });
+  return {
+    ...base,
+    files: [
+      { path: 'SKILL.md', size_bytes: 10, binary: false, changed: true, change: 'A', added: 5, removed: 0, diff: '--- /dev/null\n+++ b/SKILL.md\n@@ -0,0 +1 @@\n+x\n', truncated: false, content: 'x' },
+    ],
+    submission_id: 'SUB-01JA2',
+    client_label: 'machine-a',
+    submitted_at: '2026-10-14T10:00:00Z',
+    case: 'new',
+    conflicts: [],
+    excluded: [{ path: '.env', reason: 'looks like a secret' }],
+    ...over,
+  };
+}
+
+function renderScreen(entry = '/skills/pdf/review-content') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={['/skills/pdf/review-content']}>
+      <MemoryRouter initialEntries={[entry]}>
         <Routes>
           <Route path="/skills/:id/review-content" element={<FullReviewScreen />} />
+          <Route path="/review/submissions/:sid" element={<FullReviewScreen />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -70,6 +94,7 @@ describe('FullReviewScreen', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     review = makeReview();
+    submission = makeSubmission();
   });
 
   it('shows the license, the origin, what the files are compared with, and the files in order', () => {
@@ -112,5 +137,53 @@ describe('FullReviewScreen', () => {
     renderScreen();
     expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
     expect(screen.getByText(/nothing to approve/)).toBeInTheDocument();
+  });
+
+  it('reviews a submission: submitted-from origin, files, what was left out, and approves it with its commit message', async () => {
+    previewSubmissionApproval.mockResolvedValue({
+      default_message: 'Add team-release (submitted from machine-a), approve content',
+      confirmation: { confirmation: { pins: { proposal_id: 'P', proposal_digest: 'D', base_version: 'B' } } },
+    });
+    confirmSkillMutation.mockResolvedValue({
+      commit: { status: 'committed', hash: 'abcdef012345', reach: { this_hub_now: true, push_needed: false } },
+    });
+    renderScreen('/review/submissions/SUB-01JA2');
+    expect(screen.getByText('License: Proprietary · Origin: Submitted from machine-a')).toBeInTheDocument();
+    expect(screen.getByText(/A new draft: every file is new/)).toBeInTheDocument();
+    expect(screen.getByText(/Left out by the submitting machine: \.env \(looks like a secret\)/)).toBeInTheDocument();
+    const approve = screen.getByRole('button', { name: 'Approve' });
+    expect(approve).toBeDisabled();
+    open('SKILL.md');
+    expect(approve).toBeEnabled();
+    fireEvent.click(approve);
+    await waitFor(() => expect(confirmSkillMutation).toHaveBeenCalled());
+    expect(previewSubmissionApproval).toHaveBeenCalledWith('SUB-01JA2', 'sha256:abc');
+    expect(confirmSkillMutation).toHaveBeenCalledWith(
+      'P',
+      { proposalDigest: 'D', baseVersion: 'B' },
+      'Add team-release (submitted from machine-a), approve content',
+      'SUB-01JA2',
+    );
+    const done = await screen.findByTestId('approve-result');
+    expect(done).toHaveTextContent('Approved.');
+    expect(done).toHaveTextContent('It is a draft now');
+  });
+
+  it('keeps Approve off while files need a decision on the hub machine, and says how', () => {
+    submission = makeSubmission({ case: 'merge', conflicts: ['SKILL.md'] });
+    renderScreen('/review/submissions/SUB-01JA2');
+    open('SKILL.md');
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
+    expect(screen.getByRole('alert')).toHaveTextContent('skillhub skill review SUB-01JA2 --accept <path>=hub');
+  });
+
+  it('discards a submission only after a second click', async () => {
+    discardSubmission.mockResolvedValue(undefined);
+    renderScreen('/review/submissions/SUB-01JA2');
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    expect(discardSubmission).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, discard' }));
+    await waitFor(() => expect(discardSubmission).toHaveBeenCalledWith('SUB-01JA2'));
+    expect(await screen.findByTestId('discard-result')).toHaveTextContent('Discarded.');
   });
 });

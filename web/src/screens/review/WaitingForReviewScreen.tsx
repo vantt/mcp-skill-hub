@@ -14,10 +14,16 @@ const TEXT = {
 const KIND_LABEL: Record<ReviewQueueItem['kind'], string> = {
   draft: 'New draft',
   content_changed: 'Content changed · needs approval',
+  submission: 'Submitted · needs approval',
 };
 
-// What needs a person before agents get it: new drafts, and third-party skills whose content changed
-// after it was approved. Each row opens the full review of that skill.
+function reviewPath(item: ReviewQueueItem): string {
+  if (item.submission_id) return `/review/submissions/${encodeURIComponent(item.submission_id)}`;
+  return `/skills/${encodeURIComponent(item.skill_id)}/review-content`;
+}
+
+// What needs a person before agents get it: new drafts, third-party skills whose content changed
+// after it was approved, and skills other machines submitted. Each row opens the full review.
 export function WaitingForReviewScreen() {
   const { data, isLoading, error } = useReviewQueue();
 
@@ -52,9 +58,9 @@ export function WaitingForReviewScreen() {
       ) : (
         <ul className="app-review-queue" aria-label="Skills waiting for review">
           {data.items.map((item) => (
-            <li key={item.skill_id} className="fg-card app-review-queue__item">
+            <li key={item.submission_id ?? item.skill_id} className="fg-card app-review-queue__item">
               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-                <Link to={`/skills/${encodeURIComponent(item.skill_id)}/review-content`} className="t-body" style={{ fontWeight: 600 }}>
+                <Link to={reviewPath(item)} className="t-body" style={{ fontWeight: 600 }}>
                   {item.title || item.skill_id}
                 </Link>
                 {item.origin && (

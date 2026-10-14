@@ -103,10 +103,16 @@ read side of the runtime profile is meant to be reachable from another machine.
 
 **What a stolen token allows.** The same as an agent on machine A: the three runtime tools, the
 skills listing and the pinned resource reads. That is read-only access to approved skill content
-and routing metadata, plus writing feedback and resolve telemetry into B's telemetry store. It does
-not allow any curation tool, any canonical write, approving content, reading unapproved content, or
-running anything on B. Rotation (`skillhub token rotate`) revokes it. Mitigations: long random
-token, constant-time compare, rate limit, never in URLs, logs or host config files.
+and routing metadata, plus writing feedback and resolve telemetry into B's telemetry store. It can
+also fill the submission queue (`POST /mcp/submissions`): at most 50 waiting submissions and
+256 MiB in total, each at most 512 files and 16 MiB, refused beyond that. A submission only waits in
+`runtime/submissions/` on B, which Git does not track; it changes no skill and nothing is served from
+it until a person on B reviews it and approves it as third-party content. It does not allow any
+curation tool, any canonical write, approving content, reading unapproved content, or running
+anything on B. Rotation (`skillhub token rotate`) revokes it. Mitigations: long random token,
+constant-time compare, rate limit, the queue caps, never in URLs, logs or host config files. The
+client label that comes with a submission is shown as "submitted from" text and is never used for
+trust. A per-invite permission to submit stays deferred.
 
 **What travels over the connection.**
 
@@ -115,18 +121,22 @@ token, constant-time compare, rate limit, never in URLs, logs or host config fil
 - Approved skill content: `SKILL.md`, references, scripts and other files, with their digests.
 - Routing metadata, the runtime spec (requirements, setup and check commands) and resolve results.
 - Feedback and client labels for telemetry.
+- From A to B only, a skill A sends for review (`skillhub skill commit` in a project connected to
+  B): its files, the version it was checked out from, and a label for the machine. B queues it.
 
 **What must never travel.**
 
 - Curation tools (skill create, edit, activate, approve, source import, workspace mutations) and the
   case journal CLI. Network mode hard-wires the runtime profile.
-- Any write path into the canonical files or the Git repository.
+- Any write path into the canonical files or the Git repository. A submission is not one: it waits
+  in an untracked queue and reaches the repository only when a person on B approves it there.
 - Secrets from `$SKILLHUB_CONFIG_DIR/env` or any skill's stored environment values; the client
   keeps its own.
 - Paths on the hub's disk, such as `local.path`, `local.state_directory` and the
   `io.skillhub/local_path` resource meta that local stdio clients get today.
 - The bearer token itself, in any response, log line or printed command.
-- Content of skills awaiting review: blocked for remote callers exactly as for local ones.
+- Content of skills awaiting review: blocked for remote callers exactly as for local ones. That
+  includes the submissions waiting in the queue, which are not skills and are served to no one.
 
 **Where scripts run.** Only on machine A, after A has the files (Q3). The hub never runs a skill's
 check, setup or scripts for a remote caller.

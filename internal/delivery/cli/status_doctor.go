@@ -218,7 +218,7 @@ func renderHubStatus(p *termui.Printer, section app.Section, home app.CurationHo
 	p.Fields(fields...)
 	// Curation work the health checks do not cover (sources to distill,
 	// upstream updates, lessons to review) stays visible with its command.
-	type waitingItem struct{ line, command string }
+	type waitingItem struct{ line, command, after string }
 	var waiting []waitingItem
 	var checkouts []string
 	for _, action := range home.Actions {
@@ -227,6 +227,9 @@ func renderHubStatus(p *termui.Printer, section app.Section, home app.CurationHo
 			checkouts = append(checkouts, action.Summary+" · "+action.Command)
 			continue
 		case "repair_workspace", "recover_workspace", "rebuild_index", "host_integration_missing", "review_git_changes", "first_run_commit":
+			continue
+		case "submission_waiting":
+			waiting = append(waiting, waitingItem{line: action.Summary, after: "Review: " + action.Command + `   or the web page "Waiting for review"`})
 			continue
 		case "review_lessons":
 			// A script command is printed on its own line, unwrapped, so it
@@ -258,6 +261,9 @@ func renderHubStatus(p *termui.Printer, section app.Section, home app.CurationHo
 			p.Bullets(item.line)
 			if item.command != "" {
 				p.Command(item.command)
+			}
+			if item.after != "" {
+				p.Raw("    " + item.after + "\n")
 			}
 		}
 	}

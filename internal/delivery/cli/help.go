@@ -168,14 +168,22 @@ Subcommands:
                                                     changes on the hub). In a terminal it asks what the skill does, when to use it,
                                                     when not to and for an example; without one the flags fill the same file
   checkout <id>                                     Copy a skill with every file into .claude/skills/<id>/ of this project to edit and
-                                                    try it; the hub keeps serving the current version and the folder goes into .gitignore
+                                                    try it; the hub keeps serving the current version and the folder goes into .gitignore.
+                                                    In a project connected to a hub on another machine it fetches the active skill from that hub
   commit <id|folder> [--collection <c>] [--runtime-file <yaml>] [--accept <p>=hub|project]... [--manual <p>=<f>]... [--write-conflicts <dir>]
          [--trigger <t>]... [--not-for <n>]... [--example <e>]... [--min-scope <s>] [--edit-routing]
          [--approve-content <digest>] [--diff] [--yes] [--no-commit] [--json]
                                                     Bring a project folder back to the hub as one reviewed change and one hub commit.
-                                                    A folder that was never checked out becomes a new skill
+                                                    A folder that was never checked out becomes a new skill. In a project connected to a hub
+                                                    on another machine it sends the folder there for review (collection and routing are set
+                                                    by the reviewer; --yes works only for a hub your own settings name)
   show <id> [--verbose]                             Show a skill in any state
   review <id> [--verbose]                           Comprehensive diagnostic review of a skill
+  review <SUB-id> [--diff] [--discard] [--accept <p>=hub|project]... [--manual <p>=<f>]... [--write-conflicts <dir>]
+         [--trigger <t>]... [--not-for <n>]... [--example <e>]... [--min-scope <s>] [--edit-routing] [--json]
+                                                    Review a skill another machine sent to this hub: preview it like a commit and, in a
+                                                    terminal, apply it, approve its content and (for a new skill) activate it, as one hub
+                                                    commit. --discard drops it. Nothing is applied without a terminal
   doctor <id> [--json]                              Check this machine against a skill's runtime block
   env set|unset <id> <KEY> | env list <id>          Store secrets for a skill's scripts (values never shown)
   edit <id> [--name <n>] [--description <d>] [--rationale <r>] [--content-file <f>|--editor]
@@ -198,6 +206,10 @@ and asks. Committing the checkout of a third-party skill also approves the new c
 never blocked; without a terminal that needs --approve-content <digest>, which only a person gives. A new folder is added
 as a draft, and in a terminal you can activate it in the same commit. Routing for a new skill is suggested from its
 description (--edit-routing opens it in $EDITOR). The hub keeps serving the released version until the commit is approved.
+
+From another machine: in a project connected to a hub with "skillhub connect --hub", "skill checkout <id>" fetches an active skill
+and "skill commit <id>" sends the folder to that hub's review queue ("Sent as SUB-..."). Nothing on the hub changes and nothing is
+served until a person on the hub machine runs "skill review SUB-..." (or uses "Waiting for review" on the web) and approves it.
 
 Applying a change: in a terminal, a command that changes the hub shows its preview and asks
 "Apply this change? [y/N]". Without a terminal (scripts, agents) or with --json it only previews; run the same

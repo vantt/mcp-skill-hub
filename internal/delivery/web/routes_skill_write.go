@@ -240,6 +240,9 @@ type skillConfirmRequest struct {
 	BaseVersion    string `json:"base_version"`
 	// CommitMessage replaces the subject of the hub commit this confirm makes.
 	CommitMessage string `json:"commit_message,omitempty"`
+	// SubmissionID names the submission this proposal was made from; it is
+	// removed from the review queue once the proposal is applied.
+	SubmissionID string `json:"submission_id,omitempty"`
 }
 
 // maxCommitMessageBytes bounds a commit message typed on the web.
@@ -300,5 +303,6 @@ func (s *Server) handleSkillConfirm(w http.ResponseWriter, r *http.Request) {
 		writeAppError(w, result.Error)
 		return
 	}
+	s.dropAppliedSubmission(req.SubmissionID, preview.SkillID)
 	writeJSON(w, http.StatusOK, result)
 }

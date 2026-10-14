@@ -83,7 +83,9 @@ Editing a file of a skill from another repository changes its content, so agents
 
 ### Review what waits for you
 
-**Waiting for review** lists what needs a person before agents get it: new drafts, and skills from another repository whose content changed after you approved it. The number next to the menu entry is the count.
+**Waiting for review** lists what needs a person before agents get it: new drafts, skills from another repository whose content changed after you approved it, and skills other machines sent for review (**Submitted · needs approval**, with "Submitted from <machine>" as the origin). The number next to the menu entry is the count.
+
+A submission opens the same full review as any skill: every changed file with its diff, the license, "Origin: Submitted from <machine>", and the files the other machine left out. **Approve** applies the files and approves their content in one hub commit, once you have opened every changed file; a new skill lands as an approved draft, which you activate from its page. **Discard** (after a second click) drops it and changes nothing. Files that the hub and the other machine both changed since it was checked out need a decision in a terminal: `skillhub skill review <SUB-id> --accept <path>=hub`.
 
 1. Click a skill to open its full review. At the top you see its license, its origin and what its files are compared with: the content you last approved, what agents get today, or nothing for a new draft.
 2. Open each changed file to read it with its diff. A file you opened is marked with a check.

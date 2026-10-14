@@ -146,6 +146,7 @@ func (service CurationService) GetCurationHome(ctx context.Context, path string)
 		GitConfigured:   git.Configured,
 		RecoveryPending: len(recoveries) > 0,
 		Categories:      defaultCategories(),
+		Submissions:     submissionEntries(root),
 	}
 	if len(issues) > 0 {
 		state.Health = "invalid"
@@ -241,6 +242,8 @@ type homeState struct {
 	// DistillLabIntact is true when the hub's distill-lab files match the
 	// current bundle, so a command that runs its script may be printed.
 	DistillLabIntact bool
+	// Submissions are the skills other machines sent that wait for a person.
+	Submissions []Submission
 }
 
 func defaultCategories() []ActionCategory {
@@ -523,6 +526,13 @@ func deriveCurationHome(state homeState) CurationHome {
 		}
 		home.Actions = append(home.Actions, ActionItem{Kind: "distill_changed_sources", Count: state.ChangedSources, Priority: 70, Summary: fmt.Sprintf("%s %s ready to distill", termCount(state.ChangedSources, "source", "sources"), pluralWord(state.ChangedSources, "is", "are")), Command: "curation_run_start"})
 	}
+	if len(state.Submissions) > 0 {
+		home.HomeSummary.AttentionItems += len(state.Submissions)
+		if home.Status == StatusOK {
+			home.Status = StatusActionRequired
+		}
+		home.Actions = append(home.Actions, submissionActions(state.Submissions)...)
+	}
 	if state.DueSources > 0 {
 		home.HomeSummary.OptionalItems += state.DueSources
 		home.HomeSummary.AttentionItems += state.DueSources
@@ -588,6 +598,8 @@ func deriveCurationHome(state homeState) CurationHome {
 			home.Summary = fmt.Sprintf("%d skill(s) have upstream changes to review.", recommended.Count)
 		case "distill_changed_sources":
 			home.Summary = fmt.Sprintf("%s %s ready to distill.", termCount(recommended.Count, "source", "sources"), pluralWord(recommended.Count, "is", "are"))
+		case "submission_waiting":
+			home.Summary = fmt.Sprintf("%s waiting for review.", termCount(len(state.Submissions), "submitted skill", "submitted skills"))
 		case "review_lessons":
 			home.Summary = fmt.Sprintf("%s %s waiting for review.", termCount(recommended.Count, "candidate lesson", "candidate lessons"), pluralWord(recommended.Count, "is", "are"))
 		case "review_git_changes":
@@ -624,6 +636,7 @@ func recommendationLabel(kind string) string {
 		"review_upstream_updates":   "Review upstream updates with skillhub skill outdated",
 		"distill_changed_sources":   "Distill changed sources",
 		"review_lessons":            "Review candidate lessons with distill-lab",
+		"submission_waiting":        "Review the submitted skill with skillhub skill review",
 		"check_due_sources":         "Check all due sources",
 		"review_git_changes":        "Commit the changes of the hub",
 		"first_run_commit":          "Commit the new hub, then run `skillhub connect` in your project",
@@ -650,6 +663,30 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return "item"
+}
+
+// maxSubmissionActions is how many waiting submissions status names one by
+// one; the rest are counted in a single line.
+const maxSubmissionActions = 3
+
+// submissionActions names the skills other machines sent for review: each one
+// with the command that reviews it, and the rest as one count.
+func submissionActions(submissions []Submission) []ActionItem {
+	describe := func(submission Submission) string {
+		return fmt.Sprintf("%s from %s, %s", submission.SkillID, submission.ClientLabel, submission.SubmittedAt[:min(10, len(submission.SubmittedAt))])
+	}
+	command := func(submission Submission) string { return "skillhub skill review " + submission.ID }
+	if len(submissions) <= maxSubmissionActions {
+		actions := make([]ActionItem, 0, len(submissions))
+		for _, submission := range submissions {
+			actions = append(actions, ActionItem{Kind: "submission_waiting", ID: submission.ID, Count: 1, Priority: 65,
+				Summary: "1 submitted skill waits for review: " + describe(submission), Command: command(submission)})
+		}
+		return actions
+	}
+	oldest := submissions[0]
+	return []ActionItem{{Kind: "submission_waiting", ID: oldest.ID, Count: len(submissions), Priority: 65,
+		Summary: fmt.Sprintf("%d submitted skills wait for review, the oldest is %s", len(submissions), describe(oldest)), Command: command(oldest)}}
 }
 
 // reviewLessonsAction points at the skill with the most candidate lessons.

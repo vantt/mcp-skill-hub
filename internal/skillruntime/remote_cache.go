@@ -57,6 +57,9 @@ var (
 	ErrBundleDigestMismatch = errors.New("skill bundle does not match its digest")
 	// ErrBundleInvalid reports an archive that is malformed or breaks a limit.
 	ErrBundleInvalid = errors.New("invalid skill bundle")
+	// ErrBundleLimit is joined to ErrBundleInvalid when the archive breaks a
+	// size or count limit, so a receiver can tell too large from malformed.
+	ErrBundleLimit = errors.New("skill bundle over a limit")
 )
 
 // BundleFile is one distributed file of a skill version. Path is relative to
@@ -66,6 +69,27 @@ type BundleFile struct {
 	Digest string `json:"digest"`
 	Size   int64  `json:"size"`
 	Kind   string `json:"kind,omitempty"`
+	// Executable carries the file's execute bit in a submission; a hub bundle
+	// leaves it out.
+	Executable bool `json:"executable,omitempty"`
+}
+
+// BundleSubmission is what a machine adds to a bundle it sends to a hub for
+// review: the version it started from, a label for the machine, and the files
+// its folder filter left out. A bundle the hub serves has none of it.
+type BundleSubmission struct {
+	// BaseVersion is the content digest of the checkout the files came from;
+	// it is empty for a skill the hub is not known to have.
+	BaseVersion string `json:"base_version,omitempty"`
+	// ClientLabel names the submitting machine. It is a label for people only.
+	ClientLabel string           `json:"client_label,omitempty"`
+	Excluded    []BundleExcluded `json:"excluded,omitempty"`
+}
+
+// BundleExcluded names a file the sending machine's filter left out, and why.
+type BundleExcluded struct {
+	Path   string `json:"path"`
+	Reason string `json:"reason,omitempty"`
 }
 
 // BundleMetadata describes the skill version inside a bundle. Files is the
@@ -73,13 +97,14 @@ type BundleFile struct {
 // read model of the skill without its SKILL.md text (which is a file of the
 // bundle), kept opaque here so this package stays transport-neutral.
 type BundleMetadata struct {
-	Schema          int             `json:"schema"`
-	SkillID         string          `json:"skill_id"`
-	ManifestVersion string          `json:"manifest_version"`
-	Files           []BundleFile    `json:"files"`
-	DepsKey         string          `json:"deps_key"`
-	Runtime         *Spec           `json:"runtime,omitempty"`
-	Detail          json.RawMessage `json:"detail,omitempty"`
+	Schema          int               `json:"schema"`
+	SkillID         string            `json:"skill_id"`
+	ManifestVersion string            `json:"manifest_version"`
+	Files           []BundleFile      `json:"files"`
+	DepsKey         string            `json:"deps_key"`
+	Runtime         *Spec             `json:"runtime,omitempty"`
+	Detail          json.RawMessage   `json:"detail,omitempty"`
+	Submission      *BundleSubmission `json:"submission,omitempty"`
 }
 
 // ManifestDigest returns the lowercase hex digest that a skill URI pins: the
@@ -189,7 +214,10 @@ func checkBundleMetadata(metadata BundleMetadata) error {
 	if !depsKeyPattern.MatchString(metadata.DepsKey) {
 		return fmt.Errorf("%w: invalid dependency key", ErrBundleInvalid)
 	}
-	if len(metadata.Files) == 0 || len(metadata.Files) > BundleMaxFiles {
+	if len(metadata.Files) > BundleMaxFiles {
+		return fmt.Errorf("%w: %d files; supported range is 1..%d: %w", ErrBundleInvalid, len(metadata.Files), BundleMaxFiles, ErrBundleLimit)
+	}
+	if len(metadata.Files) == 0 {
 		return fmt.Errorf("%w: %d files; supported range is 1..%d", ErrBundleInvalid, len(metadata.Files), BundleMaxFiles)
 	}
 	seen := make(map[string]bool, len(metadata.Files))
@@ -208,7 +236,7 @@ func checkBundleMetadata(metadata BundleMetadata) error {
 		total += file.Size
 	}
 	if total > BundleMaxBytes {
-		return fmt.Errorf("%w: files total %d bytes; the limit is %d", ErrBundleInvalid, total, BundleMaxBytes)
+		return fmt.Errorf("%w: files total %d bytes; the limit is %d: %w", ErrBundleInvalid, total, BundleMaxBytes, ErrBundleLimit)
 	}
 	if !seen["SKILL.md"] {
 		return fmt.Errorf("%w: no top-level SKILL.md", ErrBundleInvalid)
@@ -226,7 +254,7 @@ func (limited *limitedReader) Read(buffer []byte) (int, error) {
 	if limited.remaining <= 0 {
 		var probe [1]byte
 		if n, _ := limited.reader.Read(probe[:]); n > 0 {
-			return 0, fmt.Errorf("%w: the archive is larger than %d bytes", ErrBundleInvalid, BundleMaxArchiveBytes)
+			return 0, fmt.Errorf("%w: the archive is larger than %d bytes: %w", ErrBundleInvalid, BundleMaxArchiveBytes, ErrBundleLimit)
 		}
 		return 0, io.EOF
 	}
@@ -243,27 +271,43 @@ func (limited *limitedReader) Read(buffer []byte) (int, error) {
 // digest and every file matches its listed size and digest; anything else in
 // the archive is an error. On error staging may hold partial files.
 func extractBundle(archive io.Reader, digest, staging string) (BundleMetadata, error) {
+	return extractBundleFile(archive, digest, staging)
+}
+
+// ExtractBundle reads a bundle a machine sends to a hub into the empty
+// directory staging and returns its metadata, with the same limits and path
+// checks as a bundle the hub serves. There is no digest to pin: the archive is
+// accepted when its metadata hashes to its own file list and every file
+// matches its listed size and digest. The metadata entry is written into
+// staging as well; on error staging may hold partial files.
+func ExtractBundle(archive io.Reader, staging string) (BundleMetadata, error) {
+	return extractBundleFile(archive, "", staging)
+}
+
+// extractBundleFile is the shared reader; an empty digest accepts the digest
+// the file list computes.
+func extractBundleFile(archive io.Reader, digest, staging string) (BundleMetadata, error) {
 	compressed := &limitedReader{reader: archive, remaining: BundleMaxArchiveBytes}
 	decompressor, err := gzip.NewReader(compressed)
 	if err != nil {
-		return BundleMetadata{}, fmt.Errorf("%w: %v", ErrBundleInvalid, err)
+		return BundleMetadata{}, fmt.Errorf("%w: %w", ErrBundleInvalid, err)
 	}
 	defer decompressor.Close()
 	reader := tar.NewReader(&limitedReader{reader: decompressor, remaining: BundleMaxArchiveBytes})
 	header, err := reader.Next()
 	if err != nil {
-		return BundleMetadata{}, fmt.Errorf("%w: no metadata entry: %v", ErrBundleInvalid, err)
+		return BundleMetadata{}, fmt.Errorf("%w: no metadata entry: %w", ErrBundleInvalid, err)
 	}
 	if header.Name != BundleMetadataName || header.Typeflag != tar.TypeReg || header.Size > BundleMaxMetadataBytes {
 		return BundleMetadata{}, fmt.Errorf("%w: the first entry is not the metadata", ErrBundleInvalid)
 	}
 	encoded, err := io.ReadAll(reader)
 	if err != nil {
-		return BundleMetadata{}, fmt.Errorf("%w: read metadata: %v", ErrBundleInvalid, err)
+		return BundleMetadata{}, fmt.Errorf("%w: read metadata: %w", ErrBundleInvalid, err)
 	}
 	var metadata BundleMetadata
 	if err := json.Unmarshal(encoded, &metadata); err != nil {
-		return BundleMetadata{}, fmt.Errorf("%w: decode metadata: %v", ErrBundleInvalid, err)
+		return BundleMetadata{}, fmt.Errorf("%w: decode metadata: %w", ErrBundleInvalid, err)
 	}
 	if err := checkBundleMetadata(metadata); err != nil {
 		return BundleMetadata{}, err
@@ -271,6 +315,9 @@ func extractBundle(archive io.Reader, digest, staging string) (BundleMetadata, e
 	computed, err := ManifestDigest(metadata.Files)
 	if err != nil {
 		return BundleMetadata{}, err
+	}
+	if digest == "" {
+		digest = computed
 	}
 	if computed != digest || metadata.ManifestVersion != "sha256:"+digest {
 		return BundleMetadata{}, fmt.Errorf("%w: the file list hashes to %s, not %s", ErrBundleDigestMismatch, computed, digest)
@@ -290,7 +337,7 @@ func extractBundle(archive io.Reader, digest, staging string) (BundleMetadata, e
 			break
 		}
 		if err != nil {
-			return BundleMetadata{}, fmt.Errorf("%w: %v", ErrBundleInvalid, err)
+			return BundleMetadata{}, fmt.Errorf("%w: %w", ErrBundleInvalid, err)
 		}
 		file, listed := expected[header.Name]
 		if !listed || header.Typeflag != tar.TypeReg || header.Size != file.Size {
@@ -330,7 +377,7 @@ func writeBundleFile(handle *os.Root, file BundleFile, contents io.Reader) error
 	if source.err != nil {
 		// The archive ended or broke inside this file, for example because
 		// the download was cut off: the bundle is invalid, not the disk.
-		return fmt.Errorf("%w: read %s: %v", ErrBundleInvalid, file.Path, source.err)
+		return fmt.Errorf("%w: read %s: %w", ErrBundleInvalid, file.Path, source.err)
 	}
 	if copyErr != nil {
 		return fmt.Errorf("write %s: %w", file.Path, copyErr)

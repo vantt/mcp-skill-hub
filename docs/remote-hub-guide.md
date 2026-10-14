@@ -484,13 +484,41 @@ Next: Clear the cache:
 
 `cache clear` acts at once and prints what it removed; `--dry-run` shows it first.
 
+## Sending a skill for review
+
+A project connected to machine B with `skillhub connect --hub` can take part in curation without a login on B. On machine A you check a skill out, edit it with your agent, and send it back:
+
+```text
+skillhub skill checkout review-checklist
+skillhub skill commit review-checklist
+```
+
+`skillhub skill checkout <id>` fetches an active skill from machine B into `.claude/skills/<id>/` of the project, with a marker that names the hub and the version you started from. `skillhub skill create <id>` writes a new skill in the project the same way it does on machine B. `skillhub skill commit <id>` reads the folder with the same rules as a hub commit (secrets and build output are left out, and the preview names them), shows what it will send and asks:
+
+```text
+review-checklist: 1 file changed since checkout; this sends it to the hub at http://hub-b:7420 for review.
+  M SKILL.md  193 B
+Send review-checklist to the hub at http://hub-b:7420 for review? [y/N] y
+Sent as SUB-01JA2…  A person on the hub machine reviews it; agents get it only after approval.
+```
+
+Without a terminal, `skillhub skill commit <id>` only previews, and `--yes` sends. An agent can run it that way. `--yes` sends your token and files only to a hub your own settings name (a user-scope `connect`, or a hub on this machine, for example through an SSH tunnel); for a hub that only this project's files name, run the command in a terminal and answer the question. Collection and routing are not sent: the person who reviews the submission sets them on machine B.
+
+Nothing on machine B changes when you send: the submission waits in a queue (`runtime/submissions/`, which Git does not track), no agent is served it, and a new submission of the same skill from the same machine replaces the older one. Machine B keeps at most 50 waiting submissions and 256 MiB. On machine B:
+
+- `skillhub status` lists each waiting submission ("1 submitted skill waits for review: review-checklist from machine-a") with the command to review it.
+- `skillhub skill review <SUB-id>` previews it like a commit. In a terminal it asks whether to apply it, whether to approve the content for agents (always asked: it comes from another machine) and, for a new skill, whether to activate it. The answers land in one commit that says "submitted from <machine>". `skillhub skill review <SUB-id> --discard` drops it. Without a terminal it only shows the preview; an agent never approves.
+- The web page **Waiting for review** lists the same submissions with the full review screen and an **Approve** button (see [Web UI](web-ui.md)).
+
 ## Security in plain words
 
 **What travels between the machines.** The text of each task your agent resolves, the approved skill files, the skill's runtime description (its `check` and `setup` commands), resolve results and feedback. That is why the server prints a warning when it listens on a network address, and why an untrusted network needs the SSH tunnel.
 
-**What never travels.** Curation tools, the case journal, any write to your skills or the Git repository, stored secrets (`skillhub skill env set` values), paths on machine B's disk, skills waiting for your approval, and the token itself, which appears in no answer, log line, printed command or agent config file.
+**What travels the other way.** Only what you send for review with `skillhub skill commit` (see "Sending a skill for review" below): the skill's files, the version it was checked out from and your machine's name, as one upload to machine B. Machine B puts it in a waiting queue and changes nothing else.
 
-**What a stolen hub token allows.** The same as an agent on machine A: resolving tasks, reading approved skills and writing usage records on machine B. It does not allow any curation, approving content, reading unapproved content or running anything on machine B. Requests without a valid token are refused, and repeated wrong tokens are slowed down.
+**What never travels.** Curation tools, the case journal, any write to your skills or the Git repository, stored secrets (`skillhub skill env set` values), paths on machine B's disk, skills waiting for your approval (the content of a submission is shown to no agent), and the token itself, which appears in no answer, log line, printed command or agent config file.
+
+**What a stolen hub token allows.** The same as an agent on machine A: resolving tasks, reading approved skills and writing usage records on machine B. It can also send skills for review, which only fill a waiting queue on machine B (at most 50 submissions and 256 MiB; each at most 512 files and 16 MiB). It does not allow any curation, approving content, serving a submitted skill, reading unapproved content or running anything on machine B. Requests without a valid token are refused, and repeated wrong tokens are slowed down.
 
 **What the web UI allows.** `skillhub serve web` also listens on every network interface by default, and its address carries a session token. Anyone who has that address can add and change skills in the hub, and every connected agent on every machine then uses them. To keep it on machine B, run `cd ~/skill-hub && skillhub serve web --addr 127.0.0.1:7421`.
 

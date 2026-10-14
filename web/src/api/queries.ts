@@ -19,6 +19,8 @@ import type {
   SkillFiles,
   SkillReviewContent,
   SkillReviewResult,
+  SubmissionApprovalPreview,
+  SubmissionReview,
   SkillRuntimeStatus,
   SkillSourcesResult,
   SkillDistillDocument,
@@ -113,6 +115,7 @@ export async function confirmSkillMutation(
   proposalId: string,
   pins: { proposalDigest: string; baseVersion: string },
   commitMessage?: string,
+  submissionId?: string,
 ): Promise<SkillMutationResult> {
   return apiFetch<SkillMutationResult>(
     `/skills/proposals/${encodeURIComponent(proposalId)}/confirm`,
@@ -122,6 +125,7 @@ export async function confirmSkillMutation(
         proposal_digest: pins.proposalDigest,
         base_version: pins.baseVersion,
         ...(commitMessage ? { commit_message: commitMessage } : {}),
+        ...(submissionId ? { submission_id: submissionId } : {}),
       }),
     },
   );
@@ -198,6 +202,31 @@ export function useSkillReviewContent(id: string) {
     staleTime: 0,
     gcTime: 0,
   });
+}
+
+// A skill another machine submitted, read the way a skill's own review content is.
+export function useSubmissionReview(submissionId: string) {
+  return useQuery({
+    queryKey: ['submission-review', submissionId],
+    queryFn: () => apiFetch<SubmissionReview>(`/submissions/${encodeURIComponent(submissionId)}`),
+    enabled: Boolean(submissionId),
+    // What the person reads must stay what they approve.
+    staleTime: 0,
+    gcTime: 0,
+  });
+}
+
+// Previews applying a submission together with the approval of the content a person has read; confirm
+// with confirmSkillMutation, passing the submission id so it leaves the queue.
+export async function previewSubmissionApproval(submissionId: string, contentDigest: string): Promise<SubmissionApprovalPreview> {
+  return apiFetch<SubmissionApprovalPreview>(`/submissions/${encodeURIComponent(submissionId)}/approve/preview`, {
+    method: 'POST',
+    body: JSON.stringify({ content_digest: contentDigest }),
+  });
+}
+
+export async function discardSubmission(submissionId: string): Promise<void> {
+  await apiFetch<unknown>(`/submissions/${encodeURIComponent(submissionId)}/discard`, { method: 'POST', body: '{}' });
 }
 
 // Previews approving the content a person has read; confirm with confirmSkillMutation.

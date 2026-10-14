@@ -75,6 +75,21 @@ func parseSkillCommitFlags(flags *skillFlags, positionals []string) error {
 	if withoutRuntime.hasEditFlags() {
 		return errors.New("commit takes the skill from its folder; edit the folder, then commit it")
 	}
+	if err := validateResolutionFlags(flags); err != nil {
+		return err
+	}
+	if flags.approveContent != "" && !contentDigestPattern.MatchString(flags.approveContent) {
+		return errors.New("--approve-content requires a digest of the form sha256:<64 lowercase hex characters>")
+	}
+	if flags.editRouting && (flags.yes || flags.jsonOutput) {
+		return errors.New("--edit-routing needs a terminal and cannot be combined with --yes or --json")
+	}
+	return nil
+}
+
+// validateResolutionFlags checks the --accept and --manual values, which name a
+// file and what to do with it.
+func validateResolutionFlags(flags *skillFlags) error {
 	for _, item := range flags.accepts {
 		path, choice, found := strings.Cut(item, "=")
 		if !found || path == "" || (choice != "hub" && choice != "project") {
@@ -89,12 +104,6 @@ func parseSkillCommitFlags(flags *skillFlags, positionals []string) error {
 		if _, err := os.Stat(strings.TrimSpace(file)); err != nil {
 			return fmt.Errorf("manual file %q does not exist", strings.TrimSpace(file))
 		}
-	}
-	if flags.approveContent != "" && !contentDigestPattern.MatchString(flags.approveContent) {
-		return errors.New("--approve-content requires a digest of the form sha256:<64 lowercase hex characters>")
-	}
-	if flags.editRouting && (flags.yes || flags.jsonOutput) {
-		return errors.New("--edit-routing needs a terminal and cannot be combined with --yes or --json")
 	}
 	return nil
 }

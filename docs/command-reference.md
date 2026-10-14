@@ -37,6 +37,7 @@ Find the command for a task here. For every flag, run `skillhub help` or `skillh
 | Add a skill from GitHub or a local folder, as a draft | `skillhub skill add <locator> [--path <p>] [--skill <name>\|--all] [--yes]` |
 | Create a draft skill | `skillhub skill create` in a terminal asks the questions; scripts use `skillhub skill create <skill-id> --collection <c> --name <n> --description <d> [--content-file <f>] [routing flags] [--yes]` |
 | Review a skill before you activate it | `skillhub skill review <skill-id> [--verbose]` |
+| Review a skill another machine sent to this hub (terminal: apply, approve, activate) | `skillhub skill review <SUB-id> [--diff]`; drop it with `skillhub skill review <SUB-id> --discard` |
 | Edit instructions in your editor | `skillhub skill edit <skill-id> --editor` |
 | Change the description or routing fields | `skillhub skill edit <skill-id> [--description <d>] [--trigger <t>] [--not-for <n>] [--min-scope <s>] [--yes]` |
 | Add requests that should, or should not, pick the skill | `skillhub skill edit <skill-id> --example <e> --counter-example <e> [--yes]` |

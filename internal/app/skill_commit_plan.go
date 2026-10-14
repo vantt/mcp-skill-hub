@@ -273,6 +273,15 @@ func (service SkillCommitService) finishPreview(ctx context.Context, preview Ski
 		preview.Trust = trustOfProposal(plan, plan.final, plan.metaAfter)
 		plan.thirdParty, plan.origin, plan.contentDigest = preview.Trust.ThirdParty, preview.Trust.Origin, preview.Trust.ContentDigest
 	}
+	if plan.submission != nil {
+		// Content from another machine is untrusted until a person approves
+		// it, whatever the skill's own origin is.
+		if preview.Trust == nil {
+			preview.Trust = &SkillCommitTrust{ContentDigest: proposedContentDigest(plan.final, plan.metaAfter)}
+		}
+		preview.Trust.ThirdParty, preview.Trust.Origin = true, "submitted from "+plan.submission.ClientLabel
+		plan.thirdParty, plan.origin, plan.contentDigest = true, preview.Trust.Origin, preview.Trust.ContentDigest
+	}
 	warnings := preview.Warnings
 	preview.Result = NewResult(StatusActionRequired, commitSummary(preview))
 	preview.Warnings = warnings

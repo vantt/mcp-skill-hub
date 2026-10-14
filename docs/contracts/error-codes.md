@@ -64,13 +64,31 @@ The machine-owned schema authority for error envelopes is [error-envelope.schema
 | `skill_selection_required` | Select a skill or use `--all` | The source repository contains multiple discovered skills; select one with `--skill <name>` or import all with `--all`. |
 | `skill_conflict` | Rename or use a different ID | A skill with the target ID already exists in the workspace; choose a distinct ID or edit the existing skill. `skillhub skill checkout` returns it when `.claude/skills/<id>/` already exists in the project; the FIX says to commit or edit that folder. |
 | `source_conflict` | Use a different source ID | A monitored source with the specified identifier already exists; choose a distinct source ID. |
-| `resource_limits_exceeded` | Reduce file count or size | The skill or companion assets exceed size limits; remove large files or split the skill. |
+| `resource_limits_exceeded` | Reduce file count or size | The skill or companion assets exceed size limits; remove large files or split the skill. The network listener answers a submission over its limits with this code and HTTP 413 (see [Submissions on the network listener](#submissions-on-the-network-listener)). |
 | `source_changed` | Re-run check or preview | The remote source revision changed since preview generation; generate a fresh preview against the new revision. |
 | `edit_conflict` | Review recovery file and retry | The canonical skill was modified while the external editor was open; original edits were saved to a 24-hour recovery file in `runtime/edits/`. It also refuses a change whose files already differ from Git ("has edits that were not committed"), before anything is written: commit or discard those files, or re-run on the command line with `--no-commit`. |
 | `validation_failed` | Correct canonical errors | Canonical workspace files failed schema or consistency validation; inspect the reported file and line errors. |
 | `local_watch_unsupported` | Use a remote Git repository | Watching a local directory is not supported; watching applies only to remote Git repositories. |
 | `resource_content_unavailable` | Re-add or re-import the skill | Required companion resource content is missing or corrupted and historical bytes are never guessed; re-add the skill or restore the resource. |
 | `content_review_required` | Do not retry automatically | The requested skill is from a third-party source and its content has not been approved; the agent must not use the skill and must tell the user to run `skillhub skill review <id>` to review and approve it. `skillhub skill commit` returns it too, without a terminal and without `--approve-content`: new content of a third-party skill is never applied unapproved, because that would stop agents from getting the skill. A person runs the commit in a terminal and answers the approval question. |
+
+## Submissions on the network listener
+
+`POST /mcp/submissions` on the hub's network listener (port 7420) takes a skill a
+machine sends for review. Like `GET /mcp/bundle`, it sits behind the Host check,
+the bearer token and the rate limiter, and its refusals are a small JSON body
+`{"code", "message"}` rather than the full result envelope, with these statuses:
+
+| Status | `code` | Meaning |
+|---|---|---|
+| 202 | | Queued: `{"submission_id": "SUB-…", "status": "waiting"}`. Nothing on the hub changed. |
+| 400 | `invalid_request` | The archive is malformed, a path leaves the skill folder, or it holds hub-managed or never-imported files (`.meta/`, the checkout marker, secrets). |
+| 401 / 403 | | No or wrong token (401), or a Host or Origin the listener does not accept (403). |
+| 404 | | The path is not served: a hub from before submissions. |
+| 405 / 415 | `method_not_allowed`, `invalid_request` | Not a `POST`, or not `application/vnd.skillhub.bundle+gzip`. |
+| 413 | `resource_limits_exceeded` | More than 512 files, more than 16 MiB of files, or a larger archive than a skill may be. |
+| 429 | `submission_queue_full` | The queue already holds 50 waiting submissions or 256 MiB. The shared rate limiter also answers 429, with `Retry-After` and no body code. |
+| 500 | `internal_error` | The submission could not be queued; the hub logs a correlation id. |
 
 `git_dirty_after_apply` is deliberately not an error code: after a successful
 approved apply, uncommitted Git changes are a user-facing status or warning.

@@ -177,7 +177,7 @@ export interface SkillChangesPreview {
   trust?: { third_party: boolean; origin?: string; content_digest: string; approved: boolean };
 }
 
-export type ReviewKind = 'draft' | 'content_changed';
+export type ReviewKind = 'draft' | 'content_changed' | 'submission';
 
 export interface ReviewQueueItem {
   kind: ReviewKind;
@@ -186,6 +186,8 @@ export interface ReviewQueueItem {
   reason: string;
   since?: string;
   origin?: string;
+  // Set for a skill another machine submitted.
+  submission_id?: string;
 }
 
 export interface ReviewQueue {
@@ -227,9 +229,64 @@ export interface SkillReviewContent {
   third_party: boolean;
   approved: boolean;
   content_digest: string;
-  baseline: 'approved' | 'served' | 'none';
+  baseline: 'approved' | 'served' | 'hub' | 'none';
   baseline_commit?: string;
   files: ReviewFile[];
+}
+
+export interface ExcludedFile {
+  path: string;
+  reason: string;
+}
+
+// A skill another machine sent for review: the review content of a skill, plus where it came from.
+export interface SubmissionReview {
+  schema_version: string;
+  status: string;
+  summary: string;
+  items: unknown[];
+  suggested_actions: unknown[];
+  warnings: unknown[];
+  error: unknown;
+  skill_id: string;
+  state: string;
+  title: string;
+  license: string;
+  origin?: string;
+  third_party: boolean;
+  approved: boolean;
+  content_digest: string;
+  baseline: SkillReviewContent['baseline'];
+  baseline_commit?: string;
+  files: ReviewFile[];
+  submission_id: string;
+  client_label: string;
+  submitted_at: string;
+  case: 'new' | 'update' | 'merge' | 'replace';
+  conflicts: string[];
+  excluded: ExcludedFile[];
+}
+
+// The proposal that applies a submission and approves its content as one change.
+export interface SubmissionApprovalPreview {
+  schema_version: string;
+  status: string;
+  summary: string;
+  skill_id?: string;
+  items?: unknown[];
+  suggested_actions?: unknown[];
+  warnings?: unknown[];
+  error?: unknown;
+  command?: string;
+  recovery_id?: string;
+  diff?: DiffSummary | string;
+  full_diff?: string;
+  routing_impact?: { summary: string; warnings: string[] | null } | null;
+  confirmation: SkillProposal['confirmation'];
+  submission_id: string;
+  base_version: string;
+  files: unknown[];
+  default_message: string;
 }
 
 export interface SkillRouting {

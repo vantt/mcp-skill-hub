@@ -81,6 +81,9 @@ func answerReader() *bufio.Reader {
 type previewHints struct {
 	rerun                  string
 	diffShown, interactive bool
+	// submission marks the review of content another machine sent: it is
+	// applied only by a person at a terminal, never with --yes.
+	submission bool
 }
 
 // previewTail ends a preview. Without a terminal it says nothing was written

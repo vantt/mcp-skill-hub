@@ -80,7 +80,8 @@ func (service SkillCommitService) Apply(ctx context.Context, path string, previe
 			fmt.Sprintf("%s is third-party (%s); applying new content without approval would stop agents from getting it", plan.id, plan.origin),
 			"Run the commit in a terminal and answer the approval question, or pass `--approve-content "+plan.contentDigest+"` (a person only).")), nil
 	}
-	changes, variant, err := approvedChanges(plan, options.Approve && plan.thirdParty)
+	approving := options.Approve && plan.thirdParty
+	changes, variant, err := approvedChanges(plan, approving)
 	if err != nil {
 		return SkillCommitResult{}, err
 	}
@@ -89,7 +90,7 @@ func (service SkillCommitService) Apply(ctx context.Context, path string, previe
 		return SkillCommitResult{}, err
 	}
 	activate := options.Activate && plan.caseName == commitCaseNew
-	message := commitMessage(preview, options.Approve && plan.thirdParty, activate)
+	message := commitMessage(preview, approving, activate)
 	receipt, outcome, activated, activationNote, err := service.writeCommit(ctx, path, plan, planned, message, activate)
 	if errors.Is(err, mutation.ErrConflict) {
 		return commitResultError(NewStaleProposalError("the hub changed after the preview; nothing was applied", "Run `skillhub skill commit` again.")), nil
@@ -97,25 +98,29 @@ func (service SkillCommitService) Apply(ctx context.Context, path string, previe
 	if err != nil {
 		return SkillCommitResult{}, err
 	}
-	marker, err := syncProjectFolder(ctx, service.Clock, plan, outcome)
-	if err != nil {
-		return SkillCommitResult{}, err
+	var marker CheckoutMarker
+	if plan.submission == nil {
+		if marker, err = syncProjectFolder(ctx, service.Clock, plan, outcome); err != nil {
+			return SkillCommitResult{}, err
+		}
 	}
 	result := SkillCommitResult{
-		Result:          NewResult(StatusApplied, appliedCommitSummary(plan, options.Approve && plan.thirdParty, activated)),
+		Result:          NewResult(StatusApplied, appliedCommitSummary(plan, approving, activated)),
 		SkillID:         plan.id,
 		Case:            plan.caseName,
 		Collection:      plan.collection,
 		OperationID:     receipt.OperationID,
 		ChangedPaths:    receipt.ChangedPaths,
 		Files:           preview.Files,
-		Approved:        options.Approve && plan.thirdParty,
+		Approved:        approving,
 		Activated:       activated,
 		CatalogSnapshot: receipt.CatalogSnapshot,
 		Generation:      receipt.Generation,
 		GitDirty:        receipt.GitDirty,
 		Commit:          outcome,
-		Checkout:        &marker,
+	}
+	if plan.submission == nil {
+		result.Checkout = &marker
 	}
 	if activationNote != "" {
 		result.Warnings = append(result.Warnings, Warning{Code: "activation_failed", Summary: activationNote})
@@ -214,6 +219,9 @@ func withCommitMessage(ctx context.Context, message string) context.Context {
 
 func commitMessage(preview SkillCommitPreview, approved, activated bool) string {
 	id := preview.SkillID
+	if submission := preview.plan.submission; submission != nil {
+		return submissionCommitMessage(preview, submission.ClientLabel, approved, activated)
+	}
 	if preview.Case == commitCaseNew {
 		message := "Add " + id + " from a project"
 		if activated {
@@ -291,4 +299,22 @@ func syncProjectFolder(ctx context.Context, clock Clock, plan *commitPlan, outco
 		}
 	}
 	return marker, nil
+}
+
+// submissionCommitMessage is the Git subject of a reviewed submission: it names
+// the machine the content came from.
+func submissionCommitMessage(preview SkillCommitPreview, label string, approved, activated bool) string {
+	var message string
+	if preview.Case == commitCaseNew {
+		message = fmt.Sprintf("Add %s (submitted from %s)", preview.SkillID, label)
+	} else {
+		message = fmt.Sprintf("Commit %s submitted from %s (%s)", preview.SkillID, label, pluralize(len(preview.Files), "file"))
+	}
+	if approved {
+		message += ", approve content"
+	}
+	if activated {
+		message += ", activate"
+	}
+	return message
 }

@@ -39,6 +39,10 @@ export const routes: RouteObject[] = [
     Component: WaitingForReviewScreen,
   },
   {
+    path: '/review/submissions/:sid',
+    Component: FullReviewScreen,
+  },
+  {
     path: '/sources',
     Component: SourcesScreen,
   },

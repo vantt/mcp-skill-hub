@@ -23,7 +23,10 @@ type skillFlags struct {
 	operations, triggers, notFor, examples, counterExamples, skills, positionals   []string
 	accepts, manuals                                                               []string
 	jsonOutput, yes, diff, editor, verbose, all, check, noCheck, exitCode          bool
-	noCommit, editRouting                                                          bool
+	noCommit, editRouting, discard                                                 bool
+	// remote is the hub on another machine, set for the commands that work
+	// from a project connected to one: commit and checkout.
+	remote *app.RemoteHub
 	// rerun is the command the person typed, for the hint lines of a preview.
 	rerun string
 }
@@ -66,9 +69,15 @@ func runSkill(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 		return runSkillAdd(ctx, service, flags, stdout, stderr)
 	}
 	if subcommand == "checkout" {
+		if flags.remote != nil {
+			return runRemoteCheckout(ctx, flags, stdout, stderr)
+		}
 		return runSkillCheckout(ctx, flags, stdout, stderr)
 	}
 	if subcommand == "commit" {
+		if flags.remote != nil {
+			return runRemoteCommit(ctx, flags, stdout, stderr)
+		}
 		return runSkillCommit(ctx, flags, stdout, stderr)
 	}
 	if subcommand == "outdated" {
@@ -81,11 +90,18 @@ func runSkill(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 		return runSkillUpdate(ctx, flags, stdout, stderr)
 	}
 	if subcommand == "review" {
+		if _, isSubmission := app.SubmissionIDOf(flags.id); isSubmission {
+			return runSubmissionReview(ctx, flags, stdout, stderr)
+		}
 		result, err := service.ReviewSkill(ctx, flags.workspace, flags.id)
 		if err != nil {
 			return writeSkillErrorFor(flags.id, stdout, stderr, flags.jsonOutput, err)
 		}
-		return writeSkillReview(stdout, stderr, flags.jsonOutput, flags.verbose, result)
+		code := writeSkillReview(stdout, stderr, flags.jsonOutput, flags.verbose, result)
+		if code == 0 && !flags.jsonOutput {
+			writeWaitingSubmissions(stdout, flags.workspace, flags.id)
+		}
+		return code
 	}
 	if subcommand == "list" {
 		return runSkillList(ctx, service, flags, stdout, stderr)
@@ -424,6 +440,8 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 			flags.noCommit = true
 		case "--edit-routing":
 			flags.editRouting = true
+		case "--discard":
+			flags.discard = true
 		case "--editor":
 			flags.editor = true
 		case "--verbose":
@@ -445,6 +463,9 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 	flags.rerun = rerunCommand("skillhub skill", append([]string{subcommand}, args...))
 	if flags.noCommit && !hubChangingSkillSubcommands[subcommand] {
 		return flags, fmt.Errorf("--no-commit is available only for commands that change the hub")
+	}
+	if flags.discard && subcommand != "review" {
+		return flags, errors.New("--discard is available only for skill review of a submission")
 	}
 	if flags.state != "" && subcommand != "list" {
 		return flags, errors.New("--state is available only for skill list")
@@ -521,7 +542,19 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 		} else {
 			return flags, errors.New("review requires exactly one skill ID")
 		}
-		if flags.yes || flags.diff || flags.idempotencyKey != "" || flags.editor || flags.contentFile != "" || flags.proposalID != "" {
+		if _, isSubmission := app.SubmissionIDOf(flags.id); isSubmission {
+			// A submission is applied only by a person at a terminal, so there
+			// is no --yes. --discard drops it.
+			if flags.yes || flags.idempotencyKey != "" || flags.editor || flags.contentFile != "" || flags.proposalID != "" || flags.approveContent != "" || flags.collection != "" || flags.runtimeFile != "" {
+				return flags, errors.New("a submission is approved by a person at a terminal; review accepts only --diff, --discard, --accept, --manual, --write-conflicts, --edit-routing and the routing flags for it")
+			}
+			if err := validateResolutionFlags(&flags); err != nil {
+				return flags, err
+			}
+			if flags.discard && (flags.diff || flags.editRouting || len(flags.accepts)+len(flags.manuals) > 0 || flags.writeConflicts != "") {
+				return flags, errors.New("--discard cannot be combined with other review flags")
+			}
+		} else if flags.yes || flags.diff || flags.idempotencyKey != "" || flags.editor || flags.contentFile != "" || flags.proposalID != "" || flags.discard || flags.editRouting || len(flags.accepts)+len(flags.manuals) > 0 || flags.writeConflicts != "" {
 			return flags, errors.New("review does not accept mutation flags")
 		}
 	case "doctor":
@@ -623,6 +656,14 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 	}
 	resolved, resErr := resolveWorkspace(flags.workspace)
 	if resErr != nil {
+		// A project connected to a hub on another machine can still check a
+		// skill out and send one back for review there.
+		if subcommand == "commit" || subcommand == "checkout" {
+			if hub, remote := remoteHubFor(flags.workspace); remote {
+				flags.remote = &hub
+				return flags, nil
+			}
+		}
 		return flags, resErr
 	}
 	flags.workspace = resolved
