@@ -135,7 +135,7 @@ Không bắt `distinguish_from` với mọi cặp.
 
 ### Metadata linting rules (warnings)
 
-Hệ thống cung cấp các quy tắc lint metadata tự động khi chạy `skillhub validate` hoặc `skillhub skill review`. Các cảnh báo này **không bao giờ làm hỏng hay chặn validation** (exit code 0 nếu không có lỗi cấu trúc):
+Hệ thống cung cấp các quy tắc lint metadata tự động khi chạy `skillhub maintain validate`, `skillhub skill review`, bản xem trước của `skillhub skill commit` và màn hình Review trên web. Các cảnh báo này **không bao giờ làm hỏng hay chặn validation** (exit code 0 nếu không có lỗi cấu trúc):
 
 | Mã cảnh báo | Điều kiện kích hoạt | Hướng dẫn khắc phục (`fix`) |
 |---|---|---|
@@ -144,8 +144,37 @@ Hệ thống cung cấp các quy tắc lint metadata tự động khi chạy `sk
 | `missing_examples` | Active skill có ít hơn 3 `routing.examples` | Bổ sung 3–5 câu mô tả tác vụ tự nhiên |
 | `example_restates_trigger` | Một example overlap $\ge 0.9$ với trigger của chính skill đó | Diễn đạt lại theo ngữ cảnh tác vụ thực tế |
 | `near_duplicate` | Hai active skills có tập token description + triggers overlap $\ge 0.6$ mà không có quan hệ phân định giữa chúng | Bổ sung `distinguish_from`, `equivalent_to` hoặc gộp skill |
+| `example_resolves_elsewhere` | Một example của skill, khi chạy qua resolver với skill ở trạng thái đang xét (đã bật), không ra chính skill đó: ra skill khác (`OtherSkillID` là skill thắng), cần chọn giữa các skill, hoặc không ra skill nào | Thêm `not_for` cho skill thắng, thêm `distinguish_from`, thu hẹp trigger, hoặc diễn đạt lại example |
+| `counter_example_resolves_to_skill` | Một `counter_examples` của skill vẫn ra chính skill đó | Thêm `not_for` bao phủ yêu cầu này, hoặc thu hẹp trigger đang khớp |
+| `example_taken_by` | Example của skill Y nay ra skill X vừa thay đổi (hoặc X và Y cùng vào lựa chọn). `SkillID` là X, `OtherSkillID` là Y; thông điệp ghi "now" (mới xảy ra) hoặc "already" (trước thay đổi đã như vậy) | Thêm `not_for` cho X, thu hẹp trigger của X, hoặc thêm `distinguish_from` giữa X và Y |
+| `self_resolution_skipped` | Bước kiểm tra example bị bỏ qua: vượt giới hạn công việc, `config/recommendation.yaml` (policy) đổi, hoặc resolver từ chối một skill chưa đủ trường routing | Đổi ít skill hơn mỗi lần, chạy `skillhub maintain validate --full` sau khi rebuild, hoặc điền đủ trường routing bắt buộc |
 
 *Ghi chú:* Việc kiểm tra theo cặp có độ phức tạp $O(n^2)$; nếu số lượng active skills vượt quá 2.000, bước kiểm tra cặp sẽ được bỏ qua với cảnh báo `lint_pairs_skipped`.
+
+#### Kiểm tra example qua resolver
+
+Bốn mã cuối bảng không đo độ giống nhau của chữ mà **chạy resolver thật** trên example, trong bộ nhớ và không ghi gì (không đổi catalog, telemetry hay con trỏ generation). Thư viện được lấy từ generation đang phục vụ, rồi phủ lên phiên bản mới của skill đang xét (overlay), nên review một skill chưa rebuild hay một thư mục chưa commit vẫn được kiểm tra như thể skill đã active. Mỗi example được resolve với chính nó bị loại khỏi tập từ khóa, giống `skillhub eval routing`, và skill `system-curator` của hệ thống không bao giờ là chủ của một case.
+
+Những case được chạy cho một thay đổi (*affected examples*):
+
+- toàn bộ `routing.examples` và `routing.counter_examples` của chính skill đã đổi;
+- `routing.examples` của skill khác mà skill đã đổi **có thể ảnh hưởng đến quyết định**: skill mới sẽ là ứng viên với điểm từ ngưỡng `ApplicabilityFloor` trở lên, là runner-up liên kết qua `distinguish_from` trong biên cho phép, hoặc bị loại cứng nhưng độ liên quan vẫn đạt ngưỡng (có thể biến kết quả thành `constraint_conflict`). `counter_examples` của skill khác không được chọn, vì skill đã đổi thắng một counter-example không gây hại cho chủ của nó.
+
+Một case của skill khác chỉ được báo khi nó sai **và** skill đã đổi tham gia vào quyết định (thắng, hoặc nằm trong top 2 của kết quả cần chọn). Trạng thái "trước thay đổi" chỉ được resolve cho các case sẽ được báo, để quyết định chữ `now` hay `already`.
+
+Các chế độ của `skillhub maintain validate`:
+
+| Chế độ | Phạm vi |
+|---|---|
+| mặc định (changed) | Skill thay đổi so với `HEAD` (working tree, gồm cả file chưa theo dõi). Cây sạch thì không chạy gì. Chưa có commit nào thì kiểm tra mọi skill active |
+| `--staged` | Skill có file trong Git index, đọc trực tiếp blob của index. Dùng trong pre-commit hook; không lấy commit lock (`runtime/locks/commit.lock`) |
+| `--full` | Example riêng của mọi skill active; không tìm "bị skill khác lấy" vì không có skill nào thay đổi. Không dùng cùng `--staged` (exit 2) |
+
+Cả ba chế độ chỉ phát cảnh báo, không đổi exit code. Chế độ changed và `--full` cần generation đang phục vụ khớp với file; nếu cũ thì chỉ có `lint_skipped` yêu cầu rebuild. Khi `config/recommendation.yaml` đổi, mọi kết quả cũ không còn so sánh được, nên chỉ phát một `self_resolution_skipped` hướng tới `skillhub maintain rebuild` rồi `skillhub maintain validate --full`.
+
+**Giới hạn công việc.** Một lần chạy bị chặn ở `số example × số skill active ≤ 60000` (hằng `maxSelfResolutionWork`). Đo trên corpus 42 skill, một lần chạy đầy đủ mất khoảng 1,35 giây; với 256 skill khoảng 0,65 giây. Vượt giới hạn thì phát một `self_resolution_skipped` thay vì chạy nửa vời.
+
+**Khoảng hở đã biết.** Retrieval của resolver giới hạn mỗi kênh ở `CandidateLimit` = 40. Khi có hơn 40 skill active, một skill mới vào danh sách đã bị cắt có thể đẩy một skill khác ra khỏi top 2 mà điều kiện ảnh hưởng ở trên không mô hình hóa. Trường hợp này chỉ `skillhub maintain validate --full` (hoặc `skillhub eval routing`) bắt được.
 ## 4. Index design
 
 ### 4.1 SQLite tables định hướng

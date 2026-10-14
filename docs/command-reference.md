@@ -84,6 +84,7 @@ Routing flags for `create` and `edit`: `--operation`, `--trigger`, `--not-for`, 
 | See uncommitted hub changes | `skillhub maintain diff` |
 | Check the hub files | `skillhub maintain validate` |
 | Check only the files staged in Git, for a pre-commit hook | `skillhub maintain validate --staged` |
+| Check the routing examples of every active skill, not only the changed ones | `skillhub maintain validate --full` |
 | Rebuild the search index | `skillhub maintain rebuild [--verbose]` |
 | Preview or apply a file format migration | `skillhub maintain migrate [--to <version>] [--yes]` |
 

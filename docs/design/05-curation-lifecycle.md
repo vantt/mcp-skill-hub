@@ -614,7 +614,7 @@ skillhub source import <id>             # advanced intake: import discovered ski
 # (installed in the hub folder by init; it runs in the agent with Node, never in the binary)
 # Porting lessons into skill content uses skill_update preview/confirm
 
-skillhub validate [--staged]            # validate working tree or staged index
+skillhub validate [--staged | --full]   # validate working tree (changed skills; --full: all) or staged index
 skillhub rebuild                        # rebuild search catalog
 skillhub diff                           # show uncommitted changes
 skillhub doctor [--fix]                 # diagnose and repair

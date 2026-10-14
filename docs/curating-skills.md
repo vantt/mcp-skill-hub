@@ -263,6 +263,18 @@ Activation readiness
 
 Output is trimmed. The full review also shows origin, Git status, the tools its scripts seem to need and weak routing fields. Add `--verbose` to list every file with its size.
 
+Under the **Routing lint** heading, review also tries the skill's own examples. It resolves them against the active library as if this version of the skill were active, and names the skill each example picked when it was not this one. It lists the examples of other skills that the change would take over as well. It records nothing and rebuilds nothing, so you can run it on an edit you have not committed. For example, after adding the trigger "tidy up the changelog entries for the version" to `release-notes`, which `changelog-curation` lists as its own example:
+
+```text
+Routing lint
+  - example_taken_by: example "tidy up the changelog entries for the version" of
+    "changelog-curation" now resolves to "release-notes" Fix: Add a not_for entry on release-notes
+    that covers this request, narrow release-notes's triggers, or add distinguish_from between
+    release-notes and changelog-curation
+```
+
+The `skill commit` preview and the web **Review** screen show the same findings. They are warnings: they never block a commit or an approval.
+
 For a skill from GitHub, the review adds a **Content trust** block:
 
 ```text
@@ -389,7 +401,7 @@ To run the check on every commit, add it to a Git hook, such as `.git/hooks/pre-
 skillhub maintain validate --staged
 ```
 
-Skill Hub's own commits run that hook too. Skill Hub does not install hooks for you; any hook manager works. A hook written for an earlier release runs the old top-level validate command, which no longer exists. `skillhub doctor` reports such a hook, and `skillhub doctor --fix` changes that one command and keeps the rest of the hook.
+The hook also warns when a staged skill's routing change makes one of its examples, or another skill's example, resolve to a different skill. These warnings never block the commit. Skill Hub's own commits run that hook too. Skill Hub does not install hooks for you; any hook manager works. A hook written for an earlier release runs the old top-level validate command, which no longer exists. `skillhub doctor` reports such a hook, and `skillhub doctor --fix` changes that one command and keeps the rest of the hook.
 
 ## Measure usage (`skillhub telemetry funnel`)
 
@@ -427,7 +439,7 @@ Failures (1):
     primary=)
 ```
 
-Output is trimmed. Each failure is a request that did not pick its skill; fix it with a better trigger or more examples. `--json` puts the numbers under `metrics`, for example `metrics.recall`.
+`skillhub maintain validate` checks the examples of the skills you changed since the last commit, `--full` checks every active skill, and `eval routing` gives the totals and thresholds. Output is trimmed. Each failure is a request that did not pick its skill; fix it with a better trigger or more examples. `--json` puts the numbers under `metrics`, for example `metrics.recall`.
 
 To use it as a gate, add thresholds such as `--min-precision 0.60` or `--min-recall 0.58`. A missed threshold exits with code 1. `--no-skill <file>` adds requests that should pick no skill.
 

@@ -384,7 +384,7 @@ Bảng tổng hợp đối chiếu trực tiếp giữa Core Use Case, lệnh CL
 | **UC-07D: Port Lessons** | `skillhub skill update` | `skill_update_preview` | `skill_update_confirm` | CLI: `--yes`<br/>MCP: Đủ 3 pins | Cập nhật nội dung skill với human review |
 | **UC-08: Upstream Drift & Merge** | `skillhub skill outdated`<br/>`skillhub skill update` | *(Read-only)* `skill_upstream_status` | *(Không có)* | CLI: `--yes` hoặc Short ID<br/>MCP: **Không hỗ trợ apply** | Agent chỉ đọc metadata drift; apply là quyết định con người qua CLI/WebUI |
 | **UC-09: Learning References** | `skillhub source attach\|detach\|unwatch` | `source_watch_preview` | `source_watch_confirm` | CLI: `--yes`<br/>MCP: Đủ 3 pins | Quản lý quan hệ học tập; ngăn source mồ côi |
-| **Workspace Maintenance** | `skillhub validate [--staged]`<br/>`skillhub diff` | `workspace_validate`<br/>`workspace_diff` | *(Read-only)* | Không cần confirm | `validate --staged` đọc trực tiếp Git index blob |
+| **Workspace Maintenance** | `skillhub maintain validate [--staged \| --full]`<br/>`skillhub maintain diff` | `workspace_validate`<br/>`workspace_diff` | *(Read-only)* | Không cần confirm | `validate --staged` đọc trực tiếp Git index blob; mặc định chỉ kiểm tra routing của skill đã thay đổi, `--full` kiểm tra mọi skill active |
 ---
 
 ## 4. Chuẩn hóa Khung Kết quả Máy đọc (JSON Result Envelope)
