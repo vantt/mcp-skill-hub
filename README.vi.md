@@ -262,7 +262,7 @@ Hãy cài Skill Hub trên cả hai máy trước, như ở phần [Cài đặt](
    cd <dự-án-của-bạn> && skillhub connect --hub http://<máy-hub>:7420 --token-file ~/.skillhub-token-<máy-hub>-7420
    ```
 
-   Hãy chép đúng các dòng server in ra; chúng chứa đúng địa chỉ và tên file. Muốn xem lại sau này, chạy `skillhub serve --print` trên máy hub; nó không khởi động gì cả. Nếu không dùng được `scp` (không có tài khoản SSH vào máy hub), hãy sao chép file token sang máy agent bằng cách riêng tư nào đó và chạy `chmod 600` cho nó; `connect` chỉ cần đường dẫn của file đó. Thêm `-g` vào `connect` để kết nối mọi dự án của tài khoản người dùng cùng lúc.
+   Hãy chép đúng các dòng server in ra; chúng chứa đúng địa chỉ và tên file. Nếu không dùng được `scp` (không có tài khoản SSH vào máy hub), hãy sao chép file token sang máy agent bằng cách riêng tư nào đó và chạy `chmod 600` cho nó; `connect` chỉ cần đường dẫn của file đó. Thêm `-g` vào `connect` để kết nối mọi dự án của tài khoản người dùng cùng lúc.
 
 3. **Khởi động lại agent** và kiểm tra kết nối:
 
