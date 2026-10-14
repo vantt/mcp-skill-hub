@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/netip"
 	"os"
 	"os/exec"
 	"runtime"
@@ -16,6 +17,7 @@ import (
 	"github.com/vantt/skillhub-mcp/internal/delivery/hostpolicy"
 	"github.com/vantt/skillhub-mcp/internal/delivery/mcpserver"
 	"github.com/vantt/skillhub-mcp/internal/delivery/web"
+	"github.com/vantt/skillhub-mcp/internal/hubtoken"
 )
 
 // mcpDefaultPort is the port `skillhub serve` listens on when --addr names
@@ -36,6 +38,7 @@ type serveConfig struct {
 	noOpen         bool
 	dev            bool
 	installService bool
+	printConnect   bool
 }
 
 // parseServeArgs reads `skillhub serve [mcp|web] [flags]`. Without a mode
@@ -87,6 +90,11 @@ func parseServeArgs(args []string) (serveConfig, string, string) {
 				return cfg, "--install-service only applies to `skillhub serve` (mcp), not the web UI", fix
 			}
 			cfg.installService = true
+		case "--print":
+			if cfg.mode != serveModeMCP {
+				return cfg, "--print only applies to `skillhub serve` (mcp), not the web UI", fix
+			}
+			cfg.printConnect = true
 		case "--no-open", "--dev":
 			if cfg.mode != serveModeWeb {
 				return cfg, flag + " only applies to `skillhub serve web`", fix
@@ -101,6 +109,9 @@ func parseServeArgs(args []string) (serveConfig, string, string) {
 		default:
 			return cfg, fmt.Sprintf("unknown argument %q", flag), fix
 		}
+	}
+	if cfg.printConnect && cfg.installService {
+		return cfg, "--print and --install-service cannot be combined", "Run `skillhub serve --print` to see the connect commands, or `skillhub serve --install-service` to keep the server running."
 	}
 	return cfg, "", ""
 }
@@ -149,6 +160,9 @@ func runServe(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 	}
 	if cfg.installService {
 		return runInstallService(cfg, resolved, stdout, stderr)
+	}
+	if cfg.printConnect {
+		return runServePrint(cfg, addresses, resolved, stdout, stderr)
 	}
 	if cfg.mode == serveModeWeb {
 		return runServeWeb(ctx, cfg, addresses, resolved, stdout, stderr)
@@ -209,6 +223,47 @@ func runServeMCP(ctx context.Context, cfg serveConfig, addresses []listenAddress
 		)
 		return 1
 	}
+	return 0
+}
+
+// runServePrint prints the commands another machine runs to connect to this
+// hub, for the addresses a server started with the same flags would listen on.
+// It starts nothing and creates no token file.
+func runServePrint(cfg serveConfig, addresses []listenAddress, workspaceRoot string, stdout, stderr io.Writer) int {
+	bound := make([]net.Addr, 0, len(addresses))
+	for _, address := range addresses {
+		if address.port == 0 {
+			return writeInvalidRequest(stdout, stderr, false, "--print needs a fixed port, but "+address.String()+" asks the system for a free one when the server starts", "Give the port the server uses, for example --addr 0.0.0.0:7420.")
+		}
+		ip := net.IPv4zero
+		if address.host != "" {
+			parsed, err := netip.ParseAddr(address.host)
+			if err != nil {
+				return writeInvalidRequest(stdout, stderr, false, "cannot read the address "+address.String(), "Run `skillhub help serve`.")
+			}
+			ip = net.IP(parsed.AsSlice())
+		} else if address.wildcard() {
+			ip = net.IPv6unspecified
+		}
+		bound = append(bound, &net.TCPAddr{IP: ip, Port: address.port})
+	}
+	tokenFile := cfg.tokenFile
+	if tokenFile == "" {
+		tokenFile = hubtoken.DefaultPath(workspaceRoot)
+	}
+	_, statErr := os.Stat(tokenFile)
+	interfaces, _ := hostpolicy.SystemInterfaces()
+	home, _ := os.UserHomeDir()
+	writeMCPBanner(stdout, mcpBanner{
+		addresses:    bound,
+		workspace:    workspaceRoot,
+		tokenFile:    tokenFile,
+		home:         home,
+		user:         currentUserName(),
+		interfaces:   interfaces,
+		preview:      true,
+		tokenMissing: statErr != nil,
+	})
 	return 0
 }
 

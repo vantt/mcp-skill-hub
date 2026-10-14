@@ -260,7 +260,7 @@ Install Skill Hub on both machines first, as in [Install](#install). Then:
    cd <your-project> && skillhub connect --hub http://<hub-machine>:7420 --token-file ~/.skillhub-token-<hub-machine>-7420
    ```
 
-   Copy the exact lines from the server's output; they hold the right address and file names. Add `-g` to `connect` to connect every project of your user account at once.
+   Copy the exact lines from the server's output; they hold the right address and file names. To see them again later, run `skillhub serve --print` on the hub machine; it starts nothing. If you cannot use `scp` (no SSH login to the hub machine), copy the token file to the agent machine by any private means and run `chmod 600` on it; `connect` only needs the path of that file. Add `-g` to `connect` to connect every project of your user account at once.
 
 3. **Restart your agent** and check the connection:
 

@@ -25,6 +25,11 @@ type mcpBanner struct {
 	home       string
 	user       string
 	interfaces []hostpolicy.Interface
+	// preview prints the same commands without a running server: another
+	// heading, no Ctrl-C hint. tokenMissing adds a note that the token file
+	// does not exist yet.
+	preview      bool
+	tokenMissing bool
 }
 
 // writeMCPBanner tells the user, per address another machine can use, the
@@ -33,13 +38,20 @@ type mcpBanner struct {
 // the token.
 func writeMCPBanner(w io.Writer, banner mcpBanner) {
 	p := termui.New(w)
-	p.Line("Skill Hub is serving skills to agents on other machines.")
+	if banner.preview {
+		p.Line("Commands to connect another machine to this hub. Nothing was started.")
+	} else {
+		p.Line("Skill Hub is serving skills to agents on other machines.")
+	}
 	p.Line("It serves the runtime tools only (skill_resolve, skill_get, skill_feedback); curation stays on this machine.")
 	p.Blank()
 	p.Fields(
 		termui.Field{Label: "Hub folder", Value: banner.workspace},
 		termui.Field{Label: "Token file", Value: banner.tokenFile},
 	)
+	if banner.tokenMissing {
+		p.Line("The token file does not exist yet: `skillhub serve` creates it the first time it starts.")
+	}
 	if warning := hostpolicy.ExposureWarning(banner.addresses, mcpDefaultPort); warning != "" {
 		p.Raw("WARNING: " + warning + "\n")
 	}
@@ -85,6 +97,10 @@ func writeMCPBanner(w io.Writer, banner mcpBanner) {
 		}
 	}
 	p.Blank()
+	if banner.preview {
+		p.Line("The token itself is never printed. Start the server with `skillhub serve`.")
+		return
+	}
 	p.Line("The token itself is never printed. Stop the server with Ctrl-C.")
 }
 

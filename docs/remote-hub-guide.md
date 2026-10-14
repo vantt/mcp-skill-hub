@@ -168,6 +168,16 @@ cd ~/skill-hub && skillhub serve --addr 192.168.1.20,100.101.102.103
 
 If one address cannot be opened, the server does not start and names the address and the reason.
 
+### Print the connect lines again
+
+The server prints the `scp` and `connect` lines when it starts. When it runs as a service, that output sits in the service log. To see the lines again, run the same command with `--print` and the same `--addr`; it starts nothing, changes nothing and never prints the token:
+
+```bash
+cd ~/skill-hub && skillhub serve --print --addr 192.168.1.20,100.101.102.103
+```
+
+`--print` needs a fixed port in every address, because port `0` is chosen only when the server starts. If the hub's token file does not exist yet, it says so; the first `skillhub serve` creates it.
+
 ### Connect with a name instead of an address
 
 You can also use machine B's name. Its short name (`http://machine-b:7420`) works as it is when it equals machine B's host name, which is Tailscale's default. Any other name, for example the full MagicDNS name `machine-b.tailnet-name.ts.net`, must be accepted by the server first:
