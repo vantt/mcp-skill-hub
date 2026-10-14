@@ -148,11 +148,12 @@ func (SkillService) ReviewSkill(ctx context.Context, path, id string) (SkillRevi
 						activeSkills = append(activeSkills, s)
 					}
 				}
-				if targetSkill, decErr := resolverpkg.DecodeSkillDocument(id, skillMetaBytes); decErr == nil {
-					findings := resolverpkg.LintTargetSkill(targetSkill, activeSkills)
-					for _, f := range findings {
-						readiness.Warnings = append(readiness.Warnings, fmt.Sprintf("%s: %s Fix: %s", f.Code, f.Message, f.Fix))
-					}
+				findings, lintErr := lintReviewedSkill(id, skillMetaBytes, entrypointBytes, activeSkills)
+				if lintErr != nil {
+					readiness.Warnings = append(readiness.Warnings, "lint_skipped: Routing lint skipped: "+lintErr.Error())
+				}
+				for _, f := range findings {
+					readiness.Warnings = append(readiness.Warnings, fmt.Sprintf("%s: %s Fix: %s", f.Code, f.Message, f.Fix))
 				}
 			}
 		}
@@ -212,6 +213,20 @@ func (SkillService) ReviewSkill(ctx context.Context, path, id string) (SkillRevi
 
 	appendSkillReviewItems(&result, len(resources), totalBytes, missingFields)
 	return result, nil
+}
+
+// lintReviewedSkill decodes the skill the way activation would see it and lints it against
+// the active skills.
+func lintReviewedSkill(id string, metaBytes, skillMD []byte, active []resolverpkg.Skill) ([]resolverpkg.LintFinding, error) {
+	normalized, err := catalog.NormalizeSkillDocument(metaBytes, skillMD, id)
+	if err != nil {
+		return nil, err
+	}
+	target, err := resolverpkg.DecodeSkillDocument(id, normalized)
+	if err != nil {
+		return nil, err
+	}
+	return resolverpkg.LintTargetSkill(target, active), nil
 }
 
 type skillReviewMeta struct {

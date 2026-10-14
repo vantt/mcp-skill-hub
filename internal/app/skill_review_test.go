@@ -382,3 +382,60 @@ func TestReviewCountsOnlyUserFilesAsFiles(t *testing.T) {
 		t.Fatalf("file_bytes = %d, total_bytes = %d, want user bytes %d below the total", status.FileBytes, status.TotalBytes, userBytes)
 	}
 }
+
+func createReviewTestSkill(t *testing.T, service SkillService, root, id, trigger string, activate bool) {
+	t.Helper()
+	ctx := context.Background()
+	preview, err := service.PreviewCreate(ctx, root, skill.CreateInput{
+		ID: id, Collection: "software", Name: id, Description: "Review pull requests carefully.",
+		Content: []byte("# " + id + "\n\nReal instructions.\n"),
+		Routing: skill.RoutingInput{Triggers: []string{trigger}, NotFor: []string{"design brokers"}, MinScope: "multi_step"},
+	}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.ConfirmSkillMutation(ctx, root, preview, preview.Confirmation.Confirmation.Pins); err != nil {
+		t.Fatal(err)
+	}
+	if !activate {
+		return
+	}
+	preview, err = service.PreviewActivate(ctx, root, id, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.ConfirmSkillMutation(ctx, root, preview, preview.Confirmation.Confirmation.Pins); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestReviewDraftWarnsWhenItsTriggerCollidesWithAnActiveSkill(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	root := newSkillWorkspace(t)
+	service := SkillService{}
+
+	createReviewTestSkill(t, service, root, "pr-reviewer", "review a pull request", true)
+	createReviewTestSkill(t, service, root, "pr-reviewer-draft", "review a pull request", false)
+
+	review, err := service.ReviewSkill(ctx, root, "pr-reviewer-draft")
+	if err != nil {
+		t.Fatalf("ReviewSkill failed: %v", err)
+	}
+	if !slices.ContainsFunc(review.ActivationReadiness.Warnings, func(w string) bool {
+		return strings.HasPrefix(w, "trigger_collision:")
+	}) {
+		t.Fatalf("expected a trigger_collision warning, got %v", review.ActivationReadiness.Warnings)
+	}
+}
+
+func TestLintReviewedSkillReportsUndecodableMetadata(t *testing.T) {
+	t.Parallel()
+	if _, err := lintReviewedSkill("broken", []byte("routing: [\n"), []byte("# Broken\n"), nil); err == nil {
+		t.Fatal("expected an error for metadata that is not valid YAML")
+	}
+	_, err := lintReviewedSkill("ok", []byte("id: ok\nstatus: draft\nrouting:\n  triggers: [summarize a release]\n"), []byte("# Ok\n"), nil)
+	if err != nil {
+		t.Fatalf("lintReviewedSkill on valid metadata failed: %v", err)
+	}
+}

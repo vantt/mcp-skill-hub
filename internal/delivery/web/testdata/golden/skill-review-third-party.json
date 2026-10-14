@@ -47,7 +47,11 @@
   "valid": true,
   "activation_readiness": {
     "ready": true,
-    "untouched_scaffold": false
+    "untouched_scaffold": false,
+    "warnings": [
+      "missing_examples: skill \"vendor-skill\" has 0 examples; active skills require at least 3 examples Fix: Add 3–5 natural task phrasings",
+      "near_duplicate: skills \"vendor-skill\" and \"approved-skill\" have >= 0.6 description and trigger overlap without distinguishing relationships Fix: Add distinguish_from or equivalent_to, or merge"
+    ]
   },
   "resource_status": {
     "entrypoint_path": "skills/core/vendor-skill/SKILL.md",

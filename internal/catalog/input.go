@@ -207,19 +207,7 @@ func parseEntity(file inputFile, fileMap map[string][]byte) (entity, bool, error
 			skillDir = filepath.Dir(skillDir)
 		}
 		skillMDPath := filepath.ToSlash(filepath.Join(skillDir, "SKILL.md"))
-		mdBytes := fileMap[skillMDPath]
-		metaName, _ := document["name"].(string)
-		metaDesc, _ := document["description"].(string)
-		name, desc := DeriveSkillNameAndDesc(mdBytes, metaName, metaDesc, id)
-		document["name"] = name
-		document["description"] = desc
-		if routing, ok := document["routing"].(map[string]any); ok {
-			for _, key := range []string{"aliases", "topics", "technologies", "domain"} {
-				if document[key] == nil && routing[key] != nil {
-					document[key] = routing[key]
-				}
-			}
-		}
+		normalizeSkillMap(document, fileMap[skillMDPath], id)
 	}
 	encoded, err := jsonMarshalStable(document)
 	if err != nil {
@@ -229,6 +217,39 @@ func parseEntity(file inputFile, fileMap map[string][]byte) (entity, bool, error
 		ID: id, Path: file.Path, Kind: kind, SchemaVersion: scalarString(document["schema_version"]),
 		Digest: file.Digest, Document: document, JSON: string(encoded), SearchText: flattenText(document),
 	}, true, nil
+}
+
+// normalizeSkillMap derives name and description from SKILL.md and lifts the routing
+// fields the resolver reads from the top level.
+func normalizeSkillMap(document map[string]any, skillMD []byte, id string) {
+	metaName, _ := document["name"].(string)
+	metaDesc, _ := document["description"].(string)
+	name, desc := DeriveSkillNameAndDesc(skillMD, metaName, metaDesc, id)
+	document["name"] = name
+	document["description"] = desc
+	if routing, ok := document["routing"].(map[string]any); ok {
+		for _, key := range []string{"aliases", "topics", "technologies", "domain"} {
+			if document[key] == nil && routing[key] != nil {
+				document[key] = routing[key]
+			}
+		}
+	}
+}
+
+// NormalizeSkillDocument turns the YAML of a skill.meta.yaml or .meta/skill.yaml, plus the
+// bytes of its SKILL.md, into the stable JSON the catalog stores for that skill. Callers that
+// hold bytes rather than a path (the working tree, a Git HEAD blob or the Git index) get the
+// same document the build would produce.
+func NormalizeSkillDocument(metaBytes, skillMD []byte, id string) ([]byte, error) {
+	var document map[string]any
+	if err := yaml.NewDecoder(bytes.NewReader(metaBytes)).Decode(&document); err != nil {
+		return nil, fmt.Errorf("parse skill metadata: %w", err)
+	}
+	if document == nil {
+		return nil, fmt.Errorf("parse skill metadata: document is empty")
+	}
+	normalizeSkillMap(document, skillMD, id)
+	return jsonMarshalStable(document)
 }
 
 func ParseSkillMD(contents []byte) (map[string]any, []byte) {
