@@ -70,6 +70,7 @@ type SkillAddProposal struct {
 	License         SkillLicenseInfo             `json:"license"`
 	UpstreamSource  *UpstreamSourceRef           `json:"upstream_source,omitempty"`
 	Resources       []DiscoveredCompanion        `json:"resources"`
+	Excluded        []ExcludedFile               `json:"excluded,omitempty"`
 	TotalBytes      int64                        `json:"total_bytes"`
 	Transformations []string                     `json:"transformations,omitempty"`
 	Diff            skill.DiffSummary            `json:"diff"`
@@ -119,6 +120,7 @@ type SkillAddResult struct {
 	Origin          SkillOrigin                  `json:"origin"`
 	License         SkillLicenseInfo             `json:"license"`
 	Resources       []DiscoveredCompanion        `json:"resources,omitempty"`
+	Excluded        []ExcludedFile               `json:"excluded,omitempty"`
 	UpstreamSource  *UpstreamSourceRef           `json:"upstream_source,omitempty"`
 }
 
@@ -225,6 +227,7 @@ func (service SkillAddService) PreviewSkillAdd(ctx context.Context, path string,
 		selected:       selected,
 		origin:         captured.origin,
 		upstreamSource: upstreamRef,
+		excluded:       mergeSkillAddExcluded(captured.excluded, selected),
 		changes:        changes,
 		diffAdded:      diffAdded,
 		transforms:     allTransforms,
@@ -281,6 +284,7 @@ type skillAddCapture struct {
 	revisionAt   func(path string) (sourcepkg.Revision, error)
 	sourceID     string
 	sourceChange *mutation.Change
+	excluded     []ExcludedFile // left out while capturing a local folder, relative to it
 }
 
 func resolveSkillAddSource(ctx context.Context, service SkillAddService, root, rawLocator string) (skillAddCapture, *SkillAddProposal, error) {
@@ -327,7 +331,15 @@ func captureLocalSkillAddSource(ctx context.Context, root, rawLocator string) (s
 			}
 			return skillAddCapture{}, &prop, nil
 		}
+		if prop := limitExceededProposal(capErr, "Add the skill's own folder, not a parent; build output and secrets are left out automatically."); prop != nil {
+			return skillAddCapture{}, prop, nil
+		}
 		return skillAddCapture{}, nil, fmt.Errorf("capture local snapshot: %w", capErr)
+	}
+	capturedExcluded := make([]ExcludedFile, 0, len(manifest.Excluded))
+	for _, rel := range manifest.Excluded {
+		reason, _ := sourcepkg.ExcludedFromImport(rel)
+		capturedExcluded = append(capturedExcluded, ExcludedFile{Path: rel, Reason: reason})
 	}
 
 	baseName := filepath.Base(authRoot.Path())
@@ -347,7 +359,18 @@ func captureLocalSkillAddSource(ctx context.Context, root, rawLocator string) (s
 			},
 		},
 		resources: manifest.Resources,
+		excluded:  capturedExcluded,
 	}, nil, nil
+}
+
+// limitExceededProposal turns a source size-limit failure into an invalid
+// request whose FIX says how to narrow the source.
+func limitExceededProposal(err error, fix string) *SkillAddProposal {
+	var limitErr *sourcepkg.LimitExceededError
+	if !errors.As(err, &limitErr) {
+		return nil
+	}
+	return &SkillAddProposal{Result: ErrorResult(NewInvalidRequestError(limitErr.Error(), fix))}
 }
 
 func captureRemoteSkillAddSource(ctx context.Context, service SkillAddService, rawLocator string) (skillAddCapture, *SkillAddProposal, error) {
@@ -438,6 +461,9 @@ func captureRemoteSkillAddSource(ctx context.Context, service SkillAddService, r
 
 	resources, listErr := gitAdapter.List(ctx, src, rev, sourcepkg.Scope{})
 	if listErr != nil {
+		if prop := limitExceededProposal(listErr, "Point at one skill folder with `--path <folder>` (or a `/tree/<ref>/<folder>` URL), or pick one skill with `--skill <name>`."); prop != nil {
+			return skillAddCapture{}, prop, nil
+		}
 		return skillAddCapture{}, nil, fmt.Errorf("list repository resources: %w", listErr)
 	}
 
@@ -652,12 +678,28 @@ func buildSkillAddChanges(selected []DiscoveredSkillItem, collection string, cap
 		for _, comp := range item.Companions {
 			compData := item.CompanionBytes[comp.Path]
 			compTarget := fmt.Sprintf("skills/%s/%s/%s", collection, targetID, comp.Path)
-			changes = append(changes, mutation.Change{Path: compTarget, Contents: compData})
+			changes = append(changes, mutation.Change{Path: compTarget, Contents: compData, Executable: comp.Executable})
 			diffAdded = append(diffAdded, compTarget)
 		}
 	}
 
 	return changes, diffAdded, allTransforms, nil, nil
+}
+
+// mergeSkillAddExcluded joins what a local capture left out with what discovery
+// left out of each selected skill, as paths relative to the added source.
+func mergeSkillAddExcluded(captured []ExcludedFile, selected []DiscoveredSkillItem) []ExcludedFile {
+	merged := append([]ExcludedFile(nil), captured...)
+	for _, item := range selected {
+		for _, file := range item.Excluded {
+			if item.SkillDir != "" {
+				file.Path = item.SkillDir + "/" + file.Path
+			}
+			merged = append(merged, file)
+		}
+	}
+	sort.Slice(merged, func(i, j int) bool { return merged[i].Path < merged[j].Path })
+	return merged
 }
 
 type skillAddPlanContext struct {
@@ -666,6 +708,7 @@ type skillAddPlanContext struct {
 	selected       []DiscoveredSkillItem
 	origin         SkillOrigin
 	upstreamSource *UpstreamSourceRef
+	excluded       []ExcludedFile
 	changes        []mutation.Change
 	diffAdded      []string
 	transforms     []string
@@ -713,6 +756,7 @@ func lookupReplayedSkillAdd(ctx context.Context, planCtx skillAddPlanContext) (*
 			License:        primaryItem.License,
 			UpstreamSource: planCtx.upstreamSource,
 			Resources:      primaryItem.Companions,
+			Excluded:       planCtx.excluded,
 			TotalBytes:     primaryItem.TotalBytes,
 			Diff:           skill.DiffSummary{},
 			Assessment:     assessment,
@@ -810,6 +854,7 @@ func planSkillAddProposal(ctx context.Context, planCtx skillAddPlanContext) (Ski
 		License:         primaryItem.License,
 		UpstreamSource:  planCtx.upstreamSource,
 		Resources:       primaryItem.Companions,
+		Excluded:        planCtx.excluded,
 		TotalBytes:      primaryItem.TotalBytes,
 		Transformations: planCtx.transforms,
 		Diff:            diffSummary,
@@ -829,7 +874,10 @@ func planSkillAddProposal(ctx context.Context, planCtx skillAddPlanContext) (Ski
 		expiresAt:  expiresAt,
 	}
 
-	if primaryItem.License.Warning != "" {
+	// A folder of your own needs no license, so only a declared proprietary
+	// license is worth a warning there.
+	ownFolder := planCtx.origin.Kind == "local" && !primaryItem.License.IsProprietary
+	if primaryItem.License.Warning != "" && !ownFolder {
 		proposal.Warnings = append(proposal.Warnings, Warning{
 			Code:    "license_warning",
 			Summary: primaryItem.License.Warning,
@@ -850,6 +898,12 @@ func (service SkillAddService) ConfirmSkillAdd(ctx context.Context, path string,
 	}
 	service = service.defaults(root)
 	now := service.Clock.Now().UTC()
+
+	// A preview that failed carries no plan, so report its own error instead of
+	// a stale-proposal error.
+	if preview.Error != nil {
+		return SkillAddResult{Result: ErrorResult(preview.Error)}, nil
+	}
 
 	switch verifyProposalPins(now, preview.expiresAt, true, false, preview.Confirmation.Confirmation.Pins, pins) {
 	case proposalExpired:
@@ -891,6 +945,7 @@ func (service SkillAddService) ConfirmSkillAdd(ctx context.Context, path string,
 			Origin:          preview.Origin,
 			License:         preview.License,
 			Resources:       preview.Resources,
+			Excluded:        preview.Excluded,
 			UpstreamSource:  upstreamSource,
 		}, nil
 	}
@@ -924,6 +979,7 @@ func (service SkillAddService) ConfirmSkillAdd(ctx context.Context, path string,
 		Origin:          preview.Origin,
 		License:         preview.License,
 		Resources:       preview.Resources,
+		Excluded:        preview.Excluded,
 		UpstreamSource:  upstreamSource,
 	}, nil
 }

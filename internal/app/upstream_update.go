@@ -218,6 +218,11 @@ func readLocalSkillFiles(root, skillRelDir string) (map[string][]byte, error) {
 		if workspace.IsHubMeta(cleanRel) {
 			return nil
 		}
+		// Files an import never copies stay out of the three-way plan, so an
+		// update neither overwrites nor deletes them.
+		if _, skip := sourcepkg.ExcludedFromImport(cleanRel); skip {
+			return nil
+		}
 		data, err := os.ReadFile(p)
 		if err != nil {
 			return err

@@ -41,6 +41,8 @@ type filesystemManifest struct {
 	Digest    string     `json:"digest"`
 	CreatedAt time.Time  `json:"created_at"`
 	Resources []Resource `json:"resources"`
+	// Excluded lists source-relative paths left out by ExcludedFromImport.
+	Excluded []string `json:"excluded,omitempty"`
 }
 
 func (adapter FilesystemAdapter) defaults() FilesystemAdapter {
@@ -390,6 +392,7 @@ func (adapter FilesystemAdapter) captureDirectory(ctx context.Context, root stri
 	}
 	defer handle.Close()
 	resources := make([]Resource, 0)
+	excluded := make([]string, 0)
 	hash := sha256.New()
 	var total int64
 	err = filepath.WalkDir(root, func(name string, entry fs.DirEntry, walkErr error) error {
@@ -410,6 +413,13 @@ func (adapter FilesystemAdapter) captureDirectory(ctx context.Context, root stri
 		info, err := handle.Lstat(rel)
 		if err != nil {
 			return err
+		}
+		if _, skip := ExcludedFromImport(rel); skip {
+			excluded = append(excluded, rel)
+			if info.IsDir() {
+				return fs.SkipDir
+			}
+			return nil
 		}
 		if info.Mode()&os.ModeSymlink != 0 {
 			return fmt.Errorf("%w: unsafe source symlink: %s", ErrUnsafeFile, rel)
@@ -437,7 +447,7 @@ func (adapter FilesystemAdapter) captureDirectory(ctx context.Context, root stri
 		if err := writeSnapshotFile(staging, rel, contents); err != nil {
 			return err
 		}
-		resources = append(resources, Resource{Path: rel, Size: int64(len(contents))})
+		resources = append(resources, Resource{Path: rel, Size: int64(len(contents)), Executable: info.Mode()&0o111 != 0})
 		fmt.Fprintf(hash, "%s\x00%d\x00", rel, len(contents))
 		hash.Write(contents)
 		hash.Write([]byte{'\n'})
@@ -458,11 +468,16 @@ func (adapter FilesystemAdapter) captureDirectory(ctx context.Context, root stri
 			return filesystemManifest{}, readErr
 		}
 		fmt.Fprintf(hash, "%s\x00%d\x00", item.Path, len(contents))
+		if item.Executable {
+			// Only executable files carry the marker, so existing digests hold.
+			hash.Write([]byte("x\x00"))
+		}
 		hash.Write(contents)
 		hash.Write([]byte{'\n'})
 	}
 	digest := "sha256:" + hex.EncodeToString(hash.Sum(nil))
-	manifest := filesystemManifest{Version: 1, Digest: digest, CreatedAt: adapter.Now().UTC(), Resources: resources}
+	sort.Strings(excluded)
+	manifest := filesystemManifest{Version: 1, Digest: digest, CreatedAt: adapter.Now().UTC(), Resources: resources, Excluded: excluded}
 	manifestBytes, err := json.Marshal(manifest)
 	if err != nil {
 		return filesystemManifest{}, err

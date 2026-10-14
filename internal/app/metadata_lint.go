@@ -3,12 +3,15 @@ package app
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/vantt/skillhub-mcp/internal/catalog"
 	resolverpkg "github.com/vantt/skillhub-mcp/internal/resolver"
 	"github.com/vantt/skillhub-mcp/internal/skillruntime"
+	sourcepkg "github.com/vantt/skillhub-mcp/internal/source"
 )
 
 func runtimeHintFindings(skillID string, hints skillruntime.Hints) []Warning {
@@ -65,6 +68,52 @@ func canonicalRuntimeHints(root, id string) (skillruntime.Hints, error) {
 }
 
 func workspaceLintWarnings(ctx context.Context, root string) []Warning {
+	return append(secretLikeFileWarnings(ctx, root), catalogLintWarnings(ctx, root)...)
+}
+
+const secretLikeFileListLimit = 20
+
+// secretLikeFileWarnings reports files under skills/ that an import would have
+// left out, such as .env files a hub received before imports skipped them. It
+// reads names only, never contents, and works without a catalog generation.
+func secretLikeFileWarnings(ctx context.Context, root string) []Warning {
+	var found []string
+	skillsDir := filepath.Join(root, "skills")
+	_ = filepath.WalkDir(skillsDir, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil || ctx.Err() != nil {
+			return fs.SkipAll
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil || entry.Type()&fs.ModeSymlink != 0 {
+			return nil
+		}
+		rel = filepath.ToSlash(rel)
+		if _, skip := sourcepkg.ExcludedFromImport(rel); skip {
+			found = append(found, rel)
+			if entry.IsDir() {
+				return fs.SkipDir
+			}
+		}
+		return nil
+	})
+	if len(found) == 0 {
+		return nil
+	}
+	sort.Strings(found)
+	listed := found
+	more := ""
+	if len(listed) > secretLikeFileListLimit {
+		more = fmt.Sprintf(" and %d more", len(listed)-secretLikeFileListLimit)
+		listed = listed[:secretLikeFileListLimit]
+	}
+	return []Warning{{
+		Code: "secret_like_file",
+		Summary: fmt.Sprintf("Files that look like secrets or build output are inside skill folders: %s%s. Fix: Remove it from the hub with `git rm --cached` and delete it, or move the secret out of the skill folder.",
+			strings.Join(listed, ", "), more),
+	}}
+}
+
+func catalogLintWarnings(ctx context.Context, root string) []Warning {
 	handle, err := catalog.OpenCurrentLocked(ctx, root)
 	if err != nil {
 		return []Warning{{

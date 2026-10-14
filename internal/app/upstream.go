@@ -346,7 +346,14 @@ func reconstructSkillFilesAtCommit(
 	if err != nil {
 		return nil, nil, sourcepkg.Revision{}, err
 	}
-	return files, rootItem.Warnings, rev, nil
+	warnings := rootItem.Warnings
+	for _, left := range rootItem.Excluded {
+		warnings = append(warnings, Warning{
+			Code:    "import_excluded",
+			Summary: fmt.Sprintf("Left out upstream file %q (%s).", left.Path, left.Reason),
+		})
+	}
+	return files, warnings, rev, nil
 }
 
 func diffReconstructedFiles(baseFiles, headFiles map[string][]byte) []sourcepkg.Change {

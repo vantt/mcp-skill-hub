@@ -43,6 +43,8 @@ type DiscoveredSkill struct {
 	Conflict    bool   `json:"conflict"`
 	Imported    bool   `json:"imported,omitempty"`
 	SkipReason  string `json:"skip_reason,omitempty"`
+	// Excluded lists files left out of the import, relative to the skill folder.
+	Excluded []ExcludedFile `json:"excluded,omitempty"`
 }
 
 type SourceImportProposal struct {
@@ -224,6 +226,7 @@ func (service SourceImportService) PreviewSourceImport(ctx context.Context, path
 			Collection:  "default",
 			Description: item.Description,
 			Path:        item.SkillDir,
+			Excluded:    item.Excluded,
 		}
 
 		if item.Error != "" {
@@ -760,7 +763,7 @@ func buildImportItemChanges(
 	for _, comp := range pi.Companions {
 		compData := pi.CompanionBytes[comp.Path]
 		compTarget := "skills/default/" + targetID + "/" + comp.Path
-		changes = append(changes, mutation.Change{Path: compTarget, Contents: compData})
+		changes = append(changes, mutation.Change{Path: compTarget, Contents: compData, Executable: comp.Executable})
 		added = append(added, compTarget)
 	}
 

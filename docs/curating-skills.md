@@ -148,7 +148,21 @@ Draft review-checklist added. Agent use: off. Changes are not committed.
 Next: skillhub skill review review-checklist
 ```
 
-Adding from a local folder works in the terminal only. Skill Hub copies the other files in the folder too, hidden ones included, so keep secrets out of it. A skill from your own folder needs no content approval.
+Adding from a local folder works in the terminal only. Skill Hub copies the other files in the folder, scripts keep their executable bit, and the preview lists every file with its size. It leaves out files that look like secrets or build output: `.env` and `.env.*` (except `.env.example` and `.env.sample`), `*.pem`, SSH private keys such as `id_rsa` and `id_ed25519`, `.DS_Store`, and the folders `.git`, `node_modules` and `__pycache__`. The preview names each one under "Left out", so you can see what did not come along. A skill from your own folder needs no content approval.
+
+```text
+Add review-checklist as a draft from local.
+Files (2, 98 B):
+  - SKILL.md (80 B)
+  - scripts/check.sh (18 B) (executable)
+Left out (not copied into the hub):
+  - .env (looks like a secret)
+Origin retained. Agent use: off.
+No collection files changed.
+Next: skillhub skill confirm PROP-<id>
+```
+
+Adding the same folder again changes nothing: the command says the skill was already added and shows its current state.
 
 ### Add from GitHub
 
@@ -160,7 +174,12 @@ skillhub skill add https://github.com/anthropics/skills --path skills/pdf
 
 ```text
 Add pdf as a draft from https://github.com/anthropics/skills.git at <commit>.
-11 files, 57.3 KB. Origin retained. Agent use: off.
+Files (11, 57.3 KB):
+  - SKILL.md (9.9 KB)
+  - LICENSE.txt (1.4 KB)
+  - scripts/extract.py (4.2 KB)
+  ...one line for each of the other 8 files
+Origin retained. Agent use: off.
 Upstream: tracked by new source anthropics-skills (checked weekly by `skillhub source check`; nothing
 runs in the background).
 No collection files changed.
@@ -169,7 +188,7 @@ Next: skillhub skill confirm PROP-<id>
 
 Run the `skillhub skill confirm` line, or repeat the command with `--yes`. The repository becomes the skill's **upstream**: the source it was copied from, so you can pull its updates later.
 
-For a repository with several skills, `--skill <name>` picks one and `--all` adds every skill as its own draft. Repositories larger than 8 MiB are refused, so for a large one point at the skill's folder as above. `--ref <branch-or-tag>` picks another branch or tag.
+For a repository with several skills, `--skill <name>` picks one and `--all` adds every skill as its own draft. Repositories larger than 8 MiB are refused with the same advice: point at the skill's folder as above. `--ref <branch-or-tag>` picks another branch or tag.
 
 ### After you add a skill
 

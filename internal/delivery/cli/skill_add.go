@@ -70,7 +70,8 @@ func runSkillAdd(ctx context.Context, service app.SkillService, flags skillFlags
 	if err != nil {
 		return writeSkillErrorFor(flags.id, stdout, stderr, flags.jsonOutput, err)
 	}
-	if !flags.yes {
+	// An error preview has nothing to confirm; show its own cause even under --yes.
+	if !flags.yes || app.ErrorOf(preview, nil) != nil {
 		return writeResult(stdout, stderr, flags.jsonOutput, preview, func(p *termui.Printer) {
 			writeSkillAddPreview(p, preview)
 		})
@@ -110,9 +111,31 @@ func writeSkillAddPreview(p *termui.Printer, preview app.SkillAddProposal) {
 		originDesc = preview.Origin.Path
 	}
 
+	if preview.Replayed {
+		writeSkillAddReplayed(p, preview.SkillID, preview.Assessment.Canonical.Status)
+		return
+	}
+
 	p.Line(fmt.Sprintf("Add %s as a draft from %s.", skillName, originDesc))
-	p.Line(fmt.Sprintf("%s, %s. Origin retained. Agent use: off.",
-		termui.Plural(len(preview.Resources), "file", "files"), termui.Bytes(preview.TotalBytes)))
+	p.Line(fmt.Sprintf("Files (%d, %s):", len(preview.Resources)+1, termui.Bytes(preview.TotalBytes)))
+	skillMDBytes := preview.TotalBytes
+	for _, res := range preview.Resources {
+		skillMDBytes -= res.Bytes
+	}
+	files := []string{fmt.Sprintf("SKILL.md (%s)", termui.Bytes(skillMDBytes))}
+	for _, res := range preview.Resources {
+		line := fmt.Sprintf("%s (%s)", res.Path, termui.Bytes(res.Bytes))
+		if res.Executable {
+			line += " (executable)"
+		}
+		files = append(files, line)
+	}
+	p.Bullets(files...)
+	writeLeftOut(p, "Left out (not copied into the hub):", preview.Excluded)
+	p.Line("Origin retained. Agent use: off.")
+	for _, warn := range preview.Warnings {
+		p.Warning(warn.Summary)
+	}
 	if preview.UpstreamSource != nil {
 		if preview.UpstreamSource.Created {
 			p.Line(fmt.Sprintf("Upstream: tracked by new source %s (checked weekly by `skillhub source check`; nothing runs in the background).", preview.UpstreamSource.SourceID))
@@ -127,6 +150,10 @@ func writeSkillAddPreview(p *termui.Printer, preview app.SkillAddProposal) {
 }
 
 func writeSkillAddResult(p *termui.Printer, verbose bool, result app.SkillAddResult) {
+	if result.Replayed {
+		writeSkillAddReplayed(p, result.SkillID, result.Assessment.Canonical.Status)
+		return
+	}
 	skillName := result.SkillID
 	if len(result.SkillIDs) > 1 {
 		skillName = strings.Join(result.SkillIDs, ", ")
@@ -144,4 +171,28 @@ func writeSkillAddResult(p *termui.Printer, verbose bool, result app.SkillAddRes
 		)
 	}
 	p.Line(fmt.Sprintf("Next: skillhub skill review %s", result.SkillID))
+}
+
+// writeSkillAddReplayed explains that an identical add already happened, with
+// the skill's real lifecycle state, and offers no confirm command.
+func writeSkillAddReplayed(p *termui.Printer, skillID, state string) {
+	line := fmt.Sprintf("%s was already added from this source; nothing changed.", skillID)
+	if state != "" {
+		line += fmt.Sprintf(" It is %s now.", state)
+	}
+	p.Line(line)
+	p.Line(fmt.Sprintf("Next: skillhub skill review %s", skillID))
+}
+
+// writeLeftOut lists files an import did not copy, one bullet per path.
+func writeLeftOut(p *termui.Printer, heading string, excluded []app.ExcludedFile) {
+	if len(excluded) == 0 {
+		return
+	}
+	p.Line(heading)
+	items := make([]string, 0, len(excluded))
+	for _, file := range excluded {
+		items = append(items, fmt.Sprintf("%s (%s)", file.Path, file.Reason))
+	}
+	p.Bullets(items...)
 }

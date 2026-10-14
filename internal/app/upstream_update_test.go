@@ -800,3 +800,49 @@ func TestUpstreamMetaCannotSelfApproveOnImportAndUpstreamUpdate(t *testing.T) {
 		t.Fatal("skill self-approved on upstream update!")
 	}
 }
+
+func TestUpstreamUpdateLeavesOutSecretFilesAndKeepsLocalOnes(t *testing.T) {
+	root, repoDir, skillID, sourceID, upstreamService, _, adapter := setupUpstreamUpdateHarness(t)
+	ctx := context.Background()
+
+	hubSkill := filepath.Join(root, "skills", "default", skillID)
+	localEnv := filepath.Join(hubSkill, ".env")
+	if err := os.WriteFile(localEnv, []byte("LOCAL=1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	upstreamSkill := filepath.Join(repoDir, "skills", skillID)
+	_ = os.WriteFile(filepath.Join(upstreamSkill, "SKILL.md"), []byte("---\nname: my-skill\ndescription: Original description\n---\nline 1\nline 2-upstream\nline 3\nline 4\nline 5\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(upstreamSkill, ".env"), []byte("UPSTREAM=1\n"), 0o644)
+	runGitInDir(t, repoDir, "add", "-f", ".")
+	runGitInDir(t, repoDir, "commit", "-m", "upstream edit and secret")
+
+	sourceService := SourceService{Adapters: map[string]sourcepkg.Adapter{"git": adapter}}
+	_, _ = sourceService.CheckSources(ctx, root, []string{sourceID}, false)
+
+	preview, err := upstreamService.PreviewUpdate(ctx, root, UpstreamUpdateInput{SkillID: skillID})
+	if err != nil || preview.Error != nil {
+		t.Fatalf("preview failed: %v, %#v", err, preview.Error)
+	}
+	for _, file := range preview.Files {
+		if file.Path == ".env" {
+			t.Fatalf("preview lists .env: %#v", preview.Files)
+		}
+	}
+	warned := false
+	for _, w := range preview.Warnings {
+		if w.Code == "import_excluded" && strings.Contains(w.Summary, ".env") {
+			warned = true
+		}
+	}
+	if !warned {
+		t.Fatalf("expected an import_excluded warning naming .env, got %#v", preview.Warnings)
+	}
+	if result, err := upstreamService.ConfirmUpdate(ctx, root, preview, preview.Confirmation.Confirmation.Pins); err != nil || result.Error != nil {
+		t.Fatalf("confirm failed: %v, %#v", err, result.Error)
+	}
+	got, err := os.ReadFile(localEnv)
+	if err != nil || string(got) != "LOCAL=1\n" {
+		t.Fatalf("local .env was touched: %q, %v", got, err)
+	}
+}

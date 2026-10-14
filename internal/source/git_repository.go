@@ -347,7 +347,7 @@ func (adapter GitRepositoryAdapter) List(ctx context.Context, source Source, rev
 			if total > adapter.MaxBytes {
 				return &LimitExceededError{Limit: "bytes", Actual: total, Max: adapter.MaxBytes}
 			}
-			resources = append(resources, Resource{Path: name, Size: item.size})
+			resources = append(resources, Resource{Path: name, Size: item.size, Executable: item.executable})
 		}
 		return nil
 	})
@@ -359,8 +359,9 @@ func (adapter GitRepositoryAdapter) List(ctx context.Context, source Source, rev
 }
 
 type gitFile struct {
-	hash plumbing.Hash
-	size int64
+	hash       plumbing.Hash
+	size       int64
+	executable bool
 }
 
 func (adapter GitRepositoryAdapter) revisionFiles(ctx context.Context, repository *git.Repository, source Source, revision Revision) (map[string]gitFile, error) {
@@ -402,7 +403,7 @@ func (adapter GitRepositoryAdapter) revisionFiles(ctx context.Context, repositor
 		if total > adapter.MaxBytes {
 			return &LimitExceededError{Limit: "bytes", Actual: total, Max: adapter.MaxBytes}
 		}
-		files[name] = gitFile{hash: file.Hash, size: file.Size}
+		files[name] = gitFile{hash: file.Hash, size: file.Size, executable: file.Mode == filemode.Executable}
 		return nil
 	})
 	if err != nil {

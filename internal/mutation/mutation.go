@@ -35,6 +35,8 @@ type Change struct {
 	BeforeDigest string `json:"before"`
 	Contents     []byte `json:"contents,omitempty"`
 	Delete       bool   `json:"delete,omitempty"`
+	// Executable publishes a new file with mode 0755 instead of 0644.
+	Executable bool `json:"executable,omitempty"`
 }
 
 // WriteSet is the complete input to a managed canonical mutation.
@@ -415,6 +417,11 @@ func proposalDigest(set WriteSet) string {
 	}
 	for _, item := range changes {
 		fmt.Fprintf(hash, "%s\x00%s\x00%t\x00%s\n", item.Path, item.BeforeDigest, item.Delete, digest(item.Contents))
+		if item.Executable {
+			// Only executable changes carry the marker, so digests of every
+			// other write set stay what they were.
+			hash.Write([]byte("x\n"))
+		}
 	}
 	return "sha256:" + hex.EncodeToString(hash.Sum(nil))
 }

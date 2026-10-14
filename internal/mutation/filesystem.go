@@ -99,6 +99,9 @@ func replaceCanonicalChecked(root string, item change, contents []byte, options 
 	}
 
 	mode := fs.FileMode(0o644) // documented default for newly-created canonical files
+	if item.Executable {
+		mode = 0o755
+	}
 	displaced := false
 	if item.BeforeDigest != "" {
 		if item.Displaced == "" {
@@ -113,6 +116,9 @@ func replaceCanonicalChecked(root string, item change, contents []byte, options 
 				return statErr
 			}
 			mode = info.Mode().Perm()
+			if item.Executable {
+				mode |= 0o111
+			}
 		} else if displacedDigest != "" {
 			return fmt.Errorf("%w: displaced target digest mismatch for %s", ErrRecoveryRequired, item.Path)
 		}
@@ -138,6 +144,9 @@ func replaceCanonicalChecked(root string, item change, contents []byte, options 
 				return statErr
 			}
 			mode = info.Mode().Perm()
+			if item.Executable {
+				mode |= 0o111
+			}
 		}
 		exact, err := rootHandle.ReadFile(item.Displaced)
 		if err != nil {

@@ -65,6 +65,14 @@ type DiscoveredCompanion struct {
 	FullPath string `json:"full_path"` // Full path within the source or snapshot (e.g. "skills/pdf/LICENSE.txt")
 	Bytes    int64  `json:"bytes"`     // Size in bytes
 	Digest   string `json:"digest"`    // Content digest (sha256:<hex>)
+	// Executable keeps the script's executable bit when the file lands in the hub.
+	Executable bool `json:"executable,omitempty"`
+}
+
+// ExcludedFile names a file or folder that was left out of an import and why.
+type ExcludedFile struct {
+	Path   string `json:"path"`
+	Reason string `json:"reason"`
 }
 
 // SkillLicenseInfo describes declared and detected license facts and warnings.
@@ -91,6 +99,7 @@ type DiscoveredSkillItem struct {
 	FileCount       int                   `json:"file_count"`
 	License         SkillLicenseInfo      `json:"license"`
 	Warnings        []Warning             `json:"warnings,omitempty"`
+	Excluded        []ExcludedFile        `json:"excluded,omitempty"` // paths relative to the skill folder
 	Transformations []string              `json:"transformations,omitempty"`
 	Conflict        bool                  `json:"conflict"`
 	SkipReason      string                `json:"skip_reason,omitempty"`
@@ -357,6 +366,9 @@ func DiscoverSkillsFromResources(ctx context.Context, reader ResourceReader, res
 	var roots []skillRoot
 	for _, res := range scoped {
 		cleanPath := filepath.ToSlash(strings.TrimPrefix(res.Path, "/"))
+		if _, skip := sourcepkg.ExcludedFromImport(cleanPath); skip {
+			continue // a skill inside build output or version-control data is not a skill
+		}
 		if filepath.Base(cleanPath) == "SKILL.md" {
 			dir := filepath.ToSlash(filepath.Dir(cleanPath))
 			if dir == "." {
@@ -457,6 +469,10 @@ func DiscoverSkillsFromResources(ctx context.Context, reader ResourceReader, res
 			if relPath == "" || relPath == "SKILL.md" {
 				continue
 			}
+			if reason, skip := sourcepkg.ExcludedFromImport(relPath); skip {
+				item.Excluded = append(item.Excluded, ExcludedFile{Path: relPath, Reason: reason})
+				continue
+			}
 			if workspace.IsHubMeta(relPath) {
 				item.Warnings = append(item.Warnings, Warning{
 					Code:    "upstream_meta_ignored",
@@ -493,10 +509,11 @@ func DiscoverSkillsFromResources(ctx context.Context, reader ResourceReader, res
 			digest := "sha256:" + hex.EncodeToString(sum[:])
 
 			comp := DiscoveredCompanion{
-				Path:     relPath,
-				FullPath: cleanPath,
-				Bytes:    int64(len(compBytes)),
-				Digest:   digest,
+				Path:       relPath,
+				FullPath:   cleanPath,
+				Bytes:      int64(len(compBytes)),
+				Digest:     digest,
+				Executable: res.Executable,
 			}
 
 			item.Companions = append(item.Companions, comp)
@@ -509,6 +526,10 @@ func DiscoverSkillsFromResources(ctx context.Context, reader ResourceReader, res
 		// Sort companions by relative path for determinism
 		sort.Slice(item.Companions, func(i, j int) bool {
 			return item.Companions[i].Path < item.Companions[j].Path
+		})
+
+		sort.Slice(item.Excluded, func(i, j int) bool {
+			return item.Excluded[i].Path < item.Excluded[j].Path
 		})
 
 		item.TotalBytes = totalBytes

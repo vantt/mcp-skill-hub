@@ -217,3 +217,122 @@ func TestSkillAddPreviewAndResultRenderUpstream(t *testing.T) {
 		t.Fatalf("local result output should not contain 'Watching: off', got:\n%s", outLocal)
 	}
 }
+
+func writeCLIAddFixture(t *testing.T, dir, rel, body string, mode os.FileMode) {
+	t.Helper()
+	path := filepath.Join(dir, filepath.FromSlash(rel))
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(body), mode); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, mode); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSkillAddPreviewListsEveryFileAndWhatWasLeftOut(t *testing.T) {
+	t.Parallel()
+	root := initTestWorkspace(t)
+	dir := filepath.Join(t.TempDir(), "team-release")
+	writeCLIAddFixture(t, dir, "SKILL.md", "---\nname: team-release\ndescription: Release the team.\n---\n\n# Release\n", 0o644)
+	writeCLIAddFixture(t, dir, "scripts/bump.sh", "#!/bin/sh\n", 0o755)
+	writeCLIAddFixture(t, dir, ".env", "TOKEN=abc\n", 0o644)
+
+	code, stdout, stderr := runCLI(t, "skill", "add", dir, "--workspace", root)
+	if code != 0 {
+		t.Fatalf("preview exit %d: %s", code, stderr)
+	}
+	out := flatText(stdout)
+	for _, want := range []string{"Files (2,", "SKILL.md", "scripts/bump.sh", "(executable)", "Left out", ".env"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("preview missing %q:\n%s", want, stdout)
+		}
+	}
+	if strings.Contains(out, "TOKEN=abc") {
+		t.Errorf("preview leaked file contents:\n%s", stdout)
+	}
+}
+
+func TestSkillAddAgainExplainsNothingChanged(t *testing.T) {
+	t.Parallel()
+	root := initTestWorkspace(t)
+	dir := filepath.Join(t.TempDir(), "team-release")
+	writeCLIAddFixture(t, dir, "SKILL.md", "---\nname: team-release\ndescription: Release the team.\n---\n\n# Release\n", 0o644)
+
+	if code, _, stderr := runCLI(t, "skill", "add", dir, "--workspace", root, "--yes"); code != 0 {
+		t.Fatalf("first add exit %d: %s", code, stderr)
+	}
+	if code, _, stderr := runCLI(t, "skill", "edit", "team-release", "--trigger", "release day", "--not-for", "hotfixes", "--min-scope", "single_step", "--workspace", root, "--yes"); code != 0 {
+		t.Fatalf("edit exit %d: %s", code, stderr)
+	}
+	if code, _, stderr := runCLI(t, "skill", "activate", "team-release", "--workspace", root, "--yes"); code != 0 {
+		t.Fatalf("activate exit %d: %s", code, stderr)
+	}
+	for _, args := range [][]string{
+		{"skill", "add", dir, "--workspace", root},
+		{"skill", "add", dir, "--workspace", root, "--yes"},
+	} {
+		code, stdout, stderr := runCLI(t, args...)
+		if code != 0 {
+			t.Fatalf("%v exit %d: %s", args, code, stderr)
+		}
+		out := flatText(stdout)
+		if !strings.Contains(out, "already added") || !strings.Contains(out, "active") {
+			t.Errorf("%v: want an already-added message with the state:\n%s", args, stdout)
+		}
+		if strings.Contains(out, "--proposal ''") || strings.Contains(out, "skill confirm") {
+			t.Errorf("%v: must not offer a confirm command:\n%s", args, stdout)
+		}
+		if strings.Contains(out, "Draft team-release added") {
+			t.Errorf("%v: must not claim a new draft:\n%s", args, stdout)
+		}
+		if !strings.Contains(out, "skillhub skill review team-release") {
+			t.Errorf("%v: missing review next step:\n%s", args, stdout)
+		}
+	}
+}
+
+func TestSkillAddErrorPreviewKeepsItsOwnCauseUnderYes(t *testing.T) {
+	t.Parallel()
+	root := initTestWorkspace(t)
+	missing := filepath.Join(t.TempDir(), "nope")
+	for _, args := range [][]string{
+		{"skill", "add", missing, "--workspace", root},
+		{"skill", "add", missing, "--workspace", root, "--yes"},
+	} {
+		code, _, stderr := runCLI(t, args...)
+		if code != 2 {
+			t.Errorf("%v exit = %d, want 2", args, code)
+		}
+		if !strings.Contains(flatText(stderr), "cannot access local directory") || strings.Contains(strings.ToLower(stderr), "stale") {
+			t.Errorf("%v stderr should carry the real cause:\n%s", args, stderr)
+		}
+	}
+}
+
+func TestSkillAddPreviewShowsLicenseWarningOnlyWhenItMatters(t *testing.T) {
+	t.Parallel()
+	root := initTestWorkspace(t)
+	temp := t.TempDir()
+	proprietary := filepath.Join(temp, "prop-skill")
+	writeCLIAddFixture(t, proprietary, "SKILL.md", "---\nname: prop-skill\ndescription: Proprietary tool\nlicense: Proprietary terms apply\n---\n\n# Prop\n", 0o644)
+	own := filepath.Join(temp, "own-skill")
+	writeCLIAddFixture(t, own, "SKILL.md", "---\nname: own-skill\ndescription: My own tool\n---\n\n# Own\n", 0o644)
+
+	code, stdout, stderr := runCLI(t, "skill", "add", proprietary, "--workspace", root)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, stderr)
+	}
+	if !strings.Contains(strings.ToLower(flatText(stdout)), "proprietary") {
+		t.Errorf("preview must warn about the proprietary license:\n%s", stdout)
+	}
+	code, stdout, stderr = runCLI(t, "skill", "add", own, "--workspace", root)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, stderr)
+	}
+	if strings.Contains(strings.ToLower(stdout), "license") {
+		t.Errorf("a folder of your own needs no license line:\n%s", stdout)
+	}
+}

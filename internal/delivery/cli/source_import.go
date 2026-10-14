@@ -3,10 +3,12 @@ package cli
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 
 	"github.com/vantt/skillhub-mcp/internal/app"
+	"github.com/vantt/skillhub-mcp/internal/delivery/cli/termui"
 )
 
 func validateSourceImportRequest(flags sourceFlags, positionals []string) error {
@@ -66,4 +68,19 @@ func runSourceImport(ctx context.Context, service app.SourceImportService, flags
 	}
 	result, err := service.ConfirmSourceImport(ctx, flags.workspace, preview, preview.Confirmation.Confirmation.Pins)
 	return writeSourceImportResult(stdout, stderr, flags.jsonOutput, result, err)
+}
+
+// writeImportLeftOut prints one line per importable skill that has files the
+// import will not copy.
+func writeImportLeftOut(p *termui.Printer, items []app.DiscoveredSkill) {
+	for _, item := range items {
+		if len(item.Excluded) == 0 {
+			continue
+		}
+		left := make([]string, 0, len(item.Excluded))
+		for _, file := range item.Excluded {
+			left = append(left, fmt.Sprintf("%s (%s)", file.Path, file.Reason))
+		}
+		p.Line(fmt.Sprintf("Left out of %s: %s", item.TargetID, strings.Join(left, ", ")))
+	}
 }

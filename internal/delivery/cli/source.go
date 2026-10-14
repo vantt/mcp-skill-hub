@@ -683,6 +683,7 @@ func writeSourceImportProposal(stdout, stderr io.Writer, jsonOutput bool, propos
 			bullets = append(bullets, fmt.Sprintf("%s -> %s [skipped: %s]", item.Name, item.TargetID, item.SkipReason))
 		}
 		p.Bullets(bullets...)
+		writeImportLeftOut(p, proposal.Importable)
 		for _, warn := range proposal.Warnings {
 			p.Warning(warn.Summary)
 		}

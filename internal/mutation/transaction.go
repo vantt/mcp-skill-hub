@@ -32,6 +32,7 @@ type change struct {
 	BeforeStaged string `json:"before_staged,omitempty"`
 	Displaced    string `json:"displaced,omitempty"`
 	Receipt      bool   `json:"receipt,omitempty"`
+	Executable   bool   `json:"executable,omitempty"`
 }
 
 func commitPrepared(root string, set WriteSet, changes []Change, resultSnapshot string, occurredAt time.Time, options Options) (Receipt, error) {
@@ -49,7 +50,7 @@ func commitPrepared(root string, set WriteSet, changes []Change, resultSnapshot 
 	entries := make([]change, 0, len(changes)+1)
 	beforeImages := make(map[string][]byte, len(changes))
 	for _, item := range changes {
-		entry := change{Path: item.Path, BeforeDigest: item.BeforeDigest, Delete: item.Delete}
+		entry := change{Path: item.Path, BeforeDigest: item.BeforeDigest, Delete: item.Delete, Executable: item.Executable}
 		if item.BeforeDigest != "" {
 			before, err := readCanonicalFile(root, item.Path)
 			if err != nil {

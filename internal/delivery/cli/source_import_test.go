@@ -313,3 +313,27 @@ func TestSourceImportExplicitRefDoesNotUseStoredRevision(t *testing.T) {
 		t.Fatal("failed ref override changed canonical files")
 	}
 }
+
+func TestSourceImportPreviewNamesWhatWasLeftOut(t *testing.T) {
+	t.Parallel()
+	proposal := app.SourceImportProposal{
+		Importable: []app.DiscoveredSkill{
+			{Name: "tool", TargetID: "tool", Excluded: []app.ExcludedFile{
+				{Path: ".env", Reason: "looks like a secret"},
+				{Path: "config/key.pem", Reason: "looks like a secret"},
+			}},
+			{Name: "plain", TargetID: "plain"},
+		},
+	}
+	var stdout, stderr bytes.Buffer
+	if code := writeSourceImportProposal(&stdout, &stderr, false, proposal); code != 0 {
+		t.Fatalf("exit %d: %s", code, stderr.String())
+	}
+	out := flatText(stdout.String())
+	if !strings.Contains(out, "Left out of tool: .env (looks like a secret), config/key.pem (looks like a secret)") {
+		t.Errorf("missing the left-out line:\n%s", stdout.String())
+	}
+	if strings.Count(out, "Left out") != 1 {
+		t.Errorf("only the skill with exclusions gets a line:\n%s", stdout.String())
+	}
+}

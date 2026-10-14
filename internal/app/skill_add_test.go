@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -974,5 +975,142 @@ func TestSkillAddConfirmWritesRepoWithoutRepositoryOrContentDigest(t *testing.T)
 	}
 	if !trust.RequiresReview() {
 		t.Fatal("expected remote skill to require review")
+	}
+}
+
+func writeAddFixture(t *testing.T, dir, rel, body string, mode os.FileMode) {
+	t.Helper()
+	path := filepath.Join(dir, filepath.FromSlash(rel))
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(body), mode); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, mode); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSkillAddFromFolderLeavesOutSecretFiles(t *testing.T) {
+	t.Parallel()
+	root := newSourceWorkspace(t)
+	dir := filepath.Join(t.TempDir(), "team-release")
+	writeAddFixture(t, dir, "SKILL.md", "---\nname: team-release\ndescription: Release the team.\n---\n\n# Release\n", 0o644)
+	writeAddFixture(t, dir, "scripts/bump.sh", "#!/bin/sh\n", 0o644)
+	writeAddFixture(t, dir, ".env", "TOKEN=abc\n", 0o644)
+	writeAddFixture(t, dir, "__pycache__/m.pyc", "x\n", 0o644)
+
+	service := SkillAddService{Clock: sourceClock{now: time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)}}
+	preview, err := service.PreviewSkillAdd(context.Background(), root, SkillAddInput{Locator: dir})
+	if err != nil || preview.Error != nil {
+		t.Fatalf("preview failed: %v, %#v", err, preview.Error)
+	}
+	for _, res := range preview.Resources {
+		if res.Path == ".env" || strings.HasPrefix(res.Path, "__pycache__/") {
+			t.Fatalf("preview lists %q, which must be left out", res.Path)
+		}
+	}
+	left := map[string]string{}
+	for _, item := range preview.Excluded {
+		left[item.Path] = item.Reason
+	}
+	if left[".env"] == "" || left["__pycache__"] == "" {
+		t.Fatalf("Excluded = %#v, want .env and __pycache__ with reasons", preview.Excluded)
+	}
+	result, err := service.ConfirmSkillAdd(context.Background(), root, preview, preview.Confirmation.Confirmation.Pins)
+	if err != nil || result.Error != nil {
+		t.Fatalf("confirm failed: %v, %#v", err, result.Error)
+	}
+	if len(result.Excluded) != len(preview.Excluded) {
+		t.Fatalf("result Excluded = %#v, want the preview's %#v", result.Excluded, preview.Excluded)
+	}
+	if _, err := os.Stat(filepath.Join(root, "skills", "default", "team-release", ".env")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf(".env reached the hub: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "skills", "default", "team-release", "scripts", "bump.sh")); err != nil {
+		t.Fatalf("scripts/bump.sh missing: %v", err)
+	}
+}
+
+func TestSkillAddFromFolderKeepsExecutableScripts(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("file modes are not meaningful on Windows")
+	}
+	t.Parallel()
+	root := newSourceWorkspace(t)
+	dir := filepath.Join(t.TempDir(), "team-release")
+	writeAddFixture(t, dir, "SKILL.md", "---\nname: team-release\ndescription: Release the team.\n---\n\n# Release\n", 0o644)
+	writeAddFixture(t, dir, "scripts/bump.sh", "#!/bin/sh\n", 0o755)
+	writeAddFixture(t, dir, "notes.md", "notes\n", 0o644)
+
+	service := SkillAddService{Clock: sourceClock{now: time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)}}
+	preview, err := service.PreviewSkillAdd(context.Background(), root, SkillAddInput{Locator: dir})
+	if err != nil || preview.Error != nil {
+		t.Fatalf("preview failed: %v, %#v", err, preview.Error)
+	}
+	for _, res := range preview.Resources {
+		if want := res.Path == "scripts/bump.sh"; res.Executable != want {
+			t.Errorf("%s Executable = %v, want %v", res.Path, res.Executable, want)
+		}
+	}
+	if result, err := service.ConfirmSkillAdd(context.Background(), root, preview, preview.Confirmation.Confirmation.Pins); err != nil || result.Error != nil {
+		t.Fatalf("confirm failed: %v, %#v", err, result.Error)
+	}
+	for rel, want := range map[string]os.FileMode{"scripts/bump.sh": 0o755, "notes.md": 0o644} {
+		info, err := os.Stat(filepath.Join(root, "skills", "default", "team-release", filepath.FromSlash(rel)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode().Perm() != want {
+			t.Errorf("%s mode = %v, want %v", rel, info.Mode().Perm(), want)
+		}
+	}
+}
+
+func TestConfirmSkillAddReturnsThePreviewError(t *testing.T) {
+	t.Parallel()
+	root := newSourceWorkspace(t)
+	service := SkillAddService{}
+	preview, err := service.PreviewSkillAdd(context.Background(), root, SkillAddInput{Locator: filepath.Join(t.TempDir(), "missing")})
+	if err != nil || preview.Error == nil {
+		t.Fatalf("expected an error preview, got %v, %#v", err, preview.Error)
+	}
+	result, err := service.ConfirmSkillAdd(context.Background(), root, preview, preview.Confirmation.Confirmation.Pins)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Error == nil || result.Error.Code != preview.Error.Code {
+		t.Fatalf("confirm error = %#v, want the preview's %q", result.Error, preview.Error.Code)
+	}
+}
+
+type limitListAdapter struct {
+	fakeImportAdapter
+	err error
+}
+
+func (a *limitListAdapter) List(context.Context, sourcepkg.Source, sourcepkg.Revision, sourcepkg.Scope) ([]sourcepkg.Resource, error) {
+	return nil, a.err
+}
+
+func TestSkillAddRepositoryOverLimitExplainsHowToNarrow(t *testing.T) {
+	t.Parallel()
+	root := newSourceWorkspace(t)
+	adapter := &limitListAdapter{err: &sourcepkg.LimitExceededError{Limit: "bytes", Actual: 9 << 20, Max: 8 << 20}}
+	service := SkillAddService{Adapters: map[string]sourcepkg.Adapter{"git": adapter}}
+	preview, err := service.PreviewSkillAdd(context.Background(), root, SkillAddInput{Locator: "https://github.com/example/huge"})
+	if err != nil {
+		t.Fatalf("a limit error must be an invalid request, not a failure: %v", err)
+	}
+	if preview.Error == nil || preview.Error.Code != "invalid_request" {
+		t.Fatalf("preview error = %#v, want invalid request", preview.Error)
+	}
+	fix := preview.Error.Render.Fix
+	if !strings.Contains(fix, "--path") || !strings.Contains(fix, "--skill") {
+		t.Fatalf("fix = %q, want it to mention --path and --skill", fix)
+	}
+	if !strings.Contains(preview.Error.Render.Why, "limit") {
+		t.Fatalf("why = %q, want the limit message", preview.Error.Render.Why)
 	}
 }

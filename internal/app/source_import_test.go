@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -826,5 +827,81 @@ func TestSourceImportInV3CreatesMetaSkillYAMLAndMatchesSkillAddTrust(t *testing.
 	}
 	if !reflect.DeepEqual(importTrust.ReasonCodes, addTrust.ReasonCodes) {
 		t.Fatalf("ReasonCodes mismatch: import=%v, add=%v", importTrust.ReasonCodes, addTrust.ReasonCodes)
+	}
+}
+
+func TestSourceImportLeavesOutSecretFilesAndKeepsExecutableBit(t *testing.T) {
+	t.Parallel()
+	root := newSourceWorkspace(t)
+	sourceRec := sourcepkg.Record{
+		SchemaVersion:   1,
+		ID:              "tools",
+		Locator:         sourcepkg.Locator{Repository: "https://github.com/example/tools.git"},
+		Adapter:         "git",
+		Status:          "watching",
+		Identity:        sourcepkg.Identity{Name: "tools", Canonical: "https://github.com/example/tools.git"},
+		Limits:          sourcepkg.Limits{TimeoutSeconds: 20, MaxBytes: sourcepkg.DefaultMaxBytes, MaxFiles: sourcepkg.DefaultMaxFiles, MaxFileBytes: sourcepkg.DefaultMaxFileSize},
+		Monitoring:      sourcepkg.Monitoring{Enabled: true, Cadence: "weekly"},
+		CurrentRevision: new(revision("commit-tools")),
+	}
+	srcBytes, _ := sourcepkg.MarshalCanonical(sourceRec)
+	_ = os.WriteFile(filepath.Join(root, "sources", "catalog", "tools.yaml"), srcBytes, 0o644)
+	_, _ = catalog.BuildCatalogGeneration(context.Background(), root, catalog.BuildOptions{})
+
+	files := map[string][]byte{
+		"skills/tool/SKILL.md":        []byte("---\nname: tool\ndescription: A tool\n---\n\n# Tool\n"),
+		"skills/tool/scripts/run.sh":  []byte("#!/bin/sh\n"),
+		"skills/tool/.env":            []byte("TOKEN=abc\n"),
+		"skills/tool/.env.example":    []byte("TOKEN=\n"),
+		"skills/tool/config/key.pem":  []byte("-----BEGIN-----\n"),
+		"skills/tool/references/a.md": []byte("a\n"),
+	}
+	var resources []sourcepkg.Resource
+	for path, data := range files {
+		resources = append(resources, sourcepkg.Resource{Path: path, Size: int64(len(data)), Executable: path == "skills/tool/scripts/run.sh"})
+	}
+	adapter := &fakeImportAdapter{resources: resources, files: files}
+	service := SourceImportService{
+		Clock:    sourceClock{now: time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)},
+		Adapters: map[string]sourcepkg.Adapter{"git": adapter},
+	}
+	preview, err := service.PreviewSourceImport(context.Background(), root, SourceImportPreviewInput{SourceID: "tools", Path: "skills/tool"})
+	if err != nil || preview.Error != nil {
+		t.Fatalf("preview failed: %v, %#v", err, preview.Error)
+	}
+	if len(preview.Importable) != 1 {
+		t.Fatalf("importable = %#v", preview.Importable)
+	}
+	left := map[string]bool{}
+	for _, item := range preview.Importable[0].Excluded {
+		left[item.Path] = true
+	}
+	if !left[".env"] || !left["config/key.pem"] || left[".env.example"] {
+		t.Fatalf("Excluded = %#v, want .env and config/key.pem but not .env.example", preview.Importable[0].Excluded)
+	}
+	added := map[string]bool{}
+	for _, path := range preview.Diff.Added {
+		added[path] = true
+	}
+	if added["skills/default/tool/.env"] || added["skills/default/tool/config/key.pem"] {
+		t.Fatalf("diff adds a left-out file: %v", preview.Diff.Added)
+	}
+	if !added["skills/default/tool/.env.example"] || !added["skills/default/tool/scripts/run.sh"] {
+		t.Fatalf("diff misses kept files: %v", preview.Diff.Added)
+	}
+	if _, err := service.ConfirmSourceImport(context.Background(), root, preview, preview.Confirmation.Confirmation.Pins); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "skills", "default", "tool", ".env")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf(".env reached the hub: %v", err)
+	}
+	if runtime.GOOS != "windows" {
+		info, err := os.Stat(filepath.Join(root, "skills", "default", "tool", "scripts", "run.sh"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode().Perm() != 0o755 {
+			t.Fatalf("run.sh mode = %v, want 0755", info.Mode().Perm())
+		}
 	}
 }

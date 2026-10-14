@@ -128,8 +128,9 @@ type Scope struct{ Prefix string }
 
 // Resource identifies readable data without executing it.
 type Resource struct {
-	Path string `json:"path"`
-	Size int64  `json:"size"`
+	Path       string `json:"path"`
+	Size       int64  `json:"size"`
+	Executable bool   `json:"executable,omitempty"`
 }
 
 // Adapter is the common contract for Git, filesystem, and document sources.
