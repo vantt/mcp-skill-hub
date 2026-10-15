@@ -1,7 +1,9 @@
 package mcpserver
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -41,7 +43,9 @@ const (
 // relay counts the HTTP requests and bytes between proxy and hub: a first
 // fetch must be one request, a cached repeat none at all. At the end a
 // metadata-only change and then a content change on the hub show which
-// skills are fetched again.
+// skills are fetched again; there the agent's wait is measured apart from the
+// load confirmation a hit under a new resolution sends in the background
+// (see changeRow.verdict).
 //
 // It is wall-clock and machine dependent, so it runs only with SKILLHUB_PERF=1;
 // `make remote-bench` (scripts/remote-bench.sh) is the usual entry point.
@@ -108,9 +112,17 @@ func TestRemoteBudgetBench(t *testing.T) {
 	}
 	changeRows := make([][]string, 0, len(changes))
 	for _, change := range changes {
-		changeRows = append(changeRows, []string{change.link, change.change, change.skill, change.answer, fmt.Sprint(change.requests), fmt.Sprint(change.bytes)})
+		var background []string
+		for _, exchange := range change.background {
+			background = append(background, fmt.Sprintf("%d (body %d B)", exchange.status, exchange.bodyBytes))
+		}
+		changeRows = append(changeRows, []string{change.link, change.change, change.skill, change.answer,
+			fmt.Sprintf("%d / %d", change.waitedRequests, change.waitedBytes), backgroundText(background),
+			fmt.Sprint(change.requests), fmt.Sprint(change.bytes)})
 	}
-	report.table([]string{"Link", "Hub change", "skill_get of", "Answer", "Requests", "Bytes"}, changeRows)
+	report.table([]string{"Link", "Hub change", "skill_get of", "Answer", "Waited req / B", "Background", "Requests", "Bytes"}, changeRows)
+	report.line("Waited: what the agent waited for. Background: the load confirmation a cache hit under a new resolution sends without waiting. Requests and bytes: everything on the link, both directions.")
+	report.line("")
 
 	report.line("Budgets")
 	var budgets [][]string
@@ -139,13 +151,8 @@ func TestRemoteBudgetBench(t *testing.T) {
 		}
 	}
 	for _, change := range changes {
-		name := fmt.Sprintf("%s, %s: skill_get %s", change.link, change.change, change.skill)
-		measured := fmt.Sprintf("%s, requests %d, bytes %d", change.answer, change.requests, change.bytes)
-		if change.wantFetch {
-			check(name, measured, "fetched, requests 1", change.answer == remoteCacheFetched && change.requests == 1)
-		} else {
-			check(name, measured, "hit, requests 0, bytes 0", change.answer == remoteCacheHit && change.requests == 0 && change.bytes == 0)
-		}
+		measured, limit, ok := change.verdict()
+		check(fmt.Sprintf("%s, %s: skill_get %s", change.link, change.change, change.skill), measured, limit, ok)
 	}
 	report.table([]string{"Result", "Budget", "Measured", "Limit"}, budgets)
 	if rtt != benchSlowLinkRoundTrips {
@@ -277,39 +284,193 @@ func measureRemote(t *testing.T, binary string, hub *hubProcess, link *benchLink
 	return measured
 }
 
-// changeRow is what one skill_get cost after a change on the hub.
+const (
+	// benchHitStall: a skill_get expected to be a cache hit that has not
+	// answered this long while the hub's answers are held is waiting for
+	// the hub (a hit takes milliseconds).
+	benchHitStall = 5 * time.Second
+	// benchConfirmGrace bounds the wait for the proxy's background load
+	// confirmation to appear on the link after a hit. The proxy starts it
+	// before it answers, so it appears at once; the bound only ends the wait
+	// when a hit sends none, which the budget allows.
+	benchConfirmGrace = 2 * time.Second
+	// benchSettle bounds the wait for requests already on the link to be
+	// answered.
+	benchSettle = 30 * time.Second
+)
+
+// changeRow is what one skill_get cost after a change on the hub, measured
+// from the call until the link was quiet again.
 type changeRow struct {
 	link, change, skill, answer string
-	requests, bytes             int64
+	// waitedRequests counts the requests whose answer reached the proxy
+	// before the call returned, and waitedBytes the bytes from the hub that
+	// reached it meanwhile: the cost the agent waited for. When a cache hit
+	// is expected the hub's answers are held during the call, so a hit that
+	// waits for the hub shows here instead of passing unnoticed.
+	waitedRequests int
+	waitedBytes    int64
+	// background holds the other requests: those the proxy sent without
+	// making the agent wait (the load confirmation of a cache hit).
+	background []benchExchange
+	// requests and bytes are everything on the link, both directions.
+	requests, bytes int64
 	// wantFetch is set for the skill whose content changed.
 	wantFetch bool
+}
+
+// isLoadConfirmation reports whether a background exchange is what a cache
+// hit may cost: a conditional bundle request the hub answered 304, with no
+// body.
+func (exchange benchExchange) isLoadConfirmation() bool {
+	return exchange.method == http.MethodGet && exchange.path == HTTPBundlePath && exchange.conditional &&
+		exchange.done && exchange.status == http.StatusNotModified && exchange.bodyBytes == 0
+}
+
+// verdict checks a row against its budget. A changed skill is fetched in one
+// request the agent waits for, with nothing in the background. Any other
+// skill is a cache hit that waits for nothing (0 requests, 0 bytes) and costs
+// at most one background load confirmation answered 304 with no body.
+func (row changeRow) verdict() (measured, limit string, ok bool) {
+	var background []string
+	confirmations := 0
+	for _, exchange := range row.background {
+		background = append(background, fmt.Sprintf("%s %s %d, body %d B", exchange.method, exchange.path, exchange.status, exchange.bodyBytes))
+		if exchange.isLoadConfirmation() {
+			confirmations++
+		}
+	}
+	measured = fmt.Sprintf("%s, waited: requests %d, bytes %d; background: %s", row.answer, row.waitedRequests, row.waitedBytes, backgroundText(background))
+	if row.wantFetch {
+		return measured, "fetched, waited: requests 1; background: none",
+			row.answer == remoteCacheFetched && row.waitedRequests == 1 && len(row.background) == 0
+	}
+	return measured, "hit, waited: requests 0, bytes 0; background: at most 1 conditional request answered 304, no body",
+		row.answer == remoteCacheHit && row.waitedRequests == 0 && row.waitedBytes == 0 &&
+			len(row.background) <= 1 && confirmations == len(row.background)
+}
+
+func backgroundText(exchanges []string) string {
+	if len(exchanges) == 0 {
+		return "none"
+	}
+	return strings.Join(exchanges, "; ")
+}
+
+// isEventStream reports whether an exchange is the MCP session's event
+// stream, which stays open for the whole session.
+func isEventStream(exchange *benchExchange) bool {
+	return exchange.method == http.MethodGet && exchange.path == "/mcp"
+}
+
+// linkQuiet reports whether every request but an event stream was answered in
+// full or lost with its connection.
+func linkQuiet(exchanges []*benchExchange) bool {
+	for _, exchange := range exchanges {
+		if !exchange.done && !exchange.ended && !isEventStream(exchange) {
+			return false
+		}
+	}
+	return true
+}
+
+// settleLink waits until every request on the link has been answered, so a
+// background request of the proxy never overlaps a change on the hub or the
+// next measurement.
+func settleLink(t *testing.T, link *benchLink, linkName string) {
+	t.Helper()
+	if !link.waitFor(0, benchSettle, linkQuiet) {
+		t.Fatalf("%s: requests still unanswered after %s: %+v", linkName, benchSettle, link.exchangesFrom(0))
+	}
+}
+
+// measureChangeGet runs one skill_get after a fresh resolution and measures
+// what the agent waited for apart from what the proxy sent in the
+// background.
+func measureChangeGet(t *testing.T, session *mcp.ClientSession, link *benchLink, linkName, id, task, requestID string, wantHit bool) (changeRow, proxyGetResult) {
+	t.Helper()
+	resolveFor(t, session, task, requestID)
+	settleLink(t, link, linkName)
+	start := link.exchangeCount()
+	requests, bytes := link.counts()
+	delivered := link.delivered.Load()
+	type callResult struct {
+		result *mcp.CallToolResult
+		err    error
+	}
+	called := make(chan callResult, 1)
+	if wantHit {
+		link.hold()
+	}
+	go func() {
+		result, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "skill_get", Arguments: map[string]any{"skill_id": id}})
+		called <- callResult{result, err}
+	}()
+	var call callResult
+	select {
+	case call = <-called:
+	case <-time.After(benchHitStall):
+		// The hit waits for the hub: let the answers through, so the
+		// requests it waited for are counted below.
+		link.release()
+		call = <-called
+	}
+	row := changeRow{skill: id, waitedBytes: link.delivered.Load() - delivered}
+	waited := map[int]bool{}
+	for index, exchange := range link.exchangesFrom(start) {
+		if exchange.answered {
+			waited[index] = true
+		}
+	}
+	row.waitedRequests = len(waited)
+	link.release()
+	if call.err != nil {
+		t.Fatalf("%s: skill_get %s: %v", linkName, id, call.err)
+	}
+	encoded, err := json.Marshal(call.result.StructuredContent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := decodeSkillGet(t, encoded)
+	if call.result.IsError || got.Remote == nil {
+		t.Fatalf("%s: skill_get %s = %s", linkName, id, encoded)
+	}
+	if wantHit {
+		link.waitFor(start, benchConfirmGrace, func(exchanges []*benchExchange) bool {
+			return len(exchanges) > 0 && linkQuiet(exchanges)
+		})
+	}
+	settleLink(t, link, linkName)
+	for index, exchange := range link.exchangesFrom(start) {
+		if !waited[index] {
+			row.background = append(row.background, exchange)
+		}
+	}
+	afterRequests, afterBytes := link.counts()
+	row.answer, row.requests, row.bytes = got.Remote.Cache, afterRequests-requests, afterBytes-bytes
+	return row, got
 }
 
 // checkHubChanges fetches every skill through one proxy session, then makes a
 // metadata-only change to every skill on the hub, and then a content change
 // to the last skill, and records what each skill_get costs after a fresh
-// resolution.
+// resolution. The link is quiet before each change on the hub and before each
+// measurement, so no background request of the proxy overlaps either.
 func checkHubChanges(t *testing.T, binary, root string, hub *hubProcess, link *benchLink, linkName string, skillIDs []string, tasks map[string]string, round int) []changeRow {
 	t.Helper()
 	label := linkLabel(round)
 	proxied := startProxyProcess(t, proxyCommand(binary, link.url, hub.tokenFile, append(remoteBenchEnv(), "XDG_STATE_HOME="+t.TempDir())))
 	defer proxied.close(t)
-	get := func(id, requestID string) (string, int64, int64) {
-		resolveFor(t, proxied.session, tasks[id], requestID)
-		requests, bytes := link.counts()
-		result, encoded := toolCall(t, proxied.session, "skill_get", map[string]any{"skill_id": id})
-		afterRequests, afterBytes := link.counts()
-		got := decodeSkillGet(t, encoded)
-		if result.IsError || got.Remote == nil {
-			t.Fatalf("%s: skill_get %s = %s", linkName, id, encoded)
-		}
+	get := func(id, requestID, change string, wantFetch bool) changeRow {
+		row, got := measureChangeGet(t, proxied.session, link, linkName, id, tasks[id], requestID, change != "" && !wantFetch)
 		if digest, _ := folderDigest(t, got.Local.Path); digest != hubDigest(t, root, id) {
 			t.Fatalf("%s: the copy of %s has digest %s, the hub pins %s", linkName, id, digest, hubDigest(t, root, id))
 		}
-		return got.Remote.Cache, afterRequests - requests, afterBytes - bytes
+		row.link, row.change, row.wantFetch = label, change, wantFetch
+		return row
 	}
 	for _, id := range skillIDs {
-		get(id, fmt.Sprintf("change-%d-first-%s", round, id))
+		get(id, fmt.Sprintf("change-%d-first-%s", round, id), "", true)
 	}
 	var rows []changeRow
 	before := map[string]string{}
@@ -322,8 +483,7 @@ func checkHubChanges(t *testing.T, binary, root string, hub *hubProcess, link *b
 		if hubDigest(t, root, id) != before[id] {
 			t.Fatalf("a routing change altered the digest of %s", id)
 		}
-		answer, requests, bytes := get(id, fmt.Sprintf("change-%d-meta-%s", round, id))
-		rows = append(rows, changeRow{link: label, change: "metadata only, every skill", skill: id, answer: answer, requests: requests, bytes: bytes})
+		rows = append(rows, get(id, fmt.Sprintf("change-%d-meta-%s", round, id), "metadata only, every skill", false))
 	}
 	changed := skillIDs[len(skillIDs)-1]
 	editBenchSkillContent(t, binary, root, changed, fmt.Sprintf("Changed on the hub in round %d.", round))
@@ -331,8 +491,7 @@ func checkHubChanges(t *testing.T, binary, root string, hub *hubProcess, link *b
 		t.Fatalf("a content change kept the digest of %s", changed)
 	}
 	for _, id := range skillIDs {
-		answer, requests, bytes := get(id, fmt.Sprintf("change-%d-content-%s", round, id))
-		rows = append(rows, changeRow{link: label, change: "content of " + changed, skill: id, answer: answer, requests: requests, bytes: bytes, wantFetch: id == changed})
+		rows = append(rows, get(id, fmt.Sprintf("change-%d-content-%s", round, id), "content of "+changed, id == changed))
 	}
 	return rows
 }

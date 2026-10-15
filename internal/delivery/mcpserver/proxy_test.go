@@ -1,6 +1,7 @@
 package mcpserver
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -591,10 +592,34 @@ func startDelayProxy(t *testing.T, target string, rtt time.Duration) string {
 // more round trip, the cost of the TCP handshake. It does not limit
 // bandwidth. A zero round trip relays at once, which is how a request count
 // and a byte count are taken on plain loopback.
+//
+// It also records every HTTP exchange (see benchExchange) and can hold back
+// everything the hub sends (hold and release), which tells a call that waits
+// for the hub apart from a request the client sends in the background.
 type benchLink struct {
 	url      string
 	bytes    atomic.Int64
 	requests atomic.Int64
+	// delivered counts the bytes from the hub that reached the client.
+	delivered atomic.Int64
+
+	mu        sync.Mutex
+	changed   *sync.Cond // broadcast when held changes or an exchange progresses
+	held      bool
+	exchanges []*benchExchange
+}
+
+// benchExchange is one HTTP request seen on a benchLink and its answer as
+// delivered to the client. Its fields change under the link's mu.
+type benchExchange struct {
+	method      string
+	path        string
+	conditional bool // the request named cached versions in If-None-Match
+	answered    bool // the answer's header reached the client
+	status      int
+	bodyBytes   int64
+	done        bool // the whole answer reached the client
+	ended       bool // the connection closed before the whole answer arrived
 }
 
 // httpRequestLine ends the request line of every HTTP/1.1 request the proxy
@@ -612,6 +637,7 @@ func startLink(t *testing.T, target string, rtt time.Duration) *benchLink {
 		t.Fatal(err)
 	}
 	link := &benchLink{url: "http://" + listener.Addr().String()}
+	link.changed = sync.NewCond(&link.mu)
 	var connections sync.WaitGroup
 	var mu sync.Mutex
 	var open []net.Conn
@@ -638,26 +664,178 @@ func startLink(t *testing.T, target string, rtt time.Duration) *benchLink {
 			mu.Lock()
 			open = append(open, client, server)
 			mu.Unlock()
-			connections.Add(2)
+			connections.Add(4)
+			requestStream, requestFeed := io.Pipe()
+			answerStream, answerFeed := io.Pipe()
+			pending := make(chan *benchExchange, 1024)
 			var tail []byte
 			upstream := func(data []byte) {
 				link.bytes.Add(int64(len(data)))
 				joined := append(tail, data...)
 				link.requests.Add(int64(bytes.Count(joined, httpRequestLine)))
 				tail = append([]byte(nil), joined[max(0, len(joined)-len(httpRequestLine)+1):]...)
+				_, _ = requestFeed.Write(data)
 			}
 			downstream := func(data []byte) { link.bytes.Add(int64(len(data))) }
-			go func() { defer connections.Done(); delayedCopy(server, client, rtt/2, rtt, upstream) }()
-			go func() { defer connections.Done(); delayedCopy(client, server, rtt/2, 0, downstream) }()
+			delivered := func(data []byte) {
+				link.delivered.Add(int64(len(data)))
+				_, _ = answerFeed.Write(data)
+			}
+			go func() {
+				defer connections.Done()
+				delayedCopy(server, client, rtt/2, rtt, upstream, nil, nil)
+				_ = requestFeed.Close()
+			}()
+			go func() {
+				defer connections.Done()
+				delayedCopy(client, server, rtt/2, 0, downstream, link.waitReleased, delivered)
+				_ = answerFeed.Close()
+			}()
+			go func() { defer connections.Done(); link.readRequests(requestStream, pending) }()
+			go func() { defer connections.Done(); link.readAnswers(answerStream, pending) }()
 		}
 	}()
+	// Registered last, so it runs first: held answers never block the
+	// cleanup above.
+	t.Cleanup(link.release)
 	return link
 }
 
+// readRequests records each request of one connection as an exchange and
+// passes it to readAnswers, which pairs it with its answer.
+func (link *benchLink) readRequests(stream *io.PipeReader, pending chan<- *benchExchange) {
+	defer close(pending)
+	defer func() { _ = stream.Close() }()
+	reader := bufio.NewReader(stream)
+	for {
+		request, err := http.ReadRequest(reader)
+		if err != nil {
+			return
+		}
+		exchange := &benchExchange{method: request.Method, path: request.URL.Path, conditional: request.Header.Get("If-None-Match") != ""}
+		link.mu.Lock()
+		link.exchanges = append(link.exchanges, exchange)
+		link.changed.Broadcast()
+		link.mu.Unlock()
+		pending <- exchange
+		if _, err := io.Copy(io.Discard, request.Body); err != nil {
+			return
+		}
+	}
+}
+
+// readAnswers follows the answers of one connection as the client receives
+// them; HTTP/1.1 answers come in request order.
+func (link *benchLink) readAnswers(stream *io.PipeReader, pending <-chan *benchExchange) {
+	var current *benchExchange
+	defer func() {
+		_ = stream.Close()
+		// Whatever is left will never be answered on this connection.
+		unanswered := []*benchExchange{}
+		if current != nil {
+			unanswered = append(unanswered, current)
+		}
+		for exchange := range pending {
+			unanswered = append(unanswered, exchange)
+		}
+		link.mu.Lock()
+		for _, exchange := range unanswered {
+			exchange.ended = !exchange.done
+		}
+		link.changed.Broadcast()
+		link.mu.Unlock()
+	}()
+	reader := bufio.NewReader(stream)
+	for exchange := range pending {
+		current = exchange
+		response, err := http.ReadResponse(reader, &http.Request{Method: exchange.method})
+		if err != nil {
+			return
+		}
+		link.mu.Lock()
+		exchange.answered, exchange.status = true, response.StatusCode
+		link.changed.Broadcast()
+		link.mu.Unlock()
+		// An event stream ends only with its session, so its exchange stays
+		// unfinished until then.
+		n, err := io.Copy(io.Discard, response.Body)
+		link.mu.Lock()
+		exchange.bodyBytes, exchange.done = n, err == nil
+		link.changed.Broadcast()
+		link.mu.Unlock()
+		if err != nil {
+			return
+		}
+	}
+}
+
+// hold keeps everything the hub sends from reaching the client until
+// release; the client's requests still reach the hub.
+func (link *benchLink) hold() {
+	link.mu.Lock()
+	defer link.mu.Unlock()
+	link.held = true
+}
+
+func (link *benchLink) release() {
+	link.mu.Lock()
+	defer link.mu.Unlock()
+	link.held = false
+	link.changed.Broadcast()
+}
+
+func (link *benchLink) waitReleased() {
+	link.mu.Lock()
+	defer link.mu.Unlock()
+	for link.held {
+		link.changed.Wait()
+	}
+}
+
+// exchangeCount is the number of requests recorded so far.
+func (link *benchLink) exchangeCount() int {
+	link.mu.Lock()
+	defer link.mu.Unlock()
+	return len(link.exchanges)
+}
+
+// exchangesFrom returns copies of the exchanges recorded from index on.
+func (link *benchLink) exchangesFrom(index int) []benchExchange {
+	link.mu.Lock()
+	defer link.mu.Unlock()
+	copies := make([]benchExchange, 0, len(link.exchanges)-index)
+	for _, exchange := range link.exchanges[index:] {
+		copies = append(copies, *exchange)
+	}
+	return copies
+}
+
+// waitFor waits until ready, called under mu with the exchanges recorded from
+// index on, reports true, or until timeout has passed; it reports which.
+func (link *benchLink) waitFor(index int, timeout time.Duration, ready func([]*benchExchange) bool) bool {
+	deadline := time.Now().Add(timeout)
+	timer := time.AfterFunc(timeout, func() {
+		link.mu.Lock()
+		link.changed.Broadcast()
+		link.mu.Unlock()
+	})
+	defer timer.Stop()
+	link.mu.Lock()
+	defer link.mu.Unlock()
+	for !ready(link.exchanges[index:]) {
+		if !time.Now().Before(deadline) {
+			return false
+		}
+		link.changed.Wait()
+	}
+	return true
+}
+
 // delayedCopy copies source to destination, delivering each chunk delay after
-// it was read (the first one firstExtra later still) and passing every chunk
-// to observe as it is read.
-func delayedCopy(destination, source net.Conn, delay, firstExtra time.Duration, observe func([]byte)) {
+// it was read (the first one firstExtra later still), passing every chunk to
+// observe as it is read and to delivered once written. gate, when set, runs
+// before each write and may block it.
+func delayedCopy(destination, source net.Conn, delay, firstExtra time.Duration, observe func([]byte), gate func(), delivered func([]byte)) {
 	type chunk struct {
 		data []byte
 		at   time.Time
@@ -683,8 +861,14 @@ func delayedCopy(destination, source net.Conn, delay, firstExtra time.Duration, 
 	}()
 	for item := range chunks {
 		time.Sleep(time.Until(item.at))
+		if gate != nil {
+			gate()
+		}
 		if _, err := destination.Write(item.data); err != nil {
 			break
+		}
+		if delivered != nil {
+			delivered(item.data)
 		}
 	}
 	_ = destination.Close()

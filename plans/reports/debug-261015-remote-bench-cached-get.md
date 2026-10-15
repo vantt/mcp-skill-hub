@@ -111,9 +111,75 @@ quyết định của owner, nên tôi chỉ đề xuất:
 - `TestRemoteBudgetBench` ở fc2cdb6, 42bcab7, 78af2c2 và c601b2f: PASS. Ở bafc3c5 và các commit sau: FAIL.
 - Khi tạm tắt `confirmLoad`: PASS. Thay đổi tạm đã được hoàn tác, worktree không còn thay đổi code.
 
+## Đã triển khai (người dùng chọn đề xuất 1 đến 3)
+
+Hành vi sản phẩm không đổi: `confirmLoad` vẫn giữ nguyên. Mọi thay đổi nằm trong code test và tài liệu.
+
+- **Relay của bench** (`internal/delivery/mcpserver/proxy_test.go`, `benchLink`). Relay giờ đọc từng
+  exchange HTTP trên mỗi kết nối, gồm method, path, có `If-None-Match` hay không, status, số byte body,
+  và thời điểm câu trả lời tới proxy. Relay cũng có `hold` và `release` để giữ mọi thứ hub gửi về cho
+  tới khi được thả.
+- **Các hàng "Changes on the hub"** (`measureChangeGet` và `changeRow.verdict` trong
+  `remote_budget_bench_test.go`) đo hai phần riêng.
+  - *Waited* là các request có câu trả lời tới proxy trước khi `skill_get` trả về. Khi chờ một hit, bench
+    giữ câu trả lời của hub trong suốt lần gọi. Một hit cần hub sẽ không trả về được, và sau 5 s bench
+    thả ra rồi tính request đó là waited.
+  - *Background* là các request còn lại.
+  - Budget cho hit: waited phải là 0 request và 0 byte. Background được tối đa 1 request, và request đó
+    phải là `GET /mcp/bundle` có điều kiện, được trả 304 với body 0 byte.
+  - Budget cho skill có nội dung đổi: 1 request waited và không có gì ở background.
+  - Các hàng cached repeat vẫn đòi tổng cộng 0 request, không nới.
+- **Chờ request ngầm.** Trước mỗi thay đổi trên hub và trước mỗi lần đo, bench chờ tới khi relay đã
+  giao hết mọi câu trả lời. Proxy là một process riêng và không báo lúc request ngầm xong, nên không có
+  hook nào chỉ thêm trong code test được. Vì vậy bench đọc trạng thái này từ relay. Sau một hit, bench
+  chờ tới khi relay thấy request của proxy và đã giao câu trả lời. Giới hạn 2 s chỉ có tác dụng khi hit
+  không gửi request ngầm nào, trường hợp mà budget cho phép. Race trên link chậm vì thế đã hết.
+- **Tài liệu.** `docs/design/remote-hub.md` mô tả request ngầm, cách đo waited và background, và budget
+  mới.
+- **Test** chạy trong `go test` thường (`remote_budget_check_test.go`).
+  - `TestHubChangeVerdict` thất bại khi request ngầm chuyển sang đường agent chờ, khi nó có body hay là
+    200, khi có 2 request, hoặc khi request không được trả lời.
+  - `TestBenchLinkRecordsHeldExchanges` kiểm tra rằng câu trả lời bị giữ không tới client, và status
+    cùng kích thước body được ghi đúng.
+
+## `skillhub init` ghi vào worktree khi chạy dưới `git bisect run`
+
+Nguyên nhân là `git bisect run` export `GIT_DIR=/home/vantt/projects/mcp-skill-hub/.git/worktrees/agent-af0558e1f4795fefc`
+cho script. Tôi đã kiểm chứng bằng `git bisect run env`. Bench truyền nguyên môi trường đó
+(`os.Environ()`) cho `skillhub init` chạy trong thư mục tạm. Git ưu tiên `GIT_DIR` hơn thư mục làm
+việc, nên init stage file vào index của worktree. Git hook cũng export `GIT_DIR`.
+
+Cách sửa là `TestMain` của `mcpserver` gỡ `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`,
+`GIT_COMMON_DIR`, `GIT_PREFIX`, `GIT_OBJECT_DIRECTORY`, `GIT_ALTERNATE_OBJECT_DIRECTORIES` và
+`GIT_NAMESPACE`. `TestTestsRunOutsideTheCallersRepository` bảo vệ điều này. Khi chạy với
+`GIT_DIR=/nonexistent/git`, test này thất bại nếu không có phần gỡ, và đạt khi có. Các package khác
+có `TestMain` riêng chưa được sửa.
+
+## Kết quả kiểm thử sau thay đổi
+
+- `make remote-bench` (fixture, loopback và link 100 ms) đạt cả 26/26 budget. Mỗi hit trong phần
+  change có waited `0 / 0` và một background `304 (body 0 B)`, tổng 549 đến 554 B trên link. Hàng
+  `herdr-cook-plan` có nội dung đổi là `fetched`, waited 1 request, không có background, trên cả hai link.
+- Tạm cho `skill_get` gửi request xác nhận ngay trên đường agent chờ (đã hoàn tác): các hàng change
+  bị FAIL với `hit, waited: requests 1, bytes 165; background: none`, và các hàng cached repeat cũng FAIL.
+  Vậy budget phát hiện được khi request ngầm chuyển sang đường agent chờ.
+- `go test ./internal/delivery/mcpserver/` đạt, `make check` đạt (golangci-lint báo 0 issue).
+  Ba test mới cũng đạt khi chạy với `-race`.
+- Sau mọi lần chạy, `git status` chỉ còn các thay đổi của tôi. `skillhub init` không ghi vào worktree.
+
+Có một lỗi chập chờn có từ trước, không liên quan tới thay đổi này. Khoảng 4 trên 55 lần chạy
+`TestRemoteBudgetBench` thất bại với `hub_unreachable` trong phase đo loopback. Exchange log của relay
+mới cho thấy nguyên nhân: hub trả `429 too many requests; slow down` cho `POST /mcp` ở session thứ 16
+của loopback. Câu trả lời đó đến từ bộ giới hạn toàn cục của listener (`httpRequestsPerSecond = 100`,
+`httpRequestBurst = 200` trong `internal/delivery/mcpserver/http.go`, có từ d3d92ff). Phase loopback gửi
+khoảng 18 request cho mỗi session trên 20 session, liên tiếp nhau. Khi máy chạy nhanh, tốc độ vượt
+100 request/giây và hết burst. Relay không thể tự sinh ra 429. Proxy coi 429 là `hub_unreachable`.
+Tôi không sửa phần này vì nằm ngoài phạm vi.
+
 ## Câu hỏi chưa giải quyết
 
-- Owner có chấp nhận budget mới cho các hàng change (đề xuất 1 và 2), hay muốn đổi thiết kế đếm load
-  (đề xuất 4)?
 - Khi request xác nhận ngầm nhận 404, có nên xóa hint để đóng khe hở 5 phút không?
-- Vì sao `skillhub init` của bench ghi vào worktree khi chạy dưới `git bisect run`?
+- Với 429 nói trên, nên giãn nhịp phase loopback của bench, hay để proxy coi 429 là "hub bận, thử lại"
+  thay vì `hub_unreachable`?
+- Có nên gỡ biến `GIT_*` trong `TestMain` của các package khác có test tạo repository Git
+  (`internal/app`, `internal/delivery/cli`, `internal/delivery/web`, `internal/hostintegration`) không?

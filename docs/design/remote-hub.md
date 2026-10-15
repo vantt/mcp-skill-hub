@@ -276,14 +276,35 @@ starts with an empty cache. The benchmark fails when a budget is missed.
 Changes on the hub, on both links: after a routing-only change to every skill, each `skill_get` after
 a fresh resolution was a cache hit with 0 requests and 0 bytes; after a content change to
 `herdr-cook-plan`, only that skill was fetched again (1 request, about 62 KB) and `test-audit` stayed a
-hit with 0 requests.
+hit with 0 requests. These numbers predate counting a load per resolution (see
+[Telemetry](04-telemetry-reproducibility-evaluation.md)). The hub now counts a load once for each
+version, hub session and resolution. So a cache hit under a resolution the hub has not counted yet
+still answers from the cache at once. The proxy then sends one conditional `GET /mcp/bundle` in the
+background, and the hub answers it 304 with no body. On the fixture (2026-10-15) each such hit costs
+the agent 0 requests and 0 bytes. The background request is 1 request of about 550 bytes in both
+directions. A cached repeat under the same resolution still costs no request at all.
+
+The benchmark measures the hub-change rows in two parts, by following each HTTP exchange through the
+relay:
+
+- **Waited.** The requests whose answer reached the proxy before `skill_get` returned. While a hit is
+  expected, the relay holds back everything the hub sends until the call returns. A hit that needs the
+  hub cannot return then, so it shows up as a waited request and is not mistaken for background
+  traffic.
+- **Background.** Every other request.
+
+Before each change on the hub and before each measurement, the bench waits until the relay has
+delivered every answer. So a background request never races a change on the hub. The proxy is a
+separate process and gives no signal when its background request is done, so the bench reads the
+link instead. It waits until the relay has seen the proxy's request and delivered its answer. The
+wait gives up after 2 s only when a hit sends no background request, which the budget allows.
 
 | Budget | Measured | Verdict |
 |---|---|---|
 | Remote `skill_resolve` p95 at most 50 ms above local stdio (LAN) | first of a session 20.9 ms vs 13.5 ms; warm 13.1 ms vs 10.9 ms | Met |
 | First fetch of `herdr-cook-plan`: one exchange, 500 ms on a LAN, 2 s at 100 ms RTT | 1 request on every run; p95 78.2 ms on loopback, 164.5 ms at 100 ms RTT | Met |
 | Later use of the same version: at most 20 ms, zero bytes of skill content | p95 at most 9.8 ms; 0 requests and 0 bytes on every repeat | Met |
-| Changed skill refetches only itself; metadata-only change refetches nothing | as described above | Met |
+| Changed skill refetches only itself; metadata-only change refetches nothing | as described above. Checked as: a changed skill is fetched in 1 request the agent waits for, with nothing in the background. Every other skill is a hit that waits for 0 requests and 0 bytes, and costs at most 1 background conditional request answered 304 with no body | Met |
 
 A fixture run (`make remote-bench` without `REMOTE_HUB`: skills of the same file count and sizes but
 more compressible text, so 7.3 KB on the wire for `herdr-cook-plan`) meets every budget as well.
