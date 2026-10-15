@@ -37,8 +37,16 @@ func newRemoteProject(t *testing.T) remoteProject {
 	if code, stdout, stderr := runConnectCLI(t, project, "--hub", hubURL, "--token-file", tokenFile, "--host", "claude"); code != 0 {
 		t.Fatalf("connect exit = %d\n%s%s", code, stdout, stderr)
 	}
-	machine, _ := os.Hostname()
-	return remoteProject{hub: hub, hubURL: hubURL, dir: project, tokenKey: token, machine: machine}
+	hostname, _ := os.Hostname()
+	return remoteProject{hub: hub, hubURL: hubURL, dir: project, tokenKey: token, machine: submittedFrom(hostname)}
+}
+
+// submittedFrom is the label a hub shows for a submission sent from a machine
+// with this host name: the hub keeps at most 64 characters of a client label,
+// and some hosts (macOS CI runners among them) have longer names.
+func submittedFrom(hostname string) string {
+	label := []rune(strings.TrimSpace(hostname))
+	return string(label[:min(len(label), 64)])
 }
 
 func (project remoteProject) bundleStatus(t *testing.T, id string) int {

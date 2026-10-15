@@ -92,6 +92,22 @@ func TestSubmissionsOrderByArrivalAndReplaceSameSkillFromSameMachine(t *testing.
 	}
 }
 
+func TestSubmissionKeepsOneShortLineOfTheClientLabel(t *testing.T) {
+	t.Parallel()
+	hub := newGitHub(t)
+	// A macOS CI runner's host name: longer than the 64 characters a hub keeps.
+	long := "sjc22-bm211-fd82d2e3-5478-46f3-b781-843a1dd8779e-C66A5E8302EF.local"
+	if got := submitTree(t, hub, "alpha", "", long, submittedTree("alpha", "x", nil)).ClientLabel; got != long[:64] {
+		t.Fatalf("label = %q, want the first 64 characters %q", got, long[:64])
+	}
+	if got := submitTree(t, hub, "beta", "", " machine\tb\n ", submittedTree("beta", "x", nil)).ClientLabel; got != "machineb" {
+		t.Fatalf("label = %q, want control characters dropped", got)
+	}
+	if got := submitTree(t, hub, "gamma", "", "  ", submittedTree("gamma", "x", nil)).ClientLabel; got != "unknown machine" {
+		t.Fatalf("label = %q, want unknown machine", got)
+	}
+}
+
 func TestSubmissionQueueCaps(t *testing.T) {
 	t.Parallel()
 	hub := newGitHub(t)
