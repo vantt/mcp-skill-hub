@@ -208,7 +208,8 @@ func (service RemoteCommitService) Send(ctx context.Context, hub RemoteHub, prev
 	}
 	label := service.Label
 	if label == "" {
-		label, _ = os.Hostname()
+		hostname, _ := os.Hostname()
+		label = machineLabel(hostname)
 	}
 	archive, err := BuildSubmissionBundle(preview.SkillID, preview.tree, skillruntime.BundleSubmission{BaseVersion: preview.BaseVersion, ClientLabel: label, Excluded: excluded})
 	if err != nil {
@@ -406,4 +407,21 @@ func probeFailureReason(err error) string {
 		return "the request was cancelled"
 	}
 	return networkReason(err)
+}
+
+// localNetworkSuffixes are the host name endings a home or office network adds
+// (macOS adds .local). They say nothing about which machine sent a skill, so
+// the label a person reads leaves them out.
+var localNetworkSuffixes = []string{".localdomain", ".local", ".lan", ".home"}
+
+// machineLabel turns a host name into the label a hub shows for this machine.
+func machineLabel(hostname string) string {
+	label := strings.TrimSpace(hostname)
+	for _, suffix := range localNetworkSuffixes {
+		cut := len(label) - len(suffix)
+		if cut > 0 && strings.EqualFold(label[cut:], suffix) {
+			return label[:cut]
+		}
+	}
+	return label
 }

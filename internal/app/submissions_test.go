@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/vantt/skillhub-mcp/internal/skillruntime"
 	"github.com/vantt/skillhub-mcp/internal/workspace"
@@ -97,14 +98,46 @@ func TestSubmissionKeepsOneShortLineOfTheClientLabel(t *testing.T) {
 	hub := newGitHub(t)
 	// A macOS CI runner's host name: longer than the 64 characters a hub keeps.
 	long := "sjc22-bm211-fd82d2e3-5478-46f3-b781-843a1dd8779e-C66A5E8302EF.local"
-	if got := submitTree(t, hub, "alpha", "", long, submittedTree("alpha", "x", nil)).ClientLabel; got != long[:64] {
-		t.Fatalf("label = %q, want the first 64 characters %q", got, long[:64])
+	if got, want := submitTree(t, hub, "alpha", "", long, submittedTree("alpha", "x", nil)).ClientLabel, "sjc22-bm211-fd82d2e3-5478-46f3-b781-843a1dd8779e-C66A5E8302EF"; got != want {
+		t.Fatalf("label = %q, want the whole leading part %q", got, want)
 	}
 	if got := submitTree(t, hub, "beta", "", " machine\tb\n ", submittedTree("beta", "x", nil)).ClientLabel; got != "machineb" {
 		t.Fatalf("label = %q, want control characters dropped", got)
 	}
 	if got := submitTree(t, hub, "gamma", "", "  ", submittedTree("gamma", "x", nil)).ClientLabel; got != "unknown machine" {
 		t.Fatalf("label = %q, want unknown machine", got)
+	}
+}
+
+func TestCleanClientLabelNeverCutsInsideADotSeparatedPart(t *testing.T) {
+	t.Parallel()
+	ciHost := "sjc22-bm211-fd82d2e3-5478-46f3-b781-843a1dd8779e-C66A5E8302EF.local"
+	for _, tc := range []struct{ name, in, want string }{
+		{"short name", "machine-a", "machine-a"},
+		{"short name with dots", "build.example.com", "build.example.com"},
+		{"exactly the cap", strings.Repeat("a", 64), strings.Repeat("a", 64)},
+		{"ci host with suffix", ciHost, "sjc22-bm211-fd82d2e3-5478-46f3-b781-843a1dd8779e-C66A5E8302EF"},
+		{"ci host without suffix", strings.TrimSuffix(ciHost, ".local"), strings.TrimSuffix(ciHost, ".local")},
+		{"several whole parts", strings.Repeat("a", 30) + "." + strings.Repeat("b", 30) + "." + strings.Repeat("c", 30), strings.Repeat("a", 30) + "." + strings.Repeat("b", 30)},
+		{"first part too long", strings.Repeat("x", 70) + ".local", strings.Repeat("x", 63) + "…"},
+		{"no dots too long", strings.Repeat("x", 70), strings.Repeat("x", 63) + "…"},
+		{"empty first part", "." + strings.Repeat("x", 70), strings.Repeat("x", 63) + "…"},
+		{"leading dot before whole parts", ".host." + strings.Repeat("x", 70), "host"},
+		{"only dots", strings.Repeat(".", 70), "unknown machine"},
+		{"multibyte runes", strings.Repeat("é", 40) + "." + strings.Repeat("ü", 40), strings.Repeat("é", 40)},
+		{"multibyte first part too long", strings.Repeat("日", 70), strings.Repeat("日", 63) + "…"},
+		{"control characters dropped first", " machine\tb\n ", "machineb"},
+		{"empty", "  ", "unknown machine"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := cleanClientLabel(tc.in)
+			if got != tc.want {
+				t.Fatalf("cleanClientLabel(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+			if n := utf8.RuneCountInString(got); n > maxClientLabelRunes {
+				t.Fatalf("cleanClientLabel(%q) has %d runes, over the cap", tc.in, n)
+			}
+		})
 	}
 }
 

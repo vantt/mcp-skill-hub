@@ -41,18 +41,45 @@ func newRemoteProject(t *testing.T) remoteProject {
 	return remoteProject{hub: hub, hubURL: hubURL, dir: project, tokenKey: token, machine: submittedFrom(hostname)}
 }
 
-// submittedFrom is the label a hub shows for a submission sent from a machine
-// with this host name: the hub keeps at most 64 characters of a client label,
-// and some hosts (macOS CI runners among them) have longer names.
 // oneLine joins wrapped terminal text, so a long machine label that the text
 // output wraps onto the next line still matches as one phrase.
 func oneLine(text string) string {
 	return strings.Join(strings.Fields(text), " ")
 }
 
+// submittedFrom is the label a hub shows for a submission sent from a machine
+// with this host name. The client drops a local network suffix (macOS adds
+// .local); the hub keeps at most 64 characters, as whole leading dot-separated
+// parts, and cuts a first part that alone is longer with an ellipsis.
 func submittedFrom(hostname string) string {
-	label := []rune(strings.TrimSpace(hostname))
-	return string(label[:min(len(label), 64)])
+	label := strings.TrimSpace(hostname)
+	for _, suffix := range []string{".localdomain", ".local", ".lan", ".home"} {
+		if cut := len(label) - len(suffix); cut > 0 && strings.EqualFold(label[cut:], suffix) {
+			label = label[:cut]
+			break
+		}
+	}
+	if label == "" {
+		return "unknown machine"
+	}
+	if len([]rune(label)) <= 64 {
+		return label
+	}
+	parts := strings.Split(strings.TrimLeft(label, "."), ".")
+	if first := []rune(parts[0]); len(first) > 64 {
+		return string(first[:63]) + "…"
+	}
+	kept := parts[0]
+	for _, part := range parts[1:] {
+		if len([]rune(kept))+1+len([]rune(part)) > 64 {
+			break
+		}
+		kept += "." + part
+	}
+	if kept == "" {
+		return "unknown machine"
+	}
+	return kept
 }
 
 func (project remoteProject) bundleStatus(t *testing.T, id string) int {

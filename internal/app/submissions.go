@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/vantt/skillhub-mcp/internal/skillruntime"
 	sourcepkg "github.com/vantt/skillhub-mcp/internal/source"
@@ -289,22 +290,39 @@ func printablePath(path string) bool {
 	return true
 }
 
-// cleanClientLabel keeps a machine label to one short printable line.
+// cleanClientLabel keeps a machine label to one short printable line. A label
+// over the cap keeps its whole leading dot-separated parts, so a long host name
+// never shows a cut-off part; a first part that alone is over the cap is cut
+// and ends with an ellipsis.
 func cleanClientLabel(label string) string {
-	var cleaned []rune
-	for _, r := range strings.TrimSpace(label) {
+	cleaned := strings.Map(func(r rune) rune {
 		if unicode.IsControl(r) || !unicode.IsPrint(r) {
-			continue
+			return -1
 		}
-		cleaned = append(cleaned, r)
-		if len(cleaned) == maxClientLabelRunes {
-			break
-		}
-	}
-	if len(cleaned) == 0 {
+		return r
+	}, strings.TrimSpace(label))
+	if cleaned == "" {
 		return "unknown machine"
 	}
-	return string(cleaned)
+	if utf8.RuneCountInString(cleaned) <= maxClientLabelRunes {
+		return cleaned
+	}
+	parts := strings.Split(strings.TrimLeft(cleaned, "."), ".")
+	kept, keptRunes := parts[0], utf8.RuneCountInString(parts[0])
+	if keptRunes <= maxClientLabelRunes {
+		for _, part := range parts[1:] {
+			partRunes := utf8.RuneCountInString(part)
+			if keptRunes+1+partRunes > maxClientLabelRunes {
+				break
+			}
+			kept, keptRunes = kept+"."+part, keptRunes+1+partRunes
+		}
+		if kept == "" {
+			return "unknown machine"
+		}
+		return kept
+	}
+	return string([]rune(kept)[:maxClientLabelRunes-1]) + "…"
 }
 
 func cleanExcluded(excluded []skillruntime.BundleExcluded) []ExcludedFile {
