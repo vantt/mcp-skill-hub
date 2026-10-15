@@ -10,7 +10,15 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"github.com/vantt/skillhub-mcp/internal/testenv"
 )
+
+// TestTestsRunOutsideTheCallersRepository guards the isolation in TestMain:
+// no test or subprocess may find the repository that runs the tests.
+func TestTestsRunOutsideTheCallersRepository(t *testing.T) {
+	testenv.RequireNoGitRepository(t)
+}
 
 // cliHelperEnv makes the test binary act as the skillhub command, so a test
 // can run a command as a real subprocess (for example a stdio MCP server).
@@ -86,6 +94,12 @@ func TestMain(m *testing.M) {
 			fmt.Fprintf(os.Stderr, "set %s: %v\n", key, err)
 			os.Exit(1)
 		}
+	}
+	// `git bisect run` and Git hooks export GIT_DIR; a test hub must not
+	// commit into the repository running the tests.
+	if err := testenv.UnsetGitRepository(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
 	code := m.Run()
 	if err := os.RemoveAll(root); err != nil {

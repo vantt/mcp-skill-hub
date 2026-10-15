@@ -7,23 +7,14 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
-)
 
-// gitRepositoryEnvironment names the variables that point Git at a
-// repository other than the one around its working directory.
-var gitRepositoryEnvironment = []string{
-	"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_PREFIX",
-	"GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_NAMESPACE",
-}
+	"github.com/vantt/skillhub-mcp/internal/testenv"
+)
 
 // TestTestsRunOutsideTheCallersRepository guards the isolation in TestMain:
 // no test or subprocess may find the repository that runs the tests.
 func TestTestsRunOutsideTheCallersRepository(t *testing.T) {
-	for _, key := range gitRepositoryEnvironment {
-		if value, ok := os.LookupEnv(key); ok {
-			t.Errorf("%s=%s is still set", key, value)
-		}
-	}
+	testenv.RequireNoGitRepository(t)
 }
 
 // Isolate host configuration before parallel tests or subprocesses run.
@@ -79,11 +70,9 @@ func TestMain(m *testing.M) {
 	// Git finds its repository through these before the working directory.
 	// `git bisect run` and Git hooks export GIT_DIR, and then `skillhub init`
 	// in a temp hub would commit into the repository running the tests.
-	for _, key := range gitRepositoryEnvironment {
-		if err := os.Unsetenv(key); err != nil {
-			fmt.Fprintf(os.Stderr, "unset %s: %v\n", key, err)
-			os.Exit(1)
-		}
+	if err := testenv.UnsetGitRepository(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
 	// Hubs made by tests are Git repositories, and confirmed changes commit
 	// into them, so Git needs an identity that is not the machine's.
