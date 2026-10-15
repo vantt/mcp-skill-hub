@@ -750,6 +750,21 @@ func (cache RemoteCache) Latest(hubID, skillID string) (CachedSkill, bool) {
 	return versions[0], true
 }
 
+// Forget removes every cached version of one skill of a hub, for a skill the
+// hub no longer serves. The skill's writable state and config directories are
+// kept, as Clear keeps them.
+func (cache RemoteCache) Forget(hubID, skillID string) error {
+	if cache.Root == "" || !hubIDPattern.MatchString(hubID) || !bundleSkillIDPattern.MatchString(skillID) {
+		return fmt.Errorf("invalid cache key %s/%s", hubID, skillID)
+	}
+	directory := filepath.Join(cache.HubDir(hubID), skillID)
+	removeTree(directory)
+	if _, err := os.Lstat(directory); !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("could not remove %s", directory)
+	}
+	return nil
+}
+
 // GCPolicy bounds the cache of one hub.
 type GCPolicy struct {
 	// KeepVersions is how many versions of each skill are kept.

@@ -457,7 +457,7 @@ As soon as the hub answers again, the next call works; you do not need to restar
 
 ## The skill cache on machine A
 
-Each skill version is downloaded once and kept until it changes. A changed skill is fetched again; a change of only its routing metadata on machine B is not. Three versions per skill are kept, versions unused for 30 days are removed, and each hub's cache stays under 512 MB.
+Each skill version is downloaded once and kept until it changes. A changed skill is fetched again; a change of only its routing metadata on machine B is not. Three versions per skill are kept, versions unused for 30 days are removed, and each hub's cache stays under 512 MB. When machine B stops serving a skill (deprecated, archived, or broken), the copy cached on machine A is removed the first time the hub says so. A `skill_get` within five minutes of the last `skill_resolve` may still get the cached copy once; the next call asks the hub and gets its answer.
 
 To remove the cached copies yourself:
 

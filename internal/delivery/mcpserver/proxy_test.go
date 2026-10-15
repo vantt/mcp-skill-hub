@@ -516,6 +516,41 @@ func TestProxyServesNoCachedCopyAfterAReviewRequiredResolution(t *testing.T) {
 	}
 }
 
+func TestProxyDropsACachedSkillTheHubNoLongerServes(t *testing.T) {
+	root := newBundleHubFixture(t)
+	hub := startHTTPTestHub(t, root)
+	counter := newCountingTransport()
+	proxied := startTestProxy(t, hub.baseURL, hub.token, t.TempDir(), counter)
+	proxyResolve(t, proxied.session, root, "test-audit")
+	if got, _, encoded := proxySkillGet(t, proxied.session, "test-audit"); got.Remote == nil || got.Remote.Cache != remoteCacheFetched {
+		t.Fatalf("first fetch = %s", encoded)
+	}
+
+	// A new resolution makes the next cache hit confirm the load in the
+	// background; the skill breaks on the hub before that hit.
+	proxyResolveOperation(t, proxied.session, root, "test-audit", "review")
+	writeFixtureFile(t, filepath.Join(root, "skills", "default", "test-audit", "SKILL.md"), []byte("---\ndescription: No name any more.\n---\n\n# Test audit\n"))
+	if got, _, encoded := proxySkillGet(t, proxied.session, "test-audit"); got.Remote == nil || got.Remote.Cache != remoteCacheHit {
+		t.Fatalf("skill_get within the resolution = %s", encoded)
+	}
+	proxied.proxy.backgroundTasks.Wait()
+	if status := counter.lastStatus(); status != http.StatusNotFound {
+		t.Fatalf("background confirmation got HTTP %d, want 404", status)
+	}
+	if versions := proxied.proxy.cache.Versions(proxied.proxy.hubID, "test-audit"); len(versions) != 0 {
+		t.Fatalf("the cache keeps %d version(s) of a skill the hub no longer serves", len(versions))
+	}
+
+	before := counter.count()
+	_, result, encoded := proxySkillGet(t, proxied.session, "test-audit")
+	if after := counter.count(); after.bundles == before.bundles {
+		t.Fatalf("skill_get after the 404 did not ask the hub: %s", encoded)
+	}
+	if !result.IsError || !strings.Contains(string(encoded), "not_servable") {
+		t.Fatalf("skill_get of a skill the hub no longer serves = %s", encoded)
+	}
+}
+
 func TestProxyFollowsNoRedirect(t *testing.T) {
 	var elsewhere sync.Mutex
 	var leaked []string

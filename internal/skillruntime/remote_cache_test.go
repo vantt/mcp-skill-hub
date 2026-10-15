@@ -427,6 +427,40 @@ func TestCollectGarbageKeepsRecentVersionsWithinBudget(t *testing.T) {
 	}
 }
 
+func TestForgetRemovesOneSkillAndKeepsItsState(t *testing.T) {
+	cache := RemoteCache{Root: t.TempDir()}
+	for _, skillID := range []string{"sample", "other"} {
+		metadata, contents, digest := testBundle(t, skillID, sampleSkill)
+		if _, err := cache.Install("hub-1", skillID, digest, bytes.NewReader(writeTestBundle(t, metadata, contents))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	state := filepath.Join(cache.StateRoot("hub-1"), "runtime", "config", "sample")
+	if err := os.MkdirAll(state, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.Forget("hub-1", "sample"); err != nil {
+		t.Fatal(err)
+	}
+	if versions := cache.Versions("hub-1", "sample"); len(versions) != 0 {
+		t.Fatalf("sample still has %d cached versions", len(versions))
+	}
+	if versions := cache.Versions("hub-1", "other"); len(versions) != 1 {
+		t.Fatal("forgetting sample touched another skill")
+	}
+	if _, err := os.Stat(state); err != nil {
+		t.Fatalf("the skill's state was removed: %v", err)
+	}
+	if err := cache.Forget("hub-1", "sample"); err != nil {
+		t.Fatalf("forgetting a skill that is not cached: %v", err)
+	}
+	for _, skillID := range []string{".state", "../hub-2", ""} {
+		if err := cache.Forget("hub-1", skillID); err == nil {
+			t.Errorf("Forget accepted the skill id %q", skillID)
+		}
+	}
+}
+
 func TestClearRemovesOnlyFetchedSkills(t *testing.T) {
 	cache := RemoteCache{Root: t.TempDir()}
 	for _, hubID := range []string{"hub-1", "hub-2"} {

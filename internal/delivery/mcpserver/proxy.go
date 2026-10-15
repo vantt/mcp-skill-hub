@@ -688,6 +688,19 @@ func (proxy *Proxy) rememberVersion(skillID, digest string) {
 	proxy.hints[skillID] = skillHint{digest: digest, at: proxy.now(), resolutionID: previous.resolutionID, sessionID: previous.sessionID}
 }
 
+// forgetSkill drops the resolution hint and every cached version of a skill
+// the hub says it no longer serves (deprecated, archived or broken), so the
+// next skill_get asks the hub and an unreachable hub cannot fall back to the
+// old copy.
+func (proxy *Proxy) forgetSkill(skillID string) {
+	proxy.mu.Lock()
+	delete(proxy.hints, skillID)
+	proxy.mu.Unlock()
+	if err := proxy.cache.Forget(proxy.hubID, skillID); err != nil {
+		proxy.warn("The cached copy of " + skillID + ", which the hub no longer serves, could not be removed from " + proxy.CacheDir() + ": " + err.Error() + ". Run `skillhub cache clear --hub " + shellquote.Arg(proxy.hubURL) + "`.")
+	}
+}
+
 type fetchKind int
 
 const (
@@ -806,6 +819,9 @@ func (proxy *Proxy) requestBundle(ctx context.Context, skillID string, held []st
 		_ = json.NewDecoder(io.LimitReader(response.Body, 64<<10)).Decode(&body)
 		if response.StatusCode == http.StatusForbidden && body.Code != "content_review_required" {
 			return fetchOutcome{kind: fetchFailed, code: "hub_refused", message: "The hub refused the request (HTTP 403): this machine's name for it is not accepted.", action: "Start the hub with --allow-host <the name used here>, or connect with an address the hub accepts."}, false
+		}
+		if response.StatusCode == http.StatusNotFound && body.Code == "skill_not_found" {
+			proxy.forgetSkill(skillID)
 		}
 		return fetchOutcome{kind: fetchForward}, false
 	case http.StatusTooManyRequests, http.StatusServiceUnavailable, http.StatusBadGateway, http.StatusGatewayTimeout, http.StatusInternalServerError:
