@@ -414,11 +414,29 @@ assert_file "$UNMANAGED_PREFIX/bin/skillhub"
 
 # Signature verification matrix:
 # 1. Cosign absent on PATH: install succeeds and prints warning notice.
-# Prepare a clean PATH without fake cosign:
+# The PATH of these runs is one folder with the fake curl and a link to every
+# other command on PATH except cosign. Appending the machine's PATH instead
+# would let a cosign installed on this machine verify the fixture bundle,
+# which no real Sigstore bundle signs.
 BIN_WITHOUT_COSIGN="$TEST_ROOT/bin-no-cosign"
 mkdir -p "$BIN_WITHOUT_COSIGN"
 cp "$FAKE_BIN/curl" "$BIN_WITHOUT_COSIGN/curl"
-no_cosign_out=$(PATH=$BIN_WITHOUT_COSIGN:$PATH FIXTURE_HTTP_ROOT=$HTTP_ROOT FIXTURE_HTTP_LOG=$HTTP_LOG \
+saved_ifs=$IFS
+IFS=:
+for path_entry in $PATH; do
+	IFS=$saved_ifs
+	[ -d "$path_entry" ] || continue
+	for path_tool in "$path_entry"/*; do
+		path_name=${path_tool##*/}
+		[ "$path_name" != cosign ] && [ -f "$path_tool" ] && [ -x "$path_tool" ] || continue
+		[ -e "$BIN_WITHOUT_COSIGN/$path_name" ] || [ -L "$BIN_WITHOUT_COSIGN/$path_name" ] || ln -s "$path_tool" "$BIN_WITHOUT_COSIGN/$path_name"
+	done
+done
+IFS=$saved_ifs
+if (PATH=$BIN_WITHOUT_COSIGN; command -v cosign) >/dev/null 2>&1; then
+	fail "cosign is still on the PATH meant to lack it: $BIN_WITHOUT_COSIGN"
+fi
+no_cosign_out=$(PATH=$BIN_WITHOUT_COSIGN FIXTURE_HTTP_ROOT=$HTTP_ROOT FIXTURE_HTTP_LOG=$HTTP_LOG \
 	"$SCRIPT_DIR/install.sh" --version v1.0.0 --release-base https://fixtures.invalid/releases --prefix "$NO_COSIGN_PREFIX" --os linux --arch amd64 --no-modify-path)
 case "$no_cosign_out" in
 	*"Signature not checked (cosign not installed)"*) ;;
@@ -428,7 +446,7 @@ assert_file "$NO_COSIGN_PREFIX/bin/skillhub"
 assert_output 1.0.0 "$NO_COSIGN_PREFIX/bin/skillhub" version
 
 # 2. Cosign absent on PATH and SKILLHUB_REQUIRE_SIGNATURE=1: aborts.
-if PATH=$BIN_WITHOUT_COSIGN:$PATH FIXTURE_HTTP_ROOT=$HTTP_ROOT FIXTURE_HTTP_LOG=$HTTP_LOG SKILLHUB_REQUIRE_SIGNATURE=1 \
+if PATH=$BIN_WITHOUT_COSIGN FIXTURE_HTTP_ROOT=$HTTP_ROOT FIXTURE_HTTP_LOG=$HTTP_LOG SKILLHUB_REQUIRE_SIGNATURE=1 \
 	"$SCRIPT_DIR/install.sh" --version v1.0.0 --release-base https://fixtures.invalid/releases --prefix "$TEST_ROOT/req-sig" --os linux --arch amd64 --no-modify-path >/dev/null 2>&1; then
 	fail 'install succeeded when cosign was absent but signature required'
 fi
