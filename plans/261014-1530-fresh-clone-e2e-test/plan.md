@@ -1,7 +1,7 @@
 ---
 title: "Fresh-clone end-to-end test"
 description: "One Go test that takes a committed sample hub to a new machine by running the commands the docs show (read from the docs themselves), then talks real MCP over stdio to the server the agent host would start, and fails on any step: skill_resolve and skill_get serve the good skills, and an unservable skill is not served."
-status: pending
+status: completed
 priority: P2
 effort: 5h
 branch: TBD (own worktree, see Execution)
