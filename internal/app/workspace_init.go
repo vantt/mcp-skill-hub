@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/vantt/skillhub-mcp/internal/canonical"
+	catalogpkg "github.com/vantt/skillhub-mcp/internal/catalog"
 	"github.com/vantt/skillhub-mcp/internal/hostintegration"
 	"github.com/vantt/skillhub-mcp/internal/shellquote"
 	"github.com/vantt/skillhub-mcp/internal/userconfig"
@@ -223,7 +224,29 @@ func (service WorkspaceService) initLocal(ctx context.Context, root string, targ
 	}
 	result.Details[InitDetailsKey] = report
 	result.SuggestedActions = []Action{{Label: "Connect a project", Command: report.Next}}
+	result.Warnings = append(result.Warnings, servabilityWarnings(ctx, root)...)
 	return result, nil
+}
+
+// Warning codes for an active skill the hub keeps but cannot serve to agents.
+const (
+	WarningSkillNotServable          = "skill_not_servable"
+	WarningSkillServabilityUnchecked = "skill_servability_unchecked"
+)
+
+// servabilityWarnings names every active skill of the hub that agents cannot
+// get (for example a SKILL.md without its name), so the person who set up the
+// hub learns it now and not from a skill missing in skills/list.
+func servabilityWarnings(ctx context.Context, root string) []Warning {
+	found, err := catalogpkg.ServabilityWarnings(ctx, root)
+	if err != nil {
+		return []Warning{{Code: WarningSkillServabilityUnchecked, Summary: "Could not check which skills agents can get: " + err.Error()}}
+	}
+	warnings := make([]Warning, 0, len(found))
+	for _, summary := range found {
+		warnings = append(warnings, Warning{Code: WarningSkillNotServable, Summary: summary})
+	}
+	return warnings
 }
 
 // initDryRun reports what init would do without writing anything.

@@ -147,7 +147,8 @@ func renderInitSummary(p *termui.Printer, result app.Result, report *app.InitRep
 		// Only what init found about this hub; routine notes of the steps it
 		// ran stay in --verbose and --json.
 		switch warning.Code {
-		case "git_ssh_command", "hub_tracks_agent_config", "system_skill_blocked", hostintegration.NoticeGeminiLegacy:
+		case "git_ssh_command", "hub_tracks_agent_config", "system_skill_blocked", hostintegration.NoticeGeminiLegacy,
+			app.WarningSkillNotServable, app.WarningSkillServabilityUnchecked:
 			p.Warning(warning.Summary)
 		}
 	}

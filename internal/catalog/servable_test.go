@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -31,6 +32,30 @@ func TestBuildWarnsAboutActiveSkillsThatCannotBeServed(t *testing.T) {
 				t.Fatalf("servability warnings = %#v", warned)
 			}
 		})
+	}
+}
+
+func TestServabilityWarningsNameOnlyTheSkillsThatCannotBeServed(t *testing.T) {
+	t.Parallel()
+	root := newWorkspace(t)
+	meta := func(id string) string {
+		return "schema_version: 1\nid: " + id + "\nstatus: active\nrouting:\n  triggers: [fixture]\n  not_for: [unrelated]\n  min_scope: single_step\n"
+	}
+	writeCanonical(t, root, "skills/core/good/.meta/skill.yaml", meta("good"))
+	writeCanonical(t, root, "skills/core/good/SKILL.md", "---\nname: good\ndescription: Fixture skill.\n---\n\n# Good\n")
+	writeCanonical(t, root, "skills/core/nameless/.meta/skill.yaml", meta("nameless"))
+	writeCanonical(t, root, "skills/core/nameless/SKILL.md", "---\ndescription: No name.\n---\n\n# Nameless\n")
+
+	warnings, err := ServabilityWarnings(t.Context(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(warnings) != 1 || !strings.HasPrefix(warnings[0], "skills/core/nameless:") || !strings.Contains(warnings[0], "frontmatter") {
+		t.Fatalf("servability warnings = %#v, want one for the nameless skill", warnings)
+	}
+	built := build(t, root, BuildOptions{})
+	if !slices.Contains(built.Warnings, warnings[0]) {
+		t.Fatalf("a rebuild warns %#v, not %q", built.Warnings, warnings[0])
 	}
 }
 

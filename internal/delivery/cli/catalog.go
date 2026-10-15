@@ -34,7 +34,12 @@ func runRebuild(ctx context.Context, args []string, stdout, stderr io.Writer) in
 	if !verbose {
 		p := termui.New(stdout)
 		p.Line("Search index rebuilt.")
-		return 0
+		// The warnings name what the rebuild found, for example an active
+		// skill that cannot be served and is left out of skills/list.
+		for _, warning := range result.Warnings {
+			p.Warning(warning.Summary)
+		}
+		return printerCodeOr(p, 0)
 	}
 	return writeWorkspaceResult(result, err, stdout, stderr, jsonOutput)
 }

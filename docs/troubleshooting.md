@@ -221,6 +221,18 @@ skillhub skill edit <skill-id> --content-file <file> --trigger "<when to use>" \
 
 Then activate it with `skillhub skill activate <skill-id> --yes`. At least 3 examples are recommended; add them with `--example`. [Create your first skill](curating-skills.md#create-your-first-skill) shows a full run.
 
+### A warning says a skill cannot be served
+
+`skillhub init`, `skillhub maintain rebuild` and `skillhub doctor` (under **Content**) name every active skill that agents cannot get:
+
+```text
+WARNING: skills/default/my-skill: skill cannot be served: skill my-skill frontmatter must contain
+         name "my-skill" and a non-empty description; fix SKILL.md frontmatter and rebuild, or the
+         skill is omitted from skills/list
+```
+
+The skill stays in the hub and every other skill keeps working, so `doctor` reports it as a notice and still exits 0. Agents are not offered the skill, and `skill_get` answers `not_servable`. The usual cause is a `SKILL.md` edited by hand: its frontmatter needs `name` equal to the skill's folder name and a non-empty `description`. A missing `SKILL.md`, more than 512 files or more than 16 MiB in the skill folder have the same effect. Correct the file, commit it, and run `skillhub maintain rebuild`; the warning is gone when the skill can be served.
+
 ### Resolve asks a question instead of naming a skill
 
 `skillhub resolve` asks "What is the bounded scope of this task?" when the request has no scope. Put `scope` inside `task`; the `"task.scope"` key in the hint is rejected.

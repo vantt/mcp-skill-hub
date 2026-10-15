@@ -31,6 +31,11 @@ type hubState struct {
 	catalog *catalogpkg.Status
 	// host is nil unless the catalog is healthy.
 	host *hubHostState
+	// unservable names the active skills agents cannot get; doctor fills it
+	// once the layout, content and recovery checks pass.
+	unservable []string
+	// unservableErr is why unservable could not be determined.
+	unservableErr error
 }
 
 type hubHostState struct {
@@ -150,6 +155,10 @@ func (hubCheck) Check(ctx context.Context, report RoleReport, depth Depth) []Fin
 	}
 	keep, elsewhere := hubFolderHosts(root)
 	state, err := inspectHubWhileLocked(ctx, root, keep)
+	if err == nil && depth == DepthFull && state.catalog != nil {
+		// Reading every skill is left to doctor; status stays quick.
+		state.unservable, state.unservableErr = catalogpkg.ServabilityWarningsWhileLocked(ctx, root)
+	}
 	_ = lock.Unlock()
 	if err != nil {
 		return append(findings, Finding{Code: "hub_unreadable", Label: "Hub folder", Severity: SeverityProblem,
@@ -262,6 +271,16 @@ func hubStateFindings(root string, report RoleReport, state hubState, depth Dept
 		}
 	default:
 		findings = append(findings, Finding{Code: "hub_content_invalid", Label: "Content", Severity: SeverityOK, Message: "valid"})
+	}
+	// A skill agents cannot get stays in the hub, so it is a notice: the
+	// other skills work, and doctor --fix cannot repair a SKILL.md.
+	for _, warning := range state.unservable {
+		findings = append(findings, Finding{Code: "hub_skill_not_servable", Label: "Content", Severity: SeverityNotice,
+			Message: warning, Reason: contentReason})
+	}
+	if state.unservableErr != nil {
+		findings = append(findings, Finding{Code: "hub_skill_not_servable", Label: "Content", Severity: SeveritySkipped,
+			Message: "Could not check which skills agents can get: " + plainError(state.unservableErr) + "."})
 	}
 
 	for _, recovery := range state.recoveries {

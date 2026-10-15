@@ -102,6 +102,27 @@ func ParseServableSkill(id string, entrypoint []byte, resourceCount int, totalBy
 	return frontmatter, nil
 }
 
+// ServabilityWarnings reads the canonical files under a shared lock and
+// returns one warning for each active skill distribution cannot serve, the
+// same warnings a rebuild reports. It changes nothing.
+func ServabilityWarnings(ctx context.Context, root string) ([]string, error) {
+	input, err := captureInput(ctx, root)
+	if err != nil {
+		return nil, err
+	}
+	return input.Warnings, nil
+}
+
+// ServabilityWarningsWhileLocked is ServabilityWarnings for a caller that
+// already holds the workspace lock.
+func ServabilityWarningsWhileLocked(ctx context.Context, root string) ([]string, error) {
+	input, err := captureInputWhileLocked(ctx, root, false)
+	if err != nil {
+		return nil, err
+	}
+	return input.Warnings, nil
+}
+
 // servableSkillWarnings reports every active skill that distribution cannot
 // serve. Such skills stay published (a hand edit must not block unrelated
 // work) but are listed so the author can repair them; distribution and

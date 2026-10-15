@@ -210,11 +210,20 @@ func shellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", `'\''`) + "'"
 }
 
-// assertInitQuiet checks that init from a hub with a curation file in it names no error.
+// assertInitQuiet checks that init from a hub with a curation file in it names
+// no error, and warns about the one skill agents cannot get and no other.
 func assertInitQuiet(t *testing.T, doc, line, output string) {
 	t.Helper()
 	if strings.Contains(strings.ToLower(output), "error") || strings.Contains(output, "distill") {
 		t.Fatalf("%s line %q names an error for the hub's files:\n%s", doc, line, output)
+	}
+	// Wrapped lines are joined so a warning matches whatever the width; each
+	// element starts with one warning and runs to the next.
+	warnings := strings.Split(strings.Join(strings.Fields(output), " "), "WARNING: ")[1:]
+	broken := "skills/default/" + freshCloneBrokenSkill + ": "
+	if len(warnings) != 1 || !strings.HasPrefix(warnings[0], broken) || !strings.Contains(warnings[0], "frontmatter") {
+		t.Fatalf("%s line %q gives the warnings %q, want one that %s cannot be served for its SKILL.md frontmatter:\n%s",
+			doc, line, warnings, freshCloneBrokenSkill, output)
 	}
 }
 
