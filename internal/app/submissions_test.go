@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -257,7 +258,8 @@ func TestSubmissionOfACheckoutDiffsAgainstItsBaseAndKeepsHubExecutableBits(t *te
 		t.Fatal(err)
 	}
 	info, err := os.Stat(filepath.Join(hub, "skills", "default", "review-checklist", "scripts", "lint.sh"))
-	if err != nil || info.Mode().Perm()&0o111 == 0 {
+	// File modes are not meaningful on Windows; elsewhere the hub's bit must survive.
+	if err != nil || (runtime.GOOS != "windows" && info.Mode().Perm()&0o111 == 0) {
 		t.Fatalf("lint.sh lost its execute bit: %v %v", info, err)
 	}
 	data, _ := os.ReadFile(filepath.Join(hub, "skills", "default", "review-checklist", "notes.md"))

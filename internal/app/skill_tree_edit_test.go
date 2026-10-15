@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -180,7 +181,11 @@ func TestSkillChangesKeepCRLFAndTheExecutableBit(t *testing.T) {
 		t.Fatalf("notes = %+v, %v", after, err)
 	}
 	script, err := service.ReadSkillFile(context.Background(), hub, "pdf-tools", "scripts/run.sh")
-	if err != nil || !script.Executable {
+	if err != nil || script.Content == nil || *script.Content != "#!/bin/sh\necho 1\n" {
 		t.Fatalf("script = %+v, %v", script, err)
+	}
+	// File modes are not meaningful on Windows; elsewhere the edit must keep the bit.
+	if runtime.GOOS != "windows" && !script.Executable {
+		t.Fatalf("script lost its executable bit: %+v", script)
 	}
 }

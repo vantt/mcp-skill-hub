@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -445,7 +446,8 @@ func TestRoutingSuggestionsDismissAndStableIDs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info, _ := os.Stat(path); info.Mode().Perm() != 0o600 {
+	// File modes are not meaningful on Windows; elsewhere the file stays private.
+	if info, _ := os.Stat(path); runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
 		t.Fatalf("dismissal file mode = %v", info.Mode().Perm())
 	}
 	if !strings.Contains(string(before), target.SkillID) {
