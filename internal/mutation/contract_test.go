@@ -54,7 +54,7 @@ func TestIdempotentRetryReturnsFaithfulStructuredReceipt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(retry, first) {
+	if !reflect.DeepEqual(retry, replayOf(first)) {
 		t.Fatalf("retry receipt = %#v, want %#v", retry, first)
 	}
 	conflict := retrySet
@@ -212,7 +212,7 @@ func TestLostResponseReplanReturnsOriginalResult(t *testing.T) {
 		t.Fatal("test did not produce a fresh operation and changed planning pins")
 	}
 	retry, err := ConfirmMutation(root, replanned, Confirmation{ProposalID: replanned.ID, ProposalDigest: replanned.Digest, BaseCatalogSnapshot: replanned.BaseCatalogSnapshot})
-	if err != nil || !reflect.DeepEqual(retry, first) {
+	if err != nil || !reflect.DeepEqual(retry, replayOf(first)) {
 		t.Fatalf("lost-response retry = %#v, %v; want %#v", retry, err, first)
 	}
 	changed := payload
@@ -702,4 +702,12 @@ func assertOldOrNewState(t *testing.T, root string, wantNew bool) {
 	if present != want {
 		t.Fatalf("mixed canonical state: %d/3 files present, want %d/3", present, want)
 	}
+}
+
+// replayOf is the receipt a retry of applied returns: the file modes only
+// serve the Git commit of the first application, so a replay, which commits
+// nothing, leaves them out rather than guess them.
+func replayOf(applied Receipt) Receipt {
+	applied.FileModes = nil
+	return applied
 }

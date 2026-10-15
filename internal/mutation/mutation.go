@@ -76,9 +76,13 @@ type Confirmation struct {
 type Receipt struct {
 	OperationID  string
 	ChangedPaths []string
-	// ExecutablePaths are the written files published with the executable bit,
-	// for the Git commit step. They stay out of every serialized result.
-	ExecutablePaths     []string `json:"-"`
+	// FileModes holds, for every written path whose mode the change decided,
+	// whether it is executable: a write that marks a file executable, and a
+	// new file written without the bit. An edit that keeps the file's mode is
+	// absent. The Git commit step records exactly these modes, whatever the
+	// file system can store. They stay out of every serialized result, and a
+	// replayed operation, which commits nothing, leaves them empty.
+	FileModes           map[string]bool `json:"-"`
 	CatalogSnapshot     string
 	Generation          string
 	GitDirty            bool
@@ -272,7 +276,7 @@ func CommitWithOptions(root string, set WriteSet, options Options) (Receipt, err
 			message = "Apply " + set.Command
 		}
 		message += "\n\nSkillhub-Operation: " + receipt.OperationID
-		receipt.Commit = workspace.CommitPaths(ctx, root, receipt.ChangedPaths, receipt.ExecutablePaths, message, policy.Interactive)
+		receipt.Commit = workspace.CommitPaths(ctx, root, receipt.ChangedPaths, receipt.FileModes, message, policy.Interactive)
 		if receipt.Commit.Status == workspace.CommitCommitted {
 			if dirty, err := gitDirty(root); err == nil {
 				receipt.GitDirty = dirty

@@ -53,7 +53,7 @@ func TestCommitPathsHookSeesTheScratchIndexWithOnlyTheCommittedPaths(t *testing.
 	writeHook(t, root, "#!/bin/sh\ngit ls-files -s > \""+filepath.ToSlash(seen)+"/index\"\ngit diff --cached --name-only > \""+filepath.ToSlash(seen)+"/diff\"\n")
 	writeRepoFile(t, root, scriptPath, "#!/bin/sh\n")
 	writeRepoFile(t, root, notesPath, "notes\n")
-	outcome := CommitPaths(context.Background(), root, []string{notesPath, scriptPath}, []string{scriptPath}, "Add a script", false)
+	outcome := CommitPaths(context.Background(), root, []string{notesPath, scriptPath}, map[string]bool{scriptPath: true}, "Add a script", false)
 	if outcome.Status != CommitCommitted {
 		t.Fatalf("outcome = %+v", outcome)
 	}
@@ -76,6 +76,22 @@ func TestCommitPathsHookSeesTheScratchIndexWithOnlyTheCommittedPaths(t *testing.
 	noScratchIndex(t, root)
 }
 
+func TestCommitPathsLeavesAStagedThenEditedFileAlone(t *testing.T) {
+	root := newCommitRepo(t)
+	writeRepoFile(t, root, "skills/default/b/SKILL.md", "b staged\n")
+	git(t, root, "add", "skills/default/b/SKILL.md")
+	writeRepoFile(t, root, "skills/default/b/SKILL.md", "b staged, then edited\n")
+	writeRepoFile(t, root, "skills/default/a/SKILL.md", "a changed\n")
+	outcome := CommitPaths(context.Background(), root, []string{"skills/default/a/SKILL.md"}, nil, "Edit a", false)
+	if outcome.Status != CommitCommitted {
+		t.Fatalf("outcome = %+v", outcome)
+	}
+	if status := git(t, root, "status", "--porcelain=v1"); status != "MM skills/default/b/SKILL.md" {
+		t.Fatalf("status = %q", status)
+	}
+	noScratchIndex(t, root)
+}
+
 func TestCommitPathsMakesTheFirstCommitOfAnUnbornHead(t *testing.T) {
 	newCommitRepo(t) // isolates the Git config
 	root := t.TempDir()
@@ -85,7 +101,7 @@ func TestCommitPathsMakesTheFirstCommitOfAnUnbornHead(t *testing.T) {
 	git(t, root, "config", "core.filemode", "false")
 	writeRepoFile(t, root, scriptPath, "#!/bin/sh\n")
 	writeRepoFile(t, root, notesPath, "notes\n")
-	outcome := CommitPaths(context.Background(), root, []string{notesPath, scriptPath}, []string{scriptPath}, "First", false)
+	outcome := CommitPaths(context.Background(), root, []string{notesPath, scriptPath}, map[string]bool{scriptPath: true}, "First", false)
 	if outcome.Status != CommitCommitted {
 		t.Fatalf("outcome = %+v", outcome)
 	}
@@ -134,20 +150,38 @@ func TestCommitPathsRefusesAnIndexWithUnresolvedConflicts(t *testing.T) {
 	noScratchIndex(t, root)
 }
 
-func TestCommitPathsTrustsTheFileSystemModeWhenGitDoes(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("file modes are not meaningful on Windows")
-	}
-	root := newCommitRepo(t)
-	git(t, root, "config", "core.filemode", "true")
-	// A later step rewrote the file without the bit; the stale list must not win.
-	writeRepoFile(t, root, scriptPath, "echo plain\n")
-	outcome := CommitPaths(context.Background(), root, []string{scriptPath}, []string{scriptPath}, "Add", false)
-	if outcome.Status != CommitCommitted {
-		t.Fatalf("outcome = %+v", outcome)
-	}
-	if mode := committedMode(t, root, scriptPath); mode != "100644" {
-		t.Fatalf("mode = %s, want the file system's 100644", mode)
+// The files are written 0644 on every platform, as a Windows file system
+// reports them, so the recorded modes can only come from the change.
+func TestCommitPathsTakesModesFromTheChangeNotTheFileSystem(t *testing.T) {
+	const (
+		kept     = "skills/default/a/scripts/kept.sh"
+		replaced = "skills/default/a/scripts/replaced.sh"
+	)
+	for _, fileMode := range []string{"true", "false"} {
+		t.Run("core.filemode="+fileMode, func(t *testing.T) {
+			root := newCommitRepo(t)
+			writeRepoFile(t, root, kept, "#!/bin/sh\necho 1\n")
+			writeRepoFile(t, root, replaced, "#!/bin/sh\necho old\n")
+			git(t, root, "add", "--chmod=+x", "--", kept, replaced)
+			git(t, root, "commit", "-q", "-m", "scripts")
+			git(t, root, "config", "core.filemode", fileMode)
+
+			writeRepoFile(t, root, scriptPath, "#!/bin/sh\n")           // new, marked executable
+			writeRepoFile(t, root, notesPath, "notes\n")                // new, plain
+			writeRepoFile(t, root, kept, "#!/bin/sh\necho 2\n")         // edited, mode untouched
+			writeRepoFile(t, root, replaced, "echo plain, recreated\n") // deleted and written again plain
+			paths := []string{notesPath, kept, replaced, scriptPath}
+			modes := map[string]bool{scriptPath: true, notesPath: false, replaced: false}
+			outcome := CommitPaths(context.Background(), root, paths, modes, "Write", false)
+			if outcome.Status != CommitCommitted {
+				t.Fatalf("outcome = %+v", outcome)
+			}
+			for path, want := range map[string]string{scriptPath: "100755", notesPath: "100644", kept: "100755", replaced: "100644"} {
+				if mode := committedMode(t, root, path); mode != want {
+					t.Errorf("%s committed as %s, want %s", path, mode, want)
+				}
+			}
+		})
 	}
 }
 
@@ -163,7 +197,7 @@ func TestManualCommandAfterAFailedCommitKeepsTheExecutableBit(t *testing.T) {
 	writeRepoFile(t, root, scriptPath, "#!/bin/sh\n")
 	writeRepoFile(t, root, notesPath, "notes\n")
 	before := git(t, root, "rev-parse", "HEAD")
-	outcome := CommitPaths(context.Background(), root, []string{notesPath, scriptPath}, []string{scriptPath}, "Add a script", false)
+	outcome := CommitPaths(context.Background(), root, []string{notesPath, scriptPath}, map[string]bool{scriptPath: true}, "Add a script", false)
 	if outcome.Status != CommitFailed || outcome.ManualCommand == "" {
 		t.Fatalf("outcome = %+v", outcome)
 	}

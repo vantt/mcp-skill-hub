@@ -168,8 +168,8 @@ func TestShebangChangeCommitsExecutableAndReportsIt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(receipt.ExecutablePaths) != 1 || receipt.ExecutablePaths[0] != executableTestPath {
-		t.Fatalf("executable paths = %v", receipt.ExecutablePaths)
+	if executable, set := receipt.FileModes[executableTestPath]; !set || !executable {
+		t.Fatalf("file modes = %v", receipt.FileModes)
 	}
 	if runtime.GOOS == "windows" {
 		return // file modes are not meaningful on Windows
@@ -180,6 +180,32 @@ func TestShebangChangeCommitsExecutableAndReportsIt(t *testing.T) {
 	}
 	if info.Mode().Perm() != 0o755 {
 		t.Fatalf("mode = %v, want 0755", info.Mode().Perm())
+	}
+}
+
+func TestReceiptReportsTheModeOnlyOfWritesThatSetIt(t *testing.T) {
+	t.Parallel()
+	root := newWorkspace(t)
+	created, err := Commit(root, executableTestSet("OP-NEW-PLAIN", false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if executable, set := created.FileModes[executableTestPath]; !set || executable {
+		t.Fatalf("a new plain file must be reported non-executable: %v", created.FileModes)
+	}
+	before, err := os.ReadFile(filepath.Join(root, executableTestPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	edit := executableTestSet("OP-EDIT-PLAIN", false)
+	edit.Changes[0].Contents = []byte("schema_version: 1\nid: SRC-EXEC\nadapter: git\nname: edited\n")
+	edit.Changes[0].BeforeDigest = digest(before)
+	edited, err := Commit(root, edit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, set := edited.FileModes[executableTestPath]; set {
+		t.Fatalf("an edit that leaves the mode alone must not report one: %v", edited.FileModes)
 	}
 }
 

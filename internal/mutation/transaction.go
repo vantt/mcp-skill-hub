@@ -209,15 +209,19 @@ func commitPrepared(root string, set WriteSet, changes []Change, resultSnapshot 
 		return Receipt{}, err
 	}
 	paths := make([]string, 0, len(entries))
-	var executable []string
+	modes := map[string]bool{}
 	for _, item := range entries {
 		paths = append(paths, item.Path)
-		if item.Executable && !item.Delete {
-			executable = append(executable, item.Path)
+		switch {
+		case item.Delete:
+		case item.Executable:
+			modes[item.Path] = true
+		case item.BeforeDigest == "":
+			modes[item.Path] = false // a new file is published without the bit
 		}
 	}
 	return Receipt{
-		OperationID: set.OperationID, ChangedPaths: paths, ExecutablePaths: executable, CatalogSnapshot: resultSnapshot,
+		OperationID: set.OperationID, ChangedPaths: paths, FileModes: modes, CatalogSnapshot: resultSnapshot,
 		Generation: m.PublishedGeneration, GitDirty: dirty,
 		SourceSchemaVersion: set.SourceSchemaVersion, TargetSchemaVersion: set.TargetSchemaVersion,
 	}, nil

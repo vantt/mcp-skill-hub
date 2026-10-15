@@ -113,11 +113,13 @@ func DirtyPaths(ctx context.Context, root string, paths []string) ([]string, err
 }
 
 // CommitPaths commits exactly the given paths with message. Everything else in
-// the index and the working tree is left as it was. The paths in executable
-// that are committed are recorded as executable (100755) even where Git ignores
-// file modes. Hooks and signing run as the person configured them. It never
-// fails the caller: the outcome says what happened and how to finish by hand.
-func CommitPaths(ctx context.Context, root string, paths, executable []string, message string, interactive bool) CommitOutcome {
+// the index and the working tree is left as it was. modes says, for the paths
+// whose mode the change decided, whether each is executable; Git records that
+// mode (100755 or 100644) whatever the file system can store. A path absent
+// from modes keeps the mode Git already had for it. Hooks and signing run as
+// the person configured them. It never fails the caller: the outcome says what
+// happened and how to finish by hand.
+func CommitPaths(ctx context.Context, root string, paths []string, modes map[string]bool, message string, interactive bool) CommitOutcome {
 	outcome := CommitOutcome{Message: firstLine(message)}
 	if len(paths) == 0 {
 		outcome.Status, outcome.Reason = CommitSkipped, "There was nothing to commit."
@@ -153,16 +155,16 @@ func CommitPaths(ctx context.Context, root string, paths, executable []string, m
 	} else if unmerged != "" {
 		return fail("The hub's Git index has unresolved merge conflicts, so nothing was committed. Resolve them, then run the manual command.")
 	}
+	before, stderr, err := indexModes(ctx, root, paths)
+	if err != nil {
+		return fail(gitReason(ctx, stderr, err))
+	}
 	if _, stderr, err := runGit(ctx, root, interactive, append([]string{"add", "-A", "--"}, paths...)...); err != nil {
 		return fail(gitReason(ctx, stderr, err))
 	}
-	staged := stagedExecutables(ctx, root, paths, executable)
-	if len(staged) > 0 {
-		// With core.filemode=false, as on Windows, `git add` never takes the
-		// executable bit from the file system, so it is set in the index.
-		if _, stderr, err := runGit(ctx, root, false, append([]string{"update-index", "--chmod=+x", "--"}, staged...)...); err != nil {
-			return fail(gitReason(ctx, stderr, err) + staysStaged)
-		}
+	adjusted, reason, ok := recordModes(ctx, root, paths, modes, before)
+	if !ok {
+		return fail(reason + staysStaged)
 	}
 	// Only the paths that differ from HEAD go into the commit, so a path that
 	// was added and removed again since HEAD never reaches the scratch index.
@@ -194,9 +196,9 @@ func CommitPaths(ctx context.Context, root string, paths, executable []string, m
 		return fail(reason + staysStaged)
 	}
 	if _, stderr, err := runGitEnv(ctx, root, interactive, env, nil, "commit", "-q", "-m", message); err != nil {
-		if len(staged) > 0 {
-			// Only the scratch index holds the commit with the executable
-			// bit, so the manual command commits from it.
+		if adjusted {
+			// Only the scratch index holds the commit with the modes the
+			// change decided, so the manual command commits from it.
 			keepIndex = true
 			outcome.ManualCommand = manualCommandFor(runtime.GOOS, root, paths, index)
 		}
@@ -358,8 +360,9 @@ func scratchIndex(ctx context.Context, root string) (string, error) {
 func fillScratchIndex(ctx context.Context, root string, env, changed []string) (string, bool) {
 	base := []string{"read-tree", "--empty"}
 	if _, _, err := runGit(ctx, root, false, "rev-parse", "--verify", "-q", "HEAD"); err == nil {
-		// One-tree -m keeps the stat data of entries that match HEAD.
-		base = []string{"read-tree", "-m", "HEAD"}
+		// --reset keeps the stat data of entries that match HEAD, as -m does,
+		// but does not refuse an entry whose file was edited after staging.
+		base = []string{"read-tree", "--reset", "HEAD"}
 	}
 	if _, stderr, err := runGitEnv(ctx, root, false, env, nil, base...); err != nil {
 		return gitReason(ctx, stderr, err), false
@@ -393,34 +396,71 @@ func fillScratchIndex(ctx context.Context, root string, env, changed []string) (
 	return "", true
 }
 
-// stagedExecutables returns the executable paths that are committed, exist as
-// regular files and need their bit set in the index. Where Git trusts file
-// modes it takes the bit from the file system itself, which is then the truth:
-// a stale entry for a file rewritten without the bit must not win.
-func stagedExecutables(ctx context.Context, root string, paths, executable []string) []string {
-	if len(executable) == 0 {
-		return nil
+// Index modes of a regular file.
+const (
+	modeExecutable = "100755"
+	modePlain      = "100644"
+)
+
+// indexModes returns the mode the index holds for each regular file under
+// paths.
+func indexModes(ctx context.Context, root string, paths []string) (map[string]string, string, error) {
+	output, stderr, err := runGit(ctx, root, false, append([]string{"ls-files", "-s", "-z", "--"}, paths...)...)
+	if err != nil {
+		return nil, stderr, err
 	}
-	// An unset core.filemode means true, and so does a value Git cannot read.
-	if output, _, _ := runGit(ctx, root, false, "config", "--type=bool", "--get", "core.filemode"); strings.TrimSpace(output) != "false" {
-		return nil
-	}
-	committed := make(map[string]bool, len(paths))
-	for _, path := range paths {
-		committed[path] = true
-	}
-	var staged []string
-	for _, path := range executable {
-		if committed[path] && fileExists(root, path) {
-			staged = append(staged, path)
+	modes := map[string]string{}
+	for _, record := range strings.Split(output, "\x00") {
+		info, path, found := strings.Cut(record, "\t")
+		mode, _, _ := strings.Cut(info, " ")
+		if found && (mode == modeExecutable || mode == modePlain) {
+			modes[path] = mode
 		}
 	}
-	return staged
+	return modes, "", nil
 }
 
-func fileExists(root, path string) bool {
-	info, err := os.Lstat(filepath.Join(root, filepath.FromSlash(path)))
-	return err == nil && info.Mode().IsRegular()
+// recordModes sets the index mode of every staged regular file under paths:
+// the mode the change decided when modes names the file, otherwise the mode
+// the index had before staging. `git add` takes the mode from the file system
+// where Git trusts it and a Windows file system has no executable bit, so the
+// intended mode is set explicitly. It reports whether any mode was changed.
+func recordModes(ctx context.Context, root string, paths []string, modes map[string]bool, before map[string]string) (bool, string, bool) {
+	after, stderr, err := indexModes(ctx, root, paths)
+	if err != nil {
+		return false, gitReason(ctx, stderr, err), false
+	}
+	var plus, minus []string
+	for path, mode := range after {
+		executable, decided := modes[path]
+		if !decided {
+			previous, known := before[path]
+			if !known {
+				continue
+			}
+			executable = previous == modeExecutable
+		}
+		switch {
+		case executable && mode != modeExecutable:
+			plus = append(plus, path)
+		case !executable && mode == modeExecutable:
+			minus = append(minus, path)
+		}
+	}
+	sort.Strings(plus)
+	sort.Strings(minus)
+	for _, step := range []struct {
+		flag  string
+		paths []string
+	}{{"--chmod=+x", plus}, {"--chmod=-x", minus}} {
+		if len(step.paths) == 0 {
+			continue
+		}
+		if _, stderr, err := runGit(ctx, root, false, append([]string{"update-index", step.flag, "--"}, step.paths...)...); err != nil {
+			return false, gitReason(ctx, stderr, err), false
+		}
+	}
+	return len(plus)+len(minus) > 0, "", true
 }
 
 func gitCommand(ctx context.Context, root string, stdin io.Reader, args ...string) *exec.Cmd {

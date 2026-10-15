@@ -52,7 +52,7 @@ func BenchmarkCommitPathsInALargeHub(b *testing.B) {
 		write(edited, fmt.Sprintf("edit %d\n", iteration))
 		write(script, "#!/bin/sh\n")
 		b.StartTimer()
-		outcome := CommitPaths(context.Background(), root, []string{edited, script}, []string{script}, "Edit", false)
+		outcome := CommitPaths(context.Background(), root, []string{edited, script}, map[string]bool{script: true}, "Edit", false)
 		if outcome.Status != CommitCommitted {
 			b.Fatalf("outcome = %+v", outcome)
 		}

@@ -177,7 +177,7 @@ func TestCommitPathsRecordsExecutablesWhenGitIgnoresFileModes(t *testing.T) {
 	writeRepoFile(t, root, "skills/default/a/scripts/run.sh", "#!/bin/sh\n")
 	writeRepoFile(t, root, "skills/default/a/notes.md", "notes\n")
 	paths := []string{"skills/default/a/notes.md", "skills/default/a/scripts/run.sh"}
-	outcome := CommitPaths(context.Background(), root, paths, []string{"skills/default/a/scripts/run.sh", "skills/default/a/gone.sh"}, "Add a script", false)
+	outcome := CommitPaths(context.Background(), root, paths, map[string]bool{"skills/default/a/scripts/run.sh": true, "skills/default/a/gone.sh": true}, "Add a script", false)
 	if outcome.Status != CommitCommitted {
 		t.Fatalf("outcome = %+v", outcome)
 	}

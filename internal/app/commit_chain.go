@@ -19,9 +19,9 @@ type commitChain struct {
 	policy  workspace.CommitPolicy
 	asked   bool
 	paths   map[string]bool
-	// executable are the recorded paths written with the executable bit.
-	executable map[string]bool
-	ops        []string
+	// modes are the file modes the recorded steps decided, by path.
+	modes map[string]bool
+	ops   []string
 }
 
 // beginCommitChain starts a chain over the given hub-relative paths. Steps skip
@@ -29,7 +29,7 @@ type commitChain struct {
 // files dirty, so the check is made here once, before anything is written.
 func beginCommitChain(ctx context.Context, root, message string, touched []string) (*commitChain, error) {
 	policy, asked := workspace.CommitPolicyFrom(ctx)
-	chain := &commitChain{ctx: ctx, root: root, message: message, policy: policy, asked: asked && !policy.Disabled, paths: map[string]bool{}, executable: map[string]bool{}}
+	chain := &commitChain{ctx: ctx, root: root, message: message, policy: policy, asked: asked && !policy.Disabled, paths: map[string]bool{}, modes: map[string]bool{}}
 	if !chain.asked {
 		return chain, nil
 	}
@@ -57,12 +57,12 @@ func (chain *commitChain) Context() context.Context { return chain.ctx }
 func (chain *commitChain) Record(receipt mutation.Receipt) {
 	for _, path := range receipt.ChangedPaths {
 		chain.paths[path] = true
-		// The last write of a path decides its mode: a later step that
-		// rewrites or deletes it without the bit clears an earlier one.
-		delete(chain.executable, path)
 	}
-	for _, path := range receipt.ExecutablePaths {
-		chain.executable[path] = true
+	// The last write that decided a path's mode wins: a script recreated
+	// without the bit is plain, and an edit that keeps the mode leaves an
+	// earlier decision in place.
+	for path, executable := range receipt.FileModes {
+		chain.modes[path] = executable
 	}
 	if receipt.OperationID != "" {
 		chain.ops = append(chain.ops, receipt.OperationID)
@@ -92,6 +92,6 @@ func (chain *commitChain) Finish() *workspace.CommitOutcome {
 		return &workspace.CommitOutcome{Status: workspace.CommitFailed, Message: message, Reason: "Another change was still being committed: " + err.Error()}
 	}
 	defer func() { _ = lock.Unlock() }()
-	outcome := workspace.CommitPaths(chain.ctx, chain.root, paths, sortedKeys(chain.executable), message, chain.policy.Interactive)
+	outcome := workspace.CommitPaths(chain.ctx, chain.root, paths, chain.modes, message, chain.policy.Interactive)
 	return &outcome
 }
