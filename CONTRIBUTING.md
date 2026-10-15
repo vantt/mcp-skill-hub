@@ -7,7 +7,7 @@ You need Go 1.26.9 (from `go.mod`) and, for the web UI, Node.js 24 (from `web/.n
 
 Run the full gate before you commit. It runs:
 
-- the gofmt check and `go vet`;
+- the gofmt check and `go vet`, for this platform and for Windows;
 - the lint check for new issues since `origin/main`;
 - the full test suite.
 
@@ -39,6 +39,15 @@ The web UI has its own targets:
 - `make web-e2e`: build the UI and binary, then run Playwright against the real server.
 - `make web-shots`: capture the README and guide screenshots from an invented demo hub into `docs/images/web/`.
   Set `SHOTS_OUT_DIR` to write them somewhere else.
+
+### Wait for CI on every platform before merging
+
+Local gates run on one platform. Code that compiles everywhere can still fail at run time on another one: file
+modes do not exist on Windows, paths there have drive letters and backslashes, and commands printed for PowerShell
+are joined with `; `. CI runs the test suite on Linux, macOS and Windows for every pull request. Push a branch or
+open a pull request and wait until all three `Verify` jobs pass before merging a change into `main`, above all for
+work made of several phases or merged locally. In a test, guard checks that are meaningless on Windows (file modes,
+POSIX paths) by platform and keep every other assertion running everywhere.
 
 ## Keep tests isolated
 

@@ -53,8 +53,10 @@ fmt-check:
 	@unformatted="$$(gofmt -l $(GO_DIRS))"; \
 	if [ -n "$$unformatted" ]; then echo "gofmt needed (run make fmt):"; echo "$$unformatted"; exit 1; fi
 
+## vet: also vets the Windows build, tests included, so code that only compiles on Unix fails here
 vet:
 	go vet ./...
+	GOOS=windows go vet ./...
 
 ## check: what to run before committing
 check: fmt-check vet lint test

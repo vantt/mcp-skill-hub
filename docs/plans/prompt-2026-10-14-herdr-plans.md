@@ -89,6 +89,8 @@ runtime-skill-get-gate:
   owned files have foreign edits, stop that phase and ask the user.
 - No plan IDs or phase numbers in code comments, test names or commit messages.
   Conventional commits ending with: Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+- Before merging a run's work into main, push its branch and wait until CI passes on Linux,
+  macOS and Windows (see CONTRIBUTING.md, "Wait for CI on every platform before merging").
 - Fix regressions instead of weakening tests; run `make check` (or the repo's check
   target) before accepting the last phase of each plan.
 
