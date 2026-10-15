@@ -48,6 +48,13 @@ func TestFolderCommitMakesShebangScriptsExecutableInGit(t *testing.T) {
 			if mode := hubFileMode(t, hub, "shebang-tools", "references/notes.md"); mode != "100644" {
 				t.Fatalf("plain file mode = %s, want 100644", mode)
 			}
+			// A Windows file system cannot hold the executable bit, so with
+			// core.filemode=true Git itself reports the committed 100755 script
+			// as modified there; Git on Windows defaults to core.filemode=false
+			// for that reason. The committed modes above are what matters.
+			if runtime.GOOS == "windows" && fileMode == "true" {
+				return
+			}
 			if status := hubGit(t, hub, "status", "--porcelain", "--", "skills"); status != "" {
 				t.Fatalf("skills left uncommitted:\n%s", status)
 			}
