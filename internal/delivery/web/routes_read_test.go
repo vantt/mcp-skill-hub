@@ -11,12 +11,21 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/vantt/skillhub-mcp/internal/shellquote"
 )
 
 var update = flag.Bool("update", false, "rewrite golden files")
 
 func normalizeGolden(body, root string) string {
-	s := strings.ReplaceAll(body, root, "<WORKSPACE>")
+	// JSON escapes each backslash of a Windows path.
+	s := strings.ReplaceAll(body, strings.ReplaceAll(root, `\`, `\\`), "<WORKSPACE>")
+	s = strings.ReplaceAll(s, root, "<WORKSPACE>")
+	// Commit hints chain their commands for the shell of the platform, `;` in
+	// PowerShell; keep goldens in the POSIX form.
+	if chain := shellquote.Chain("", ""); chain != " && " {
+		s = strings.ReplaceAll(s, chain+"git -C <WORKSPACE>", " && git -C <WORKSPACE>")
+	}
 	s = regexp.MustCompile(`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})`).ReplaceAllString(s, "<TIME>")
 	s = regexp.MustCompile(`sha256:[0-9a-f]{64}`).ReplaceAllString(s, "<DIGEST>")
 	s = regexp.MustCompile(`gen-[A-Za-z0-9_-]+`).ReplaceAllString(s, "gen-<ID>")
