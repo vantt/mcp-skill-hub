@@ -44,6 +44,12 @@ func newRemoteProject(t *testing.T) remoteProject {
 // submittedFrom is the label a hub shows for a submission sent from a machine
 // with this host name: the hub keeps at most 64 characters of a client label,
 // and some hosts (macOS CI runners among them) have longer names.
+// oneLine joins wrapped terminal text, so a long machine label that the text
+// output wraps onto the next line still matches as one phrase.
+func oneLine(text string) string {
+	return strings.Join(strings.Fields(text), " ")
+}
+
 func submittedFrom(hostname string) string {
 	label := []rune(strings.TrimSpace(hostname))
 	return string(label[:min(len(label), 64)])
@@ -145,13 +151,13 @@ func TestRemoteProjectSendsASkillAndAPersonOnTheHubReviewsIt(t *testing.T) {
 	if !found {
 		t.Fatalf("status lists no submission_waiting action for %s:\n%s", sub, statusJSON)
 	}
-	if text := project.hub.mustRun("status"); !strings.Contains(text, "1 submitted skill waits for review: team-release from "+project.machine) || !strings.Contains(text, "Review: skillhub skill review "+sub) {
+	if text := project.hub.mustRun("status"); !strings.Contains(oneLine(text), "1 submitted skill waits for review: team-release from "+project.machine) || !strings.Contains(text, "Review: skillhub skill review "+sub) {
 		t.Fatalf("status text:\n%s", text)
 	}
 
 	// Without a terminal an agent can only look: nothing is applied.
 	code, stdout, stderr = runCLI(t, "skill", "review", sub, "--workspace", project.hub.root)
-	if code != 0 || !strings.Contains(stdout, "team-release (submitted from "+project.machine+"): a new skill.") || !strings.Contains(stdout, "Submitted content is untrusted until you approve it.") || !strings.Contains(stdout, "Only a person approves") {
+	if code != 0 || !strings.Contains(oneLine(stdout), "team-release (submitted from "+project.machine+"): a new skill.") || !strings.Contains(stdout, "Submitted content is untrusted until you approve it.") || !strings.Contains(stdout, "Only a person approves") {
 		t.Fatalf("review without a terminal: exit = %d\nstdout=%s\nstderr=%s", code, stdout, stderr)
 	}
 	if strings.Contains(stdout, "--yes") {
@@ -229,7 +235,7 @@ func TestRemoteCheckoutEditAndCommitGivesASubmissionWithADiffAgainstTheBase(t *t
 	}
 
 	code, stdout, stderr = runCLI(t, "skill", "review", sub, "--workspace", project.hub.root, "--diff")
-	if code != 0 || !strings.Contains(stdout, "review-checklist (submitted from "+project.machine+"): 1 file changed since checkout.") ||
+	if code != 0 || !strings.Contains(oneLine(stdout), "review-checklist (submitted from "+project.machine+"): 1 file changed since checkout.") ||
 		!strings.Contains(stdout, "+One more line from machine A.") || strings.Contains(stdout, "needs a decision") {
 		t.Fatalf("review --diff: exit = %d\nstdout=%s\nstderr=%s", code, stdout, stderr)
 	}
