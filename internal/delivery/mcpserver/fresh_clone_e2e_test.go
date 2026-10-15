@@ -303,8 +303,19 @@ func assertServesSampleHub(t *testing.T, session *mcp.ClientSession, stderr *loc
 			fail("skill_get %s = %#v", skill.id, outcome)
 		}
 		local := outcome.Result.Local
+		// The server names the folder under the workspace path it was given,
+		// which may pass through a symlink (macOS /var is /private/var), so
+		// compare resolved paths as newHub is.
+		gotPath, err := filepath.EvalSymlinks(local.Path)
+		if err != nil {
+			fail("skill_get %s: the folder %q it names cannot be resolved: %v", skill.id, local.Path, err)
+		}
+		oldRoot, err := filepath.EvalSymlinks(sample.root)
+		if err != nil {
+			t.Fatal(err)
+		}
 		runtimeDir := filepath.Join(newHub, "runtime") + string(os.PathSeparator)
-		if local.Status != "ready" || !strings.HasPrefix(local.Path, runtimeDir) || strings.HasPrefix(local.Path, sample.root) {
+		if local.Status != "ready" || !strings.HasPrefix(gotPath, runtimeDir) || strings.HasPrefix(gotPath, oldRoot+string(os.PathSeparator)) {
 			fail("skill_get %s: status %q at %q, want ready inside %s and outside the old machine %s", skill.id, local.Status, local.Path, runtimeDir, sample.root)
 		}
 		files := []string{"SKILL.md"}
