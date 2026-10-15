@@ -55,17 +55,13 @@ func addFixtureRepo(t *testing.T, files ...addFixtureFile) string {
 	if _, err := tree.Commit("initial", &git.CommitOptions{Author: &object.Signature{Name: "Tester", Email: "tester@example.com", When: time.Now()}}); err != nil {
 		t.Fatal(err)
 	}
-	slash := filepath.ToSlash(dir)
-	if !strings.HasPrefix(slash, "/") {
-		slash = "/" + slash
-	}
-	return "file://" + slash
+	return localFileURL(dir)
 }
 
 // commitFixtureFile adds a commit to a fixture repository.
 func commitFixtureFile(t *testing.T, url, rel, body string) {
 	t.Helper()
-	dir := strings.TrimPrefix(url, "file://")
+	dir := localPathOfFileURL(url)
 	repo, err := git.PlainOpen(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -208,7 +204,8 @@ func TestSkillAddAtATerminalChainsAddApproveAndActivateIntoOneCommit(t *testing.
 	if !strings.Contains(meta, "status: active") || !strings.Contains(meta, "content_reviewed_digest: sha256:") || !strings.Contains(meta, "kind: github") || !strings.Contains(meta, "triggers:") {
 		t.Fatalf("the skill must be active, approved, tracked and routed:\n%s", meta)
 	}
-	if info, err := os.Stat(filepath.Join(hub.root, "skills", "default", "pdf", "scripts", "fill.py")); err != nil || info.Mode()&0o111 == 0 {
+	// File modes are not meaningful on Windows; elsewhere the bit must survive.
+	if info, err := os.Stat(filepath.Join(hub.root, "skills", "default", "pdf", "scripts", "fill.py")); err != nil || (runtime.GOOS != "windows" && info.Mode()&0o111 == 0) {
 		t.Fatalf("the executable bit must survive the add: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(hub.root, "skills", "default", "pdf", ".env")); err == nil {

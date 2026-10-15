@@ -15,3 +15,13 @@ func localFileURL(path string) string {
 	}
 	return "file://" + slash
 }
+
+// localPathOfFileURL reverses localFileURL: file:///C:/x/y becomes C:\x\y on
+// Windows, and file:///x/y stays /x/y elsewhere.
+func localPathOfFileURL(url string) string {
+	path := strings.TrimPrefix(url, "file://")
+	if filepath.VolumeName(strings.TrimPrefix(path, "/")) != "" {
+		path = strings.TrimPrefix(path, "/")
+	}
+	return filepath.FromSlash(path)
+}
