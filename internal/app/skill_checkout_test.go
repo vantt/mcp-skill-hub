@@ -79,6 +79,11 @@ func seedHubSkill(t *testing.T, root string, skill fixtureSkill) string {
 		if err := os.Chmod(filepath.Join(dir, filepath.FromSlash(rel)), 0o755); err != nil {
 			t.Fatal(err)
 		}
+		// A Windows file system keeps no executable bit, so a hub that is a
+		// Git repository gets it in its index, where the hub keeps modes.
+		if _, err := os.Stat(filepath.Join(root, ".git")); err == nil {
+			hubGit(t, root, "add", "--chmod=+x", "--", "skills/default/"+skill.id+"/"+rel)
+		}
 	}
 	return dir
 }
