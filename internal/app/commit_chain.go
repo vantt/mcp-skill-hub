@@ -57,6 +57,9 @@ func (chain *commitChain) Context() context.Context { return chain.ctx }
 func (chain *commitChain) Record(receipt mutation.Receipt) {
 	for _, path := range receipt.ChangedPaths {
 		chain.paths[path] = true
+		// The last write of a path decides its mode: a later step that
+		// rewrites or deletes it without the bit clears an earlier one.
+		delete(chain.executable, path)
 	}
 	for _, path := range receipt.ExecutablePaths {
 		chain.executable[path] = true

@@ -6,6 +6,9 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/vantt/skillhub-mcp/internal/mutation"
+	"github.com/vantt/skillhub-mcp/internal/workspace"
 )
 
 // hubFileMode returns the mode Git records for a file of a hub skill, for
@@ -67,6 +70,47 @@ func TestCheckoutCommitKeepsTheHubExecutableBitOfAFileWithoutShebang(t *testing.
 	}
 	if mode := hubFileMode(t, hub, "keep-exec", "scripts/tool"); mode != "100755" {
 		t.Fatalf("mode = %s, want the hub's 100755 kept", mode)
+	}
+}
+
+func TestCommitChainDropsTheExecutableBitOfAScriptRewrittenWithoutIt(t *testing.T) {
+	t.Parallel()
+	for _, fileMode := range []string{"true", "false"} {
+		t.Run("core.filemode="+fileMode, func(t *testing.T) {
+			t.Parallel()
+			hub := newGitHub(t)
+			hubGit(t, hub, "config", "core.filemode", fileMode)
+			seedHubSkill(t, hub, fixtureSkill{id: "chain-exec"})
+			commitHubAll(t, hub, "add")
+			const script = "skills/default/chain-exec/scripts/run.sh"
+			chain, err := beginCommitChain(commitCtx(), hub, "Rewrite run.sh", []string{"skills/default/chain-exec"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			// Written as a shebang script, deleted, then written again as a
+			// plain file: only the last write decides the mode.
+			for _, change := range []mutation.Change{
+				{Path: script, Contents: []byte("#!/bin/sh\necho 1\n")},
+				{Path: script, Delete: true},
+				{Path: script, Contents: []byte("echo plain\n")},
+			} {
+				proposal, err := mutation.PlanMutation(hub, mutation.WriteSet{Command: "edit_skill_files", Changes: []mutation.Change{change}})
+				if err != nil {
+					t.Fatal(err)
+				}
+				receipt, err := confirmAndPublish(chain.Context(), hub, proposal)
+				if err != nil {
+					t.Fatal(err)
+				}
+				chain.Record(receipt)
+			}
+			if outcome := chain.Finish(); outcome == nil || outcome.Status != workspace.CommitCommitted {
+				t.Fatalf("outcome = %+v", outcome)
+			}
+			if mode := hubFileMode(t, hub, "chain-exec", "scripts/run.sh"); mode != "100644" {
+				t.Fatalf("mode = %s, want 100644 for the plain rewrite", mode)
+			}
+		})
 	}
 }
 
