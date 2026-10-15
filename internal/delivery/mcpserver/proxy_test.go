@@ -551,6 +551,110 @@ func TestProxyDropsACachedSkillTheHubNoLongerServes(t *testing.T) {
 	}
 }
 
+// busyTransport answers the next busy requests with 429 itself, the way the
+// hub's rate limiter does, before any reaches the hub; a negative busy answers
+// every request so.
+type busyTransport struct {
+	base       http.RoundTripper
+	retryAfter string
+
+	mu       sync.Mutex
+	busy     int
+	requests int
+}
+
+func (transport *busyTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	transport.mu.Lock()
+	transport.requests++
+	busy := transport.busy != 0
+	retryAfter := transport.retryAfter
+	if transport.busy > 0 {
+		transport.busy--
+	}
+	transport.mu.Unlock()
+	if !busy {
+		return transport.base.RoundTrip(request)
+	}
+	if request.Body != nil {
+		_ = request.Body.Close()
+	}
+	header := http.Header{"Content-Type": {"text/plain; charset=utf-8"}, "Retry-After": {retryAfter}}
+	return &http.Response{StatusCode: http.StatusTooManyRequests, Status: "429 Too Many Requests", Header: header,
+		Body: io.NopCloser(strings.NewReader("too many requests; slow down\n")), Request: request, ProtoMajor: 1, ProtoMinor: 1}, nil
+}
+
+func (transport *busyTransport) set(busy int, retryAfter string) (requests int) {
+	transport.mu.Lock()
+	defer transport.mu.Unlock()
+	transport.busy, transport.retryAfter = busy, retryAfter
+	return transport.requests
+}
+
+func (transport *busyTransport) count() int {
+	transport.mu.Lock()
+	defer transport.mu.Unlock()
+	return transport.requests
+}
+
+func TestProxyWaitsOutABusyHub(t *testing.T) {
+	root := newBundleHubFixture(t)
+	hub := startHTTPTestHub(t, root)
+	transport := &busyTransport{base: http.DefaultTransport.(*http.Transport).Clone()}
+	proxied := startTestProxy(t, hub.baseURL, hub.token, t.TempDir(), transport)
+	proxyResolve(t, proxied.session, root, "test-audit")
+
+	// A few refusals of the rate limiter are waited out, for a tool call and
+	// for a bundle download alike.
+	before := transport.set(2, "1")
+	proxyResolve(t, proxied.session, root, "test-audit")
+	if sent := transport.count() - before; sent != 3 {
+		t.Fatalf("a resolution through two 429 answers sent %d requests, want 3", sent)
+	}
+	transport.set(2, "1")
+	if got, _, encoded := proxySkillGet(t, proxied.session, "test-audit"); got.Remote == nil || got.Remote.Cache != remoteCacheFetched {
+		t.Fatalf("skill_get through two 429 answers = %s", encoded)
+	}
+
+	// A hub that stays busy is reported as busy, not as unreachable, and
+	// within a bounded wait.
+	transport.set(-1, "1")
+	started := time.Now()
+	result, encoded := callProxyTool(t, proxied.session, "skill_resolve", map[string]any{
+		"schema_version": SchemaVersion, "request_id": "REQ-busy",
+		"task": map[string]any{"description": remoteBenchTaskText(t, root, "herdr-cook-plan"), "scope": "multi_step"},
+	})
+	if elapsed := time.Since(started); elapsed > 5*time.Second {
+		t.Fatalf("a busy hub held the resolution for %s", elapsed)
+	}
+	if !result.IsError || !strings.Contains(string(encoded), `"code":"hub_busy"`) || !strings.Contains(string(encoded), `"retryable":true`) {
+		t.Fatalf("resolution with the hub busy = %s", encoded)
+	}
+	_, result, encoded = proxySkillGet(t, proxied.session, "herdr-cook-plan")
+	if !result.IsError || !strings.Contains(string(encoded), `"code":"hub_busy"`) {
+		t.Fatalf("skill_get with the hub busy = %s", encoded)
+	}
+	if strings.Contains(proxied.warnings.String(), "cannot be reached") {
+		t.Fatalf("a busy hub was reported as unreachable: %q", proxied.warnings.String())
+	}
+
+	// The minute-long refusal after wrong tokens is not waited out: it means
+	// this machine's token is wrong.
+	before = transport.set(-1, "60")
+	result, encoded = callProxyTool(t, proxied.session, "skill_resolve", map[string]any{
+		"schema_version": SchemaVersion, "request_id": "REQ-locked-out",
+		"task": map[string]any{"description": remoteBenchTaskText(t, root, "herdr-cook-plan"), "scope": "multi_step"},
+	})
+	if !result.IsError || !strings.Contains(string(encoded), hubTokenRejectedCode) {
+		t.Fatalf("resolution after the wrong-token lockout = %s", encoded)
+	}
+	if sent := transport.count() - before; sent > 2 {
+		t.Fatalf("the wrong-token lockout was retried: %d requests", sent)
+	}
+
+	transport.set(0, "1")
+	proxyResolve(t, proxied.session, root, "herdr-cook-plan")
+}
+
 func TestProxyFollowsNoRedirect(t *testing.T) {
 	var elsewhere sync.Mutex
 	var leaked []string

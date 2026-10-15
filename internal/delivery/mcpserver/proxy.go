@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -53,7 +54,15 @@ const (
 	// counted; when it is full it starts over, which costs at most one more
 	// confirmation per version (the hub counts each version once per session).
 	proxyMaxCountedVersions = 4096
+	// proxyBusyRetryAfter is the longest pause the hub's rate limiter asks
+	// for (Retry-After); a longer one is not a rate limit.
+	proxyBusyRetryAfter = time.Second
 )
+
+// proxyBusyBackoff is the wait before each repeat of a request the hub's rate
+// limiter refused. The limiter refills a request every 10 ms, so the repeats
+// end well within a second; a hub still busy after them is reported as busy.
+var proxyBusyBackoff = []time.Duration{50 * time.Millisecond, 100 * time.Millisecond, 200 * time.Millisecond, 400 * time.Millisecond}
 
 var proxySkillIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
@@ -125,6 +134,9 @@ type Proxy struct {
 
 	// tokenRejected is set while the hub answers 401 to this machine's token.
 	tokenRejected *atomic.Bool
+	// hubBusy is set while the hub's rate limiter still refuses requests after
+	// the repeats of proxyBusyBackoff.
+	hubBusy *atomic.Bool
 }
 
 // skillHint is what the latest resolution said about a skill. resolutionID
@@ -193,6 +205,7 @@ func NewProxy(ctx context.Context, options ProxyOptions) (*Proxy, error) {
 		cache:         cache,
 		stateRoot:     cache.StateRoot(hubID),
 		tokenRejected: &atomic.Bool{},
+		hubBusy:       &atomic.Bool{},
 		warn:          options.Warn,
 		now:           time.Now,
 		hints:         map[string]skillHint{},
@@ -206,7 +219,7 @@ func NewProxy(ctx context.Context, options ProxyOptions) (*Proxy, error) {
 		return nil, err
 	}
 	proxy.client = &http.Client{
-		Transport: bearerRoundTripper{token: options.Token, host: hubHost.Host, base: base, rejected: proxy.tokenRejected},
+		Transport: bearerRoundTripper{token: options.Token, host: hubHost.Host, base: base, rejected: proxy.tokenRejected, busy: proxy.hubBusy, backoff: proxyBusyBackoff},
 		// A redirect is never followed: it could send the token, or a
 		// different bundle, to another host.
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
@@ -326,25 +339,75 @@ func newProxyTransport() *http.Transport {
 	}
 }
 
-// bearerRoundTripper adds the token to requests to the hub's own host, and
-// notes whether the hub currently refuses it.
+// bearerRoundTripper adds the token to requests to the hub's own host, waits
+// out the hub's rate limiter, and notes whether the hub currently refuses the
+// token or is still busy.
 type bearerRoundTripper struct {
 	token    string
 	host     string
 	base     http.RoundTripper
 	rejected *atomic.Bool
+	busy     *atomic.Bool
+	// backoff is the wait before each repeat of a request the rate limiter
+	// refused; its length bounds the repeats.
+	backoff []time.Duration
 }
 
 func (transport bearerRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
-	clone := request.Clone(request.Context())
-	if strings.EqualFold(request.URL.Host, transport.host) {
-		clone.Header.Set("Authorization", "Bearer "+transport.token)
+	for attempt := 0; ; attempt++ {
+		clone := request.Clone(request.Context())
+		if attempt > 0 && request.GetBody != nil {
+			body, err := request.GetBody()
+			if err != nil {
+				return nil, err
+			}
+			clone.Body = body
+		}
+		if strings.EqualFold(request.URL.Host, transport.host) {
+			clone.Header.Set("Authorization", "Bearer "+transport.token)
+		}
+		response, err := transport.base.RoundTrip(clone)
+		if err != nil {
+			return nil, err
+		}
+		limited, lockedOut := rateLimited(response)
+		repeatable := request.Body == nil || request.Body == http.NoBody || request.GetBody != nil
+		if !limited || attempt == len(transport.backoff) || !repeatable {
+			if transport.rejected != nil {
+				transport.rejected.Store(response.StatusCode == http.StatusUnauthorized || lockedOut)
+			}
+			if transport.busy != nil {
+				transport.busy.Store(limited)
+			}
+			return response, nil
+		}
+		// The rate limiter refuses before the hub does any work, so the
+		// request is safe to send again.
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 64<<10))
+		_ = response.Body.Close()
+		timer := time.NewTimer(transport.backoff[attempt])
+		select {
+		case <-request.Context().Done():
+			timer.Stop()
+			return nil, request.Context().Err()
+		case <-timer.C:
+		}
 	}
-	response, err := transport.base.RoundTrip(clone)
-	if err == nil && transport.rejected != nil {
-		transport.rejected.Store(response.StatusCode == http.StatusUnauthorized)
+}
+
+// rateLimited tells the hub's two 429 answers apart. limited is the shared
+// rate limiter, which asks for a pause of at most proxyBusyRetryAfter;
+// lockedOut is the minute-long refusal that only follows wrong tokens, so it
+// means the token is wrong and is not waited out.
+func rateLimited(response *http.Response) (limited, lockedOut bool) {
+	if response.StatusCode != http.StatusTooManyRequests {
+		return false, false
 	}
-	return response, err
+	seconds, err := strconv.Atoi(strings.TrimSpace(response.Header.Get("Retry-After")))
+	if err == nil && time.Duration(seconds)*time.Second > proxyBusyRetryAfter {
+		return false, true
+	}
+	return true, false
 }
 
 // CloseIdleConnections lets http.Client close the base transport's idle
@@ -465,6 +528,11 @@ func (proxy *Proxy) callHub(ctx context.Context, name string, arguments json.Raw
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
+		if proxy.hubBusy.Load() || proxy.tokenRejected.Load() {
+			// The session is fine: the hub refused the call itself, and a new
+			// session would be refused the same way.
+			return nil, err
+		}
 		lastErr = err
 		proxy.dropSession(session)
 	}
@@ -513,6 +581,9 @@ func (proxy *Proxy) forward(ctx context.Context, name string, request *mcp.CallT
 		}
 		if proxy.tokenRejected.Load() {
 			return proxy.tokenRejectedResult(), nil
+		}
+		if proxy.hubBusy.Load() {
+			return proxy.hubBusyResult(), nil
 		}
 		proxy.noteReachable(false)
 		return proxy.hubUnavailable(), nil
@@ -824,7 +895,12 @@ func (proxy *Proxy) requestBundle(ctx context.Context, skillID string, held []st
 			proxy.forgetSkill(skillID)
 		}
 		return fetchOutcome{kind: fetchForward}, false
-	case http.StatusTooManyRequests, http.StatusServiceUnavailable, http.StatusBadGateway, http.StatusGatewayTimeout, http.StatusInternalServerError:
+	case http.StatusTooManyRequests:
+		if proxy.tokenRejected.Load() {
+			return fetchOutcome{kind: fetchFailed, code: hubTokenRejectedCode, message: hubTokenRejectedMessage, action: hubTokenRejectedAction}, false
+		}
+		return fetchOutcome{kind: fetchFailed, code: hubBusyCode, message: hubBusyMessage, action: hubBusyAction}, false
+	case http.StatusServiceUnavailable, http.StatusBadGateway, http.StatusGatewayTimeout, http.StatusInternalServerError:
 		// The hub answered but cannot serve the skill now (busy, catalog
 		// stale, or a file changed on disk). Only an unreachable hub falls
 		// back to the cache; an answer like this may concern trust or content.
@@ -999,8 +1075,18 @@ const (
 	hubTokenRejectedAction  = "Continue the task without a skill. To restore skills, copy the current token file from the hub machine and pass it with --token-file."
 )
 
+const (
+	hubBusyCode    = "hub_busy"
+	hubBusyMessage = "The Skill Hub is busy with requests from other agents and asked this machine to slow down, so no skill is available for this call."
+	hubBusyAction  = "Retry in a few seconds, or continue the task without a skill."
+)
+
 func (proxy *Proxy) tokenRejectedResult() *mcp.CallToolResult {
 	return proxy.toolFailure(hubTokenRejectedCode, hubTokenRejectedMessage, hubTokenRejectedAction)
+}
+
+func (proxy *Proxy) hubBusyResult() *mcp.CallToolResult {
+	return proxy.toolFailure(hubBusyCode, hubBusyMessage, hubBusyAction)
 }
 
 func (proxy *Proxy) hubUnavailable() *mcp.CallToolResult {
@@ -1010,7 +1096,7 @@ func (proxy *Proxy) hubUnavailable() *mcp.CallToolResult {
 }
 
 func (proxy *Proxy) toolFailure(code, message, action string) *mcp.CallToolResult {
-	item := toolError{Code: code, Message: message, Retryable: code == "hub_unreachable" || code == "hub_error" || code == "resource_digest_mismatch", SuggestedAction: action}
+	item := toolError{Code: code, Message: message, Retryable: code == "hub_unreachable" || code == "hub_error" || code == hubBusyCode || code == "resource_digest_mismatch", SuggestedAction: action}
 	result, err := structuredResult(toolOutcome[proxySkillGetResult]{SchemaVersion: SchemaVersion, Error: &item}, true)
 	if err != nil {
 		return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: message}}}

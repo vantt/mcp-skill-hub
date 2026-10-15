@@ -451,7 +451,8 @@ Your agent keeps working; it only loses new skills until the connection is back.
 
 - A download that stops in the middle is discarded, never kept half-written. If the connection broke, the agent is asked to retry; if the download did not finish within two minutes, the hub counts as unreachable and the cached copy is used as above.
 - A skill that machine B has just marked as waiting for review is never served from the cache.
-- When the hub answers but cannot serve a skill right now (busy, or a file changed on disk), the agent gets `hub_error` and no cached copy, because such an answer may concern the skill's trust or content.
+- When the hub answers but cannot serve a skill right now (it is shutting down, its search index is stale, or a file changed on disk), the agent gets `hub_error` and no cached copy, because such an answer may concern the skill's trust or content.
+- When many agents call the hub at once, it asks callers to slow down (HTTP 429). The proxy waits briefly and sends the call again, up to four times within a second. If the hub is still busy, the agent gets the error `hub_busy`, which it may retry; the hub is not reported as unreachable.
 
 As soon as the hub answers again, the next call works; you do not need to restart the agent. If the server on machine B restarted, the proxy opens a new session by itself.
 
