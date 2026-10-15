@@ -112,10 +112,11 @@ func DirtyPaths(ctx context.Context, root string, paths []string) ([]string, err
 }
 
 // CommitPaths commits exactly the given paths with message. Everything else in
-// the index and the working tree is left as it was. Hooks and signing run as
-// the person configured them. It never fails the caller: the outcome says what
-// happened and how to finish by hand.
-func CommitPaths(ctx context.Context, root string, paths []string, message string, interactive bool) CommitOutcome {
+// the index and the working tree is left as it was. The paths in executable
+// that are committed are recorded as executable (100755) even where Git ignores
+// file modes. Hooks and signing run as the person configured them. It never
+// fails the caller: the outcome says what happened and how to finish by hand.
+func CommitPaths(ctx context.Context, root string, paths, executable []string, message string, interactive bool) CommitOutcome {
 	outcome := CommitOutcome{Message: firstLine(message)}
 	if len(paths) == 0 {
 		outcome.Status, outcome.Reason = CommitSkipped, "There was nothing to commit."
@@ -145,15 +146,45 @@ func CommitPaths(ctx context.Context, root string, paths []string, message strin
 		outcome.Status, outcome.Reason = CommitFailed, reason
 		return outcome
 	}
-	if _, stderr, err := runGit(ctx, root, interactive, append([]string{"add", "-A", "--"}, paths...)...); err != nil {
-		return fail(gitReason(ctx, stderr, err))
+	staged := stagedExecutables(root, paths, executable)
+	if reason, ok := stagePaths(ctx, root, nil, interactive, paths, staged); !ok {
+		return fail(reason)
 	}
-	if _, _, err := runGit(ctx, root, false, append([]string{"diff", "--cached", "--quiet", "--"}, paths...)...); err == nil {
+	const staysStaged = " The files are staged: run the manual command to finish, or `git reset` to unstage them."
+	// Only the paths that differ from HEAD go into the commit, so a path that
+	// was added and removed again since HEAD never reaches the scratch index.
+	diff, stderr, err := runGit(ctx, root, false, append([]string{"diff", "--cached", "--name-only", "--no-renames", "-z", "--"}, paths...)...)
+	if err != nil {
+		return fail(gitReason(ctx, stderr, err) + staysStaged)
+	}
+	changed := strings.FieldsFunc(diff, func(r rune) bool { return r == 0 })
+	if len(changed) == 0 {
 		outcome.Status, outcome.Reason = CommitSkipped, "The files already match the last commit."
 		return outcome
 	}
-	if _, stderr, err := runGit(ctx, root, interactive, append([]string{"commit", "-q", "-m", message, "--"}, paths...)...); err != nil {
-		return fail(gitReason(ctx, stderr, err) + " The files are staged: run the manual command to finish, or `git reset` to unstage them.")
+	staged = stagedExecutables(root, changed, staged)
+	// The commit is built in an index of its own that starts from HEAD and
+	// takes only these paths, which is what `git commit -- <paths>` does
+	// itself. Git's own version re-reads the paths from the file system, and
+	// with core.filemode=false it would record a new script as 100644 again.
+	scratch, err := os.MkdirTemp("", "skillhub-commit-")
+	if err != nil {
+		return fail("A scratch index for the commit could not be made: " + err.Error() + staysStaged)
+	}
+	defer os.RemoveAll(scratch)
+	index := []string{"GIT_INDEX_FILE=" + filepath.Join(scratch, "index")}
+	base := []string{"read-tree", "--empty"}
+	if _, _, err := runGit(ctx, root, false, "rev-parse", "--verify", "-q", "HEAD"); err == nil {
+		base = []string{"read-tree", "HEAD"}
+	}
+	if _, stderr, err := runGitEnv(ctx, root, false, index, base...); err != nil {
+		return fail(gitReason(ctx, stderr, err) + staysStaged)
+	}
+	if reason, ok := stagePaths(ctx, root, index, interactive, changed, staged); !ok {
+		return fail(reason + staysStaged)
+	}
+	if _, stderr, err := runGitEnv(ctx, root, interactive, index, "commit", "-q", "-m", message); err != nil {
+		return fail(gitReason(ctx, stderr, err) + staysStaged)
 	}
 	head, _, err := runGit(ctx, root, false, "rev-parse", "HEAD")
 	if err != nil {
@@ -245,6 +276,44 @@ func existingOrTracked(ctx context.Context, root string, paths []string) []strin
 	return kept
 }
 
+// stagePaths stages paths in the index env names, the repository's own when env
+// is empty. With core.filemode=false, as on Windows, `git add` never takes the
+// executable bit from the file system, so the executable paths are marked in
+// the index directly.
+func stagePaths(ctx context.Context, root string, env []string, interactive bool, paths, executable []string) (string, bool) {
+	if _, stderr, err := runGitEnv(ctx, root, interactive, env, append([]string{"add", "-A", "--"}, paths...)...); err != nil {
+		return gitReason(ctx, stderr, err), false
+	}
+	if len(executable) == 0 {
+		return "", true
+	}
+	if _, stderr, err := runGitEnv(ctx, root, false, env, append([]string{"update-index", "--chmod=+x", "--"}, executable...)...); err != nil {
+		return gitReason(ctx, stderr, err), false
+	}
+	return "", true
+}
+
+// stagedExecutables keeps the executable paths that are being committed and
+// still exist, so `git update-index` never names a path the index lacks.
+func stagedExecutables(root string, paths, executable []string) []string {
+	committed := make(map[string]bool, len(paths))
+	for _, path := range paths {
+		committed[path] = true
+	}
+	var staged []string
+	for _, path := range executable {
+		if committed[path] && fileExists(root, path) {
+			staged = append(staged, path)
+		}
+	}
+	return staged
+}
+
+func fileExists(root, path string) bool {
+	info, err := os.Lstat(filepath.Join(root, filepath.FromSlash(path)))
+	return err == nil && info.Mode().IsRegular()
+}
+
 func gitCommand(ctx context.Context, root string, stdin io.Reader, args ...string) *exec.Cmd {
 	command := exec.CommandContext(ctx, "git", append([]string{"-C", root}, args...)...)
 	command.Env = append(os.Environ(), "GIT_OPTIONAL_LOCKS=0", "GIT_PAGER=cat", "GIT_LITERAL_PATHSPECS=1")
@@ -256,12 +325,18 @@ func gitCommand(ctx context.Context, root string, stdin io.Reader, args ...strin
 // runGit runs one Git step. Without a terminal it has no stdin and cannot ask
 // for a password or a passphrase.
 func runGit(ctx context.Context, root string, interactive bool, args ...string) (string, string, error) {
+	return runGitEnv(ctx, root, interactive, nil, args...)
+}
+
+// runGitEnv is runGit with extra environment, such as GIT_INDEX_FILE.
+func runGitEnv(ctx context.Context, root string, interactive bool, env []string, args ...string) (string, string, error) {
 	var stdout, stderr bytes.Buffer
 	var stdin io.Reader
 	if interactive {
 		stdin = os.Stdin
 	}
 	command := gitCommand(ctx, root, stdin, args...)
+	command.Env = append(command.Env, env...)
 	if !interactive {
 		command.Env = append(command.Env, "GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=never", "GIT_ASKPASS=", "SSH_ASKPASS=")
 	}

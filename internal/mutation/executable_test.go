@@ -131,3 +131,70 @@ func TestRecoveryAfterDisplacementPublishesExecutableReplacement(t *testing.T) {
 		t.Fatalf("recovered replacement mode = %v, want 0755", info.Mode().Perm())
 	}
 }
+
+func shebangTestSet(operationID string) WriteSet {
+	return WriteSet{OperationID: operationID, Command: "create_source", Changes: []Change{{
+		Path: executableTestPath, Contents: []byte("#!/bin/sh\nschema_version: 1\nid: SRC-EXEC\nadapter: git\n"),
+	}}}
+}
+
+func TestShebangChangeIsMarkedExecutableInTheProposal(t *testing.T) {
+	t.Parallel()
+	root := newWorkspace(t)
+	shebang := shebangTestSet("")
+	proposal, err := PlanMutation(root, shebang)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !proposal.WriteSet.Changes[0].Executable {
+		t.Fatal("a change whose content starts with #! must be executable")
+	}
+	if shebang.Changes[0].Executable {
+		t.Fatal("planning must not modify the caller's changes")
+	}
+	plain, err := PlanMutation(root, executableTestSet("", false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plain.WriteSet.Changes[0].Executable {
+		t.Fatal("a change without #! must keep its mode")
+	}
+}
+
+func TestShebangChangeCommitsExecutableAndReportsIt(t *testing.T) {
+	t.Parallel()
+	root := newWorkspace(t)
+	receipt, err := Commit(root, shebangTestSet("OP-SHEBANG"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(receipt.ExecutablePaths) != 1 || receipt.ExecutablePaths[0] != executableTestPath {
+		t.Fatalf("executable paths = %v", receipt.ExecutablePaths)
+	}
+	if runtime.GOOS == "windows" {
+		return // file modes are not meaningful on Windows
+	}
+	info, err := os.Stat(filepath.Join(root, executableTestPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o755 {
+		t.Fatalf("mode = %v, want 0755", info.Mode().Perm())
+	}
+}
+
+func TestShebangRuleNeverRemovesAnExecutableBit(t *testing.T) {
+	t.Parallel()
+	changes := []Change{
+		{Path: "a", Contents: []byte("plain"), Executable: true},
+		{Path: "b", Contents: []byte("#!/bin/sh\n")},
+		{Path: "c", Contents: []byte("# not a shebang\n")},
+		{Path: "d", Delete: true},
+	}
+	markShebangExecutable(changes)
+	for index, want := range []bool{true, true, false, false} {
+		if changes[index].Executable != want {
+			t.Errorf("%s executable = %v, want %v", changes[index].Path, changes[index].Executable, want)
+		}
+	}
+}

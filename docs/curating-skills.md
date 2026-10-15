@@ -195,7 +195,7 @@ A folder with a `SKILL.md` on this machine, such as `~/review-checklist`, is add
 cd <your-project> && skillhub skill commit ~/review-checklist
 ```
 
-The preview lists every file with its size, scripts keep their executable bit, and the files that look like secrets or build output are named under `Left out`, so you can see what did not come along. Committing the same folder again is an update with a diff, not a conflict. A skill from your own folder needs no content approval.
+The preview lists every file with its size, scripts keep their executable bit (a file that starts with `#!` is made executable in the hub, even when it comes from Windows), and the files that look like secrets or build output are named under `Left out`, so you can see what did not come along. Committing the same folder again is an update with a diff, not a conflict. A skill from your own folder needs no content approval.
 
 ### After you add a skill
 

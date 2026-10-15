@@ -209,11 +209,15 @@ func commitPrepared(root string, set WriteSet, changes []Change, resultSnapshot 
 		return Receipt{}, err
 	}
 	paths := make([]string, 0, len(entries))
+	var executable []string
 	for _, item := range entries {
 		paths = append(paths, item.Path)
+		if item.Executable && !item.Delete {
+			executable = append(executable, item.Path)
+		}
 	}
 	return Receipt{
-		OperationID: set.OperationID, ChangedPaths: paths, CatalogSnapshot: resultSnapshot,
+		OperationID: set.OperationID, ChangedPaths: paths, ExecutablePaths: executable, CatalogSnapshot: resultSnapshot,
 		Generation: m.PublishedGeneration, GitDirty: dirty,
 		SourceSchemaVersion: set.SourceSchemaVersion, TargetSchemaVersion: set.TargetSchemaVersion,
 	}, nil

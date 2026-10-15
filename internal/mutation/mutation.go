@@ -2,6 +2,7 @@
 package mutation
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -73,8 +74,11 @@ type Confirmation struct {
 // Receipt is returned after a successful durable mutation, including an
 // idempotent retry after the original response was lost.
 type Receipt struct {
-	OperationID         string
-	ChangedPaths        []string
+	OperationID  string
+	ChangedPaths []string
+	// ExecutablePaths are the written files published with the executable bit,
+	// for the Git commit step. They stay out of every serialized result.
+	ExecutablePaths     []string `json:"-"`
 	CatalogSnapshot     string
 	Generation          string
 	GitDirty            bool
@@ -167,6 +171,7 @@ func PlanMutation(root string, set WriteSet) (Proposal, error) {
 	}
 	set.BaseCatalogSnapshot = snapshot.CatalogSnapshot
 	set.Changes = append([]Change(nil), set.Changes...)
+	markShebangExecutable(set.Changes)
 	for index := range set.Changes {
 		actual, err := digestAt(root, set.Changes[index].Path)
 		if err != nil {
@@ -267,7 +272,7 @@ func CommitWithOptions(root string, set WriteSet, options Options) (Receipt, err
 			message = "Apply " + set.Command
 		}
 		message += "\n\nSkillhub-Operation: " + receipt.OperationID
-		receipt.Commit = workspace.CommitPaths(ctx, root, receipt.ChangedPaths, message, policy.Interactive)
+		receipt.Commit = workspace.CommitPaths(ctx, root, receipt.ChangedPaths, receipt.ExecutablePaths, message, policy.Interactive)
 		if receipt.Commit.Status == workspace.CommitCommitted {
 			if dirty, err := gitDirty(root); err == nil {
 				receipt.GitDirty = dirty
@@ -302,6 +307,7 @@ func commitWhileLocked(root string, set WriteSet, options Options) (Receipt, boo
 		}
 	}
 	changes := append([]Change(nil), set.Changes...)
+	markShebangExecutable(changes)
 	sortChanges(changes)
 	for _, item := range changes {
 		actual, err := digestAt(root, item.Path)
@@ -483,6 +489,19 @@ func validOptionalDigest(value string) bool {
 	}
 	_, err := hex.DecodeString(strings.TrimPrefix(value, "sha256:"))
 	return err == nil && strings.ToLower(value) == value
+}
+
+// markShebangExecutable marks every written file whose content starts with #!
+// executable. A file made on Windows has no executable bit to carry, so without
+// this rule a script it brings into the hub would not run on Linux or macOS.
+// The rule only adds the bit: it never clears one a change already carries, and
+// a change without a shebang is left as it is, so its proposal digest holds.
+func markShebangExecutable(changes []Change) {
+	for index := range changes {
+		if !changes[index].Delete && bytes.HasPrefix(changes[index].Contents, []byte("#!")) {
+			changes[index].Executable = true
+		}
+	}
 }
 
 func sortChanges(changes []Change) {
