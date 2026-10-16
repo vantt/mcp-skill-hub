@@ -118,6 +118,9 @@ func ServeHTTP(ctx context.Context, listeners []net.Listener, options HTTPOption
 		MaxHeaderBytes:    httpMaxHeaderBytes,
 		ErrorLog:          httpErrorLog(adapter.logger),
 	}
+	quiet := &quietConns{conns: map[net.Conn]struct{}{}}
+	httpServer.ConnState = quiet.track
+	httpServer.RegisterOnShutdown(quiet.closeAll)
 	served := make(chan error, len(listeners))
 	for _, listener := range listeners {
 		go func() { served <- httpServer.Serve(listener) }()
@@ -171,6 +174,45 @@ func ServeHTTP(ctx context.Context, listeners []net.Listener, options HTTPOption
 		return err
 	}
 	return shutdownErr
+}
+
+// quietConns tracks the connections that have not sent a request yet. An HTTP
+// client dials such a connection ahead of a request it may then send on
+// another one, and http.Server.Shutdown counts it as active until it is five
+// seconds old, so shutdown would wait for it until its own timeout. Nothing
+// is lost by closing it: it carries no request.
+type quietConns struct {
+	mu      sync.Mutex
+	conns   map[net.Conn]struct{}
+	closing bool
+}
+
+// track is the http.Server ConnState hook. A connection that is accepted
+// after shutdown began is closed at once.
+func (quiet *quietConns) track(conn net.Conn, state http.ConnState) {
+	quiet.mu.Lock()
+	defer quiet.mu.Unlock()
+	if state != http.StateNew {
+		delete(quiet.conns, conn)
+		return
+	}
+	if quiet.closing {
+		_ = conn.Close()
+		return
+	}
+	quiet.conns[conn] = struct{}{}
+}
+
+// closeAll closes every connection that has not sent a request; Shutdown
+// calls it once it has closed the listeners.
+func (quiet *quietConns) closeAll() {
+	quiet.mu.Lock()
+	defer quiet.mu.Unlock()
+	quiet.closing = true
+	for conn := range quiet.conns {
+		_ = conn.Close()
+	}
+	clear(quiet.conns)
 }
 
 // httpGate checks every request before it reaches the MCP handler: Host and

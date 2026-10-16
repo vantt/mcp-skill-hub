@@ -305,6 +305,36 @@ func TestHTTPShutdownClosesOpenSessions(t *testing.T) {
 	}
 }
 
+// TestHTTPShutdownDoesNotWaitForAConnectionThatSentNothing covers a client
+// connection that is open but has not sent a request yet: an HTTP client
+// dials one ahead of a request it may then send elsewhere. http.Server treats
+// such a connection as active for its first five seconds, so shutdown must
+// close it rather than wait for it until the shutdown timeout.
+func TestHTTPShutdownDoesNotWaitForAConnectionThatSentNothing(t *testing.T) {
+	hub := startHTTPTestHub(t, newMCPWorkspace(t))
+	quiet, err := net.Dial("tcp", strings.TrimPrefix(hub.baseURL, "http://"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer quiet.Close()
+	// A request on another connection proves the server is serving; the quiet
+	// connection was accepted before it, as Serve accepts in order.
+	response, err := http.Get(hub.baseURL + HTTPStatusPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = response.Body.Close()
+	started := time.Now()
+	hub.stop(t)
+	if elapsed := time.Since(started); elapsed >= httpShutdownTimeout/2 {
+		t.Fatalf("shutdown took %s, want well under the %s shutdown timeout", elapsed, httpShutdownTimeout)
+	}
+	_ = quiet.SetReadDeadline(time.Now().Add(5 * time.Second))
+	if _, err := quiet.Read(make([]byte, 1)); err == nil {
+		t.Fatal("the quiet connection is still open after shutdown")
+	}
+}
+
 // TestHTTPWildcardAcceptsIPLiteralsButKeepsOriginStrict covers a listener
 // bound to every interface: a client may name this machine by any IP address
 // in the Host header (a LAN or Tailscale address, also one that appears after
