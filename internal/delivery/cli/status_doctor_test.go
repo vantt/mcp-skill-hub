@@ -233,7 +233,7 @@ func roleFixtures() []roleFixture {
 			initHub(t, filepath.Join(t.TempDir(), "hub"))
 			project := t.TempDir()
 			mustConnect(t, project, "--host", "claude")
-			replaceInFile(t, filepath.Join(project, ".claude", "settings.local.json"), `"Bash(skillhub *serve*)"`, `"Bash(make test)"`)
+			replaceInFile(t, filepath.Join(project, ".claude", "settings.local.json"), `"Bash(skillhub serve*)"`, `"Bash(make test)"`)
 			return project
 		}},
 		{name: "client-remote down", role: app.RoleClientRemote, problems: []string{"remote_reachable"}, afterFix: []string{"remote_reachable"},
@@ -413,12 +413,12 @@ func TestDoctorFixKeepsTheUsersOwnPermissionRules(t *testing.T) {
 	project := t.TempDir()
 	mustConnect(t, project, "--host", "claude")
 	settings := filepath.Join(project, ".claude", "settings.local.json")
-	replaceInFile(t, settings, `"Bash(skillhub *serve*)"`, `"Bash(make test)"`)
+	replaceInFile(t, settings, `"Bash(skillhub serve*)"`, `"Bash(make test)"`)
 	if code, stdout, stderr := runDoctorCLI(isolatedProbeContext(), project, "--fix"); code != 0 || !strings.Contains(stdout, "Fixed:") || !strings.Contains(stdout, settings) {
 		t.Fatalf("doctor --fix exit %d\n%s%s", code, stdout, stderr)
 	}
 	content, err := os.ReadFile(settings)
-	if err != nil || !strings.Contains(string(content), `"Bash(skillhub *serve*)"`) || !strings.Contains(string(content), `"Bash(make test)"`) {
+	if err != nil || !strings.Contains(string(content), `"Bash(skillhub serve*)"`) || !strings.Contains(string(content), `"Bash(make test)"`) {
 		t.Fatalf("settings after the fix: %s %v", content, err)
 	}
 }

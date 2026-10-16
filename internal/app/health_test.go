@@ -521,7 +521,7 @@ func TestOutdatedPermissionRulesAreRewrittenKeepingTheUsersOwn(t *testing.T) {
 	permissions := document["permissions"].(map[string]any)
 	var ask []any
 	for _, rule := range permissions["ask"].([]any) {
-		if rule != "Bash(skillhub *serve*)" {
+		if rule != "Bash(skillhub serve*)" {
 			ask = append(ask, rule)
 		}
 	}
@@ -544,7 +544,7 @@ func TestOutdatedPermissionRulesAreRewrittenKeepingTheUsersOwn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(after), "Bash(skillhub *serve*)") || !strings.Contains(string(after), "Bash(make test)") {
+	if !strings.Contains(string(after), "Bash(skillhub serve*)") || !strings.Contains(string(after), "Bash(make test)") {
 		t.Fatalf("settings after the fix:\n%s", after)
 	}
 	if problems := codesOf(Run(t.Context(), report, DepthFull), SeverityProblem); len(problems) != 0 {

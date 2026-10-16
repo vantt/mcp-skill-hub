@@ -65,7 +65,8 @@ func matchesAny(rules []string, command string) bool {
 
 // TestClaudeAskRulesMatchCommandsInAnyFlagOrder keeps a prompt in front of every
 // command that changes the hub, a connection, the token or the cache, whatever
-// order its flags come in, while read-only commands run without one.
+// order its flags come in, while read-only commands run without one, also
+// when a skill id or a path holds the name of such a command.
 func TestClaudeAskRulesMatchCommandsInAnyFlagOrder(t *testing.T) {
 	t.Parallel()
 	ask, allow := ruleValues("ask"), ruleValues("allow")
@@ -73,6 +74,7 @@ func TestClaudeAskRulesMatchCommandsInAnyFlagOrder(t *testing.T) {
 		"skillhub doctor --fix",
 		"skillhub doctor --json --fix",
 		"skillhub doctor --fix --json",
+		"skillhub doctor --workspace /home/me/skill-hub --fix",
 		"skillhub connect --dry-run",
 		"skillhub connect -g",
 		"skillhub connect --hub http://h:7420 --token-file f",
@@ -84,12 +86,18 @@ func TestClaudeAskRulesMatchCommandsInAnyFlagOrder(t *testing.T) {
 		"skillhub serve web --addr 127.0.0.1:7421",
 		"skillhub skill activate my-skill --yes",
 		"skillhub skill confirm PROP-1",
+		"skillhub skill commit --workspace /h my-skill --yes",
 	} {
 		if !matchesAny(ask, command) {
 			t.Errorf("%q matches no ask rule", command)
 		}
 	}
-	for _, command := range []string{"skillhub status", "skillhub skill list", "skillhub doctor", "skillhub token show"} {
+	for _, command := range []string{
+		"skillhub status", "skillhub skill list", "skillhub doctor", "skillhub token show",
+		"skillhub skill show connect-helper", "skillhub skill review init-scripts --workspace /h",
+		"skillhub skill list --workspace /home/me/serve-hub", "skillhub skill show cache-clear-notes",
+		"skillhub doctor --workspace /home/me/fix-hub", "skillhub skill commit token-rotate-guide --workspace /h",
+	} {
 		if matchesAny(ask, command) {
 			t.Errorf("%q matches an ask rule", command)
 		}
