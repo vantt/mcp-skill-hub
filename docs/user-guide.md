@@ -22,9 +22,9 @@ Every command acts on the folder you run it in. Inside the hub or a connected pr
 
 ## Set up and connect agents
 
-To install your hub and connect a first project, follow the [Quickstart](../README.md#quickstart). This section covers the choices you have when you connect.
+To install your hub and connect every project, follow the [Quickstart](../README.md#quickstart). This section covers the choices you have when you connect: one project only, or every project at once.
 
-### Connect one project (recommended)
+### Connect one project
 
 Connecting a project lets the agents you open in that folder ask the hub for skills. Go to the project and see what `connect` would write:
 
@@ -97,15 +97,15 @@ In the same permissions file, `connect` adds exactly these rules:
 | allow | `Bash(skillhub:*)` |
 | ask | `Bash(skillhub * --yes*)` |
 | ask | `Bash(skillhub * confirm *)` |
-| ask | `Bash(skillhub *init*)` |
-| ask | `Bash(skillhub *connect*)` |
-| ask | `Bash(skillhub *--fix*)` |
-| ask | `Bash(skillhub *token rotate*)` |
-| ask | `Bash(skillhub *cache clear*)` |
-| ask | `Bash(skillhub *serve*)` |
+| ask | `Bash(skillhub init*)` |
+| ask | `Bash(skillhub connect*)` |
+| ask | `Bash(skillhub doctor *--fix*)` |
+| ask | `Bash(skillhub token rotate*)` |
+| ask | `Bash(skillhub cache clear*)` |
+| ask | `Bash(skillhub serve*)` |
 | deny | `Bash(skillhub * --approve-content*)` |
 
-Claude Code asks you before any `skillhub` command with `--yes` or `confirm`, and before `init`, `connect`, `doctor --fix`, `token rotate`, `cache clear` and `serve`, wherever their flags stand. So an agent can preview a `skill commit`, and you see the prompt when it applies the commit with `--yes`. It blocks `--approve-content`, so an agent never approves content. Codex and Gemini CLI have no such rules, so they do not ask first. Connections made by an earlier release lack the newer rules; `skillhub doctor` reports them and `skillhub doctor --fix` adds them. The first time you open the folder, its trust dialog lists `Bash(skillhub:*)`. Permission-bypass modes do not enforce these rules.
+Claude Code asks you before any `skillhub` command with `--yes` or `confirm`, and before `init`, `connect`, `doctor --fix`, `token rotate`, `cache clear` and `serve`, wherever their flags stand. So an agent can preview a `skill commit`, and you see the prompt when it applies the commit with `--yes`. It blocks `--approve-content`, so an agent never approves content. Codex and Gemini CLI have no such rules, so they do not ask first. Connections made by an earlier release lack the newer rules or still carry older, broader ones that also asked before read-only commands such as `skillhub skill show observer`; `skillhub doctor` reports them and `skillhub doctor --fix` replaces them. The first time you open the folder, its trust dialog lists `Bash(skillhub:*)`. Permission-bypass modes do not enforce these rules.
 
 `connect` notes which of these rules it added itself, in `permission-records.json` in your Skill Hub user configuration folder (not in Claude's settings file). `connect --remove` takes out only those, so a rule you already had, such as your own `Bash(skillhub:*)`, stays. `doctor --fix` notes the rules it adds the same way. A connection made before this record existed has none, and `connect --remove` then takes out every rule in the table.
 

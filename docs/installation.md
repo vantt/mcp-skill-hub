@@ -12,7 +12,7 @@ The install command for Linux, macOS and Windows is in the [README Quickstart](.
 skillhub --version
 ```
 
-It prints the version, commit and build date. Next, [set up your hub](../README.md#2-set-it-up).
+It prints the version, commit and build date. Next, [set up your hub](../README.md#2-create-your-hub).
 
 ## Choose options
 

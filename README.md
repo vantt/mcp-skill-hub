@@ -18,9 +18,11 @@ Because the library is central, you can collect skills from any repository, edit
 
 ## Quickstart
 
-You need Git and an agent such as Claude Code. Setup takes about two minutes.
+From nothing to an agent that talks to your own hub, on one computer, in about two minutes. You need Git and an agent such as Claude Code.
 
 ### 1. Install
+
+This puts the `skillhub` command on your computer.
 
 ```bash
 curl -fsSL https://github.com/vantt/skillhub-mcp/releases/latest/download/install.sh | sh
@@ -37,61 +39,112 @@ PowerShell 5.1 has no `&&`: write each command below on its own line, or separat
 
 </details>
 
-Open a new terminal and run `skillhub --version` to check it.
+Open a new terminal so it finds the command, then check it:
 
-### 2. Set it up
+```bash
+skillhub --version
+```
 
-Pick the case that fits you.
+The first line shows the version, such as 0.7.1.
 
-#### One computer
+### 2. Create your hub
+
+The hub is a folder, in its own Git repository, that holds your skills. Git saves every change with your name and email. If `git config user.email` prints nothing, run:
+
+```bash
+git config --global user.name "Your Name"
+git config --global user.email "you@example.com"
+```
+
+Then create the hub:
 
 ```bash
 mkdir -p ~/skill-hub && cd ~/skill-hub && skillhub init
+```
+
+```text
+Hub created at /home/you/skill-hub.
+...
+This is now the hub of this machine; `skillhub connect` uses it.
+```
+
+`init` may suggest connecting one project; use step 3 instead, which connects all of them.
+
+### 3. Connect your agent
+
+This tells the agents on this computer where your hub is, in every project you open.
+
+```bash
 skillhub connect -g
 ```
 
-Restart your agent and say: **curate my Skill Hub**. Done: every project you open now uses your hub.
+```text
+Connected your user account (all projects) to the hub at
+/home/you/skill-hub.
+...
+Next: restart your agent and ask it: "curate my Skill Hub"
+```
 
-#### Hub on one computer, agent on another
+The `WARNING` about host activation in the middle of it is expected. The first time, Claude Code asks you to trust `Bash(skillhub:*)`: allow it, so your agent can run `skillhub` commands.
 
-Both computers must reach each other on the network (same Wi-Fi or LAN, or [Tailscale](https://tailscale.com)). Install Skill Hub on both, then:
+### 4. Check
 
-**On the hub computer.** Create the hub as above (`init`), then start the server as a background service and make a one-time code:
+`doctor` checks the hub and the connection, and prints one fix for anything that is wrong.
+
+```bash
+skillhub doctor
+```
+
+```text
+...
+Claude Code       ok      user entry in ~/.claude.json; not used here, because this project's own
+                          entry wins
+...
+Healthy.
+```
+
+Inside `~/skill-hub`, the hub folder has its own connection, so the lines for your user account say "not used here": that is normal. Lines marked `notice` are information, not errors. If the last line is not `Healthy.`, run `skillhub doctor --fix`, or look the message up in [Troubleshooting](docs/troubleshooting.md).
+
+### 5. Ask your agent
+
+Open your agent in any project folder (restart it if it was running, so it loads the connection), then say:
+
+> curate my Skill Hub
+
+Your agent checks your hub with `skillhub status` and suggests one next step. A new hub has no skills yet, so that step is your first skill: [create your first skill](docs/curating-skills.md#create-your-first-skill). Once you make it active, which turns it on for agents, your agent asks the hub for it on its own when a task fits.
+
+### Next steps
+
+- [Create your first skill](docs/curating-skills.md#create-your-first-skill), or [add skills from GitHub](docs/curating-skills.md#add-a-skill-from-github).
+- [Browse and review skills in your browser](#see-it).
+- [Keep the hub on GitHub](docs/user-guide.md#keep-the-hub-on-github), and [move it to another machine](docs/user-guide.md#move-to-another-machine).
+- [Connect only some projects](docs/user-guide.md#connect-one-project) instead of all of them.
+- [Install options, upgrade and uninstall](docs/installation.md).
+- Every command and flag: `skillhub help`, `skillhub help <command>`, or the [command reference](docs/command-reference.md).
+
+### Hub and agent on different computers
+
+Keep the hub on one computer and use it from an agent on another, over the same Wi-Fi or LAN, or [Tailscale](https://tailscale.com). Do steps 1 and 2 on the hub computer, then start the server there as a background service and make a one-time code:
 
 ```bash
 cd ~/skill-hub && skillhub serve --install-service
 skillhub token invite
 ```
 
-The service restarts after a failure and when the computer starts (Linux and macOS; on Linux the command prints one more line if it needs `loginctl enable-linger` to run while you are logged out). On Windows, run `skillhub serve` in its own terminal and leave it open.
-
-It prints a ready-to-paste line, for example:
+`token invite` prints one line per network of the hub computer, for example:
 
 ```text
-skillhub connect --hub http://100.121.46.35:7420 --invite K7QF-9M2X-4TBD
+Tailscale (100.121.46.35), on the other machine:
+  $ skillhub connect --hub http://100.121.46.35:7420 --invite K7QF-9M2X-4TBD
 ```
 
-**On the agent computer.** Paste that line inside your project, then restart your agent:
+On the agent computer, do step 1, then run the line for a network that computer can reach, with `-g` added so every project uses the hub:
 
 ```bash
-cd <your-project> && skillhub connect --hub http://100.121.46.35:7420 --invite K7QF-9M2X-4TBD
+skillhub connect --hub http://100.121.46.35:7420 --invite K7QF-9M2X-4TBD -g
 ```
 
-The code works once and expires in 10 minutes; run `token invite` again for a new one. The agent computer keeps no skills, only a token file in its Skill Hub config folder. Add `-g` to the paste line to cover every project.
-
-This runs over plain HTTP on your network: fine at home or in an office. On a network you do not trust, see `skillhub help serve` (`--strict-pairing`, SSH tunnel).
-
-### 3. Check
-
-```bash
-skillhub doctor
-```
-
-It tells you what works and prints one fix for anything that does not. `skillhub doctor --fix` repairs what it can. The [troubleshooting guide](docs/troubleshooting.md) covers every message.
-
-**Next:** [create your first skill](docs/curating-skills.md#create-your-first-skill).
-
-More: [keep the hub on GitHub](docs/user-guide.md#keep-the-hub-on-github) · [run the server in the background, use SSH tunnels, rotate the token](docs/remote-hub-guide.md) · [installation details](docs/installation.md)
+Check it there with step 4, then restart your agent: it now asks the hub for skills. Curation stays on the hub computer: open your agent in `~/skill-hub` there and say "curate my Skill Hub". The code works once, for 10 minutes. `--install-service` covers Linux and macOS; on Windows, run `skillhub serve` in its own terminal and leave it open. The connection is plain HTTP, fine at home or in an office; for other networks, SSH tunnels and the token, read [One hub from several machines](docs/remote-hub-guide.md).
 
 ## How it works
 
@@ -142,7 +195,7 @@ Start the web UI from your hub. It prints a link for this computer, your network
 cd ~/skill-hub && skillhub serve web
 ```
 
-It listens on every network interface, so anyone with the link can change your skills. To keep it on this computer, add `--addr 127.0.0.1:7421`.
+Anyone with the link can change your skills; [keep it safe on your network](docs/web-ui.md#keep-it-safe-on-your-network).
 
 <img src="docs/images/web/skill-review.png" alt="The Review tab of an active skill showing its content check and readiness." width="800">
 
