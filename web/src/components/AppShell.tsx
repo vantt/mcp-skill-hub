@@ -5,7 +5,7 @@ import { Banner } from './Banner';
 import { NavRail } from './NavRail';
 import { SessionExpired } from './SessionExpired';
 import { onSessionExpired } from '../state/session';
-import { useHome } from '../api/queries';
+import { useHome, useSubmissionReview } from '../api/queries';
 import { useT } from '../i18n';
 
 interface AppShellProps {
@@ -26,6 +26,8 @@ export function AppShell({ children }: AppShellProps) {
   }, []);
 
   const path = location.pathname;
+  const submissionId = path.startsWith('/review/submissions/') ? decodeURIComponent(path.split('/')[3] ?? '') : '';
+  const { data: submission } = useSubmissionReview(submissionId);
 
   let pageTitle = t('nav.home');
   let parentLabel: string | null = null;
@@ -46,6 +48,13 @@ export function AppShell({ children }: AppShellProps) {
     pageTitle = id;
     parentLabel = t('nav.skills');
     parentPath = '/skills';
+  } else if (path === '/review') {
+    pageTitle = t('nav.review');
+  } else if (path.startsWith('/review/submissions/')) {
+    // Named by the skill it carries once it is read; the submission id until then.
+    pageTitle = submission?.skill_id || submissionId;
+    parentLabel = t('nav.review');
+    parentPath = '/review';
   } else if (path === '/sources') {
     pageTitle = t('nav.sources');
   } else if (path === '/sources/distill') {

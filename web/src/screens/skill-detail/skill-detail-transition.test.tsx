@@ -33,6 +33,8 @@ const proposal = {
   },
 };
 
+let rendered: QueryClient;
+
 function renderScreen() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
@@ -41,6 +43,8 @@ function renderScreen() {
   queryClient.setQueryData(['skill', SKILL_ID], loadGolden<SkillDetail>('skill-detail'));
   queryClient.setQueryData(['skill-review', SKILL_ID], loadGolden<SkillReviewResult>('skill-review'));
   queryClient.setQueryData(['skill-sources', SKILL_ID], loadGolden<SkillSourcesResult>('skill-sources'));
+  queryClient.setQueryData(['review-queue'], { items: [] });
+  rendered = queryClient;
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[`/skills/${SKILL_ID}`]}>
@@ -72,5 +76,16 @@ describe('SkillDetailScreen lifecycle toast', () => {
     await waitFor(() => expect(confirmSkillMutation).toHaveBeenCalledTimes(1));
     expect(screen.queryByText(/OP-/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Transitioned/)).not.toBeInTheDocument();
+  });
+
+  it('refreshes the review queue the navigation counts, so activating a draft drops it from the count', async () => {
+    renderScreen();
+    expect(rendered.getQueryState(['review-queue'])?.isInvalidated).toBe(false);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Deprecate' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Deprecate skill' }));
+
+    await waitFor(() => expect(confirmSkillMutation).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(rendered.getQueryState(['review-queue'])?.isInvalidated).toBe(true));
   });
 });

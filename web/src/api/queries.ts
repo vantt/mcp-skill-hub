@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, type QueryClient } from '@tanstack/react-query';
 import { apiFetch } from './client';
 import type {
   ConfirmationPins,
@@ -183,6 +183,15 @@ export async function previewSkillChanges(
     method: 'POST',
     body: JSON.stringify(body),
   });
+}
+
+// Marks stale what any change to the hub's skills can move: the skill lists, the home summary and
+// the review queue, whose count the navigation shows on every page and would otherwise keep until
+// a reload.
+export function invalidateSkillSummaries(queryClient: QueryClient): void {
+  for (const queryKey of [['skills'], ['home'], ['review-queue']]) {
+    void queryClient.invalidateQueries({ queryKey });
+  }
 }
 
 // Skills that wait for a person: new drafts and third-party content that changed.

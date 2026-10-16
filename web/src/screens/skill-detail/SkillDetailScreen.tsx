@@ -3,6 +3,7 @@ import { useParams, useSearchParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   confirmSkillMutation,
+  invalidateSkillSummaries,
   previewSkillTransition,
   useSession,
   useSkillDetail,
@@ -199,8 +200,7 @@ export function SkillDetailScreen() {
       setToastMessage(`${skill.skill_id} is now ${transitionTarget || skill.lifecycle_state}. ${commitNote(done.commit)}`);
       queryClient.invalidateQueries({ queryKey: ['skill', skill.skill_id] });
       queryClient.invalidateQueries({ queryKey: ['skill-review', skill.skill_id] });
-      queryClient.invalidateQueries({ queryKey: ['skills'] });
-      queryClient.invalidateQueries({ queryKey: ['home'] });
+      invalidateSkillSummaries(queryClient);
     } catch (err) {
       if (err instanceof ApiError) {
         setErrorMessage(err.render.WHY || err.render.ERROR || err.message);

@@ -179,6 +179,9 @@ test('waiting for review: a skill submitted from another machine is read in full
   await expect(page).toHaveURL(new RegExp(`/review/submissions/${sub}$`));
 
   await expect(page.getByText(/Origin: Submitted from machine-a/)).toBeVisible();
+  // The page names the submitted skill, under Waiting for review, not the home page.
+  await expect(page).toHaveTitle('release-notes · Skill Hub');
+  await expect(page.locator('.app-crumb')).toContainText('Waiting for review');
   await expect(page.getByText(/Left out by the submitting machine: \.env \(looks like a secret\)/)).toBeVisible();
   const approve = page.getByRole('button', { name: 'Approve' });
   await expect(approve).toBeDisabled();
@@ -198,7 +201,19 @@ test('waiting for review: a skill submitted from another machine is read in full
   expect(git('status', '--porcelain=v1')).toBe('');
   expect(fs.existsSync(path.join(ws, 'runtime', 'submissions', sub))).toBe(false);
 
+  // The navigation count follows the approval without a reload: it matches what a fresh page shows.
+  const fresh = await page.context().newPage();
+  await fresh.goto(server.url);
+  await fresh.goto(`${server.origin}/review`);
+  const freshHeading = await fresh.getByRole('heading', { name: /^Waiting for review \(\d+\)$/ }).textContent();
+  const waitingNow = Number(/\((\d+)\)/.exec(freshHeading ?? '')?.[1]);
+  await fresh.close();
+  const badge = page.getByRole('navigation', { name: 'Primary' }).locator('.app-nav-badge');
+  if (waitingNow === 0) await expect(badge).toHaveCount(0);
+  else await expect(badge).toHaveText(String(waitingNow));
+
   await page.getByRole('link', { name: 'Back to Waiting for review' }).click();
+  await expect(page).toHaveTitle('Waiting for review · Skill Hub');
   await expect(page.getByRole('list', { name: 'Skills waiting for review' }).getByText('Submitted · needs approval')).toHaveCount(0);
 });
 

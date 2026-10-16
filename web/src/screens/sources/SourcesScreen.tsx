@@ -5,6 +5,7 @@ import {
   checkSources,
   confirmSourceImport,
   confirmSourceProposal,
+  invalidateSkillSummaries,
   previewSourceImport,
   previewUnwatchSource,
   useSources,
@@ -166,6 +167,7 @@ export function SourcesScreen() {
         base_version: pins.base_version,
       });
       queryClient.invalidateQueries({ queryKey: ['sources'] });
+      invalidateSkillSummaries(queryClient);
       setImportSourceId(null);
       setImportProposal(null);
     } catch (err: unknown) {

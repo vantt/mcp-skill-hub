@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { confirmSkillMutation, previewSkillCreate } from '../../api/queries';
+import { useQueryClient } from '@tanstack/react-query';
+import { confirmSkillMutation, invalidateSkillSummaries, previewSkillCreate } from '../../api/queries';
 import type { SkillProposal } from '../../api/types';
 import { ApiError } from '../../api/client';
 import { ActionBar } from '../../components/ActionBar';
@@ -42,6 +43,7 @@ const HINT_UPLOAD = 'Drop a .md file or click to browse. Max size 1 MB.';
 export function CreateSkillScreen() {
   const t = useT();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const [id, setId] = useState('');
   const [name, setName] = useState('');
@@ -166,6 +168,7 @@ export function CreateSkillScreen() {
   const handleConfirm = async (pins: { proposalId: string; proposalDigest: string; baseVersion: string }) => {
     try {
       await confirmSkillMutation(pins.proposalId, pins);
+      invalidateSkillSummaries(queryClient);
       setPreviewOpen(false);
       setReceiptToast(`Created draft ${id.trim()}. Opening it so you can finish the routing fields.`);
       setTimeout(() => {

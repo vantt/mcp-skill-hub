@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { confirmSkillAdd, previewSkillAdd } from '../../api/queries';
+import { useQueryClient } from '@tanstack/react-query';
+import { confirmSkillAdd, invalidateSkillSummaries, previewSkillAdd } from '../../api/queries';
 import type { SkillAddProposal } from '../../api/types';
 import { ApiError } from '../../api/client';
 import { ActionBar } from '../../components/ActionBar';
@@ -61,6 +62,7 @@ const LABEL_IMPORTING = 'Importing…';
 export function AddSkillScreen() {
   const t = useT();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const [step, setStep] = useState<1 | 2>(1);
   const [locator, setLocator] = useState('');
@@ -150,6 +152,7 @@ export function AddSkillScreen() {
 
     try {
       await confirmSkillAdd(pins);
+      invalidateSkillSummaries(queryClient);
       setReceiptToast(`Imported ${addedIds.join(', ') || 'the skills'} as ${addedIds.length === 1 ? 'a draft' : 'drafts'}. Review each one before activating it.`);
       setTimeout(() => {
         navigate('/skills');

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ApiError } from '../../api/client';
-import { confirmUpstreamUpdate, reviewSkillUpdate } from '../../api/queries';
+import { confirmUpstreamUpdate, invalidateSkillSummaries, reviewSkillUpdate } from '../../api/queries';
 import type { UpstreamFile, UpstreamResolution, UpstreamUpdatePreview } from '../../api/types';
 import { DiffView } from '../../components/DiffView';
 import { Skeleton } from '../../components/Skeleton';
@@ -147,7 +147,7 @@ export function UpstreamReview({ skillId, onClose, onConfirmed }: UpstreamReview
       queryClient.invalidateQueries({ queryKey: ['skill-runtime', skillId] });
       queryClient.invalidateQueries({ queryKey: ['skill', skillId] });
       queryClient.invalidateQueries({ queryKey: ['skill-review', skillId] });
-      queryClient.invalidateQueries({ queryKey: ['skills'] });
+      invalidateSkillSummaries(queryClient);
       onConfirmed?.();
       onClose();
     } catch (err: unknown) {

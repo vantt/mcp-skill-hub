@@ -51,6 +51,17 @@ test('skill lifecycle journey: create, edit routing, activate, deprecate, and ar
   // Redirects to /skills/e2e-skill
   await page.waitForURL(new RegExp('/skills/e2e-skill'), { timeout: 15000 });
 
+  // The new draft waits for review: the navigation count includes it without a reload.
+  const waitingCount = async () => {
+    const badge = page.getByRole('navigation', { name: 'Primary' }).locator('.app-nav-badge');
+    return (await badge.count()) === 0 ? 0 : Number(await badge.textContent());
+  };
+  const queueResponse = await page.request.get(`${server.origin}/api/v1/review-queue`, {
+    headers: { Authorization: `Bearer ${new URL(server.url).hash.replace('#token=', '')}` },
+  });
+  const waitingWithDraft = queueResponse.ok() ? ((await queueResponse.json()) as { items: unknown[] }).items.length : -1;
+  await expect.poll(waitingCount).toBe(waitingWithDraft);
+
   // 3. Review tab shows not ready
   await expect(page.locator('.t-title')).toHaveText('E2E Skill');
   await expect(page.getByText('Missing activation requirements')).toBeVisible();
@@ -98,8 +109,9 @@ test('skill lifecycle journey: create, edit routing, activate, deprecate, and ar
   await activateModal.getByRole('button', { name: /^activate skill$/i }).click();
   await expect(activateModal).toBeHidden({ timeout: 10000 });
 
-  // Badge should now be Active
+  // Badge should now be Active, and the active skill no longer waits for review.
   await expect(page.locator('.fg-chip', { hasText: 'Active' })).toBeVisible();
+  await expect.poll(waitingCount).toBe(waitingWithDraft - 1);
 
   // 7. Deprecate skill
   const deprecateBtn = page.getByRole('button', { name: 'Deprecate' });
