@@ -31,11 +31,11 @@ const (
 	troubleshootDoc = "docs/troubleshooting.md"
 	troubleshootFix = "### Fresh clone on a new machine"
 	readmeDoc       = "README.md"
-	readmeCheck     = "### 3. Check"
-	// The README gives no sample output for the check; the closing line of the
-	// doctor sample in the remote hub guide is the documented all-clear.
+	readmeCheck     = "### 4. Check"
+	// The closing line of the README check's sample output is the documented
+	// all-clear.
 	doctorHealthyMsg = "Healthy."
-	doctorSampleDoc  = "docs/remote-hub-guide.md"
+	doctorSampleDoc  = readmeDoc
 )
 
 // sampleHub is the hub of the old machine, committed and pushed to a bare
