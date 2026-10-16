@@ -38,7 +38,17 @@ type confirmCase struct {
 	args  func(hub nextStepHub) []string
 	// subject is the Git subject the applied change gets.
 	subject string
+	// reach is what the output says about the agents that use the hub, or
+	// "" when the change is not about one skill.
+	reach string
 }
+
+const (
+	reachNow      = "Agents using this hub get it now."
+	reachDraft    = "Agents do not get it until it is activated."
+	reachRetired  = "Agents no longer get it: it is "
+	reachApproval = "Agents do not get it until its content is approved."
+)
 
 func confirmCases() []confirmCase {
 	ready := func(t *testing.T, hub nextStepHub) { hub.createReady("tbl-skill") }
@@ -63,6 +73,7 @@ func confirmCases() []confirmCase {
 			},
 			args:    func(nextStepHub) []string { return []string{"skill", "commit", "tbl-skill"} },
 			subject: "Commit tbl-skill from a project (1 file)",
+			reach:   reachDraft,
 		},
 		{
 			name: "edit", setup: ready,
@@ -70,21 +81,25 @@ func confirmCases() []confirmCase {
 				return []string{"skill", "edit", "tbl-skill", "--trigger", "cut a release now"}
 			},
 			subject: "Edit tbl-skill",
+			reach:   reachDraft,
 		},
 		{
 			name: "activate", setup: ready,
 			args:    func(nextStepHub) []string { return []string{"skill", "activate", "tbl-skill"} },
 			subject: "Activate tbl-skill",
+			reach:   reachNow,
 		},
 		{
 			name: "deprecate", setup: active,
 			args:    func(nextStepHub) []string { return []string{"skill", "deprecate", "tbl-skill"} },
 			subject: "Deprecate tbl-skill",
+			reach:   reachRetired + "deprecated.",
 		},
 		{
 			name: "archive", setup: deprecated,
 			args:    func(nextStepHub) []string { return []string{"skill", "archive", "tbl-skill"} },
 			subject: "Archive tbl-skill",
+			reach:   reachRetired + "archived.",
 		},
 		{
 			name: "migrate",
@@ -126,8 +141,9 @@ func TestConfirmPromptYesAppliesOneCommit(t *testing.T) {
 			if subject := gitOutput(t, hub.root, "log", "-1", "--format=%s"); subject != tc.subject {
 				t.Fatalf("commit subject = %q, want %q", subject, tc.subject)
 			}
-			if !strings.Contains(stdout, "Committed ") || !strings.Contains(stdout, "Agents using this hub get it now") {
-				t.Fatalf("no commit line:\n%s", stdout)
+			flat := strings.Join(strings.Fields(stdout), " ")
+			if !strings.Contains(stdout, "Committed ") || (tc.reach != "" && !strings.Contains(flat, tc.reach)) || (tc.reach != reachNow && strings.Contains(flat, "get it now")) {
+				t.Fatalf("no commit line, or it says the wrong thing about agents (want %q):\n%s", tc.reach, stdout)
 			}
 			if !hubIsClean(t, hub.root) {
 				t.Fatalf("the commit left files behind:\n%s", gitOutput(t, hub.root, "status", "--porcelain=v1"))

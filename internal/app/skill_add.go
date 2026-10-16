@@ -140,6 +140,11 @@ type SkillAddResult struct {
 	UpstreamSource  *UpstreamSourceRef           `json:"upstream_source,omitempty"`
 	Approved        bool                         `json:"-"`
 	Activated       bool                         `json:"-"`
+	// ActivationMissing and ActivationFix say, for one added skill, what it
+	// still needs before it can be activated and the edit command that adds
+	// it; empty when it is ready. They feed the terminal's next step only.
+	ActivationMissing []string `json:"-"`
+	ActivationFix     string   `json:"-"`
 }
 
 // SkillAddService coordinates preview and confirmation for direct skill additions.
@@ -997,6 +1002,11 @@ func (service SkillAddService) ConfirmSkillAdd(ctx context.Context, path string,
 	}
 
 	assessment, _ := catalog.AssessSkillState(ctx, root, preview.SkillID)
+	added := preview.SkillIDs
+	if len(added) == 0 {
+		added = []string{preview.SkillID}
+	}
+	noteAgentReach(ctx, root, &receipt.Commit, added...)
 
 	result := SkillAddResult{
 		Result:          NewResult(StatusOK, fmt.Sprintf("Added draft skill %q. Next: review with `skillhub skill show %s`, then preview activation with `skillhub skill activate %s`.", preview.SkillID, preview.SkillID, preview.SkillID)),
@@ -1020,6 +1030,9 @@ func (service SkillAddService) ConfirmSkillAdd(ctx context.Context, path string,
 	}
 	if receipt.Commit.Status != "" {
 		result.Items = append(result.Items, commitItem(receipt.Commit, receipt.GitDirty))
+	}
+	if len(added) == 1 {
+		result.ActivationMissing, result.ActivationFix, _ = (SkillService{}).ActivationGaps(ctx, root, preview.SkillID)
 	}
 	return result, nil
 }

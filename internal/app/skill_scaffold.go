@@ -31,6 +31,9 @@ type SkillScaffoldResult struct {
 	// Path is the SKILL.md file, relative to the project root.
 	Path        string `json:"path"`
 	ProjectRoot string `json:"project_root"`
+	// GitignoreAdded is the line added to the project's .gitignore, as a
+	// checkout adds it, or "" when it was there already.
+	GitignoreAdded string `json:"gitignore_added,omitempty"`
 }
 
 // ScaffoldProjectSkill writes .claude/skills/<id>/SKILL.md in the project and
@@ -59,13 +62,24 @@ func ScaffoldProjectSkill(ctx context.Context, input SkillScaffoldInput) (SkillS
 	if err := os.WriteFile(file, []byte(scaffoldSkillMD(id, input)), 0o644); err != nil {
 		return SkillScaffoldResult{}, err
 	}
+	// Like a checkout, the folder is the person's work in progress and the
+	// hub is where the skill lives, so the project's Git leaves it out.
+	pattern := "/" + projectSkillsDir + "/" + id + "/"
+	added, err := ensureGitignored(projectRoot, pattern)
+	if err != nil {
+		return SkillScaffoldResult{}, err
+	}
 	relative := projectSkillsDir + "/" + id + "/SKILL.md"
-	return SkillScaffoldResult{
+	result := SkillScaffoldResult{
 		Result:      NewResult(StatusOK, fmt.Sprintf("Created %s (nothing changed on the hub).", relative)),
 		SkillID:     id,
 		Path:        relative,
 		ProjectRoot: projectRoot,
-	}, nil
+	}
+	if added {
+		result.GitignoreAdded = pattern
+	}
+	return result, nil
 }
 
 func scaffoldError(err *Error) SkillScaffoldResult {
@@ -73,7 +87,8 @@ func scaffoldError(err *Error) SkillScaffoldResult {
 }
 
 // scaffoldSkillMD is the starter SKILL.md. The description says what the skill
-// does and, when there are triggers, "Use when ...". The body repeats the form
+// does and, for each trigger, a sentence that reads as English whatever form
+// the person wrote it in (see useSentence). The body repeats the form
 // as lists the commit reads its routing suggestions from. The scaffold marker
 // keeps an untouched starter from being activated.
 func scaffoldSkillMD(id string, input SkillScaffoldInput) string {
@@ -83,7 +98,11 @@ func scaffoldSkillMD(id string, input SkillScaffoldInput) string {
 	}
 	description := strings.TrimSpace(input.Description)
 	if triggers := cleanPhrases(input.Triggers); len(triggers) > 0 {
-		description = strings.TrimRight(description, ". ") + ". Use when " + strings.Join(triggers, " or ") + "."
+		sentences := make([]string, 0, len(triggers))
+		for _, trigger := range triggers {
+			sentences = append(sentences, useSentence(trigger))
+		}
+		description = strings.TrimRight(description, ". ") + ". " + strings.Join(sentences, " ")
 	}
 	var out strings.Builder
 	fmt.Fprintf(&out, "---\nname: %s\ndescription: %s\n---\n\n# %s\n\n", id, yamlScalar(description), title)
@@ -92,6 +111,29 @@ func scaffoldSkillMD(id string, input SkillScaffoldInput) string {
 	writeScaffoldList(&out, "Examples", "Add a few requests a person might type to ask for this skill.", input.Examples)
 	fmt.Fprintf(&out, "## Instructions\n\n%s\nReplace this paragraph and the comment above it with the steps the agent should follow.\n", skill.ScaffoldMarker)
 	return out.String()
+}
+
+// Words a trigger can start with that already read as a condition ("after a
+// deploy", "when the build fails") or as its subject ("the user asks ...").
+var (
+	conditionWords = map[string]bool{"when": true, "whenever": true, "after": true, "before": true, "if": true, "once": true, "while": true, "during": true, "for": true, "on": true, "in": true, "at": true, "as": true}
+	subjectWords   = map[string]bool{"the": true, "a": true, "an": true, "you": true, "your": true, "someone": true, "somebody": true, "user": true, "users": true, "i": true, "we": true, "they": true, "it": true, "there": true, "my": true, "our": true}
+)
+
+// useSentence turns one answer to "When should an agent use it?" into a
+// sentence: "after a deploy" gives "Use after a deploy.", "the user asks for
+// a review" gives "Use when the user asks for a review.", and a task such as
+// "write a commit message" gives "Use it to write a commit message.".
+func useSentence(trigger string) string {
+	trigger = strings.TrimRight(strings.TrimSpace(trigger), ".")
+	first := strings.ToLower(strings.Fields(trigger)[0])
+	switch {
+	case conditionWords[first]:
+		return "Use " + trigger + "."
+	case subjectWords[first]:
+		return "Use when " + trigger + "."
+	}
+	return "Use it to " + trigger + "."
 }
 
 func writeScaffoldList(out *strings.Builder, heading, hint string, items []string) {

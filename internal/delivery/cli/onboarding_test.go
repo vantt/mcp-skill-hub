@@ -621,3 +621,25 @@ func TestDryRunWritesNothing(t *testing.T) {
 		}
 	}
 }
+
+// In the hub folder the hub's own connection is used, not the one of the user
+// account; doctor and status say that this is how it should be. Not parallel:
+// it changes the home folder and the working directory.
+func TestDoctorInTheHubFolderCallsItsOwnConnectionExpected(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	isolateInit(t)
+	hub := initHub(t, filepath.Join(t.TempDir(), "hub"))
+	t.Chdir(hub)
+	if code, stdout, stderr := runCLI(t, "connect", "-g", "--host", "claude"); code != 0 {
+		t.Fatalf("connect -g: exit %d\n%s%s", code, stdout, stderr)
+	}
+	for _, command := range []string{"doctor", "status"} {
+		code, stdout, stderr := runCLI(t, command)
+		flat := strings.Join(strings.Fields(stdout), " ")
+		if code != 0 || !strings.Contains(flat, "the hub folder uses its own connection (as expected)") || strings.Contains(flat, "not used here") {
+			t.Fatalf("%s: exit %d\n%s%s", command, code, stdout, stderr)
+		}
+	}
+}

@@ -98,6 +98,7 @@ func finishUnfinishedCommit(ctx context.Context, plan *commitPlan, preview Skill
 		outcome = workspace.CommitPaths(ctx, plan.root, preview.Uncommitted, nil, message, policy.Interactive)
 		_ = lock.Unlock()
 	}
+	noteAgentReach(ctx, plan.root, &outcome, plan.id)
 	result.Commit = &outcome
 	if outcome.Status == workspace.CommitCommitted {
 		result.Result = NewResult(StatusApplied, fmt.Sprintf("Committed the earlier change of %s.", plan.id))

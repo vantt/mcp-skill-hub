@@ -63,6 +63,10 @@ type Reach struct {
 	Remote     string `json:"remote,omitempty"`
 	// PushCommand is the command that publishes the commit to Remote.
 	PushCommand string `json:"push_command,omitempty"`
+	// Agents says, for a change to skills, whether the agents that use this
+	// hub get them now or what stops them, for example a draft that is not
+	// activated yet. Empty for a change that is not about skills.
+	Agents string `json:"agents,omitempty"`
 }
 
 type commitPolicyKey struct{}

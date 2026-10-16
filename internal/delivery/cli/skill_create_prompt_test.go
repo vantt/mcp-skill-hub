@@ -85,7 +85,7 @@ func TestSkillCreateInATerminalAsksThreeOrFourQuestionsAndWritesOnlyInTheProject
 		}
 	}
 	scaffold := readFileText(t, filepath.Join(project, ".claude", "skills", "deploy-notes", "SKILL.md"))
-	for _, want := range []string{"name: deploy-notes", "Summarize a deploy for the team channel. Use when after a production deploy.", "## When not to use\n\n- for staging deploys", "- write the deploy notes for today's release"} {
+	for _, want := range []string{"name: deploy-notes", "Summarize a deploy for the team channel. Use after a production deploy.", "## When not to use\n\n- for staging deploys", "- write the deploy notes for today's release"} {
 		if !strings.Contains(scaffold, want) {
 			t.Fatalf("SKILL.md lacks %q:\n%s", want, scaffold)
 		}

@@ -300,6 +300,9 @@ func writeSkillAddResult(p *termui.Printer, verbose bool, result app.SkillAddRes
 	}
 	switch {
 	case result.Activated:
+	case result.Approved && result.ActivationFix != "":
+		p.Line(fmt.Sprintf("%s cannot be activated yet; it needs: %s.", result.SkillID, strings.Join(result.ActivationMissing, ", ")))
+		p.Next("add them (fill in the placeholders), then activate it:", result.ActivationFix)
 	case result.Approved:
 		p.Line(fmt.Sprintf("Next: skillhub skill activate %s", result.SkillID))
 	default:

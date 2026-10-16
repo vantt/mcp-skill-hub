@@ -133,7 +133,6 @@ skillhub source watch https://github.com/anthropics/skills --skill-id <skill-id>
 ```text
 Watching source anthropic-skills (https://github.com/anthropics/skills). Cadence: weekly.
 Committed 4be19c0 "Watch anthropic-skills, <skill-id>".
-Agents using this hub get it now.
 Next: skillhub source check anthropic-skills
 ```
 

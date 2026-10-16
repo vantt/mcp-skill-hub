@@ -126,11 +126,12 @@ func writeCommitLines(p *termui.Printer, outcome *workspace.CommitOutcome) {
 	switch outcome.Status {
 	case workspace.CommitCommitted:
 		p.Line(fmt.Sprintf("Committed %s %q.", workspace.ShortHash(outcome.Hash), outcome.Message))
-		text := "Agents using this hub get it now."
-		if outcome.Reach.PushNeeded {
-			text = "Agents using this hub get it now; other clones after `" + outcome.Reach.PushCommand + "`."
+		if outcome.Reach.Agents != "" {
+			p.Line(outcome.Reach.Agents)
 		}
-		p.Line(text)
+		if outcome.Reach.PushNeeded {
+			p.Line("Other clones get it after `" + outcome.Reach.PushCommand + "`.")
+		}
 	case workspace.CommitFailed:
 		p.Line("Not committed: " + outcome.Reason)
 		p.Raw("Finish it with: " + outcome.ManualCommand + "\n")

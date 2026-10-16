@@ -280,7 +280,29 @@ func TestSkillCLIRoutingExamplesAndScriptsApproval(t *testing.T) {
 		t.Fatalf("counter-example edit = %#v", routing)
 	}
 
-	digest := "sha256:" + strings.Repeat("c", 64)
+	stale := "sha256:" + strings.Repeat("c", 64)
+	stdout.Reset()
+	stderr.Reset()
+	if code := run("skill", "edit", "pr-review", "--workspace", root, "--approve-content", stale, "--yes"); code != 2 ||
+		!strings.Contains(stderr.String(), "ERROR:") || !strings.Contains(stderr.String(), "skillhub skill review pr-review") {
+		t.Fatalf("a digest that is not the current content = %d: stdout=%s stderr=%s", code, stdout.String(), stderr.String())
+	}
+	if got := section(readMetadata(), "quality")["content_reviewed_digest"]; got != nil {
+		t.Fatalf("a refused approval was recorded: %#v", got)
+	}
+	stdout.Reset()
+	if code := run("skill", "review", "pr-review", "--workspace", root, "--json"); code != 0 {
+		t.Fatalf("review = %d: %s", code, stderr.String())
+	}
+	var review struct {
+		ContentTrust struct {
+			ContentDigest string `json:"content_digest"`
+		} `json:"content_trust"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &review); err != nil || review.ContentTrust.ContentDigest == "" {
+		t.Fatalf("review content digest: %v %s", err, stdout.String())
+	}
+	digest := review.ContentTrust.ContentDigest
 	if code := run("skill", "edit", "pr-review", "--workspace", root, "--approve-content", digest, "--yes", "--json"); code != 0 {
 		t.Fatalf("approve scripts = %d: stdout=%s stderr=%s", code, stdout.String(), stderr.String())
 	}

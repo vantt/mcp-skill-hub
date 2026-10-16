@@ -101,6 +101,7 @@ func (service SkillCommitService) Apply(ctx context.Context, path string, previe
 	if err != nil {
 		return SkillCommitResult{}, err
 	}
+	noteAgentReach(ctx, plan.root, outcome, plan.id)
 	var marker CheckoutMarker
 	if plan.submission == nil {
 		if marker, err = syncProjectFolder(ctx, service.Clock, plan, outcome); err != nil {

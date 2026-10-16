@@ -16,7 +16,7 @@ func TestScaffoldProjectSkillWritesOnlyInTheProjectAndFeedsTheCommit(t *testing.
 
 	result, err := ScaffoldProjectSkill(context.Background(), SkillScaffoldInput{
 		SkillID: "deploy-notes", ProjectDir: project, Description: "Summarize a deploy for the team channel",
-		Triggers: []string{"after a production deploy"}, NotFor: []string{"staging deploys"}, Examples: []string{"write the deploy notes for today's release"},
+		Triggers: []string{"after a production deploy", "write a commit message"}, NotFor: []string{"staging deploys"}, Examples: []string{"write the deploy notes for today's release"},
 	})
 	if err != nil || result.Error != nil {
 		t.Fatalf("scaffold: %v %#v", err, result.Error)
@@ -29,10 +29,13 @@ func TestScaffoldProjectSkillWritesOnlyInTheProjectAndFeedsTheCommit(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"name: deploy-notes", "Summarize a deploy for the team channel. Use when after a production deploy.", "## When to use\n\n- after a production deploy", "## When not to use\n\n- staging deploys", "## Examples\n\n- write the deploy notes for today's release", "## Instructions"} {
+	for _, want := range []string{"name: deploy-notes", "Summarize a deploy for the team channel. Use after a production deploy. Use it to write a commit message.", "## When to use\n\n- after a production deploy", "## When not to use\n\n- staging deploys", "## Examples\n\n- write the deploy notes for today's release", "## Instructions"} {
 		if !strings.Contains(string(data), want) {
 			t.Fatalf("SKILL.md lacks %q:\n%s", want, data)
 		}
+	}
+	if ignore, err := os.ReadFile(filepath.Join(project, ".gitignore")); err != nil || !strings.Contains(string(ignore), "/.claude/skills/deploy-notes/\n") || result.GitignoreAdded != "/.claude/skills/deploy-notes/" {
+		t.Fatalf("the created folder must stay out of the project's Git like a checkout: %q %v %+v", ignore, err, result)
 	}
 	if _, found, _ := ReadCheckoutMarker(folder); found {
 		t.Fatalf("a created folder has no marker: its first commit is a new skill")
@@ -41,7 +44,7 @@ func TestScaffoldProjectSkillWritesOnlyInTheProjectAndFeedsTheCommit(t *testing.
 		t.Fatalf("create changed the hub")
 	}
 	preview := previewCommit(t, hub, project, "deploy-notes", SkillCommitInput{})
-	if preview.Case != commitCaseNew || preview.RoutingSuggestions == nil || len(preview.RoutingSuggestions.Triggers) != 1 || len(preview.RoutingSuggestions.Examples) != 1 {
+	if preview.Case != commitCaseNew || preview.RoutingSuggestions == nil || len(preview.RoutingSuggestions.Triggers) != 2 || len(preview.RoutingSuggestions.Examples) != 1 {
 		t.Fatalf("the commit must suggest the routing the form collected: %+v", preview.RoutingSuggestions)
 	}
 	if preview.ActivationReady {

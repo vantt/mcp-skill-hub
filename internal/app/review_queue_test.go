@@ -56,6 +56,10 @@ func TestReviewQueueListsDraftsAndStaleApprovals(t *testing.T) {
 	if got["pdf"].Origin != "github.com/example/pdf" || got["pdf"].Since == "" || !strings.Contains(got["pdf"].Reason, "changed") {
 		t.Fatalf("pdf = %+v", got["pdf"])
 	}
+	// A skill made on this hub came from no other repository.
+	if got["team-release"].Origin != "" {
+		t.Fatalf("a local draft names an origin: %+v", got["team-release"])
+	}
 }
 
 func TestReviewContentDiffsAgainstTheApprovedContent(t *testing.T) {
@@ -93,7 +97,7 @@ func TestReviewContentOfADraftCountsEveryFileAsChanged(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if review.Baseline != reviewBaselineNone || review.License != "MIT License (LICENSE)" {
+	if review.Baseline != reviewBaselineNone || review.License != "MIT License (LICENSE)" || review.Origin != "" {
 		t.Fatalf("review = %+v", review)
 	}
 	for _, file := range review.Files {

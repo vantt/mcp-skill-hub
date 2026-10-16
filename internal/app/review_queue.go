@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/vantt/skillhub-mcp/internal/skill"
+	"github.com/vantt/skillhub-mcp/internal/skillruntime"
+	"gopkg.in/yaml.v3"
 )
 
 // Kinds of a skill waiting for a person.
@@ -97,6 +99,10 @@ func queueFacts(ctx context.Context, root, id string) (since, origin string) {
 	}
 	if origin == "" {
 		origin = thirdPartyOrigin(meta)
+	}
+	var document contentTrustDocument
+	if origin == "" && yaml.Unmarshal(meta, &document) == nil && skillruntime.IsThirdParty(document.provenance()) {
+		origin = "an upstream source"
 	}
 	return since, origin
 }

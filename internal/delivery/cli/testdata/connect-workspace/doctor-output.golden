@@ -23,8 +23,8 @@ Connection files  ok      current
 Your user account uses this hub
 
 Check             Status  Detail
-Claude Code       ok      user entry in ~/.claude.json; not used here, because this project's own
-                          entry wins
+Claude Code       ok      user entry in ~/.claude.json; serves your other projects, while this
+                          project uses its own entry
 Codex             ok      user entry in ~/.codex/config.toml
 Gemini CLI        ok      user entry in ~/.gemini/settings.json
 Connection files  ok      current
@@ -56,8 +56,8 @@ Connection files  ok      current
 Your user account uses this hub
 
 Check             Status  Detail
-Claude Code       ok      user entry in ~/.claude.json; not used here, because this project's own
-                          entry wins
+Claude Code       ok      user entry in ~/.claude.json; serves your other projects, while this
+                          project uses its own entry
 Codex             ok      user entry in ~/.codex/config.toml
 Gemini CLI        ok      user entry in ~/.gemini/settings.json
 Connection files  ok      current
