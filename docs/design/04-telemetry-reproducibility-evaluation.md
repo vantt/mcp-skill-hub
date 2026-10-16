@@ -372,7 +372,7 @@ Replay fail nếu required snapshot/model artifact unavailable; không âm thầ
 
 ## 7. Golden evaluation corpus và routing eval gate
 
-Ngoài các suite đánh giá tĩnh, hệ thống hỗ trợ **Routing Evaluation** (`skillhub eval routing`) tự động sinh test cases từ `routing.examples` (positive cases) và `routing.counter_examples` (counter cases) của tất cả active skills theo cơ chế **leave-one-out** (loại bỏ example tương ứng khỏi bộ nhớ tính score của candidate để đo lường độ khái quát hóa, chấp nhận rò rỉ candidacy tại FTS).
+Ngoài các suite đánh giá tĩnh, hệ thống hỗ trợ **Routing Evaluation** (`skillhub eval routing`) tự động sinh test cases từ `routing.examples` (positive cases) và `routing.counter_examples` (counter cases) của tất cả active skills theo cơ chế **leave-one-out**: example đang kiểm bị loại khỏi skill khi tính score và cả khỏi index FTS khi tìm candidate, nên câu đó không thể tìm ra skill của nó nhờ chính nó. Phía FTS chạy đúng câu truy vấn của resolver trên một bản sao trong bộ nhớ của `skill_fts` với cột examples của skill chủ được viết lại, nên hit, thứ tự và rank giống hệt một thư viện build không có example đó; lint findability (`maintain validate`, review) dùng chung vòng này. Trước 2026-10-16 phía FTS vẫn thấy example; trên golden corpus điều đó không đổi số đo nào (17/168 case positive chỉ được FTS tìm ra nhờ chính câu đó, nhưng mọi skill golden có `operations` nên chủ vẫn là candidate qua kênh rule), nên ngưỡng trong `gate-v1.json` giữ nguyên.
 
 Bộ eval kết hợp tập đối chứng âm `testdata/routing/no-skill-v1.yaml` (các truy vấn phi kỹ thuật, chit-chat, typo nhỏ hoặc ngoài danh mục), và được gác cổng tự động trong `make check` (`TestRoutingEvalGate`) qua các ngưỡng tối thiểu được thiết lập trong `testdata/routing/gate-v1.json`.
 

@@ -38,8 +38,9 @@ const bundledOwnerID = "system-curator"
 // work is over the bound or the resolver rejects a skill, it returns one
 // self_resolution_skipped finding instead.
 func checkSkillChanges(ctx context.Context, view *catalog.View, policy resolverpkg.Policy, changes []skillChange, mode selfCheckMode) []resolverpkg.LintFinding {
-	served, err := servedSkillCatalog(ctx, view)
+	served, release, err := selfCheckCatalog(ctx, view)
 	if err == nil {
+		defer release()
 		var findings []resolverpkg.LintFinding
 		if findings, err = runSelfCheck(ctx, served, policy, changes, mode); err == nil {
 			return findings
@@ -69,6 +70,17 @@ func servedSkillCatalog(ctx context.Context, view *catalog.View) (resolverpkg.Ca
 		return nil, err
 	}
 	return memoSkillsCatalog{Catalog: sqlite, view: view}, nil
+}
+
+// selfCheckCatalog is the served catalog with a leave-one-out index, for
+// replaying routing examples; the caller calls release when done with it.
+func selfCheckCatalog(ctx context.Context, view *catalog.View) (served resolverpkg.Catalog, release func(), err error) {
+	served, err = servedSkillCatalog(ctx, view)
+	if err != nil {
+		return nil, nil, err
+	}
+	index := newExampleIndex(view)
+	return omittingCatalog{Catalog: served, index: index}, index.Close, nil
 }
 
 // selectedCase is a case to resolve with the skill that owns its phrase.

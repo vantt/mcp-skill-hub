@@ -153,7 +153,7 @@ Hệ thống cung cấp các quy tắc lint metadata tự động khi chạy `sk
 
 #### Kiểm tra example qua resolver
 
-Bốn mã cuối bảng không đo độ giống nhau của chữ mà **chạy resolver thật** trên example, trong bộ nhớ và không ghi gì (không đổi catalog, telemetry hay con trỏ generation). Thư viện được lấy từ generation đang phục vụ, rồi phủ lên phiên bản mới của skill đang xét (overlay), nên review một skill chưa rebuild hay một thư mục chưa commit vẫn được kiểm tra như thể skill đã active. Mỗi example được resolve với chính nó bị loại khỏi tập từ khóa, giống `skillhub eval routing`, và skill `system-curator` của hệ thống không bao giờ là chủ của một case.
+Bốn mã cuối bảng không đo độ giống nhau của chữ mà **chạy resolver thật** trên example, trong bộ nhớ và không ghi gì (không đổi catalog, telemetry hay con trỏ generation). Thư viện được lấy từ generation đang phục vụ, rồi phủ lên phiên bản mới của skill đang xét (overlay), nên review một skill chưa rebuild hay một thư mục chưa commit vẫn được kiểm tra như thể skill đã active. Mỗi example được resolve với chính nó bị loại khỏi skill chủ và khỏi index tìm kiếm (FTS của generation, hoặc tập từ của overlay nếu chủ nằm trong overlay), giống `skillhub eval routing`, và skill `system-curator` của hệ thống không bao giờ là chủ của một case.
 
 Những case được chạy cho một thay đổi (*affected examples*):
 
