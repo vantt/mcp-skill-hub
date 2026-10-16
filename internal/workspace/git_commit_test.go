@@ -263,3 +263,25 @@ func TestCommitPathsTreatsGlobCharactersLiterally(t *testing.T) {
 		t.Fatalf("the unrelated edit was not left alone: %q", status)
 	}
 }
+
+func TestCommitPathsStartsNoBackgroundMaintenance(t *testing.T) {
+	root := newCommitRepo(t)
+	// The test environment turns maintenance off for every Git it runs;
+	// clear that here so the hub's own commit is what is being checked.
+	t.Setenv("GIT_CONFIG_COUNT", "0")
+	trace := filepath.Join(t.TempDir(), "trace")
+	t.Setenv("GIT_TRACE", trace)
+	writeRepoFile(t, root, "skills/default/a/SKILL.md", "a changed\n")
+
+	outcome := CommitPaths(context.Background(), root, []string{"skills/default/a/SKILL.md"}, nil, "Edit a", false)
+	if outcome.Status != CommitCommitted {
+		t.Fatalf("outcome = %+v", outcome)
+	}
+	data, err := os.ReadFile(trace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "maintenance run") {
+		t.Fatalf("the hub commit started background maintenance:\n%s", data)
+	}
+}

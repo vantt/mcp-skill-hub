@@ -157,8 +157,16 @@ jobs:
           try { Add-MpPreference -ExclusionPath 'D:\tmp','D:\gocache',"$env:GITHUB_WORKSPACE" } catch { Write-Warning "Defender exclusion not applied: $_" }
 
       - name: Run unit and integration tests
+        if: matrix.os != 'windows-latest'
         shell: bash
         run: go test -timeout 30m ./...
+
+      # Windows runners are several times slower; the CI workflow allows the
+      # same 60 minutes, and the release must not be stricter than CI.
+      - name: Run unit and integration tests (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        run: go test -timeout 60m ./...
 
       - name: Run race detector
         if: matrix.os != 'windows-latest'
