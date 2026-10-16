@@ -63,6 +63,8 @@ If a draft is not ready, the page says so next to the **Activate skill** button.
 
 ### Change the files of a skill
 
+Use this for a quick fix. To try a change with your agent before anyone gets it, click **Checkout to a project** at the bottom of the **Files** tab instead: it shows the command to run in your project, `skillhub skill checkout <skill-id>`, and later `skillhub skill commit <skill-id>` ([Curating skills](curating-skills.md#edit-a-skill-and-try-it-before-others-get-it)).
+
 The **Files** tab shows the whole skill as a tree: `SKILL.md` first, then its folders and files. A mark next to a file says what you did to it: **A** added, **M** modified, **D** deleted, **R** renamed.
 
 - Click a file to read it. **Edit** opens a simple editor for a text file up to 1 MiB; a Markdown file also shows how it will read.
@@ -73,23 +75,21 @@ None of this reaches the hub yet. The bar at the bottom counts your pending chan
 
 1. Click **Review →**. Each file shows its mark and the lines it gains and loses; open one to see its diff. The routing lint says whether the new `SKILL.md` still routes well.
 2. Edit the **Commit message** if you like.
-3. Click **Commit to the hub**. All your changes become one commit, and the page says who gets it: "Committed 4be19c0. This machine's agents get it now; others after you push (`git -C ~/skill-hub push`)."
+3. Click **Commit to the hub**. All your changes become one commit, and the page says who gets it: "Committed c492ab3. This machine's agents get it now." When your hub has a Git remote, it adds "others after you push" and the push command.
 
 If the hub changed while you were editing, a drawer opens when you review. Choose **Keep my edits on the latest version** to continue on top of the new files, or **Discard my edits**.
 
 Editing a file of a skill from another repository changes its content, so agents get no content from that skill until you approve it again under **Waiting for review**.
 
-**Checkout to a project** shows the command to try the skill with your agent first: run `skillhub skill checkout <skill-id>` in your project, work with the skill there, then run `skillhub skill commit <skill-id>`.
-
 ### Review what waits for you
 
 **Waiting for review** lists what needs a person before agents get it: new drafts, skills from another repository whose content changed after you approved it, and skills other machines sent for review (**Submitted · needs approval**, with "Submitted from <machine>" as the origin). The number next to the menu entry is the count.
 
-A submission opens the same full review as any skill: every changed file with its diff, the license, "Origin: Submitted from <machine>", and the files the other machine left out. **Approve** applies the files and approves their content in one hub commit, once you have opened every changed file; a new skill lands as an approved draft, which you activate from its page. **Discard** (after a second click) drops it and changes nothing. Files that the hub and the other machine both changed since it was checked out need a decision in a terminal: `skillhub skill review <SUB-id> --accept <path>=hub`.
-
 1. Click a skill to open its full review. At the top you see its license, its origin and what its files are compared with: the content you last approved, what agents get today, or nothing for a new draft.
 2. Open each changed file to read it with its diff. A file you opened is marked with a check.
 3. **Approve** stays off until every changed file was opened ("open every changed file first: 1 left"). Then it makes one commit and says who gets the skill.
+
+A submission opens the same full review as any skill: every changed file with its diff, the license, "Origin: Submitted from <machine>", and the files the other machine left out. **Approve** applies the files and approves their content in one hub commit, once you have opened every changed file; a new skill lands as an approved draft, which you activate from its page. **Discard** (after a second click) drops it and changes nothing. Files that the hub and the other machine both changed since it was checked out need a decision in a terminal: `skillhub skill review <SUB-id> --accept <path>=hub`.
 
 A draft of your own has nothing to approve: read it, then activate it from its page.
 
