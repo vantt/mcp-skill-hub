@@ -57,7 +57,7 @@ cd <your-project> && skillhub skill create commit-style \
 
 Add two more requests under **Examples**, such as `- write the commit message for this fix` and `- describe my staged changes as a commit`. Skill Hub warns until a skill has at least three examples; it does not block you.
 
-**3. Try it.** Stay in your project; do not run these in `~/skill-hub`. Change a file and stage only that file, not `.claude/`:
+**3. Try it.** Stay in your project; do not run these in `~/skill-hub`. Change a file and stage it (`skill create` keeps its folder out of Git with `.gitignore`):
 
 ```bash
 cd <your-project> && git add <your-file>
