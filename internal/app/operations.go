@@ -180,6 +180,9 @@ func offlineGitCommand(ctx context.Context, root string, args ...string) *exec.C
 		"-c", "core.fsmonitor=false",
 		"-c", "core.untrackedCache=false",
 		"-c", "core.preloadIndex=false",
+		// No detached repack while another skillhub process reads objects.
+		"-c", "maintenance.auto=false",
+		"-c", "gc.auto=0",
 		"-C", root,
 	}
 	command := exec.CommandContext(ctx, "git", append(gitArgs, args...)...)
