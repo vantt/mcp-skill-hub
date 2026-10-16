@@ -4,7 +4,7 @@
 {"mcpServers":{"skillhub":{"type":"stdio","command":"<BINARY>","args":["mcp","serve","--profile","runtime","--workspace","<WORKSPACE>"]}}}
 [no final newline]
 === .claude/settings.json
-{"permissions":{"additionalDirectories":["<WORKSPACE>/runtime/cache/skills","<WORKSPACE>/runtime/envs","<WORKSPACE>/runtime/config"], "allow":["Bash(skillhub:*)"], "ask":["Bash(skillhub * --yes*)","Bash(skillhub * confirm *)","Bash(skillhub *init*)","Bash(skillhub *connect*)","Bash(skillhub *--fix*)","Bash(skillhub *token rotate*)","Bash(skillhub *cache clear*)","Bash(skillhub *serve*)"], "deny":["Bash(skillhub * --approve-content*)"]}}
+{"permissions":{"additionalDirectories":["<WORKSPACE>/runtime/cache/skills","<WORKSPACE>/runtime/envs","<WORKSPACE>/runtime/config"], "allow":["Bash(skillhub:*)"], "ask":["Bash(skillhub * --yes*)","Bash(skillhub * confirm *)","Bash(skillhub init*)","Bash(skillhub connect*)","Bash(skillhub doctor *--fix*)","Bash(skillhub token rotate*)","Bash(skillhub cache clear*)","Bash(skillhub serve*)"], "deny":["Bash(skillhub * --approve-content*)"]}}
 [no final newline]
 === .claude/skills/system-curator/SKILL.md
 ---

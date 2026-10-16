@@ -144,6 +144,8 @@ export interface CommitReach {
   push_needed: boolean;
   remote?: string;
   push_command?: string;
+  // For a change to skills: whether this hub's agents get them now, or what stops them.
+  agents?: string;
 }
 
 export interface CommitOutcome {

@@ -112,7 +112,7 @@ func roleResolutionError(report app.RoleReport) *WorkspaceResolutionError {
 	case storedExists:
 		return &WorkspaceResolutionError{
 			Why: "This folder is not a hub or a connected project.",
-			Fix: "To use the hub at " + report.StoredHub + " from this project, run `skillhub connect`.",
+			Fix: "To use the hub at " + report.StoredHub + " from every project, run `skillhub connect -g` (or `skillhub connect` for this project only).",
 		}
 	case report.StoredHub != "":
 		return &WorkspaceResolutionError{

@@ -179,7 +179,7 @@ func managedRulesToRemove(scope Scope, path string) (map[string][]string, error)
 	}
 	all := map[string][]string{}
 	for _, rule := range claudeCLIRules {
-		all[rule.key] = rule.values
+		all[rule.key] = append(slices.Clone(rule.values), retiredClaudeCLIRules[rule.key]...)
 	}
 	return all, nil
 }

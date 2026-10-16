@@ -447,6 +447,9 @@ func desiredNonLocalPermissions(adapter Adapter, settings settingsFile, root str
 	if err != nil {
 		return nil, false, err
 	}
+	if updated, err = withoutRetiredClaudeCLIRules(updated, settings); err != nil {
+		return nil, false, err
+	}
 	withDirs, err := ensureJSONStringArray(updated, claudeAllowedDirsPath, target)
 	if err != nil {
 		return nil, false, err

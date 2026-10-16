@@ -90,6 +90,34 @@ func (c leaveOneOutCatalog) Skills(ctx context.Context) ([]resolverpkg.Skill, er
 	return result, nil
 }
 
+// Search leaves an example out of the full-text index as well, so the phrase
+// under test cannot find its skill through its own text. Counter-examples are
+// not indexed, so their cases search the catalog as it is.
+func (c leaveOneOutCatalog) Search(ctx context.Context, query string, limit int) ([]resolverpkg.SearchHit, error) {
+	if c.removeKind != selfCaseExample {
+		return c.Catalog.Search(ctx, query, limit)
+	}
+	skills, err := c.Catalog.Skills(ctx)
+	if err != nil {
+		return nil, err
+	}
+	phrase, found := "", false
+	for _, s := range skills {
+		if s.ID == c.targetSkillID && c.removeIndex >= 0 && c.removeIndex < len(s.Examples) {
+			phrase, found = s.Examples[c.removeIndex], true
+			break
+		}
+	}
+	if !found {
+		return c.Catalog.Search(ctx, query, limit)
+	}
+	omitter, ok := c.Catalog.(exampleOmitter)
+	if !ok {
+		return nil, fmt.Errorf("search without example %d of %s: %w", c.removeIndex, c.targetSkillID, errCannotOmit)
+	}
+	return omitter.searchOmitting(ctx, query, limit, c.targetSkillID, phrase)
+}
+
 type routingEvalAccumulator struct {
 	correctP                   int
 	totalP                     int
@@ -182,11 +210,13 @@ func EvaluateRouting(ctx context.Context, opts RoutingEvalOptions) (RoutingEvalR
 
 	resolverService := ResolverService{Policy: policy, Telemetry: nil}
 	var acc routingEvalAccumulator
+	replay := selfCaseReplay{root: root, view: view, svc: resolverService, index: newExampleIndex(view)}
+	defer replay.index.Close()
 
-	if err := evaluatePositiveCases(ctx, root, view, activeSkills, resolverService, &acc); err != nil {
+	if err := evaluatePositiveCases(ctx, replay, activeSkills, &acc); err != nil {
 		return RoutingEvalReport{}, err
 	}
-	if err := evaluateCounterCases(ctx, root, view, activeSkills, resolverService, &acc); err != nil {
+	if err := evaluateCounterCases(ctx, replay, activeSkills, &acc); err != nil {
 		return RoutingEvalReport{}, err
 	}
 	if opts.NoSkillFile != "" {
@@ -217,7 +247,7 @@ func EvaluateRouting(ctx context.Context, opts RoutingEvalOptions) (RoutingEvalR
 	return report, nil
 }
 
-func evaluatePositiveCases(ctx context.Context, root string, view *catalog.View, skills []resolverpkg.Skill, svc ResolverService, acc *routingEvalAccumulator) error {
+func evaluatePositiveCases(ctx context.Context, replay selfCaseReplay, skills []resolverpkg.Skill, acc *routingEvalAccumulator) error {
 	for _, skill := range skills {
 		skillTotal := len(skill.Examples)
 		skillCorrect := 0
@@ -226,7 +256,7 @@ func evaluatePositiveCases(ctx context.Context, root string, view *catalog.View,
 				continue
 			}
 			acc.totalP++
-			resp, err := resolveSelfCase(ctx, root, view, svc, c, skill)
+			resp, err := replay.resolve(ctx, c, skill)
 			if err != nil {
 				return fmt.Errorf("resolve positive case for %s: %w", skill.ID, err)
 			}
@@ -270,14 +300,14 @@ func evaluatePositiveCases(ctx context.Context, root string, view *catalog.View,
 	return nil
 }
 
-func evaluateCounterCases(ctx context.Context, root string, view *catalog.View, skills []resolverpkg.Skill, svc ResolverService, acc *routingEvalAccumulator) error {
+func evaluateCounterCases(ctx context.Context, replay selfCaseReplay, skills []resolverpkg.Skill, acc *routingEvalAccumulator) error {
 	for _, skill := range skills {
 		for _, c := range ownCases(skill) {
 			if c.Kind != selfCaseCounter {
 				continue
 			}
 			acc.totalN++
-			resp, err := resolveSelfCase(ctx, root, view, svc, c, skill)
+			resp, err := replay.resolve(ctx, c, skill)
 			if err != nil {
 				return fmt.Errorf("resolve counter case for %s: %w", skill.ID, err)
 			}
@@ -298,12 +328,23 @@ func evaluateCounterCases(ctx context.Context, root string, view *catalog.View, 
 	return nil
 }
 
-// resolveSelfCase resolves one case of a skill through the served resolver
-// path, with the case's own phrase left out of its owner.
-func resolveSelfCase(ctx context.Context, root string, view *catalog.View, svc ResolverService, c selfResolutionCase, owner resolverpkg.Skill) (resolverpkg.Response, error) {
-	inst := svc
+// selfCaseReplay resolves skills' own cases through the served resolver path
+// of one generation.
+type selfCaseReplay struct {
+	root  string
+	view  *catalog.View
+	svc   ResolverService
+	index *exampleIndex
+}
+
+// resolve resolves one case of a skill with the case's own phrase left out of
+// its owner and out of the full-text index.
+func (replay selfCaseReplay) resolve(ctx context.Context, c selfResolutionCase, owner resolverpkg.Skill) (resolverpkg.Response, error) {
+	inst := replay.svc
 	inst.Cache = resolverpkg.NewCache(64)
-	return inst.resolveWithin(ctx, root, view, selfResolutionRequest(c, owner), c.withoutPhrase)
+	return inst.resolveWithin(ctx, replay.root, replay.view, selfResolutionRequest(c, owner), func(served resolverpkg.Catalog) resolverpkg.Catalog {
+		return c.withoutPhrase(omittingCatalog{Catalog: served, index: replay.index})
+	})
 }
 
 func evaluateNoSkillCases(ctx context.Context, root string, view *catalog.View, noSkillFile string, svc ResolverService, acc *routingEvalAccumulator) error {

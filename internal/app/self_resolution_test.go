@@ -255,7 +255,9 @@ func openGoldenCatalog(t *testing.T) (*catalog.View, resolverpkg.Catalog, resolv
 	if err != nil {
 		t.Fatal(err)
 	}
-	return view, memoSkillsCatalog{Catalog: sqlite, view: view}, policy, root
+	index := newExampleIndex(view)
+	t.Cleanup(index.Close)
+	return view, omittingCatalog{Catalog: memoSkillsCatalog{Catalog: sqlite, view: view}, index: index}, policy, root
 }
 
 // The engine path over an unchanged overlay must classify every own case like
@@ -268,10 +270,12 @@ func TestSelfResolutionEngineMatchesServedResolver(t *testing.T) {
 	}
 	overlay := newOverlayCatalog(base, nil, nil)
 	svc := ResolverService{Policy: policy}
+	index := newExampleIndex(view)
+	defer index.Close()
 	compared := 0
 	for _, skill := range skills {
 		for _, c := range ownCases(skill) {
-			served, err := resolveSelfCase(t.Context(), root, view, svc, c, skill)
+			served, err := selfCaseReplay{root: root, view: view, svc: svc, index: index}.resolve(t.Context(), c, skill)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -446,5 +450,7 @@ func TestSelfResolutionPerformance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	report("synthetic", synthetic, memoSkillsCatalog{Catalog: sqlite, view: view}, syntheticPolicy)
+	index := newExampleIndex(view)
+	defer index.Close()
+	report("synthetic", synthetic, omittingCatalog{Catalog: memoSkillsCatalog{Catalog: sqlite, view: view}, index: index}, syntheticPolicy)
 }

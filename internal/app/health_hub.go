@@ -175,6 +175,7 @@ func (hubCheck) Check(ctx context.Context, report RoleReport, depth Depth) []Fin
 		} else {
 			findings = append(findings, Finding{Code: "hub_uncommitted", Label: "Git", Severity: SeverityOK, Message: "clean"})
 		}
+		findings = append(findings, gitIdentityFinding(ctx, root))
 	}
 	if depth == DepthFull {
 		if git.Configured && gitErr == nil {
@@ -183,6 +184,18 @@ func (hubCheck) Check(ctx context.Context, report RoleReport, depth Depth) []Fin
 		findings = append(findings, listenerFinding(ctx))
 	}
 	return findings
+}
+
+// gitIdentityFinding reports a hub where Git cannot name the author of a
+// commit: every change to the hub is a commit, so each one would fail.
+func gitIdentityFinding(ctx context.Context, root string) Finding {
+	if !workspace.GitIdentityMissing(ctx, root) {
+		return Finding{Code: "hub_git_identity", Label: "Git identity", Severity: SeverityOK, Message: "set"}
+	}
+	return Finding{Code: "hub_git_identity", Label: "Git identity", Severity: SeverityProblem,
+		Message: "Git has no user name or email set, so no change to the hub can be committed.",
+		Manual:  shellquote.Chain(workspace.SetGitNameCommand, workspace.SetGitEmailCommand),
+		Reason:  "Your name and email are yours to choose; set them once for this machine."}
 }
 
 func busyFinding(report RoleReport, depth Depth) Finding {

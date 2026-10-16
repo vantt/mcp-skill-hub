@@ -5,7 +5,7 @@
   "permissions": {
     "allow": ["Bash(ls:*)","Bash(skillhub:*)"],
     "additionalDirectories":["<WORKSPACE>/runtime/cache/skills","<WORKSPACE>/runtime/envs","<WORKSPACE>/runtime/config"],
-    "ask":["Bash(skillhub * --yes*)","Bash(skillhub * confirm *)","Bash(skillhub *init*)","Bash(skillhub *connect*)","Bash(skillhub *--fix*)","Bash(skillhub *token rotate*)","Bash(skillhub *cache clear*)","Bash(skillhub *serve*)"],
+    "ask":["Bash(skillhub * --yes*)","Bash(skillhub * confirm *)","Bash(skillhub init*)","Bash(skillhub connect*)","Bash(skillhub doctor *--fix*)","Bash(skillhub token rotate*)","Bash(skillhub cache clear*)","Bash(skillhub serve*)"],
     "deny":["Bash(skillhub * --approve-content*)"]
   }
 }

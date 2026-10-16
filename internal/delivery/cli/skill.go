@@ -888,6 +888,11 @@ func writeSkillErrorFor(id string, stdout, stderr io.Writer, jsonOutput bool, er
 		writeStructuredSkillError(stdout, stderr, jsonOutput, refusal)
 		return 2
 	}
+	if structured := (*app.Error)(nil); errors.As(err, &structured) && structured.Render.Error != "" {
+		// The service already said what happened, why and what to run.
+		writeStructuredSkillError(stdout, stderr, jsonOutput, structured)
+		return 2
+	}
 	why := err.Error()
 	var missingErr *app.MissingActivationRequirementsError
 	if errors.As(err, &missingErr) {

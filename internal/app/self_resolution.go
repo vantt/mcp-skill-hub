@@ -17,14 +17,15 @@ const (
 )
 
 // maxSelfResolutionWork bounds one self-resolution run, counted in
-// resolves x active skills. One resolve costs about 0.6 ms plus 8.5 us per
-// active skill, measured with SKILLHUB_PERF=1 on the dev machine:
+// resolves x active skills. One resolve costs about 0.75 ms plus 9 us per
+// active skill, measured with SKILLHUB_PERF=1 on the dev machine, with every
+// search going through the leave-one-out index (the costliest path):
 //
-//	golden corpus, 42 skills:    0.94 ms per resolve, 22.4 us per resolve x skill
-//	synthetic corpus, 256 skills: 2.76 ms per resolve, 10.8 us per resolve x skill
+//	golden corpus, 42 skills:    1.13 ms per resolve, 27.0 us per resolve x skill
+//	synthetic corpus, 256 skills: 3.04 ms per resolve, 11.9 us per resolve x skill
 //
-// At 60,000 a run takes about 1.35 s at 42 skills and 0.65 s at 256, so it stays
-// under the 2 s target with headroom for slower machines.
+// At 60,000 a run takes about 1.6 s at 42 skills and 0.7 s at 256, so it stays
+// under the 2 s target.
 const maxSelfResolutionWork = 60000
 
 // selfResolutionCase is one routing phrase of a skill, replayed against the
@@ -161,6 +162,47 @@ func (c *overlayCatalog) Search(ctx context.Context, query string, limit int) ([
 	if err != nil {
 		return nil, err
 	}
+	return c.withOverlayHits(ctx, baseHits, query, "", nil)
+}
+
+// searchOmitting searches as Search does with one example of a skill left out
+// of whichever index holds the skill: the overlay's own terms for a replaced or
+// added skill, the base index for any other.
+func (c *overlayCatalog) searchOmitting(ctx context.Context, query string, limit int, skillID, phrase string) ([]resolverpkg.SearchHit, error) {
+	if _, err := c.Skills(ctx); err != nil {
+		return nil, err
+	}
+	replacement, overlaid := c.replace[skillID]
+	if !overlaid {
+		omitter, ok := c.Catalog.(exampleOmitter)
+		if !ok {
+			return nil, fmt.Errorf("search without an example of %s: %w", skillID, errCannotOmit)
+		}
+		baseHits, err := omitter.searchOmitting(ctx, query, limit, skillID, phrase)
+		if err != nil {
+			return nil, err
+		}
+		return c.withOverlayHits(ctx, baseHits, query, "", nil)
+	}
+	baseHits, err := c.Catalog.Search(ctx, query, limit)
+	if err != nil {
+		return nil, err
+	}
+	if _, indexed := c.terms[skillID]; !indexed {
+		return c.withOverlayHits(ctx, baseHits, query, "", nil)
+	}
+	remaining, found := withoutExample(replacement.Examples, phrase)
+	if !found {
+		return nil, fmt.Errorf("example %q is not an example of %s", phrase, skillID)
+	}
+	replacement.Examples = remaining
+	return c.withOverlayHits(ctx, baseHits, query, skillID, indexedTerms(replacement))
+}
+
+// withOverlayHits drops replaced and removed skills from the base hits and
+// adds the overlay skills that match the query. ownerTerms, when set, stands in
+// for the indexed terms of the skill ownerID.
+func (c *overlayCatalog) withOverlayHits(ctx context.Context, baseHits []resolverpkg.SearchHit, query, ownerID string, ownerTerms map[string]struct{}) ([]resolverpkg.SearchHit, error) {
 	if _, err := c.Skills(ctx); err != nil {
 		return nil, err
 	}
@@ -193,7 +235,11 @@ func (c *overlayCatalog) Search(ctx context.Context, query string, limit int) ([
 		if seen[id] {
 			continue
 		}
-		if matchesAnyToken(c.terms[id], queryTerms) {
+		terms := c.terms[id]
+		if id == ownerID {
+			terms = ownerTerms
+		}
+		if matchesAnyToken(terms, queryTerms) {
 			seen[id] = true
 			hits = append(hits, resolverpkg.SearchHit{SkillID: id})
 		}

@@ -112,6 +112,9 @@ func runSkillCreate(ctx context.Context, flags skillFlags, stdout, stderr io.Wri
 	}
 	return writeResult(stdout, stderr, flags.jsonOutput, result, func(p *termui.Printer) {
 		p.Line(result.Summary)
+		if result.GitignoreAdded != "" {
+			p.Line("Added " + result.GitignoreAdded[1:] + " to .gitignore.")
+		}
 		p.Line("Write the instructions there and try them: ask your agent to use /" + result.SkillID + ".")
 		p.Raw("When ready: skillhub skill commit " + shellquote.Arg(result.SkillID) + "\n")
 	})

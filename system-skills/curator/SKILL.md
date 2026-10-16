@@ -1,6 +1,6 @@
 ---
 name: system-curator
-version: 1.7.0
+version: 1.8.0
 contract-version: "2"
 description: Guide Skill Hub maintenance through the `skillhub` CLI (with --json) when a shell is available, or the bundled curation MCP tools when it is not.
 activation-policy: explicit-only
@@ -63,7 +63,15 @@ pipes, or `cd` around it. Hosts usually pre-approve `skillhub …` commands but
 ask about anything else, so a compound probe can stall on a permission prompt
 before curation starts. If it prints a version, use the CLI with `--json` for
 the whole session, adding `--workspace <path>` after the subcommand when the
-connected project does not resolve the intended Hub. Prefer the CLI even when
+connected project does not resolve the intended Hub.
+
+Run every curation command the same way: one plain `skillhub` command, for
+example `skillhub skill list --workspace /path/to/hub --json`. Never `cd` into
+the hub first (`cd <hub> && skillhub …`), never chain it with `&&`, `||` or
+`;`, and never pipe or redirect its output (`| head`, `| jq`, `2>&1`): read the
+`--json` fields instead. Hosts pre-approve a plain `skillhub` command (Claude
+Code's `Bash(skillhub:*)` rule); a compound command matches no such rule, so it
+stops on a permission prompt. Prefer the CLI even when
 curation MCP tools are also listed: the CLI needs one fewer MCP server, accepts
 local skill folders, and calls the same application services. Use the MCP tools
 only when there is no shell or `skillhub version` fails.

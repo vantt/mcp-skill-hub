@@ -399,7 +399,7 @@ The second command shows the exact line it would add, the reason, and a routing 
 
 ## Check routing quality (`skillhub eval routing`)
 
-Test whether your active skills' examples pick the right skill. Each example is matched with itself left out, so the score shows how well new requests will match:
+Test whether your active skills' examples pick the right skill. Each example is matched with itself left out, both from its skill and from the search index, so it cannot find its skill through its own words and the score shows how well new requests will match:
 
 ```bash
 skillhub eval routing

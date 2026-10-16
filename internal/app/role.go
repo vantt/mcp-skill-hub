@@ -302,7 +302,7 @@ func MovedHubFix(report RoleReport, missing string) string {
 	case storedExists:
 		return "Run `skillhub connect " + shellquote.Arg(report.StoredHub) + "` to use the hub stored on this machine."
 	}
-	return "To create a hub, run `" + NewHubCommand() + "`, then `skillhub connect` in this project."
+	return "To create a hub, run `" + NewHubCommand() + "`, then `skillhub connect -g`."
 }
 
 // IsHubRoot reports whether dir holds a hub marker.

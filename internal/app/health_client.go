@@ -117,9 +117,14 @@ func hostScopeFindings(report RoleReport, global bool, hosts []hostintegration.H
 			continue
 		}
 		message += displayConfigPath(*entry)
+		inHub := role.Project != nil && report.Hub != nil && sameDirectory(role.Project.Root, report.Hub.Root)
 		switch {
+		case global && inHub:
+			message += "; serves your other projects, while the hub folder uses its own connection (as expected)"
 		case global && role.Project != nil:
-			message += "; not used here, because this project's own entry wins"
+			message += "; serves your other projects, while this project uses its own entry"
+		case !global && inHub && role.User != nil:
+			message += "; the hub folder's own connection, used here instead of your user account's entry (as expected)"
 		case !global && role.User != nil:
 			message += "; it wins over the entry of your user account"
 		}
