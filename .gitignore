@@ -35,3 +35,4 @@ web/.e2e/
 # Video build artifacts: demo recordings, transcripts and voice audio are made again from video/demos
 video/recordings/
 video/audio/
+video/demos/tapes/06-agent-connect.tape

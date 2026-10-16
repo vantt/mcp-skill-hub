@@ -1,0 +1,44 @@
+# Scene: Hub and agent on different computers, agent side (README). render.sh writes
+# 06-agent-connect.tape from this file, with the connect line 05-hub-invite.tape printed.
+# The agent computer is a second sandbox; light theme so it never looks like the hub computer.
+Output video/recordings/tapes/06-agent-connect.mp4
+Source video/demos/tapes/settings.tape
+Set Theme "Catppuccin Latte"
+# Machine label "Agent computer": drawn by Remotion (VHS has no window title setting).
+
+Hide
+Type "DEMO_FRESH=1 . video/demos/sandbox.sh /tmp/skillhub-tape-agent 2>/dev/null && mkdir -p ~/my-project && cd ~/my-project && git init -q && clear"
+Enter
+Sleep 1s
+Show
+
+Type "@CONNECT_LINE@ -g"
+Sleep 600ms
+Enter
+Sleep 4s
+Sleep 6s
+
+Hide
+Type "clear"
+Enter
+Show
+
+Type "skillhub doctor"
+Enter
+Sleep 3s
+Sleep 5s
+
+Hide
+Type "mkdir -p .claude/skills && cp -R $DEMO_DIR/fixtures/release-checklist .claude/skills/ && clear"
+Enter
+Sleep 500ms
+Show
+
+Type "skillhub skill commit release-checklist"
+Enter
+Sleep 3s
+Sleep 2s
+Type "y"
+Enter
+Sleep 2s
+Sleep 5s

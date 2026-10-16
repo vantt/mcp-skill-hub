@@ -74,22 +74,41 @@ Còn thiếu gì ảnh hưởng nội dung thì agent hỏi trước Giai đoạ
 | Ảnh Web UI có sẵn | `docs/images/web/*.png` (chụp từ `make web-shots`); dùng làm tham chiếu hoặc ảnh tĩnh nếu chưa quay kịp |
 | Nơi đăng | **Cả hai**: `full.mp4` lên YouTube, `preview.gif` + link YouTube ở đầu README. Chốt 2026-10-16. Không đăng gì trước khi chủ project nói "đăng". |
 | Người đọc lời thoại | **Giọng TTS** (edge-tts, xem mục 5). Chốt 2026-10-16. |
+| Cấu trúc video | **Hub trước, rồi agent**, cùng thứ tự với Quickstart của README: ai cũng làm Install, Create your hub, Connect; chapter "An agent on another computer" dùng lại hub đó và chỉ thay bước kết nối. Mỗi bước một chapter YouTube. Chốt cấu trúc tại CHECKPOINT 1 ([`video/script.md`](../../video/script.md)). |
 | Tính năng bắt buộc | Xem danh sách bên dưới. |
 
 **Tính năng bắt buộc có trong video** (mọi lệnh đã đối chiếu với `docs/command-reference.md` và `README.md`; Giai đoạn 1
 vẫn phải chạy lại từng lệnh trên bản release mới nhất):
 
+Dùng chung cho cả hai case:
+
 1. Cài đặt: `curl -fsSL https://github.com/vantt/skillhub-mcp/releases/latest/download/install.sh | sh`, kiểm tra bằng
-   `skillhub --version` (nhắc ngắn có lệnh PowerShell cho Windows).
-2. Tạo hub trên một máy: `mkdir -p ~/skill-hub && cd ~/skill-hub && skillhub init`.
+   `skillhub --version` (nhắc ngắn có lệnh PowerShell cho Windows). Chapter máy khác cài trên cả hai máy.
+
+**Hub và agent trên cùng máy**
+
+2. Tạo hub: `mkdir -p ~/skill-hub && cd ~/skill-hub && skillhub init`.
 3. Kết nối mọi project: `skillhub connect -g`, khởi động lại agent.
 4. Nói với agent **"curate my Skill Hub"** và thấy agent lấy skill từ hub (cảnh trong Claude Code).
 5. Thêm một skill từ GitHub làm draft, duyệt rồi kích hoạt: `skillhub skill add <github-url>`,
    `skillhub skill review <skill-id>`, `skillhub skill activate <skill-id>`; mỗi thay đổi thành một Git commit trong hub.
 6. Web UI: `skillhub serve web`, trang danh sách skill với bộ lọc trạng thái (draft / active / deprecated).
-7. (Phần nâng cao) Hub trên máy này, agent ở máy khác: `skillhub serve --install-service`, `skillhub token invite`, dán
-   dòng `skillhub connect --hub <url> --invite <code>` ở máy kia.
-8. (Mẹo) `skillhub status` và `skillhub doctor` khi có gì không chạy.
+
+**Agent trên máy khác (hub trên một máy, agent trên máy khác)**
+
+7. Điều kiện: hai máy thấy nhau trên mạng (cùng Wi-Fi/LAN hoặc Tailscale).
+8. Trên máy hub: tạo hub như bước 2, rồi `cd ~/skill-hub && skillhub serve --install-service` và `skillhub token invite`;
+   lệnh in ra một dòng `skillhub connect --hub <url> --invite <code>` để dán. Nhắc: mã dùng một lần, hết hạn sau 10 phút;
+   Windows chạy `skillhub serve` trong terminal riêng thay vì `--install-service`.
+9. Trên máy agent: `cd <project> && skillhub connect --hub <url> --invite <code>`, khởi động lại agent; thêm `-g` để
+   áp dụng cho mọi project. Máy agent không giữ skill, chỉ giữ file token.
+10. Agent trên máy agent dùng skill từ hub; sửa hoặc kích hoạt một skill trên máy hub (CLI hoặc Web UI) rồi thấy agent ở
+    máy kia nhận bản mới.
+11. (Tùy chọn, nếu còn thời lượng) Sửa skill từ máy agent: `skillhub skill checkout <skill-id>`, sửa, rồi
+    `skillhub skill commit <skill-id>` gửi vào hàng chờ duyệt (`Sent as SUB-…`); trên máy hub
+    `skillhub skill review <SUB-id>` để duyệt.
+
+Mẹo chung (cuối video): `skillhub status` và `skillhub doctor` khi có gì không chạy.
 
 Không đưa vào video: lệnh dev (`resolve`, `eval`, `telemetry`), distill/learning (để video sau), và bất kỳ con số đo
 hiệu năng nào chưa có phương pháp đo được công bố.
@@ -98,7 +117,7 @@ hiệu năng nào chưa có phương pháp đo được công bố.
 
 | # | File | Mô tả | Lưu ở đâu khi xong |
 |---|---|---|---|
-| 1 | `video/output/full.mp4` | Video đầy đủ, 2–5 phút, 1920×1080, 30fps, có lời thoại, phụ đề, nhạc nền nhỏ | Không commit vào Git. Đăng YouTube và/hoặc đính kèm GitHub release. |
+| 1 | `video/output/full.mp4` | Video đầy đủ, khoảng 4–5 phút, 1920×1080, 30fps, có lời thoại, phụ đề, nhạc nền nhỏ | Không commit vào Git. Đăng YouTube và/hoặc đính kèm GitHub release. |
 | 2 | `video/output/short.mp4` | Bản ~30 giây, chỉ phần công dụng | `docs/images/demo/short.mp4` nếu ≤ 10MB, ngược lại chỉ đăng lên release |
 | 3 | `video/output/preview.gif` | GIF 10–15 giây, cảnh demo hấp dẫn nhất. Mục tiêu ≤ 5MB (README tải nhanh), tối đa 10MB | `docs/images/demo/preview.gif`, gắn ở đầu `README.md` và `README.vi.md` |
 | 4 | `video/output/subtitles.<lang>.srt` | Phụ đề theo từng ngôn ngữ đã chốt ở mục 2 | Commit trong `video/` (file nhỏ, dùng lại khi upload) |
@@ -113,16 +132,18 @@ Chỉ `preview.gif` (và `short.mp4` nếu đủ nhỏ) được copy vào `docs
 |---|---|---|---|---|
 | 1 | Mở đầu: một câu nêu vấn đề + cảnh kết quả cuối cùng | 5–10s | Motion graphics + trích đoạn demo | Vấn đề: skill rải rác trong từng project, từng máy, copy tay rồi lệch nhau. Kết quả: agent trong một project mới tự lấy đúng skill từ hub. |
 | 2 | Công dụng: vấn đề → giải pháp → 2–3 tính năng chính | 20–40s | Motion graphics | Sơ đồ: một Git repo (hub) → MCP → nhiều agent / nhiều project / nhiều máy. Ba ý: thư viện của bạn trong Git; duyệt trước khi tới agent; không cài gì vào từng project. |
-| 3 | Cài đặt: yêu cầu hệ thống + lệnh cài | ~30s | Quay terminal (VHS), lệnh hiển thị chữ to | Cần Git và một agent (Claude Code). Lệnh `install.sh`, rồi `skillhub --version`. Một dòng nhắc Windows có lệnh PowerShell trong README. |
-| 4 | Hướng dẫn sử dụng, mỗi bước có tiêu đề trên màn hình | phần chính | Quay demo + chú thích, highlight | Bước 1: `skillhub init`. Bước 2: `skillhub connect -g`. Bước 3: "curate my Skill Hub" trong Claude Code. Bước 4: thêm, duyệt, kích hoạt một skill. Bước 5: xem skill trong Web UI. |
-| 5 | Nâng cao / mẹo (tùy chọn) | 20–40s | Quay demo | Dùng hub từ máy khác bằng `token invite` (mã dùng một lần, hết hạn sau 10 phút). Mẹo: `skillhub status`, `skillhub doctor`. |
-| 6 | Kết: link repo, tài liệu, mời star / góp ý | 5–10s | Motion graphics | `github.com/vantt/skillhub-mcp`, `docs/user-guide.md`, mời mở issue / Discussions. Ghi rõ: "Verified with Claude Code". |
+| 3 | Cài đặt: yêu cầu hệ thống + lệnh cài (dùng chung hai case) | ~30s | Quay terminal (VHS), lệnh hiển thị chữ to | Cần Git và một agent (Claude Code). Lệnh `install.sh`, rồi `skillhub --version`. Một dòng nhắc Windows có lệnh PowerShell trong README. |
+| 4 | Hub và agent trên cùng máy: tạo hub, kết nối, kiểm tra, hỏi agent, skill đầu tiên, sửa trên Web UI; mỗi bước có tiêu đề "Step N · …" | ~2:30 | Quay demo (VHS, Playwright, OBS) + chú thích, highlight | `init`, `connect -g`, `doctor` (chạy trong project), "curate my Skill Hub", `skill create` → viết instructions → thử với `/commit-style` → `skill commit` (draft + activate), Web UI sửa file rồi **Commit to the hub**. |
+| 5 | Agent trên máy khác (chapter riêng), nhãn máy "Hub computer" / "Agent computer" | ~1:00 | Sơ đồ hai máy + quay demo chia đôi màn hình | Máy hub: `serve --install-service` (thẻ chữ), `token invite`. Máy agent: dán dòng `connect --hub … --invite …` thêm `-g`, `doctor`. Curation vẫn ở máy hub; skill gửi từ máy agent thành `SUB-…`, duyệt trên Web UI. |
+| 6 | Mẹo + kết: link repo, tài liệu, mời star / góp ý | 15–20s | Motion graphics | Mẹo `skillhub status`, `skillhub doctor`. `github.com/vantt/skillhub-mcp`, `docs/user-guide.md`, `docs/remote-hub-guide.md`, mời mở issue / Discussions. Ghi rõ: "Verified with Claude Code". |
 
 Nguyên tắc nội dung:
 
 - Mọi lệnh, tham số, đường dẫn trong video **phải khớp với code thực tế** của repo ở phiên bản đang quay. Không bịa
   tính năng. Nếu `docs/command-reference.md` và `skillhub help <command>` khác nhau thì `skillhub help` thắng.
 - Mỗi bước hướng dẫn chỉ làm một việc. Thao tác chậm, rõ ràng.
+- Chapter "An agent on another computer" nói rõ nó dùng lại bước nào (Install, Create your hub, Check), để người nhảy thẳng tới đó vẫn làm theo được.
+- Trong chapter máy khác, mọi cảnh terminal có nhãn máy; hai máy dùng hai theme terminal khác màu (tối: máy hub, sáng: máy agent).
 - Lời thoại ngắn gọn, câu đơn, dễ hiểu khi nghe một lần.
 - Gọi đúng tên: "Skill Hub", "hub", "skill", "agent". Không nói Skill Hub hỗ trợ đầy đủ Codex hay Gemini CLI.
 
@@ -153,6 +174,9 @@ Skill Hub ghi vào thư mục cấu hình của agent và in token, nên mọi c
 - `HOME` tạm (ví dụ `HOME=$(mktemp -d)`), hub mẫu mới tạo bằng `skillhub init`, skill mẫu tự đặt tên, repo GitHub mẫu
   công khai cho bước `skill add` (không dùng hub thật của chủ project).
 - Prompt terminal gọn, không có tên user, hostname, đường dẫn cá nhân. Ví dụ `PS1='$ '`.
+- Chapter máy khác do agent quay: hai `HOME` tạm trên cùng một máy đóng vai hai máy (hub lắng nghe `127.0.0.1` hoặc IP LAN của máy quay).
+  Bản quay trên hai máy thật (OBS, chủ project quay) là bằng chứng cho gate của plan quảng bá; nếu chưa có thì video
+  ghi rõ cảnh được dựng trên một máy.
 - Địa chỉ IP trong cảnh hai máy: dùng địa chỉ của máy quay thử, sau đó kiểm tra từng frame; mã invite chỉ dùng một lần và
   hết hạn sau 10 phút, nhưng vẫn không để lộ token thật (`token show` không xuất hiện trong video).
 - Không quay `~/.claude`, `~/.config` thật, không mở email, không có thông báo hệ thống trên màn hình.
@@ -194,7 +218,8 @@ video/output/*
   `docs/curating-skills.md`, `docs/web-ui.md`, `docs/remote-hub-guide.md`, và plan quảng bá.
 - Xác định: loại project, vấn đề giải quyết, tính năng chính, cách cài đặt, luồng sử dụng cơ bản. Đối chiếu với mục 2;
   báo lại chỗ nào khác.
-- Cài bản release mới nhất trong `HOME` tạm và chạy thử **từng lệnh** sẽ xuất hiện trong video. Ghi phiên bản
+- Cài bản release mới nhất trong `HOME` tạm và chạy thử **từng lệnh** sẽ xuất hiện trong video, cho cả hai trường hợp
+  (máy khác: hai `HOME` tạm trên cùng máy, một làm hub, một làm máy agent). Ghi phiên bản
   (`skillhub --version`) vào `video/script.md`.
 - Hỏi chủ project nếu có gì ở mục 2 không còn đúng với repo.
 
@@ -246,7 +271,8 @@ gắn vào release). Không upload, không đăng khi chủ project chưa nói "
 ## 8. Tiêu chí nghiệm thu
 
 - [ ] Mọi lệnh/thao tác trong video chạy đúng với phiên bản `skillhub` ghi trong `video/script.md`.
-- [ ] Người chưa biết project xem xong có thể tự cài và dùng tính năng cơ bản (init, connect, curate).
+- [ ] Người chưa biết project xem xong có thể tự cài và dùng tính năng cơ bản theo **cả hai case**: một máy (init, connect, curate) và client-server (serve, token invite, connect --invite).
+- [ ] Mỗi chapter xem riêng vẫn làm theo được (chapter máy khác nói rõ bước nào dùng lại).
 - [ ] Lời thoại, hình, phụ đề khớp thời gian; không có khoảng lặng hoặc cắt giữa câu.
 - [ ] Chữ trên màn hình đọc được rõ khi xem trên điện thoại.
 - [ ] Không lộ thông tin nhạy cảm (key, token, đường dẫn cá nhân, hostname, email, hub thật).

@@ -12,6 +12,7 @@ your own hub. The brief is [plans/261016-1000-intro-video/plan.md](../../plans/2
 | `web/seed-review.sh` | Puts a skill under **Waiting for review** offline: starts `skillhub serve` on loopback, makes an invite, connects a second demo machine, sends the `release-checklist` fixture with `skill commit`, stops the server. |
 | `web/record.mjs` | Starts `skillhub serve web` in the sandbox on a fixed port, records two scenes with Playwright's built-in video, stops the server. |
 | `web/run.sh` | `seed-review.sh` and then `record.mjs`. |
+| `tapes/` | The VHS tapes of the terminal scenes, one per scene of [`video/script.md`](../script.md), and `render.sh`, which records them in order into `video/recordings/tapes/` (needs `vhs`, `ttyd` and `ffmpeg` on PATH). Its header lists the scenes and the port it uses. |
 | `fixtures/` | The invented skills the scripts use; see [fixtures/README.md](fixtures/README.md). |
 
 ## Prerequisites
