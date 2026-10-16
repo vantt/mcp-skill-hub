@@ -463,8 +463,15 @@ func recordModes(ctx context.Context, root string, paths []string, modes map[str
 	return len(plus)+len(minus) > 0, "", true
 }
 
+// noBackgroundMaintenance keeps the hub's own Git steps from starting
+// `git maintenance run --auto --detach`. A detached repack can remove loose
+// objects while another skillhub process (the server, the web UI, a second
+// command) is reading them, which fails that read with "no such file".
+var noBackgroundMaintenance = []string{"-c", "maintenance.auto=false", "-c", "gc.auto=0"}
+
 func gitCommand(ctx context.Context, root string, stdin io.Reader, args ...string) *exec.Cmd {
-	command := exec.CommandContext(ctx, "git", append([]string{"-C", root}, args...)...)
+	gitArgs := append(append([]string{}, noBackgroundMaintenance...), "-C", root)
+	command := exec.CommandContext(ctx, "git", append(gitArgs, args...)...)
 	command.Env = append(os.Environ(), "GIT_OPTIONAL_LOCKS=0", "GIT_PAGER=cat", "GIT_LITERAL_PATHSPECS=1")
 	command.Stdin = stdin
 	command.WaitDelay = 2 * time.Second
