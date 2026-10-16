@@ -22,6 +22,18 @@ Plan này là một phần của [Promote skillhub-mcp](../261014-1700-promote-s
 [phase 3 (launch)](../261014-1700-promote-skillhub-mcp/phase-03-launch.md). Mọi ràng buộc của plan đó (không đăng gì
 khi chủ project chưa đồng ý, không nói quá, không lộ dữ liệu riêng) áp dụng nguyên vẹn ở đây.
 
+## Phần nền đã có sẵn (2026-10-16)
+
+Phần nền đã có sẵn trong [`video/demos/`](../../video/demos/README.md), dùng lại, không viết lại:
+
+- `sandbox.sh`: dựng máy demo cô lập (HOME, XDG, Git config, danh tính "Demo User", prompt `$ `, binary đang thử).
+- `happy-path.sh`: chạy đúng các lệnh của Quickstart và `docs/curating-skills.md`, ghi transcript đã làm sạch từng
+  bước vào `video/recordings/transcripts/` (`DEMO_NETWORK=1` thêm phần `skill add` từ GitHub).
+- `web/run.sh`: đưa một skill vào "Waiting for review" (không cần mạng) rồi quay hai cảnh Web UI bằng Playwright.
+
+Giai đoạn 3 chỉ cần viết `.tape`/storyboard và gọi các script này. Chạy lại `happy-path.sh` sau mỗi release để lấy
+transcript khớp phiên bản. Cách chạy, đầu ra và các quy tắc an toàn: `video/demos/README.md`.
+
 ---
 
 ## 1. Mục tiêu
