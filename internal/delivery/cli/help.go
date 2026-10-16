@@ -44,8 +44,8 @@ Maintenance:
   --version Print the skillhub version
 
 Hub selection: run inside the hub or a connected project, else pass --workspace <path>
-(a local hub folder) or set SKILLHUB_WORKSPACE; --hub always takes a URL. Run ` + "`skillhub <command> --help`" + ` for a command's flags and
-` + "`skillhub help --dev`" + ` for developer commands.
+(a local hub folder) or set SKILLHUB_WORKSPACE; --hub always takes a URL. Run ` + "`skillhub <command> --help`" + ` for a command's flags,
+` + "`skillhub help skill <subcommand>`" + ` for one skill subcommand and ` + "`skillhub help --dev`" + ` for developer commands.
 `
 
 // devUsage lists the developer commands that the global help leaves out.
@@ -162,6 +162,9 @@ command to run next.
   --quiet      Print only the overall status word
 `,
 	"skill": `Usage: skillhub skill <subcommand> [flags]
+
+Run ` + "`skillhub help skill <subcommand>`" + ` (or ` + "`skillhub skill <subcommand> --help`" + `) for one subcommand's
+flags and examples. Every subcommand but create takes --workspace <path>, a hub folder on this machine.
 
 Subcommands:
   add <github-url> [--skill <name> | --all] [--id <id>] [--collection <c>] [--ref <r>] [--path <p>] [--edit-routing]
@@ -575,6 +578,9 @@ func runHelp(args []string, stdout, stderr io.Writer) int {
 	}
 	if args[0] == "--dev" {
 		return writeDevHelp(stdout)
+	}
+	if strings.TrimSpace(args[0]) == "skill" {
+		return runSkillHelp(args[1:], stdout, stderr)
 	}
 	if code, ok := writeCommandHelp(stdout, strings.TrimSpace(args[0])); ok {
 		return code
