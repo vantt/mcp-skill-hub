@@ -68,7 +68,9 @@ Every applied change to the hub becomes one Git commit that holds only that
 change's files and its operation receipt. The result carries it as `commit`
 (see the schema): `status` is `committed`, `skipped`, `failed` or `deferred`,
 `hash` and `message` name the commit, `reach` says who gets the new version
-(`this_hub_now`, and `push_needed` with the remote's `push_command`), and a
+(`this_hub_now`, `push_needed` with the remote's `push_command`, and, for a
+change to skills, `agents`: whether the agents using this hub get them now or
+what stops them, such as a draft or content nobody approved), and a
 `failed` or `skipped` commit gives its `reason` and the exact `manual_command`
 that finishes it. The files stay written when a commit fails: signing, a Git
 hook or a missing identity can stop it, and nothing is rolled back. `commit` is

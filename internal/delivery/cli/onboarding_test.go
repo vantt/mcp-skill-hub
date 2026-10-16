@@ -83,7 +83,7 @@ func TestHelpEntryPointsPrintUsageAndExitZero(t *testing.T) {
 		if code != 0 || stderr != "" {
 			t.Fatalf("%v exit = %d stderr = %q", args, code, stderr)
 		}
-		for _, want := range []string{"Get started", "skillhub connect", "curate my Skill Hub", "Setup:", "Skills:", "Sources & learning:", "Serve:", "Maintenance:", "init", "doctor", "--version", "skillhub help --dev"} {
+		for _, want := range []string{"Get started", "skillhub connect -g ", "curate my Skill Hub", "Setup:", "Skills:", "Sources & learning:", "Serve:", "Maintenance:", "init", "doctor", "--version", "skillhub help --dev"} {
 			if !strings.Contains(stdout, want) {
 				t.Fatalf("%v help is missing %q:\n%s", args, want, stdout)
 			}
@@ -213,7 +213,7 @@ func TestInitDefaultOutputIsShortSummaryWithoutDigests(t *testing.T) {
 		t.Fatalf("exit = %d: %s", code, stderr)
 	}
 	flat := strings.Join(strings.Fields(stdout), " ")
-	for _, want := range []string{"Hub created at " + root, "Agent connection written: claude-code, codex-cli, gemini-cli.", "First commit", "Next:", shellquote.Chain("cd <your-project>", "skillhub connect")} {
+	for _, want := range []string{"Hub created at " + root, "Agent connection written: claude-code, codex-cli, gemini-cli.", "First commit", "Next:", "skillhub connect -g"} {
 		if !strings.Contains(flat, want) {
 			t.Fatalf("init output is missing %q:\n%s", want, stdout)
 		}
@@ -618,6 +618,28 @@ func TestDryRunWritesNothing(t *testing.T) {
 		}
 		if after := snapshot(); !reflect.DeepEqual(before, after) {
 			t.Fatalf("%v changed files:\nbefore: %v\nafter:  %v", args, before, after)
+		}
+	}
+}
+
+// In the hub folder the hub's own connection is used, not the one of the user
+// account; doctor and status say that this is how it should be. Not parallel:
+// it changes the home folder and the working directory.
+func TestDoctorInTheHubFolderCallsItsOwnConnectionExpected(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	isolateInit(t)
+	hub := initHub(t, filepath.Join(t.TempDir(), "hub"))
+	t.Chdir(hub)
+	if code, stdout, stderr := runCLI(t, "connect", "-g", "--host", "claude"); code != 0 {
+		t.Fatalf("connect -g: exit %d\n%s%s", code, stdout, stderr)
+	}
+	for _, command := range []string{"doctor", "status"} {
+		code, stdout, stderr := runCLI(t, command)
+		flat := strings.Join(strings.Fields(stdout), " ")
+		if code != 0 || !strings.Contains(flat, "the hub folder uses its own connection (as expected)") || strings.Contains(flat, "not used here") {
+			t.Fatalf("%s: exit %d\n%s%s", command, code, stdout, stderr)
 		}
 	}
 }

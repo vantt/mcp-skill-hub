@@ -1079,6 +1079,7 @@ func (service UpstreamService) ConfirmUpdate(ctx context.Context, path string, p
 		},
 		Commit: commitView(receipt.Commit),
 	}
+	noteAgentReach(ctx, root, result.Commit, skillID)
 	if receipt.Commit.Status != "" {
 		result.Items = append(result.Items, commitItem(receipt.Commit, receipt.GitDirty))
 	}

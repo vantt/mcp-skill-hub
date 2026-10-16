@@ -1,5 +1,4 @@
 import { execFileSync } from 'node:child_process';
-import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -80,31 +79,21 @@ test.describe('Shipped User Flow Journeys (Spec 04 §3)', () => {
     const pageText = await page.content();
     expect(pageText).not.toContain(secretValue);
 
-    // 5. Approve content outside via CLI and activate
-    const contentPath = path.join(ws, 'skills', 'core', 'smoke-skill', 'SKILL.md');
-    const contentBytes = fs.readFileSync(contentPath);
-    const digest = 'sha256:' + crypto.createHash('sha256').update(contentBytes).digest('hex');
-
+    // 5. Give it routing, then approve the content outside via CLI the way a person does:
+    // read the digest `skill review` prints and approve exactly that content.
+    const cliEnv = { ...process.env, ...gitIdentity, SKILLHUB_WORKSPACE: ws };
     execFileSync(
       binaryPath,
-      [
-        'skill',
-        'edit',
-        'smoke-skill',
-        '--trigger',
-        'smoke test',
-        '--not-for',
-        'none',
-        '--min-scope',
-        'single_step',
-        '--approve-content',
-        digest,
-        '--yes',
-      ],
-      {
-        env: { ...process.env, ...gitIdentity, SKILLHUB_WORKSPACE: ws },
-        stdio: 'pipe',
-      },
+      ['skill', 'edit', 'smoke-skill', '--trigger', 'smoke test', '--not-for', 'none', '--min-scope', 'single_step', '--yes'],
+      { env: cliEnv, stdio: 'pipe' },
+    );
+    const review = JSON.parse(
+      execFileSync(binaryPath, ['skill', 'review', 'smoke-skill', '--json'], { env: cliEnv, stdio: 'pipe' }).toString(),
+    ) as { content_trust: { content_digest: string } };
+    execFileSync(
+      binaryPath,
+      ['skill', 'edit', 'smoke-skill', '--approve-content', review.content_trust.content_digest, '--yes'],
+      { env: cliEnv, stdio: 'pipe' },
     );
 
     await page.reload();

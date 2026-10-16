@@ -528,3 +528,25 @@ func writeCLIAddFixture(t *testing.T, dir, rel, body string, mode os.FileMode) {
 		t.Fatal(err)
 	}
 }
+
+// An approved draft that lacks routing cannot be activated, so the next step
+// names the missing fields with the edit command instead of `skill activate`.
+func TestSkillAddNamesTheMissingRoutingInsteadOfAnActivateThatWouldFail(t *testing.T) {
+	useFileSourceAdapters(t)
+	hub := newNextStepHub(t)
+	repo := addFixtureRepo(t, addFixtureFile{path: "SKILL.md", body: "---\nname: pdf\ndescription: Fill and extract PDF forms.\n---\n\n# PDF\n\nFill the form fields with the values the user gives.\n"})
+	atTerminal(t, "y\ny\n")
+	code, stdout, stderr := hub.run("skill", "add", repo)
+	if code != 0 {
+		t.Fatalf("exit = %d\nstdout=%s\nstderr=%s", code, stdout, stderr)
+	}
+	out := flatText(stdout)
+	if strings.Contains(out, "skillhub skill activate pdf") {
+		t.Fatalf("the next step offers an activation that would fail:\n%s", stdout)
+	}
+	for _, want := range []string{"skillhub skill edit pdf --trigger ", " --not-for ", " --example "} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("output lacks %q:\n%s", want, stdout)
+		}
+	}
+}

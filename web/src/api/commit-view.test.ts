@@ -11,6 +11,15 @@ describe('commitSentence', () => {
     );
   });
 
+  it('says what the server found about the agents of a changed skill', () => {
+    expect(
+      commitSentence({ status: 'committed', hash: '4be19c0ffee', reach: { this_hub_now: true, push_needed: false, agents: 'Agents do not get it until it is activated.' } }),
+    ).toBe('Committed 4be19c0. Agents do not get it until it is activated.');
+    expect(
+      commitNote({ status: 'committed', hash: '4be19c0ffee', reach: { this_hub_now: true, push_needed: true, push_command: 'git -C ~/skill-hub push', agents: 'Agents no longer get it: it is deprecated.' } }),
+    ).toBe('Agents no longer get it: it is deprecated. Other clones get it after you push (git -C ~/skill-hub push).');
+  });
+
   it('names the command that finishes a commit that failed', () => {
     const text = commitSentence({ status: 'failed', reason: 'signing needs a passphrase', manual_command: 'git -C hub commit', reach: { this_hub_now: true, push_needed: false } });
     expect(text).toContain('Not committed: signing needs a passphrase.');

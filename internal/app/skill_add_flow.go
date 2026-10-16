@@ -197,6 +197,7 @@ func (service SkillAddService) ConfirmSkillAddWith(ctx context.Context, path str
 		}
 	}
 	if outcome := chain.Finish(); outcome != nil {
+		noteAgentReach(ctx, root, outcome, result.SkillID)
 		if outcome.Status == workspace.CommitCommitted {
 			dirty, dirtyErr := workspace.DirtyPaths(ctx, root, touched)
 			result.GitDirty = dirtyErr != nil || len(dirty) > 0

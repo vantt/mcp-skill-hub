@@ -712,6 +712,13 @@ jobs:
           - windows-latest
     permissions:
       contents: read
+    # The smoke test runs skillhub init, which refuses to start without a Git
+    # author; a fresh runner has none.
+    env:
+      GIT_AUTHOR_NAME: Skill Hub CI
+      GIT_AUTHOR_EMAIL: ci@skillhub.invalid
+      GIT_COMMITTER_NAME: Skill Hub CI
+      GIT_COMMITTER_EMAIL: ci@skillhub.invalid
     steps:
       - name: Test literal one-liner install, PATH, upgrade, and uninstall (Linux & macOS)
         if: matrix.os != 'windows-latest'

@@ -10,7 +10,7 @@ import (
 const DefaultSuggestedMinScope = "single_step"
 
 var (
-	triggerPrefixes = []string{"use this skill when ", "use this skill for ", "use this when ", "use this for ", "use when ", "use for "}
+	triggerPrefixes = []string{"use this skill when ", "use this skill for ", "use this when ", "use this for ", "use when ", "use for ", "use it to "}
 	notForPrefixes  = []string{
 		"do not use this skill for ", "do not use this skill when ", "do not use for ", "do not use when ", "do not use ",
 		"don't use this skill for ", "don't use this skill when ", "don't use for ", "don't use when ", "don't use ",

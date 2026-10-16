@@ -135,7 +135,7 @@ test('files tab: edit, add, upload, rename and delete, review them, and commit o
   // 5. Commit: one commit with the typed message, the reach line, and exactly those paths.
   await page.getByLabel('Commit message').fill('Tidy the PDF references');
   await page.getByRole('button', { name: 'Commit to the hub' }).click();
-  await expect(page.getByTestId('commit-result')).toContainText(/Committed [0-9a-f]{7}\. This machine's agents get it now/, { timeout: 15000 });
+  await expect(page.getByTestId('commit-result')).toContainText(/Committed [0-9a-f]{7}\. Agents using this hub get it now\./, { timeout: 15000 });
   await expect(page.getByText(`${SKILL_ID} committed`).first()).toBeVisible();
 
   expect(Number(git('rev-list', '--count', 'HEAD'))).toBe(commitsBefore + 1);

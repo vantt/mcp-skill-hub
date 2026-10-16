@@ -290,6 +290,9 @@ func preparePermissions(adapter Adapter, scope Scope, path, root string, plan pl
 	// A local hub replacing a remote one drops the remote cache directory;
 	// over a local entry nothing is dropped.
 	base, err := stripJSONStringArray(raw, claudeAllowedDirsPath, staleAccessDirs(previous, plan), true)
+	if err == nil {
+		base, err = withoutRetiredClaudeCLIRules(base, settingsFile{scope, path})
+	}
 	if err != nil {
 		return newPreparedFile(host, ChangeHostPermissions, path, raw, raw, mode, exists, err.Error()), nil
 	}
@@ -314,7 +317,7 @@ func preparePermissions(adapter Adapter, scope Scope, path, root string, plan pl
 		}
 	}
 	file := newPreparedFile(host, ChangeHostPermissions, path, raw, desired, mode, exists, "")
-	file.preview = claudePermissionsPreview(raw, desired)
+	file.preview = claudePermissionsChangePreview(raw, desired)
 	return file, nil
 }
 

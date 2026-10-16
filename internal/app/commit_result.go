@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/vantt/skillhub-mcp/internal/workspace"
 )
@@ -40,11 +41,18 @@ func commitItem(outcome workspace.CommitOutcome, gitDirty bool) Item {
 	return Item{ID: "git_state", Summary: gitMutationSummary(gitDirty), Impact: "No commit was made; commit the changed files when you are ready."}
 }
 
-// reachText says who gets a committed version and when.
+// reachText says who gets a committed version and when: the agents of this
+// hub, for a change to skills, and other clones after a push.
 func reachText(reach workspace.Reach) string {
-	text := "Agents using this hub get it now"
-	if reach.PushNeeded {
-		return text + "; other clones after `" + reach.PushCommand + "`."
+	var parts []string
+	if reach.Agents != "" {
+		parts = append(parts, reach.Agents)
 	}
-	return text + "."
+	if reach.PushNeeded {
+		parts = append(parts, "Other clones get it after `"+reach.PushCommand+"`.")
+	}
+	if len(parts) == 0 {
+		return "Committed to this hub."
+	}
+	return strings.Join(parts, " ")
 }

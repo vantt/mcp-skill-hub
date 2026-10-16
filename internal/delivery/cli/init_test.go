@@ -22,7 +22,7 @@ func isolateInit(t *testing.T) string {
 	config := t.TempDir()
 	t.Setenv(userconfig.DirEnv, config)
 	gitConfig := filepath.Join(t.TempDir(), "gitconfig")
-	if err := os.WriteFile(gitConfig, nil, 0o600); err != nil {
+	if err := os.WriteFile(gitConfig, []byte("[user]\n\tname = Skill Hub Tests\n\temail = tests@example.invalid\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("GIT_CONFIG_GLOBAL", gitConfig)
@@ -116,10 +116,10 @@ func TestInitInAnEmptyFolderCommitsStoresAndNamesTheNextCommand(t *testing.T) {
 		t.Fatalf("init did not mark the .git it created: %v", err)
 	}
 	author := gitOutput(t, dir, "log", "-1", "--format=%an <%ae>")
-	if author != "Skill Hub <skillhub@localhost>" || !strings.Contains(stdout, "Git has no user name or email set") {
+	if author != "Skill Hub Tests <tests@example.invalid>" {
 		t.Fatalf("author = %q; output:\n%s", author, stdout)
 	}
-	for _, want := range []string{"Hub created at " + dir + ".", "Agent connection written: claude-code, codex-cli, gemini-cli.", "Git hooks and commit signing were skipped for this first commit.", "Next: connect a project to this hub:", "$ " + shellquote.Chain("cd <your-project>", "skillhub connect")} {
+	for _, want := range []string{"Hub created at " + dir + ".", "Agent connection written: claude-code, codex-cli, gemini-cli.", "Git hooks and commit signing were skipped for this first commit.", "Next: connect your agents in every project to this hub", "$ skillhub connect -g\n"} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("output lacks %q:\n%s", want, stdout)
 		}
@@ -180,7 +180,7 @@ func TestInitInAnEmptyGitRepositoryKeepsThatRepository(t *testing.T) {
 func TestInitSkipsHooksAndSigningOfAPreExistingRepository(t *testing.T) {
 	config := isolateInit(t)
 	gitConfig := os.Getenv("GIT_CONFIG_GLOBAL")
-	if err := os.WriteFile(gitConfig, []byte("[commit]\n\tgpgsign = true\n[user]\n\tsigningkey = 0000000000000000\n"), 0o600); err != nil {
+	if err := os.WriteFile(gitConfig, []byte("[commit]\n\tgpgsign = true\n[user]\n\tname = Skill Hub Tests\n\temail = tests@example.invalid\n\tsigningkey = 0000000000000000\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()

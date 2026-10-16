@@ -151,6 +151,12 @@ func askCommitQuestions(stdout io.Writer, preview app.SkillCommitPreview) (app.S
 		p.Line("Nothing written." + reason)
 		return options, false
 	}
+	if len(preview.Uncommitted) > 0 {
+		if !askYesNo(stdout, "Commit them now?") {
+			return nothing("")
+		}
+		return options, true
+	}
 	if preview.Case == "new" {
 		if !askYesNo(stdout, fmt.Sprintf("Add %s as a draft?", preview.SkillID)) {
 			return nothing("")
@@ -229,6 +235,10 @@ func writeSkillCommitPreview(p *termui.Printer, preview app.SkillCommitPreview, 
 	if preview.NothingToCommit {
 		return
 	}
+	if len(preview.Uncommitted) > 0 {
+		writeUnfinishedCommit(p, preview.Uncommitted, hints)
+		return
+	}
 	if preview.Case == "new" {
 		writeNewSkillFiles(p, preview)
 	} else {
@@ -258,6 +268,17 @@ func writeSkillCommitPreview(p *termui.Printer, preview app.SkillCommitPreview, 
 		}
 	}
 	writeCommitTail(p, preview, hints)
+}
+
+// writeUnfinishedCommit lists the hub files an earlier commit left
+// uncommitted and how to commit them.
+func writeUnfinishedCommit(p *termui.Printer, paths []string, hints previewHints) {
+	p.Raw(alignedRows(paths, "  ", false))
+	if hints.interactive {
+		return
+	}
+	p.Line("Nothing committed yet.")
+	p.Raw("Apply: " + hints.rerun + " --yes\n")
 }
 
 // writeLeftOutLine names the files a commit leaves out, on one line.
@@ -441,6 +462,9 @@ func writeSkillCommitResult(p *termui.Printer, result app.SkillCommitResult) {
 		p.Line(result.Summary + notCommittedNote(result.Commit))
 	}
 	writeCommitLines(p, result.Commit)
+	if result.Commit != nil && result.Commit.Status == "failed" {
+		p.Line("Or, once Git can commit, run `skillhub skill commit " + shellquote.Arg(result.SkillID) + "` again: it commits what was written.")
+	}
 	for _, warning := range result.Warnings {
 		p.Warning(warning.Summary)
 	}

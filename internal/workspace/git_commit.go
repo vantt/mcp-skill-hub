@@ -63,6 +63,10 @@ type Reach struct {
 	Remote     string `json:"remote,omitempty"`
 	// PushCommand is the command that publishes the commit to Remote.
 	PushCommand string `json:"push_command,omitempty"`
+	// Agents says, for a change to skills, whether the agents that use this
+	// hub get them now or what stops them, for example a draft that is not
+	// activated yet. Empty for a change that is not about skills.
+	Agents string `json:"agents,omitempty"`
 }
 
 type commitPolicyKey struct{}
@@ -511,7 +515,7 @@ func gitReason(ctx context.Context, stderr string, err error) string {
 		return fmt.Sprintf("The commit did not finish within %d seconds. A hook or your signing key may be waiting for input, and there is no terminal.", int(commitTimeout.Seconds()))
 	}
 	if strings.Contains(stderr, "identity unknown") || strings.Contains(stderr, "auto-detect email") || strings.Contains(stderr, "empty ident") {
-		return "Git has no author identity. Set user.name and user.email, for example: git config --global user.email you@example.com"
+		return "Git has no user name or email set. Set them with `" + SetGitNameCommand + "` and `" + SetGitEmailCommand + "`."
 	}
 	lines := make([]string, 0, 3)
 	for _, line := range strings.Split(stderr, "\n") {

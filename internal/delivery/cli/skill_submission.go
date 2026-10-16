@@ -282,12 +282,15 @@ func writeSubmissionResult(p *termui.Printer, result app.SkillCommitResult) {
 	for _, warning := range result.Warnings {
 		p.Warning(warning.Summary)
 	}
-	if result.Case == "new" && !result.Activated {
-		p.Line("Agents using this hub get it once you activate it.")
-		p.Next("it is approved but still a draft:", "skillhub skill activate "+shellquote.Arg(result.SkillID))
-		return
+	if outcome.Reach.Agents != "" {
+		p.Line(outcome.Reach.Agents)
 	}
-	p.Line("Agents using this hub get it now.")
+	if outcome.Reach.PushNeeded {
+		p.Line("Other clones get it after `" + outcome.Reach.PushCommand + "`.")
+	}
+	if result.Case == "new" && !result.Activated {
+		p.Next("it is approved but still a draft:", "skillhub skill activate "+shellquote.Arg(result.SkillID))
+	}
 }
 
 // writeWaitingSubmissions names the submissions that wait for a skill, below

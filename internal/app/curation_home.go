@@ -639,7 +639,7 @@ func recommendationLabel(kind string) string {
 		"submission_waiting":        "Review the submitted skill with skillhub skill review",
 		"check_due_sources":         "Check all due sources",
 		"review_git_changes":        "Commit the changes of the hub",
-		"first_run_commit":          "Commit the new hub, then run `skillhub connect` in your project",
+		"first_run_commit":          "Commit the new hub, then run `skillhub connect -g`",
 	}[kind]
 }
 

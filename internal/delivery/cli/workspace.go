@@ -117,9 +117,6 @@ func renderInitSummary(p *termui.Printer, result app.Result, report *app.InitRep
 	if report.Commit != "" {
 		p.Line(fmt.Sprintf("First commit %s: %q.", shortCommit(report.Commit), "Initialize Skill Hub hub"))
 		p.Line("Git hooks and commit signing were skipped for this first commit.")
-		if report.FallbackIdentity {
-			p.Line("Git has no user name or email set, so this commit is by Skill Hub <skillhub@localhost>.")
-		}
 	}
 	if remote := report.Remote; remote != nil && !remote.Fetched {
 		switch {
@@ -153,12 +150,12 @@ func renderInitSummary(p *termui.Printer, result app.Result, report *app.InitRep
 		}
 	}
 	if report.Stored {
-		p.Line("This is now the hub of this machine; `skillhub connect` uses it.")
+		p.Line("This is now the hub of this machine; `skillhub connect -g` uses it.")
 	} else if report.StoreError != "" {
 		p.Warning("The hub path could not be recorded for `skillhub connect`: " + report.StoreError)
 	}
 	p.Blank()
-	p.Next("connect a project to this hub:", report.Next)
+	p.Next("connect your agents in every project to this hub (or `skillhub connect` in one project only):", report.Next)
 }
 
 func shortCommit(commit string) string {

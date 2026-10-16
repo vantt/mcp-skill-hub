@@ -521,7 +521,7 @@ func TestOutdatedPermissionRulesAreRewrittenKeepingTheUsersOwn(t *testing.T) {
 	permissions := document["permissions"].(map[string]any)
 	var ask []any
 	for _, rule := range permissions["ask"].([]any) {
-		if rule != "Bash(skillhub *serve*)" {
+		if rule != "Bash(skillhub serve*)" {
 			ask = append(ask, rule)
 		}
 	}
@@ -544,7 +544,7 @@ func TestOutdatedPermissionRulesAreRewrittenKeepingTheUsersOwn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(after), "Bash(skillhub *serve*)") || !strings.Contains(string(after), "Bash(make test)") {
+	if !strings.Contains(string(after), "Bash(skillhub serve*)") || !strings.Contains(string(after), "Bash(make test)") {
 		t.Fatalf("settings after the fix:\n%s", after)
 	}
 	if problems := codesOf(Run(t.Context(), report, DepthFull), SeverityProblem); len(problems) != 0 {
@@ -692,7 +692,7 @@ func TestStatusNextFollowsTheTableOrder(t *testing.T) {
 		sections []Section
 		want     string
 	}{
-		{"none with a stored hub", RoleReport{StoredHub: stored}, nil, "skillhub connect"},
+		{"none with a stored hub", RoleReport{StoredHub: stored}, nil, "skillhub connect -g"},
 		{"none with a gone stored hub", RoleReport{StoredHub: filepath.Join(stored, "gone")}, nil, shellquote.Chain("cd <new-location>", "skillhub init")},
 		{"none without a stored hub", RoleReport{}, nil, NewHubCommand()},
 		{"busy first", RoleReport{}, hub(Finding{Code: "hub_busy", Severity: SeverityNotice}, Finding{Code: "x", Severity: SeverityProblem, Fix: fix}), "skillhub status"},

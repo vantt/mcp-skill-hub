@@ -73,6 +73,10 @@ func TestMain(m *testing.M) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+	if err := testenv.SetGitIdentity(root); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 	code := m.Run()
 	if err := os.RemoveAll(root); err != nil {
 		fmt.Fprintf(os.Stderr, "clean up isolated test files in %s (test exit code %d): %v\n", root, code, err)

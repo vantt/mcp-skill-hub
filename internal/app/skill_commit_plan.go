@@ -269,6 +269,15 @@ func (service SkillCommitService) finishPreview(ctx context.Context, preview Ski
 	}
 	plan.finalVersion = skillBaseVersion(plan.final)
 	preview.NothingToCommit = len(plan.changes) == 0 && len(preview.Conflicts) == 0
+	if preview.NothingToCommit && plan.submission == nil {
+		uncommitted, operations, err := unfinishedCommitPaths(ctx, plan.root, plan.relDir)
+		if err != nil {
+			return SkillCommitPreview{}, err
+		}
+		if len(uncommitted) > 0 {
+			preview.NothingToCommit, preview.Uncommitted, preview.uncommittedOps = false, uncommitted, operations
+		}
+	}
 	if plan.hub != nil {
 		preview.Trust = trustOfProposal(plan, plan.final, plan.metaAfter)
 		plan.thirdParty, plan.origin, plan.contentDigest = preview.Trust.ThirdParty, preview.Trust.Origin, preview.Trust.ContentDigest
@@ -288,6 +297,9 @@ func (service SkillCommitService) finishPreview(ctx context.Context, preview Ski
 	switch {
 	case preview.NothingToCommit:
 		preview.Result = NewResult(StatusOK, fmt.Sprintf("Nothing to commit: %s matches the hub.", plan.id))
+	case len(preview.Uncommitted) > 0:
+		preview.Result = NewResult(StatusActionRequired, fmt.Sprintf("%s matches the hub, but its files there are not committed to Git yet (an earlier commit did not finish; %s): this commits them.",
+			plan.id, pluralize(len(preview.Uncommitted), "file")))
 	case len(preview.Conflicts) > 0:
 		preview.Warnings = append(preview.Warnings, Warning{Code: "needs_decision", Summary: fmt.Sprintf("%s need a decision before this can be applied.", pluralize(len(preview.Conflicts), "file"))})
 	}
@@ -389,11 +401,15 @@ func trustOfProposal(plan *commitPlan, final map[string]treeFile, meta []byte) *
 		if trust.Origin == "" {
 			trust.Origin = thirdPartyOrigin(plan.metaBefore)
 		}
+		if trust.Origin == "" {
+			trust.Origin = "an upstream source"
+		}
 	}
 	return trust
 }
 
-// thirdPartyOrigin names where a third-party skill came from.
+// thirdPartyOrigin names the repository of a skill's upstream source, or ""
+// when it has none: a skill made on this hub came from no other repository.
 func thirdPartyOrigin(meta []byte) string {
 	for _, source := range parseSkillReviewMeta(meta).Sources {
 		for _, role := range source.Roles {
@@ -409,7 +425,7 @@ func thirdPartyOrigin(meta []byte) string {
 			return source.ID
 		}
 	}
-	return "an upstream source"
+	return ""
 }
 
 // commitLint lints the proposed skill the way review does, through the same

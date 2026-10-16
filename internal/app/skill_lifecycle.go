@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/vantt/skillhub-mcp/internal/mutation"
+	"github.com/vantt/skillhub-mcp/internal/shellquote"
 	"github.com/vantt/skillhub-mcp/internal/skill"
 	"github.com/vantt/skillhub-mcp/internal/skillruntime"
 	"github.com/vantt/skillhub-mcp/internal/workspace"
@@ -112,6 +113,15 @@ func (service SkillService) PreviewSkillUpdate(ctx context.Context, path, id str
 	if err != nil {
 		return SkillProposal{}, err
 	}
+	if input.ContentReviewedDigest != nil {
+		refusal, err := service.checkApprovedDigest(ctx, root, id, strings.TrimSpace(*input.ContentReviewedDigest), input)
+		if err != nil {
+			return SkillProposal{}, err
+		}
+		if refusal != nil {
+			return SkillProposal{}, refusal
+		}
+	}
 	proposal, err := service.Manager.PreviewUpdate(ctx, root, id, input, fullDiff)
 	if err != nil {
 		var conflictErr *skill.EditConflictError
@@ -142,6 +152,32 @@ func (service SkillService) PreviewSkillUpdate(ctx context.Context, path, id str
 // third-party skill's content from agents until it is approved again. Only a
 // change to a file other than hub metadata or to the runtime block alters the
 // approved content digest.
+// checkApprovedDigest refuses an approval that is not of the skill's content
+// as it is now: a mistyped or old digest, or one given together with a change
+// to the content, would record an approval nobody gave for that content.
+func (service SkillService) checkApprovedDigest(ctx context.Context, root, id, digest string, input skill.UpdateInput) (*Error, error) {
+	review := "skillhub skill review " + shellquote.Arg(id)
+	if input.SetContent || input.Runtime != nil {
+		return &Error{Code: ErrorInvalidRequest, Render: ErrorRender{
+			Error: "--approve-content cannot be combined with a change to the content of " + id + ".",
+			Why:   "An approval records the exact content a person read, and this edit changes that content.",
+			Fix:   "Apply the edit without --approve-content, then read the new content with `" + review + "` and approve the digest it prints.",
+		}}, nil
+	}
+	trust, err := service.ContentTrustFor(ctx, root, id)
+	if err != nil {
+		return nil, err
+	}
+	if trust.ContentDigest == digest {
+		return nil, nil
+	}
+	return &Error{Code: ErrorInvalidRequest, Render: ErrorRender{
+		Error: "--approve-content " + digest + " is not the content of " + id + " as it is now.",
+		Why:   "The content's digest is " + trust.ContentDigest + "; an approval records the exact content a person read, so an old or mistyped digest is refused and nothing was written.",
+		Fix:   "Read the current content with `" + review + "`, then approve the digest it prints.",
+	}}, nil
+}
+
 func approvalLostWarning(root, id string, input skill.UpdateInput, diff skill.DiffSummary) (Warning, bool) {
 	changesContent := input.Runtime != nil
 	for _, paths := range [][]string{diff.Added, diff.Modified, diff.Deleted} {
@@ -264,6 +300,7 @@ func (service SkillService) ConfirmSkillMutation(ctx context.Context, path strin
 		return SkillMutationResult{}, err
 	}
 	state := skillStateAfter(ctx, root, preview)
+	noteAgentReach(ctx, root, &result.Commit, preview.SkillID)
 	activeLocally := (state == "active")
 	response := SkillMutationResult{
 		Result:  NewResult(StatusApplied, appliedSkillSummary(preview.SkillID, preview.Command, state)),
@@ -319,6 +356,45 @@ func (SkillService) ReadSkillRationale(ctx context.Context, path, id string) (st
 		return "", err
 	}
 	return skill.ReadRationale(root, id)
+}
+
+// ActivationGaps returns what a skill still needs before it can be activated
+// and one `skill edit` command that adds it, with placeholders for the person
+// to fill in. Both are empty when the skill is ready.
+func (service SkillService) ActivationGaps(ctx context.Context, path, id string) ([]string, string, error) {
+	missing, err := service.CheckActivationRequirements(ctx, path, id)
+	if err != nil || len(missing) == 0 {
+		return missing, "", err
+	}
+	root, err := skill.ResolveWorkspace(path)
+	if err != nil {
+		return nil, "", err
+	}
+	routing, err := skill.ReadRouting(root, id)
+	if err != nil {
+		return nil, "", err
+	}
+	command := "skillhub skill edit " + shellquote.Arg(id)
+	routingAdded := false
+	for _, gap := range missing {
+		switch {
+		case gap == "trigger":
+			command += ` --trigger "<when an agent should use it>"`
+			routingAdded = true
+		case strings.HasPrefix(gap, "not_for"):
+			command += ` --not-for "<when it should not>"`
+			routingAdded = true
+		case gap == "min_scope":
+			command += " --min-scope " + skill.DefaultSuggestedMinScope
+			routingAdded = true
+		case strings.HasPrefix(gap, "content"):
+			command += " --editor"
+		}
+	}
+	if routingAdded && len(routing.Examples) == 0 {
+		command += ` --example "<a request that should use it>"`
+	}
+	return missing, command, nil
 }
 
 // CheckActivationRequirements returns all missing requirements for activating a skill.

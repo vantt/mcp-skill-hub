@@ -1,9 +1,16 @@
 import type { CommitOutcome } from './types';
 
-// Who gets a committed version and when, in a person's words.
+// Who gets a committed version and when, in a person's words. For a change to
+// skills the server says whether the agents get them now, for example not while
+// a skill is a draft.
 export function reachSentence(commit: CommitOutcome): string {
-  return commit.reach?.push_needed
-    ? `This machine's agents get it now; others after you push (${commit.reach.push_command ?? 'git push'}).`
+  const push = commit.reach?.push_needed ? (commit.reach.push_command ?? 'git push') : '';
+  const agents = commit.reach?.agents;
+  if (agents) {
+    return push ? `${agents} Other clones get it after you push (${push}).` : agents;
+  }
+  return push
+    ? `This machine's agents get it now; others after you push (${push}).`
     : "This machine's agents get it now.";
 }
 

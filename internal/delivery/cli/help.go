@@ -12,14 +12,16 @@ Usage: skillhub <command> [flags]
 
 Get started:
   1. mkdir -p ~/skill-hub && cd ~/skill-hub && skillhub init    Create your hub
-  2. cd <your project> && skillhub connect                       Connect that project
+  2. skillhub connect -g                                         Connect your agents in every project
+     (or cd <your project> && skillhub connect for one project only)
   3. Open your agent there and ask: "curate my Skill Hub"
   On another machine, use that hub through an SSH tunnel or Tailscale:
      skillhub connect --hub <url> --token-file <file>
 
 Setup:
   init      Create a hub in the current folder, or from a Git URL (--dry-run shows what it would do)
-  connect   Connect this project's agents to the hub (-g for all projects), --hub to a hub on another machine
+  connect   Connect your agents to the hub: -g for every project (recommended), without it this project only;
+            --hub to a hub on another machine
   doctor    Check the hub and the agent connections; --fix repairs what it can
   status    Show the state of the hub and its connections, and the next command
 
@@ -42,8 +44,8 @@ Maintenance:
   --version Print the skillhub version
 
 Hub selection: run inside the hub or a connected project, else pass --workspace <path>
-(a local hub folder) or set SKILLHUB_WORKSPACE; --hub always takes a URL. Run ` + "`skillhub <command> --help`" + ` for a command's flags and
-` + "`skillhub help --dev`" + ` for developer commands.
+(a local hub folder) or set SKILLHUB_WORKSPACE; --hub always takes a URL. Run ` + "`skillhub <command> --help`" + ` for a command's flags,
+` + "`skillhub help skill <subcommand>`" + ` for one skill subcommand and ` + "`skillhub help --dev`" + ` for developer commands.
 `
 
 // devUsage lists the developer commands that the global help leaves out.
@@ -63,7 +65,7 @@ Make the current folder a hub: an empty folder or an empty Git repository
 becomes a Git repository with the hub layout, the search index, the agent
 connection of the hub folder and a first commit (Git hooks and commit signing
 are skipped for it). The hub path is stored for this machine, so
-` + "`skillhub connect`" + ` in a project finds it. Run again in a hub, init refreshes it.
+` + "`skillhub connect -g`" + ` (or ` + "`skillhub connect`" + ` in one project) finds it. Run again in a hub, init refreshes it.
 A folder with other files is refused; init takes no folder argument.
 
   <git-url>   Start from a repository (https, ssh or file URL, user@host:path,
@@ -90,6 +92,7 @@ content in those files.
   <path>            A hub folder on this machine (default: the hub ` + "`skillhub init`" + `
                     set up last on this machine)
   -g, --global      Register for your user account so every project sees the hub
+                    (recommended; without -g only the current folder is connected)
   --host <name>     Limit to claude, codex, or gemini (repeat or comma-separate)
   --dry-run         Show what would change; write nothing
   --json            Machine-readable result
@@ -159,6 +162,9 @@ command to run next.
   --quiet      Print only the overall status word
 `,
 	"skill": `Usage: skillhub skill <subcommand> [flags]
+
+Run ` + "`skillhub help skill <subcommand>`" + ` (or ` + "`skillhub skill <subcommand> --help`" + `) for one subcommand's
+flags and examples. Every subcommand but create takes --workspace <path>, a hub folder on this machine.
 
 Subcommands:
   add <github-url> [--skill <name> | --all] [--id <id>] [--collection <c>] [--ref <r>] [--path <p>] [--edit-routing]
@@ -572,6 +578,9 @@ func runHelp(args []string, stdout, stderr io.Writer) int {
 	}
 	if args[0] == "--dev" {
 		return writeDevHelp(stdout)
+	}
+	if strings.TrimSpace(args[0]) == "skill" {
+		return runSkillHelp(args[1:], stdout, stderr)
 	}
 	if code, ok := writeCommandHelp(stdout, strings.TrimSpace(args[0])); ok {
 		return code

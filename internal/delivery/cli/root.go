@@ -27,6 +27,11 @@ func RunContext(ctx context.Context, args []string, stdout, stderr io.Writer) in
 	if isHelpFlag(args[0]) {
 		return writeGlobalHelp(stdout)
 	}
+	if args[0] == "skill" {
+		if name, ok := skillSubcommandHelp(args[1:]); ok && writeSkillSubcommandHelp(stdout, name) {
+			return 0
+		}
+	}
 	if wantsHelp(args[1:]) {
 		if code, ok := writeCommandHelp(stdout, args[0]); ok {
 			return code
