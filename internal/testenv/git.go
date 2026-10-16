@@ -18,13 +18,30 @@ var GitRepositoryVariables = []string{
 	"GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_NAMESPACE",
 }
 
+// backgroundMaintenanceOff turns off the maintenance Git may start in the
+// background after a commit. A detached repack can still be writing into
+// .git/objects/pack of a temporary repository when the test that made it
+// ends, so removing the test's temporary folder fails.
+var backgroundMaintenanceOff = [][2]string{{"gc.auto", "0"}, {"maintenance.auto", "false"}}
+
 // UnsetGitRepository removes GitRepositoryVariables from the process
 // environment, so Git in tests and in their subprocesses finds its repository
-// from the working directory. Call it from TestMain before m.Run.
+// from the working directory, and turns off Git's background maintenance for
+// them. Call it from TestMain before m.Run.
 func UnsetGitRepository() error {
 	for _, key := range GitRepositoryVariables {
 		if err := os.Unsetenv(key); err != nil {
 			return fmt.Errorf("unset %s: %w", key, err)
+		}
+	}
+	env := map[string]string{"GIT_CONFIG_COUNT": fmt.Sprint(len(backgroundMaintenanceOff))}
+	for i, entry := range backgroundMaintenanceOff {
+		env[fmt.Sprintf("GIT_CONFIG_KEY_%d", i)] = entry[0]
+		env[fmt.Sprintf("GIT_CONFIG_VALUE_%d", i)] = entry[1]
+	}
+	for key, value := range env {
+		if err := os.Setenv(key, value); err != nil {
+			return fmt.Errorf("set %s: %w", key, err)
 		}
 	}
 	return nil
