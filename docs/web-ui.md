@@ -7,19 +7,19 @@ The web UI lets you look after your skills by clicking instead of typing. It run
 
 ## Start the web UI
 
-Run this in your hub or in a connected project. `--addr 127.0.0.1:7421` keeps the web UI on this machine; the command opens your browser.
+Run this in your hub folder. It opens your browser:
 
 ```bash
-cd ~/skill-hub && skillhub serve web --addr 127.0.0.1:7421
+cd ~/skill-hub && skillhub serve web
 ```
 
-The command prints the address to open. The token at the end changes each time you start it.
+If no browser opens, open the link it prints (output trimmed):
 
 ```text
 Skill Hub web UI: http://127.0.0.1:7421/#token=<token>
 ```
 
-The token keeps other people out, so treat the address like a password: anyone who has it can change your skills. To print the address without opening a browser, add `--no-open`. Press `Ctrl+C` in the terminal to stop the web UI.
+The token at the end changes each time you start it. Anyone who has the link can change your skills, so treat it like a password; to keep the web UI on this machine, see [Keep it safe on your network](#keep-it-safe-on-your-network). Press `Ctrl+C` in the terminal to stop the web UI.
 
 ## Do common tasks
 
