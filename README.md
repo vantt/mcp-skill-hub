@@ -118,7 +118,7 @@ Your agent checks your hub with `skillhub status` and suggests one next step. A 
 - [Create your first skill](docs/curating-skills.md#create-your-first-skill), or [add skills from GitHub](docs/curating-skills.md#add-a-skill-from-github).
 - [Browse and review skills in your browser](#see-it).
 - [Keep the hub on GitHub](docs/user-guide.md#keep-the-hub-on-github), and [move it to another machine](docs/user-guide.md#move-to-another-machine).
-- [Connect only some projects](docs/user-guide.md#connect-one-project-recommended) instead of all of them.
+- [Connect only some projects](docs/user-guide.md#connect-one-project) instead of all of them.
 - [Install options, upgrade and uninstall](docs/installation.md).
 - Every command and flag: `skillhub help`, `skillhub help <command>`, or the [command reference](docs/command-reference.md).
 

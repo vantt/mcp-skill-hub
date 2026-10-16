@@ -118,7 +118,7 @@ Agent kiểm tra hub bằng `skillhub status` và gợi ý một bước tiếp 
 - [Tạo skill đầu tiên](docs/curating-skills.md#create-your-first-skill), hoặc [thêm skill từ GitHub](docs/curating-skills.md#add-a-skill-from-github) (tiếng Anh).
 - [Xem và duyệt skill trên trình duyệt](#xem-thử).
 - [Giữ hub trên GitHub](docs/user-guide.md#keep-the-hub-on-github), và [chuyển nó sang máy khác](docs/user-guide.md#move-to-another-machine) (tiếng Anh).
-- [Chỉ kết nối một số dự án](docs/user-guide.md#connect-one-project-recommended) thay vì tất cả (tiếng Anh).
+- [Chỉ kết nối một số dự án](docs/user-guide.md#connect-one-project) thay vì tất cả (tiếng Anh).
 - [Tuỳ chọn cài đặt, nâng cấp và gỡ cài đặt](docs/installation.md) (tiếng Anh).
 - Mọi lệnh và cờ: `skillhub help`, `skillhub help <command>`, hoặc [tài liệu tham chiếu lệnh](docs/command-reference.md) (tiếng Anh).
 

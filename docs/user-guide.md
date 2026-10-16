@@ -22,9 +22,9 @@ Every command acts on the folder you run it in. Inside the hub or a connected pr
 
 ## Set up and connect agents
 
-To install your hub and connect a first project, follow the [Quickstart](../README.md#quickstart). This section covers the choices you have when you connect.
+To install your hub and connect every project, follow the [Quickstart](../README.md#quickstart). This section covers the choices you have when you connect: one project only, or every project at once.
 
-### Connect one project (recommended)
+### Connect one project
 
 Connecting a project lets the agents you open in that folder ask the hub for skills. Go to the project and see what `connect` would write:
 
