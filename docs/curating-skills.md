@@ -2,13 +2,13 @@
 
 This guide shows how to grow the skills your agent uses: write a new one, improve one you have, bring one in from GitHub, and approve what others send. Each task below is a short path you can copy and run; flags and tuning come after them, under [More](#more).
 
-Finish the [Quickstart](../README.md#quickstart) first: it creates your hub and connects a project. Run every command below inside that connected project, written here as `<your-project>`.
+Finish the [Quickstart](../README.md#quickstart) first. Then run the commands below in any project folder you work in (`<your-project>`), not in `~/skill-hub`: with `connect -g` every project uses your hub. (If you connected only one project with `skillhub connect`, use that project.)
 
-You can also ask your connected agent: **curate my Skill Hub**. It checks the hub and suggests one next step, using the same commands as this guide.
+You can also ask your agent: **curate my Skill Hub**. It checks the hub and suggests one next step, using the same commands as this guide.
 
 ## Create your first skill
 
-Write a skill in your project, try it with your agent, then publish it so every project connected to your hub gets it. A **skill** is a folder with a `SKILL.md` file of instructions your agent follows. This one teaches your team's commit style.
+Write a skill in your project, try it with your agent, then publish it so every project gets it. A **skill** is a folder with a `SKILL.md` file of instructions your agent follows. This one teaches your team's commit style.
 
 **1. Start the skill.** In a terminal, the command asks four questions: what the skill does, when an agent should use it, when it should not, and an example request. Press Enter on an empty line to finish a list.
 
@@ -45,7 +45,7 @@ cd <your-project> && skillhub skill create commit-style \
 
 </details>
 
-**2. Write the instructions.** Open `.claude/skills/commit-style/SKILL.md`. Keep the top of the file: the sections **When to use**, **When not to use** and **Examples** hold your answers, and they become the skill's **routing**, the rules that decide when the hub recommends it. Replace only the placeholder under **Instructions** (the `<!-- skillhub:scaffold -->` comment and the paragraph under it) with:
+**2. Write the instructions.** Open `.claude/skills/commit-style/SKILL.md`. Keep the top of the file: the sections **When to use**, **When not to use** and **Examples** hold your answers, and they tell the hub when to recommend this skill. Replace only the placeholder under **Instructions** (the `<!-- skillhub:scaffold -->` comment and the paragraph under it) with:
 
 ```markdown
 1. Start with a short summary line in the imperative mood, at most 50 characters.
@@ -55,9 +55,15 @@ cd <your-project> && skillhub skill create commit-style \
    Checked-by: skillhub-demo
 ```
 
-Add two more requests under **Examples**, such as `- write the commit message for this fix` and `- describe my staged changes as a commit`. The hub warns until a skill has at least three.
+Add two more requests under **Examples**, such as `- write the commit message for this fix` and `- describe my staged changes as a commit`. Skill Hub warns until a skill has at least three examples; it does not block you.
 
-**3. Try it.** Stage a change in your project (`git add <file>`), then ask Claude Code:
+**3. Try it.** Stay in your project; do not run these in `~/skill-hub`. Change a file and stage only that file, not `.claude/`:
+
+```bash
+cd <your-project> && git add <your-file>
+```
+
+Then ask Claude Code:
 
 > use /commit-style to write a commit message for my staged changes
 
@@ -69,27 +75,21 @@ If your agent used the skill, the message ends with `Checked-by: skillhub-demo`.
 cd <your-project> && skillhub skill commit commit-style
 ```
 
-The command shows what it will add and asks two questions. Answer `y` to both:
+The command shows what it will add and asks two questions. Answer `y` to both (output trimmed):
 
 ```text
 commit-style is not on the hub: this adds a new skill (collection: default).
 Files (1, 623 B):
   SKILL.md  623 B
-Routing, suggested from the description (edit with --edit-routing):
-  trigger    "write a commit message"
-  not for    "writing release notes"
-  examples   "write a commit message for my staged changes", "write the commit message for this fix", "describe my staged changes as a commit"
-  min scope  single_step
-Routing lint: no findings.
 Add commit-style as a draft? [y/N] y
 Activate commit-style now? [y/N] y
-Committed 0211d9b "Add commit-style from a project, activate".
+Committed da67f76 "Add commit-style from a project, activate".
 Agents using this hub get it now.
 ```
 
-Output is trimmed. A new skill starts as a **draft**, which agents are not offered; **activating** it lets the hub recommend it. Both answers become one Git commit in your hub, which Skill Hub makes for you.
+A new skill starts as a **draft**, which agents are not offered; **activating** it lets the hub recommend it. Both answers become one Git commit in your hub, which Skill Hub makes for you.
 
-**What happens next.** Every agent that uses this hub gets the skill now, in every connected project. If your hub has a Git remote, other clones get it after you push; the output prints the push command. The folder stays in your project as a checkout (next task), so you can keep improving it and run `skill commit` again. Delete the folder when you are done, so this project uses the hub's version like the others.
+**What happens next.** Every agent that uses this hub gets the skill now, in every project. If your hub has a Git remote, other clones get it after you push; the output prints the push command. The folder stays in your project and now counts as a checkout (next task), so you can keep improving it and run `skill commit` again. Delete the folder when you are done, so this project uses the hub's version like the others.
 
 <details>
 <summary>Without a terminal (an agent or a script)</summary>
@@ -111,9 +111,9 @@ Claude Code asks you before it runs a `skillhub` command with `--yes`.
 
 ## Edit a skill and try it before others get it
 
-Change any file of a skill, scripts included, and try the change with your agent while every other project keeps the version they have.
+Change any file of a skill, scripts included, and try the change with your agent while every other project keeps the version it has.
 
-**1. Copy the skill into your project.**
+**1. Copy the skill into your project.** Just created the skill? The folder is already a checkout: go to step 2. Otherwise:
 
 ```bash
 cd <your-project> && skillhub skill checkout commit-style
@@ -126,8 +126,6 @@ The hub keeps serving the current version; agents in other projects are not affe
 Try it: ask your agent to use /commit-style.
 When ready: skillhub skill commit commit-style
 ```
-
-If the folder is already there, for example right after you created the skill, skip this step: it is already a checkout.
 
 **2. Edit the files** in `.claude/skills/commit-style/`, yourself or with your agent. For example, change "at most 50 characters" to "at most 72 characters" in `SKILL.md`, and add a script `scripts/trailer.sh`:
 
@@ -153,49 +151,53 @@ commit-style: 2 files changed since checkout (the hub did not change)
 Routing lint: no findings.
 Show the diff: skillhub skill commit commit-style --diff
 Apply this change? [y/N] y
-Committed 8771144 "Commit commit-style from a project (2 files)".
+Committed a7ba5e5 "Commit commit-style from a project (2 files)".
 Agents using this hub get it now.
 ```
 
 Add `--diff` to read every changed line before you answer.
 
-**What happens next.** Agents on this hub get the new version now; other clones after you push. Run `skill commit` again after more edits; with nothing changed it says `Nothing to commit`. `skillhub status` lists the checkouts in this project that you have not committed yet.
+**What happens next.** Agents on this hub get the new version now; other clones after you push. Run `skill commit` again after more edits; with nothing changed it says `Nothing to commit`. `skillhub status` lists the skills checked out in this project and how many files changed in each.
 
+- **Routing** is what the hub uses to decide when to recommend a skill: its triggers, "not for" entries and examples. The **When to use**, **When not to use** and **Examples** sections of `SKILL.md` were read as routing suggestions on the skill's first commit only. To change routing later, use `skill edit`: see [Tune routing](#tune-routing-skillhub-skill-edit).
 - **A skill from GitHub** asks one more question, `Approve this content for agents?`, because agents get nothing from changed third-party content until a person approves it. See [Approve and publish](#approve-and-publish).
-- **The hub changed meanwhile** (someone else committed the same skill): `skill commit` merges both versions and asks you to decide each file that both sides changed. `skillhub help skill` lists the choices (`--accept`, `--manual`, `--write-conflicts`).
-- **Routing fields** (triggers, examples, "not for") of a skill already on the hub are changed with `skill edit`, not in `SKILL.md`. See [Tune routing](#tune-routing-skillhub-skill-edit).
+- **The hub changed meanwhile** (someone else committed the same skill): `skill commit` merges both versions and asks you to decide each file that both sides changed. `skillhub help skill commit` lists the choices.
 
 ## Add a skill from GitHub
 
-Bring in a skill someone published on GitHub. Point at the skill's folder in the repository:
+Bring in a skill someone published on GitHub. A skill written by someone else is **third-party**: agents get none of its content until you have read it and approved it.
+
+**1. Read it.** Point at the skill's folder in the repository and page through every file. Piped into a pager, the command only shows; it writes nothing:
+
+```bash
+cd <your-project> && skillhub skill add https://github.com/anthropics/skills --path skills/webapp-testing --diff | less
+```
+
+A folder address such as `https://github.com/anthropics/skills/tree/main/skills/webapp-testing` works too. The preview lists every file, the license, and the files left out because they look like secrets or build output (`.env*`, `*.pem`, SSH keys, `node_modules/`).
+
+**2. Add it and approve what you read.** Run the command again without `--diff`, and answer `y` to both questions (output trimmed):
 
 ```bash
 cd <your-project> && skillhub skill add https://github.com/anthropics/skills --path skills/webapp-testing
 ```
-
-A folder address such as `https://github.com/anthropics/skills/tree/main/skills/webapp-testing` works too. The command lists every file and the license, then asks up to three questions:
 
 ```text
 Add webapp-testing from github.com/anthropics/skills@main, tracked for upstream updates.
 Files (6, 21.9 KB):
   LICENSE.txt                         11.1 KB
   SKILL.md                             3.8 KB
-  scripts/with_server.py               3.6 KB
   ...
 License: Complete terms in LICENSE.txt (LICENSE.txt)
 Third-party: agents get webapp-testing only after you approve its content.
-Show every file: skillhub skill add https://github.com/anthropics/skills --path skills/webapp-testing --diff
 Add webapp-testing as a draft? [y/N] y
 Approve this content for agents? [y/N] y
 webapp-testing cannot be activated yet: trigger, not_for or rationale
 (quality.routing_review_rationale).
 Draft webapp-testing added and its content approved. Agent use: off. Upstream: anthropics-skills.
-Committed cd8d637 "Add webapp-testing from github.com/anthropics/skills, approve content".
+Committed d6ea5c0 "Add webapp-testing from github.com/anthropics/skills, approve content".
 ```
 
-Output is trimmed. A skill written by someone else is **third-party**: agents get none of its content until a person has read it and approved it. Read the files first (`--diff` prints them all), then answer the approval question. Files that look like secrets or build output (`.env*`, `*.pem`, SSH keys, `node_modules/`) are left out and named in the preview.
-
-**Give it routing, then activate it.** A skill from GitHub rarely says when to use it in a form the hub can read, so the hub cannot activate it yet. Add a trigger, a "not for" entry and three example requests, then activate:
+**3. Say when to use it, then activate it.** A skill from GitHub rarely says when to use it in a form the hub can read, so it cannot be activated yet. Add a trigger, a "not for" entry and three example requests, then activate:
 
 ```bash
 cd <your-project> && skillhub skill edit webapp-testing --trigger "test a local web app in a browser" \
@@ -206,7 +208,7 @@ skillhub skill activate webapp-testing
 
 Each command shows its change and asks `Apply this change? [y/N]`; each applied change is one hub commit.
 
-**What happens next.** Agents get the skill once it is active. The repository becomes the skill's **upstream**, so you can pull its later changes: see [Keep copied skills up to date](sources-and-learning.md#keep-copied-skills-up-to-date). For a repository with several skills, `--skill <name>` picks one and `--all` adds each as its own draft.
+**What happens next.** Agents get the skill once it is active. The repository becomes the skill's **upstream**, so you can pull its later changes: see [Keep copied skills up to date](sources-and-learning.md#keep-copied-skills-up-to-date). For a repository with several skills, `--skill <name>` picks one and `--all` adds each as its own draft; `skillhub help skill add` lists the rest.
 
 **A skill in a folder on this machine**, such as `~/review-checklist`, is added with `skill commit` instead. It needs no approval, because it is yours:
 
@@ -216,22 +218,21 @@ cd <your-project> && skillhub skill commit ~/review-checklist
 
 ## Approve and publish
 
-Some changes wait for a person before agents get them: a third-party skill an agent added, and skills sent from another machine. Agents cannot approve; you do it in a terminal or in the browser.
+Some skills wait for a person before agents get them: a third-party skill an agent added, and skills [sent from another machine](#from-another-machine). Agents cannot approve; you do it in a terminal or in the browser.
 
-**See what waits.** Open **Waiting for review** in the [web UI](web-ui.md#review-what-waits-for-you), or list the drafts:
+**1. See what waits.** Open **Waiting for review** in the [web UI](web-ui.md#review-what-waits-for-you), or list the drafts:
 
 ```bash
 cd <your-project> && skillhub skill list --state draft
 ```
 
-**Read the skill and approve it.** Say your agent added a skill from GitHub with `skillhub skill add https://github.com/anthropics/skills --path skills/frontend-design --yes`. Without a terminal it stopped at the draft, unapproved. `skill review` reports the skill's state, what it still needs to be activated, and a **Content trust** block with the exact approval command:
+**2. Read the skill and approve it.** Say your agent added a skill from GitHub with `skillhub skill add https://github.com/anthropics/skills --path skills/frontend-design --yes`. Without a terminal it stopped at the draft, unapproved. `skill review` says what the skill still needs and how to approve it (output trimmed):
 
 ```bash
 cd <your-project> && skillhub skill review frontend-design
 ```
 
 ```text
-State:        draft (valid; routing: not eligible; servable)
 Activation readiness
   - Missing required field: trigger
   - Missing required field: not_for or rationale (quality.routing_review_rationale)
@@ -243,15 +244,45 @@ After reviewing the skill's files and runtime block, approve exactly this conten
   $ skillhub skill edit frontend-design --approve-content sha256:<digest>
 ```
 
-Output is trimmed. The digest is a fingerprint of the files you read. Read them in the hub folder (`skills/<collection>/<skill-id>/`) or in the web UI, then copy the approval command from your own output; it asks `Apply this change? [y/N]`. On the web page **Waiting for review**, **Approve** turns on once you have opened every changed file.
+The digest is a fingerprint of the files you read. Read them in the hub folder (`skills/<collection>/<skill-id>/`) or in the web UI, then copy the approval command from your own output; it asks `Apply this change? [y/N]`. On the web page **Waiting for review**, **Approve** turns on once you have opened every changed file.
 
-**Activate it.** Fill in what **Activation readiness** lists, as in [Add a skill from GitHub](#add-a-skill-from-github), then:
+**3. Say when to use it, then activate it.** Fill in what **Activation readiness** lists: a trigger, a "not for" entry and three example requests:
 
 ```bash
-cd <your-project> && skillhub skill activate frontend-design
+cd <your-project> && skillhub skill edit frontend-design --trigger "design a web page or user interface" \
+  --not-for "backend code without a user interface" --example "design a landing page for my app" \
+  --example "make this dashboard look less generic" --example "choose fonts and colours for my site"
+skillhub skill activate frontend-design
 ```
 
-### From another machine
+Each command asks `Apply this change? [y/N]`. Once the skill is active, agents on this hub get it.
+
+## Edit in the browser
+
+For a quick fix without trying it in an agent first, edit the files in the web UI. Start it from your hub folder:
+
+```bash
+cd ~/skill-hub && skillhub serve web
+```
+
+It opens your browser. If no browser opens, open the link it prints. Anyone who has that link can change your skills; to keep the web UI on this machine, see [Keep it safe on your network](web-ui.md#keep-it-safe-on-your-network).
+
+1. Open **Skills**, click the skill, then the **Files** tab.
+2. Click a file and **Edit** it, or add one with **+ File**. A bar at the bottom counts your changes: "2 changes not committed · agents still get the current version".
+3. Click **Review →**, read each file's diff, and click **Commit to the hub**. The page answers "Committed c492ab3. This machine's agents get it now."
+
+[Change the files of a skill](web-ui.md#change-the-files-of-a-skill) and [Review what waits for you](web-ui.md#review-what-waits-for-you) show each screen. Press `Ctrl+C` in the terminal to stop the web UI.
+
+## More
+
+The tasks above cover daily curation. The sections below explain what happens underneath and how to tune routing. For every flag of a skill command, run `skillhub help skill <command>`, for example `skillhub help skill commit`, or see the [command reference](command-reference.md#work-with-skills).
+
+- Pull updates from a skill's upstream: [Keep copied skills up to date](sources-and-learning.md#keep-copied-skills-up-to-date).
+- Learn from other repositories without copying them: [Learn from other repositories](sources-and-learning.md#learn-from-other-repositories).
+- Import many skills at once: [Import many skills from a repository](sources-and-learning.md#import-many-skills-from-a-repository).
+- Fix an error message: [Troubleshooting](troubleshooting.md).
+
+## From another machine
 
 A project connected to a hub on another machine (`skillhub connect --hub <url>`) uses the same two commands. `skill checkout` fetches the active skill from that hub, and `skill commit` sends your folder there for review:
 
@@ -271,7 +302,7 @@ skillhub skill review SUB-<id> --discard  # drop it
 
 The same submission opens on the web page **Waiting for review**. The sender chooses neither the collection nor the routing; the reviewer sets them. [One hub from several machines](remote-hub-guide.md) covers the setup and the security notes.
 
-### Retire a skill
+## Retire a skill
 
 A skill moves through four states in this order: **draft**, **active**, **deprecated** (being phased out) and **archived** (kept for history, never offered). Retire one in two steps:
 
@@ -281,29 +312,6 @@ skillhub skill archive <skill-id>
 ```
 
 An active skill cannot go straight to archived.
-
-## Edit in the browser
-
-For a quick fix without trying it in an agent first, edit the files in the web UI. Start it from your hub folder; it opens your browser:
-
-```bash
-cd ~/skill-hub && skillhub serve web --addr 127.0.0.1:7421
-```
-
-1. Open **Skills**, click the skill, then the **Files** tab.
-2. Click a file and **Edit** it, or add one with **+ File**. A bar at the bottom counts your changes: "2 changes not committed · agents still get the current version".
-3. Click **Review →**, read each file's diff, and click **Commit to the hub**. The page answers "Committed c492ab3. This machine's agents get it now."
-
-[Change the files of a skill](web-ui.md#change-the-files-of-a-skill) and [Review what waits for you](web-ui.md#review-what-waits-for-you) show each screen. Press `Ctrl+C` in the terminal to stop the web UI.
-
-## More
-
-The tasks above cover daily curation. The sections below explain what happens underneath and how to tune routing. For every flag of every skill command, run `skillhub help skill` or see the [command reference](command-reference.md#work-with-skills).
-
-- Pull updates from a skill's upstream: [Keep copied skills up to date](sources-and-learning.md#keep-copied-skills-up-to-date).
-- Learn from other repositories without copying them: [Learn from other repositories](sources-and-learning.md#learn-from-other-repositories).
-- Import many skills at once: [Import many skills from a repository](sources-and-learning.md#import-many-skills-from-a-repository).
-- Fix an error message: [Troubleshooting](troubleshooting.md).
 
 ## What gets committed and who gets it
 
@@ -350,7 +358,7 @@ cd <your-project> && skillhub skill edit commit-style \
   --counter-example "write release notes"
 ```
 
-An active skill needs a trigger, a "not for" entry (or a `--rationale`) and a minimum scope; at least 3 examples are recommended. Other forms:
+An active skill needs a trigger, a "not for" entry (or a `--rationale`) and a minimum scope. Skill Hub warns until a skill has at least three examples; it does not block you. Other forms:
 
 - `skillhub skill edit <skill-id> --editor` edits the instructions in `$VISUAL` or `$EDITOR`, without trying them first. If the skill changes while the editor is open, the edit is refused and your text stays in a recovery file under `runtime/edits/` in the hub. `--content-file <file>` replaces the instructions from a file.
 - `skillhub skill edit <skill-id> --runtime-file <yaml>` declares the tools and variables the skill's scripts need, as a YAML mapping such as `requires: {bins: [git]}`; a file that holds `{}` removes the block. [Run skills that need tools or secrets](user-guide.md#run-skills-that-need-tools-or-secrets) explains the rest.
