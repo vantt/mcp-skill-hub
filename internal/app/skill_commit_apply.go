@@ -75,6 +75,9 @@ func (service SkillCommitService) Apply(ctx context.Context, path string, previe
 	if preview.NothingToCommit {
 		return SkillCommitResult{Result: NewResult(StatusOK, fmt.Sprintf("Nothing to commit: %s matches the hub.", plan.id)), SkillID: plan.id, Case: plan.caseName, ChangedPaths: []string{}, Files: []SkillCommitFile{}}, nil
 	}
+	if len(preview.Uncommitted) > 0 {
+		return finishUnfinishedCommit(ctx, plan, preview), nil
+	}
 	if plan.thirdParty && !options.Approve {
 		return commitResultError(NewContentReviewRequiredError(
 			fmt.Sprintf("%s is third-party (%s); applying new content without approval would stop agents from getting it", plan.id, plan.origin),

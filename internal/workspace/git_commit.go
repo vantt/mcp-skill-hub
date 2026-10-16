@@ -504,7 +504,7 @@ func gitReason(ctx context.Context, stderr string, err error) string {
 		return fmt.Sprintf("The commit did not finish within %d seconds. A hook or your signing key may be waiting for input, and there is no terminal.", int(commitTimeout.Seconds()))
 	}
 	if strings.Contains(stderr, "identity unknown") || strings.Contains(stderr, "auto-detect email") || strings.Contains(stderr, "empty ident") {
-		return "Git has no author identity. Set user.name and user.email, for example: git config --global user.email you@example.com"
+		return "Git has no user name or email set. Set them with `" + SetGitNameCommand + "` and `" + SetGitEmailCommand + "`."
 	}
 	lines := make([]string, 0, 3)
 	for _, line := range strings.Split(stderr, "\n") {

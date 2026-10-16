@@ -42,9 +42,6 @@ type InitReport struct {
 	Created bool `json:"created"`
 	// Commit is the first commit init made, if it made one.
 	Commit string `json:"commit,omitempty"`
-	// FallbackIdentity is true when the first commit used Skill Hub's own
-	// author because Git has no user name or email configured.
-	FallbackIdentity bool `json:"fallback_identity,omitempty"`
 	// Stored is true when the hub path was recorded in the user configuration.
 	Stored bool `json:"stored"`
 	// StoreError explains why the hub path could not be recorded.
@@ -78,13 +75,6 @@ const InitDetailsKey = "init"
 
 // firstCommitMessage is the message of the commit init makes.
 const firstCommitMessage = "Initialize Skill Hub hub"
-
-// fallbackName and fallbackEmail are the author of the first commit when Git
-// has no identity configured; they apply to that one commit only.
-const (
-	fallbackName  = "Skill Hub"
-	fallbackEmail = "skillhub@localhost"
-)
 
 type initKind int
 
@@ -129,6 +119,9 @@ func (service WorkspaceService) Init(path string, opts InitOptions) (Result, err
 	target, refusal := inspectInitTarget(root)
 	if refusal != nil {
 		return refusal.result(), nil
+	}
+	if workspace.GitIdentityMissing(context.Background(), nearestExisting(root)) {
+		return gitIdentityRefusal(), nil
 	}
 	if opts.Source.IsSet() {
 		if opts.DryRun {
@@ -197,7 +190,7 @@ func (service WorkspaceService) initLocal(ctx context.Context, root string, targ
 		return result, err
 	}
 	if target.kind != initHubCommitted {
-		commit, fallback, gitErr := commitFirst(ctx, root)
+		commit, gitErr := commitFirst(ctx, root)
 		if gitErr != nil {
 			return ErrorResult(&Error{Code: ErrorGitFailed, Render: ErrorRender{
 				Error: "The first commit of the hub failed.",
@@ -205,7 +198,7 @@ func (service WorkspaceService) initLocal(ctx context.Context, root string, targ
 				Fix:   "Fix what Git reports, then run `skillhub init` here again. Everything written so far stays; init finishes the commit.",
 			}}), nil
 		}
-		report.Commit, report.FallbackIdentity = commit, fallback
+		report.Commit = commit
 	}
 	if err := store.SetHub(root); err != nil {
 		report.StoreError = err.Error()
@@ -287,6 +280,22 @@ func (service WorkspaceService) initDryRun(root string, target initTarget, store
 	}
 	result.Items = append(items, result.Items...)
 	return result, nil
+}
+
+// gitIdentityRefusal stops init before it writes anything when Git cannot
+// name the author of a commit: every change to the hub is a commit, so the
+// first skill commit would fail later with the change half done.
+func gitIdentityRefusal() Result {
+	result := ErrorResult(&Error{Code: ErrorInvalidRequest, Render: ErrorRender{
+		Error: "Git has no user name or email set, so the hub could not record any change.",
+		Why:   "Every change to a hub is a Git commit, and Git needs your name and email for each one; nothing was written.",
+		Fix:   "Set them once for this machine, then run `skillhub init` again:",
+	}})
+	result.SuggestedActions = []Action{
+		{Label: "Set your Git name", Command: workspace.SetGitNameCommand},
+		{Label: "Set your Git email", Command: workspace.SetGitEmailCommand},
+	}
+	return result
 }
 
 // initRefusal is a folder init will not touch, with the command to run instead.
@@ -468,38 +477,34 @@ func commitCandidates(ctx context.Context, root string) ([]string, error) {
 // commitFirst makes the hub's first commit of commitCandidates. Hooks and
 // signing are disabled for this commit, so a hook or signing setup in a
 // pre-existing .git or the user's Git config cannot stop or run code during
-// init. Without a configured identity it commits as Skill Hub.
-func commitFirst(ctx context.Context, root string) (commit string, fallback bool, err error) {
+// init. Init checked before that Git has an identity to commit with.
+func commitFirst(ctx context.Context, root string) (string, error) {
 	paths, err := commitCandidates(ctx, root)
 	if err != nil {
-		return "", false, err
+		return "", err
 	}
 	if len(paths) == 0 {
-		return "", false, errors.New("init found no files to commit")
+		return "", errors.New("init found no files to commit")
 	}
 	hooks, err := os.MkdirTemp("", "skillhub-no-hooks-")
 	if err != nil {
-		return "", false, fmt.Errorf("create an empty hooks folder: %w", err)
+		return "", fmt.Errorf("create an empty hooks folder: %w", err)
 	}
 	defer os.RemoveAll(hooks)
 	pathspec := strings.Join(paths, "\x00") + "\x00"
 	if err := runGitWithInput(ctx, root, pathspec, "add", "--pathspec-from-file=-", "--pathspec-file-nul"); err != nil {
-		return "", false, err
+		return "", err
 	}
-	args := []string{"-c", "core.hooksPath=" + hooks, "-c", "commit.gpgsign=false"}
-	if gitConfigValue(ctx, root, "user.name") == "" || gitConfigValue(ctx, root, "user.email") == "" {
-		args = append(args, "-c", "user.name="+fallbackName, "-c", "user.email="+fallbackEmail)
-		fallback = true
-	}
-	args = append(args, "commit", "--no-verify", "--quiet", "-m", firstCommitMessage, "--pathspec-from-file=-", "--pathspec-file-nul")
+	args := []string{"-c", "core.hooksPath=" + hooks, "-c", "commit.gpgsign=false",
+		"commit", "--no-verify", "--quiet", "-m", firstCommitMessage, "--pathspec-from-file=-", "--pathspec-file-nul"}
 	if err := runGitWithInput(ctx, root, pathspec, args...); err != nil {
-		return "", false, err
+		return "", err
 	}
 	output, err := offlineGitCommand(ctx, root, "rev-parse", "HEAD").Output()
 	if err != nil {
-		return "", false, fmt.Errorf("read the new commit: %w", err)
+		return "", fmt.Errorf("read the new commit: %w", err)
 	}
-	return strings.TrimSpace(string(output)), fallback, nil
+	return strings.TrimSpace(string(output)), nil
 }
 
 func runGitWithInput(ctx context.Context, root, input string, args ...string) error {
@@ -512,15 +517,6 @@ func runGitWithInput(ctx context.Context, root, input string, args ...string) er
 		return gitError(err, stderr.String())
 	}
 	return nil
-}
-
-// gitConfigValue returns the effective value of a Git config key, or "".
-func gitConfigValue(ctx context.Context, root, key string) string {
-	output, err := offlineGitCommand(ctx, root, "config", "--get", key).Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(output))
 }
 
 // gitError keeps Git's own message: it is what the user needs to fix the cause.

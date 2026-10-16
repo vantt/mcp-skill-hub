@@ -5,6 +5,7 @@ package testenv
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -48,4 +49,22 @@ func RunOutsideGitRepository(m *testing.M) {
 		os.Exit(1)
 	}
 	os.Exit(m.Run())
+}
+
+// SetGitIdentity points Git's global configuration at a new file in dir that
+// holds a test identity, and turns the system configuration off. Hubs made by
+// tests commit, and init refuses to run without an identity, so the tests of a
+// package that runs init call it from TestMain; a test about a missing
+// identity sets its own GIT_CONFIG_GLOBAL.
+func SetGitIdentity(dir string) error {
+	config := filepath.Join(dir, "gitconfig")
+	if err := os.WriteFile(config, []byte("[user]\n\tname = Skill Hub Tests\n\temail = tests@example.invalid\n"), 0o600); err != nil {
+		return fmt.Errorf("write the test Git config: %w", err)
+	}
+	for key, value := range map[string]string{"GIT_CONFIG_GLOBAL": config, "GIT_CONFIG_NOSYSTEM": "1"} {
+		if err := os.Setenv(key, value); err != nil {
+			return fmt.Errorf("set %s: %w", key, err)
+		}
+	}
+	return nil
 }

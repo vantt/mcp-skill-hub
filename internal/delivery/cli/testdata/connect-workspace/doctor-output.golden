@@ -9,6 +9,7 @@ Interrupted change  ok      none
 Search index        ok      current
 Agent connection    ok      current
 Git                 ok      clean
+Git identity        ok      set
 Pre-commit hook     ok      no pre-commit hook
 Network server      ok      nothing listens on 127.0.0.1:7420; run `skillhub serve` when agents on
                             another machine need this hub
@@ -41,6 +42,7 @@ Interrupted change  ok      none
 Search index        ok      current
 Agent connection    ok      current
 Git                 ok      clean
+Git identity        ok      set
 Pre-commit hook     ok      no pre-commit hook
 Network server      ok      nothing listens on 127.0.0.1:7420; run `skillhub serve` when agents on
                             another machine need this hub

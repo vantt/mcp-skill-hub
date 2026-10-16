@@ -70,12 +70,14 @@ In an existing hub, `init <git-url>` connects only to an empty repository or to 
 
 ### Git has no user name or email set
 
-`init` still makes the first commit, as `Skill Hub <skillhub@localhost>`, and says so. Set your own name and email for later commits:
+Every change to a hub is a Git commit, so `init` refuses to start and writes nothing, and `doctor` reports `Git identity` as a problem. Set your name and email once for this machine, then run the command again:
 
 ```bash
 git config --global user.name "<your name>"
 git config --global user.email "<your email>"
 ```
+
+If a `skill commit` ran while Git had no identity, its files are written on the hub but not committed. Run the same `skillhub skill commit <id>` again after setting them: it finds the uncommitted files of that skill and commits them.
 
 ### A cloned hub tracks runtime files
 

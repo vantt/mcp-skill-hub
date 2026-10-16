@@ -117,9 +117,6 @@ func renderInitSummary(p *termui.Printer, result app.Result, report *app.InitRep
 	if report.Commit != "" {
 		p.Line(fmt.Sprintf("First commit %s: %q.", shortCommit(report.Commit), "Initialize Skill Hub hub"))
 		p.Line("Git hooks and commit signing were skipped for this first commit.")
-		if report.FallbackIdentity {
-			p.Line("Git has no user name or email set, so this commit is by Skill Hub <skillhub@localhost>.")
-		}
 	}
 	if remote := report.Remote; remote != nil && !remote.Fetched {
 		switch {

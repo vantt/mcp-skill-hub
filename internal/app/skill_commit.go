@@ -123,7 +123,12 @@ type SkillCommitPreview struct {
 	ActivationReady   bool     `json:"activation_ready"`
 	ActivationMissing []string `json:"activation_missing,omitempty"`
 	NothingToCommit   bool     `json:"nothing_to_commit"`
-	FullDiff          string   `json:"full_diff,omitempty"`
+	// Uncommitted lists the hub files of a skill that already match the
+	// folder but were never committed to Git, such as after a commit Git
+	// refused; applying commits them.
+	Uncommitted    []string `json:"uncommitted,omitempty"`
+	uncommittedOps []string
+	FullDiff       string `json:"full_diff,omitempty"`
 	// MergeFiles carries the merged text with conflict markers for
 	// --write-conflicts.
 	MergeFiles []UpstreamFile `json:"-"`
