@@ -250,7 +250,7 @@ Agents get nothing from a skill copied from someone else's repository, or sent f
 skillhub skill review <skill-id>
 ```
 
-After you read its files, approve in a terminal: the `y/N` question that `skill add`, `skill commit` and `skill review <SUB-id>` ask, or the exact `skillhub skill edit <skill-id> --approve-content <digest>` command from the **Content trust** block. The web page **Waiting for review** approves too, once you have opened every changed file. The digest is a fingerprint of the content you reviewed. See [Safety model](curating-skills.md#safety-model).
+After you read its files, approve in a terminal: the `y/N` question that `skill add`, `skill commit` and `skill review <SUB-id>` ask, or the exact `skillhub skill edit <skill-id> --approve-content <digest>` command from the **Content trust** block. The web page **Waiting for review** approves too, once you have opened every changed file. The digest is a fingerprint of the content you reviewed. See [Approve and publish](curating-skills.md#approve-and-publish).
 
 ### The agent reports `setup_failed`
 

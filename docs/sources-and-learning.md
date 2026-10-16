@@ -16,7 +16,7 @@ The commands below run inside the hub or a connected project, for example `cd <y
 
 ## Keep copied skills up to date
 
-When you add a skill from GitHub with `skillhub skill add`, the hub remembers where it came from. That repository becomes the skill's upstream, so you can see and pull its changes later. [Add a skill](curating-skills.md#add-a-skill-skillhub-skill-add) shows how to add one.
+When you add a skill from GitHub with `skillhub skill add`, the hub remembers where it came from. That repository becomes the skill's upstream, so you can see and pull its changes later. [Add a skill from GitHub](curating-skills.md#add-a-skill-from-github) shows how to add one.
 
 ### Check for updates
 
@@ -240,7 +240,7 @@ The preview also prints a `skillhub source import --proposal ... --yes` line. Ru
 
 Choose skills with `--skill <name>` (repeatable) or `--all`, but not both. `--ref <r>` picks a branch or tag; `--path <p>` picks a folder.
 
-Skills you already have are skipped, never overwritten. Import never approves content, activates a skill or watches the source, so `skillhub skill outdated` shows them as **not tracked**. Each draft is committed to the hub. Review and activate each as in [Curating skills](curating-skills.md#review-and-approve).
+Skills you already have are skipped, never overwritten. Import never approves content, activates a skill or watches the source, so `skillhub skill outdated` shows them as **not tracked**. Each draft is committed to the hub. Review and activate each as in [Approve and publish](curating-skills.md#approve-and-publish).
 
 Sources larger than 8 MiB are refused. For a large repository, use a URL that points at the skill's folder (`/tree/<branch>/<folder>`), as above.
 
