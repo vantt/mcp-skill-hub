@@ -83,7 +83,7 @@ func TestHelpEntryPointsPrintUsageAndExitZero(t *testing.T) {
 		if code != 0 || stderr != "" {
 			t.Fatalf("%v exit = %d stderr = %q", args, code, stderr)
 		}
-		for _, want := range []string{"Get started", "skillhub connect", "curate my Skill Hub", "Setup:", "Skills:", "Sources & learning:", "Serve:", "Maintenance:", "init", "doctor", "--version", "skillhub help --dev"} {
+		for _, want := range []string{"Get started", "skillhub connect -g ", "curate my Skill Hub", "Setup:", "Skills:", "Sources & learning:", "Serve:", "Maintenance:", "init", "doctor", "--version", "skillhub help --dev"} {
 			if !strings.Contains(stdout, want) {
 				t.Fatalf("%v help is missing %q:\n%s", args, want, stdout)
 			}
@@ -213,7 +213,7 @@ func TestInitDefaultOutputIsShortSummaryWithoutDigests(t *testing.T) {
 		t.Fatalf("exit = %d: %s", code, stderr)
 	}
 	flat := strings.Join(strings.Fields(stdout), " ")
-	for _, want := range []string{"Hub created at " + root, "Agent connection written: claude-code, codex-cli, gemini-cli.", "First commit", "Next:", shellquote.Chain("cd <your-project>", "skillhub connect")} {
+	for _, want := range []string{"Hub created at " + root, "Agent connection written: claude-code, codex-cli, gemini-cli.", "First commit", "Next:", "skillhub connect -g"} {
 		if !strings.Contains(flat, want) {
 			t.Fatalf("init output is missing %q:\n%s", want, stdout)
 		}

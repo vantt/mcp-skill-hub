@@ -436,7 +436,7 @@ func StatusNext(report RoleReport, sections []Section, inventory HubInventory) N
 	if len(sections) == 0 {
 		switch {
 		case IsHubRoot(report.StoredHub):
-			return NextStep{Label: "connect this project to the hub at " + report.StoredHub, Command: "skillhub connect"}
+			return NextStep{Label: "connect your agents in every project to the hub at " + report.StoredHub, Command: "skillhub connect -g"}
 		case report.StoredHub != "":
 			return NextStep{Label: "the hub stored at " + report.StoredHub + " is gone; if you moved it, record its new location", Command: shellquote.Chain("cd <new-location>", "skillhub init"), Elsewhere: true}
 		}

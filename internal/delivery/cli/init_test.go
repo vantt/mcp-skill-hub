@@ -119,7 +119,7 @@ func TestInitInAnEmptyFolderCommitsStoresAndNamesTheNextCommand(t *testing.T) {
 	if author != "Skill Hub <skillhub@localhost>" || !strings.Contains(stdout, "Git has no user name or email set") {
 		t.Fatalf("author = %q; output:\n%s", author, stdout)
 	}
-	for _, want := range []string{"Hub created at " + dir + ".", "Agent connection written: claude-code, codex-cli, gemini-cli.", "Git hooks and commit signing were skipped for this first commit.", "Next: connect a project to this hub:", "$ " + shellquote.Chain("cd <your-project>", "skillhub connect")} {
+	for _, want := range []string{"Hub created at " + dir + ".", "Agent connection written: claude-code, codex-cli, gemini-cli.", "Git hooks and commit signing were skipped for this first commit.", "Next: connect your agents in every project to this hub", "$ skillhub connect -g\n"} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("output lacks %q:\n%s", want, stdout)
 		}

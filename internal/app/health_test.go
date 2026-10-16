@@ -692,7 +692,7 @@ func TestStatusNextFollowsTheTableOrder(t *testing.T) {
 		sections []Section
 		want     string
 	}{
-		{"none with a stored hub", RoleReport{StoredHub: stored}, nil, "skillhub connect"},
+		{"none with a stored hub", RoleReport{StoredHub: stored}, nil, "skillhub connect -g"},
 		{"none with a gone stored hub", RoleReport{StoredHub: filepath.Join(stored, "gone")}, nil, shellquote.Chain("cd <new-location>", "skillhub init")},
 		{"none without a stored hub", RoleReport{}, nil, NewHubCommand()},
 		{"busy first", RoleReport{}, hub(Finding{Code: "hub_busy", Severity: SeverityNotice}, Finding{Code: "x", Severity: SeverityProblem, Fix: fix}), "skillhub status"},

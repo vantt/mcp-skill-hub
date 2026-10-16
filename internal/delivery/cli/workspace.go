@@ -153,12 +153,12 @@ func renderInitSummary(p *termui.Printer, result app.Result, report *app.InitRep
 		}
 	}
 	if report.Stored {
-		p.Line("This is now the hub of this machine; `skillhub connect` uses it.")
+		p.Line("This is now the hub of this machine; `skillhub connect -g` uses it.")
 	} else if report.StoreError != "" {
 		p.Warning("The hub path could not be recorded for `skillhub connect`: " + report.StoreError)
 	}
 	p.Blank()
-	p.Next("connect a project to this hub:", report.Next)
+	p.Next("connect your agents in every project to this hub (or `skillhub connect` in one project only):", report.Next)
 }
 
 func shortCommit(commit string) string {

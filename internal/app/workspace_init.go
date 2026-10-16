@@ -147,7 +147,7 @@ func (service WorkspaceService) Init(path string, opts InitOptions) (Result, err
 
 // initLocal runs the init steps for a folder inspectInitTarget accepted.
 func (service WorkspaceService) initLocal(ctx context.Context, root string, target initTarget, store userconfig.Store) (Result, error) {
-	report := &InitReport{Hub: root, Created: target.kind != initHubCommitted, Next: shellquote.Chain("cd <your-project>", "skillhub connect")}
+	report := &InitReport{Hub: root, Created: target.kind != initHubCommitted, Next: "skillhub connect -g"}
 	// apply creates the folder and runs `git init -b main` when they are
 	// missing, through the same layout step doctor --fix uses.
 	if target.kind == initResume {
@@ -209,7 +209,7 @@ func (service WorkspaceService) initLocal(ctx context.Context, root string, targ
 	}
 	if err := store.SetHub(root); err != nil {
 		report.StoreError = err.Error()
-		report.Next = shellquote.Chain("cd <your-project>", "skillhub connect "+shellquote.Arg(root))
+		report.Next = "skillhub connect -g " + shellquote.Arg(root)
 	} else {
 		report.Stored = true
 	}
@@ -223,7 +223,7 @@ func (service WorkspaceService) initLocal(ctx context.Context, root string, targ
 		result.Details = map[string]any{}
 	}
 	result.Details[InitDetailsKey] = report
-	result.SuggestedActions = []Action{{Label: "Connect a project", Command: report.Next}}
+	result.SuggestedActions = []Action{{Label: "Connect your agents in every project", Command: report.Next}}
 	result.Warnings = append(result.Warnings, servabilityWarnings(ctx, root)...)
 	return result, nil
 }
