@@ -1,7 +1,7 @@
 ---
 title: "One-time invite to hand the hub token to another machine"
 description: "skillhub token invite prints a single-use, short-lived code; skillhub connect --hub <url> --invite <code> redeems it over the network listener and saves the shared hub token in the user config directory, so the scp step is no longer needed."
-status: in-progress
+status: completed # closed 2026-10-17: invite shipped in v0.7.0, pairing on any network unless --strict-pairing (91059c5); see plans/reports/review-261014-invite-implementation.md
 priority: P2
 effort: 8h
 branch: main
