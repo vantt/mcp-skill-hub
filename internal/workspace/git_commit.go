@@ -319,26 +319,69 @@ func existingOrTracked(ctx context.Context, root string, paths []string) []strin
 	return kept
 }
 
+// commitIndexName is the name prefix of the scratch indexes under the Git dir.
+const commitIndexName = "skillhub-commit-index"
+
+// CommitIndexMaxAge is how long a scratch index kept for the manual command of
+// a failed commit is left alone: the person who saw the command may still run
+// it. An older one is a leftover that LeftoverCommitIndexes reports.
+const CommitIndexMaxAge = 24 * time.Hour
+
+// gitPath resolves name under the Git dir of root, as `git rev-parse
+// --git-path` does, to an absolute path.
+func gitPath(ctx context.Context, root, name string) (string, error) {
+	output, stderr, err := runGit(ctx, root, false, "rev-parse", "--git-path", name)
+	if err != nil {
+		return "", errors.New(gitReason(ctx, stderr, err))
+	}
+	path := filepath.FromSlash(strings.TrimSpace(output))
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(root, path)
+	}
+	return path, nil
+}
+
+// LeftoverCommitIndexes lists the scratch indexes in the Git dir of root that
+// were last written more than CommitIndexMaxAge before now. A failed commit
+// keeps its scratch index for the manual command it prints, and nothing
+// removes the file when that command is never run.
+func LeftoverCommitIndexes(ctx context.Context, root string, now time.Time) ([]string, error) {
+	prefix, err := gitPath(ctx, root, commitIndexName)
+	if err != nil {
+		return nil, err
+	}
+	dir, name := filepath.Dir(prefix), filepath.Base(prefix)+"-"
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	var leftover []string
+	for _, entry := range entries {
+		if !entry.Type().IsRegular() || !strings.HasPrefix(entry.Name(), name) {
+			continue
+		}
+		info, err := entry.Info()
+		if errors.Is(err, os.ErrNotExist) {
+			continue // removed since the directory was read
+		} else if err != nil {
+			return nil, err
+		}
+		if now.Sub(info.ModTime()) > CommitIndexMaxAge {
+			leftover = append(leftover, filepath.Join(dir, entry.Name()))
+		}
+	}
+	return leftover, nil
+}
+
 // scratchIndex makes a copy of the repository's index under its Git dir, so
 // the commit can be built without touching the real index and the stat data
 // of every tracked file is kept rather than hashed again.
 func scratchIndex(ctx context.Context, root string) (string, error) {
-	gitPath := func(name string) (string, error) {
-		output, stderr, err := runGit(ctx, root, false, "rev-parse", "--git-path", name)
-		if err != nil {
-			return "", errors.New(gitReason(ctx, stderr, err))
-		}
-		path := filepath.FromSlash(strings.TrimSpace(output))
-		if !filepath.IsAbs(path) {
-			path = filepath.Join(root, path)
-		}
-		return path, nil
-	}
-	current, err := gitPath("index")
+	current, err := gitPath(ctx, root, "index")
 	if err != nil {
 		return "", err
 	}
-	scratch, err := gitPath("skillhub-commit-index")
+	scratch, err := gitPath(ctx, root, commitIndexName)
 	if err != nil {
 		return "", err
 	}

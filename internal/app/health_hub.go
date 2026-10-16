@@ -180,6 +180,7 @@ func (hubCheck) Check(ctx context.Context, report RoleReport, depth Depth) []Fin
 	if depth == DepthFull {
 		if git.Configured && gitErr == nil {
 			findings = append(findings, precommitFinding(ctx, root))
+			findings = append(findings, commitIndexFindings(ctx, root)...)
 		}
 		findings = append(findings, listenerFinding(ctx))
 	}
@@ -634,6 +635,39 @@ func precommitFinding(ctx context.Context, root string) Finding {
 		Apply:   func(context.Context) (Changed, error) { return rewritePrecommitHook(path) },
 	}
 	return finding
+}
+
+// commitIndexFindings reports the scratch indexes that failed commits left in
+// the Git dir more than a day ago, when there are any. The fix lists them
+// again when it runs, so an index written since the check (the manual command
+// of a new failed commit) is kept.
+func commitIndexFindings(ctx context.Context, root string) []Finding {
+	leftover, err := workspace.LeftoverCommitIndexes(ctx, root, time.Now())
+	if err != nil {
+		return []Finding{{Code: "hub_commit_index_leftover", Label: "Commit indexes", Severity: SeveritySkipped, Message: "not checked: " + plainError(err)}}
+	}
+	if len(leftover) == 0 {
+		return nil
+	}
+	return []Finding{{Code: "hub_commit_index_leftover", Label: "Commit indexes", Severity: SeverityNotice,
+		Message: termCount(len(leftover), "scratch index", "scratch indexes") + " of a failed commit, older than a day, " + pluralWord(len(leftover), "is", "are") + " left in the Git folder; the commit command printed for " + pluralWord(len(leftover), "it", "them") + " was not run.",
+		Fix: &FixAction{
+			Summary: "remove the scratch indexes that failed commits left in the Git folder more than a day ago",
+			Apply: func(ctx context.Context) (Changed, error) {
+				current, err := workspace.LeftoverCommitIndexes(ctx, root, time.Now())
+				if err != nil {
+					return nil, err
+				}
+				changed := Changed{}
+				for _, path := range current {
+					if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+						return changed, err
+					}
+					changed = append(changed, path)
+				}
+				return changed, nil
+			},
+		}}}
 }
 
 func precommitHookPath(ctx context.Context, root string) (string, error) {

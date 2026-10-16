@@ -270,7 +270,7 @@ Edit skills through `skillhub skill checkout` and `skillhub skill commit` to avo
 
 ### The commit failed because of a hook or signing
 
-The change was written to the hub, but the Git commit did not finish. The command prints `Not committed:` with the reason and a `Finish it with:` line. Without a terminal, a commit that waits for a signing passphrase or an interactive hook gives up after about a minute with `The commit did not finish within 60 seconds`. Run the printed line in the hub from a terminal, fix the hook (the output of a failing hook is in the reason), or run the command again with `--no-commit`. Nothing is lost: the files are in place and `skillhub status` lists them as uncommitted.
+The change was written to the hub, but the Git commit did not finish. The command prints `Not committed:` with the reason and a `Finish it with:` line. Without a terminal, a commit that waits for a signing passphrase or an interactive hook gives up after about a minute with `The commit did not finish within 60 seconds`. Run the printed line in the hub from a terminal, fix the hook (the output of a failing hook is in the reason), or run the command again with `--no-commit`. Nothing is lost: the files are in place and `skillhub status` lists them as uncommitted. When the printed line commits from a scratch index (`GIT_INDEX_FILE=…`), that index stays in the Git folder until the line runs; `skillhub doctor` reports one left there for more than a day, and `skillhub doctor --fix` removes it.
 
 ### Adding a large GitHub repository fails
 

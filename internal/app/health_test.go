@@ -729,3 +729,72 @@ func TestChangedPathsReadsTheRepairItems(t *testing.T) {
 		t.Fatalf("changed = %v, want %v", got, want)
 	}
 }
+
+// writeCommitIndex writes a file in the hub's Git dir, last written age ago.
+func writeCommitIndex(t *testing.T, root, name string, age time.Duration) string {
+	t.Helper()
+	path := filepath.Join(root, ".git", name)
+	if err := os.WriteFile(path, []byte("index"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	when := time.Now().Add(-age)
+	if err := os.Chtimes(path, when, when); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestDoctorRemovesOnlyOldCommitIndexesOfFailedCommits(t *testing.T) {
+	t.Parallel()
+	root := healthHub(t)
+	old := writeCommitIndex(t, root, "skillhub-commit-index-111", 48*time.Hour)
+	recent := writeCommitIndex(t, root, "skillhub-commit-index-222", time.Hour)
+	unrelated := writeCommitIndex(t, root, "skillhub-other-333", 48*time.Hour)
+	report := RoleReport{Cwd: root, Hub: &HubRef{Root: root}}
+	if slices.Contains(codesOf(Run(t.Context(), report, DepthLight), SeverityNotice), "hub_commit_index_leftover") {
+		t.Fatal("status looks for leftover commit indexes; only doctor should")
+	}
+	sections := Run(t.Context(), report, DepthFull)
+	finding := findingByCode(t, sections, "hub_commit_index_leftover")
+	if finding.Severity != SeverityNotice || finding.Fix == nil || !strings.HasPrefix(finding.Message, "1 ") {
+		t.Fatalf("leftover index finding = %+v", finding)
+	}
+	if problems := codesOf(sections, SeverityProblem); len(problems) != 0 {
+		t.Fatalf("a leftover index is not a problem: %v", problems)
+	}
+	fixes := ApplyFixes(t.Context(), sections)
+	if len(fixes.Fixed) != 1 || !slices.Equal(fixes.Fixed[0].Changed, Changed{old}) {
+		t.Fatalf("fixes = %+v", fixes)
+	}
+	if _, err := os.Lstat(old); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("old index still there: %v", err)
+	}
+	for _, path := range []string{recent, unrelated} {
+		if _, err := os.Lstat(path); err != nil {
+			t.Fatalf("doctor --fix removed %s: %v", path, err)
+		}
+	}
+	if after := findingByCodeOrOK(Run(t.Context(), report, DepthFull), "hub_commit_index_leftover"); after.Severity == SeverityNotice {
+		t.Fatalf("finding after the fix = %+v", after)
+	}
+}
+
+func TestCommitIndexFixKeepsAnIndexWrittenSinceTheCheck(t *testing.T) {
+	t.Parallel()
+	root := healthHub(t)
+	index := writeCommitIndex(t, root, "skillhub-commit-index-444", 48*time.Hour)
+	sections := Run(t.Context(), RoleReport{Cwd: root, Hub: &HubRef{Root: root}}, DepthFull)
+	finding := findingByCode(t, sections, "hub_commit_index_leftover")
+	// A new failed commit writes the file again between the check and the fix.
+	now := time.Now()
+	if err := os.Chtimes(index, now, now); err != nil {
+		t.Fatal(err)
+	}
+	changed, err := finding.Fix.Apply(t.Context())
+	if err != nil || len(changed) != 0 {
+		t.Fatalf("fix = %v, %v", changed, err)
+	}
+	if _, err := os.Lstat(index); err != nil {
+		t.Fatalf("the fix removed an index written in the last day: %v", err)
+	}
+}

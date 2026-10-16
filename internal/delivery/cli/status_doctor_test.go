@@ -23,7 +23,7 @@ import (
 )
 
 // doctorOnly are the checks only doctor runs; status leaves them out.
-var doctorOnly = []string{"hub_precommit_validate", "hub_listener", "remote_version", "remote_cache", "remote_last_fetch"}
+var doctorOnly = []string{"hub_precommit_validate", "hub_commit_index_leftover", "hub_listener", "remote_version", "remote_cache", "remote_last_fetch"}
 
 func runStatusCLI(ctx context.Context, dir string, args ...string) (int, string, string) {
 	var stdout, stderr bytes.Buffer
