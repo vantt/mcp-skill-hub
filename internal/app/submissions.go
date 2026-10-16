@@ -290,13 +290,35 @@ func printablePath(path string) bool {
 	return true
 }
 
+// labelRuneDropped reports a rune cleanClientLabel removes from a label.
+func labelRuneDropped(r rune) bool {
+	return unicode.IsControl(r) || !unicode.IsPrint(r)
+}
+
+// ValidateClientLabel checks a label a person chose for their machine: it
+// must be what the hub shows unchanged, a non-empty line of printable
+// characters of at most 64 runes without surrounding spaces.
+func ValidateClientLabel(label string) error {
+	switch {
+	case strings.TrimSpace(label) == "":
+		return errors.New("the label is empty")
+	case strings.TrimSpace(label) != label:
+		return errors.New("the label starts or ends with a space")
+	case strings.IndexFunc(label, labelRuneDropped) >= 0:
+		return errors.New("the label holds a control or other non-printable character")
+	case utf8.RuneCountInString(label) > maxClientLabelRunes:
+		return fmt.Errorf("the label is longer than %d characters", maxClientLabelRunes)
+	}
+	return nil
+}
+
 // cleanClientLabel keeps a machine label to one short printable line. A label
 // over the cap keeps its whole leading dot-separated parts, so a long host name
 // never shows a cut-off part; a first part that alone is over the cap is cut
 // and ends with an ellipsis.
 func cleanClientLabel(label string) string {
 	cleaned := strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) || !unicode.IsPrint(r) {
+		if labelRuneDropped(r) {
 			return -1
 		}
 		return r

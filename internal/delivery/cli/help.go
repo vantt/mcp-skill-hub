@@ -184,7 +184,8 @@ Subcommands:
                                                     Bring a project folder back to the hub as one reviewed change and one hub commit.
                                                     A folder that was never checked out becomes a new skill. In a project connected to a hub
                                                     on another machine it sends the folder there for review (collection and routing are set
-                                                    by the reviewer; --yes works only for a hub your own settings name)
+                                                    by the reviewer; --yes works only for a hub your own settings name; --label <name>
+                                                    sets the name the hub shows for this machine instead of its host name)
   show <id> [--verbose]                             Show a skill in any state
   review <id> [--verbose]                           Comprehensive diagnostic review of a skill
   review <SUB-id> [--diff] [--discard] [--accept <p>=hub|project]... [--manual <p>=<f>]... [--write-conflicts <dir>]

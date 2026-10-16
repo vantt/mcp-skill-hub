@@ -1,6 +1,26 @@
 package app
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
+
+func TestValidateClientLabelAcceptsWhatTheHubShowsUnchanged(t *testing.T) {
+	t.Parallel()
+	for _, label := range []string{"laptop", "Ann's laptop", "máy-tính", strings.Repeat("a", 64), strings.Repeat("é", 64)} {
+		if err := ValidateClientLabel(label); err != nil {
+			t.Errorf("ValidateClientLabel(%q) = %v", label, err)
+		}
+		if cleaned := cleanClientLabel(label); cleaned != label {
+			t.Errorf("the hub shows %q as %q", label, cleaned)
+		}
+	}
+	for _, label := range []string{"", "   ", "lap\ntop", "lap\ttop", "lap\x00top", "lap\u200btop", "lap\u2028top", strings.Repeat("a", 65)} {
+		if err := ValidateClientLabel(label); err == nil {
+			t.Errorf("ValidateClientLabel(%q) accepted it", label)
+		}
+	}
+}
 
 func TestMachineLabelDropsALocalNetworkSuffix(t *testing.T) {
 	t.Parallel()

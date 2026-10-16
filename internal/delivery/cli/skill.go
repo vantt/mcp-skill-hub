@@ -22,10 +22,13 @@ type skillFlags struct {
 	fromSuggestion                                                                 string
 	proposalID, proposalDigest, baseVersion, idempotencyKey, state                 string
 	locator, ref, subPath, approveContent, runtimeFile, target, writeConflicts     string
-	operations, triggers, notFor, examples, counterExamples, skills, positionals   []string
-	accepts, manuals                                                               []string
-	jsonOutput, yes, diff, editor, verbose, all, check, noCheck, exitCode          bool
-	noCommit, editRouting, discard                                                 bool
+	// label is --label: the name a hub on another machine shows for this
+	// machine; nil when the flag is not given.
+	label                                                                        *string
+	operations, triggers, notFor, examples, counterExamples, skills, positionals []string
+	accepts, manuals                                                             []string
+	jsonOutput, yes, diff, editor, verbose, all, check, noCheck, exitCode        bool
+	noCommit, editRouting, discard                                               bool
 	// remote is the hub on another machine, set for the commands that work
 	// from a project connected to one: commit and checkout.
 	remote *app.RemoteHub
@@ -380,7 +383,7 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 			return args[index], nil
 		}
 		switch value {
-		case "--workspace", "--id", "--collection", "--name", "--description", "--content-file", "--min-scope", "--rationale", "--operation", "--trigger", "--not-for", "--example", "--counter-example", "--approve-content", "--runtime-file", "--from-suggestion", "--proposal", "--proposal-digest", "--base-version", "--idempotency-key", "--state", "--ref", "--path", "--skill", "--target", "--write-conflicts", "--accept", "--manual":
+		case "--workspace", "--id", "--collection", "--name", "--description", "--content-file", "--min-scope", "--rationale", "--operation", "--trigger", "--not-for", "--example", "--counter-example", "--approve-content", "--runtime-file", "--from-suggestion", "--proposal", "--proposal-digest", "--base-version", "--idempotency-key", "--state", "--ref", "--path", "--skill", "--target", "--write-conflicts", "--accept", "--manual", "--label":
 			item, err := next()
 			if err != nil {
 				return flags, err
@@ -442,6 +445,8 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 				flags.accepts = append(flags.accepts, item)
 			case "--manual":
 				flags.manuals = append(flags.manuals, item)
+			case "--label":
+				flags.label = &item
 			}
 		case "--all":
 			flags.all = true
@@ -478,6 +483,9 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 	flags.rerun = rerunCommand("skillhub skill", append([]string{subcommand}, args...))
 	if flags.noCommit && !hubChangingSkillSubcommands[subcommand] {
 		return flags, fmt.Errorf("--no-commit is available only for commands that change the hub")
+	}
+	if flags.label != nil && subcommand != "commit" {
+		return flags, errors.New("--label is available only for skill commit to a hub on another machine")
 	}
 	if flags.discard && subcommand != "review" {
 		return flags, errors.New("--discard is available only for skill review of a submission")
@@ -687,6 +695,9 @@ func parseSkillFlags(subcommand string, args []string) (skillFlags, error) {
 			}
 		}
 		return flags, resErr
+	}
+	if flags.label != nil {
+		return flags, errors.New("--label names this machine to a hub on another machine; a commit to the hub on this machine takes none")
 	}
 	flags.workspace = resolved
 	return flags, nil

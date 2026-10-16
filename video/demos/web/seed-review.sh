@@ -9,9 +9,8 @@
 # fixture with `skill commit`, and stops the server. Transcripts of those steps go to
 # $DEMO_OUT/remote/ (raw material for the "hub on another computer" scene).
 #
-# The hub names a submission after the sending machine's hostname, which has no override; the
-# script renames it in the queued submission to $DEMO_PEER_LABEL (default "laptop") so the real
-# hostname never appears on screen. Nothing else in the submission changes.
+# The hub names a submission after the sending machine's hostname; the script sends it with
+# `--label $DEMO_PEER_LABEL` (default "laptop") so the real hostname never appears on screen.
 #
 # Environment: DEMO_HUB_PORT (default 17420), DEMO_PEER_LABEL, DEMO_OUT.
 set -u
@@ -65,16 +64,13 @@ invite=$(grep -o -- '--invite [A-Z0-9-]*' "$DEMO_SANDBOX/logs/$(printf %02d "$DE
 	cp -R "$here/fixtures/release-checklist" .claude/skills/release-checklist || exit 1
 	demo_step peer-connect "skillhub connect --hub http://127.0.0.1:$port ${invite} -g"
 	demo_step peer-doctor 'skillhub doctor'
-	demo_step peer-send 'skillhub skill commit release-checklist' y
+	demo_step peer-send "skillhub skill commit release-checklist --label $(printf %q "$label")" y
 ) || exit 1
 DEMO_STEP_NO=$((DEMO_STEP_NO + 3))
 
-# Name the submission after the demo label, not the hostname of this computer.
 found=0
 for meta in "$HOME"/skill-hub/runtime/submissions/SUB-*/submission.json; do
-	[ -f "$meta" ] || continue
-	DEMO_LABEL=$label perl -0pi -e 's/("client_label"\s*:\s*)"[^"]*"/$1"$ENV{DEMO_LABEL}"/' "$meta" || exit 1
-	found=1
+	[ -f "$meta" ] && found=1
 done
 [ "$found" = 1 ] || demo_die "no submission arrived at the hub"
 

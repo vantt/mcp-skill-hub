@@ -313,6 +313,39 @@ func TestDiscardDropsASubmissionAndAnAnswerOfNoWritesNothing(t *testing.T) {
 	}
 }
 
+func TestRemoteCommitLabelNamesTheMachineOnTheHub(t *testing.T) {
+	project := newRemoteProject(t)
+	runCLI(t, "skill", "create", "team-release", "--description", "Cut a team release", "--trigger", "cut a team release", "--not-for", "deploying", "--example", "cut the release")
+	for _, label := range []string{"lap\ntop", strings.Repeat("a", 65), "  "} {
+		if code, _, stderr := runCLI(t, "skill", "commit", "team-release", "--label", label, "--yes"); code == 0 || !strings.Contains(stderr, "--label") {
+			t.Errorf("--label %q: exit = %d stderr=%s", label, code, stderr)
+		}
+	}
+	if queued, _ := app.ListSubmissions(project.hub.root); len(queued) != 0 {
+		t.Fatalf("an invalid label was sent: %+v", queued)
+	}
+	code, stdout, stderr := runCLI(t, "skill", "commit", "team-release", "--label", "laptop", "--yes")
+	if code != 0 {
+		t.Fatalf("send: exit = %d\nstdout=%s\nstderr=%s", code, stdout, stderr)
+	}
+	sub := submissionIDIn(t, stdout)
+	if text := project.hub.mustRun("status"); !strings.Contains(oneLine(text), "1 submitted skill waits for review: team-release from laptop") {
+		t.Fatalf("status text:\n%s", text)
+	}
+	if _, stdout, _ = runCLI(t, "skill", "review", sub, "--workspace", project.hub.root); !strings.Contains(oneLine(stdout), "team-release (submitted from laptop)") {
+		t.Fatalf("review:\n%s", stdout)
+	}
+	// The hub on this machine has no use for a label, and no other command takes one.
+	for _, args := range [][]string{
+		{"skill", "commit", "team-release", "--workspace", project.hub.root, "--label", "laptop"},
+		{"skill", "checkout", "team-release", "--label", "laptop"},
+	} {
+		if code, _, stderr := runCLI(t, args...); code == 0 || !strings.Contains(stderr, "--label") {
+			t.Errorf("%v: exit = %d stderr=%s", args, code, stderr)
+		}
+	}
+}
+
 func TestRemoteProjectStillRefusesOtherCurationCommands(t *testing.T) {
 	newRemoteProject(t)
 	for _, args := range [][]string{

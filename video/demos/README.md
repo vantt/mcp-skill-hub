@@ -120,8 +120,8 @@ branch, the web scenes against `main`.
   (`<commit-1>`, ...). The real values are recorded once, before HOME changes, in the sandbox's `.private`
   (mode 600). After the run, `demo_check_clean` fails the script if any of them, a token or an invite code is still
   in a transcript.
-- **No real hostname on screen.** A submission is labelled with the sending machine's hostname and there is no flag to
-  change it, so `seed-review.sh` renames the queued submission to `laptop`. This is the only file the scripts edit
+- **No real hostname on screen.** A submission is labelled with the sending machine's hostname unless `skill commit`
+  gets `--label`, so `seed-review.sh` sends it with `--label laptop` (`DEMO_PEER_LABEL`). The scripts edit no hub file
   behind the CLI's back.
 - **Nothing left running.** Servers started by the scripts run on loopback only and are stopped when the script ends,
   also on failure; their PIDs are kept in `run/pids`, and a fresh sandbox stops any that are left.

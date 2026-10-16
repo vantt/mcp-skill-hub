@@ -292,6 +292,8 @@ Sent as SUB-01M51D3QYM6Z5EBPVEKC644XH6. A person on the hub machine reviews it; 
 after approval.
 ```
 
+The hub shows the submission as sent from this machine's host name; add `--label <name>` (at most 64 printable characters, for example `--label laptop`) to choose the name it shows instead.
+
 Nothing on the hub changes until a person on the hub machine reviews it. `skillhub status` there lists what waits. Review it in a terminal on the hub machine; it asks `Apply this change? [y/N]` and `Approve this content for agents? [y/N]`, and both answers make one hub commit:
 
 ```bash

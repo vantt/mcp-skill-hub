@@ -103,6 +103,7 @@ Example:
                              [--accept <p>=hub|project]... [--manual <p>=<f>]... [--write-conflicts <dir>]
                              [--trigger <t>]... [--not-for <n>]... [--example <e>]... [--min-scope <s>]
                              [--edit-routing] [--approve-content <digest>] [--diff] [--yes] [--no-commit] [--json]
+       skillhub skill commit <id|folder> [--label <name>] [--yes] [--json]   (hub on another machine)
 
 Bring a project folder back to the hub as one reviewed change and one hub
 commit. It shows every changed file (and a three-way merge when the hub changed
@@ -124,11 +125,14 @@ sends the folder to that hub's review queue.
   --diff                     Add the full diff to the preview
   --yes                      Apply without asking
   --no-commit                Write the files without a Git commit
+  --label <name>             Name the hub shows for this machine (another-machine hub only;
+                             default: the host name)
   --json                     Machine-readable result
 
 Examples:
   skillhub skill commit commit-style
   skillhub skill commit .claude/skills/team-release --collection tools --yes
+  skillhub skill commit team-release --label laptop --yes
 ` + skillHubNote,
 
 	"show": `Usage: skillhub skill show <id> [--verbose] [--json]

@@ -53,8 +53,7 @@ func runRemoteCommit(ctx context.Context, flags skillFlags, stdout, stderr io.Wr
 			problem+" is decided by the person who reviews the submission on the hub machine",
 			"Send the folder as it is; the reviewer sets collection and routing there.")
 	}
-	service := app.RemoteCommitService{}
-	preview, err := service.Preview(ctx, hub, flags.positionals[0], currentDirectory())
+	preview, err := remoteCommitService(flags).Preview(ctx, hub, flags.positionals[0], currentDirectory())
 	if err != nil {
 		return writeSkillErrorFor(flags.positionals[0], stdout, stderr, flags.jsonOutput, err)
 	}
@@ -68,7 +67,7 @@ func runRemoteCommit(ctx context.Context, flags skillFlags, stdout, stderr io.Wr
 				fmt.Sprintf("only this project's files name the hub at %s, so --yes does not send your hub token and files there", hub.URL),
 				"Run the command in a terminal and answer the question, or trust that hub with `skillhub connect --hub "+hub.URL+" --user`.")
 		}
-		return sendSubmission(ctx, hub, preview, flags.jsonOutput, stdout, stderr)
+		return sendSubmission(ctx, flags, preview, stdout, stderr)
 	}
 	interactive := !flags.jsonOutput && confirmInteractive(stdout)
 	code := writeResult(stdout, stderr, flags.jsonOutput, preview, func(p *termui.Printer) {
@@ -85,15 +84,24 @@ func runRemoteCommit(ctx context.Context, flags skillFlags, stdout, stderr io.Wr
 		fmt.Fprintln(stdout, "Nothing sent.")
 		return 0
 	}
-	return sendSubmission(ctx, hub, preview, flags.jsonOutput, stdout, stderr)
+	return sendSubmission(ctx, flags, preview, stdout, stderr)
 }
 
-func sendSubmission(ctx context.Context, hub app.RemoteHub, preview app.RemoteCommitPreview, jsonOutput bool, stdout, stderr io.Writer) int {
-	result, err := (app.RemoteCommitService{}).Send(ctx, hub, preview)
-	if err != nil {
-		return writeSkillErrorFor(preview.SkillID, stdout, stderr, jsonOutput, err)
+// remoteCommitService names this machine with --label, or with its host name.
+func remoteCommitService(flags skillFlags) app.RemoteCommitService {
+	service := app.RemoteCommitService{}
+	if flags.label != nil {
+		service.Label = *flags.label
 	}
-	return writeResult(stdout, stderr, jsonOutput, result, func(p *termui.Printer) {
+	return service
+}
+
+func sendSubmission(ctx context.Context, flags skillFlags, preview app.RemoteCommitPreview, stdout, stderr io.Writer) int {
+	result, err := remoteCommitService(flags).Send(ctx, *flags.remote, preview)
+	if err != nil {
+		return writeSkillErrorFor(preview.SkillID, stdout, stderr, flags.jsonOutput, err)
+	}
+	return writeResult(stdout, stderr, flags.jsonOutput, result, func(p *termui.Printer) {
 		p.Line(fmt.Sprintf("Sent as %s.  A person on the hub machine reviews it; agents get it only after approval.", result.SubmissionID))
 	})
 }

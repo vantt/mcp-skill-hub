@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/vantt/skillhub-mcp/internal/app"
 )
 
 // singleSkillID takes the one skill id of a command from its positional
@@ -83,6 +85,11 @@ func parseSkillCommitFlags(flags *skillFlags, positionals []string) error {
 	}
 	if flags.editRouting && (flags.yes || flags.jsonOutput) {
 		return errors.New("--edit-routing needs a terminal and cannot be combined with --yes or --json")
+	}
+	if flags.label != nil {
+		if err := app.ValidateClientLabel(*flags.label); err != nil {
+			return fmt.Errorf("--label %q cannot be used: %w; choose a name of at most 64 printable characters", *flags.label, err)
+		}
 	}
 	return nil
 }
