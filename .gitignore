@@ -31,3 +31,7 @@ web/.e2e/
 # DISTILL:START
 /upstreams/
 # DISTILL:END
+
+# Video build artifacts: demo recordings, transcripts and voice audio are made again from video/demos
+video/recordings/
+video/audio/

@@ -1,0 +1,7 @@
+Write Git commit messages in our team style
+write a commit message
+
+writing release notes
+
+write a commit message for my staged changes
+
