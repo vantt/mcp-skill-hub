@@ -157,11 +157,10 @@ lessons:
         source, and the host-side step is a new pipeline.
     final_score: 3
     decision:
-      state: planned
+      state: ported
       reason: >-
-        Plan plans/261014-1540-session-mining-routing-proposals (on hold until the curation
-        UX review): proposals for examples/counter_examples/not_for on existing skills from
-        the case journal, applied only through preview/confirm.
+        Shipped in v0.7.0: telemetry cases suggest routing entries for existing skills,
+        applied only through preview/confirm.
       at: e999668e8d8c
 
   - key: embedder-identity-in-index-state

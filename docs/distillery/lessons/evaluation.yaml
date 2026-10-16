@@ -81,11 +81,11 @@ lessons:
         the sources show the claim failing silently. Five independent sources agree.
     final_score: 13.5
     decision:
-      state: planned
+      state: ported
       reason: >-
-        Plan plans/261014-1530-fresh-clone-e2e-test: an end-to-end test runs the documented
-        move-to-another-machine commands (init/connect) on a fresh clone with the built
-        binary and real MCP calls, and must be able to fail.
+        Shipped in v0.7.0: TestFreshCloneOnANewMachineServesTheHubsSkills runs the
+        documented move commands end to end; since v0.7.1 it also fails on the 2026-10-10
+        servability regression.
       at: e999668e8d8c
 
   - key: behavior-eval-per-curated-skill

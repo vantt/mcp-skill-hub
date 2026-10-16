@@ -47,12 +47,10 @@ lessons:
         reached a minimal-description runtime surface independently.
     final_score: 22.5
     decision:
-      state: planned
+      state: ported
       reason: >-
-        Plan plans/261014-1600-tools-list-budget: a model-visible and wire byte budget test
-        for the runtime tool list, shorter tool descriptions after server instructions land,
-        and a compact advertised resolver request schema validated against the full
-        contract.
+        Shipped in v0.7.0: runtime tool list budget test, shorter descriptions and a compact
+        advertised resolver request schema.
       at: 120b67676388
 
   - key: entrypoint-length-budget-lint
@@ -254,11 +252,10 @@ lessons:
       - server instructions
       - bootstrap
     decision:
-      state: planned
+      state: ported
       reason: >-
-        Plan plans/261014-1509-server-instructions-protocol: the protocol travels only in
-        MCP server instructions; connect stops writing the instruction-file block and doctor
-        --fix removes it.
+        Shipped in v0.7.0: the protocol travels in MCP server instructions; connect no
+        longer writes the instruction-file block and doctor --fix removes it.
       at: 51334ae94919
 
   - key: stable-skill-uri-for-recovery

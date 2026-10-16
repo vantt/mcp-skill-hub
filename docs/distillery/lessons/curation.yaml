@@ -307,11 +307,10 @@ lessons:
         own examples; d: lands as a lint check. One source.
     final_score: 3
     decision:
-      state: planned
+      state: ported
       reason: >-
-        Plan plans/261014-1545-findability-lint (on hold until the curation UX review):
-        self-resolution warnings in review and validate, checking only the examples a skill
-        change can affect.
+        Shipped in v0.7.0: review, previews and validate report examples a skill change
+        affects (example_taken_by and self-resolution warnings).
       at: e999668e8d8c
 
   - key: owner-trial-before-publish
