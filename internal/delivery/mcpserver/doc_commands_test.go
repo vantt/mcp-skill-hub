@@ -126,7 +126,7 @@ func TestDocSectionCommandsReadsTheDocumentedMove(t *testing.T) {
 	}{
 		{"docs/user-guide.md", "## Move to another machine", 2},
 		{"docs/troubleshooting.md", "### Fresh clone on a new machine", 1},
-		{"README.md", "### 3. Check", 1},
+		{"README.md", "### 4. Check", 1},
 	} {
 		t.Run(tc.doc+" "+tc.section, func(t *testing.T) {
 			lines := docSectionCommands(t, tc.doc, tc.section)

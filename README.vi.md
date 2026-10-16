@@ -18,9 +18,11 @@ Vì thư viện nằm một chỗ, bạn có thể thu thập skill từ bất k
 
 ## Bắt đầu nhanh
 
-Bạn cần Git và một agent như Claude Code. Thiết lập mất khoảng hai phút.
+Từ con số không đến một agent nói chuyện được với hub của riêng bạn, trên một máy, trong khoảng hai phút. Bạn cần Git, đã [đặt tên và email của bạn](docs/troubleshooting.md#git-has-no-user-name-or-email-set), và một agent như Claude Code.
 
 ### 1. Cài đặt
+
+Bước này đưa lệnh `skillhub` vào máy của bạn.
 
 ```bash
 curl -fsSL https://github.com/vantt/skillhub-mcp/releases/latest/download/install.sh | sh
@@ -37,61 +39,98 @@ PowerShell 5.1 không có `&&`: hãy viết mỗi lệnh dưới đây trên m�
 
 </details>
 
-Mở một terminal mới và chạy `skillhub --version` để kiểm tra.
+Mở một terminal mới để nó tìm thấy lệnh, rồi kiểm tra:
 
-### 2. Thiết lập
+```bash
+skillhub --version
+```
 
-Chọn trường hợp phù hợp với bạn.
+Nó in ra số phiên bản, ví dụ 0.7.1.
 
-#### Một máy
+### 2. Tạo hub
+
+Hub là một thư mục, nằm trong kho Git riêng của nó, chứa các skill của bạn.
 
 ```bash
 mkdir -p ~/skill-hub && cd ~/skill-hub && skillhub init
+```
+
+```text
+Hub created at /home/you/skill-hub.
+...
+This is now the hub of this machine; `skillhub connect` uses it.
+```
+
+### 3. Kết nối agent
+
+Bước này cho các agent trên máy biết hub của bạn ở đâu, trong mọi dự án bạn mở.
+
+```bash
 skillhub connect -g
 ```
 
-Khởi động lại agent và nói: **curate my Skill Hub**. Xong: mọi dự án bạn mở giờ đều dùng hub của bạn.
+```text
+Connected your user account (all projects) to the hub at
+/home/you/skill-hub.
+...
+Next: restart your agent and ask it: "curate my Skill Hub"
+```
 
-#### Hub ở một máy, agent ở máy khác
+Nếu chỉ muốn kết nối vài dự án, xem [Kết nối một dự án](docs/user-guide.md#connect-one-project-recommended).
 
-Hai máy phải thấy nhau qua mạng (cùng Wi-Fi hoặc LAN, hoặc qua [Tailscale](https://tailscale.com)). Cài Skill Hub trên cả hai máy, rồi:
+### 4. Kiểm tra
 
-**Trên máy hub.** Tạo hub như trên (`init`), rồi khởi động server dưới dạng dịch vụ nền và tạo mã dùng một lần:
+`doctor` kiểm tra hub và kết nối, và in một cách sửa cho mỗi chỗ sai.
+
+```bash
+skillhub doctor
+```
+
+```text
+...
+Healthy.
+```
+
+Các dòng ghi `notice` chỉ là thông tin, không phải lỗi. Nếu dòng cuối không phải `Healthy.`, chạy `skillhub doctor --fix`, hoặc tra thông báo trong [Xử lý sự cố](docs/troubleshooting.md).
+
+### 5. Hỏi agent của bạn
+
+Khởi động lại agent để nó nạp kết nối, rồi nói:
+
+> curate my Skill Hub
+
+Agent kiểm tra hub bằng `skillhub status` và gợi ý một bước tiếp theo. Hub mới chưa có skill nào, nên bước đó là skill đầu tiên của bạn: [tạo skill đầu tiên](docs/curating-skills.md#create-your-first-skill). Khi skill đã active, agent tự hỏi hub để lấy nó khi một việc phù hợp.
+
+### Hub và agent ở hai máy khác nhau
+
+Giữ hub ở một máy và dùng nó từ agent ở máy khác, qua cùng Wi-Fi hoặc LAN, hoặc [Tailscale](https://tailscale.com). Làm bước 1 và 2 trên máy hub, rồi khởi động server ở đó dưới dạng dịch vụ nền và tạo mã dùng một lần:
 
 ```bash
 cd ~/skill-hub && skillhub serve --install-service
 skillhub token invite
 ```
 
-Dịch vụ tự khởi động lại khi lỗi và khi máy bật (Linux và macOS; trên Linux lệnh in thêm một dòng nếu cần `loginctl enable-linger` để chạy khi bạn đã đăng xuất). Trên Windows, hãy chạy `skillhub serve` trong một terminal riêng và để nó mở.
-
-Nó in ra một dòng sẵn để dán, ví dụ:
+`token invite` in ra một dòng để dán ở máy kia, ví dụ:
 
 ```text
 skillhub connect --hub http://100.121.46.35:7420 --invite K7QF-9M2X-4TBD
 ```
 
-**Trên máy agent.** Dán dòng đó trong dự án của bạn, rồi khởi động lại agent:
+Trên máy agent, làm bước 1, rồi chạy dòng mà hub của bạn đã in, thêm `-g` để mọi dự án đều dùng hub:
 
 ```bash
-cd <dự-án-của-bạn> && skillhub connect --hub http://100.121.46.35:7420 --invite K7QF-9M2X-4TBD
+skillhub connect --hub http://100.121.46.35:7420 --invite K7QF-9M2X-4TBD -g
 ```
 
-Mã chỉ dùng được một lần và hết hạn sau 10 phút; chạy lại `token invite` để lấy mã mới. Máy agent không giữ skill nào, chỉ có một file token trong thư mục cấu hình của Skill Hub. Thêm `-g` vào dòng đã dán để áp dụng cho mọi dự án.
+Kiểm tra ở máy đó bằng bước 4, rồi khởi động lại agent: từ giờ nó hỏi hub để lấy skill. Việc quản lý skill vẫn ở máy hub: mở agent trong `~/skill-hub` ở đó và nói "curate my Skill Hub". Mã chỉ dùng được một lần, trong 10 phút. `--install-service` dùng cho Linux và macOS; trên Windows, chạy `skillhub serve` trong một terminal riêng và để nó mở. Kết nối là HTTP thường, ổn ở nhà hoặc văn phòng; với mạng khác, đường hầm SSH và token, đọc [Một hub cho nhiều máy](docs/remote-hub-guide.md).
 
-Cách này chạy qua HTTP thường trên mạng của bạn: ổn ở nhà hoặc văn phòng. Trên mạng bạn không tin cậy, xem `skillhub help serve` (`--strict-pairing`, đường hầm SSH).
+### Bước tiếp theo
 
-### 3. Kiểm tra
-
-```bash
-skillhub doctor
-```
-
-Nó cho biết cái gì hoạt động và in một cách sửa cho mỗi mục lỗi. `skillhub doctor --fix` sửa những gì có thể. [Hướng dẫn xử lý sự cố](docs/troubleshooting.md) giải thích từng thông báo.
-
-**Tiếp theo:** [tạo skill đầu tiên](docs/curating-skills.md#create-your-first-skill).
-
-Xem thêm: [giữ hub trên GitHub](docs/user-guide.md#keep-the-hub-on-github) · [chạy server nền, dùng đường hầm SSH, xoay token](docs/remote-hub-guide.md) · [chi tiết cài đặt](docs/installation.md)
+- [Tạo skill đầu tiên](docs/curating-skills.md#create-your-first-skill), hoặc [thêm skill từ một kho](docs/curating-skills.md#add-a-skill-skillhub-skill-add).
+- [Xem và duyệt skill trên trình duyệt](#xem-thử).
+- [Giữ hub trên GitHub](docs/user-guide.md#keep-the-hub-on-github), và [chuyển nó sang máy khác](docs/user-guide.md#move-to-another-machine).
+- [Tuỳ chọn cài đặt, nâng cấp và gỡ cài đặt](docs/installation.md).
+- Mọi lệnh và cờ: `skillhub help`, `skillhub help <command>`, hoặc [tài liệu tham chiếu lệnh](docs/command-reference.md).
 
 ## Cách hoạt động
 
