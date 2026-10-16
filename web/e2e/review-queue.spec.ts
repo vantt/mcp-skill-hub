@@ -103,7 +103,7 @@ test('waiting for review: a third-party skill goes from the list to a full revie
   // 4. Approve: one commit, the reach line, and the skill leaves the list.
   const before = Number(git('rev-list', '--count', 'HEAD'));
   await approve.click();
-  await expect(page.getByTestId('approve-result')).toContainText(/Approved\. Committed [0-9a-f]{7}\. This machine's agents get it now/, { timeout: 15000 });
+  await expect(page.getByTestId('approve-result')).toContainText(/Approved\. Committed [0-9a-f]{7}\. Agents using this hub get it now\./, { timeout: 15000 });
   expect(Number(git('rev-list', '--count', 'HEAD'))).toBe(before + 1);
   expect(git('status', '--porcelain=v1')).toBe('');
 
