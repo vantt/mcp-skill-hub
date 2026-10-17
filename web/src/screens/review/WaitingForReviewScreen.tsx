@@ -8,6 +8,8 @@ import { StatusBadge } from '../../components/StatusBadge';
 const TEXT = {
   loadFailed: 'The list of skills waiting for review could not be loaded.',
   title: 'Waiting for review',
+  go: 'Review →',
+  subtitle: 'Drafts and changed third-party content stay here until a person has looked at them. Approved skills leave the list.',
 };
 
 
@@ -47,9 +49,14 @@ export function WaitingForReviewScreen() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-      <h1 className="t-title" style={{ margin: 0, fontSize: '24px', fontWeight: 600 }}>
-        {heading}
-      </h1>
+      <header style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
+        <h1 className="t-title" style={{ margin: 0, fontSize: '24px', fontWeight: 600 }}>
+          {heading}
+        </h1>
+        <span className="t-body-sm" style={{ color: 'var(--color-text-muted)' }}>
+          {TEXT.subtitle}
+        </span>
+      </header>
       {data.items.length === 0 ? (
         <EmptyState
           title="Nothing is waiting for review"
@@ -58,20 +65,22 @@ export function WaitingForReviewScreen() {
       ) : (
         <ul className="app-review-queue" aria-label="Skills waiting for review">
           {data.items.map((item) => (
-            <li key={item.submission_id ?? item.skill_id} className="fg-card app-review-queue__item">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-                <Link to={reviewPath(item)} className="t-body" style={{ fontWeight: 600 }}>
+            <li
+              key={item.submission_id ?? item.skill_id}
+              className={`app-review-queue__item app-review-queue__item--${item.kind}`}
+            >
+              <div className="app-review-queue__main">
+                <Link to={reviewPath(item)} className="app-review-queue__title">
                   {item.title || item.skill_id}
                 </Link>
-                {item.origin && (
-                  <span className="t-caption app-wrap" style={{ color: 'var(--color-text-muted)' }}>
-                    {item.origin}
-                  </span>
-                )}
+                {item.origin && <span className="app-review-queue__origin app-wrap">{item.origin}</span>}
               </div>
-              <StatusBadge label={KIND_LABEL[item.kind]} tone={item.kind === 'draft' ? 'neutral' : 'warning'} />
-              <span className="t-caption" style={{ color: 'var(--color-text-muted)' }}>
-                {item.since}
+              <div className="app-review-queue__meta">
+                <StatusBadge label={KIND_LABEL[item.kind]} tone={item.kind === 'draft' ? 'neutral' : 'warning'} />
+                {item.since && <span className="t-caption app-review-queue__since">{item.since}</span>}
+              </div>
+              <span className="app-review-queue__go" aria-hidden="true">
+                {TEXT.go}
               </span>
             </li>
           ))}

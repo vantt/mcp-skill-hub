@@ -138,3 +138,30 @@ func TestReviewContentApprovalMakesTheSkillServableInOneCommit(t *testing.T) {
 		t.Fatalf("queue = %+v", queue.Items)
 	}
 }
+
+func TestReviewQueueDropsAnApprovedThirdPartyDraft(t *testing.T) {
+	t.Parallel()
+	hub := newGitHub(t)
+	seedHubSkill(t, hub, fixtureSkill{id: "pdf", state: "draft", origin: "github", files: map[string]string{"scripts/fill.py": "print(1)\n"}})
+	commitHubAll(t, hub, "add pdf")
+	service := SkillService{}
+	queue, err := service.ReviewQueue(context.Background(), hub)
+	if err != nil || len(queue.Items) != 1 {
+		t.Fatalf("before approval: %+v, %v", queue.Items, err)
+	}
+	trust, err := service.ContentTrustFor(context.Background(), hub, "pdf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	preview, err := service.PreviewSkillApproval(context.Background(), hub, "pdf", trust.ContentDigest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result, err := service.ConfirmSkillMutation(commitCtx(), hub, preview, preview.Confirmation.Confirmation.Pins); err != nil || result.Error != nil {
+		t.Fatalf("approve: %v %+v", err, result.Error)
+	}
+	queue, err = service.ReviewQueue(context.Background(), hub)
+	if err != nil || len(queue.Items) != 0 {
+		t.Fatalf("after approval: %+v, %v", queue.Items, err)
+	}
+}

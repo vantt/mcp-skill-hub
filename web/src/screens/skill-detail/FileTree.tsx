@@ -31,6 +31,32 @@ function buildTree(rows: TreeRow[]): Node {
   return root;
 }
 
+const ICON = { width: 16, height: 16, viewBox: '0 0 16 16', fill: 'none', stroke: 'currentColor', strokeWidth: 1.4, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true, focusable: false } as const;
+
+export function FolderIcon({ open = true }: { open?: boolean }) {
+  return (
+    <svg {...ICON} fill="currentColor" fillOpacity={0.18}>
+      <path d={open ? 'M1.5 4.5v8h11l2-6h-11l-2 4.5V3h4l1.5 1.5h5v2' : 'M1.5 3h4l1.5 1.5h7.5v8h-13z'} />
+    </svg>
+  );
+}
+
+export function FileIcon() {
+  return (
+    <svg {...ICON}>
+      <path d="M4 1.5h5l3 3v10H4zM9 1.5v3h3" />
+    </svg>
+  );
+}
+
+export function UploadIcon() {
+  return (
+    <svg {...ICON}>
+      <path d="M8 11V2.5M4.5 6 8 2.5 11.5 6M2.5 13.5h11" />
+    </svg>
+  );
+}
+
 function baseName(path: string): string {
   return path.split('/').pop() || path;
 }
@@ -61,6 +87,9 @@ export function FileTree({ rows, selected, onSelect }: FileTreeProps) {
           style={{ paddingLeft: `${8 + depth * 16}px`, textDecoration: row.status === 'D' ? 'line-through' : undefined }}
           onClick={() => onSelect(row.path)}
         >
+          <span className="app-filetree__icon" aria-hidden="true">
+            <FileIcon />
+          </span>
           <span className="app-wrap" style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
             {baseName(row.path)}
           </span>
@@ -83,7 +112,9 @@ export function FileTree({ rows, selected, onSelect }: FileTreeProps) {
       ...dirs.map((dir) => (
         <li key={`dir:${dir.name}:${depth}`} role="none">
           <div className="app-filetree__dir" style={{ paddingLeft: `${8 + depth * 16}px` }}>
-            <span aria-hidden="true">▾ </span>
+            <span className="app-filetree__icon" aria-hidden="true">
+              <FolderIcon />
+            </span>
             <span>{dir.name}</span>
           </div>
           <ul role="group" className="app-filetree__list">

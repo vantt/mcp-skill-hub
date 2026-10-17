@@ -158,7 +158,6 @@ html, body { margin: 0; height: 100%; overflow: hidden; }
 
 .app-review-files, .app-review-queue { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
 .app-review-files summary { cursor: pointer; padding: var(--space-2) 0; }
-.app-review-queue__item { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); }
 .app-nav-badge { margin-left: auto; }
 .app-scrim { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: var(--space-4); background: rgba(0, 0, 0, 0.5); }
 .app-modal {
@@ -171,3 +170,89 @@ html, body { margin: 0; height: 100%; overflow: hidden; }
   .app-pending-bar__actions { width: 100%; }
   .app-pending-bar__actions > * { flex: 1 1 auto; justify-content: center; }
 }
+
+/* Facts: values wrap instead of overlapping the next column; long ones take a whole row. */
+.app-facts { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+.app-facts .fg-fact { min-width: 0; }
+.app-facts .fg-fact__value { overflow-wrap: anywhere; word-break: break-word; font-size: 13px; }
+.app-facts .fg-fact--wide { grid-column: 1 / -1; }
+.app-mono { font-family: var(--font-mono); }
+
+/* Files tab: three equal actions under the tree, folders read as folders and files as files. */
+.app-files__tools { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); margin: 0 0 var(--space-3); }
+.app-files__tools .fg-btn { justify-content: center; gap: 6px; white-space: nowrap; padding-left: var(--space-2); padding-right: var(--space-2); }
+.app-files__tools .fg-btn svg { flex: none; }
+.app-files__tree .app-filetree__list { padding-top: var(--space-2); border-top: 1px solid var(--color-border); }
+.app-filetree__icon { display: inline-flex; flex: none; color: var(--color-text-subtle); }
+.app-filetree__dir {
+  display: flex; align-items: center; gap: var(--space-2); margin-top: 2px;
+  font-weight: 600; color: var(--color-text); letter-spacing: 0.01em;
+}
+.app-filetree__dir .app-filetree__icon { color: var(--color-brand); }
+.app-filetree__file--active .app-filetree__icon { color: var(--color-brand); }
+.app-files__tree .app-filetree__list .app-filetree__list { padding-top: 0; border-top: 0; }
+.app-filetree__file:focus-visible { outline: 2px solid var(--color-border-interactive); outline-offset: -2px; }
+.app-filetree__file--active { box-shadow: inset 2px 0 0 var(--color-brand); }
+
+/* Waiting for review: each row is one clickable card with a status stripe on its left edge. */
+.app-review-queue { gap: var(--space-3); }
+.app-review-queue__item {
+  position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: var(--space-4);
+  padding: var(--space-4) var(--space-4) var(--space-4) var(--space-5); background: var(--color-surface);
+  border: 1px solid var(--color-border); border-radius: var(--card-radius); overflow: hidden;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+.app-review-queue__item::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 4px; background: var(--color-border-strong); }
+.app-review-queue__item--content_changed::before, .app-review-queue__item--submission::before { background: var(--color-warning); }
+.app-review-queue__item:hover { border-color: var(--color-border-interactive); background: var(--color-surface-raised); }
+.app-review-queue__item:focus-within { outline: 2px solid var(--color-border-interactive); outline-offset: 1px; }
+.app-review-queue__main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.app-review-queue__title { font-size: 16px; font-weight: 600; color: var(--color-text); text-decoration: none; overflow-wrap: anywhere; }
+.app-review-queue__title::after { content: ''; position: absolute; inset: 0; }
+.app-review-queue__origin { font-family: var(--font-mono); font-size: 12px; color: var(--color-text-subtle); }
+.app-review-queue__meta { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.app-review-queue__since { color: var(--color-text-subtle); }
+.app-review-queue__go { font-size: 13px; font-weight: 600; color: var(--color-link); white-space: nowrap; }
+.app-review-queue__item:hover .app-review-queue__go { color: var(--color-link-hover); }
+@media (max-width: 720px) {
+  .app-review-queue__item { grid-template-columns: minmax(0, 1fr); gap: var(--space-2); }
+  .app-review-queue__meta { flex-direction: row; align-items: center; justify-content: space-between; }
+  .app-review-queue__go { display: none; }
+}
+
+/* Review content: a progress strip with select-all, then one card per file. */
+.app-review-toolbar {
+  position: sticky; top: calc(-1 * var(--space-6)); z-index: 4; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: var(--space-3); padding: var(--space-3) var(--space-4); background: var(--color-surface);
+  border: 1px solid var(--color-border-strong); border-radius: var(--card-radius);
+}
+.app-review-toolbar__progress { display: flex; flex-direction: column; gap: 6px; min-width: 200px; flex: 1; }
+.app-review-toolbar__progress progress { width: 100%; height: 6px; accent-color: var(--color-success); }
+.app-review-toolbar__actions { display: flex; gap: var(--space-2); }
+.app-review-file { border: 1px solid var(--color-border); border-radius: var(--card-radius); background: var(--color-surface); overflow: hidden; }
+.app-review-file--pending { border-color: var(--color-border-strong); box-shadow: inset 3px 0 0 var(--color-warning); }
+.app-review-file .app-review-file__summary {
+  display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); cursor: pointer; list-style: none;
+}
+.app-review-file__summary::-webkit-details-marker { display: none; }
+.app-review-file__summary:hover { background: var(--color-surface-hover); }
+.app-review-file__state { display: inline-flex; justify-content: center; width: 18px; flex: none; color: var(--color-text-subtle); }
+.app-review-file__state--seen { color: var(--color-success); font-weight: 700; }
+.app-review-file__path { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 13px; }
+.app-review-file__counts { display: inline-flex; gap: var(--space-2); font-family: var(--font-mono); }
+.app-review-file__added { color: var(--color-success); }
+.app-review-file__removed { color: var(--color-danger); }
+.app-review-file__opened { color: var(--color-text-subtle); }
+.app-review-file__body { padding: var(--space-3) var(--space-4) var(--space-4); border-top: 1px solid var(--color-border); display: flex; flex-direction: column; gap: var(--space-2); }
+
+/* The Min scope guide: what each value means, with the chosen one marked. */
+.app-scope-guide { list-style: none; margin: var(--space-1) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.app-scope-guide__item {
+  display: grid; grid-template-columns: 104px minmax(0, 1fr); align-items: baseline; gap: var(--space-3);
+  padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-xs, 6px);
+  font-size: 12px; color: var(--color-text-muted);
+}
+.app-scope-guide__item code { font-family: var(--font-mono); font-size: 12px; color: var(--color-text-subtle); }
+.app-scope-guide__item--active { border-color: var(--color-border-interactive); background: var(--color-brand-tint); color: var(--color-text); }
+.app-scope-guide__item--active code { color: var(--color-text); font-weight: 700; }
+@media (max-width: 720px) { .app-scope-guide__item { grid-template-columns: 1fr; gap: 2px; } }

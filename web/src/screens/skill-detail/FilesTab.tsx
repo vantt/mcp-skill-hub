@@ -23,7 +23,7 @@ import {
   type TreeRow,
 } from '../../state/changeset';
 import { CheckoutButton } from './CheckoutButton';
-import { FileTree } from './FileTree';
+import { FileIcon, FileTree, FolderIcon, UploadIcon } from './FileTree';
 import { PendingChangesBar } from './PendingChangesBar';
 import { ReviewChangesScreen } from './ReviewChangesScreen';
 
@@ -294,15 +294,17 @@ export function FilesTab({ skill, workspaceId }: FilesTabProps) {
 
       <div className="app-files">
         <aside className="fg-card app-files__tree" aria-label="Files">
-          <FileTree rows={rows} selected={selectedRow?.path ?? null} onSelect={select} />
-          <div className="app-files__tools">
+          <div className="app-files__tools" role="toolbar" aria-label="File actions">
             <button type="button" className="fg-btn fg-btn--secondary fg-btn--small" onClick={() => setAdding(folderOf(selectedRow?.path ?? null))}>
+              <FileIcon />
               <span>{TEXT.addFile}</span>
             </button>
             <button type="button" className="fg-btn fg-btn--secondary fg-btn--small" onClick={() => setAdding('new-folder/')}>
+              <FolderIcon />
               <span>{TEXT.addFolder}</span>
             </button>
             <button type="button" className="fg-btn fg-btn--secondary fg-btn--small" onClick={() => uploadRef.current?.click()}>
+              <UploadIcon />
               <span>{TEXT.upload}</span>
             </button>
             <input
@@ -314,6 +316,7 @@ export function FilesTab({ skill, workspaceId }: FilesTabProps) {
               onChange={(event) => void upload(event.target.files)}
             />
           </div>
+          <FileTree rows={rows} selected={selectedRow?.path ?? null} onSelect={select} />
           {adding !== null && (
             <form
               className="app-files__form"

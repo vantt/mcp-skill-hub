@@ -9,6 +9,7 @@ import { ProposalPreview } from '../../components/ProposalPreview';
 import { Toast } from '../../components/Toast';
 import { proposalPatch, proposalPaths, proposalWarning } from '../../api/proposal-view';
 import { DRAFT_NOTE, ROUTING_HELP, SCOPE_OPTIONS } from '../routing-hints';
+import { ScopeGuide } from '../ScopeGuide';
 import { useT } from '../../i18n';
 
 const LABEL_IDENTITY = 'Identity';
@@ -383,7 +384,7 @@ export function CreateSkillScreen() {
               <span>{LABEL_MIN_SCOPE}</span>
             </label>
             <div className="fg-select">
-              <select id="create-scope" value={minScope} onChange={(e) => setMinScope(e.target.value)}>
+              <select id="create-scope" aria-describedby="create-scope-hint" value={minScope} onChange={(e) => setMinScope(e.target.value)}>
                 {SCOPE_OPTIONS.map((sc) => (
                   <option key={sc.value} value={sc.value}>
                     {sc.label}
@@ -394,9 +395,10 @@ export function CreateSkillScreen() {
                 ▾
               </span>
             </div>
-            <span className="fg-field__hint">
+            <span className="fg-field__hint" id="create-scope-hint">
               <span>{ROUTING_HELP.minScope.hint}</span>
             </span>
+            <ScopeGuide value={minScope} />
           </div>
         </div>
       </section>

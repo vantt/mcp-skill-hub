@@ -56,6 +56,10 @@ func (service SkillService) ReviewQueue(ctx context.Context, path string) (Revie
 		item := ReviewQueueItem{SkillID: entry.ID, Title: entry.Name}
 		switch entry.State {
 		case "draft":
+			// A third-party draft whose content is approved is waiting to be activated, not reviewed.
+			if trust, trustErr := service.contentTrustWithChanges(ctx, path, entry.ID); trustErr == nil && trust.ThirdParty && !trust.RequiresReview() {
+				continue
+			}
 			item.Kind, item.Reason = ReviewKindDraft, "new draft"
 		case "active":
 			trust, trustErr := service.contentTrustWithChanges(ctx, path, entry.ID)

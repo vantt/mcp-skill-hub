@@ -34,7 +34,9 @@ const BASELINE_TEXT: Record<SkillReviewContent['baseline'], string> = {
 };
 
 const TEXT = {
-  openedMark: ' (opened)',
+  openedMark: '(opened)',
+  selectAll: 'Select all and open',
+  collapseAll: 'Collapse all',
   truncated: 'Only the first 1 MiB is shown.',
   back: '← Waiting for review',
   headingTail: ' · review content',
@@ -74,12 +76,16 @@ function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-function counts(file: ReviewFile): string {
+function counts(file: ReviewFile): React.ReactNode {
   if (file.binary) return 'binary';
-  const parts: string[] = [];
-  if (file.added) parts.push(`+${file.added}`);
-  if (file.removed) parts.push(`−${file.removed}`);
-  return parts.join(' ');
+  const added = file.added ? `+${file.added}` : '';
+  const removed = file.removed ? `−${file.removed}` : '';
+  return (
+    <>
+      {added && <span className="app-review-file__added">{added}</span>}
+      {removed && <span className="app-review-file__removed">{removed}</span>}
+    </>
+  );
 }
 
 // Every file of a skill in order, changed files first-class with their diffs, and the license and
@@ -95,6 +101,7 @@ export function FullReviewScreen() {
   const submission: SubmissionReview | undefined = submissionId ? submissionQuery.data : undefined;
   const skillId = data?.skill_id ?? id ?? '';
   const [opened, setOpened] = useState<Set<string>>(new Set());
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [approving, setApproving] = useState(false);
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
   const [discarded, setDiscarded] = useState(false);
@@ -127,6 +134,25 @@ export function FullReviewScreen() {
   const noteText = data.third_party ? TEXT.alreadyApproved : TEXT.nothingToApprove;
 
   const markOpened = (path: string) => setOpened((prev) => (prev.has(path) ? prev : new Set(prev).add(path)));
+  const toggleExpanded = (path: string, open: boolean) => {
+    setExpanded((prev) => {
+      if (prev.has(path) === open) return prev;
+      const next = new Set(prev);
+      if (open) next.add(path);
+      else next.delete(path);
+      return next;
+    });
+    if (open) markOpened(path);
+  };
+  const openAllChanged = () => {
+    const paths = changed.map((file) => file.path);
+    setExpanded((prev) => new Set([...prev, ...paths]));
+    setOpened((prev) => new Set([...prev, ...paths]));
+  };
+  const collapseAll = () => setExpanded(new Set());
+  const openedCount = changed.length - left;
+  const allOpen = left === 0;
+  const progressText = `${openedCount} of ${changed.length} changed ${changed.length === 1 ? 'file' : 'files'} opened`;
 
   const discard = async () => {
     setFailure(null);
@@ -173,39 +199,47 @@ export function FullReviewScreen() {
     }
   };
 
-  const renderFile = (file: ReviewFile) => (
-    <li key={file.path} className="app-review-file">
-      <details onToggle={(event) => event.currentTarget.open && markOpened(file.path)}>
-        <summary>
-          {file.changed ? (
-            <span aria-label={opened.has(file.path) ? 'opened' : 'not opened yet'}>{opened.has(file.path) ? '✓' : '○'}</span>
-          ) : (
-            <span aria-hidden="true"> </span>
-          )}{' '}
-          <span className="app-wrap" style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
-            {file.path}
-          </span>{' '}
-          {file.change && (
-            <span className={`app-filetree__mark app-filetree__mark--${file.change}`} aria-label={CHANGE_WORD[file.change]}>
-              {file.change}
-            </span>
-          )}{' '}
-          <span className="t-caption">{counts(file)}</span>
-          {opened.has(file.path) && file.changed && <span className="t-caption">{TEXT.openedMark}</span>}
-        </summary>
-        {file.binary ? (
-          <span className="t-body-sm">{binaryNote(file)}</span>
-        ) : file.diff ? (
-          <DiffView diff={file.diff} />
-        ) : file.content ? (
-          <pre className="app-files__source">{file.content}</pre>
-        ) : (
-          <span className="t-body-sm">{file.change === 'D' ? 'This file is gone.' : 'This file is empty.'}</span>
-        )}
-        {file.truncated && <span className="t-caption">{TEXT.truncated}</span>}
-      </details>
-    </li>
-  );
+  const renderFile = (file: ReviewFile) => {
+    const seen = opened.has(file.path);
+    return (
+      <li key={file.path} className={`app-review-file${file.changed && !seen ? ' app-review-file--pending' : ''}`}>
+        <details open={expanded.has(file.path)} onToggle={(event) => toggleExpanded(file.path, event.currentTarget.open)}>
+          <summary className="app-review-file__summary">
+            {file.changed ? (
+              <span
+                className={`app-review-file__state${seen ? ' app-review-file__state--seen' : ''}`}
+                aria-label={seen ? 'opened' : 'not opened yet'}
+              >
+                {seen ? '✓' : '○'}
+              </span>
+            ) : (
+              <span className="app-review-file__state" aria-hidden="true" />
+            )}
+            <span className="app-review-file__path app-wrap">{file.path}</span>
+            {file.change && (
+              <span className={`app-filetree__mark app-filetree__mark--${file.change}`} aria-label={CHANGE_WORD[file.change]}>
+                {file.change}
+              </span>
+            )}
+            <span className="app-review-file__counts t-caption">{counts(file)}</span>
+            {seen && file.changed && <span className="t-caption app-review-file__opened">{TEXT.openedMark.trim()}</span>}
+          </summary>
+          <div className="app-review-file__body">
+            {file.binary ? (
+              <span className="t-body-sm">{binaryNote(file)}</span>
+            ) : file.diff ? (
+              <DiffView diff={file.diff} />
+            ) : file.content ? (
+              <pre className="app-files__source">{file.content}</pre>
+            ) : (
+              <span className="t-body-sm">{file.change === 'D' ? 'This file is gone.' : 'This file is empty.'}</span>
+            )}
+            {file.truncated && <span className="t-caption">{TEXT.truncated}</span>}
+          </div>
+        </details>
+      </li>
+    );
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
@@ -242,6 +276,24 @@ export function FullReviewScreen() {
           {TEXT.leftOut}
           {submission.excluded.map((file) => `${file.path} (${file.reason})`).join('; ')}
         </span>
+      )}
+      {changed.length > 0 && (
+        <div className="app-review-toolbar" role="group" aria-label="Changed files progress">
+          <div className="app-review-toolbar__progress">
+            <span className="t-body-sm" data-testid="open-progress">
+              {progressText}
+            </span>
+            <progress max={changed.length} value={openedCount} aria-label="Changed files opened" />
+          </div>
+          <div className="app-review-toolbar__actions">
+            <button type="button" className="fg-btn fg-btn--secondary fg-btn--small" onClick={openAllChanged} disabled={allOpen && changed.every((f) => expanded.has(f.path))}>
+              <span>{TEXT.selectAll}</span>
+            </button>
+            <button type="button" className="fg-btn fg-btn--ghost fg-btn--small" onClick={collapseAll} disabled={expanded.size === 0}>
+              <span>{TEXT.collapseAll}</span>
+            </button>
+          </div>
+        </div>
       )}
       <ul className="app-review-files" aria-label="Changed files">
         {changed.map(renderFile)}

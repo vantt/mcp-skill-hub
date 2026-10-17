@@ -11,6 +11,7 @@ import { ProposalPreview } from '../../components/ProposalPreview';
 import { Toast } from '../../components/Toast';
 import { clearDraft, loadDraft, saveDraft } from '../../state/drafts';
 import { ROUTING_HELP, SCOPE_OPTIONS } from '../routing-hints';
+import { ScopeGuide } from '../ScopeGuide';
 import {
   EDIT_FIELD_LABEL,
   changedFields,
@@ -390,6 +391,7 @@ export function RoutingTab({ skill, workspaceId, focusField }: RoutingTabProps) 
             <div className="fg-select">
               <select
                 id="edit-scope"
+                aria-describedby="edit-scope-hint"
                 value={minScope}
                 onChange={(e) => setMinScope(e.target.value)}
               >
@@ -403,9 +405,10 @@ export function RoutingTab({ skill, workspaceId, focusField }: RoutingTabProps) 
                 ▾
               </span>
             </div>
-            <span className="fg-field__hint">
+            <span className="fg-field__hint" id="edit-scope-hint">
               <span>{ROUTING_HELP.minScope.hint}</span>
             </span>
+            <ScopeGuide value={minScope} />
             {!minScope && (
               <span className="fg-field__hint" style={{ color: 'var(--color-warning)' }}>
                 <span>{LABEL_REQUIRED_SCOPE}</span>

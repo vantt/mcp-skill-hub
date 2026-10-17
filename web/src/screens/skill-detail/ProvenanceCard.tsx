@@ -51,69 +51,30 @@ export function ProvenanceCard({ provenance, onViewSources }: ProvenanceCardProp
           <span>{LABEL_NO_PROVENANCE}</span>
         </div>
       ) : (
-        <div className="fg-facts">
-          {provenance?.source_locator && (
-            <div className="fg-fact">
-              <div className="fg-fact__label">
-                <span>{LABEL_SOURCE_LOCATOR}</span>
-              </div>
-              <div className="fg-fact__value" style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
-                <span>{provenance.source_locator}</span>
-              </div>
-            </div>
-          )}
-          {provenance?.upstream_path && (
-            <div className="fg-fact">
-              <div className="fg-fact__label">
-                <span>{LABEL_UPSTREAM_PATH}</span>
-              </div>
-              <div className="fg-fact__value" style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
-                <span>{provenance.upstream_path}</span>
-              </div>
-            </div>
-          )}
-          {provenance?.source_revision && (
-            <div className="fg-fact">
-              <div className="fg-fact__label">
-                <span>{LABEL_SOURCE_REVISION}</span>
-              </div>
-              <div className="fg-fact__value" style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
-                <span>{provenance.source_revision}</span>
-              </div>
-            </div>
-          )}
-          {provenance?.source_id && (
-            <div className="fg-fact">
-              <div className="fg-fact__label">
-                <span>{LABEL_SOURCE_ID}</span>
-              </div>
-              <div className="fg-fact__value" style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
-                <span>{provenance.source_id}</span>
-              </div>
-            </div>
-          )}
-          {provenance?.created_by && (
-            <div className="fg-fact">
-              <div className="fg-fact__label">
-                <span>{LABEL_CREATED_BY}</span>
-              </div>
-              <div className="fg-fact__value" style={{ fontSize: '13px' }}>
-                <span>{provenance.created_by}</span>
-              </div>
-            </div>
-          )}
-          {provenance?.created_at && (
-            <div className="fg-fact">
-              <div className="fg-fact__label">
-                <span>{LABEL_CREATED_AT}</span>
-              </div>
-              <div className="fg-fact__value" style={{ fontSize: '13px' }}>
-                <span>{provenance.created_at}</span>
-              </div>
-            </div>
-          )}
+        <div className="fg-facts app-facts">
+          <ProvenanceFact label={LABEL_SOURCE_LOCATOR} value={provenance?.source_locator} mono wide />
+          <ProvenanceFact label={LABEL_UPSTREAM_PATH} value={provenance?.upstream_path} mono wide />
+          <ProvenanceFact label={LABEL_SOURCE_REVISION} value={provenance?.source_revision} mono wide />
+          <ProvenanceFact label={LABEL_SOURCE_ID} value={provenance?.source_id} mono />
+          <ProvenanceFact label={LABEL_CREATED_BY} value={provenance?.created_by} />
+          <ProvenanceFact label={LABEL_CREATED_AT} value={provenance?.created_at} />
         </div>
       )}
     </section>
+  );
+}
+
+// One labelled value. Long identifiers take a full row and wrap, so they never run into a neighbour.
+function ProvenanceFact({ label, value, mono, wide }: { label: string; value?: string; mono?: boolean; wide?: boolean }) {
+  if (!value) return null;
+  return (
+    <div className={`fg-fact${wide ? ' fg-fact--wide' : ''}`}>
+      <div className="fg-fact__label">
+        <span>{label}</span>
+      </div>
+      <div className={`fg-fact__value${mono ? ' app-mono' : ''}`}>
+        <span>{value}</span>
+      </div>
+    </div>
   );
 }

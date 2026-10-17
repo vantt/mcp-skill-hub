@@ -25,10 +25,22 @@ export const ROUTING_HELP = {
 } satisfies Record<string, FieldHelp>;
 
 export const SCOPE_OPTIONS = [
-  { value: '', label: 'Select scope' },
-  { value: 'single_step', label: 'single_step: one step' },
-  { value: 'multi_step', label: 'multi_step: several steps' },
-  { value: 'project', label: 'project: a whole project' },
+  { value: '', label: 'Select scope', detail: 'Pick the smallest job that is still worth loading this skill for.' },
+  {
+    value: 'single_step',
+    label: 'single_step: one step',
+    detail: 'Load it even for a small, one-off task, such as fixing one function or answering one question.',
+  },
+  {
+    value: 'multi_step',
+    label: 'multi_step: several steps',
+    detail: 'Load it only when the task takes several steps, such as a feature touching a few files.',
+  },
+  {
+    value: 'project',
+    label: 'project: a whole project',
+    detail: 'Load it only for project-wide work, such as a migration, a release or a new service.',
+  },
 ];
 
 export const DRAFT_NOTE =

@@ -182,8 +182,8 @@ export function UpstreamSection({ skillId, upstream, onReviewUpdate, onTracked }
         </div>
       )}
 
-      <div className="fg-facts">
-        <div className="fg-fact">
+      <div className="fg-facts app-facts">
+        <div className="fg-fact fg-fact--wide">
           <div className="fg-fact__label">
             <span>{LABEL_REPOSITORY}</span>
           </div>
@@ -192,7 +192,7 @@ export function UpstreamSection({ skillId, upstream, onReviewUpdate, onTracked }
           </div>
         </div>
         {upstream.path && (
-          <div className="fg-fact">
+          <div className="fg-fact fg-fact--wide">
             <div className="fg-fact__label">
               <span>{LABEL_PATH}</span>
             </div>

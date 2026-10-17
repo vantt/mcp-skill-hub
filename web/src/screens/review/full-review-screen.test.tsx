@@ -132,6 +132,17 @@ describe('FullReviewScreen', () => {
     expect(await screen.findByTestId('approve-result')).toHaveTextContent("Approved. Committed abcdef0. This machine's agents get it now.");
   });
 
+  it('opens every changed file at once so Approve unlocks, and collapses them again', () => {
+    renderScreen();
+    expect(screen.getByTestId('open-progress')).toHaveTextContent('0 of 2 changed files opened');
+    fireEvent.click(screen.getByRole('button', { name: 'Select all and open' }));
+    expect(screen.getByTestId('open-progress')).toHaveTextContent('2 of 2 changed files opened');
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse all' }));
+    expect(screen.getByRole('button', { name: 'Collapse all' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+  });
+
   it('has nothing to approve for a skill that is not from another repository', () => {
     review = makeReview({ third_party: false, state: 'draft', baseline: 'none' });
     renderScreen();
