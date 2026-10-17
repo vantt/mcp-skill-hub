@@ -31,6 +31,7 @@ const LABEL_MIN_SCOPE = 'Min scope';
 const LABEL_PREVIEW_CHANGES = 'Preview changes';
 const LABEL_REQUIRED_TRIGGER = 'Required before activation.';
 const LABEL_REQUIRED_SCOPE = 'Required before activation.';
+const LABEL_REQUIRED_NOT_FOR = 'Required before activation.';
 const HINT_NAME = 'The title people see in lists.';
 const HINT_DESCRIPTION = 'One or two sentences on what the skill does. Agents read this to decide whether to load it.';
 const MSG_DRAFT_SAVED = 'Draft saved in this browser';
@@ -41,7 +42,7 @@ const REQ_STAR = '*';
 // Where each field of the Review checklist lives in this form.
 const FOCUS_TARGET: Record<string, string> = {
   triggers: 'edit-trigs',
-  operations: 'edit-ops',
+  not_for: 'edit-notfor',
   scope: 'edit-scope',
 };
 
@@ -361,7 +362,8 @@ export function RoutingTab({ skill, workspaceId, focusField }: RoutingTabProps) 
 
           <div className="fg-field">
             <label className="fg-field__label t-label" htmlFor="edit-notfor">
-              <span>{LABEL_NOT_FOR}</span>
+              <span>{LABEL_NOT_FOR} </span>
+              <span className="fg-field__req">{REQ_STAR}</span>
             </label>
             <input
               id="edit-notfor"
@@ -373,6 +375,11 @@ export function RoutingTab({ skill, workspaceId, focusField }: RoutingTabProps) 
             <span className="fg-field__hint">
               <span>{ROUTING_HELP.notFor.hint}</span>
             </span>
+            {!notFor.trim() && (
+              <span className="fg-field__hint" style={{ color: 'var(--color-warning)' }}>
+                <span>{LABEL_REQUIRED_NOT_FOR}</span>
+              </span>
+            )}
           </div>
 
           <div className="fg-field">
