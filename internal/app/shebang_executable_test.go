@@ -38,7 +38,7 @@ func TestFolderCommitMakesShebangScriptsExecutableInGit(t *testing.T) {
 			writeProjectFile(t, folder, "scripts/run.sh", "#!/bin/sh\necho run\n", 0o644)
 			writeProjectFile(t, folder, "references/notes.md", "# notes\n", 0o644)
 
-			preview := previewCommit(t, hub, project, "shebang-tools", SkillCommitInput{})
+			preview := previewCommit(t, hub, project, "./shebang-tools", SkillCommitInput{})
 			if result, err := (SkillCommitService{}).Apply(commitCtx(), hub, preview, SkillCommitApplyOptions{}); err != nil || result.Error != nil {
 				t.Fatalf("apply = %+v %v", result.Error, err)
 			}

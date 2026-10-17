@@ -26,9 +26,10 @@ type commitTarget struct {
 	marker *CheckoutMarker
 }
 
-// resolveCommitTarget turns the argument of `skill commit` into a folder. An
-// existing directory is a folder; anything else is a skill id, read from
-// <project>/.claude/skills/<id>/.
+// resolveCommitTarget turns the argument of `skill commit` into a folder. A
+// bare skill id always means <project>/.claude/skills/<id>/, even when a folder
+// of that name sits in the current directory; a folder is named by a path, one
+// with a slash or a leading dot.
 func resolveCommitTarget(ctx context.Context, argument, projectDir string) (commitTarget, *Error) {
 	argument = strings.TrimSpace(argument)
 	if argument == "" {
@@ -37,23 +38,24 @@ func resolveCommitTarget(ctx context.Context, argument, projectDir string) (comm
 	if strings.HasPrefix(argument, "SUB-") {
 		return commitTarget{}, NewInvalidRequestError(fmt.Sprintf("%s is a submission, not a folder", argument), fmt.Sprintf("Review it with `skillhub skill review %s`.", argument))
 	}
-	candidate := argument
-	if !filepath.IsAbs(candidate) {
-		candidate = filepath.Join(projectDir, candidate)
-	}
-	dir := ""
-	if info, err := os.Stat(candidate); err == nil && info.IsDir() {
-		dir = filepath.Clean(candidate)
-	} else if skillTargetIDPattern.MatchString(argument) {
+	var dir string
+	if !looksLikePath(argument) && skillTargetIDPattern.MatchString(argument) {
 		dir = filepath.Join(projectRootOf(ctx, projectDir), filepath.FromSlash(projectSkillsDir), argument)
 		if info, err := os.Stat(dir); err != nil || !info.IsDir() {
 			return commitTarget{}, NewInvalidRequestError(
 				fmt.Sprintf("there is no %s/%s folder in this project", projectSkillsDir, argument),
-				fmt.Sprintf("Copy it here with `skillhub skill checkout %s`, or start a new one with `skillhub skill create %s`.", argument, argument),
+				fmt.Sprintf("Copy it here with `skillhub skill checkout %s`, start a new one with `skillhub skill create %s`, or name another folder by its path, such as `./%s`.", argument, argument, argument),
 			)
 		}
 	} else {
-		return commitTarget{}, NewInvalidRequestError(fmt.Sprintf("%q is neither a skill id nor a folder", argument), "Pass a lowercase skill id or the path of a skill folder.")
+		candidate := argument
+		if !filepath.IsAbs(candidate) {
+			candidate = filepath.Join(projectDir, candidate)
+		}
+		if info, err := os.Stat(candidate); err != nil || !info.IsDir() {
+			return commitTarget{}, NewInvalidRequestError(fmt.Sprintf("%q is neither a skill id nor a folder", argument), "Pass a lowercase skill id or the path of a skill folder.")
+		}
+		dir = filepath.Clean(candidate)
 	}
 	target := commitTarget{dir: dir}
 	marker, found, err := ReadCheckoutMarker(dir)
@@ -69,6 +71,12 @@ func resolveCommitTarget(ctx context.Context, argument, projectDir string) (comm
 		return commitTarget{}, NewInvalidRequestError(fmt.Sprintf("cannot derive a skill id from folder %q", filepath.Base(dir)), "Name the folder with a lowercase id such as `team-release`.")
 	}
 	return target, nil
+}
+
+// looksLikePath reports whether a commit argument names a folder by its path
+// rather than a skill by its id.
+func looksLikePath(argument string) bool {
+	return filepath.IsAbs(argument) || strings.HasPrefix(argument, ".") || strings.ContainsAny(argument, `/\`)
 }
 
 // readProjectFolder reads the content of a project skill folder. It leaves out

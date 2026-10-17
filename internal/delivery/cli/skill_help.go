@@ -113,7 +113,10 @@ the same commit. When a previous commit wrote the files but Git did not commit
 them, it commits them. In a project connected to a hub on another machine it
 sends the folder to that hub's review queue.
 
-  --collection <c>           Collection of a new skill
+A bare id reads .claude/skills/<id>/ of the project; name any other folder by
+its path, such as ./my-skill or tools/my-skill.
+
+  --collection <c>          Collection of a new skill
   --runtime-file <yaml>      Runtime block of a new skill
   --accept <p>=hub|project   Decide a file both sides changed (repeatable)
   --manual <p>=<f>           Use your own merged file for <p> (repeatable)

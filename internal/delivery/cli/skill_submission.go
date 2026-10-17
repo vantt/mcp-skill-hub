@@ -108,6 +108,7 @@ func sendSubmission(ctx context.Context, flags skillFlags, preview app.RemoteCom
 
 func writeRemoteCommitPreview(p *termui.Printer, preview app.RemoteCommitPreview) {
 	p.Line(preview.Summary)
+	writeFolderLine(p, preview.Folder)
 	if preview.CheckedOut {
 		rows := make([]string, 0, len(preview.Files))
 		for _, file := range preview.Files {

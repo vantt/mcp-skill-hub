@@ -287,6 +287,22 @@ func newProjectSkill(t *testing.T, project string) string {
 	return folder
 }
 
+func TestSkillCommitBareIDReadsTheProjectSkillEvenWithAFolderOfThatNameHere(t *testing.T) {
+	t.Parallel()
+	hub := newGitHub(t)
+	project := newProjectDir(t)
+	folder := newProjectSkill(t, project)
+	decoy := filepath.Join(project, "team-release")
+	writeProjectFile(t, decoy, "SKILL.md", "---\nname: team-release\ndescription: An older copy holding only its SKILL.md.\n---\n# Old\n", 0o644)
+
+	if preview := previewCommit(t, hub, project, "team-release", SkillCommitInput{}); preview.Folder != folder {
+		t.Fatalf("a bare id read %s, want %s", preview.Folder, folder)
+	}
+	if preview := previewCommit(t, hub, project, "./team-release", SkillCommitInput{}); preview.Folder != decoy {
+		t.Fatalf("a path read %s, want %s", preview.Folder, decoy)
+	}
+}
+
 func TestSkillCommitNewSkillIsAUnapprovedDraftAndLeavesOutManagedFiles(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("file modes are not meaningful on Windows")
@@ -388,7 +404,7 @@ func TestSkillCommitReplacesTheHubCopyOfAFolderThatWasNeverCheckedOut(t *testing
 	folder := filepath.Join(project, "alpha")
 	writeProjectFile(t, folder, "SKILL.md", "---\nname: alpha\ndescription: Does alpha things. Use when you need alpha.\n---\n\n# alpha\n\nbrand new body\n", 0o644)
 
-	preview := previewCommit(t, hub, project, "alpha", SkillCommitInput{})
+	preview := previewCommit(t, hub, project, "./alpha", SkillCommitInput{})
 	if preview.Case != commitCaseReplace || len(preview.Warnings) == 0 {
 		t.Fatalf("case=%s warnings=%v", preview.Case, preview.Warnings)
 	}

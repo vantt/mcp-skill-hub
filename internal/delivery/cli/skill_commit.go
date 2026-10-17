@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/vantt/skillhub-mcp/internal/app"
@@ -232,6 +233,9 @@ func editRoutingYAML(ctx context.Context, routing skill.RoutingInput) (skill.Rou
 // writeSkillCommitPreview prints what a commit would change.
 func writeSkillCommitPreview(p *termui.Printer, preview app.SkillCommitPreview, hints previewHints) {
 	p.Line(preview.Summary)
+	if !hints.submission {
+		writeFolderLine(p, preview.Folder)
+	}
 	if preview.NothingToCommit {
 		return
 	}
@@ -279,6 +283,18 @@ func writeUnfinishedCommit(p *termui.Printer, paths []string, hints previewHints
 	}
 	p.Line("Nothing committed yet.")
 	p.Raw("Apply: " + hints.rerun + " --yes\n")
+}
+
+// writeFolderLine names the folder a commit read, relative to the current
+// directory when it is inside it, so a wrong folder is plain to see.
+func writeFolderLine(p *termui.Printer, dir string) {
+	if dir == "" {
+		return
+	}
+	if rel, err := filepath.Rel(currentDirectory(), dir); err == nil && filepath.IsLocal(rel) {
+		dir = rel
+	}
+	p.Line("Folder: " + filepath.ToSlash(dir))
 }
 
 // writeLeftOutLine names the files a commit leaves out, on one line.
